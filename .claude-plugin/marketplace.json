@@ -1,0 +1,14 @@
+{
+  "name": "agent-tooling",
+  "description": "Private cross-client Agent Skills with native Claude Code adapters",
+  "owner": {
+    "name": "Arend Alloul"
+  },
+  "plugins": [
+    {
+      "name": "obsidian",
+      "source": "./plugins/obsidian",
+      "description": "Safe workflows for managing Arend's Obsidian vault"
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLAUDE_CATALOG="$REPO_ROOT/.claude-plugin/marketplace.json"
+CODEX_CATALOG="$REPO_ROOT/.agents/plugins/marketplace.json"
+
+for command in claude codex jq python3 rg; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    printf 'missing required command: %s\n' "$command" >&2
+    exit 69
+  fi
+done
+
+printf 'Validating JSON manifests...\n'
+jq -e . "$CLAUDE_CATALOG" "$CODEX_CATALOG" >/dev/null
+
+TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agent-tooling-validation.XXXXXX")"
+CLAUDE_TEST_HOME="$TEST_ROOT/claude-home"
+CLAUDE_TEST_CONFIG="$CLAUDE_TEST_HOME/.claude"
+CODEX_TEST_HOME="$TEST_ROOT/codex-home"
+CODEX_TEST_CONFIG="$TEST_ROOT/codex-config"
+mkdir -p "$CLAUDE_TEST_CONFIG" "$CODEX_TEST_HOME" "$CODEX_TEST_CONFIG"
+trap 'rm -rf "$TEST_ROOT"' EXIT
+
+printf 'Checking catalogs and repository-local sources...\n'
+claude_plugins="$(jq -r '.plugins[].name' "$CLAUDE_CATALOG" | sort)"
+codex_plugins="$(jq -r '.plugins[].name' "$CODEX_CATALOG" | sort)"
+
+while IFS=$'\t' read -r name source; do
+  if [[ "$source" != ./plugins/* ]]; then
+    printf 'Claude plugin %s has a non-local source: %s\n' "$name" "$source" >&2
+    exit 65
+  fi
+  plugin_root="$REPO_ROOT/${source#./}"
+  if [[ ! -d "$plugin_root" ]]; then
+    printf 'Claude plugin %s source does not exist: %s\n' "$name" "$source" >&2
+    exit 66
+  fi
+
+  claude_name="$(jq -r '.name' "$plugin_root/.claude-plugin/plugin.json")"
+  if [[ "$name" != "$claude_name" ]]; then
+    printf 'Claude plugin name mismatch for %s.\n' "$name" >&2
+    exit 65
+  fi
+  if [[ -f "$plugin_root/.codex-plugin/plugin.json" ]]; then
+    codex_name="$(jq -r '.name' "$plugin_root/.codex-plugin/plugin.json")"
+    if [[ "$name" != "$codex_name" ]]; then
+      printf 'Cross-client plugin name mismatch for %s.\n' "$name" >&2
+      exit 65
+    fi
+  fi
+done < <(jq -r '.plugins[] | [.name, .source] | @tsv' "$CLAUDE_CATALOG")
+
+while IFS=$'\t' read -r name source; do
+  if [[ "$source" != ./plugins/* ]]; then
+    printf 'Codex plugin %s has a non-local source: %s\n' "$name" "$source" >&2
+    exit 65
+  fi
+  plugin_root="$REPO_ROOT/${source#./}"
+  if [[ ! -d "$plugin_root" ]]; then
+    printf 'Codex plugin %s source does not exist: %s\n' "$name" "$source" >&2
+    exit 66
+  fi
+
+  codex_name="$(jq -r '.name' "$plugin_root/.codex-plugin/plugin.json")"
+  if [[ "$name" != "$codex_name" ]]; then
+    printf 'Codex plugin name mismatch for %s.\n' "$name" >&2
+    exit 65
+  fi
+  if [[ -f "$plugin_root/.claude-plugin/plugin.json" ]]; then
+    claude_name="$(jq -r '.name' "$plugin_root/.claude-plugin/plugin.json")"
+    if [[ "$name" != "$claude_name" ]]; then
+      printf 'Cross-client plugin name mismatch for %s.\n' "$name" >&2
+      exit 65
+    fi
+  fi
+done < <(jq -r '.plugins[] | [.name, .source.path] | @tsv' "$CODEX_CATALOG")
+
+printf 'Checking for engine-specific installation paths...\n'
+if rg -n '((~|\$HOME|/Users/[^/]+|/home/[^/]+)/\.(claude|codex)(/|$)|(/Users/[^/]+|/home/[^/]+)/(.*\/)?(plugins|skills)/)' "$REPO_ROOT/plugins"; then
+  printf 'Found a hard-coded Claude or Codex installation path.\n' >&2
+  exit 65
+fi
+
+printf 'Validating Claude marketplace and plugin packages...\n'
+HOME="$CLAUDE_TEST_HOME" CLAUDE_CONFIG_DIR="$CLAUDE_TEST_CONFIG" claude plugin validate "$REPO_ROOT"
+for plugin_root in "$REPO_ROOT"/plugins/*; do
+  [[ -d "$plugin_root" ]] || continue
+  HOME="$CLAUDE_TEST_HOME" CLAUDE_CONFIG_DIR="$CLAUDE_TEST_CONFIG" claude plugin validate "$plugin_root"
+done
+
+printf 'Smoke-installing Claude and Codex plugins in isolated homes...\n'
+HOME="$CLAUDE_TEST_HOME" CLAUDE_CONFIG_DIR="$CLAUDE_TEST_CONFIG" claude plugin marketplace add "$REPO_ROOT" >/dev/null
+while IFS= read -r plugin; do
+  [[ -n "$plugin" ]] || continue
+  HOME="$CLAUDE_TEST_HOME" CLAUDE_CONFIG_DIR="$CLAUDE_TEST_CONFIG" claude plugin install "$plugin@agent-tooling" --scope user >/dev/null
+done <<< "$claude_plugins"
+
+HOME="$CODEX_TEST_HOME" CODEX_HOME="$CODEX_TEST_CONFIG" codex plugin marketplace add "$REPO_ROOT" --json >/dev/null
+while IFS= read -r plugin; do
+  [[ -n "$plugin" ]] || continue
+  HOME="$CODEX_TEST_HOME" CODEX_HOME="$CODEX_TEST_CONFIG" codex plugin add "$plugin@agent-tooling" --json >/dev/null
+done <<< "$codex_plugins"
+
+printf 'Validating bundled helper scripts...\n'
+while IFS= read -r script; do
+  bash -n "$script"
+done < <(find "$REPO_ROOT/plugins" -type f -path '*/scripts/*.sh' -print | sort)
+
+while IFS= read -r script; do
+  PYTHONPYCACHEPREFIX="$TEST_ROOT/pycache" python3 -m py_compile "$script"
+done < <(find "$REPO_ROOT/plugins" -type f -path '*/scripts/*.py' -print | sort)
+
+printf 'Validation passed.\n'

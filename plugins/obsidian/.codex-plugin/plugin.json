@@ -1,0 +1,23 @@
+{
+  "name": "obsidian",
+  "version": "0.1.0",
+  "description": "Safe workflows for managing Arend's Obsidian vault",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Obsidian",
+    "shortDescription": "Safely manage local Obsidian notes",
+    "longDescription": "Search, create, update, organize, and maintain notes in Arend's Obsidian vault using filesystem or connector capabilities available to the client.",
+    "developerName": "Arend Alloul",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use the Obsidian Vault skill to find and safely update a note."
+    ]
+  }
+}

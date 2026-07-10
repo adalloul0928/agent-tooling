@@ -1,0 +1,4 @@
+interface:
+  display_name: "Obsidian Vault"
+  short_description: "Read and write local Obsidian vault notes"
+  default_prompt: "Use $obsidian-vault to capture and organize a PUMPD idea in the right vault note."
