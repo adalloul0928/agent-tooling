@@ -13,6 +13,8 @@ There are two ways to reach the vault. Which one to use depends on **which capab
 - Search with `rg`, use the available file-reading tool, make targeted edits with the client's file-edit primitive, create with a file-creation tool or the bundled `scripts/new_note.py`, and review with `git`. For example, Codex normally uses `apply_patch`; Claude Code normally uses `Edit`. Commit only when asked.
 
 **If filesystem tools are NOT available, but a remote `obsidian` connector is**: use the connector's search, read, list, write, edit, and move capabilities. It is a full read/write path to the same vault and syncs to every device within minutes. Connector tool names can vary by client; discover the available capabilities instead of requiring a fixed prefix.
+
+This capability-based discovery is deliberate: it keeps the same authored skill portable across Claude and Codex.
 - There is no Git or bash here, so the Git steps in the Workflow section do not apply — skip them.
 - Prefer writing new generated content into `00 Inbox/` rather than directly into project folders, since there is no Git review gate and writes sync immediately. Promote to a final location only when the user confirms.
 - This remote-only staging rule overrides the normal taxonomy and PUMPD idea destinations below until the user confirms promotion.
