@@ -33,8 +33,8 @@ behavior belongs in native adapter manifests.
 - Claude plugin metadata: `plugins/<name>/.claude-plugin/plugin.json`.
 - Codex plugin metadata: `plugins/<name>/.codex-plugin/plugin.json`.
 - Omit Claude plugin versions while Git-revision updates are the chosen policy.
-- Use semantic versions for Codex plugins and bump the version whenever packaged
-  behavior changes.
+- Omit Codex plugin versions while Git-revision updates are the chosen policy.
+  Introduce semver only if a future client or dependency contract requires it.
 - Keep agents, hooks, MCP declarations, and client configuration platform-native
   unless both clients have been explicitly validated against the same contract.
 

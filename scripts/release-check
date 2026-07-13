@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+printf 'repository: %s\n' "$REPO_ROOT"
+printf 'commit: %s\n' "$(git -C "$REPO_ROOT" rev-parse HEAD)"
+printf 'branch: %s\n' "$(git -C "$REPO_ROOT" branch --show-current)"
+
+if [[ -n "$(git -C "$REPO_ROOT" status --porcelain=v1)" ]]; then
+  printf 'working tree: dirty (review required)\n'
+else
+  printf 'working tree: clean\n'
+fi
+
+printf 'claude plugins:\n'
+jq -r '.plugins[] | "  - \(.name): \(.source)"' \
+  "$REPO_ROOT/.claude-plugin/marketplace.json"
+
+printf 'codex plugins:\n'
+jq -r '.plugins[] | "  - \(.name): \(.source.path)"' \
+  "$REPO_ROOT/.agents/plugins/marketplace.json"
+
+"$REPO_ROOT/scripts/validate-static"

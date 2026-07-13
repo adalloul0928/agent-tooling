@@ -12,7 +12,7 @@ There are two ways to reach the vault. Which one to use depends on **which capab
 **If filesystem tools are available** on the Mac with access to the vault path: use the filesystem as the default. This is the local, Git-tracked working copy.
 - Search with `rg`, use the available file-reading tool, make targeted edits with the client's file-edit primitive, create with a file-creation tool or the bundled `scripts/new_note.py`, and review with `git`. For example, Codex normally uses `apply_patch`; Claude Code normally uses `Edit`. Commit only when asked.
 
-**If filesystem tools are NOT available, but a remote `obsidian` connector is**: use the connector for all reads and writes. It is a full read/write path to the same vault and syncs to every device within minutes. In the current connector, tools are prefixed `vault_` (for example `vault_search`, `vault_read`, `vault_list`, `vault_write`, `vault_edit`, `vault_batch_read`, and `vault_move`).
+**If filesystem tools are NOT available, but a remote `obsidian` connector is**: use the connector's search, read, list, write, edit, and move capabilities. It is a full read/write path to the same vault and syncs to every device within minutes. Connector tool names can vary by client; discover the available capabilities instead of requiring a fixed prefix.
 - There is no Git or bash here, so the Git steps in the Workflow section do not apply — skip them.
 - Prefer writing new generated content into `00 Inbox/` rather than directly into project folders, since there is no Git review gate and writes sync immediately. Promote to a final location only when the user confirms.
 - This remote-only staging rule overrides the normal taxonomy and PUMPD idea destinations below until the user confirms promotion.

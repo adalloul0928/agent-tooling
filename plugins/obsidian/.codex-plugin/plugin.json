@@ -1,6 +1,5 @@
 {
   "name": "obsidian",
-  "version": "0.1.0",
   "description": "Safe workflows for managing Arend's Obsidian vault",
   "author": {
     "name": "Arend Alloul"

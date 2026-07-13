@@ -45,6 +45,8 @@ def validate_note_path(vault: Path, rel: Path) -> Path:
         raise ValueError("note path must be relative to the vault")
     if rel.suffix.lower() != ".md":
         raise ValueError("note path must end with .md")
+    if any(part in {".", ".."} for part in rel.parts):
+        raise ValueError("note path resolves outside the vault")
     if any(part in BLOCKED_PARTS or part.startswith(".") for part in rel.parts):
         raise ValueError("note path cannot target hidden/protected folders")
 
