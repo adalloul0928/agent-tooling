@@ -1,0 +1,354 @@
+#!/usr/bin/env python3
+"""Compare composable agent-tooling profiles with local read-only state."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import sys
+import tomllib
+from collections import OrderedDict
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_PROFILES_DIR = REPO_ROOT / "profiles"
+VARIABLE_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+CHECK_FIELDS = {
+    "path": {"path"},
+    "same_file": {"paths"},
+    "claude_plugin": {"plugin"},
+    "claude_marketplace": {"name"},
+    "claude_setting": {"setting", "expected"},
+    "codex_plugin": {"plugin"},
+    "codex_marketplace": {"name"},
+    "codex_mcp": {"server"},
+    "project_claude_mcp": {"path", "server"},
+    "project_codex_mcp": {"path", "server"},
+}
+
+
+class ProfileError(ValueError):
+    pass
+
+
+@dataclass
+class Context:
+    home: Path
+    variables: dict[str, str]
+
+    def expand(self, value: str) -> str:
+        def replace(match: re.Match[str]) -> str:
+            name = match.group(1)
+            if name not in self.variables:
+                raise ProfileError(f"unknown profile variable: {name}")
+            return self.variables[name]
+
+        expanded = VARIABLE_PATTERN.sub(replace, value)
+        if expanded == "~":
+            return str(self.home)
+        if expanded.startswith("~/"):
+            return str(self.home / expanded[2:])
+        return expanded
+
+    def path(self, value: str) -> Path:
+        return Path(self.expand(value)).resolve()
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError as exc:
+        raise ProfileError(f"invalid JSON: {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ProfileError(f"expected JSON object: {path}")
+    return data
+
+
+def read_toml(path: Path) -> dict[str, Any]:
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except tomllib.TOMLDecodeError as exc:
+        raise ProfileError(f"invalid TOML: {path}: {exc}") from exc
+
+
+def profile_path(reference: str, profiles_dir: Path, parent: Path | None = None) -> Path:
+    candidate = Path(reference)
+    if candidate.is_absolute():
+        return candidate
+    if parent is not None and (parent / candidate).exists():
+        return (parent / candidate).resolve()
+    if candidate.suffix != ".json":
+        candidate = candidate.with_suffix(".json")
+    return (profiles_dir / candidate).resolve()
+
+
+def load_profile(path: Path, profiles_dir: Path, stack: tuple[Path, ...] = ()) -> dict[str, Any]:
+    path = path.resolve()
+    if path in stack:
+        chain = " -> ".join(item.name for item in (*stack, path))
+        raise ProfileError(f"profile inheritance cycle: {chain}")
+
+    raw = read_json(path)
+    if raw.get("schema_version") != 1:
+        raise ProfileError(f"unsupported schema_version in {path}")
+    if not isinstance(raw.get("name"), str) or not raw["name"]:
+        raise ProfileError(f"profile name is required in {path}")
+
+    variables: dict[str, str] = {}
+    checks: OrderedDict[str, dict[str, Any]] = OrderedDict()
+    manual: OrderedDict[str, dict[str, Any]] = OrderedDict()
+    sources: list[str] = []
+
+    for reference in raw.get("extends", []):
+        parent_path = profile_path(reference, profiles_dir, path.parent)
+        parent = load_profile(parent_path, profiles_dir, (*stack, path))
+        variables.update(parent["variables"])
+        checks.update((item["id"], item) for item in parent["checks"])
+        manual.update((item["id"], item) for item in parent["manual_checks"])
+        for source in parent["sources"]:
+            if source not in sources:
+                sources.append(source)
+
+    variables.update(raw.get("variables", {}))
+    for collection_name, target in (("checks", checks), ("manual_checks", manual)):
+        collection = raw.get(collection_name, [])
+        if not isinstance(collection, list):
+            raise ProfileError(f"{collection_name} must be a list in {path}")
+        for item in collection:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                raise ProfileError(f"every {collection_name} item needs an id in {path}")
+            target[item["id"]] = item
+
+    sources.append(str(path))
+    return {
+        "name": raw["name"],
+        "description": raw.get("description", ""),
+        "variables": variables,
+        "checks": list(checks.values()),
+        "manual_checks": list(manual.values()),
+        "sources": sources,
+    }
+
+
+def validate_definition(profile: dict[str, Any]) -> None:
+    context = Context(home=Path.home(), variables=profile["variables"])
+    for name, value in profile["variables"].items():
+        if not isinstance(name, str) or not isinstance(value, str):
+            raise ProfileError("profile variables must be string keys and values")
+    for check in profile["checks"]:
+        kind = check.get("kind")
+        if kind not in CHECK_FIELDS:
+            raise ProfileError(f"unsupported check kind: {kind}")
+        missing = CHECK_FIELDS[kind] - check.keys()
+        if missing:
+            raise ProfileError(f"{check['id']} missing fields: {', '.join(sorted(missing))}")
+        if check.get("severity", "required") not in {"required", "warning"}:
+            raise ProfileError(f"{check['id']} has invalid severity")
+        for key in ("path", "ref"):
+            value = check.get(key)
+            if isinstance(value, str):
+                context.expand(value)
+        for value in check.get("paths", []):
+            if not isinstance(value, str):
+                raise ProfileError(f"{check['id']} paths must contain strings")
+            context.expand(value)
+
+
+def outcome(check: dict[str, Any], ok: bool, message: str) -> dict[str, Any]:
+    severity = check.get("severity", "required")
+    status = "pass" if ok else ("warn" if severity == "warning" else "fail")
+    return {
+        "id": check["id"],
+        "kind": check["kind"],
+        "severity": severity,
+        "status": status,
+        "message": message,
+    }
+
+
+def expected_presence(check: dict[str, Any], present: bool, label: str) -> dict[str, Any]:
+    expected = check.get("expected", "present")
+    if expected not in {"present", "absent"}:
+        raise ProfileError(f"{check['id']} expected must be present or absent")
+    ok = present if expected == "present" else not present
+    actual = "present" if present else "absent"
+    return outcome(check, ok, f"{label} is {actual}; expected {expected}")
+
+
+def nested_value(data: dict[str, Any], dotted: str) -> tuple[bool, Any]:
+    current: Any = data
+    for part in dotted.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return False, None
+        current = current[part]
+    return True, current
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(65536), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def evaluate(check: dict[str, Any], context: Context) -> dict[str, Any]:
+    kind = check.get("kind")
+    home = context.home
+
+    if kind == "path":
+        path = context.path(check["path"])
+        path_type = check.get("path_type", "any")
+        present = path.is_file() if path_type == "file" else path.is_dir() if path_type == "directory" else path.exists()
+        return expected_presence(check, present, str(path))
+
+    if kind == "same_file":
+        paths = [context.path(item) for item in check.get("paths", [])]
+        if len(paths) < 2:
+            raise ProfileError(f"{check['id']} needs at least two paths")
+        missing = [str(path) for path in paths if not path.is_file()]
+        if missing:
+            return outcome(check, False, f"missing comparison files: {', '.join(missing)}")
+        hashes = {sha256(path) for path in paths}
+        return outcome(check, len(hashes) == 1, f"compared {len(paths)} files; unique hashes: {len(hashes)}")
+
+    if kind == "claude_plugin":
+        settings = read_json(home / ".claude/settings.json")
+        enabled = settings.get("enabledPlugins", {}).get(check["plugin"]) is True
+        expected = check.get("expected", "enabled")
+        ok = enabled if expected == "enabled" else not enabled
+        return outcome(check, ok, f"Claude plugin {check['plugin']} is {'enabled' if enabled else 'not enabled'}")
+
+    if kind == "claude_marketplace":
+        marketplaces = read_json(home / ".claude/plugins/known_marketplaces.json")
+        name = check["name"]
+        present = name in marketplaces
+        result = expected_presence(check, present, f"Claude marketplace {name}")
+        if result["status"] == "pass" and present and check.get("ref"):
+            actual_ref = marketplaces[name].get("source", {}).get("ref")
+            expected_ref = context.expand(check["ref"])
+            return outcome(check, actual_ref == expected_ref, f"Claude marketplace {name} ref is {actual_ref!r}; expected {expected_ref!r}")
+        return result
+
+    if kind == "claude_setting":
+        settings = read_json(home / ".claude/settings.json")
+        found, actual = nested_value(settings, check["setting"])
+        expected = check.get("expected")
+        return outcome(check, found and actual == expected, f"Claude setting {check['setting']} is {actual!r}; expected {expected!r}")
+
+    codex_config = read_toml(home / ".codex/config.toml")
+    if kind == "codex_plugin":
+        enabled = codex_config.get("plugins", {}).get(check["plugin"], {}).get("enabled") is True
+        expected = check.get("expected", "enabled")
+        ok = enabled if expected == "enabled" else not enabled
+        return outcome(check, ok, f"Codex plugin {check['plugin']} is {'enabled' if enabled else 'not enabled'}")
+
+    if kind == "codex_marketplace":
+        marketplaces = codex_config.get("marketplaces", {})
+        name = check["name"]
+        present = name in marketplaces
+        result = expected_presence(check, present, f"Codex marketplace {name}")
+        if result["status"] == "pass" and present and check.get("ref"):
+            actual_ref = marketplaces[name].get("ref")
+            expected_ref = context.expand(check["ref"])
+            return outcome(check, actual_ref == expected_ref, f"Codex marketplace {name} ref is {actual_ref!r}; expected {expected_ref!r}")
+        return result
+
+    if kind == "codex_mcp":
+        present = check["server"] in codex_config.get("mcp_servers", {})
+        return expected_presence(check, present, f"Codex MCP {check['server']}")
+
+    if kind == "project_claude_mcp":
+        config = read_json(context.path(check["path"]))
+        present = check["server"] in config.get("mcpServers", {})
+        return expected_presence(check, present, f"project Claude MCP {check['server']}")
+
+    if kind == "project_codex_mcp":
+        config = read_toml(context.path(check["path"]))
+        present = check["server"] in config.get("mcp_servers", {})
+        return expected_presence(check, present, f"project Codex MCP {check['server']}")
+
+    raise ProfileError(f"unsupported check kind: {kind}")
+
+
+def run(profile: dict[str, Any], home: Path) -> dict[str, Any]:
+    context = Context(home=home.resolve(), variables=profile["variables"])
+    results = [evaluate(check, context) for check in profile["checks"]]
+    for check in profile["manual_checks"]:
+        last_verified = check.get("last_verified")
+        suffix = f" Last verified: {last_verified}." if last_verified else " Not yet verified."
+        results.append({
+            "id": check["id"],
+            "kind": "manual",
+            "severity": "manual",
+            "status": "manual",
+            "message": check["description"] + suffix,
+        })
+    summary = {status: sum(item["status"] == status for item in results) for status in ("pass", "warn", "fail", "manual")}
+    return {
+        "profile": profile["name"],
+        "description": profile["description"],
+        "sources": profile["sources"],
+        "results": results,
+        "summary": summary,
+    }
+
+
+def print_text(report: dict[str, Any]) -> None:
+    symbols = {"pass": "✓", "warn": "⚠", "fail": "✗", "manual": "○"}
+    print(f"profile: {report['profile']}")
+    if report["description"]:
+        print(report["description"])
+    print()
+    for item in report["results"]:
+        print(f"{symbols[item['status']]} {item['status'].upper():6} {item['id']} — {item['message']}")
+    summary = report["summary"]
+    print()
+    print("summary: " + ", ".join(f"{key}={summary[key]}" for key in ("pass", "warn", "fail", "manual")))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("profile", nargs="?", default="pumpd-workstation", help="profile name or JSON path")
+    parser.add_argument("--profiles-dir", type=Path, default=DEFAULT_PROFILES_DIR)
+    parser.add_argument("--home", type=Path, default=Path.home(), help="home directory to inspect")
+    parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    parser.add_argument("--strict", action="store_true", help="treat advisory warnings as failures")
+    parser.add_argument("--validate", action="store_true", help="validate profile composition without inspecting state")
+    args = parser.parse_args()
+
+    try:
+        selected = profile_path(args.profile, args.profiles_dir)
+        profile = load_profile(selected, args.profiles_dir.resolve())
+        validate_definition(profile)
+        if args.validate:
+            print(f"Valid profile: {selected}")
+            return 0
+        report = run(profile, args.home)
+    except (OSError, ProfileError, KeyError, TypeError) as exc:
+        print(f"doctor configuration error: {exc}", file=sys.stderr)
+        return 65
+
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        print_text(report)
+
+    if report["summary"]["fail"]:
+        return 1
+    if args.strict and report["summary"]["warn"]:
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

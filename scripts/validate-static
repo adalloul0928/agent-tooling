@@ -13,7 +13,9 @@ for command in jq python3 rg agentskills; do
 done
 
 printf 'Validating JSON manifests...\n'
-jq -e . "$CLAUDE_CATALOG" "$CODEX_CATALOG" >/dev/null
+while IFS= read -r json_file; do
+  jq -e . "$json_file" >/dev/null
+done < <(find "$REPO_ROOT/.agents" "$REPO_ROOT/.claude-plugin" "$REPO_ROOT/plugins" "$REPO_ROOT/profiles" "$REPO_ROOT/schemas" -type f -name '*.json' -print | sort)
 
 claude_plugins="$(jq -r '.plugins[].name' "$CLAUDE_CATALOG" | sort)"
 codex_plugins="$(jq -r '.plugins[].name' "$CODEX_CATALOG" | sort)"
@@ -87,6 +89,11 @@ done < <(find "$REPO_ROOT/plugins" -type f -path '*/scripts/*.sh' -print | sort)
 
 PYTHONPYCACHEPREFIX="${TMPDIR:-/tmp}/agent-tooling-pycache" \
   python3 -m compileall -q "$REPO_ROOT/plugins"
+PYTHONPYCACHEPREFIX="${TMPDIR:-/tmp}/agent-tooling-pycache" \
+  python3 -m py_compile "$REPO_ROOT/scripts/doctor"
+while IFS= read -r profile; do
+  "$REPO_ROOT/scripts/doctor" "$profile" --profiles-dir "$REPO_ROOT/profiles" --validate
+done < <(find "$REPO_ROOT/profiles" -type f -name '*.json' -print | sort)
 python3 -m unittest discover -s "$REPO_ROOT/tests" -p 'test_*.py'
 
 printf 'Static validation passed.\n'
