@@ -23,8 +23,11 @@ plugin manifests and Claude catalog entries intentionally omit `version`.
 
 ## Rollback
 
-1. Reinstall the previous known-good Git revision or revert the marketplace
-   commit.
+1. Reinstall the previous known-good release ref or revert the marketplace
+   commit. Keep an immutable Git tag for every live release even though plugin
+   manifests omit semver; Claude Code 2.1.207 accepts a branch or tag in the
+   marketplace URL fragment but not an arbitrary commit SHA. Codex can use the
+   same tag with `--ref` and also accepts a commit SHA.
 2. Start fresh client sessions and verify the previous canary string.
 3. If native plugin recovery fails, remove the plugin and restore the retained
    standalone skill directory.

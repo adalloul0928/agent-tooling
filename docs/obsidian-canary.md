@@ -47,4 +47,6 @@ than assumed from a fixed tool-name prefix.
 3. Commit and push the canary revision.
 4. Run each client's native marketplace refresh/upgrade.
 5. Start fresh sessions and prove the revised sentence is present.
-6. Reinstall the previous revision and confirm rollback.
+6. Reinstall the previous immutable release tag and confirm rollback. Use a
+   tag or branch for Claude; its tested Git URL syntax does not accept a raw
+   commit SHA as the fragment. Codex accepts the same named ref with `--ref`.
