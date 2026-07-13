@@ -51,3 +51,9 @@ Profiles intentionally expose known next work rather than claiming a clean
 setup. Connector separation remains advisory until every required local twin is
 authenticated, hosted checks still require a person, and newly published
 plugins remain required-but-missing until their release is installed.
+
+The profile is an enforceable subset of the intended environment, not the full
+inventory. [tooling-inventory.md](tooling-inventory.md) records vendor tools,
+special local skills, hosted connectors, MCP placement, and authentication
+boundaries that may be optional, private, or impossible to verify safely from a
+read-only local doctor.

@@ -83,3 +83,12 @@ read-only doctor compares those profiles with native local configuration:
 
 See [docs/profiles-and-doctor.md](docs/profiles-and-doctor.md) for the profile
 model, status meanings, and safety boundary.
+
+## Inventory and placement
+
+[docs/tooling-inventory.md](docs/tooling-inventory.md) is the canonical map of
+owned skills, vendor plugins, project tooling, MCPs, hosted connectors, and
+authentication across Claude Code, Claude.ai, Codex, and ChatGPT. Use it before
+adding a capability or deciding whether it belongs in this repository, an
+application repository, a vendor marketplace, local configuration, or a hosted
+account.
