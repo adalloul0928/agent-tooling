@@ -1,0 +1,139 @@
+{
+  "$schema": "../schemas/profile.schema.json",
+  "schema_version": 1,
+  "name": "pumpd-project",
+  "description": "Committed configuration required for reliable PUMPD work in local and cloud agents.",
+  "variables": {
+    "project_root": "~/ws/PUMPD-MOBILE-APP/pumpd-mobile-app"
+  },
+  "checks": [
+    {
+      "id": "pumpd.agents-file",
+      "kind": "path",
+      "path": "${project_root}/AGENTS.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.claude-wrapper",
+      "kind": "path",
+      "path": "${project_root}/CLAUDE.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.claude-settings",
+      "kind": "path",
+      "path": "${project_root}/.claude/settings.json",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.claude-mcp-file",
+      "kind": "path",
+      "path": "${project_root}/.mcp.json",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.codex-config",
+      "kind": "path",
+      "path": "${project_root}/.codex/config.toml",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.codex-hooks",
+      "kind": "path",
+      "path": "${project_root}/.codex/hooks.json",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.backend-review-claude",
+      "kind": "path",
+      "path": "${project_root}/.claude/skills/backend-review/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.backend-review-codex",
+      "kind": "path",
+      "path": "${project_root}/.agents/skills/backend-review/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.fix-review-claude",
+      "kind": "path",
+      "path": "${project_root}/.claude/skills/fix-review/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.fix-review-codex",
+      "kind": "path",
+      "path": "${project_root}/.agents/skills/fix-review/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.backend-review-parity",
+      "kind": "same_file",
+      "paths": [
+        "${project_root}/.claude/skills/backend-review/SKILL.md",
+        "${project_root}/.agents/skills/backend-review/SKILL.md"
+      ],
+      "severity": "warning"
+    },
+    {
+      "id": "pumpd.fix-review-parity",
+      "kind": "same_file",
+      "paths": [
+        "${project_root}/.claude/skills/fix-review/SKILL.md",
+        "${project_root}/.agents/skills/fix-review/SKILL.md"
+      ],
+      "severity": "warning"
+    },
+    {
+      "id": "pumpd.claude-supabase-local",
+      "kind": "project_claude_mcp",
+      "path": "${project_root}/.mcp.json",
+      "server": "supabase_local",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.claude-ios-simulator",
+      "kind": "project_claude_mcp",
+      "path": "${project_root}/.mcp.json",
+      "server": "ios-simulator-mcp",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.codex-context7",
+      "kind": "project_codex_mcp",
+      "path": "${project_root}/.codex/config.toml",
+      "server": "context7",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.codex-ios-simulator",
+      "kind": "project_codex_mcp",
+      "path": "${project_root}/.codex/config.toml",
+      "server": "ios-simulator-mcp",
+      "expected": "present"
+    }
+  ],
+  "manual_checks": [
+    {
+      "id": "pumpd.claude-cloud-canary",
+      "description": "Verify project skills and MCPs from a merged revision in Claude Code cloud and Cyrus.",
+      "last_verified": null
+    },
+    {
+      "id": "pumpd.codex-cloud-canary",
+      "description": "Verify project instructions, skills, and MCPs from a merged revision in Codex cloud.",
+      "last_verified": null
+    }
+  ]
+}

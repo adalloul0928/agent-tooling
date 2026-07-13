@@ -1,0 +1,78 @@
+{
+  "$schema": "../schemas/profile.schema.json",
+  "schema_version": 1,
+  "name": "base-workstation",
+  "description": "Cross-client tooling expected on Aren's primary development workstation.",
+  "variables": {
+    "obsidian_release": "obsidian-vault-2026-07-13.2"
+  },
+  "checks": [
+    {
+      "id": "claude.agent-tooling-marketplace",
+      "kind": "claude_marketplace",
+      "name": "agent-tooling",
+      "expected": "present",
+      "ref": "${obsidian_release}"
+    },
+    {
+      "id": "claude.obsidian-plugin",
+      "kind": "claude_plugin",
+      "plugin": "obsidian@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "codex.agent-tooling-marketplace",
+      "kind": "codex_marketplace",
+      "name": "agent-tooling",
+      "expected": "present",
+      "ref": "${obsidian_release}"
+    },
+    {
+      "id": "codex.obsidian-plugin",
+      "kind": "codex_plugin",
+      "plugin": "obsidian@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "claude.orphaned-supabase-marketplace",
+      "kind": "claude_marketplace",
+      "name": "supabase-agent-skills",
+      "expected": "absent",
+      "severity": "warning"
+    },
+    {
+      "id": "claude.connector-separation",
+      "kind": "claude_setting",
+      "setting": "disableClaudeAiConnectors",
+      "expected": true,
+      "severity": "warning"
+    }
+  ],
+  "manual_checks": [
+    {
+      "id": "desktop.claude-obsidian-canary",
+      "description": "Run the Obsidian matrix in a fresh Claude Desktop Code session.",
+      "last_verified": null
+    },
+    {
+      "id": "desktop.codex-obsidian-canary",
+      "description": "Run the Obsidian matrix in a fresh Codex Desktop task.",
+      "last_verified": null
+    },
+    {
+      "id": "claude.mcp-health",
+      "description": "Review failed or unauthenticated Claude MCPs without changing connector state automatically.",
+      "last_verified": "2026-07-13"
+    },
+    {
+      "id": "hosted.claude-account",
+      "description": "Verify the Claude personal marketplace, account skills, and connectors separately from Claude Code.",
+      "last_verified": null
+    },
+    {
+      "id": "hosted.chatgpt-account",
+      "description": "Verify supported ChatGPT/Codex hosted plugins and connectors separately from local Codex.",
+      "last_verified": null
+    }
+  ]
+}

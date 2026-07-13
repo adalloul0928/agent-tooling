@@ -64,3 +64,17 @@ Run the cross-client validation and isolated Claude/Codex install smoke tests:
 
 Claude's validator reports the intentionally omitted Claude plugin version as a
 warning. The warning is expected while Git revisions are the release mechanism.
+
+## Desired-state profiles
+
+Composable profiles record what a workstation or project should contain without
+storing secrets or pretending hosted account state is synchronized. The
+read-only doctor compares those profiles with native local configuration:
+
+```bash
+./scripts/doctor
+./scripts/doctor pumpd-project --json
+```
+
+See [docs/profiles-and-doctor.md](docs/profiles-and-doctor.md) for the profile
+model, status meanings, and safety boundary.
