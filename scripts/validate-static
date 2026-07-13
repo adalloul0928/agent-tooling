@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLAUDE_CATALOG="$REPO_ROOT/.claude-plugin/marketplace.json"
+CODEX_CATALOG="$REPO_ROOT/.agents/plugins/marketplace.json"
+
+for command in jq python3 rg agentskills; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    printf 'missing required command: %s\n' "$command" >&2
+    exit 69
+  fi
+done
+
+printf 'Validating JSON manifests...\n'
+jq -e . "$CLAUDE_CATALOG" "$CODEX_CATALOG" >/dev/null
+
+claude_plugins="$(jq -r '.plugins[].name' "$CLAUDE_CATALOG" | sort)"
+codex_plugins="$(jq -r '.plugins[].name' "$CODEX_CATALOG" | sort)"
+if [[ "$claude_plugins" != "$codex_plugins" ]]; then
+  printf 'Claude and Codex catalogs publish different plugin names.\n' >&2
+  exit 65
+fi
+
+printf 'Checking catalogs, adapters, and release policy...\n'
+while IFS=$'\t' read -r name claude_source codex_source; do
+  if [[ "$claude_source" != ./plugins/* || "$codex_source" != "$claude_source" ]]; then
+    printf 'Plugin %s must use the same repository-local source in both catalogs.\n' "$name" >&2
+    exit 65
+  fi
+
+  plugin_root="$REPO_ROOT/${claude_source#./}"
+  claude_manifest="$plugin_root/.claude-plugin/plugin.json"
+  codex_manifest="$plugin_root/.codex-plugin/plugin.json"
+  for manifest in "$claude_manifest" "$codex_manifest"; do
+    if [[ ! -f "$manifest" ]]; then
+      printf 'Missing adapter manifest: %s\n' "$manifest" >&2
+      exit 66
+    fi
+    jq -e . "$manifest" >/dev/null
+    if [[ "$(jq -r '.name' "$manifest")" != "$name" ]]; then
+      printf 'Adapter name mismatch for %s.\n' "$name" >&2
+      exit 65
+    fi
+    if jq -e 'has("version")' "$manifest" >/dev/null; then
+      printf 'Plugin manifest must omit version under Git-revision policy: %s\n' "$manifest" >&2
+      exit 65
+    fi
+  done
+
+  while IFS= read -r link; do
+    resolved="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve())' "$link")"
+    if [[ "$resolved" != "$plugin_root"/* ]]; then
+      printf 'Plugin symlink escapes its package: %s -> %s\n' "$link" "$resolved" >&2
+      exit 65
+    fi
+  done < <(find "$plugin_root" -type l -print | sort)
+done < <(
+  jq -r --slurpfile codex "$CODEX_CATALOG" '
+    .plugins[] as $claude
+    | ($codex[0].plugins[] | select(.name == $claude.name)) as $codex_plugin
+    | [$claude.name, $claude.source, $codex_plugin.source.path]
+    | @tsv
+  ' "$CLAUDE_CATALOG"
+)
+
+if jq -e '.plugins[] | has("version")' "$CLAUDE_CATALOG" >/dev/null; then
+  printf 'Claude catalog entries must omit version under Git-revision policy.\n' >&2
+  exit 65
+fi
+
+printf 'Checking for engine-specific installation paths...\n'
+if rg -n '((~|\$HOME|/Users/[^/]+|/home/[^/]+)/\.(claude|codex)(/|$)|(/Users/[^/]+|/home/[^/]+)/(.*\/)?(plugins|skills)/)' "$REPO_ROOT/plugins"; then
+  printf 'Found a hard-coded Claude or Codex installation path.\n' >&2
+  exit 65
+fi
+
+printf 'Validating Agent Skills...\n'
+while IFS= read -r skill_file; do
+  agentskills validate "$(dirname "$skill_file")"
+done < <(find "$REPO_ROOT/plugins" -type f -name SKILL.md -print | sort)
+
+printf 'Validating bundled helper scripts...\n'
+while IFS= read -r script; do
+  bash -n "$script"
+done < <(find "$REPO_ROOT/plugins" -type f -path '*/scripts/*.sh' -print | sort)
+
+PYTHONPYCACHEPREFIX="${TMPDIR:-/tmp}/agent-tooling-pycache" \
+  python3 -m compileall -q "$REPO_ROOT/plugins"
+python3 -m unittest discover -s "$REPO_ROOT/tests" -p 'test_*.py'
+
+printf 'Static validation passed.\n'

@@ -9,9 +9,10 @@ an application repository.
 
 ## Status
 
-The repository is in bootstrap mode. The first pilot packages the shared
-`obsidian-vault` skill as the `obsidian` plugin for both clients. Existing
-standalone installations remain the rollback path until the pilot passes.
+The dual catalogs and first `obsidian-vault` package are bootstrapped. The pilot
+is being hardened and validated before it replaces either standalone
+installation. Existing standalone installations remain the rollback path until
+Git-backed install, update, and normal-use canaries pass.
 
 ## Repository contract
 
@@ -37,8 +38,12 @@ agent-tooling/
 
 - Claude plugin releases follow the marketplace Git revision; omit plugin
   `version` fields unless a future compatibility requirement changes the policy.
-- Codex plugin manifests use semantic versions and must be bumped when their
-  packaged contents change.
+- Codex plugin releases also follow the marketplace Git revision; omit plugin
+  `version` fields unless a future compatibility requirement changes the policy.
+
+Microsoft APM was tested as a possible compiler. The result was a partial adopt:
+native manifests remain authoritative, while APM's lockfile and audit features
+remain candidates for a later optional layer. See [docs/apm-spike.md](docs/apm-spike.md).
 
 ## Rollout
 
