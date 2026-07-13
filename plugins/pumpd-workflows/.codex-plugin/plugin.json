@@ -1,17 +1,17 @@
 {
   "name": "pumpd-workflows",
-  "description": "Planning, review, Git, Linear, and worktree workflows for PUMPD",
+  "description": "Local PUMPD maintenance workflows outside the Cyrus pipeline",
   "author": {
     "name": "Arend Alloul"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "PUMPD Workflows",
-    "shortDescription": "Plan, review, track, and deliver PUMPD work",
-    "longDescription": "Reusable PUMPD research, planning, decomposition, review, Linear, pull request, and worktree workflows.",
+    "shortDescription": "Maintain local PUMPD agent worktrees",
+    "longDescription": "Small local PUMPD maintenance workflows that are intentionally separate from the Cyrus planning and delegation pipeline.",
     "developerName": "Arend Alloul",
     "category": "Developer Tools",
     "capabilities": ["Read", "Write"],
-    "defaultPrompt": ["Use the appropriate PUMPD workflow skill for this task."]
+    "defaultPrompt": ["Use the PUMPD local cleanup skill for this maintenance task."]
   }
 }

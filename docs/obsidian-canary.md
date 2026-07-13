@@ -41,8 +41,8 @@ than assumed from a fixed tool-name prefix.
 
 ## Update canary
 
-1. Install the released plugin from the Git-backed marketplace in temporary
-   Claude and Codex homes.
+1. Install `personal@agent-tooling` from the Git-backed marketplace in
+   temporary Claude and Codex homes.
 2. Change a harmless sentence in this file or the skill description.
 3. Commit and push the canary revision.
 4. Run each client's native marketplace refresh/upgrade.

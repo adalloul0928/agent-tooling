@@ -1,0 +1,17 @@
+{
+  "name": "wet-in-seattle",
+  "description": "Analytics and operating workflows for It's Always Wet In Seattle",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Wet In Seattle",
+    "shortDescription": "Run Wet In Seattle reporting workflows",
+    "longDescription": "Private analytics and operating workflows for the It's Always Wet In Seattle storefront.",
+    "developerName": "Arend Alloul",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Use the matching Wet In Seattle skill for this task."]
+  }
+}

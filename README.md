@@ -9,12 +9,17 @@ an application repository.
 
 ## Status
 
-The dual catalogs now publish four native plugins from one shared skill core:
+The dual catalogs publish four focused native plugins from shared skill cores:
 
-- `obsidian`: vault workflows;
-- `pumpd-workflows`: PUMPD research, planning, review, delivery, and Git workflows;
-- `agent-ops`: tooling management, research, learning, usage review, and Cyrus setup;
-- `personal-productivity`: IAWIS reporting and personal task workflows.
+- `personal`: Obsidian vault and personal task workflows;
+- `cyrus-workflows`: PUMPD research, planning, review, delegation, learning,
+  and retrospective workflows for Cyrus;
+- `pumpd-workflows`: small local PUMPD maintenance workflows outside Cyrus;
+- `wet-in-seattle`: IAWIS analytics and operating workflows.
+
+These plugins and their bundled skills are first-party creations. Vendor
+plugins, MCP servers, and CLIs remain with their publishers and are referenced
+through desired-state profiles rather than copied into this repository.
 
 Existing standalone installations remain the rollback path until Git-backed
 install, update, and normal-use canaries pass.

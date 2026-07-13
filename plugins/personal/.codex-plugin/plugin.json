@@ -1,0 +1,22 @@
+{
+  "name": "personal",
+  "description": "Personal vault and task-management workflows",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Personal",
+    "shortDescription": "Manage personal notes and tasks",
+    "longDescription": "Safely manage Arend's Obsidian vault and synchronized personal task workflows across Obsidian and Linear.",
+    "developerName": "Arend Alloul",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use the matching personal skill for this vault or task workflow."
+    ]
+  }
+}

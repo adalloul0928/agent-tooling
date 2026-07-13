@@ -62,6 +62,7 @@
             "same_file",
             "claude_plugin",
             "claude_marketplace",
+            "claude_mcp",
             "claude_setting",
             "codex_plugin",
             "codex_marketplace",
