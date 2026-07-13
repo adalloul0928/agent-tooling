@@ -9,10 +9,15 @@ an application repository.
 
 ## Status
 
-The dual catalogs and first `obsidian-vault` package are bootstrapped. The pilot
-is being hardened and validated before it replaces either standalone
-installation. Existing standalone installations remain the rollback path until
-Git-backed install, update, and normal-use canaries pass.
+The dual catalogs now publish four native plugins from one shared skill core:
+
+- `obsidian`: vault workflows;
+- `pumpd-workflows`: PUMPD research, planning, review, delivery, and Git workflows;
+- `agent-ops`: tooling management, research, learning, usage review, and Cyrus setup;
+- `personal-productivity`: IAWIS reporting and personal task workflows.
+
+Existing standalone installations remain the rollback path until Git-backed
+install, update, and normal-use canaries pass.
 
 ## Repository contract
 
@@ -47,12 +52,12 @@ remain candidates for a later optional layer. See [docs/apm-spike.md](docs/apm-s
 
 ## Rollout
 
-1. Validate the repository contract and the `obsidian-vault` pilot.
+1. Validate the repository contract and each plugin package.
 2. Test local path installation in isolated client homes.
 3. Test private GitHub marketplace installation and refresh behavior.
 4. Run explicit invocation, implicit invocation, non-trigger, read, write, and
    Git-review canaries.
-5. Migrate additional skills in small, independently reversible batches.
+5. Remove the matching standalone copies only after the relevant canaries pass.
 
 ## Validation
 

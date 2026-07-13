@@ -1,0 +1,7 @@
+{
+  "name": "pumpd-workflows",
+  "description": "Planning, review, Git, Linear, and worktree workflows for PUMPD",
+  "author": {
+    "name": "Arend Alloul"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "agent-ops",
+  "description": "Cross-client tooling setup, research, learning, and Cyrus operations",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agent Operations",
+    "shortDescription": "Manage and improve personal agent tooling",
+    "longDescription": "Cross-client workflows for adding tooling, researching, capturing learnings, analyzing usage, and setting up Cyrus.",
+    "developerName": "Arend Alloul",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Use the matching agent operations skill for this tooling task."]
+  }
+}

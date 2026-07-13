@@ -63,6 +63,13 @@
       "server": "expo",
       "expected": "absent",
       "severity": "warning"
+    },
+    {
+      "id": "codex.duplicate-ios-simulator-mcp",
+      "kind": "codex_mcp",
+      "server": "ios_simulator",
+      "expected": "absent",
+      "severity": "warning"
     }
   ]
 }

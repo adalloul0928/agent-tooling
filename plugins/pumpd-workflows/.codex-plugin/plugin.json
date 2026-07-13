@@ -1,0 +1,17 @@
+{
+  "name": "pumpd-workflows",
+  "description": "Planning, review, Git, Linear, and worktree workflows for PUMPD",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "PUMPD Workflows",
+    "shortDescription": "Plan, review, track, and deliver PUMPD work",
+    "longDescription": "Reusable PUMPD research, planning, decomposition, review, Linear, pull request, and worktree workflows.",
+    "developerName": "Arend Alloul",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Use the appropriate PUMPD workflow skill for this task."]
+  }
+}
