@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 BLOCKED_PARTS = {".git", ".obsidian", ".smart-env", ".trash"}
+NON_PROJECT_ROOTS = {"00 Inbox", "_Templates", "_Attachments", "99 Archive"}
 STATUS_CHOICES = ("draft", "captured", "active", "review", "archived", "done", "reference")
 
 
@@ -33,7 +34,10 @@ def yaml_field(key: str, value: str) -> str:
 
 def infer_project_area(rel: Path) -> tuple[str, str]:
     parts = rel.parts
-    project = parts[0] if parts else ""
+    if len(parts) < 2 or parts[0] in NON_PROJECT_ROOTS:
+        return "", ""
+
+    project = parts[0]
     area = ""
     if len(parts) > 2:
         area = " / ".join(parts[1:-1])
