@@ -85,6 +85,20 @@ class NewNoteTests(unittest.TestCase):
         self.assertEqual(escaping.returncode, 64)
         self.assertIn("outside the vault", escaping.stderr)
 
+    def test_does_not_infer_project_from_organizational_or_root_paths(self) -> None:
+        for relative_path in ("00 Inbox/Inbox Note.md", "Root Note.md"):
+            with self.subTest(relative_path=relative_path):
+                result = self.run_script(
+                    relative_path,
+                    "--title",
+                    Path(relative_path).stem,
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                content = (self.vault / relative_path).read_text(encoding="utf-8")
+                self.assertNotIn("\nproject:", content)
+                self.assertNotIn("\narea:", content)
+
     def test_rejects_non_vault_and_non_markdown_targets(self) -> None:
         not_markdown = self.run_script(
             "PUMPD/Tasks/Todo/Bad.txt",
