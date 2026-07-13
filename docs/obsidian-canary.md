@@ -3,6 +3,9 @@
 Run these cases in fresh sessions. Do not point mutation cases at a valuable
 note; use a temporary vault or a disposable note in the real vault.
 
+Current update marker: connector capabilities are discovered per client rather
+than assumed from a fixed tool-name prefix.
+
 ## Trigger cases
 
 - "Use the Obsidian Vault skill to find the Claude tooling strategy."
