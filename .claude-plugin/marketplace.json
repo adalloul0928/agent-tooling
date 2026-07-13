@@ -9,6 +9,21 @@
       "name": "obsidian",
       "source": "./plugins/obsidian",
       "description": "Safe workflows for managing Arend's Obsidian vault"
+    },
+    {
+      "name": "pumpd-workflows",
+      "source": "./plugins/pumpd-workflows",
+      "description": "Planning, review, Git, Linear, and worktree workflows for PUMPD"
+    },
+    {
+      "name": "agent-ops",
+      "source": "./plugins/agent-ops",
+      "description": "Cross-client tooling setup, research, learning, and Cyrus operations"
+    },
+    {
+      "name": "personal-productivity",
+      "source": "./plugins/personal-productivity",
+      "description": "Private IAWIS reporting and personal task workflows"
     }
   ]
 }

@@ -96,6 +96,104 @@
       "severity": "warning"
     },
     {
+      "id": "pumpd.architecture-canonical",
+      "kind": "path",
+      "path": "${project_root}/.agents/skills/pumpd-architecture/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.architecture-claude",
+      "kind": "path",
+      "path": "${project_root}/.claude/skills/pumpd-architecture/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.ui-patterns-canonical",
+      "kind": "path",
+      "path": "${project_root}/.agents/skills/pumpd-ui-patterns/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.ui-patterns-claude",
+      "kind": "path",
+      "path": "${project_root}/.claude/skills/pumpd-ui-patterns/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.testing-canonical",
+      "kind": "path",
+      "path": "${project_root}/.agents/skills/pumpd-testing/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.testing-claude",
+      "kind": "path",
+      "path": "${project_root}/.claude/skills/pumpd-testing/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.supabase-patterns-canonical",
+      "kind": "path",
+      "path": "${project_root}/.agents/skills/pumpd-supabase-patterns/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.supabase-patterns-claude",
+      "kind": "path",
+      "path": "${project_root}/.claude/skills/pumpd-supabase-patterns/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.quality-canonical",
+      "kind": "path",
+      "path": "${project_root}/.agents/skills/quality/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.quality-claude",
+      "kind": "path",
+      "path": "${project_root}/.claude/skills/quality/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.sync-types-canonical",
+      "kind": "path",
+      "path": "${project_root}/.agents/skills/sync-types/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.sync-types-claude",
+      "kind": "path",
+      "path": "${project_root}/.claude/skills/sync-types/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.ios-simulator-skill-canonical",
+      "kind": "path",
+      "path": "${project_root}/.agents/skills/pumpd-ios-simulator/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "pumpd.ios-simulator-skill-claude",
+      "kind": "path",
+      "path": "${project_root}/.claude/skills/pumpd-ios-simulator/SKILL.md",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
       "id": "pumpd.claude-supabase-local",
       "kind": "project_claude_mcp",
       "path": "${project_root}/.mcp.json",

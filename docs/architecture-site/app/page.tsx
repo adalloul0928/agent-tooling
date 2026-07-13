@@ -38,19 +38,19 @@ const journeys: Journey[] = [
       },
       {
         index: "02",
-        title: "Package and lock",
+        title: "Package natively",
         detail:
-          "APM resolves the package, records an exact source and content hash, and can generate the Claude and Codex catalogs.",
-        status: "pilot",
-        owner: "APM",
+          "Add thin Claude and Codex manifests plus entries in both native catalogs. Git revisions identify the release.",
+        status: "native",
+        owner: "agent-tooling",
       },
       {
         index: "03",
         title: "Install locally",
         detail:
-          "APM renders the shared skill into Claude Code and Codex native locations. Each client still reads its own files.",
+          "Each client installs the matching native plugin from the same Git revision. Each still reads its own catalog and cache.",
         status: "automatic",
-        owner: "APM → clients",
+        owner: "native marketplaces",
       },
       {
         index: "04",
@@ -84,7 +84,7 @@ const journeys: Journey[] = [
         detail:
           "Declare that the workstation or project expects a capability such as Linear, including which surfaces should receive it.",
         status: "pilot",
-        owner: "APM profile",
+        owner: "desired-state profile",
       },
       {
         index: "02",
@@ -98,7 +98,7 @@ const journeys: Journey[] = [
         index: "03",
         title: "Authenticate per client",
         detail:
-          "OAuth and tokens remain in the client or account that uses them. Credentials never belong in agent-tooling or an APM lockfile.",
+          "OAuth and tokens remain in the client or account that uses them. Credentials never belong in agent-tooling or a desired-state profile.",
         status: "manual",
         owner: "local client",
       },
@@ -117,24 +117,24 @@ const journeys: Journey[] = [
     eyebrow: "A tool connection",
     title: "MCP server",
     summary:
-      "One neutral desired-state entry can produce Claude JSON and Codex TOML, while client-specific overrides preserve real differences.",
-    rule: "Share intent, not secrets. Render native files instead of forcing identical schemas.",
+      "Profiles record which MCP capability belongs on each surface, while Claude JSON and Codex TOML remain native, reviewable files.",
+    rule: "Share intent, not secrets. Keep native schemas explicit instead of forcing identical configuration.",
     steps: [
       {
         index: "01",
-        title: "Declare once",
+        title: "Classify once",
         detail:
-          "Put command, arguments, transport, environment placeholders, scope, and target clients in the APM manifest.",
-        status: "pilot",
-        owner: "APM manifest",
+          "Record the capability owner, scope, target clients, and whether it is user-local or project-critical in the profile and docs.",
+        status: "automatic",
+        owner: "profile + docs",
       },
       {
         index: "02",
-        title: "Render per client",
+        title: "Configure per client",
         detail:
-          "APM writes Claude's MCP JSON and Codex's MCP TOML without pretending the two schemas are identical.",
-        status: "automatic",
-        owner: "APM adapters",
+          "Write Claude's MCP JSON and Codex's MCP TOML through each native CLI or committed project file.",
+        status: "native",
+        owner: "native config",
       },
       {
         index: "03",
@@ -156,9 +156,9 @@ const journeys: Journey[] = [
         index: "05",
         title: "Audit and prune",
         detail:
-          "APM can compare declared state with deployed files, report drift, and remove only resources it owns.",
-        status: "pilot",
-        owner: "APM lifecycle",
+          "The read-only doctor compares declared state with local files. Cleanup is explicit, backed up, and performed with native CLIs.",
+        status: "automatic",
+        owner: "doctor + native CLIs",
       },
     ],
   },
@@ -180,11 +180,11 @@ const journeys: Journey[] = [
       },
       {
         index: "02",
-        title: "Project install",
+        title: "Project projection",
         detail:
-          "An APM project manifest can resolve shared packages and produce Claude and Codex project-native outputs.",
-        status: "pilot",
-        owner: "project APM",
+          "Commit one canonical skill under .agents/skills and expose it to Claude with an in-repo relative directory symlink.",
+        status: "native",
+        owner: "project repo",
       },
       {
         index: "03",
@@ -312,11 +312,11 @@ const surfaces = [
 ];
 
 const matrixRows = [
-  ["Owned skill", "Canonical source", "Install + lock", "Plugin install", "Account plugin", "Commit projection", "Plugin install", "Commit + canary"],
-  ["Vendor plugin", "Reference only", "Pilot tracking", "Native marketplace", "Native marketplace", "Project declaration", "Native marketplace", "Pilot"],
-  ["MCP server", "Definition/template", "Render adapters", "JSON config", "Connector UI", "Committed .mcp.json", "TOML config", "Committed config"],
-  ["Project rules", "Reusable pieces", "Project render", "CLAUDE.md", "Not inherited", "Repo checkout", "AGENTS.md", "Repo checkout"],
-  ["OAuth / secrets", "Never", "References only", "Local runtime", "Account", "Cloud environment", "Local runtime", "Cloud environment"],
+  ["Owned skill", "Canonical source", "Expected plugin", "Plugin install", "Account plugin", "Commit projection", "Plugin install", "Commit + canary"],
+  ["Vendor plugin", "Reference only", "Expected vendor", "Native marketplace", "Native marketplace", "Project declaration", "Native marketplace", "Manual check"],
+  ["MCP server", "Docs/template", "Expected server", "JSON config", "Connector UI", "Committed .mcp.json", "TOML config", "Committed config"],
+  ["Project rules", "Reusable pieces", "Expected files", "CLAUDE.md", "Not inherited", "Repo checkout", "AGENTS.md", "Repo checkout"],
+  ["OAuth / secrets", "Never", "Manual only", "Local runtime", "Account", "Cloud environment", "Local runtime", "Cloud environment"],
 ];
 
 const statusLabels: Record<Status, string> = {
@@ -360,7 +360,7 @@ export default function Home() {
             <em>Many surfaces.</em>
           </h1>
           <p className="hero-intro">
-            A visual map of what <strong>agent-tooling</strong> owns, what <strong>APM</strong> can automate,
+            A visual map of what <strong>agent-tooling</strong> owns, what <strong>profiles and doctor</strong> track,
             what Claude and Codex load locally or in the cloud, and where a human still has to click, connect, or verify.
           </p>
           <div className="hero-actions">
@@ -379,7 +379,7 @@ export default function Home() {
             <small>owned source + catalogs</small>
           </div>
           <div className="satellite satellite-apm">
-            <span>02</span><strong>APM</strong><small>desired state</small>
+            <span>02</span><strong>Profiles</strong><small>desired state</small>
           </div>
           <div className="satellite satellite-claude">
             <span>03A</span><strong>Claude</strong><small>native adapter</small>
@@ -398,7 +398,7 @@ export default function Home() {
         <span className="section-number">00</span>
         <div>
           <p className="kicker">The plain-English version</p>
-          <h2>Git stores the recipe. APM prepares the kitchens. Each app still cooks in its own way.</h2>
+          <h2>Git stores the recipe. Profiles describe the kitchens. Each app still cooks in its own way.</h2>
         </div>
         <p>
           Nothing turns Claude and Codex into one product. The strategy gives them a shared source where possible,
@@ -434,15 +434,15 @@ export default function Home() {
 
           <article className="layer-card layer-apm">
             <div className="layer-topline"><span>Layer 02</span><span>Reconcile</span></div>
-            <h3>Microsoft APM</h3>
-            <p>The candidate package manager for local and project desired state.</p>
+            <h3>Profiles + doctor</h3>
+            <p>The small, read-only control plane for local and project desired state.</p>
             <ul>
-              <li>One manifest + exact lockfile</li>
-              <li>Target-specific rendering</li>
-              <li>Install, update, audit, prune</li>
-              <li>Catalog generation + CI checks</li>
+              <li>Composable desired-state profiles</li>
+              <li>Native inventory inspection</li>
+              <li>Drift and missing-capability reports</li>
+              <li>Manual hosted-account checks</li>
             </ul>
-            <div className="layer-rule">Pilot first. It is not yet the trusted production owner.</div>
+            <div className="layer-rule">Read-only by design. Installation and OAuth remain native actions.</div>
           </article>
 
           <article className="layer-card layer-native">
@@ -474,7 +474,7 @@ export default function Home() {
 
         <div className="truth-strip">
           <div><span>Source of truth</span><strong>agent-tooling + project Git</strong></div>
-          <div><span>Desired state</span><strong>APM manifests + lockfiles</strong></div>
+          <div><span>Desired state</span><strong>Composable profiles + checklists</strong></div>
           <div><span>Actual state</span><strong>Native clients + account UIs</strong></div>
           <div><span>Proof</span><strong>doctor, audit, and canaries</strong></div>
         </div>
@@ -583,22 +583,22 @@ export default function Home() {
       <section className="section apm-section" id="operations">
         <div className="section-heading">
           <div>
-            <p className="kicker">04 · APM&apos;s role</p>
-            <h2>A package manager, not another agent</h2>
+            <p className="kicker">04 · Control-plane decision</p>
+            <h2>Native adapters now; APM ideas selectively</h2>
           </div>
           <p className="section-lede">
-            APM runs before the clients. It prepares and verifies configuration; it does not answer prompts, hold OAuth, or replace Claude and Codex.
+            The APM spike was a partial adoption. Native manifests remain authoritative; profiles and doctor borrow the useful desired-state and audit ideas without introducing a second compiler.
           </p>
         </div>
 
         <div className="lifecycle">
           {[
-            ["01", "Declare", "apm.yml says what each target should receive"],
-            ["02", "Resolve", "Sources and transitive dependencies are selected"],
-            ["03", "Lock", "Exact commits and content hashes are recorded"],
-            ["04", "Render", "Native Claude and Codex files are produced"],
-            ["05", "Audit", "Missing, edited, or orphaned files are reported"],
-            ["06", "Update", "A reviewed plan advances versions or removes state"],
+            ["01", "Author", "Shared skills live once in agent-tooling or the project"],
+            ["02", "Adapt", "Thin native manifests expose Claude and Codex packages"],
+            ["03", "Release", "Immutable Git revisions identify known-good content"],
+            ["04", "Install", "Native marketplaces preserve client semantics"],
+            ["05", "Inspect", "doctor reports missing, duplicate, or deferred state"],
+            ["06", "Clean", "Backed-up native commands make explicit changes"],
           ].map(([number, title, copy], index) => (
             <article key={number}>
               <div className="life-number">{number}</div>
@@ -611,23 +611,23 @@ export default function Home() {
 
         <div className="apm-split">
           <article className="apm-does">
-            <p className="kicker">What APM can own</p>
-            <h3>File-based, reproducible state</h3>
+            <p className="kicker">What is live now</p>
+            <h3>Small, native, reviewable state</h3>
             <div className="check-grid">
               {[
-                "Portable skill installation",
-                "Claude/Codex target rendering",
-                "MCP definitions and provenance",
-                "Dependency and version locking",
-                "Generated-file ownership",
-                "Drift and integrity audits",
-                "Safe uninstall and prune",
-                "Marketplace artifact generation",
+                "One portable skill core",
+                "Native Claude/Codex catalogs",
+                "Immutable Git release refs",
+                "Composable desired-state profiles",
+                "Read-only local inventory",
+                "Static package validation",
+                "Explicit backed-up cleanup",
+                "Manual hosted-state ledger",
               ].map((item) => <div key={item}><span>+</span>{item}</div>)}
             </div>
           </article>
           <article className="apm-does-not">
-            <p className="kicker">What remains outside APM</p>
+            <p className="kicker">What stays separate</p>
             <h3>Identity, accounts, and runtime trust</h3>
             <div className="check-grid">
               {[
@@ -646,21 +646,21 @@ export default function Home() {
 
         <div className="command-card">
           <div className="command-copy">
-            <p className="kicker">The eventual workstation loop</p>
-            <h3>Change intent, preview, apply, prove.</h3>
-            <p>Commands shown are the target operating model. APM remains behind a disposable-home pilot until its config-preservation canaries pass.</p>
+            <p className="kicker">The current workstation loop</p>
+            <h3>Change source, validate, inspect, apply natively.</h3>
+            <p>There is no general automatic apply. The doctor stays read-only; mutations are narrow native commands with a rollback snapshot.</p>
           </div>
-          <pre aria-label="Example APM workflow"><code><span className="prompt">$</span> apm install --dry-run
-<span className="comment"># inspect the proposed Claude + Codex changes</span>
+          <pre aria-label="Example native workflow"><code><span className="prompt">$</span> ./scripts/validate
+<span className="comment"># validate both catalogs and isolated native installs</span>
 
-<span className="prompt">$</span> apm install -g --target claude,codex
-<span className="comment"># reconcile the approved local state</span>
+<span className="prompt">$</span> ./scripts/doctor pumpd-workstation
+<span className="comment"># inspect desired state without changing anything</span>
 
-<span className="prompt">$</span> apm audit
-<span className="comment"># prove deployed files match the lock</span>
+<span className="prompt">$</span> claude plugin update plugin@agent-tooling
+<span className="comment"># apply one reviewed Claude package update</span>
 
-<span className="prompt">$</span> apm update --dry-run
-<span className="comment"># review updates before accepting them</span></code></pre>
+<span className="prompt">$</span> codex plugin add plugin@agent-tooling --json
+<span className="comment"># apply the matching Codex package natively</span></code></pre>
         </div>
       </section>
 
@@ -678,7 +678,7 @@ export default function Home() {
               <tr>
                 <th>Capability</th>
                 <th>agent-tooling</th>
-                <th>APM</th>
+                <th>Profile / doctor</th>
                 <th>Claude local</th>
                 <th>Claude hosted</th>
                 <th>Claude cloud</th>
@@ -724,7 +724,7 @@ export default function Home() {
           <div className="end-state-flow">
             <div><span>1</span><strong>Add or declare</strong><small>in the canonical source</small></div>
             <i>→</i>
-            <div><span>2</span><strong>Preview and apply</strong><small>through APM or native manager</small></div>
+            <div><span>2</span><strong>Validate and apply</strong><small>through each native manager</small></div>
             <i>→</i>
             <div><span>3</span><strong>Verify each surface</strong><small>with inventory and canaries</small></div>
             <i>→</i>

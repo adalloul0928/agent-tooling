@@ -1,0 +1,4 @@
+interface:
+  display_name: "PUMPD Local Cleanup"
+  short_description: "Clean local PUMPD branches and worktrees"
+  default_prompt: "Use $pumpd-local-cleanup to clean local Claude/Codex branches and worktrees, then update main and preview."

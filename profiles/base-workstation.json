@@ -34,6 +34,42 @@
       "expected": "enabled"
     },
     {
+      "id": "claude.pumpd-workflows-plugin",
+      "kind": "claude_plugin",
+      "plugin": "pumpd-workflows@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "codex.pumpd-workflows-plugin",
+      "kind": "codex_plugin",
+      "plugin": "pumpd-workflows@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "claude.agent-ops-plugin",
+      "kind": "claude_plugin",
+      "plugin": "agent-ops@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "codex.agent-ops-plugin",
+      "kind": "codex_plugin",
+      "plugin": "agent-ops@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "claude.personal-productivity-plugin",
+      "kind": "claude_plugin",
+      "plugin": "personal-productivity@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "codex.personal-productivity-plugin",
+      "kind": "codex_plugin",
+      "plugin": "personal-productivity@agent-tooling",
+      "expected": "enabled"
+    },
+    {
       "id": "claude.orphaned-supabase-marketplace",
       "kind": "claude_marketplace",
       "name": "supabase-agent-skills",

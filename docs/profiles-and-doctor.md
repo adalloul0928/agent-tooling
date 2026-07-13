@@ -47,7 +47,7 @@ The default profile is `pumpd-workstation`. Required failures return exit code
 `1`. Advisory warnings do not fail a normal run; `--strict` returns `2` when
 warnings remain. Invalid profiles return `65`.
 
-The initial profiles intentionally expose known next work rather than claiming
-a clean setup: project-owned review skills are still missing, connector
-separation is not enabled, duplicate Codex MCP providers remain, and hosted
-checks require a person.
+Profiles intentionally expose known next work rather than claiming a clean
+setup. Connector separation remains advisory until every required local twin is
+authenticated, hosted checks still require a person, and newly published
+plugins remain required-but-missing until their release is installed.
