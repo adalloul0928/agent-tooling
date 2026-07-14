@@ -254,28 +254,28 @@ const surfaces = [
     tone: "claude",
     items: [
       {
-        name: "Chat + Desktop Chat",
+        name: "Claude.ai Chat",
         kind: "Hosted account",
-        receives: "Account skills, connectors, installed account plugins",
-        misses: "Local ~/.claude and project machine state",
+        receives: "Enabled account skills, connectors, and account plugins",
+        misses: "Local ~/.claude, local MCPs, and a project checkout",
       },
       {
-        name: "Cowork",
-        kind: "Hosted workbench",
-        receives: "Account plugins, connectors, skills, hooks, sub-agents",
-        misses: "Private machine paths unless explicitly exposed",
+        name: "Claude Desktop Chat",
+        kind: "Desktop chat surface",
+        receives: "Claude account state plus desktop chat extensions and MCP configuration",
+        misses: "Claude Code plugin state merely because Code is embedded in the same app",
       },
       {
         name: "Code Desktop + CLI",
         kind: "Local code client",
-        receives: "CLAUDE.md, ~/.claude, repo .claude, MCPs, Code plugins",
-        misses: "Codex configuration; account connectors after separation",
+        receives: "CLAUDE.md, local and project .claude config, Code plugins, local MCPs",
+        misses: "Codex configuration; hosted connectors when user-scoped separation is enabled",
       },
       {
         name: "Code cloud + Routines",
         kind: "Fresh cloud VM",
-        receives: "Cloned repo config, project plugins/MCPs, enabled account skills",
-        misses: "Local home skills, user plugins, local MCP state",
+        receives: "Committed repo config, project-declared plugins/MCPs, enabled claude.ai skills",
+        misses: "Local home skills, user-only Code plugins, local MCP state, local credentials",
       },
     ],
   },
@@ -319,6 +319,106 @@ const matrixRows = [
   ["OAuth / secrets", "Never", "Manual only", "Local runtime", "Account", "Cloud environment", "Local runtime", "Cloud environment"],
 ];
 
+const buildingBlocks = [
+  {
+    name: "Skill",
+    role: "Teaches a repeatable procedure",
+    example: "obsidian-vault, pumpd-plan",
+    boundary: "Instructions and supporting files; it does not grant service access by itself.",
+  },
+  {
+    name: "MCP server",
+    role: "Provides live tools or data",
+    example: "analytics-mcp, Supabase",
+    boundary: "A declaration is separate from authentication and runtime health.",
+  },
+  {
+    name: "Plugin",
+    role: "Bundles one or more atoms",
+    example: "personal, cyrus-workflows",
+    boundary: "May contain skills, MCP declarations, hooks, or agents; installation is client-specific.",
+  },
+  {
+    name: "Marketplace",
+    role: "Advertises installable plugins",
+    example: "agent-tooling, openai-curated",
+    boundary: "Registering a catalog does not install every plugin inside it.",
+  },
+  {
+    name: "Connector / app",
+    role: "Adds an account-hosted integration",
+    example: "Gmail, Drive, hosted Linear",
+    boundary: "Lives in Claude.ai or ChatGPT account state, outside local Git.",
+  },
+  {
+    name: "CLI",
+    role: "Executes a vendor's native commands",
+    example: "supabase, doppler, expo, vercel",
+    boundary: "Often complements an MCP; credentials remain in the vendor or local environment.",
+  },
+  {
+    name: "Profile",
+    role: "Describes expected state",
+    example: "pumpd-workstation",
+    boundary: "Our doctor reads and reports it; profiles never install or authenticate anything.",
+  },
+  {
+    name: "Project config",
+    role: "Guarantees checkout-owned behavior",
+    example: "AGENTS.md, .mcp.json",
+    boundary: "This is the reliable path for local teammates and fresh cloud sessions.",
+  },
+];
+
+const ownedBundles = [
+  {
+    name: "personal",
+    scope: "Base workstation",
+    skills: ["obsidian-vault", "personal-task", "personal-task-done"],
+    note: "Installed in local Claude Code and Codex. This is the home for future broadly useful personal workflows.",
+  },
+  {
+    name: "cyrus-workflows",
+    scope: "PUMPD workstation",
+    skills: ["cyrus-setup", "pumpd-research", "pumpd-plan", "pumpd-review", "pumpd-decompose", "log-learning", "pumpd-retro"],
+    note: "Owns the Cyrus research-to-delegation loop. Learning and retro remain human-triggered for now.",
+  },
+  {
+    name: "pumpd-workflows",
+    scope: "PUMPD workstation",
+    skills: ["pumpd-local-cleanup"],
+    note: "Only local PUMPD maintenance that is not part of the Cyrus automation pipeline.",
+  },
+  {
+    name: "wet-in-seattle",
+    scope: "Wet In Seattle workstation",
+    skills: ["iawis-weekly-report"],
+    note: "Project-specific reporting workflow. analytics-mcp is configured separately because auth is not a plugin dependency.",
+  },
+];
+
+const projectSkills = [
+  "backend-review",
+  "fix-review",
+  "pumpd-architecture",
+  "pumpd-ios-simulator",
+  "pumpd-supabase-patterns",
+  "pumpd-testing",
+  "pumpd-ui-patterns",
+  "quality",
+  "sync-types",
+];
+
+const vendorTools = [
+  ["Linear", "Official plugin / MCP", "Local Claude + Codex", "OAuth in each client; Cyrus remains a separate automation integration"],
+  ["Supabase", "Official plugin / MCP + CLI", "Local clients + PUMPD project", "Use project-local MCP for local DB work; authenticate hosted access separately"],
+  ["Sentry", "Official plugin / MCP", "Local Claude + Codex", "Use CLI only for release/build tasks that need it"],
+  ["Context7", "MCP", "Project or plugin scope", "No owned fork; keep one definition per client/scope"],
+  ["Expo", "Official plugin / skills + CLI", "PUMPD on demand", "Add MCP only when live EAS or simulator operations justify it"],
+  ["Vercel", "Official plugin / MCP + CLI", "Web projects on demand", "Vendor-managed package; project/environment auth stays separate"],
+  ["Doppler", "CLI first", "Projects that consume secrets", "Do not add an MCP until a concrete workflow outweighs the extra secret surface"],
+];
+
 const statusLabels: Record<Status, string> = {
   automatic: "Automated path",
   native: "Native client path",
@@ -342,12 +442,14 @@ export default function Home() {
           <span>Agent Tooling Atlas</span>
         </a>
         <nav aria-label="Guide sections">
+          <a href="#vocabulary">Vocabulary</a>
           <a href="#model">Model</a>
+          <a href="#setup">Our setup</a>
           <a href="#surfaces">Surfaces</a>
-          <a href="#journeys">Trace a capability</a>
-          <a href="#operations">Operations</a>
+          <a href="#profiles">Profiles</a>
+          <a href="#apm">APM</a>
         </nav>
-        <span className="pilot-badge">Pilot architecture · 2026.07</span>
+        <span className="pilot-badge">Desired state · 2026.07</span>
       </header>
 
       <section className="hero" id="top">
@@ -406,10 +508,46 @@ export default function Home() {
         </p>
       </section>
 
+      <section className="section vocabulary-section" id="vocabulary">
+        <div className="section-heading">
+          <div>
+            <p className="kicker">01 · Vocabulary</p>
+            <h2>Every atom has one job</h2>
+          </div>
+          <p className="section-lede">
+            The setup becomes manageable when packaging, procedure, tool access, authentication, and desired state are treated as different things.
+          </p>
+        </div>
+        <div className="vocabulary-grid">
+          {buildingBlocks.map((item, index) => (
+            <article className="vocabulary-item" key={item.name}>
+              <div className="vocabulary-index">{String(index + 1).padStart(2, "0")}</div>
+              <div>
+                <h3>{item.name}</h3>
+                <strong>{item.role}</strong>
+                <p>{item.boundary}</p>
+                <small>Example · {item.example}</small>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="atom-equation" aria-label="Relationship between marketplace, plugin, skills and tools">
+          <div><span>Catalog</span><strong>Marketplace</strong><small>find it</small></div>
+          <i>→</i>
+          <div><span>Package</span><strong>Plugin</strong><small>install it</small></div>
+          <i>→</i>
+          <div><span>Procedure</span><strong>Skill</strong><small>teach it</small></div>
+          <b>+</b>
+          <div><span>Access</span><strong>MCP / CLI</strong><small>do it</small></div>
+          <b>+</b>
+          <div><span>Permission</span><strong>Authentication</strong><small>authorize it</small></div>
+        </div>
+      </section>
+
       <section className="section model-section" id="model">
         <div className="section-heading">
           <div>
-            <p className="kicker">01 · The operating model</p>
+            <p className="kicker">02 · The operating model</p>
             <h2>Four layers, four different jobs</h2>
           </div>
           <p className="section-lede">
@@ -480,10 +618,94 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="section setup-section" id="setup">
+        <div className="section-heading">
+          <div>
+            <p className="kicker">03 · Our actual setup</p>
+            <h2>Small bundles, explicit projects</h2>
+          </div>
+          <p className="section-lede">
+            The private catalog contains only workflows we own. Vendor tooling stays vendor-owned, while behavior required for PUMPD lives with the PUMPD checkout.
+          </p>
+        </div>
+
+        <div className="setup-principle">
+          <div><span>Private catalog</span><strong>4 owned plugins</strong><small>12 portable skills</small></div>
+          <div><span>PUMPD checkout</span><strong>9 project skills</strong><small>committed for local + cloud</small></div>
+          <div><span>Vendor catalogs</span><strong>7 core services</strong><small>installed and authenticated natively</small></div>
+        </div>
+
+        <div className="location-map" aria-label="Where configuration lives">
+          <article>
+            <span>Owned source</span>
+            <h3>agent-tooling</h3>
+            <pre><code>plugins/&lt;bundle&gt;/skills/{"<skill>"}{`\n`}.claude-plugin/marketplace.json{`\n`}.agents/plugins/marketplace.json{`\n`}profiles/*.json{`\n`}scripts/doctor</code></pre>
+          </article>
+          <article>
+            <span>Project guarantee</span>
+            <h3>PUMPD repository</h3>
+            <pre><code>AGENTS.md + CLAUDE.md{`\n`}.agents/skills/{`\n`}.claude/skills/{`\n`}.claude/settings.json{`\n`}.mcp.json{`\n`}.codex/config.toml</code></pre>
+          </article>
+          <article>
+            <span>Local actual state</span>
+            <h3>Workstation homes</h3>
+            <pre><code>~/.claude/{`\n`}  settings + plugins + MCPs{`\n`}~/.codex/{`\n`}  config + plugins + MCPs{`\n`}vendor CLI credentials</code></pre>
+          </article>
+          <article>
+            <span>Hosted actual state</span>
+            <h3>Accounts + cloud</h3>
+            <pre><code>Claude.ai skills/connectors{`\n`}ChatGPT apps/connectors{`\n`}Claude cloud environments{`\n`}Codex cloud environments{`\n`}organization policy</code></pre>
+          </article>
+        </div>
+
+        <div className="bundle-grid">
+          {ownedBundles.map((bundle, index) => (
+            <article className="bundle-card" key={bundle.name}>
+              <div className="bundle-heading">
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <small>{bundle.scope}</small>
+              </div>
+              <h3>{bundle.name}</h3>
+              <div className="skill-list">
+                {bundle.skills.map((skill) => <code key={skill}>{skill}</code>)}
+              </div>
+              <p>{bundle.note}</p>
+              <div className="bundle-owner">First-party · one skill core · Claude + Codex adapters</div>
+            </article>
+          ))}
+        </div>
+
+        <div className="project-owned">
+          <div className="project-owned-copy">
+            <p className="kicker">PUMPD project contract</p>
+            <h3>Cloud-critical behavior travels with the repository</h3>
+            <p>
+              <code>.agents/skills</code> holds the canonical project skills. <code>.claude/skills</code> exposes the same in-repo content to Claude. <code>AGENTS.md</code> is shared guidance; <code>CLAUDE.md</code> is Claude&apos;s lightweight entry point.
+            </p>
+          </div>
+          <div className="project-skill-list">
+            {projectSkills.map((skill, index) => (
+              <div key={skill}><span>{String(index + 1).padStart(2, "0")}</span><code>{skill}</code></div>
+            ))}
+          </div>
+        </div>
+
+        <div className="vendor-table-wrap" tabIndex={0} aria-label="Scrollable third-party tooling strategy">
+          <table className="vendor-table">
+            <thead><tr><th>Third-party tool</th><th>Preferred capability</th><th>Placement</th><th>Operating note</th></tr></thead>
+            <tbody>
+              {vendorTools.map((row) => (
+                <tr key={row[0]}>{row.map((cell, index) => index === 0 ? <th key={cell}>{cell}</th> : <td key={cell}>{cell}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section className="section surfaces-section" id="surfaces">
         <div className="section-heading">
           <div>
-            <p className="kicker">02 · Surface map</p>
+            <p className="kicker">04 · Surface map</p>
             <h2>Claude and Codex are families of products</h2>
           </div>
           <p className="section-lede">
@@ -526,10 +748,55 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="section profiles-section" id="profiles">
+        <div className="section-heading">
+          <div>
+            <p className="kicker">05 · Profiles and doctor</p>
+            <h2>Profiles answer “what should this context have?”</h2>
+          </div>
+          <p className="section-lede">
+            A profile is a composable, secret-free checklist. The doctor compares it with observable files and native client state, then reports without changing anything.
+          </p>
+        </div>
+
+        <div className="profile-diagram" aria-label="Profile composition diagram">
+          <div className="profile-root">
+            <span>Shared parent</span>
+            <strong>base-workstation</strong>
+            <small>agent-tooling catalogs + personal plugin + manual account checks</small>
+          </div>
+          <div className="profile-branch branch-left" aria-hidden="true" />
+          <div className="profile-branch branch-right" aria-hidden="true" />
+          <div className="profile-card profile-pumpd-project">
+            <span>Project layer</span>
+            <strong>pumpd-project</strong>
+            <small>committed instructions, skills, MCPs, hooks, cloud canaries</small>
+          </div>
+          <div className="profile-plus" aria-hidden="true">+</div>
+          <div className="profile-card profile-pumpd">
+            <span>Effective context</span>
+            <strong>pumpd-workstation</strong>
+            <small>base + PUMPD project + cyrus/pumpd bundles + stable vendor plugins</small>
+          </div>
+          <div className="profile-card profile-wet">
+            <span>Effective context</span>
+            <strong>wet-in-seattle-workstation</strong>
+            <small>base + wet-in-seattle bundle + separately authenticated analytics-mcp</small>
+          </div>
+        </div>
+
+        <div className="doctor-grid">
+          <article><span className="doctor-status pass">PASS</span><h3>Observed and correct</h3><p>The expected file, plugin, marketplace, setting, or MCP declaration is present.</p></article>
+          <article><span className="doctor-status warn">WARN</span><h3>Review drift</h3><p>An advisory mismatch exists, such as duplicate configuration or connector separation not yet enabled.</p></article>
+          <article><span className="doctor-status fail">FAIL</span><h3>Required state missing</h3><p>A required capability is absent. The doctor identifies it but does not install it.</p></article>
+          <article><span className="doctor-status manual">MANUAL</span><h3>A person must verify</h3><p>OAuth health, account stores, cloud access, and behavior cannot be proven from local configuration alone.</p></article>
+        </div>
+      </section>
+
       <section className="section journey-section" id="journeys">
         <div className="section-heading journey-heading">
           <div>
-            <p className="kicker">03 · Trace a capability</p>
+            <p className="kicker">06 · Trace a capability</p>
             <h2>What happens when I add…?</h2>
           </div>
           <div className="legend" aria-label="Status legend">
@@ -580,15 +847,76 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section apm-section" id="operations">
+      <section className="section auth-section" id="auth">
         <div className="section-heading">
           <div>
-            <p className="kicker">04 · Control-plane decision</p>
-            <h2>Native adapters now; APM ideas selectively</h2>
+            <p className="kicker">07 · Installation and authentication</p>
+            <h2>Installed is not authenticated</h2>
           </div>
           <p className="section-lede">
-            The APM spike was a partial adoption. Native manifests remain authoritative; profiles and doctor borrow the useful desired-state and audit ideas without introducing a second compiler.
+            The repo can publish packages and describe expected connections. Permission is still granted by the exact local client, hosted account, or cloud environment that will use the service.
           </p>
+        </div>
+
+        <div className="auth-flow" aria-label="Capability installation and authentication flow">
+          <article><span>01 · Source</span><strong>Git or vendor</strong><p>Contains public configuration and package content. Never live tokens.</p></article>
+          <i aria-hidden="true">→</i>
+          <article><span>02 · Install</span><strong>Native client</strong><p>Claude and Codex each record their own installed plugin or MCP declaration.</p></article>
+          <i aria-hidden="true">→</i>
+          <article><span>03 · Authorize</span><strong>Runtime identity</strong><p>OAuth, environment variables, or CLI credentials are granted on that surface.</p></article>
+          <i aria-hidden="true">→</i>
+          <article><span>04 · Verify</span><strong>Behavioral canary</strong><p>A real read or safe action proves the capability works—not merely that its name exists.</p></article>
+        </div>
+
+        <div className="auth-boundaries">
+          <article>
+            <p className="kicker">Local Claude Code</p>
+            <h3>Authenticate in Claude Code</h3>
+            <p>Use Claude Code&apos;s MCP management or supported login flow. Claude Desktop&apos;s general chat MCP configuration is a separate surface from the Code runtime embedded in the desktop app.</p>
+          </article>
+          <article>
+            <p className="kicker">Local Codex</p>
+            <h3>Authenticate in Codex</h3>
+            <p>Use Codex desktop MCP settings or the supported Codex CLI login flow. A ChatGPT app connection does not automatically authenticate the local MCP.</p>
+          </article>
+          <article>
+            <p className="kicker">Hosted accounts</p>
+            <h3>Connect in Claude.ai or ChatGPT</h3>
+            <p>Skills, apps, plugins, and connectors installed in an account remain account state. Git documents expectations but cannot click through OAuth or guarantee refresh.</p>
+          </article>
+          <article>
+            <p className="kicker">Cloud coding</p>
+            <h3>Provision the cloud environment</h3>
+            <p>Fresh VMs receive the committed checkout and supported server-managed state. Local credentials do not travel; cloud environment variables and connector choices must be configured separately.</p>
+          </article>
+        </div>
+
+        <div className="separation-callout">
+          <span>Separation switch</span>
+          <strong>Keep <code>disableClaudeAiConnectors</code> unset until local Linear, Supabase, Sentry, and PUMPD paths are authenticated and canaried.</strong>
+          <p>Then enable it at user scope to keep hosted connectors in chat and deliberate local twins in Claude Code.</p>
+        </div>
+      </section>
+
+      <section className="section apm-section" id="apm">
+        <div className="section-heading">
+          <div>
+            <p className="kicker">08 · Microsoft APM</p>
+            <h2>Useful package manager. Optional here.</h2>
+          </div>
+          <p className="section-lede">
+            APM is an external package manager for agent instructions, skills, hooks, agents, plugins, and MCP declarations. We evaluated version 0.25.0, adopted its mental model, and deliberately did not make its CLI or generated files part of the required setup.
+          </p>
+        </div>
+
+        <div className="apm-definition">
+          <div>
+            <p className="kicker">What APM is</p>
+            <h3><code>apm.yml</code> describes dependencies. <code>apm.lock.yaml</code> pins what was resolved.</h3>
+          </div>
+          <div className="apm-command-flow" aria-label="APM command flow">
+            <span>declare</span><strong>apm.yml</strong><i>→</i><span>resolve</span><strong>lockfile</strong><i>→</i><span>deploy</span><strong>target files</strong><i>→</i><span>prove</span><strong>apm audit</strong>
+          </div>
         </div>
 
         <div className="lifecycle">
@@ -611,37 +939,44 @@ export default function Home() {
 
         <div className="apm-split">
           <article className="apm-does">
-            <p className="kicker">What is live now</p>
-            <h3>Small, native, reviewable state</h3>
+            <p className="kicker">What APM adds</p>
+            <h3>Dependency rigor across agent targets</h3>
             <div className="check-grid">
               {[
-                "One portable skill core",
-                "Native Claude/Codex catalogs",
-                "Immutable Git release refs",
-                "Composable desired-state profiles",
-                "Read-only local inventory",
-                "Static package validation",
-                "Explicit backed-up cleanup",
-                "Manual hosted-state ledger",
+                "One declarative dependency manifest",
+                "Commit-pinned transitive lockfile",
+                "Multi-target skill and MCP deployment",
+                "Per-file integrity hashes",
+                "Drift and orphan detection",
+                "Hidden-Unicode security scanning",
+                "CI and SBOM-friendly audit output",
+                "Pack and marketplace tooling",
               ].map((item) => <div key={item}><span>+</span>{item}</div>)}
             </div>
           </article>
           <article className="apm-does-not">
-            <p className="kicker">What stays separate</p>
-            <h3>Identity, accounts, and runtime trust</h3>
+            <p className="kicker">Why it is not required now</p>
+            <h3>Generation was not lossless for our policy</h3>
             <div className="check-grid">
               {[
-                "Claude.ai standalone skill state",
-                "ChatGPT account plugin state",
-                "Connector installation and OAuth",
-                "Native vendor plugin guarantees",
-                "Secret storage or token rotation",
-                "Cloud network authorization",
-                "MCP process sandboxing",
-                "Proof that a workflow is effective",
+                "Generated Claude versions conflict with Git-revision releases",
+                "No native Codex plugin manifest in the spike",
+                "Target-only metadata crossed package boundaries",
+                "Hooks still required target-aware rewrites",
+                "Hosted account stores remain unsynchronized",
+                "OAuth and secrets still remain per runtime",
+                "Native catalogs are already small and validated",
+                "A third required abstraction would add maintenance",
               ].map((item) => <div key={item}><span>×</span>{item}</div>)}
             </div>
           </article>
+        </div>
+
+        <div className="apm-decision">
+          <div><span>Current authority</span><strong>Hand-authored Claude + Codex catalogs and manifests</strong></div>
+          <div><span>Current control plane</span><strong>Profiles + read-only doctor + native canaries</strong></div>
+          <div><span>Possible later use</span><strong>Consumer lockfile, provenance, Unicode scan, drift audit</strong></div>
+          <div><span>Revisit trigger</span><strong>Native maintenance cost exceeds the extra abstraction</strong></div>
         </div>
 
         <div className="command-card">
@@ -667,7 +1002,7 @@ export default function Home() {
       <section className="section matrix-section">
         <div className="section-heading">
           <div>
-            <p className="kicker">05 · Ownership matrix</p>
+            <p className="kicker">09 · Ownership matrix</p>
             <h2>Who owns what?</h2>
           </div>
           <p className="section-lede">Read across any row to see the same capability expressed through different stores and runtimes.</p>
@@ -697,7 +1032,7 @@ export default function Home() {
 
       <section className="section decision-section">
         <div className="decision-intro">
-          <p className="kicker">06 · Placement rules</p>
+          <p className="kicker">10 · Placement rules</p>
           <h2>Five questions decide where a capability belongs</h2>
           <p>Use these before adding anything. They prevent duplicates, auth collisions, and accidental cloud dependencies.</p>
         </div>
