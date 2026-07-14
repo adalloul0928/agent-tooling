@@ -7,8 +7,8 @@ description: >-
   error — gated on human approval before any edit. Reads the append-only
   "Agent Learnings" log in Obsidian; optionally enriches from recent
   session transcripts. Use for "run the retro / review learnings / what should
-  we fix / improve the workflow", or on a schedule. Learnings-driven; complements
-  usage-recommender (usage-driven).
+  we fix / improve the workflow", or on a schedule. This feedback loop remains
+  human-triggered until scheduled automation is deliberately enabled.
 ---
 
 # /pumpd-retro — review learnings, improve the system
@@ -19,7 +19,7 @@ Closes the self-improvement loop: turns the raw learnings log into concrete, **a
 - The learnings log: vault `PUMPD/Operations/AI Tooling/Agent Learnings.md` (or the existing legacy `Claude Code Learnings.md`) — only entries **not** yet marked `✅ promoted`.
 - Any raw tool-failure log exposed by the active client — noisy; mine it for **recurring-error tallies** (same tool/error repeated), not individual entries.
 - The inventory of targets: the canonical `agent-tooling` plugins, project `.agents/skills`, project client adapters, project instructions, hooks, and any client-owned memory that is available.
-- _Optional:_ recent session transcripts exposed by the active client — read **only** to enrich a vague learning, never as the primary signal (transcript-frequency analysis belongs to `usage-recommender`).
+- _Optional:_ recent session summaries exposed by the active client — read **only** to enrich a vague learning, never as the primary signal.
 
 ## Steps
 1. **Gather & cluster.** Read the un-promoted learnings. Group by `tags` / `source` / `kind`; collapse duplicates; rank by **frequency × pain**. Surface **recurring** items (same `what` ≥2×) first — highest ROI.
@@ -30,11 +30,8 @@ Closes the self-improvement loop: turns the raw learnings log into concrete, **a
    - **fix a recurring error** — a hook, an allowlist entry, a config change.
    Pull in transcript context only if a cluster is too vague to action.
 3. **Propose — a filtered punch-list.** Each item: **observation** (cite the log entries / counts / dates) → **proposed change** → **exact target file** → **diff preview**. Material only (borrow `/pumpd-review`'s discipline) — don't bury the user in nitpicks.
-4. **Approval gate (hard).** Present the punch-list and **stop**. Nothing is edited until the user approves, **item by item**. For each approved item, use `add-tool` for a new capability, the active client's config workflow for hooks/settings, the Obsidian workflow for vault writes, or a direct edit for an existing skill.
+4. **Approval gate (hard).** Present the punch-list and **stop**. Nothing is edited until the user approves, **item by item**. For each approved item, use the active client's supported tooling workflow for a new capability, its config workflow for hooks/settings, the Obsidian workflow for vault writes, or a direct edit for an existing skill.
 5. **Apply & prune.** Make the approved edits. Move consumed entries to the log's `## Promoted / archived` section with a date + what changed. Write a short dated "retro summary" block (what changed + why — itself a learning). Update the `last-retro` marker.
-
-## Relation to `usage-recommender`
-Siblings, not duplicates. **This** is *qualitative* — "from what *hurt*, what should we *fix/improve*?" (from the learnings log). **`usage-recommender`** is *quantitative* — "from how you *work*, what's *missing*?" (from transcript frequencies). When a learning looks frequency-shaped ("re-ran tests by hand 4×"), **hand it off** — suggest running `usage-recommender` to quantify and propose the automation.
 
 ## Rules
 - **Never edit without approval** — the whole point is human-in-the-loop improvement.
@@ -44,4 +41,4 @@ Siblings, not duplicates. **This** is *qualitative* — "from what *hurt*, what 
 
 ## Finish — offer the next step
 End by summarizing what changed, then:
-> ▶ **Next:** loop closed — re-run `/pumpd-retro` when the log fills again, or run `usage-recommender` for any frequency-shaped gaps you surfaced.
+> ▶ **Next:** loop closed — re-run `/pumpd-retro` manually when the learnings log contains enough material for another review.

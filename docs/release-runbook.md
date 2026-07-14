@@ -22,12 +22,16 @@ revision is the release unit for all four owned plugins.
    tag in a follow-up source change if it was not part of the release commit.
 4. Refresh the already registered `agent-tooling` catalog in Claude and Codex.
 5. Install or update the following in both clients:
-   - `obsidian@agent-tooling`
+   - `personal@agent-tooling`
    - `pumpd-workflows@agent-tooling`
-   - `agent-ops@agent-tooling`
-   - `personal-productivity@agent-tooling`
+   - `cyrus-workflows@agent-tooling`
+   - `wet-in-seattle@agent-tooling`
 6. Start fresh Claude Code and Codex sessions before testing discovery or
    invocation.
+
+This release replaces `obsidian`, `agent-ops`, and `personal-productivity`.
+Install and validate their replacements before uninstalling the superseded
+plugins; plugin renames do not migrate existing installations automatically.
 
 The private catalog is added once per client. Official Anthropic and OpenAI
 catalogs are built in and should not be copied into this repository. A catalog
@@ -39,7 +43,7 @@ refresh does not install a newly published plugin automatically.
 2. Add the GitHub marketplace, not the local path.
 3. Install all four owned plugins in both clients.
 4. Confirm that each plugin exposes its expected skills.
-5. Run the cases in `docs/obsidian-canary.md` for the Obsidian bundle and an
+5. Run the cases in `docs/obsidian-canary.md` for the `personal` bundle and an
    explicit, implicit, and non-trigger case for each other bundle.
 6. Publish a harmless update and prove both native refresh paths receive it.
 7. Record the tested tag, commit, and client versions in the PR.

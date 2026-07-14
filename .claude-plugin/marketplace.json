@@ -6,24 +6,24 @@
   },
   "plugins": [
     {
-      "name": "obsidian",
-      "source": "./plugins/obsidian",
-      "description": "Safe workflows for managing Arend's Obsidian vault"
+      "name": "personal",
+      "source": "./plugins/personal",
+      "description": "Personal Obsidian vault and task-management workflows"
     },
     {
       "name": "pumpd-workflows",
       "source": "./plugins/pumpd-workflows",
-      "description": "Planning, review, Git, Linear, and worktree workflows for PUMPD"
+      "description": "Local PUMPD maintenance workflows outside the Cyrus pipeline"
     },
     {
-      "name": "agent-ops",
-      "source": "./plugins/agent-ops",
-      "description": "Cross-client tooling setup, research, learning, and Cyrus operations"
+      "name": "cyrus-workflows",
+      "source": "./plugins/cyrus-workflows",
+      "description": "PUMPD research, planning, review, delegation, and feedback workflows for Cyrus"
     },
     {
-      "name": "personal-productivity",
-      "source": "./plugins/personal-productivity",
-      "description": "Private IAWIS reporting and personal task workflows"
+      "name": "wet-in-seattle",
+      "source": "./plugins/wet-in-seattle",
+      "description": "Analytics and operating workflows for It's Always Wet In Seattle"
     }
   ]
 }

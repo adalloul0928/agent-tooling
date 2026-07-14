@@ -36,6 +36,16 @@ test("server-renders the Agent Tooling Atlas", async () => {
   assert.match(html, /Claude and Codex are families of products/);
   assert.match(html, /What happens when I add/);
   assert.match(html, /Who owns what/);
+  assert.match(html, /Every atom has one job/);
+  assert.match(html, /Small bundles, explicit projects/);
+  assert.match(html, /personal/);
+  assert.match(html, /cyrus-workflows/);
+  assert.match(html, /pumpd-workflows/);
+  assert.match(html, /wet-in-seattle/);
+  assert.match(html, /Profiles answer/);
+  assert.match(html, /Installed is not authenticated/);
+  assert.match(html, /Useful package manager\. Optional here\./);
+  assert.match(html, /apm\.lock\.yaml/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
 
@@ -51,6 +61,8 @@ test("keeps the guide interactive, accessible, and free of starter artifacts", a
   assert.match(page, /role="tablist"/);
   assert.match(page, /aria-selected/);
   assert.match(page, /aria-label="Scrollable capability ownership matrix"/);
+  assert.match(page, /aria-label="Profile composition diagram"/);
+  assert.match(page, /aria-label="Capability installation and authentication flow"/);
   assert.match(page, /prefers-reduced-motion|StatusPill/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(layout, /title:\s*"Agent Tooling Atlas"/);

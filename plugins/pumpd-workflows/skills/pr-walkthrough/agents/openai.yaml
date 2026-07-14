@@ -1,4 +1,0 @@
-interface:
-  display_name: "PR Walkthrough"
-  short_description: "Explain PR changes, rationale, tradeoffs, and evidence."
-  default_prompt: "Walk me through the current PR and explain what changed, why the implementation was chosen, alternatives considered, risks, tests, and source references."

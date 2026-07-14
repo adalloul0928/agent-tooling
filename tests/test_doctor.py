@@ -47,7 +47,7 @@ class DoctorTests(unittest.TestCase):
     def test_composes_profiles_and_reports_pass_and_manual(self) -> None:
         self.write_json(
             self.home / ".claude/settings.json",
-            {"enabledPlugins": {"obsidian@agent-tooling": True}},
+            {"enabledPlugins": {"personal@agent-tooling": True}},
         )
         self.write_json(
             self.home / ".claude/plugins/known_marketplaces.json",
@@ -56,7 +56,7 @@ class DoctorTests(unittest.TestCase):
         codex = self.home / ".codex/config.toml"
         codex.parent.mkdir(parents=True)
         codex.write_text(
-            '[plugins."obsidian@agent-tooling"]\nenabled = true\n'
+            '[plugins."personal@agent-tooling"]\nenabled = true\n'
             '[marketplaces.agent-tooling]\nref = "release-1"\n',
             encoding="utf-8",
         )
@@ -67,8 +67,8 @@ class DoctorTests(unittest.TestCase):
                 "name": "base",
                 "variables": {"release": "release-1"},
                 "checks": [
-                    {"id": "claude-plugin", "kind": "claude_plugin", "plugin": "obsidian@agent-tooling", "expected": "enabled"},
-                    {"id": "codex-plugin", "kind": "codex_plugin", "plugin": "obsidian@agent-tooling", "expected": "enabled"},
+                    {"id": "claude-plugin", "kind": "claude_plugin", "plugin": "personal@agent-tooling", "expected": "enabled"},
+                    {"id": "codex-plugin", "kind": "codex_plugin", "plugin": "personal@agent-tooling", "expected": "enabled"},
                     {"id": "claude-market", "kind": "claude_marketplace", "name": "agent-tooling", "expected": "present", "ref": "${release}"},
                     {"id": "codex-market", "kind": "codex_marketplace", "name": "agent-tooling", "expected": "present", "ref": "${release}"}
                 ],
@@ -111,6 +111,35 @@ class DoctorTests(unittest.TestCase):
         report = json.loads(result.stdout)
         self.assertEqual(report["summary"]["fail"], 1)
         self.assertEqual(report["summary"]["warn"], 1)
+
+    def test_checks_user_scoped_claude_and_codex_mcps(self) -> None:
+        self.write_json(
+            self.home / ".claude.json",
+            {"mcpServers": {"analytics-mcp": {"command": "analytics-mcp"}}},
+        )
+        codex = self.home / ".codex/config.toml"
+        codex.parent.mkdir(parents=True)
+        codex.write_text(
+            '[mcp_servers.analytics-mcp]\ncommand = "analytics-mcp"\n',
+            encoding="utf-8",
+        )
+        self.write_json(
+            self.profiles / "mcp.json",
+            {
+                "schema_version": 1,
+                "name": "mcp",
+                "checks": [
+                    {"id": "claude-mcp", "kind": "claude_mcp", "server": "analytics-mcp", "expected": "present"},
+                    {"id": "codex-mcp", "kind": "codex_mcp", "server": "analytics-mcp", "expected": "present"}
+                ]
+            },
+        )
+
+        result = self.run_doctor("mcp")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["summary"]["pass"], 2)
 
     def test_detects_profile_inheritance_cycles(self) -> None:
         self.write_json(

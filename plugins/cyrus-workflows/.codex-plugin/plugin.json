@@ -1,0 +1,17 @@
+{
+  "name": "cyrus-workflows",
+  "description": "PUMPD research, planning, review, delegation, and feedback workflows for Cyrus",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Cyrus Workflows",
+    "shortDescription": "Prepare and delegate PUMPD work to Cyrus",
+    "longDescription": "Run the PUMPD research, planning, adversarial review, Linear decomposition, Cyrus setup, learning capture, and retrospective workflow.",
+    "developerName": "Arend Alloul",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Use the matching Cyrus workflow skill for this PUMPD task."]
+  }
+}

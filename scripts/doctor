@@ -23,6 +23,7 @@ CHECK_FIELDS = {
     "same_file": {"paths"},
     "claude_plugin": {"plugin"},
     "claude_marketplace": {"name"},
+    "claude_mcp": {"server"},
     "claude_setting": {"setting", "expected"},
     "codex_plugin": {"plugin"},
     "codex_marketplace": {"name"},
@@ -244,6 +245,11 @@ def evaluate(check: dict[str, Any], context: Context) -> dict[str, Any]:
         found, actual = nested_value(settings, check["setting"])
         expected = check.get("expected")
         return outcome(check, found and actual == expected, f"Claude setting {check['setting']} is {actual!r}; expected {expected!r}")
+
+    if kind == "claude_mcp":
+        config = read_json(home / ".claude.json")
+        present = check["server"] in config.get("mcpServers", {})
+        return expected_presence(check, present, f"Claude MCP {check['server']}")
 
     codex_config = read_toml(home / ".codex/config.toml")
     if kind == "codex_plugin":

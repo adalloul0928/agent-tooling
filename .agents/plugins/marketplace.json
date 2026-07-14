@@ -5,10 +5,10 @@
   },
   "plugins": [
     {
-      "name": "obsidian",
+      "name": "personal",
       "source": {
         "source": "local",
-        "path": "./plugins/obsidian"
+        "path": "./plugins/personal"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -29,10 +29,10 @@
       "category": "Developer Tools"
     },
     {
-      "name": "agent-ops",
+      "name": "cyrus-workflows",
       "source": {
         "source": "local",
-        "path": "./plugins/agent-ops"
+        "path": "./plugins/cyrus-workflows"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -41,10 +41,10 @@
       "category": "Developer Tools"
     },
     {
-      "name": "personal-productivity",
+      "name": "wet-in-seattle",
       "source": {
         "source": "local",
-        "path": "./plugins/personal-productivity"
+        "path": "./plugins/wet-in-seattle"
       },
       "policy": {
         "installation": "AVAILABLE",

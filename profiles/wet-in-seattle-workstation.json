@@ -1,0 +1,47 @@
+{
+  "$schema": "../schemas/profile.schema.json",
+  "schema_version": 1,
+  "name": "wet-in-seattle-workstation",
+  "description": "Desired local tooling for It's Always Wet In Seattle reporting and operations.",
+  "extends": [
+    "base-workstation.json"
+  ],
+  "checks": [
+    {
+      "id": "claude.wet-in-seattle-plugin",
+      "kind": "claude_plugin",
+      "plugin": "wet-in-seattle@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "codex.wet-in-seattle-plugin",
+      "kind": "codex_plugin",
+      "plugin": "wet-in-seattle@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "claude.analytics-mcp",
+      "kind": "claude_mcp",
+      "server": "analytics-mcp",
+      "expected": "present"
+    },
+    {
+      "id": "codex.analytics-mcp",
+      "kind": "codex_mcp",
+      "server": "analytics-mcp",
+      "expected": "present"
+    }
+  ],
+  "manual_checks": [
+    {
+      "id": "wet-in-seattle.analytics-health",
+      "description": "Verify Google Analytics authentication and read access to the IAWIS GA4 property in each client.",
+      "last_verified": null
+    },
+    {
+      "id": "wet-in-seattle.shopify-cross-check",
+      "description": "Verify the storefront checkout and Shopify cross-check credentials are available without committing them to agent-tooling.",
+      "last_verified": null
+    }
+  ]
+}

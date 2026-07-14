@@ -1,6 +1,6 @@
 {
   "name": "pumpd-workflows",
-  "description": "Planning, review, Git, Linear, and worktree workflows for PUMPD",
+  "description": "Local PUMPD maintenance workflows outside the Cyrus pipeline",
   "author": {
     "name": "Arend Alloul"
   }

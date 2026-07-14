@@ -30,6 +30,11 @@ pumpd-project
 pumpd-workstation
 ```
 
+`wet-in-seattle-workstation.json` extends `base-workstation.json`, adds the
+`wet-in-seattle` plugin, and requires the separately configured
+`analytics-mcp` server in Claude and Codex. The profile verifies only that the
+server is declared; Google Analytics and Shopify health remain manual checks.
+
 Parent variables and checks are inherited in order. A child may override a
 check by reusing its stable `id`. Paths use `~` and profile variables rather
 than committed machine-specific absolute paths.
@@ -41,6 +46,7 @@ than committed machine-specific absolute paths.
 ./scripts/doctor base-workstation
 ./scripts/doctor pumpd-project --json
 ./scripts/doctor pumpd-workstation --strict
+./scripts/doctor wet-in-seattle-workstation
 ```
 
 The default profile is `pumpd-workstation`. Required failures return exit code

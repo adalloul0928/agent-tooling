@@ -9,6 +9,30 @@
   ],
   "checks": [
     {
+      "id": "claude.pumpd-workflows-plugin",
+      "kind": "claude_plugin",
+      "plugin": "pumpd-workflows@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "codex.pumpd-workflows-plugin",
+      "kind": "codex_plugin",
+      "plugin": "pumpd-workflows@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "claude.cyrus-workflows-plugin",
+      "kind": "claude_plugin",
+      "plugin": "cyrus-workflows@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "codex.cyrus-workflows-plugin",
+      "kind": "codex_plugin",
+      "plugin": "cyrus-workflows@agent-tooling",
+      "expected": "enabled"
+    },
+    {
       "id": "claude.linear-plugin",
       "kind": "claude_plugin",
       "plugin": "linear@claude-plugins-official",

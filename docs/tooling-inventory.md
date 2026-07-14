@@ -91,12 +91,19 @@ or local Code path.
 Installing one of these plugins installs all of its bundled skills; individual
 skill installation is not required.
 
-| Plugin | Skills | Intended scope |
-| --- | --- | --- |
-| `obsidian` | `obsidian-vault` | User/workstation |
-| `pumpd-workflows` | `doc-sync`, `linear-task-manager`, `pr`, `pr-walkthrough`, `pumpd-decompose`, `pumpd-local-cleanup`, `pumpd-plan`, `pumpd-research`, `pumpd-retro`, `pumpd-review`, `resolve-pr-comments`, `staged-code-reviewer`, `worktree` | User/workstation; reusable PUMPD delivery workflows |
-| `agent-ops` | `add-tool`, `cyrus-setup`, `log-learning`, `research`, `usage-recommender` | User/workstation |
-| `personal-productivity` | `iawis-weekly-report`, `personal-task`, `personal-task-done` | User/workstation |
+| Plugin | Skills | Intended scope | Ownership |
+| --- | --- | --- | --- |
+| `personal` | `obsidian-vault`, `personal-task`, `personal-task-done` | User/workstation | First-party |
+| `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | User/workstation; prepares, delegates, and improves Cyrus work | First-party |
+| `pumpd-workflows` | `pumpd-local-cleanup` | User/workstation; local PUMPD maintenance outside Cyrus | First-party |
+| `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle workstation | First-party |
+
+The intentionally small initial catalog omits generic research, Git, PR,
+worktree, documentation-sync, code-review, and tooling-recommendation skills.
+Those capabilities are deferred until repeated use justifies a custom workflow;
+vendor or native equivalents should be preferred in the meantime. Git history
+retains the removed implementations without publishing a misleading
+`deferred` bundle.
 
 Every owned plugin has one physical skill core under `plugins/<plugin>/skills`
 and separate Claude and Codex manifests. Keep shared workflow logic portable;
@@ -225,7 +232,8 @@ plugin owns the full integration.
 
 | Scope | Claude | Codex |
 | --- | --- | --- |
-| User raw MCPs | `analytics-mcp`, `claude_design` | Only broadly reusable servers not already supplied by a plugin/runtime |
+| User raw MCPs | `claude_design` | Only broadly reusable servers not already supplied by a plugin/runtime |
+| Wet In Seattle profile | `analytics-mcp` | `analytics-mcp` |
 | Plugin-provided | Context7, Linear, Playwright, Sentry, Supabase | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel |
 | PUMPD project | `.mcp.json`: `heroui-native`, `ios-simulator-mcp`, `supabase_local` | `.codex/config.toml`: `context7`, `heroui-native`, `playwright`, `ios-simulator-mcp` |
 | Other intentional local capabilities | Supplied by the applicable plugin or local config | Figma, GitHub, HeroUI Pro, Node REPL, Xcode tooling, and Sites design tooling where needed |
@@ -309,7 +317,8 @@ For an `agent-tooling` release:
 2. Create an immutable release tag for the merged commit.
 3. Update the release ref recorded by the desired-state profile.
 4. Refresh the `agent-tooling` catalog in Claude and Codex.
-5. Install or update all four owned plugins in both clients.
+5. Install or update `personal`, `cyrus-workflows`, `pumpd-workflows`, and
+   `wet-in-seattle` in the clients required by their profiles.
 6. Start fresh client sessions and run behavioral canaries.
 7. Authenticate new MCPs separately on each required local or hosted surface.
 8. Verify Claude Code cloud, Codex cloud, Claude.ai, and ChatGPT account state
