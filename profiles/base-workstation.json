@@ -4,7 +4,7 @@
   "name": "base-workstation",
   "description": "Cross-client tooling expected on Aren's primary development workstation.",
   "variables": {
-    "agent_tooling_release": "obsidian-vault-2026-07-13.2"
+    "agent_tooling_release": "agent-tooling-2026-07-13.1"
   },
   "checks": [
     {
