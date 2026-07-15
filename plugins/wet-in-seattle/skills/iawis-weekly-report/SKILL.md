@@ -21,6 +21,15 @@ If the property ID placeholder hasn't been filled in, call `get_account_summarie
 
 ## analytics-mcp authentication
 
+The `wet-in-seattle` plugin starts `analytics-mcp` through Doppler. Local setup
+expects Doppler project `agent-tooling`, config `prd`, with these keys:
+
+- `GOOGLE_APPLICATION_CREDENTIALS`: the path to the local ADC JSON file;
+- `GOOGLE_PROJECT_ID`: the Google Cloud project used by analytics-mcp.
+
+The plugin requests only those two keys when the server starts. Doppler login,
+Google ADC, and the credential file remain machine-local.
+
 The MCP server's Google credentials expire periodically. If any GA4 tool call returns one of:
 
 - `503 Reauthentication is needed` — access token expired
@@ -35,7 +44,11 @@ gcloud auth application-default login \
   --client-id-file="$IAWIS_GCLOUD_CLIENT_ID_FILE"
 ```
 
-Sign in as `aren@wetinseattle.com`. After "Credentials saved to file: …", run `/mcp` → reconnect `analytics-mcp` (it caches creds at startup and won't see the new ones otherwise), then retry the failed query. Full background, error → cause cheat sheet, and recovery if the OAuth client JSON is lost: `references/analytics-mcp-auth.md`.
+Sign in as `aren@wetinseattle.com`. After "Credentials saved to file: …",
+reconnect `analytics-mcp` in the active client (it caches credentials at startup
+and won't see the new ones otherwise), then retry the failed query. Full
+background, error → cause cheat sheet, and recovery if the OAuth client JSON is
+lost: `references/analytics-mcp-auth.md`.
 
 ## Procedure
 

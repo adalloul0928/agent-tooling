@@ -3,5 +3,6 @@
   "description": "Analytics and operating workflows for It's Always Wet In Seattle",
   "author": {
     "name": "Arend Alloul"
-  }
+  },
+  "mcpServers": "./.mcp.json"
 }

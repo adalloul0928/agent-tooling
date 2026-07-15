@@ -31,9 +31,10 @@ pumpd-workstation
 ```
 
 `wet-in-seattle-workstation.json` extends `base-workstation.json`, adds the
-`wet-in-seattle` plugin, and requires the separately configured
-`analytics-mcp` server in Claude and Codex. The profile verifies only that the
-server is declared; Google Analytics and Shopify health remain manual checks.
+`wet-in-seattle` plugin, which supplies `analytics-mcp` to both Claude and
+Codex through a shared Doppler-backed declaration. The profile verifies that
+the plugin is enabled; Doppler access, Google Analytics authentication, and
+Shopify health remain manual checks.
 
 Parent variables and checks are inherited in order. A child may override a
 check by reusing its stable `id`. Paths use `~` and profile variables rather

@@ -5,6 +5,7 @@
     "name": "Arend Alloul"
   },
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Wet In Seattle",
     "shortDescription": "Run Wet In Seattle reporting workflows",
