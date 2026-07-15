@@ -4,7 +4,7 @@
   "name": "base-workstation",
   "description": "Cross-client tooling expected on Aren's primary development workstation.",
   "variables": {
-    "agent_tooling_release": "agent-tooling-2026-07-13.1"
+    "agent_tooling_release": "agent-tooling-2026-07-14.1"
   },
   "checks": [
     {
