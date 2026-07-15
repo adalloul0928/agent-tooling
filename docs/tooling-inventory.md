@@ -93,7 +93,7 @@ skill installation is not required.
 
 | Plugin | Skills | Intended scope | Ownership |
 | --- | --- | --- | --- |
-| `personal` | `obsidian-vault`, `personal-task`, `personal-task-done` | User/workstation | First-party |
+| `personal` | `obsidian-vault`, `dad-daily-update`, `personal-task`, `personal-task-done` | User/workstation | First-party |
 | `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | PUMPD project/worktree | First-party |
 | `pumpd-workflows` | `pumpd-local-cleanup` | PUMPD project/worktree | First-party |
 | `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle project/worktree | First-party |

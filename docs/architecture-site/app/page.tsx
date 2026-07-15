@@ -374,7 +374,7 @@ const ownedBundles = [
   {
     name: "personal",
     scope: "Base workstation",
-    skills: ["obsidian-vault", "personal-task", "personal-task-done"],
+    skills: ["obsidian-vault", "dad-daily-update", "personal-task", "personal-task-done"],
     note: "Installed in local Claude Code and Codex. This is the home for future broadly useful personal workflows.",
   },
   {
