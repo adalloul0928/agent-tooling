@@ -34,6 +34,18 @@
       "expected": "enabled"
     },
     {
+      "id": "claude.mobile-development-plugin",
+      "kind": "claude_plugin",
+      "plugin": "mobile-development@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "codex.mobile-development-plugin",
+      "kind": "codex_plugin",
+      "plugin": "mobile-development@agent-tooling",
+      "expected": "enabled"
+    },
+    {
       "id": "claude.orphaned-supabase-marketplace",
       "kind": "claude_marketplace",
       "name": "supabase-agent-skills",

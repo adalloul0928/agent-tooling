@@ -42,6 +42,7 @@ test("server-renders the Agent Tooling Atlas", async () => {
   assert.match(html, /cyrus-workflows/);
   assert.match(html, /pumpd-workflows/);
   assert.match(html, /wet-in-seattle/);
+  assert.match(html, /mobile-development/);
   assert.match(html, /Profiles answer/);
   assert.match(html, /Installed is not authenticated/);
   assert.match(html, /Useful package manager\. Optional here\./);

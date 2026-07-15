@@ -9,13 +9,16 @@ an application repository.
 
 ## Status
 
-The dual catalogs publish four focused native plugins from shared skill cores:
+The dual catalogs publish five focused native plugins from shared skill cores
+and native MCP adapters:
 
 - `personal`: Obsidian vault and personal task workflows;
 - `cyrus-workflows`: PUMPD research, planning, review, delegation, learning,
   and retrospective workflows for Cyrus;
 - `pumpd-workflows`: small local PUMPD maintenance workflows outside Cyrus;
 - `wet-in-seattle`: IAWIS workflows with a Doppler-backed Analytics MCP.
+- `mobile-development`: reusable iOS Simulator and HeroUI Native MCPs, with
+  HeroUI Native Pro authentication injected by Doppler.
 
 These plugins and their bundled skills are first-party creations. Vendor
 plugins, MCP servers, and CLIs remain with their publishers and are referenced
@@ -35,6 +38,7 @@ agent-tooling/
       .claude-plugin/plugin.json
       .codex-plugin/plugin.json
       skills/<skill>/SKILL.md
+      .mcp.json
 ```
 
 - Keep one physical skill core under its plugin directory.
