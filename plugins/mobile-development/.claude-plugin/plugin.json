@@ -1,0 +1,8 @@
+{
+  "name": "mobile-development",
+  "description": "Reusable iOS Simulator and HeroUI Native MCP tooling",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "mcpServers": "./.mcp.json"
+}

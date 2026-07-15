@@ -1,0 +1,17 @@
+{
+  "name": "mobile-development",
+  "description": "Reusable iOS Simulator and HeroUI Native MCP tooling",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Mobile Development",
+    "shortDescription": "Use iOS Simulator and HeroUI Native tooling",
+    "longDescription": "Reusable local MCP tooling for iOS Simulator automation, public HeroUI Native documentation, and licensed HeroUI Native Pro components.",
+    "developerName": "Arend Alloul",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Use the matching mobile development MCP tools for this task."]
+  }
+}

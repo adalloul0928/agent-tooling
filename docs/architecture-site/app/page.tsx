@@ -395,6 +395,12 @@ const ownedBundles = [
     skills: ["iawis-weekly-report"],
     note: "Project-specific reporting workflow. The plugin supplies analytics-mcp to both clients and Doppler injects its allowlisted environment at startup.",
   },
+  {
+    name: "mobile-development",
+    scope: "Base workstation",
+    skills: ["ios-simulator-mcp", "heroui-native", "heroui-native-pro"],
+    note: "MCP-only bundle for reusable mobile tooling. Doppler injects the licensed HeroUI Native Pro token without committing it.",
+  },
 ];
 
 const projectSkills = [
@@ -670,7 +676,7 @@ export default function Home() {
                 {bundle.skills.map((skill) => <code key={skill}>{skill}</code>)}
               </div>
               <p>{bundle.note}</p>
-              <div className="bundle-owner">First-party · one skill core · Claude + Codex adapters</div>
+              <div className="bundle-owner">First-party package · Claude + Codex adapters</div>
             </article>
           ))}
         </div>

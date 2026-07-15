@@ -1,0 +1,31 @@
+{
+  "mcpServers": {
+    "ios-simulator-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "ios-simulator-mcp@1.6.0"]
+    },
+    "heroui-native": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@heroui/native-mcp@1.1.0"]
+    },
+    "heroui-native-pro": {
+      "type": "stdio",
+      "command": "doppler",
+      "args": [
+        "--silent",
+        "run",
+        "--project",
+        "agent-tooling",
+        "--config",
+        "prd",
+        "--only-secrets",
+        "HEROUI_PRO_PERSONAL_TOKEN",
+        "--no-fallback",
+        "--command",
+        "exec npx -y mcp-remote@0.1.38 https://native-mcp.heroui.pro/mcp --header 'x-heroui-personal-token:$''{HEROUI_PRO_PERSONAL_TOKEN}'"
+      ]
+    }
+  }
+}

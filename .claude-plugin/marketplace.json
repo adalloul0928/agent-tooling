@@ -24,6 +24,11 @@
       "name": "wet-in-seattle",
       "source": "./plugins/wet-in-seattle",
       "description": "Analytics and operating workflows for It's Always Wet In Seattle"
+    },
+    {
+      "name": "mobile-development",
+      "source": "./plugins/mobile-development",
+      "description": "Reusable iOS Simulator and HeroUI Native MCP tooling"
     }
   ]
 }

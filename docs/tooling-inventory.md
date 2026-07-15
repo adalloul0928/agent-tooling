@@ -94,14 +94,19 @@ skill installation is not required.
 | Plugin | Skills | Intended scope | Ownership |
 | --- | --- | --- | --- |
 | `personal` | `obsidian-vault`, `personal-task`, `personal-task-done` | User/workstation | First-party |
-| `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | User/workstation; prepares, delegates, and improves Cyrus work | First-party |
-| `pumpd-workflows` | `pumpd-local-cleanup` | User/workstation; local PUMPD maintenance outside Cyrus | First-party |
-| `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle workstation | First-party |
+| `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | PUMPD project/worktree | First-party |
+| `pumpd-workflows` | `pumpd-local-cleanup` | PUMPD project/worktree | First-party |
+| `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle project/worktree | First-party |
+| `mobile-development` | None; MCP-only | User/workstation; reusable local mobile tooling | First-party wrapper around third-party MCPs |
 
 The `wet-in-seattle` wrapper and reporting skill are first-party. The bundled
 `analytics-mcp` executable is Google's third-party server, launched locally
 through the third-party Doppler CLI; neither dependency is copied into this
 repository.
+
+The `mobile-development` wrapper packages the third-party iOS Simulator,
+HeroUI Native, and HeroUI Native Pro MCP connections without copying their
+source. The licensed Pro token is read from Doppler at runtime.
 
 The intentionally small initial catalog omits generic research, Git, PR,
 worktree, documentation-sync, code-review, and tooling-recommendation skills.
@@ -144,21 +149,16 @@ plugins.
 
 ### Claude target
 
-User-scoped, generally useful plugins:
+Generally useful or user-scoped plugins:
 
-- `code-review`
-- `code-simplifier`
-- `context7`
-- `frontend-design`
-- `linear`
-- `playwright`
-- `security-guidance`
-- `sentry`
-- `supabase`
+- `skill-creator`, when skill authoring is active;
+- `sentry`, only when its cross-project availability justifies its global
+  skill metadata.
 
 Project-specific or on-demand plugins:
 
-- `react-native-best-practices`, enabled only where React Native work needs it;
+- `code-review`, `code-simplifier`, `context7`, `frontend-design`, `linear`,
+  `playwright`, `security-guidance`, and `supabase`;
 - `upgrading-react-native`, enabled for an upgrade and removed or disabled
   afterward.
 
@@ -213,8 +213,8 @@ only path rules may remain under `.claude/rules`.
 
 ## Special local skills
 
-Licensed HeroUI material remains machine-local and must not be committed or
-redistributed:
+Licensed HeroUI skill content remains machine-local and must not be committed
+or redistributed:
 
 - `heroui-native-pro`
 - `heroui-react-pro`
@@ -239,21 +239,22 @@ plugin owns the full integration.
 | --- | --- | --- |
 | User raw MCPs | `claude_design` | Only broadly reusable servers not already supplied by a plugin/runtime |
 | Wet In Seattle plugin | Doppler-backed `analytics-mcp` | Doppler-backed `analytics-mcp` |
+| Mobile Development plugin | `ios-simulator-mcp`, `heroui-native`, Doppler-backed `heroui-native-pro` | Same three plugin-provided MCPs |
 | Other plugin-provided | Context7, Linear, Playwright, Sentry, Supabase | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel |
-| PUMPD project | `.mcp.json`: `heroui-native`, `ios-simulator-mcp`, `supabase_local` | `.codex/config.toml`: `context7`, `heroui-native`, `playwright`, `ios-simulator-mcp` |
-| Other intentional local capabilities | Supplied by the applicable plugin or local config | Figma, GitHub, HeroUI Pro, Node REPL, Xcode tooling, and Sites design tooling where needed |
+| PUMPD project | `.mcp.json`: `supabase_local` | `.codex/config.toml`: `context7`, `playwright` |
+| Other intentional local capabilities | Supplied by the applicable plugin or local config | Figma, GitHub, Node REPL, Xcode tooling, and Sites design tooling where needed |
 
 Project definitions may intentionally specialize or override user defaults.
 Avoid defining the same server twice at user scope and through a plugin. In
-particular, raw Codex definitions for Linear, Expo, and a global iOS Simulator
-are not part of the desired state when the curated plugin or PUMPD project
-configuration owns them.
+particular, raw definitions for Analytics, HeroUI, or iOS Simulator are not
+part of the desired state once their owned plugin replacement is installed and
+verified.
 
-No MCP secret belongs in this repository. The `wet-in-seattle` plugin commits
-only the Doppler project/config identifiers and an environment-variable
-allowlist. The Doppler CLI fetches the values when the MCP starts. Local Doppler
-login, service tokens, Google ADC files, and other credential material remain
-outside Git.
+No MCP secret belongs in this repository. The `wet-in-seattle` and
+`mobile-development` plugins commit only Doppler project/config identifiers
+and environment-variable allowlists. The Doppler CLI fetches values when an
+MCP starts. Local Doppler login, service tokens, Google ADC files, HeroUI Pro
+tokens, and other credential material remain outside Git.
 
 ## Hosted connectors and apps
 
@@ -323,8 +324,9 @@ For an `agent-tooling` release:
 2. Create an immutable release tag for the merged commit.
 3. Update the release ref recorded by the desired-state profile.
 4. Refresh the `agent-tooling` catalog in Claude and Codex.
-5. Install or update `personal`, `cyrus-workflows`, `pumpd-workflows`, and
-   `wet-in-seattle` in the clients required by their profiles.
+5. Install or update `personal`, `cyrus-workflows`, `pumpd-workflows`,
+   `wet-in-seattle`, and `mobile-development` in the clients required by their
+   profiles.
 6. Start fresh client sessions and run behavioral canaries.
 7. Authenticate new MCPs separately on each required local or hosted surface.
 8. Verify Claude Code cloud, Codex cloud, Claude.ai, and ChatGPT account state

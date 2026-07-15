@@ -201,24 +201,10 @@
       "expected": "present"
     },
     {
-      "id": "pumpd.claude-ios-simulator",
-      "kind": "project_claude_mcp",
-      "path": "${project_root}/.mcp.json",
-      "server": "ios-simulator-mcp",
-      "expected": "present"
-    },
-    {
       "id": "pumpd.codex-context7",
       "kind": "project_codex_mcp",
       "path": "${project_root}/.codex/config.toml",
       "server": "context7",
-      "expected": "present"
-    },
-    {
-      "id": "pumpd.codex-ios-simulator",
-      "kind": "project_codex_mcp",
-      "path": "${project_root}/.codex/config.toml",
-      "server": "ios-simulator-mcp",
       "expected": "present"
     }
   ],
