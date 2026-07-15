@@ -15,7 +15,7 @@ The dual catalogs publish four focused native plugins from shared skill cores:
 - `cyrus-workflows`: PUMPD research, planning, review, delegation, learning,
   and retrospective workflows for Cyrus;
 - `pumpd-workflows`: small local PUMPD maintenance workflows outside Cyrus;
-- `wet-in-seattle`: IAWIS analytics and operating workflows.
+- `wet-in-seattle`: IAWIS workflows with a Doppler-backed Analytics MCP.
 
 These plugins and their bundled skills are first-party creations. Vendor
 plugins, MCP servers, and CLIs remain with their publishers and are referenced

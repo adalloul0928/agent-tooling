@@ -98,6 +98,11 @@ skill installation is not required.
 | `pumpd-workflows` | `pumpd-local-cleanup` | User/workstation; local PUMPD maintenance outside Cyrus | First-party |
 | `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle workstation | First-party |
 
+The `wet-in-seattle` wrapper and reporting skill are first-party. The bundled
+`analytics-mcp` executable is Google's third-party server, launched locally
+through the third-party Doppler CLI; neither dependency is copied into this
+repository.
+
 The intentionally small initial catalog omits generic research, Git, PR,
 worktree, documentation-sync, code-review, and tooling-recommendation skills.
 Those capabilities are deferred until repeated use justifies a custom workflow;
@@ -233,8 +238,8 @@ plugin owns the full integration.
 | Scope | Claude | Codex |
 | --- | --- | --- |
 | User raw MCPs | `claude_design` | Only broadly reusable servers not already supplied by a plugin/runtime |
-| Wet In Seattle profile | `analytics-mcp` | `analytics-mcp` |
-| Plugin-provided | Context7, Linear, Playwright, Sentry, Supabase | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel |
+| Wet In Seattle plugin | Doppler-backed `analytics-mcp` | Doppler-backed `analytics-mcp` |
+| Other plugin-provided | Context7, Linear, Playwright, Sentry, Supabase | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel |
 | PUMPD project | `.mcp.json`: `heroui-native`, `ios-simulator-mcp`, `supabase_local` | `.codex/config.toml`: `context7`, `heroui-native`, `playwright`, `ios-simulator-mcp` |
 | Other intentional local capabilities | Supplied by the applicable plugin or local config | Figma, GitHub, HeroUI Pro, Node REPL, Xcode tooling, and Sites design tooling where needed |
 
@@ -244,10 +249,11 @@ particular, raw Codex definitions for Linear, Expo, and a global iOS Simulator
 are not part of the desired state when the curated plugin or PUMPD project
 configuration owns them.
 
-No MCP secret belongs in this repository. Commit environment variable names or
-non-secret command declarations only when the repository schema supports them;
-store values in the client's secret handling, shell environment, or approved
-secret manager.
+No MCP secret belongs in this repository. The `wet-in-seattle` plugin commits
+only the Doppler project/config identifiers and an environment-variable
+allowlist. The Doppler CLI fetches the values when the MCP starts. Local Doppler
+login, service tokens, Google ADC files, and other credential material remain
+outside Git.
 
 ## Hosted connectors and apps
 

@@ -18,24 +18,12 @@
       "kind": "codex_plugin",
       "plugin": "wet-in-seattle@agent-tooling",
       "expected": "enabled"
-    },
-    {
-      "id": "claude.analytics-mcp",
-      "kind": "claude_mcp",
-      "server": "analytics-mcp",
-      "expected": "present"
-    },
-    {
-      "id": "codex.analytics-mcp",
-      "kind": "codex_mcp",
-      "server": "analytics-mcp",
-      "expected": "present"
     }
   ],
   "manual_checks": [
     {
       "id": "wet-in-seattle.analytics-health",
-      "description": "Verify Google Analytics authentication and read access to the IAWIS GA4 property in each client.",
+      "description": "Verify Doppler agent-tooling/prd access, analytics-mcp startup, and read access to the IAWIS GA4 property in each client.",
       "last_verified": null
     },
     {

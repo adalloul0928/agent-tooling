@@ -50,6 +50,29 @@ while IFS=$'\t' read -r name claude_source codex_source; do
     fi
   done
 
+  claude_mcp_source="$(jq -r '.mcpServers // empty' "$claude_manifest")"
+  codex_mcp_source="$(jq -r '.mcpServers // empty' "$codex_manifest")"
+  if [[ "$claude_mcp_source" != "$codex_mcp_source" ]]; then
+    printf 'Claude and Codex MCP declarations differ for %s.\n' "$name" >&2
+    exit 65
+  fi
+  if [[ -n "$claude_mcp_source" ]]; then
+    if [[ "$claude_mcp_source" != ./* ]]; then
+      printf 'Plugin %s must use a repository-local MCP declaration.\n' "$name" >&2
+      exit 65
+    fi
+    mcp_config="$plugin_root/${claude_mcp_source#./}"
+    resolved_mcp_config="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve())' "$mcp_config")"
+    if [[ "$resolved_mcp_config" != "$plugin_root"/* || ! -f "$resolved_mcp_config" ]]; then
+      printf 'Invalid MCP declaration for %s: %s\n' "$name" "$claude_mcp_source" >&2
+      exit 66
+    fi
+    if ! jq -e '.mcpServers | type == "object" and length > 0' "$resolved_mcp_config" >/dev/null; then
+      printf 'Plugin %s MCP declaration must contain at least one server.\n' "$name" >&2
+      exit 65
+    fi
+  fi
+
   while IFS= read -r link; do
     resolved="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve())' "$link")"
     if [[ "$resolved" != "$plugin_root"/* ]]; then

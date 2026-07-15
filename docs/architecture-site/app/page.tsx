@@ -393,7 +393,7 @@ const ownedBundles = [
     name: "wet-in-seattle",
     scope: "Wet In Seattle workstation",
     skills: ["iawis-weekly-report"],
-    note: "Project-specific reporting workflow. analytics-mcp is configured separately because auth is not a plugin dependency.",
+    note: "Project-specific reporting workflow. The plugin supplies analytics-mcp to both clients and Doppler injects its allowlisted environment at startup.",
   },
 ];
 
@@ -781,7 +781,7 @@ export default function Home() {
           <div className="profile-card profile-wet">
             <span>Effective context</span>
             <strong>wet-in-seattle-workstation</strong>
-            <small>base + wet-in-seattle bundle + separately authenticated analytics-mcp</small>
+            <small>base + wet-in-seattle bundle + Doppler-backed analytics-mcp</small>
           </div>
         </div>
 

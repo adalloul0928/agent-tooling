@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "analytics-mcp": {
+      "type": "stdio",
+      "command": "doppler",
+      "args": [
+        "--silent",
+        "run",
+        "--project",
+        "agent-tooling",
+        "--config",
+        "prd",
+        "--only-secrets",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "--only-secrets",
+        "GOOGLE_PROJECT_ID",
+        "--no-fallback",
+        "--command",
+        "exec \"$HOME/.local/bin/analytics-mcp\""
+      ]
+    }
+  }
+}
