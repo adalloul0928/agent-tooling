@@ -12,7 +12,7 @@ an application repository.
 The dual catalogs publish five focused native plugins from shared skill cores
 and native MCP adapters:
 
-- `personal`: Obsidian vault and personal task workflows;
+- `personal`: Obsidian vault, family check-in, and personal task workflows;
 - `cyrus-workflows`: PUMPD research, planning, review, delegation, learning,
   and retrospective workflows for Cyrus;
 - `pumpd-workflows`: small local PUMPD maintenance workflows outside Cyrus;

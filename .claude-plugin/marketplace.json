@@ -8,7 +8,7 @@
     {
       "name": "personal",
       "source": "./plugins/personal",
-      "description": "Personal Obsidian vault and task-management workflows"
+      "description": "Personal Obsidian vault, family check-in, and task-management workflows"
     },
     {
       "name": "pumpd-workflows",
