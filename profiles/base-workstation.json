@@ -86,7 +86,7 @@
     {
       "id": "claude.mcp-health",
       "description": "Review failed or unauthenticated Claude MCPs without changing connector state automatically.",
-      "last_verified": "2026-07-13"
+      "last_verified": "2026-07-17"
     },
     {
       "id": "hosted.claude-account",

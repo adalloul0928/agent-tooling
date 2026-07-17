@@ -385,21 +385,21 @@ const ownedBundles = [
   },
   {
     name: "cyrus-workflows",
-    scope: "PUMPD workstation",
+    scope: "PUMPD target",
     skills: ["cyrus-setup", "pumpd-research", "pumpd-plan", "pumpd-review", "pumpd-decompose", "log-learning", "pumpd-retro"],
-    note: "Owns the Cyrus research-to-delegation loop. Learning and retro remain human-triggered for now.",
+    note: "Claude installs this at project scope. Codex currently installs plugins user-wide, so committed project skills remain the cloud-safe contract.",
   },
   {
     name: "pumpd-workflows",
-    scope: "PUMPD workstation",
+    scope: "PUMPD target",
     skills: ["pumpd-local-cleanup"],
-    note: "Only local PUMPD maintenance that is not part of the Cyrus automation pipeline.",
+    note: "Only local PUMPD maintenance outside Cyrus. Claude scopes it to PUMPD; Codex currently exposes the installed plugin user-wide.",
   },
   {
     name: "wet-in-seattle",
-    scope: "Wet In Seattle workstation",
+    scope: "Wet In Seattle target",
     skills: ["iawis-weekly-report"],
-    note: "Project-specific reporting workflow. The plugin supplies analytics-mcp to both clients and Doppler injects its allowlisted environment at startup.",
+    note: "Claude scopes this to the project. Codex currently installs it user-wide. The plugin supplies analytics-mcp and Doppler injects its allowlisted environment.",
   },
   {
     name: "mobile-development",
@@ -423,7 +423,7 @@ const projectSkills = [
 
 const vendorTools = [
   ["Linear", "Official plugin / MCP", "Local Claude + Codex", "OAuth in each client; Cyrus remains a separate automation integration"],
-  ["Supabase", "Official plugin / MCP + CLI", "Local clients + PUMPD project", "Use project-local MCP for local DB work; authenticate hosted access separately"],
+  ["Supabase", "Official skills + remote/local MCP + CLI", "Local clients + PUMPD project", "Claude uses an authenticated user MCP; PUMPD keeps a separate local DB MCP; Codex currently uses official skills/CLI"],
   ["Sentry", "Official plugin / MCP", "Local Claude + Codex", "Use CLI only for release/build tasks that need it"],
   ["Context7", "MCP", "Project or plugin scope", "No owned fork; keep one definition per client/scope"],
   ["Expo", "Official plugin / skills + CLI", "PUMPD on demand", "Add MCP only when live EAS or simulator operations justify it"],
@@ -637,12 +637,12 @@ export default function Home() {
             <h2>Small bundles, explicit projects</h2>
           </div>
           <p className="section-lede">
-            The private catalog contains only workflows we own. Vendor tooling stays vendor-owned, while behavior required for PUMPD lives with the PUMPD checkout.
+            The private catalog contains only workflows we own. Vendor tooling stays vendor-owned, while behavior required for PUMPD lives with the PUMPD checkout. Claude supports project-scoped plugin enablement; current Codex installs plugins at user scope, so project-critical Codex behavior stays committed as project skills and MCPs.
           </p>
         </div>
 
         <div className="setup-principle">
-          <div><span>Private catalog</span><strong>4 owned plugins</strong><small>12 portable skills</small></div>
+          <div><span>Private catalog</span><strong>6 owned plugins</strong><small>14 portable skills + 4 MCPs</small></div>
           <div><span>PUMPD checkout</span><strong>9 project skills</strong><small>committed for local + cloud</small></div>
           <div><span>Vendor catalogs</span><strong>7 core services</strong><small>installed and authenticated natively</small></div>
         </div>
@@ -905,8 +905,8 @@ export default function Home() {
 
         <div className="separation-callout">
           <span>Separation switch</span>
-          <strong>Keep <code>disableClaudeAiConnectors</code> unset until local Linear, Supabase, Sentry, and PUMPD paths are authenticated and canaried.</strong>
-          <p>Then enable it at user scope to keep hosted connectors in chat and deliberate local twins in Claude Code.</p>
+          <strong><code>disableClaudeAiConnectors</code> is enabled at user scope after the local Linear, Supabase, mobile, and project paths were canaried.</strong>
+          <p>Hosted connectors remain in chat while Claude Code uses deliberate local plugins and MCP twins.</p>
         </div>
       </section>
 
