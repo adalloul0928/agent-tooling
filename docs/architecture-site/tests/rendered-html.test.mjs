@@ -39,6 +39,7 @@ test("server-renders the Agent Tooling Atlas", async () => {
   assert.match(html, /Every atom has one job/);
   assert.match(html, /Small bundles, explicit projects/);
   assert.match(html, /personal/);
+  assert.match(html, /developer-workflows/);
   assert.match(html, /cyrus-workflows/);
   assert.match(html, /pumpd-workflows/);
   assert.match(html, /wet-in-seattle/);

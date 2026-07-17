@@ -2,7 +2,7 @@
 
 Releases use immutable Git tags rather than plugin semver. Native plugin
 manifests and catalog entries intentionally omit `version`, so the catalog Git
-revision is the release unit for all five owned plugins.
+revision is the release unit for all six owned plugins.
 
 ## Before publishing
 
@@ -23,6 +23,7 @@ revision is the release unit for all five owned plugins.
 4. Refresh the already registered `agent-tooling` catalog in Claude and Codex.
 5. Install or update the following in both clients:
    - `personal@agent-tooling`
+   - `developer-workflows@agent-tooling`
    - `pumpd-workflows@agent-tooling`
    - `cyrus-workflows@agent-tooling`
    - `wet-in-seattle@agent-tooling`
@@ -42,7 +43,7 @@ refresh does not install a newly published plugin automatically.
 
 1. Create temporary Claude and Codex homes.
 2. Add the GitHub marketplace, not the local path.
-3. Install all five owned plugins in both clients.
+3. Install all six owned plugins in both clients.
 4. Confirm that each plugin exposes its expected skills.
 5. Run the cases in `docs/obsidian-canary.md` for the `personal` bundle,
    explicit/implicit/non-trigger cases for skill bundles, and an MCP startup

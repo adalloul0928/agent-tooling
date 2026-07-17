@@ -378,6 +378,12 @@ const ownedBundles = [
     note: "Installed in local Claude Code and Codex. This is the home for future broadly useful personal workflows.",
   },
   {
+    name: "developer-workflows",
+    scope: "Base workstation",
+    skills: ["thermo-nuclear-code-quality-review"],
+    note: "Explicit, reusable development-quality workflows that should be available across projects without becoming project-owned configuration.",
+  },
+  {
     name: "cyrus-workflows",
     scope: "PUMPD workstation",
     skills: ["cyrus-setup", "pumpd-research", "pumpd-plan", "pumpd-review", "pumpd-decompose", "log-learning", "pumpd-retro"],

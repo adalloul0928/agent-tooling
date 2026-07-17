@@ -94,6 +94,7 @@ skill installation is not required.
 | Plugin | Skills | Intended scope | Ownership |
 | --- | --- | --- | --- |
 | `personal` | `obsidian-vault`, `dad-daily-update`, `personal-task`, `personal-task-done` | User/workstation | First-party |
+| `developer-workflows` | `thermo-nuclear-code-quality-review` | User/workstation; reusable across projects | First-party |
 | `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | PUMPD project/worktree | First-party |
 | `pumpd-workflows` | `pumpd-local-cleanup` | PUMPD project/worktree | First-party |
 | `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle project/worktree | First-party |
@@ -108,12 +109,13 @@ The `mobile-development` wrapper packages the third-party iOS Simulator,
 HeroUI Native, and HeroUI Native Pro MCP connections without copying their
 source. The licensed Pro token is read from Doppler at runtime.
 
-The intentionally small initial catalog omits generic research, Git, PR,
-worktree, documentation-sync, code-review, and tooling-recommendation skills.
-Those capabilities are deferred until repeated use justifies a custom workflow;
-vendor or native equivalents should be preferred in the meantime. Git history
-retains the removed implementations without publishing a misleading
-`deferred` bundle.
+The intentionally small catalog omits generic research, Git, PR, worktree,
+documentation-sync, and tooling-recommendation skills. Those capabilities are
+deferred until repeated use justifies a custom workflow; vendor or native
+equivalents should be preferred in the meantime. `developer-workflows` contains
+the deliberately retained thermo-nuclear review because it is a custom,
+cross-project workflow with repeated use. Git history retains other removed
+implementations without publishing a misleading `deferred` bundle.
 
 Every owned plugin has one physical skill core under `plugins/<plugin>/skills`
 and separate Claude and Codex manifests. Keep shared workflow logic portable;
@@ -324,9 +326,9 @@ For an `agent-tooling` release:
 2. Create an immutable release tag for the merged commit.
 3. Update the release ref recorded by the desired-state profile.
 4. Refresh the `agent-tooling` catalog in Claude and Codex.
-5. Install or update `personal`, `cyrus-workflows`, `pumpd-workflows`,
-   `wet-in-seattle`, and `mobile-development` in the clients required by their
-   profiles.
+5. Install or update `personal`, `developer-workflows`, `cyrus-workflows`,
+   `pumpd-workflows`, `wet-in-seattle`, and `mobile-development` in the clients
+   required by their profiles.
 6. Start fresh client sessions and run behavioral canaries.
 7. Authenticate new MCPs separately on each required local or hosted surface.
 8. Verify Claude Code cloud, Codex cloud, Claude.ai, and ChatGPT account state

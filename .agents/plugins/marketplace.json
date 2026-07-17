@@ -17,6 +17,18 @@
       "category": "Productivity"
     },
     {
+      "name": "developer-workflows",
+      "source": {
+        "source": "local",
+        "path": "./plugins/developer-workflows"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    },
+    {
       "name": "pumpd-workflows",
       "source": {
         "source": "local",
