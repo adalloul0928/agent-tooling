@@ -1,6 +1,6 @@
 {
   "name": "developer-workflows",
-  "description": "Reusable first-party development quality workflows",
+  "description": "Reusable first-party development quality workflows and shared developer MCPs",
   "author": {
     "name": "Arend Alloul"
   },
@@ -8,7 +8,7 @@
   "interface": {
     "displayName": "Developer Workflows",
     "shortDescription": "Run reusable development quality workflows",
-    "longDescription": "Run Arend's explicit, cross-project development quality and maintainability workflows in Claude Code and Codex.",
+    "longDescription": "Run Arend's cross-project development quality workflows and use shared developer MCPs in Claude Code and Codex.",
     "developerName": "Arend Alloul",
     "category": "Developer Tools",
     "capabilities": [
