@@ -27,7 +27,7 @@ class DoctorTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data), encoding="utf-8")
 
-    def run_doctor(self, profile: str) -> subprocess.CompletedProcess[str]:
+    def run_doctor(self, profile: str, *extra_args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 "python3",
@@ -38,6 +38,7 @@ class DoctorTests(unittest.TestCase):
                 "--home",
                 str(self.home),
                 "--json",
+                *extra_args,
             ],
             check=False,
             capture_output=True,
@@ -136,6 +137,50 @@ class DoctorTests(unittest.TestCase):
         )
 
         result = self.run_doctor("mcp")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["summary"]["pass"], 2)
+
+    def test_project_root_override_checks_active_project_state(self) -> None:
+        stale_root = self.root / "stale-project"
+        active_root = self.root / "active-project"
+        self.write_json(
+            active_root / ".claude/settings.json",
+            {"enabledPlugins": {"pumpd-workflows@agent-tooling": True}},
+        )
+        codex = active_root / ".codex/config.toml"
+        codex.parent.mkdir(parents=True)
+        codex.write_text(
+            '[mcp_servers.context7]\ncommand = "context7"\n',
+            encoding="utf-8",
+        )
+        self.write_json(
+            self.profiles / "project.json",
+            {
+                "schema_version": 1,
+                "name": "project",
+                "variables": {"project_root": str(stale_root)},
+                "checks": [
+                    {
+                        "id": "project-plugin",
+                        "kind": "claude_plugin",
+                        "plugin": "pumpd-workflows@agent-tooling",
+                        "path": "${project_root}/.claude/settings.json",
+                        "expected": "enabled",
+                    },
+                    {
+                        "id": "project-mcp",
+                        "kind": "project_codex_mcp",
+                        "path": "${project_root}/.codex/config.toml",
+                        "server": "context7",
+                        "expected": "present",
+                    },
+                ],
+            },
+        )
+
+        result = self.run_doctor("project", "--project-root", str(active_root))
 
         self.assertEqual(result.returncode, 0, result.stderr)
         report = json.loads(result.stdout)

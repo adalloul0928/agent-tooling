@@ -6,11 +6,15 @@
   "extends": [
     "base-workstation.json"
   ],
+  "variables": {
+    "project_root": "~/ws/IAWIS-Repo/always-wet-store"
+  },
   "checks": [
     {
       "id": "claude.wet-in-seattle-plugin",
       "kind": "claude_plugin",
       "plugin": "wet-in-seattle@agent-tooling",
+      "path": "${project_root}/.claude/settings.json",
       "expected": "enabled"
     },
     {

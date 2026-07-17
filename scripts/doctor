@@ -223,11 +223,16 @@ def evaluate(check: dict[str, Any], context: Context) -> dict[str, Any]:
         return outcome(check, len(hashes) == 1, f"compared {len(paths)} files; unique hashes: {len(hashes)}")
 
     if kind == "claude_plugin":
-        settings = read_json(home / ".claude/settings.json")
+        settings_path = context.path(check["path"]) if check.get("path") else home / ".claude/settings.json"
+        settings = read_json(settings_path)
         enabled = settings.get("enabledPlugins", {}).get(check["plugin"]) is True
         expected = check.get("expected", "enabled")
         ok = enabled if expected == "enabled" else not enabled
-        return outcome(check, ok, f"Claude plugin {check['plugin']} is {'enabled' if enabled else 'not enabled'}")
+        return outcome(
+            check,
+            ok,
+            f"Claude plugin {check['plugin']} is {'enabled' if enabled else 'not enabled'} in {settings_path}",
+        )
 
     if kind == "claude_marketplace":
         marketplaces = read_json(home / ".claude/plugins/known_marketplaces.json")
@@ -327,6 +332,11 @@ def main() -> int:
     parser.add_argument("profile", nargs="?", default="pumpd-workstation", help="profile name or JSON path")
     parser.add_argument("--profiles-dir", type=Path, default=DEFAULT_PROFILES_DIR)
     parser.add_argument("--home", type=Path, default=Path.home(), help="home directory to inspect")
+    parser.add_argument(
+        "--project-root",
+        type=Path,
+        help="override the profile's project_root variable with the active checkout",
+    )
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     parser.add_argument("--strict", action="store_true", help="treat advisory warnings as failures")
     parser.add_argument("--validate", action="store_true", help="validate profile composition without inspecting state")
@@ -335,6 +345,10 @@ def main() -> int:
     try:
         selected = profile_path(args.profile, args.profiles_dir)
         profile = load_profile(selected, args.profiles_dir.resolve())
+        if args.project_root is not None:
+            if "project_root" not in profile["variables"]:
+                raise ProfileError("--project-root requires a profile with a project_root variable")
+            profile["variables"]["project_root"] = str(args.project_root.resolve())
         validate_definition(profile)
         if args.validate:
             print(f"Valid profile: {selected}")

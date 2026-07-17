@@ -92,6 +92,7 @@ read-only doctor compares those profiles with native local configuration:
 ```bash
 ./scripts/doctor
 ./scripts/doctor pumpd-project --json
+./scripts/doctor pumpd-workstation --project-root /path/to/pumpd-mobile-app
 ```
 
 See [docs/profiles-and-doctor.md](docs/profiles-and-doctor.md) for the profile

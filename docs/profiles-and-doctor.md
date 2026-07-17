@@ -52,8 +52,15 @@ than committed machine-specific absolute paths.
 ./scripts/doctor base-workstation
 ./scripts/doctor pumpd-project --json
 ./scripts/doctor pumpd-workstation --strict
+./scripts/doctor pumpd-workstation --project-root "$PWD"
 ./scripts/doctor wet-in-seattle-workstation
 ```
+
+Use `--project-root` from an active worktree or checkout to override the
+profile's default `project_root`. Project-scoped Claude plugin checks read that
+checkout's `.claude/settings.json`, and project MCP checks read its committed
+Claude and Codex configuration. This avoids reporting drift from a different or
+stale checkout.
 
 The default profile is `pumpd-workstation`. Required failures return exit code
 `1`. Advisory warnings do not fail a normal run; `--strict` returns `2` when

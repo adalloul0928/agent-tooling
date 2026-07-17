@@ -12,6 +12,7 @@
       "id": "claude.pumpd-workflows-plugin",
       "kind": "claude_plugin",
       "plugin": "pumpd-workflows@agent-tooling",
+      "path": "${project_root}/.claude/settings.json",
       "expected": "enabled"
     },
     {
@@ -24,6 +25,7 @@
       "id": "claude.cyrus-workflows-plugin",
       "kind": "claude_plugin",
       "plugin": "cyrus-workflows@agent-tooling",
+      "path": "${project_root}/.claude/settings.json",
       "expected": "enabled"
     },
     {
@@ -36,18 +38,28 @@
       "id": "claude.linear-plugin",
       "kind": "claude_plugin",
       "plugin": "linear@claude-plugins-official",
+      "path": "${project_root}/.claude/settings.json",
       "expected": "enabled"
     },
     {
       "id": "claude.supabase-plugin",
       "kind": "claude_plugin",
       "plugin": "supabase@claude-plugins-official",
+      "path": "${project_root}/.claude/settings.json",
       "expected": "enabled"
     },
     {
       "id": "claude.sentry-plugin",
       "kind": "claude_plugin",
       "plugin": "sentry@claude-plugins-official",
+      "path": "${project_root}/.claude/settings.json",
+      "expected": "enabled"
+    },
+    {
+      "id": "claude.callstack-react-native-plugin",
+      "kind": "claude_plugin",
+      "plugin": "react-native-best-practices@callstack-agent-skills",
+      "path": "${project_root}/.claude/settings.json",
       "expected": "enabled"
     },
     {

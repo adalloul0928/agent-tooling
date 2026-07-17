@@ -206,6 +206,38 @@
       "path": "${project_root}/.codex/config.toml",
       "server": "context7",
       "expected": "present"
+    },
+    {
+      "id": "pumpd.duplicate-claude-heroui-native",
+      "kind": "project_claude_mcp",
+      "path": "${project_root}/.mcp.json",
+      "server": "heroui-native",
+      "expected": "absent",
+      "severity": "warning"
+    },
+    {
+      "id": "pumpd.duplicate-claude-ios-simulator",
+      "kind": "project_claude_mcp",
+      "path": "${project_root}/.mcp.json",
+      "server": "ios-simulator-mcp",
+      "expected": "absent",
+      "severity": "warning"
+    },
+    {
+      "id": "pumpd.duplicate-codex-heroui-native",
+      "kind": "project_codex_mcp",
+      "path": "${project_root}/.codex/config.toml",
+      "server": "heroui-native",
+      "expected": "absent",
+      "severity": "warning"
+    },
+    {
+      "id": "pumpd.duplicate-codex-ios-simulator",
+      "kind": "project_codex_mcp",
+      "path": "${project_root}/.codex/config.toml",
+      "server": "ios-simulator-mcp",
+      "expected": "absent",
+      "severity": "warning"
     }
   ],
   "manual_checks": [
