@@ -332,22 +332,7 @@ const vendorSkillRows: ComparisonRow[] = [
   },
 ];
 
-const projectSkillRows: ComparisonRow[] = [
-  "backend-review",
-  "fix-review",
-  "pumpd-architecture",
-  "pumpd-ios-simulator",
-  "pumpd-supabase-patterns",
-  "pumpd-testing",
-  "pumpd-ui-patterns",
-  "quality",
-  "sync-types",
-].map((name) => ({
-  name,
-  state: "match",
-  claude: { detail: "PUMPD project · symlink to .agents/skills" },
-  codex: { detail: "PUMPD project · .agents/skills" },
-}));
+const projectSkillRows: ComparisonRow[] = [];
 
 const mcpRows: ComparisonRow[] = [
   {
@@ -466,6 +451,15 @@ function SideCell({ side, client }: { side?: Side; client: "claude" | "codex" })
 }
 
 function ComparisonTable({ rows }: { rows: ComparisonRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <strong>No project skills installed</strong>
+        <p>Claude Code and Codex are both clean at the PUMPD project level.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="comparison-table">
       <div className="table-header" aria-hidden="true">
@@ -544,7 +538,7 @@ export default function Home() {
       />
       <Section
         title="PUMPD project skills"
-        description="These nine are not global. They remain committed in the PUMPD project and are shared through .agents/skills with Claude symlinks."
+        description="Reserved for future project-specific skills. This section stays visible even when the inventory is empty."
         rows={projectSkillRows}
       />
       <Section

@@ -28,6 +28,7 @@ test("renders the Claude and Codex inventory", async () => {
   assert.match(html, /Claude only/);
   assert.match(html, /Codex only/);
   assert.match(html, /PUMPD project skills/);
-  assert.match(html, /backend-review/);
+  assert.match(html, /No project skills installed/);
+  assert.doesNotMatch(html, /backend-review|fix-review|pumpd-architecture|sync-types/);
   assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton/);
 });
