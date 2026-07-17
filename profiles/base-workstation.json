@@ -34,6 +34,18 @@
       "expected": "enabled"
     },
     {
+      "id": "claude.developer-workflows-plugin",
+      "kind": "claude_plugin",
+      "plugin": "developer-workflows@agent-tooling",
+      "expected": "enabled"
+    },
+    {
+      "id": "codex.developer-workflows-plugin",
+      "kind": "codex_plugin",
+      "plugin": "developer-workflows@agent-tooling",
+      "expected": "enabled"
+    },
+    {
       "id": "claude.mobile-development-plugin",
       "kind": "claude_plugin",
       "plugin": "mobile-development@agent-tooling",

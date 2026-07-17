@@ -30,9 +30,10 @@ pumpd-project
 pumpd-workstation
 ```
 
-`base-workstation.json` includes `personal` plus the reusable
-`mobile-development` MCP bundle. The MCP bundle is local-workstation tooling;
-it is not part of the committed PUMPD cloud contract.
+`base-workstation.json` includes `personal`, the reusable `developer-workflows`
+skill bundle, and the reusable `mobile-development` MCP bundle. These are
+local-workstation tools; they are not part of the committed PUMPD cloud
+contract.
 
 `wet-in-seattle-workstation.json` extends `base-workstation.json`, adds the
 `wet-in-seattle` plugin, which supplies `analytics-mcp` to both Claude and

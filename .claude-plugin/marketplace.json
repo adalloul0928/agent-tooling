@@ -11,6 +11,11 @@
       "description": "Personal Obsidian vault, family check-in, and task-management workflows"
     },
     {
+      "name": "developer-workflows",
+      "source": "./plugins/developer-workflows",
+      "description": "Reusable first-party development quality workflows"
+    },
+    {
       "name": "pumpd-workflows",
       "source": "./plugins/pumpd-workflows",
       "description": "Local PUMPD maintenance workflows outside the Cyrus pipeline"

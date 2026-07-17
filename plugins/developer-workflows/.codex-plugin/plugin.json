@@ -1,0 +1,21 @@
+{
+  "name": "developer-workflows",
+  "description": "Reusable first-party development quality workflows",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Developer Workflows",
+    "shortDescription": "Run reusable development quality workflows",
+    "longDescription": "Run Arend's explicit, cross-project development quality and maintainability workflows in Claude Code and Codex.",
+    "developerName": "Arend Alloul",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read"
+    ],
+    "defaultPrompt": [
+      "Use the matching developer workflow when the user explicitly requests it."
+    ]
+  }
+}
