@@ -2,7 +2,7 @@
 
 This document is the canonical map for deciding what tooling exists, who owns
 it, where it lives, and how it reaches Claude and Codex. It describes the
-desired state as of 2026-07-17. Profiles and `scripts/doctor` turn the locally
+desired state as of 2026-07-13. Profiles and `scripts/doctor` turn the locally
 observable parts of this model into checks; hosted account state and live
 authentication still require manual verification.
 
@@ -128,68 +128,6 @@ record the intended project audience for Codex, but do not claim native project
 plugin isolation. Project-critical Codex behavior must remain in committed
 project skills/MCPs, or the user plugin must stay enabled globally until Codex
 adds a supported project scope.
-
-## Current workstation cheat sheet
-
-This is the verified local snapshot as of 2026-07-17. It is intentionally
-grouped by source and scope: a plugin may contribute many skills or MCPs, and a
-project-scoped Claude plugin appears inactive when Claude is opened outside its
-matching checkout. Claude.ai and ChatGPT account apps/connectors are separate
-hosted inventories and are not counted here.
-
-### Claude Code
-
-| Type | Source/scope | Current items |
-| --- | --- | --- |
-| Owned plugins | `agent-tooling`, user | `personal`, `developer-workflows`, `mobile-development` |
-| Owned plugins | `agent-tooling`, project | `cyrus-workflows`, `pumpd-workflows`, `wet-in-seattle` |
-| Official plugin | Anthropic, user | `skill-creator` |
-| Official plugin records | Anthropic, matching PUMPD/IAWIS checkout or worktree | `code-review`, `code-simplifier`, `context7`, `frontend-design`, `linear`, `playwright`, `security-guidance`, `sentry`, `shopify-ai-toolkit`, `supabase` |
-| Third-party plugin | Callstack, project | `react-native-best-practices` |
-| Base MCPs | User/plugin | `supabase`, `ios-simulator-mcp`, `heroui-native`, `heroui-native-pro` |
-| PUMPD MCPs | Plugin/project | `context7`, `linear`, `playwright`, `sentry`, `supabase_local` |
-| IAWIS MCPs | Plugin/project | `analytics-mcp`, `shadcn` |
-
-Claude first-party skills are the 14 skills listed in the owned-plugin table
-above. PUMPD adds the nine committed project skills listed below. There are no
-active standalone skills under `~/.claude/skills`; owned skills arrive through
-plugins. Current vendor skill suites are:
-
-- `skill-creator`: 1 skill;
-- `frontend-design`: 1 skill;
-- `supabase`: 2 skills;
-- `sentry`: 10 skills;
-- Callstack `react-native-best-practices`: 14 skills;
-- `shopify-ai-toolkit`: 20 skills in its IAWIS worktree record.
-
-### Codex
-
-| Type | Source/scope | Current items |
-| --- | --- | --- |
-| Owned plugins | `agent-tooling`, user-wide | `personal`, `developer-workflows`, `mobile-development`, `pumpd-workflows`, `cyrus-workflows`, `wet-in-seattle` |
-| Runtime/bundled plugins | OpenAI-managed | `documents`, `pdf`, `spreadsheets`, `presentations`, `template-creator`, `sites`, `browser`, `chrome`, `visualize` |
-| Curated plugins | OpenAI-managed | `linear`, `vercel`, `github`, `sentry`, `build-ios-apps`, `expo`, `supabase` |
-| Owned MCPs | Plugin-provided, user-wide | `analytics-mcp`, `ios-simulator-mcp`, `heroui-native`, `heroui-native-pro` |
-| Runtime/vendor MCPs | Bundled or curated | `node_repl`, `sites-design-picker`, `xcodebuildmcp`, `github`, `linear` |
-| Direct user MCPs | Local config | `figma`, retained legacy `heroui-pro`, disabled `computer-use` |
-| PUMPD MCPs | Committed project config | `context7`, `playwright` |
-| Standalone authored skills | `~/.codex/skills` | `chronicle`, `figma` |
-
-Codex also receives the same 14 first-party skills from `agent-tooling` and the
-nine PUMPD project skills from the checkout. OpenAI runtime and curated plugins
-currently contribute these skill suites:
-
-- artifact/runtime: `documents`, `pdf`, `spreadsheets`, `presentations`,
-  `template-creator`, `sites`, `browser`, `chrome`, and `visualize`;
-- service workflows: `linear`, `github`, `sentry`, and `supabase`;
-- larger vendor suites: `build-ios-apps` (9 skills), `expo` (13 skills), and
-  `vercel` (47 skills).
-
-The HTML Atlas expands every current vendor/runtime skill name while keeping
-the large suites collapsed by default. In current Codex, `analytics-mcp` and
-the PUMPD/IAWIS-targeted owned skills are globally visible because installed
-plugins are user-scoped; committed project skills and MCPs remain the reliable
-project boundary.
 
 ## Role of Microsoft APM
 

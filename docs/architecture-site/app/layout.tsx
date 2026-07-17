@@ -22,7 +22,7 @@ const mono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Agent Tooling Atlas",
-  description: "A practical Claude and Codex inventory cheat sheet for agent-tooling plugins, skills, MCP servers, scopes, marketplaces, profiles, and cloud boundaries.",
+  description: "An interactive guide to agent-tooling, Microsoft APM, Claude, Codex, local clients, cloud sessions, marketplaces, skills, plugins, and MCP servers.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

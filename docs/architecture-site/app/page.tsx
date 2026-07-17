@@ -431,382 +431,6 @@ const vendorTools = [
   ["Doppler", "CLI first", "Projects that consume secrets", "Do not add an MCP until a concrete workflow outweighs the extra secret surface"],
 ];
 
-const ownedSkills = [
-  "obsidian-vault",
-  "dad-daily-update",
-  "personal-task",
-  "personal-task-done",
-  "thermo-nuclear-code-quality-review",
-  "cyrus-setup",
-  "pumpd-research",
-  "pumpd-plan",
-  "pumpd-review",
-  "pumpd-decompose",
-  "log-learning",
-  "pumpd-retro",
-  "pumpd-local-cleanup",
-  "iawis-weekly-report",
-];
-
-const clientCheatsheets = [
-  {
-    id: "claude",
-    name: "Claude Code",
-    marker: "C",
-    scopeRule: "User and project plugin scopes are supported",
-    headline: "Project-specific packages stay attached to their Claude checkout.",
-    metrics: [
-      ["Owned plugins", "6"],
-      ["Owned skills", "14"],
-      ["Base MCPs", "4"],
-      ["PUMPD project skills", "9"],
-    ],
-    pluginGroups: [
-      {
-        label: "agent-tooling · user",
-        scope: "Every local Claude Code project",
-        items: ["personal", "developer-workflows", "mobile-development"],
-      },
-      {
-        label: "agent-tooling · project",
-        scope: "Only the matching checkout",
-        items: ["cyrus-workflows", "pumpd-workflows", "wet-in-seattle"],
-      },
-      {
-        label: "Anthropic · user",
-        scope: "Official catalog",
-        items: ["skill-creator"],
-      },
-      {
-        label: "Anthropic · project records",
-        scope: "PUMPD or IAWIS checkout/worktree",
-        items: [
-          "code-review",
-          "code-simplifier",
-          "context7",
-          "frontend-design",
-          "linear",
-          "playwright",
-          "security-guidance",
-          "sentry",
-          "shopify-ai-toolkit",
-          "supabase",
-        ],
-      },
-      {
-        label: "Third party · project",
-        scope: "Callstack catalog; intentionally retained",
-        items: ["react-native-best-practices"],
-      },
-    ],
-    mcpGroups: [
-      {
-        label: "Base workstation",
-        scope: "Available across local Claude Code",
-        items: ["supabase", "ios-simulator-mcp", "heroui-native", "heroui-native-pro"],
-      },
-      {
-        label: "PUMPD checkout",
-        scope: "Official plugins plus committed project MCP",
-        items: ["context7", "linear", "playwright", "sentry", "supabase_local"],
-      },
-      {
-        label: "Wet in Seattle checkout",
-        scope: "Plugin plus project MCP",
-        items: ["analytics-mcp", "shadcn"],
-      },
-    ],
-    skillGroups: [
-      {
-        label: "Owned plugin skills",
-        scope: "Canonical source: agent-tooling",
-        items: ownedSkills,
-      },
-      {
-        label: "PUMPD project skills",
-        scope: "Canonical source: PUMPD .agents/skills",
-        items: projectSkills,
-      },
-      {
-        label: "Standalone home skills",
-        scope: "Intentionally empty",
-        items: ["None — owned skills arrive through plugins"],
-      },
-    ],
-    vendorSkillSuites: [
-      { plugin: "skill-creator", scope: "Anthropic · user", items: ["skill-creator"] },
-      { plugin: "frontend-design", scope: "Anthropic · project", items: ["frontend-design"] },
-      {
-        plugin: "supabase",
-        scope: "Anthropic · project",
-        items: ["supabase", "supabase-postgres-best-practices"],
-      },
-      {
-        plugin: "sentry",
-        scope: "Anthropic · project",
-        items: [
-          "sentry-create-alert",
-          "sentry-debug-issue",
-          "sentry-feature-setup",
-          "sentry-get-started",
-          "sentry-instrument",
-          "sentry-otel-exporter-setup",
-          "sentry-sdk-upgrade",
-          "sentry-setup-ai-monitoring",
-          "sentry-snapshots-cocoa",
-          "sentry-workflow",
-        ],
-      },
-      {
-        plugin: "react-native-best-practices",
-        scope: "Callstack · project",
-        items: [
-          "agent-device",
-          "assess-react-native-migration",
-          "create-react-native-library",
-          "dogfood",
-          "github",
-          "github-actions",
-          "react-native-best-practices",
-          "react-native-brownfield-migration",
-          "react-native-testing",
-          "react-native-tv-best-practices",
-          "react-navigation",
-          "upgrading-react-native",
-          "validate-skills",
-          "vercel-react-native-skills",
-        ],
-      },
-      {
-        plugin: "shopify-ai-toolkit",
-        scope: "Anthropic · IAWIS worktree",
-        items: [
-          "shopify-admin",
-          "shopify-app-store-review",
-          "shopify-custom-data",
-          "shopify-customer",
-          "shopify-dev",
-          "shopify-functions",
-          "shopify-hydrogen",
-          "shopify-liquid",
-          "shopify-onboarding-dev",
-          "shopify-onboarding-merchant",
-          "shopify-partner",
-          "shopify-payments-apps",
-          "shopify-polaris-admin-extensions",
-          "shopify-polaris-app-home",
-          "shopify-polaris-checkout-extensions",
-          "shopify-polaris-customer-account-extensions",
-          "shopify-pos-ui",
-          "shopify-storefront-graphql",
-          "shopify-use-shopify-cli",
-          "ucp",
-        ],
-      },
-    ],
-    notes: [
-      "Project plugins show as inactive when Claude is opened outside their matching checkout; that is expected scope behavior.",
-      "Claude.ai skills and connectors remain a separate account inventory and are not included in this local Code snapshot.",
-    ],
-  },
-  {
-    id: "codex",
-    name: "Codex",
-    marker: "X",
-    scopeRule: "Installed plugins are currently user-wide",
-    headline: "Targeted packages stay globally visible; project guarantees stay committed in Git.",
-    metrics: [
-      ["Owned plugins", "6"],
-      ["Vendor/runtime plugins", "16"],
-      ["Base MCP entries", "12"],
-      ["Standalone authored skills", "2"],
-    ],
-    pluginGroups: [
-      {
-        label: "agent-tooling · user-wide",
-        scope: "Codex has no verified project plugin scope",
-        items: [
-          "personal",
-          "developer-workflows",
-          "mobile-development",
-          "pumpd-workflows",
-          "cyrus-workflows",
-          "wet-in-seattle",
-        ],
-      },
-      {
-        label: "OpenAI runtime + bundled",
-        scope: "Managed by the Codex application",
-        items: [
-          "documents",
-          "pdf",
-          "spreadsheets",
-          "presentations",
-          "template-creator",
-          "sites",
-          "browser",
-          "chrome",
-          "visualize",
-        ],
-      },
-      {
-        label: "OpenAI curated",
-        scope: "Vendor-managed packages",
-        items: ["linear", "vercel", "github", "sentry", "build-ios-apps", "expo", "supabase"],
-      },
-    ],
-    mcpGroups: [
-      {
-        label: "Owned plugin MCPs",
-        scope: "User-wide because their plugins are user-wide",
-        items: ["analytics-mcp", "ios-simulator-mcp", "heroui-native", "heroui-native-pro"],
-      },
-      {
-        label: "Runtime + vendor MCPs",
-        scope: "Built-in, bundled, or curated",
-        items: ["node_repl", "sites-design-picker", "xcodebuildmcp", "github", "linear"],
-      },
-      {
-        label: "Direct user entries",
-        scope: "Local authentication/config",
-        items: ["figma", "heroui-pro · retained legacy exception", "computer-use · disabled"],
-      },
-      {
-        label: "PUMPD checkout",
-        scope: "Committed .codex/config.toml",
-        items: ["context7", "playwright"],
-      },
-    ],
-    skillGroups: [
-      {
-        label: "Owned plugin skills",
-        scope: "Canonical source: agent-tooling",
-        items: ownedSkills,
-      },
-      {
-        label: "PUMPD project skills",
-        scope: "Canonical source: PUMPD .agents/skills",
-        items: projectSkills,
-      },
-      {
-        label: "Standalone authored skills",
-        scope: "Machine-specific exceptions in ~/.codex/skills",
-        items: ["chronicle", "figma"],
-      },
-    ],
-    vendorSkillSuites: [
-      { plugin: "documents", scope: "OpenAI runtime", items: ["documents"] },
-      { plugin: "pdf", scope: "OpenAI runtime", items: ["pdf"] },
-      { plugin: "spreadsheets", scope: "OpenAI runtime", items: ["spreadsheets", "excel-live-control"] },
-      { plugin: "presentations", scope: "OpenAI runtime", items: ["presentations"] },
-      { plugin: "template-creator", scope: "OpenAI runtime", items: ["template-creator"] },
-      { plugin: "sites", scope: "OpenAI bundled", items: ["sites-building", "sites-hosting"] },
-      { plugin: "browser", scope: "OpenAI bundled", items: ["control-in-app-browser"] },
-      { plugin: "chrome", scope: "OpenAI bundled", items: ["control-chrome"] },
-      { plugin: "visualize", scope: "OpenAI bundled", items: ["visualize"] },
-      { plugin: "linear", scope: "OpenAI curated", items: ["linear"] },
-      { plugin: "github", scope: "OpenAI curated", items: ["github", "gh-address-comments", "gh-fix-ci", "yeet"] },
-      { plugin: "sentry", scope: "OpenAI curated", items: ["sentry"] },
-      {
-        plugin: "build-ios-apps",
-        scope: "OpenAI curated",
-        items: [
-          "ios-app-intents",
-          "ios-debugger-agent",
-          "ios-ettrace-performance",
-          "ios-memgraph-leaks",
-          "ios-simulator-browser",
-          "swiftui-liquid-glass",
-          "swiftui-performance-audit",
-          "swiftui-ui-patterns",
-          "swiftui-view-refactor",
-        ],
-      },
-      {
-        plugin: "expo",
-        scope: "OpenAI curated",
-        items: [
-          "building-native-ui",
-          "codex-expo-run-actions",
-          "expo-api-routes",
-          "expo-cicd-workflows",
-          "expo-deployment",
-          "expo-dev-client",
-          "expo-module",
-          "expo-tailwind-setup",
-          "expo-ui-jetpack-compose",
-          "expo-ui-swift-ui",
-          "native-data-fetching",
-          "upgrading-expo",
-          "use-dom",
-        ],
-      },
-      {
-        plugin: "supabase",
-        scope: "OpenAI curated",
-        items: ["supabase", "supabase-postgres-best-practices"],
-      },
-      {
-        plugin: "vercel",
-        scope: "OpenAI curated",
-        items: [
-          "agent-browser",
-          "agent-browser-verify",
-          "ai-elements",
-          "ai-gateway",
-          "ai-generation-persistence",
-          "ai-sdk",
-          "auth",
-          "bootstrap",
-          "chat-sdk",
-          "cms",
-          "cron-jobs",
-          "deployments-cicd",
-          "email",
-          "env-vars",
-          "geist",
-          "geistdocs",
-          "investigation-mode",
-          "json-render",
-          "marketplace",
-          "micro",
-          "ncc",
-          "next-forge",
-          "nextjs",
-          "observability",
-          "payments",
-          "react-best-practices",
-          "routing-middleware",
-          "runtime-cache",
-          "satori",
-          "shadcn",
-          "sign-in-with-vercel",
-          "swr",
-          "turbopack",
-          "turborepo",
-          "v0-dev",
-          "vercel-agent",
-          "vercel-api",
-          "vercel-cli",
-          "vercel-firewall",
-          "vercel-flags",
-          "vercel-functions",
-          "vercel-queues",
-          "vercel-sandbox",
-          "vercel-services",
-          "vercel-storage",
-          "verification",
-          "workflow",
-        ],
-      },
-    ],
-    notes: [
-      "analytics-mcp is visible globally because wet-in-seattle must be installed user-wide in current Codex.",
-      "ChatGPT apps and hosted connectors remain separate from this local Codex inventory.",
-    ],
-  },
-];
-
 const statusLabels: Record<Status, string> = {
   automatic: "Automated path",
   native: "Native client path",
@@ -820,9 +444,7 @@ function StatusPill({ status }: { status: Status }) {
 
 export default function Home() {
   const [activeJourney, setActiveJourney] = useState(journeys[0].id);
-  const [activeCheatClient, setActiveCheatClient] = useState(clientCheatsheets[0].id);
   const journey = journeys.find((item) => item.id === activeJourney) ?? journeys[0];
-  const clientInventory = clientCheatsheets.find((item) => item.id === activeCheatClient) ?? clientCheatsheets[0];
 
   return (
     <main>
@@ -832,7 +454,7 @@ export default function Home() {
           <span>Agent Tooling Atlas</span>
         </a>
         <nav aria-label="Guide sections">
-          <a href="#cheatsheet">Cheat sheet</a>
+          <a href="#vocabulary">Vocabulary</a>
           <a href="#model">Model</a>
           <a href="#setup">Our setup</a>
           <a href="#surfaces">Surfaces</a>
@@ -856,7 +478,7 @@ export default function Home() {
             what Claude and Codex load locally or in the cloud, and where a human still has to click, connect, or verify.
           </p>
           <div className="hero-actions">
-            <a className="button button-primary" href="#cheatsheet">Open the cheat sheet <span>↓</span></a>
+            <a className="button button-primary" href="#model">Start with the model <span>↓</span></a>
             <a className="button button-ghost" href="#journeys">Trace something I add</a>
           </div>
         </div>
@@ -1092,118 +714,10 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section cheatsheet-section" id="cheatsheet">
-        <div className="section-heading">
-          <div>
-            <p className="kicker">04 · Current workstation cheat sheet</p>
-            <h2>What is installed, where it comes from, and where it appears</h2>
-          </div>
-          <p className="section-lede">
-            Verified 2026-07-17 from the live Claude Code and Codex configuration. Start here when something appears twice, seems missing, or needs to be reproduced on another machine.
-          </p>
-        </div>
-
-        <div className="cheat-rules" aria-label="Four rules for reading the inventory">
-          <article><span>01</span><strong>Plugin</strong><p>Install and update the package, not every skill inside it.</p></article>
-          <article><span>02</span><strong>Skill</strong><p>Instructions loaded from a plugin, project checkout, runtime, or rare standalone directory.</p></article>
-          <article><span>03</span><strong>MCP</strong><p>A live tool connection. Its declaration, authentication, and scope are separate.</p></article>
-          <article><span>04</span><strong>Hosted app</strong><p>Claude.ai and ChatGPT account state is not part of this local inventory.</p></article>
-        </div>
-
-        <div className="cheat-tabs" role="tablist" aria-label="Choose a local client inventory">
-          {clientCheatsheets.map((client) => (
-            <button
-              type="button"
-              role="tab"
-              id={`cheat-tab-${client.id}`}
-              aria-controls={`cheat-panel-${client.id}`}
-              aria-selected={activeCheatClient === client.id}
-              className={activeCheatClient === client.id ? "active" : ""}
-              onClick={() => setActiveCheatClient(client.id)}
-              key={client.id}
-            >
-              <span className={`cheat-tab-mark ${client.id}`}>{client.marker}</span>
-              <span><strong>{client.name}</strong><small>{client.scopeRule}</small></span>
-            </button>
-          ))}
-        </div>
-
-        <div
-          className={`cheat-panel cheat-${clientInventory.id}`}
-          id={`cheat-panel-${clientInventory.id}`}
-          role="tabpanel"
-          aria-labelledby={`cheat-tab-${clientInventory.id}`}
-        >
-          <div className="cheat-panel-heading">
-            <div>
-              <p className="kicker">Local actual state · {clientInventory.name}</p>
-              <h3>{clientInventory.headline}</h3>
-            </div>
-            <span>{clientInventory.scopeRule}</span>
-          </div>
-
-          <div className="cheat-metrics">
-            {clientInventory.metrics.map(([label, value]) => (
-              <div key={label}><strong>{value}</strong><span>{label}</span></div>
-            ))}
-          </div>
-
-          <div className="cheat-columns">
-            <article className="cheat-category">
-              <div className="cheat-category-heading"><span>01</span><h3>Plugins</h3></div>
-              <p className="cheat-category-rule">Packages currently installed or recorded by the native client.</p>
-              {clientInventory.pluginGroups.map((group) => (
-                <div className="cheat-group" key={group.label}>
-                  <div><strong>{group.label}</strong><small>{group.scope}</small></div>
-                  <div className="cheat-chips">{group.items.map((item) => <code key={item}>{item}</code>)}</div>
-                </div>
-              ))}
-            </article>
-
-            <article className="cheat-category">
-              <div className="cheat-category-heading"><span>02</span><h3>MCP servers</h3></div>
-              <p className="cheat-category-rule">The same server may be supplied by a plugin, project, runtime, or direct user entry.</p>
-              {clientInventory.mcpGroups.map((group) => (
-                <div className="cheat-group" key={group.label}>
-                  <div><strong>{group.label}</strong><small>{group.scope}</small></div>
-                  <div className="cheat-chips">{group.items.map((item) => <code key={item}>{item}</code>)}</div>
-                </div>
-              ))}
-            </article>
-          </div>
-
-          <article className="cheat-category cheat-skills">
-            <div className="cheat-category-heading"><span>03</span><h3>Skills</h3></div>
-            <p className="cheat-category-rule">First-party and project skills stay visible; large vendor suites are collapsed by plugin so the list remains usable.</p>
-            <div className="cheat-skill-groups">
-              {clientInventory.skillGroups.map((group) => (
-                <div className="cheat-group" key={group.label}>
-                  <div><strong>{group.label}</strong><small>{group.scope}</small></div>
-                  <div className="cheat-chips">{group.items.map((item) => <code key={item}>{item}</code>)}</div>
-                </div>
-              ))}
-            </div>
-            <div className="vendor-suites">
-              <div className="vendor-suites-heading"><strong>Vendor and runtime skill suites</strong><span>Expand a plugin only when you need the exact skill names.</span></div>
-              {clientInventory.vendorSkillSuites.map((suite) => (
-                <details key={suite.plugin}>
-                  <summary><code>{suite.plugin}</code><span>{suite.scope} · {suite.items.length} {suite.items.length === 1 ? "skill" : "skills"}</span></summary>
-                  <div className="cheat-chips">{suite.items.map((item) => <code key={item}>{item}</code>)}</div>
-                </details>
-              ))}
-            </div>
-          </article>
-
-          <div className="cheat-notes">
-            {clientInventory.notes.map((note) => <p key={note}><span>Note</span>{note}</p>)}
-          </div>
-        </div>
-      </section>
-
       <section className="section surfaces-section" id="surfaces">
         <div className="section-heading">
           <div>
-            <p className="kicker">05 · Surface map</p>
+            <p className="kicker">04 · Surface map</p>
             <h2>Claude and Codex are families of products</h2>
           </div>
           <p className="section-lede">
@@ -1249,7 +763,7 @@ export default function Home() {
       <section className="section profiles-section" id="profiles">
         <div className="section-heading">
           <div>
-            <p className="kicker">06 · Profiles and doctor</p>
+            <p className="kicker">05 · Profiles and doctor</p>
             <h2>Profiles answer “what should this context have?”</h2>
           </div>
           <p className="section-lede">
@@ -1294,7 +808,7 @@ export default function Home() {
       <section className="section journey-section" id="journeys">
         <div className="section-heading journey-heading">
           <div>
-            <p className="kicker">07 · Trace a capability</p>
+            <p className="kicker">06 · Trace a capability</p>
             <h2>What happens when I add…?</h2>
           </div>
           <div className="legend" aria-label="Status legend">
@@ -1348,7 +862,7 @@ export default function Home() {
       <section className="section auth-section" id="auth">
         <div className="section-heading">
           <div>
-            <p className="kicker">08 · Installation and authentication</p>
+            <p className="kicker">07 · Installation and authentication</p>
             <h2>Installed is not authenticated</h2>
           </div>
           <p className="section-lede">
@@ -1399,7 +913,7 @@ export default function Home() {
       <section className="section apm-section" id="apm">
         <div className="section-heading">
           <div>
-            <p className="kicker">09 · Microsoft APM</p>
+            <p className="kicker">08 · Microsoft APM</p>
             <h2>Useful package manager. Optional here.</h2>
           </div>
           <p className="section-lede">
@@ -1500,7 +1014,7 @@ export default function Home() {
       <section className="section matrix-section">
         <div className="section-heading">
           <div>
-            <p className="kicker">10 · Ownership matrix</p>
+            <p className="kicker">09 · Ownership matrix</p>
             <h2>Who owns what?</h2>
           </div>
           <p className="section-lede">Read across any row to see the same capability expressed through different stores and runtimes.</p>
@@ -1530,7 +1044,7 @@ export default function Home() {
 
       <section className="section decision-section">
         <div className="decision-intro">
-          <p className="kicker">11 · Placement rules</p>
+          <p className="kicker">10 · Placement rules</p>
           <h2>Five questions decide where a capability belongs</h2>
           <p>Use these before adding anything. They prevent duplicates, auth collisions, and accidental cloud dependencies.</p>
         </div>
