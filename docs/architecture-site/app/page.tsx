@@ -40,7 +40,7 @@ const journeys: Journey[] = [
         index: "02",
         title: "Package natively",
         detail:
-          "Add thin Claude and Codex manifests plus entries in both native catalogs. Git revisions identify the release.",
+          "Add thin Claude and Codex manifests plus entries in both native catalogs. The main branch is the rolling release channel.",
         status: "native",
         owner: "agent-tooling",
       },
@@ -48,7 +48,7 @@ const journeys: Journey[] = [
         index: "03",
         title: "Install locally",
         detail:
-          "Each client installs the matching native plugin from the same Git revision. Each still reads its own catalog and cache.",
+          "Each client installs the matching native plugin from the latest refreshed main revision. Each still reads its own catalog and cache.",
         status: "automatic",
         owner: "native marketplaces",
       },
@@ -935,7 +935,7 @@ export default function Home() {
           {[
             ["01", "Author", "Shared skills live once in agent-tooling or the project"],
             ["02", "Adapt", "Thin native manifests expose Claude and Codex packages"],
-            ["03", "Release", "Immutable Git revisions identify known-good content"],
+            ["03", "Release", "Merge to main, then refresh both native marketplaces"],
             ["04", "Install", "Native marketplaces preserve client semantics"],
             ["05", "Inspect", "doctor reports missing, duplicate, or deferred state"],
             ["06", "Clean", "Backed-up native commands make explicit changes"],
