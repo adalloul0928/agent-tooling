@@ -51,10 +51,12 @@ agent-tooling/
 
 ## Version policy
 
-- Claude plugin releases follow the marketplace Git revision; omit plugin
-  `version` fields unless a future compatibility requirement changes the policy.
-- Codex plugin releases also follow the marketplace Git revision; omit plugin
-  `version` fields unless a future compatibility requirement changes the policy.
+- `main` is the rolling release channel for both native marketplaces. A native
+  marketplace refresh resolves the newest merged commit from that branch.
+- Omit Claude and Codex plugin `version` fields unless a future compatibility
+  requirement changes the policy.
+- Historical tags may remain as repository history, but workstation profiles do
+  not pin to them.
 
 Microsoft APM was tested as a possible compiler. The result was a partial adopt:
 native manifests remain authoritative, while APM's lockfile and audit features
@@ -78,7 +80,8 @@ Run the cross-client validation and isolated Claude/Codex install smoke tests:
 ```
 
 Claude's validator reports the intentionally omitted Claude plugin version as a
-warning. The warning is expected while Git revisions are the release mechanism.
+warning. The warning is expected while the rolling Git branch is the release
+mechanism.
 
 ## Desired-state profiles
 
