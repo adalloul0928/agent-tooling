@@ -24,8 +24,10 @@ test("renders the Claude and Codex inventory", async () => {
   assert.match(html, />Codex</);
   assert.match(html, /developer-workflows/);
   assert.match(html, /analytics-mcp/);
-  assert.match(html, /PUMPD WORKTREE-ONLY/);
+  assert.match(html, /Different setup/);
+  assert.match(html, /Claude only/);
+  assert.match(html, /Codex only/);
+  assert.match(html, /PUMPD project skills/);
   assert.match(html, /backend-review/);
-  assert.match(html, /\.codex\/worktrees\/2ed0\/pumpd-mobile-app/);
   assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton/);
 });

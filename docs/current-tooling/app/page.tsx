@@ -1,27 +1,338 @@
-type ListGroup = {
-  title: string;
-  note?: string;
-  items: string[];
+type Side = {
+  detail: string;
+  items?: string[];
+  disabled?: boolean;
 };
 
-const ownedSkills = [
-  "obsidian-vault",
-  "dad-daily-update",
-  "personal-task",
-  "personal-task-done",
-  "thermo-nuclear-code-quality-review",
-  "cyrus-setup",
-  "pumpd-research",
-  "pumpd-plan",
-  "pumpd-review",
-  "pumpd-decompose",
-  "log-learning",
-  "pumpd-retro",
-  "pumpd-local-cleanup",
-  "iawis-weekly-report",
+type ComparisonRow = {
+  name: string;
+  state: "match" | "different" | "claude-only" | "codex-only";
+  claude?: Side;
+  codex?: Side;
+};
+
+const sharedOwnedPlugins: ComparisonRow[] = [
+  ["personal", "user", "user-wide"],
+  ["developer-workflows", "user", "user-wide"],
+  ["mobile-development", "user", "user-wide"],
+  ["pumpd-workflows", "PUMPD project", "user-wide"],
+  ["cyrus-workflows", "PUMPD project", "user-wide"],
+  ["wet-in-seattle", "IAWIS project", "user-wide"],
+].map(([name, claude, codex]) => ({
+  name,
+  state: claude === "user" && codex === "user-wide" ? "match" : "different",
+  claude: { detail: `agent-tooling · ${claude}` },
+  codex: { detail: `agent-tooling · ${codex}` },
+})) as ComparisonRow[];
+
+const pluginRows: ComparisonRow[] = [
+  ...sharedOwnedPlugins,
+  {
+    name: "linear",
+    state: "different",
+    claude: { detail: "Anthropic official · project" },
+    codex: { detail: "OpenAI curated · user-wide" },
+  },
+  {
+    name: "sentry",
+    state: "different",
+    claude: { detail: "Anthropic official · project" },
+    codex: { detail: "OpenAI curated · user-wide" },
+  },
+  {
+    name: "supabase",
+    state: "different",
+    claude: { detail: "Anthropic official · project" },
+    codex: { detail: "OpenAI curated · user-wide" },
+  },
+  ...[
+    "skill-creator",
+    "code-review",
+    "code-simplifier",
+    "context7",
+    "frontend-design",
+    "playwright",
+    "security-guidance",
+    "shopify-ai-toolkit",
+  ].map((name) => ({
+    name,
+    state: "claude-only" as const,
+    claude: { detail: `Anthropic official · ${name === "skill-creator" ? "user" : "project"}` },
+  })),
+  {
+    name: "react-native-best-practices",
+    state: "claude-only",
+    claude: { detail: "Callstack · project" },
+  },
+  ...[
+    "documents",
+    "pdf",
+    "spreadsheets",
+    "presentations",
+    "template-creator",
+    "sites",
+    "browser",
+    "chrome",
+    "visualize",
+  ].map((name) => ({
+    name,
+    state: "codex-only" as const,
+    codex: { detail: "OpenAI runtime · user-wide" },
+  })),
+  ...["vercel", "github", "build-ios-apps", "expo"].map((name) => ({
+    name,
+    state: "codex-only" as const,
+    codex: { detail: "OpenAI curated · user-wide" },
+  })),
 ];
 
-const pumpdWorktreeSkills = [
+const ownedSkillRows: ComparisonRow[] = [
+  ["obsidian-vault", "personal"],
+  ["dad-daily-update", "personal"],
+  ["personal-task", "personal"],
+  ["personal-task-done", "personal"],
+  ["thermo-nuclear-code-quality-review", "developer-workflows"],
+  ["cyrus-setup", "cyrus-workflows"],
+  ["pumpd-research", "cyrus-workflows"],
+  ["pumpd-plan", "cyrus-workflows"],
+  ["pumpd-review", "cyrus-workflows"],
+  ["pumpd-decompose", "cyrus-workflows"],
+  ["log-learning", "cyrus-workflows"],
+  ["pumpd-retro", "cyrus-workflows"],
+  ["pumpd-local-cleanup", "pumpd-workflows"],
+  ["iawis-weekly-report", "wet-in-seattle"],
+].map(([name, plugin]) => ({
+  name,
+  state: "match",
+  claude: { detail: `agent-tooling · ${plugin}` },
+  codex: { detail: `agent-tooling · ${plugin}` },
+})) as ComparisonRow[];
+
+const vendorSkillRows: ComparisonRow[] = [
+  {
+    name: "Supabase skills",
+    state: "match",
+    claude: {
+      detail: "2 skills",
+      items: ["supabase", "supabase-postgres-best-practices"],
+    },
+    codex: {
+      detail: "2 skills",
+      items: ["supabase", "supabase-postgres-best-practices"],
+    },
+  },
+  {
+    name: "Sentry skills",
+    state: "different",
+    claude: {
+      detail: "10 skills",
+      items: [
+        "sentry-create-alert",
+        "sentry-debug-issue",
+        "sentry-feature-setup",
+        "sentry-get-started",
+        "sentry-instrument",
+        "sentry-otel-exporter-setup",
+        "sentry-sdk-upgrade",
+        "sentry-setup-ai-monitoring",
+        "sentry-snapshots-cocoa",
+        "sentry-workflow",
+      ],
+    },
+    codex: { detail: "1 skill", items: ["sentry"] },
+  },
+  {
+    name: "Anthropic skills",
+    state: "claude-only",
+    claude: { detail: "2 skills", items: ["skill-creator", "frontend-design"] },
+  },
+  {
+    name: "Callstack React Native skills",
+    state: "claude-only",
+    claude: {
+      detail: "14 skills",
+      items: [
+        "agent-device",
+        "assess-react-native-migration",
+        "create-react-native-library",
+        "dogfood",
+        "github",
+        "github-actions",
+        "react-native-best-practices",
+        "react-native-brownfield-migration",
+        "react-native-testing",
+        "react-native-tv-best-practices",
+        "react-navigation",
+        "upgrading-react-native",
+        "validate-skills",
+        "vercel-react-native-skills",
+      ],
+    },
+  },
+  {
+    name: "Shopify skills",
+    state: "claude-only",
+    claude: {
+      detail: "20 skills",
+      items: [
+        "shopify-admin",
+        "shopify-app-store-review",
+        "shopify-custom-data",
+        "shopify-customer",
+        "shopify-dev",
+        "shopify-functions",
+        "shopify-hydrogen",
+        "shopify-liquid",
+        "shopify-onboarding-dev",
+        "shopify-onboarding-merchant",
+        "shopify-partner",
+        "shopify-payments-apps",
+        "shopify-polaris-admin-extensions",
+        "shopify-polaris-app-home",
+        "shopify-polaris-checkout-extensions",
+        "shopify-polaris-customer-account-extensions",
+        "shopify-pos-ui",
+        "shopify-storefront-graphql",
+        "shopify-use-shopify-cli",
+        "ucp",
+      ],
+    },
+  },
+  {
+    name: "Standalone personal skills",
+    state: "codex-only",
+    claude: { detail: "None · ~/.claude/skills is clean" },
+    codex: { detail: "2 skills", items: ["chronicle", "figma"] },
+  },
+  {
+    name: "OpenAI runtime skills",
+    state: "codex-only",
+    codex: {
+      detail: "11 skills",
+      items: [
+        "documents",
+        "pdf",
+        "spreadsheets",
+        "excel-live-control",
+        "presentations",
+        "template-creator",
+        "sites-building",
+        "sites-hosting",
+        "control-in-app-browser",
+        "control-chrome",
+        "visualize",
+      ],
+    },
+  },
+  {
+    name: "GitHub skills",
+    state: "codex-only",
+    codex: { detail: "4 skills", items: ["github", "gh-address-comments", "gh-fix-ci", "yeet"] },
+  },
+  {
+    name: "Apple skills",
+    state: "codex-only",
+    codex: {
+      detail: "9 skills",
+      items: [
+        "ios-app-intents",
+        "ios-debugger-agent",
+        "ios-ettrace-performance",
+        "ios-memgraph-leaks",
+        "ios-simulator-browser",
+        "swiftui-liquid-glass",
+        "swiftui-performance-audit",
+        "swiftui-ui-patterns",
+        "swiftui-view-refactor",
+      ],
+    },
+  },
+  {
+    name: "Expo skills",
+    state: "codex-only",
+    codex: {
+      detail: "13 skills",
+      items: [
+        "building-native-ui",
+        "codex-expo-run-actions",
+        "expo-api-routes",
+        "expo-cicd-workflows",
+        "expo-deployment",
+        "expo-dev-client",
+        "expo-module",
+        "expo-tailwind-setup",
+        "expo-ui-jetpack-compose",
+        "expo-ui-swift-ui",
+        "native-data-fetching",
+        "upgrading-expo",
+        "use-dom",
+      ],
+    },
+  },
+  {
+    name: "Other OpenAI curated skills",
+    state: "codex-only",
+    codex: { detail: "2 skills", items: ["linear", "sentry"] },
+  },
+  {
+    name: "Vercel skills",
+    state: "codex-only",
+    codex: {
+      detail: "47 skills",
+      items: [
+        "agent-browser",
+        "agent-browser-verify",
+        "ai-elements",
+        "ai-gateway",
+        "ai-generation-persistence",
+        "ai-sdk",
+        "auth",
+        "bootstrap",
+        "chat-sdk",
+        "cms",
+        "cron-jobs",
+        "deployments-cicd",
+        "email",
+        "env-vars",
+        "geist",
+        "geistdocs",
+        "investigation-mode",
+        "json-render",
+        "marketplace",
+        "micro",
+        "ncc",
+        "next-forge",
+        "nextjs",
+        "observability",
+        "payments",
+        "react-best-practices",
+        "routing-middleware",
+        "runtime-cache",
+        "satori",
+        "shadcn",
+        "sign-in-with-vercel",
+        "swr",
+        "turbopack",
+        "turborepo",
+        "v0-dev",
+        "vercel-agent",
+        "vercel-api",
+        "vercel-cli",
+        "vercel-firewall",
+        "vercel-flags",
+        "vercel-functions",
+        "vercel-queues",
+        "vercel-sandbox",
+        "vercel-services",
+        "vercel-storage",
+        "verification",
+        "workflow",
+      ],
+    },
+  },
+];
+
+const projectSkillRows: ComparisonRow[] = [
   "backend-review",
   "fix-review",
   "pumpd-architecture",
@@ -31,386 +342,168 @@ const pumpdWorktreeSkills = [
   "pumpd-ui-patterns",
   "quality",
   "sync-types",
-];
-
-const claudePlugins: ListGroup[] = [
-  {
-    title: "Our plugins · agent-tooling",
-    items: [
-      "personal · user",
-      "developer-workflows · user",
-      "mobile-development · user",
-      "cyrus-workflows · PUMPD project",
-      "pumpd-workflows · PUMPD project",
-      "wet-in-seattle · IAWIS project",
-    ],
-  },
-  {
-    title: "Anthropic official",
-    items: [
-      "skill-creator · user",
-      "code-review · project",
-      "code-simplifier · project",
-      "context7 · project",
-      "frontend-design · project",
-      "linear · project",
-      "playwright · project",
-      "security-guidance · project",
-      "sentry · project",
-      "shopify-ai-toolkit · project",
-      "supabase · project",
-    ],
-  },
-  {
-    title: "Third party",
-    items: ["react-native-best-practices · Callstack · project"],
-  },
-];
-
-const claudeMcps: ListGroup[] = [
-  {
-    title: "Base / user",
-    items: [
-      "supabase",
-      "ios-simulator-mcp · from mobile-development",
-      "heroui-native · from mobile-development",
-      "heroui-native-pro · from mobile-development",
-    ],
-  },
-  {
-    title: "PUMPD project",
-    items: ["context7", "linear", "playwright", "sentry", "supabase_local"],
-  },
-  {
-    title: "IAWIS project",
-    items: ["analytics-mcp", "shadcn"],
-  },
-];
-
-const codexPlugins: ListGroup[] = [
-  {
-    title: "Our plugins · agent-tooling",
-    items: [
-      "personal",
-      "developer-workflows",
-      "mobile-development",
-      "pumpd-workflows",
-      "cyrus-workflows",
-      "wet-in-seattle",
-    ],
-  },
-  {
-    title: "OpenAI runtime",
-    items: [
-      "documents",
-      "pdf",
-      "spreadsheets",
-      "presentations",
-      "template-creator",
-      "sites",
-      "browser",
-      "chrome",
-      "visualize",
-    ],
-  },
-  {
-    title: "OpenAI curated",
-    items: [
-      "linear",
-      "vercel",
-      "github",
-      "sentry",
-      "build-ios-apps",
-      "expo",
-      "supabase",
-    ],
-  },
-];
-
-const codexMcps: ListGroup[] = [
-  {
-    title: "From our plugins",
-    items: ["analytics-mcp", "ios-simulator-mcp", "heroui-native", "heroui-native-pro"],
-  },
-  {
-    title: "Runtime / vendor",
-    items: ["node_repl", "sites-design-picker", "xcodebuildmcp", "github", "linear"],
-  },
-  {
-    title: "Direct user configuration",
-    items: ["figma", "heroui-pro · retained legacy exception", "computer-use · disabled"],
-  },
-  {
-    title: "PUMPD project",
-    items: ["context7", "playwright"],
-  },
-];
-
-const claudeVendorSkills: ListGroup[] = [
-  { title: "Anthropic", items: ["skill-creator", "frontend-design"] },
-  {
-    title: "Supabase",
-    items: ["supabase", "supabase-postgres-best-practices"],
-  },
-  {
-    title: "Sentry · 10 skills",
-    items: [
-      "sentry-create-alert",
-      "sentry-debug-issue",
-      "sentry-feature-setup",
-      "sentry-get-started",
-      "sentry-instrument",
-      "sentry-otel-exporter-setup",
-      "sentry-sdk-upgrade",
-      "sentry-setup-ai-monitoring",
-      "sentry-snapshots-cocoa",
-      "sentry-workflow",
-    ],
-  },
-  {
-    title: "Callstack · 14 skills",
-    items: [
-      "agent-device",
-      "assess-react-native-migration",
-      "create-react-native-library",
-      "dogfood",
-      "github",
-      "github-actions",
-      "react-native-best-practices",
-      "react-native-brownfield-migration",
-      "react-native-testing",
-      "react-native-tv-best-practices",
-      "react-navigation",
-      "upgrading-react-native",
-      "validate-skills",
-      "vercel-react-native-skills",
-    ],
-  },
-  {
-    title: "Shopify · 20 skills",
-    items: [
-      "shopify-admin",
-      "shopify-app-store-review",
-      "shopify-custom-data",
-      "shopify-customer",
-      "shopify-dev",
-      "shopify-functions",
-      "shopify-hydrogen",
-      "shopify-liquid",
-      "shopify-onboarding-dev",
-      "shopify-onboarding-merchant",
-      "shopify-partner",
-      "shopify-payments-apps",
-      "shopify-polaris-admin-extensions",
-      "shopify-polaris-app-home",
-      "shopify-polaris-checkout-extensions",
-      "shopify-polaris-customer-account-extensions",
-      "shopify-pos-ui",
-      "shopify-storefront-graphql",
-      "shopify-use-shopify-cli",
-      "ucp",
-    ],
-  },
-];
-
-const codexRuntimeSkills: ListGroup[] = [
-  {
-    title: "OpenAI runtime · 11 skills",
-    items: [
-      "documents",
-      "pdf",
-      "spreadsheets",
-      "excel-live-control",
-      "presentations",
-      "template-creator",
-      "sites-building",
-      "sites-hosting",
-      "control-in-app-browser",
-      "control-chrome",
-      "visualize",
-    ],
-  },
-  {
-    title: "GitHub · 4 skills",
-    items: ["github", "gh-address-comments", "gh-fix-ci", "yeet"],
-  },
-  {
-    title: "Apple · 9 skills",
-    items: [
-      "ios-app-intents",
-      "ios-debugger-agent",
-      "ios-ettrace-performance",
-      "ios-memgraph-leaks",
-      "ios-simulator-browser",
-      "swiftui-liquid-glass",
-      "swiftui-performance-audit",
-      "swiftui-ui-patterns",
-      "swiftui-view-refactor",
-    ],
-  },
-  {
-    title: "Expo · 13 skills",
-    items: [
-      "building-native-ui",
-      "codex-expo-run-actions",
-      "expo-api-routes",
-      "expo-cicd-workflows",
-      "expo-deployment",
-      "expo-dev-client",
-      "expo-module",
-      "expo-tailwind-setup",
-      "expo-ui-jetpack-compose",
-      "expo-ui-swift-ui",
-      "native-data-fetching",
-      "upgrading-expo",
-      "use-dom",
-    ],
-  },
-  {
-    title: "Supabase · 2 skills",
-    items: ["supabase", "supabase-postgres-best-practices"],
-  },
-  {
-    title: "Other curated",
-    items: ["linear", "sentry"],
-  },
-  {
-    title: "Vercel · 47 skills",
-    items: [
-      "agent-browser",
-      "agent-browser-verify",
-      "ai-elements",
-      "ai-gateway",
-      "ai-generation-persistence",
-      "ai-sdk",
-      "auth",
-      "bootstrap",
-      "chat-sdk",
-      "cms",
-      "cron-jobs",
-      "deployments-cicd",
-      "email",
-      "env-vars",
-      "geist",
-      "geistdocs",
-      "investigation-mode",
-      "json-render",
-      "marketplace",
-      "micro",
-      "ncc",
-      "next-forge",
-      "nextjs",
-      "observability",
-      "payments",
-      "react-best-practices",
-      "routing-middleware",
-      "runtime-cache",
-      "satori",
-      "shadcn",
-      "sign-in-with-vercel",
-      "swr",
-      "turbopack",
-      "turborepo",
-      "v0-dev",
-      "vercel-agent",
-      "vercel-api",
-      "vercel-cli",
-      "vercel-firewall",
-      "vercel-flags",
-      "vercel-functions",
-      "vercel-queues",
-      "vercel-sandbox",
-      "vercel-services",
-      "vercel-storage",
-      "verification",
-      "workflow",
-    ],
-  },
-];
-
-function ItemList({ items }: { items: string[] }) {
-  return (
-    <ul className="item-list">
-      {items.map((item) => (
-        <li key={item}>{item}</li>
-      ))}
-    </ul>
-  );
-}
-
-function Groups({ groups }: { groups: ListGroup[] }) {
-  return (
-    <div className="groups">
-      {groups.map((group) => (
-        <section className="group" key={group.title}>
-          <h4>{group.title}</h4>
-          {group.note ? <p>{group.note}</p> : null}
-          <ItemList items={group.items} />
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function ExpandableGroups({ groups }: { groups: ListGroup[] }) {
-  return (
-    <div className="expandable-groups">
-      {groups.map((group) => (
-        <details key={group.title}>
-          <summary>{group.title}</summary>
-          <ItemList items={group.items} />
-        </details>
-      ))}
-    </div>
-  );
-}
-
-function ClientCard({
+].map((name) => ({
   name,
-  className,
-  plugins,
-  mcps,
-  standaloneSkills,
-  vendorSkills,
+  state: "match",
+  claude: { detail: "PUMPD project · symlink to .agents/skills" },
+  codex: { detail: "PUMPD project · .agents/skills" },
+}));
+
+const mcpRows: ComparisonRow[] = [
+  {
+    name: "ios-simulator-mcp",
+    state: "match",
+    claude: { detail: "mobile-development plugin" },
+    codex: { detail: "mobile-development plugin" },
+  },
+  {
+    name: "heroui-native",
+    state: "match",
+    claude: { detail: "mobile-development plugin" },
+    codex: { detail: "mobile-development plugin" },
+  },
+  {
+    name: "heroui-native-pro",
+    state: "match",
+    claude: { detail: "mobile-development plugin" },
+    codex: { detail: "mobile-development plugin" },
+  },
+  {
+    name: "analytics-mcp",
+    state: "different",
+    claude: { detail: "IAWIS project" },
+    codex: { detail: "wet-in-seattle plugin" },
+  },
+  {
+    name: "context7",
+    state: "match",
+    claude: { detail: "PUMPD project" },
+    codex: { detail: "PUMPD project" },
+  },
+  {
+    name: "playwright",
+    state: "match",
+    claude: { detail: "PUMPD project" },
+    codex: { detail: "PUMPD project" },
+  },
+  {
+    name: "linear",
+    state: "different",
+    claude: { detail: "PUMPD project" },
+    codex: { detail: "vendor runtime" },
+  },
+  {
+    name: "supabase",
+    state: "claude-only",
+    claude: { detail: "base / user" },
+  },
+  {
+    name: "sentry",
+    state: "claude-only",
+    claude: { detail: "PUMPD project" },
+  },
+  {
+    name: "supabase_local",
+    state: "claude-only",
+    claude: { detail: "PUMPD project" },
+  },
+  {
+    name: "shadcn",
+    state: "claude-only",
+    claude: { detail: "IAWIS project" },
+  },
+  ...["node_repl", "sites-design-picker", "xcodebuildmcp", "github"].map((name) => ({
+    name,
+    state: "codex-only" as const,
+    codex: { detail: "runtime / vendor" },
+  })),
+  {
+    name: "figma",
+    state: "codex-only",
+    codex: { detail: "direct user configuration" },
+  },
+  {
+    name: "heroui-pro",
+    state: "codex-only",
+    codex: { detail: "direct user config · retained legacy exception" },
+  },
+  {
+    name: "computer-use",
+    state: "codex-only",
+    codex: { detail: "direct user configuration", disabled: true },
+  },
+];
+
+const labels = {
+  match: "Match",
+  different: "Different setup",
+  "claude-only": "Claude only",
+  "codex-only": "Codex only",
+};
+
+function SideCell({ side, client }: { side?: Side; client: "claude" | "codex" }) {
+  if (!side) {
+    return <div className={`side-cell empty ${client}`}>—</div>;
+  }
+
+  return (
+    <div className={`side-cell ${client}`}>
+      <span className="installed-mark" aria-hidden="true">✓</span>
+      <div>
+        <p>{side.detail}</p>
+        {side.disabled ? <span className="disabled-pill">Disabled</span> : null}
+        {side.items ? (
+          <details>
+            <summary>Show names</summary>
+            <ul>
+              {side.items.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </details>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ComparisonTable({ rows }: { rows: ComparisonRow[] }) {
+  return (
+    <div className="comparison-table">
+      <div className="table-header" aria-hidden="true">
+        <span>Capability</span>
+        <span className="claude-label">Claude Code</span>
+        <span className="codex-label">Codex</span>
+      </div>
+      {rows.map((row) => (
+        <div className={`comparison-row ${row.state}`} key={row.name}>
+          <div className="capability-name">
+            <strong>{row.name}</strong>
+            <span className={`state-pill ${row.state}`}>{labels[row.state]}</span>
+          </div>
+          <SideCell side={row.claude} client="claude" />
+          <SideCell side={row.codex} client="codex" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Section({
+  title,
+  description,
+  rows,
 }: {
-  name: string;
-  className: string;
-  plugins: ListGroup[];
-  mcps: ListGroup[];
-  standaloneSkills: string[];
-  vendorSkills: ListGroup[];
+  title: string;
+  description: string;
+  rows: ComparisonRow[];
 }) {
   return (
-    <article className={`client-card ${className}`}>
-      <header className="client-header">
-        <span className="client-dot" aria-hidden="true" />
-        <h2>{name}</h2>
+    <section className="inventory-section">
+      <header>
+        <h2>{title}</h2>
+        <p>{description}</p>
       </header>
-
-      <section className="capability">
-        <h3>Plugins</h3>
-        <Groups groups={plugins} />
-      </section>
-
-      <section className="capability">
-        <h3>Skills</h3>
-        <div className="group owned-group">
-          <h4>Our skills · agent-tooling · {ownedSkills.length}</h4>
-          <ItemList items={ownedSkills} />
-        </div>
-        <div className="group">
-          <h4>{name === "Codex" ? "Standalone · 2" : "Standalone"}</h4>
-          <ItemList items={standaloneSkills} />
-        </div>
-        <h4 className="vendor-heading">Official and vendor skills</h4>
-        <ExpandableGroups groups={vendorSkills} />
-      </section>
-
-      <section className="capability">
-        <h3>MCPs</h3>
-        <Groups groups={mcps} />
-      </section>
-    </article>
+      <ComparisonTable rows={rows} />
+    </section>
   );
 }
 
@@ -419,45 +512,46 @@ export default function Home() {
     <main>
       <header className="page-header">
         <p className="eyebrow">CURRENT STATE · VERIFIED JULY 17, 2026</p>
-        <h1>My Claude &amp; Codex Tooling</h1>
+        <h1>Claude Code vs. Codex</h1>
         <p className="lede">
-          One page. Two clients. Every installed plugin, skill, and MCP grouped by where it comes from.
+          Read straight across each row. Matches stay neutral; differences are highlighted.
         </p>
+        <div className="legend" aria-label="Comparison legend">
+          <span className="state-pill match">Match</span>
+          <span className="state-pill different">Different setup</span>
+          <span className="state-pill claude-only">Claude only</span>
+          <span className="state-pill codex-only">Codex only</span>
+        </div>
         <p className="scope-note">
           Claude.ai and ChatGPT hosted apps/connectors are account-managed and are not included here.
         </p>
       </header>
 
-      <div className="client-grid">
-        <ClientCard
-          name="Claude Code"
-          className="claude"
-          plugins={claudePlugins}
-          mcps={claudeMcps}
-          standaloneSkills={["None — ~/.claude/skills is clean"]}
-          vendorSkills={claudeVendorSkills}
-        />
-        <ClientCard
-          name="Codex"
-          className="codex"
-          plugins={codexPlugins}
-          mcps={codexMcps}
-          standaloneSkills={["chronicle", "figma"]}
-          vendorSkills={codexRuntimeSkills}
-        />
-      </div>
-
-      <aside className="worktree-warning">
-        <div>
-          <p className="warning-label">PUMPD WORKTREE-ONLY</p>
-          <h2>These nine skills still exist, but they are not global.</h2>
-          <p>
-            They live in the hidden Codex worktree below. The Claude entries are symlinks to the same canonical files.
-          </p>
-          <code>/Users/arendalloul/.codex/worktrees/2ed0/pumpd-mobile-app/.agents/skills</code>
-        </div>
-        <ItemList items={pumpdWorktreeSkills} />
-      </aside>
+      <Section
+        title="Plugins"
+        description="Bundles installed into each coding client. Scope and provider differences are called out even when both clients have the same capability."
+        rows={pluginRows}
+      />
+      <Section
+        title="Our skills"
+        description="Skills authored in agent-tooling. These should match across Claude Code and Codex."
+        rows={ownedSkillRows}
+      />
+      <Section
+        title="Official & vendor skills"
+        description="Large vendor packs are compared by suite. Expand any cell to see every skill name."
+        rows={vendorSkillRows}
+      />
+      <Section
+        title="PUMPD project skills"
+        description="These nine are not global. They remain committed in the PUMPD project and are shared through .agents/skills with Claude symlinks."
+        rows={projectSkillRows}
+      />
+      <Section
+        title="MCP servers"
+        description="Servers are matched by capability; highlighted rows show different ownership, scope, or availability."
+        rows={mcpRows}
+      />
     </main>
   );
 }
