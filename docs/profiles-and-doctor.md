@@ -76,3 +76,49 @@ inventory. [tooling-inventory.md](tooling-inventory.md) records vendor tools,
 special local skills, hosted connectors, MCP placement, and authentication
 boundaries that may be optional, private, or impossible to verify safely from a
 read-only local doctor.
+
+## Setup (apply mode)
+
+`scripts/setup` is the apply-mode twin of doctor. Doctor stays deliberately
+read-only; setup executes install recipes for the checks doctor reports as
+failing. Together they make machine bootstrap repeatable: clone this repo, run
+`doppler login`, then `./scripts/setup <profile> --apply` and follow the printed
+manual checklist (OAuth grants and account-level connectors are never
+automated).
+
+```bash
+./scripts/setup pumpd-workstation            # dry-run plan (default)
+./scripts/setup pumpd-workstation --apply    # execute planned commands
+./scripts/setup base-workstation --json      # machine-readable plan
+./scripts/setup pumpd-workstation --only claude.expo-mcp --apply
+```
+
+A check opts into automation with an `install` object; the schema already
+permits extra fields, so no schema change is required:
+
+```json
+{
+  "id": "claude.expo-mcp",
+  "kind": "claude_mcp",
+  "server": "expo",
+  "install": {
+    "run": ["claude", "mcp", "add", "--transport", "http", "expo",
+             "https://mcp.expo.dev/mcp"],
+    "note": "First use opens browser OAuth to the Expo account."
+  }
+}
+```
+
+Rules:
+
+- `install.run` is a command (list preferred; strings run through the shell).
+  `${variables}` and `~` expand exactly as in doctor checks.
+- `install.note` is printed with the plan — use it for OAuth prompts and
+  follow-up steps.
+- Without a recipe, `claude_plugin` checks fall back to
+  `claude plugin install <plugin>`; every other kind is listed as TODO rather
+  than guessed.
+- Recipes are committed content: never embed secrets or tokens. Commands that
+  need credentials fetch them at runtime (Doppler) or stay in `manual_checks`.
+- Vendor skills installed via `npx skills add` are tracked as `path` checks on
+  the installed `SKILL.md` with the add command as their recipe.
