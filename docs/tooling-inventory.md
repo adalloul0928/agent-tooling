@@ -218,6 +218,36 @@ scope, so `-g` is required for a user-level install, and `--skill` accepts one
 skill per flag (repeat the flag to batch). Skills land at
 `~/.claude/skills/<name>/SKILL.md`.
 
+Four further collections were adopted 2026-07-23 on the same terms — installed,
+never mirrored, tracked as `path` checks with per-skill recipes in
+`base-workstation`. **Everything each collection ships is installed except where
+a skill name collides** with something already registered:
+
+| Source | License | Installed | Excluded |
+| --- | --- | --- | --- |
+| `software-mansion-labs/skills` | MIT — **stated in the README only; no LICENSE file**, which is why license APIs report none | all 8 | — |
+| `callstackincubator/agent-skills` | MIT (LICENSE file) | 9 of 10 | `react-native-best-practices` |
+| `supabase/agent-skills` | MIT (LICENSE file) | both | — |
+| `anthropics/skills` | **Unstated** — no LICENSE file and no README license section, only `THIRD_PARTY_NOTICES.md`. Recorded as observed rather than assumed | 12 of 18 | `docx`, `pdf`, `pptx`, `xlsx`, `skill-creator`, `claude-api` |
+
+Both exclusions are **name collisions, not judgments about usefulness**:
+
+- `react-native-best-practices` ships in **both** Software Mansion's and
+  Callstack's collections under the same directory name, and `skills add` has no
+  rename option — installing both silently overwrites one. Software Mansion's
+  wins because it covers Reanimated 4, Gesture Handler, `react-native-svg`, and
+  worklets bundle mode, the libraries PUMPD actually depends on. The cost is
+  Callstack's performance material (FPS, TTI, bundle size, Hermes, FlashList),
+  which is not installed anywhere; re-evaluate if performance work becomes a
+  focus.
+- The six `anthropics/skills` entries are already registered by the installed
+  `anthropic-skills` and `skill-creator` plugins. Installing file copies would
+  register a second skill of the same name and make triggering ambiguous.
+
+No `.agents` adapter is hand-authored for any of these. `skills add` takes an
+`--agent` flag, so Codex support is an install-time argument rather than mirrored
+files — which also keeps the no-redistribution rule intact.
+
 ## PUMPD project-owned skills
 
 Skills required to work correctly in PUMPD live in the PUMPD repository, not

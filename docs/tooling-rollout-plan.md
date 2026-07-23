@@ -52,18 +52,18 @@ one PR.
 | `create-pr` | C | **deferred** | Deferred 2026-07-23 pending a scoping decision. PUMPD's `/pr` already does the full gate, conventional title, Summary/Changes/Testing body, and Linear linking — R6 said *portablize + generalize, don't duplicate*. Gaps if revived: `/pr` targets `main` while **11 of the last 12 merged PRs went to `preview`** (live bug), is `disable-model-invocation: true` so "create pr" never triggers it, hardcodes `npm run …` (breaks backend/edge), has no commit/push, and is Claude-only. Open question: always-true rules (base `preview`; never pipe the gate through tail/head — it masks non-zero exit codes) may belong in `AGENTS.md` rather than a skill |
 | Review agent | C | **deferred** | Deferred 2026-07-23. Built-in `/code-review ultra` already does parallel multi-agent, severity-ranked, synthesized review; with `/code-review`, `/security-review`, thermo-nuclear, `pumpd-review`, `pumpd-security-scan`, and PUMPD's `review`/`quality` there are 6+ paths already. Would be the repo's **first packaged agent** (no `agents/` dir or manifest key exists) and agents are Claude-only per AGENTS.md, cutting against the portability thesis. Evidence was borrowed from R6's PR half (~19 create_pr sessions); no review-specific friction is recorded. If revived, build as a **skill**, not an agent |
 | `mcp-preflight` | C | **done** | `plugins/developer-workflows/skills/mcp-preflight/`. Everything observed from `claude mcp list` / `--help`, not recalled. Three states with unrelated fixes: `✔ Connected`; `! Needs authentication` → `claude mcp login <name>` (`--no-browser` for SSH/headless); `⏸ Pending approval` → an unapproved project `.mcp.json` server Claude never connects to (`reset-project-choices`). No `--json` on `list`; **don't key off the exit code**. Doppler-wrapped stdio servers usually fail because of Doppler, not the MCP. Doppler MCP dropped from scope (retired in #32); Codex side marked unverified — CLI not on PATH |
-| Permission allowlist | config | pending | Via `fewer-permission-prompts`: git, gh, npm, pnpm, deno, cp, sips, `xcrun simctl list/boot` |
+| Permission allowlist | config | **deferred** | Via `fewer-permission-prompts`: git, gh, npm, pnpm, deno, cp, sips, `xcrun simctl list/boot` |
 
 ## Batch 3 — vendor adopts + Maestro
 
 | Item | Lane | Status | Notes |
 |---|---|---|---|
-| `software-mansion-labs/skills` | B | pending | Confirm LICENSE first; Claude-only upstream → add `.agents` Codex adapter; covers Reanimated 4 / gestures / worklets bundle-mode (Uniwind conflict) |
-| `callstackincubator/agent-skills` | B | pending | Perf/profiling/bundling + react-native-testing + react-compiler reference |
-| Supabase agent skills | B | pending | `npx skills add supabase/agent-skills` |
+| `software-mansion-labs/skills` | B | **done** (Claude) | All 8 installed. **LICENSE resolved: MIT, README-only — no LICENSE file**, which is why the API reported none. Its `react-native-best-practices` won the name collision with Callstack's and carries the Reanimated 4 / gestures / svg / worklets-bundle-mode content (those sub-skills are bundled, not separately installable). **The `.agents` Codex adapter is unnecessary** — `skills add --agent` handles Codex, and hand-authoring would mirror upstream bodies |
+| `callstackincubator/agent-skills` | B | **done** (Claude) | 9 of 10 installed (MIT). `react-native-best-practices` excluded — name collision with SWM's, and `skills add` has no rename option, so installing both silently overwrites one. **Cost:** its perf material (FPS/TTI/bundle/Hermes/FlashList) is not installed anywhere. **Correction:** the `react-native-testing` and react-compiler skills this row was justified by do not exist in the repo |
+| Supabase agent skills | B | **done** (Claude) | Both installed (MIT). Clean — no collisions, no corrections |
 | Shopify AI Toolkit storefront skills | B | pending | Read skills only (`shopify-storefront-graphql`, `shopify-custom-data`, `shopify-dev`); `OPT_OUT_INSTRUMENTATION=true`; exclude store-write CLI skill |
-| `webapp-testing` (anthropics/skills) | B | pending | Playwright visual-QA loop |
-| `frontend-design` (anthropics/skills) | B | pending | UI aesthetic direction |
+| `webapp-testing` (anthropics/skills) | B | **done** (Claude) | Installed in the grouped Batch 3 sweep |
+| `frontend-design` (anthropics/skills) | B | **done** (Claude) | Installed in the grouped Batch 3 sweep. **`anthropics/skills` states no license** (no LICENSE file, no README section, only THIRD_PARTY_NOTICES.md) — recorded as unstated, not assumed. 12 of 18 installed; docx/pdf/pptx/xlsx/skill-creator/claude-api excluded as already-registered plugin names |
 | Maestro MCP | A | pending | stdio, ships in Maestro CLI; plugin-scoped `.mcp.json` |
 
 ## Batch 4 — P2 builds
