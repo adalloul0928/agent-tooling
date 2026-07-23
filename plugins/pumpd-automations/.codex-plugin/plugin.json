@@ -4,6 +4,7 @@
   "author": {
     "name": "Arend Alloul"
   },
+  "skills": "./skills/",
   "interface": {
     "displayName": "PUMPD Automations",
     "shortDescription": "Run scheduled PUMPD scans that file Triage suggestions",
