@@ -94,7 +94,7 @@ skill installation is not required.
 | Plugin | Skills | Intended scope | Ownership |
 | --- | --- | --- | --- |
 | `personal` | `obsidian-vault`, `dad-daily-update`, `personal-task`, `personal-task-done` | User/workstation | First-party |
-| `developer-workflows` | `thermo-nuclear-code-quality-review` | User/workstation; reusable across projects | First-party |
+| `developer-workflows` | `thermo-nuclear-code-quality-review`; Doppler-backed `heroui-pro` MCP | User/workstation; reusable across projects | First-party wrapper around the third-party MCP |
 | `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | PUMPD target; Claude project scope, Codex user install | First-party |
 | `pumpd-workflows` | `pumpd-local-cleanup` | PUMPD target; Claude project scope, Codex user install | First-party |
 | `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle target; Claude project scope, Codex user install | First-party |
@@ -108,6 +108,10 @@ repository.
 The `mobile-development` wrapper packages the third-party iOS Simulator,
 HeroUI Native, and HeroUI Native Pro MCP connections without copying their
 source. The licensed Pro token is read from Doppler at runtime.
+
+The `developer-workflows` wrapper packages the third-party HeroUI Pro React MCP.
+It reads the same licensed Pro token from Doppler at runtime, so neither Claude
+Code nor Codex needs a raw token in local MCP configuration.
 
 The intentionally small catalog omits generic research, Git, PR, worktree,
 documentation-sync, and tooling-recommendation skills. Those capabilities are
@@ -303,7 +307,8 @@ plugin owns the full integration.
 
 | Scope | Claude | Codex |
 | --- | --- | --- |
-| User raw MCPs | Authenticated remote `supabase` | Figma, HeroUI Pro, Node REPL, and disabled Computer Use runtime entry |
+| User raw MCPs | Authenticated remote `supabase` | Figma, Node REPL, and disabled Computer Use runtime entry |
+| Developer Workflows plugin | Doppler-backed `heroui-pro` | Doppler-backed `heroui-pro` |
 | Wet In Seattle plugin | Doppler-backed `analytics-mcp` | Doppler-backed `analytics-mcp` |
 | Mobile Development plugin | `ios-simulator-mcp`, `heroui-native`, Doppler-backed `heroui-native-pro` | Same three plugin-provided MCPs |
 | Other plugin-provided | Context7, Linear, Playwright, and Sentry MCPs; Supabase skills paired with the user MCP | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel, and XcodeBuildMCP |
@@ -314,15 +319,14 @@ Project definitions may intentionally specialize or override user defaults.
 Avoid defining the same server twice at user scope and through a plugin. In
 particular, raw definitions for Analytics, HeroUI, or iOS Simulator are not
 part of the desired state once their owned plugin replacement is installed and
-verified. The current Codex `heroui-pro` remote entry is a deliberate legacy
-exception retained by user choice; the Doppler-backed
-`mobile-development:heroui-native-pro` MCP is the managed replacement.
+verified. `developer-workflows:heroui-pro` and
+`mobile-development:heroui-native-pro` are the managed HeroUI Pro connections.
 
-No MCP secret belongs in this repository. The `wet-in-seattle` and
-`mobile-development` plugins commit only Doppler project/config identifiers
-and environment-variable allowlists. The Doppler CLI fetches values when an
-MCP starts. Local Doppler login, service tokens, Google ADC files, HeroUI Pro
-tokens, and other credential material remain outside Git.
+No MCP secret belongs in this repository. The `wet-in-seattle`,
+`developer-workflows`, and `mobile-development` plugins commit only Doppler
+project/config identifiers and environment-variable allowlists. The Doppler CLI
+fetches values when an MCP starts. Local Doppler login, service tokens, Google
+ADC files, HeroUI Pro tokens, and other credential material remain outside Git.
 
 ## Hosted connectors and apps
 
