@@ -94,10 +94,10 @@ skill installation is not required.
 | Plugin | Skills | Intended scope | Ownership |
 | --- | --- | --- | --- |
 | `personal` | `obsidian-vault`, `dad-daily-update`, `personal-task`, `personal-task-done` | User/workstation | First-party |
-| `developer-workflows` | `thermo-nuclear-code-quality-review`; Doppler-backed `heroui-pro` MCP | User/workstation; reusable across projects | First-party wrapper around the third-party MCP |
-| `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | PUMPD target; Claude project scope, Codex user install | First-party |
-| `pumpd-workflows` | `pumpd-local-cleanup` | PUMPD target; Claude project scope, Codex user install | First-party |
-| `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle target; Claude project scope, Codex user install | First-party |
+| `developer-workflows` | `thermo-nuclear-code-quality-review` | User/workstation; reusable across projects | First-party |
+| `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | PUMPD project/worktree | First-party |
+| `pumpd-workflows` | `pumpd-local-cleanup` | PUMPD project/worktree | First-party |
+| `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle project/worktree | First-party |
 | `mobile-development` | None; MCP-only | User/workstation; reusable local mobile tooling | First-party wrapper around third-party MCPs |
 
 The `wet-in-seattle` wrapper and reporting skill are first-party. The bundled
@@ -108,10 +108,6 @@ repository.
 The `mobile-development` wrapper packages the third-party iOS Simulator,
 HeroUI Native, and HeroUI Native Pro MCP connections without copying their
 source. The licensed Pro token is read from Doppler at runtime.
-
-The `developer-workflows` wrapper packages the third-party HeroUI Pro React MCP.
-It reads the same licensed Pro token from Doppler at runtime, so neither Claude
-Code nor Codex needs a raw token in local MCP configuration.
 
 The intentionally small catalog omits generic research, Git, PR, worktree,
 documentation-sync, and tooling-recommendation skills. Those capabilities are
@@ -124,14 +120,6 @@ implementations without publishing a misleading `deferred` bundle.
 Every owned plugin has one physical skill core under `plugins/<plugin>/skills`
 and separate Claude and Codex manifests. Keep shared workflow logic portable;
 put client-specific declarations in the native adapters.
-
-As of Codex CLI 0.145.0-alpha.18, plugin installation and enablement are
-user-scoped. Fresh-process canaries confirmed that plugin declarations in a
-project `.codex/config.toml` do not activate those plugins. Profiles therefore
-record the intended project audience for Codex, but do not claim native project
-plugin isolation. Project-critical Codex behavior must remain in committed
-project skills/MCPs, or the user plugin must stay enabled globally until Codex
-adds a supported project scope.
 
 ## Role of Microsoft APM
 
@@ -227,15 +215,21 @@ only path rules may remain under `.claude/rules`.
 
 ## Special local skills
 
-The active standalone Codex skill directory intentionally contains only:
+Licensed HeroUI skill content remains machine-local and must not be committed
+or redistributed:
 
-- `figma`, paired with the authenticated Figma MCP;
-- `chronicle`, which depends on machine-specific history and permissions.
+- `heroui-native-pro`
+- `heroui-react-pro`
+- `heroui-pro-design-taste`
 
-Former standalone HeroUI, discovery, review, Git, and project workflow skills
-are archived for rollback and are not part of the active inventory. Licensed
-HeroUI credentials remain machine-local; the active HeroUI Native Pro MCP reads
-its token from Doppler rather than publishing licensed skill content.
+The following should be reviewed individually before consolidation:
+
+- `figma`: prefer an official vendor plugin when it provides the needed
+  capability; otherwise retain the local skill and MCP pairing;
+- `find-skills`: retain only if its discovery behavior adds value beyond the
+  native catalogs;
+- `chronicle`: keep local while it depends on machine-specific history or
+  permissions.
 
 ## MCP placement
 
@@ -245,11 +239,10 @@ plugin owns the full integration.
 
 | Scope | Claude | Codex |
 | --- | --- | --- |
-| User raw MCPs | Authenticated remote `supabase` | Figma, Node REPL, and disabled Computer Use runtime entry |
-| Developer Workflows plugin | Doppler-backed `heroui-pro` | Doppler-backed `heroui-pro` |
+| User raw MCPs | `claude_design` | Only broadly reusable servers not already supplied by a plugin/runtime |
 | Wet In Seattle plugin | Doppler-backed `analytics-mcp` | Doppler-backed `analytics-mcp` |
 | Mobile Development plugin | `ios-simulator-mcp`, `heroui-native`, Doppler-backed `heroui-native-pro` | Same three plugin-provided MCPs |
-| Other plugin-provided | Context7, Linear, Playwright, and Sentry MCPs; Supabase skills paired with the user MCP | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel, and XcodeBuildMCP |
+| Other plugin-provided | Context7, Linear, Playwright, Sentry, Supabase | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel |
 | PUMPD project | `.mcp.json`: `supabase_local` | `.codex/config.toml`: `context7`, `playwright` |
 | Other intentional local capabilities | Supplied by the applicable plugin or local config | Figma, GitHub, Node REPL, Xcode tooling, and Sites design tooling where needed |
 
@@ -257,14 +250,13 @@ Project definitions may intentionally specialize or override user defaults.
 Avoid defining the same server twice at user scope and through a plugin. In
 particular, raw definitions for Analytics, HeroUI, or iOS Simulator are not
 part of the desired state once their owned plugin replacement is installed and
-verified. `developer-workflows:heroui-pro` and
-`mobile-development:heroui-native-pro` are the managed HeroUI Pro connections.
+verified.
 
-No MCP secret belongs in this repository. The `wet-in-seattle`,
-`developer-workflows`, and `mobile-development` plugins commit only Doppler
-project/config identifiers and environment-variable allowlists. The Doppler CLI
-fetches values when an MCP starts. Local Doppler login, service tokens, Google
-ADC files, HeroUI Pro tokens, and other credential material remain outside Git.
+No MCP secret belongs in this repository. The `wet-in-seattle` and
+`mobile-development` plugins commit only Doppler project/config identifiers
+and environment-variable allowlists. The Doppler CLI fetches values when an
+MCP starts. Local Doppler login, service tokens, Google ADC files, HeroUI Pro
+tokens, and other credential material remain outside Git.
 
 ## Hosted connectors and apps
 
@@ -280,10 +272,10 @@ The same principle applies to ChatGPT account apps and local Codex plugins or
 MCPs. Install only the hosted apps that improve the hosted experience; do not
 try to mirror every local development tool into chat.
 
-`disableClaudeAiConnectors` is enabled at user scope after validating the local
-Linear, Supabase, mobile-development, and project paths. This enforces the
-intended separation: hosted connectors for chat and deliberate local
-plugins/MCPs for Claude Code.
+`disableClaudeAiConnectors` should remain unset until the required local
+Linear, Supabase, and PUMPD twins are authenticated and validated. Once the
+local path is reliable, set it to `true` to enforce the intended separation:
+hosted connectors for chat, local plugins/MCPs for Claude Code.
 
 ## Authentication
 
@@ -323,23 +315,25 @@ Use this decision sequence:
    environment variable names without storing credentials.
 6. **How is it verified?** Add structural validation, desired-state profile
    checks, and a manual behavior or cloud canary as appropriate.
-7. **What is the rollback?** Record the previous known-good commit and retain a
-   standalone copy until both native clients pass normal-use canaries.
+7. **What is the rollback?** Retain the previous release ref or standalone copy
+   until both native clients pass normal-use canaries.
 
 ## Installation and update workflow
 
 For an `agent-tooling` release:
 
 1. Merge the source change to `main` after `./scripts/validate` passes.
-2. Refresh the `agent-tooling` catalog in Claude and Codex; both track `main`.
-3. Install or update `personal`, `developer-workflows`, `cyrus-workflows`,
+2. Create an immutable release tag for the merged commit.
+3. Update the release ref recorded by the desired-state profile.
+4. Refresh the `agent-tooling` catalog in Claude and Codex.
+5. Install or update `personal`, `developer-workflows`, `cyrus-workflows`,
    `pumpd-workflows`, `wet-in-seattle`, and `mobile-development` in the clients
    required by their profiles.
-4. Start fresh client sessions and run behavioral canaries.
-5. Authenticate new MCPs separately on each required local or hosted surface.
-6. Verify Claude Code cloud, Codex cloud, Claude.ai, and ChatGPT account state
+6. Start fresh client sessions and run behavioral canaries.
+7. Authenticate new MCPs separately on each required local or hosted surface.
+8. Verify Claude Code cloud, Codex cloud, Claude.ai, and ChatGPT account state
    separately when the capability is expected there.
-7. Remove a retained standalone copy only after the replacement has passed.
+9. Remove a retained standalone copy only after the replacement has passed.
 
 The private catalog only has to be registered once per local client. A new
 plugin in an already registered catalog still requires an explicit install;

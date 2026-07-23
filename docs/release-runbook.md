@@ -1,8 +1,8 @@
 # Release runbook
 
-`main` is the rolling release channel. Native plugin manifests and catalog
-entries intentionally omit `version`; each client receives the newest merged
-revision when its `agent-tooling` marketplace is refreshed.
+Releases use immutable Git tags rather than plugin semver. Native plugin
+manifests and catalog entries intentionally omit `version`, so the catalog Git
+revision is the release unit for all six owned plugins.
 
 ## Before publishing
 
@@ -16,15 +16,19 @@ revision when its `agent-tooling` marketplace is refreshed.
 ## Publish the release
 
 1. Merge the approved change to `main`.
-2. Refresh the already registered `agent-tooling` catalog in Claude and Codex.
-3. Install newly added plugins and update existing plugins in both clients:
+2. Create and push an immutable tag for the merged commit. Use a repository-wide
+   release name because the revision may contain more than one plugin.
+3. Update the release variable in `profiles/base-workstation.json` to the new
+   tag in a follow-up source change if it was not part of the release commit.
+4. Refresh the already registered `agent-tooling` catalog in Claude and Codex.
+5. Install or update the following in both clients:
    - `personal@agent-tooling`
    - `developer-workflows@agent-tooling`
    - `pumpd-workflows@agent-tooling`
    - `cyrus-workflows@agent-tooling`
    - `wet-in-seattle@agent-tooling`
    - `mobile-development@agent-tooling`
-4. Start fresh Claude Code and Codex sessions before testing discovery or
+6. Start fresh Claude Code and Codex sessions before testing discovery or
    invocation.
 
 This release replaces `obsidian`, `agent-ops`, and `personal-productivity`.
@@ -45,7 +49,7 @@ refresh does not install a newly published plugin automatically.
    explicit/implicit/non-trigger cases for skill bundles, and an MCP startup
    check for MCP-only bundles.
 6. Publish a harmless update and prove both native refresh paths receive it.
-7. Record the tested commit and client versions in the PR.
+7. Record the tested tag, commit, and client versions in the PR.
 
 Installation and authentication are different gates. Authenticate any new MCP
 through the local client that will use it, configure non-OAuth secrets outside
@@ -54,11 +58,11 @@ not prove Claude Code cloud, Codex cloud, Claude.ai, or ChatGPT account state.
 
 ## Rollback
 
-1. Revert the problematic commit on `main`, merge the revert, and refresh both
-   marketplaces. Record the previous known-good commit before publishing so the
-   rollback target is unambiguous. For an emergency Claude rollback before a
-   revert merges, create a temporary branch at that commit because Claude's
-   marketplace source accepts a branch but not a raw commit SHA.
+1. Reinstall the previous known-good release ref or revert the marketplace
+   commit. Keep an immutable Git tag for every live release even though plugin
+   manifests omit semver; Claude Code 2.1.207 accepts a branch or tag in the
+   marketplace URL fragment but not an arbitrary commit SHA. Codex can use the
+   same tag with `--ref` and also accepts a commit SHA.
 2. Start fresh client sessions and verify the previous canary string.
 3. If native plugin recovery fails, remove the plugin and restore the retained
    standalone skill directory.
