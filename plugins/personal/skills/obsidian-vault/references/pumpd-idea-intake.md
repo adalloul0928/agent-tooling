@@ -34,15 +34,14 @@ Use archive notes only for historical context. Do not move or rewrite existing `
 
 ## Destination Rules
 
-- New fuzzy idea -> `PUMPD/Tasks/Todo/YYYY-MM-DD - Short Title.md`
-- Beta launch priority -> append/create under `PUMPD/Tasks/Todo/`
-- Tooling/workflow idea -> `PUMPD/Operations/AI Tooling/`
-- Deployment/release/env idea -> `PUMPD/Operations/Deployment/`
-- Research question -> `PUMPD/Research/`
-- Durable decision -> `PUMPD/Decisions/`
-- Direct update to an active plan/spec -> append to that active note
+- New fuzzy idea or beta-launch priority -> Linear; use `00 Inbox/` only for explicit capture when Linear is unavailable
+- Tooling/workflow investigation -> `PUMPD/AI Tooling/` when PUMPD-specific, otherwise the `agent-tooling` repository
+- Deployment/release/env documentation -> the relevant PUMPD repository docs
+- Research question -> `PUMPD/Research/<Topic>.md`
+- Approved direction -> promote the same note to `PUMPD/Plans/<Topic>.md`
+- Direct update to an active research or plan note -> append to that note
 
-If there is no active note to append to, create an idea note rather than overloading archive docs.
+If there is no active note to append to, prefer Linear for backlog capture or start a research note when investigation is beginning. Do not overload archive docs.
 
 ## Idea Note Shape
 
@@ -97,7 +96,7 @@ Keep append sections short. Do not turn every idea into a long spec unless the u
 
 ## Promotion Rules
 
-- When an idea becomes actionable, promote it into `PUMPD/Tasks/Todo/` or a Linear issue.
-- When an idea becomes a decision, create or update a `PUMPD/Decisions/` note.
-- When an idea is answered by research, link the research note and set the idea note `status: done` or `status: reference` if the user asks for status cleanup.
-- Do not delete captured ideas; archive or mark status instead.
+- When an idea becomes actionable, create or update its Linear issue.
+- When research produces an approved direction, move the same topic note from `PUMPD/Research/` to `PUMPD/Plans/`.
+- When work ships, archive the plan and update current repository documentation.
+- Do not delete captured ideas; archive them instead.

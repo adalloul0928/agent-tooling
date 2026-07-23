@@ -20,7 +20,7 @@ Stage 4 of the pipeline. Reads an approved plan and creates the Linear structure
 - **⇒ Create ONE parent and delegate ONCE.** Do **not** pre-create leaf issues — they won't cascade (no `gt` steps in their bodies, and each would need its own delegate).
 
 ## Inputs
-- The approved plan note (`PUMPD/Tasks/Todo/<Feature> — Plan.md`) — must have passed `/pumpd-review`. §8 = the breakdown; §10 = acceptance; §11 = phases.
+- The approved plan note (`PUMPD/Plans/<Topic>.md`) — must have passed `/pumpd-review`. §8 = the breakdown; §10 = acceptance; §11 = phases.
 - Linear MCP (`mcp__claude_ai_Linear` / `mcp__linear`). Team **PUMPD** (`84eaed25-6d3b-40a1-82b5-5c8e8e10b64d`). Surfaces in scope: `mobile`, `backend`.
 
 ## Pre-flight: the consistency gate (`/analyze`)

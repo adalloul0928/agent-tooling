@@ -50,11 +50,11 @@ When the user sends a PUMPD idea, do not dump it blindly into a generic inbox. C
 1. Classify the idea: product/UX, stats/analytics, AI Coach, workout/session flow, onboarding/auth, data/backend, deployment/ops, AI tooling/workflow, beta launch, or research.
 2. Search active PUMPD notes first, excluding `PUMPD/Research/archive/` unless historical context is needed.
 3. If the idea clearly belongs to an active note, append a short dated section there.
-4. If it is new, fuzzy, or not yet scoped, create a structured note in `PUMPD/Tasks/Todo/`.
-5. If it is a durable choice, use `PUMPD/Decisions/`.
-6. If it mainly requires investigation, use `PUMPD/Research/`.
-7. If it is about Codex/Claude/MCP/workflow, use `PUMPD/Operations/AI Tooling/`.
-8. If it is about CI/CD, release, EAS, Supabase environments, or production ops, use `PUMPD/Operations/Deployment/`.
+4. If it is new, fuzzy, and not ready for investigation, put it in Linear. Use `00 Inbox/` only when the user explicitly wants vault capture or Linear is unavailable.
+5. If it mainly requires investigation, create or update `PUMPD/Research/<Topic>.md`.
+6. After an approach is approved, promote the same topic note to `PUMPD/Plans/<Topic>.md`; do not create a parallel research/plan pair.
+7. If it is about PUMPD-specific Codex/Claude/Cyrus workflow, use `PUMPD/AI Tooling/`.
+8. If it is current technical documentation, setup, deployment, or architecture, prefer the relevant code repository documentation.
 
 When capturing an idea, preserve the user's raw wording and add a concise interpretation, affected surfaces, next action, and open questions. New idea notes should use `type: idea`, `status: captured`, and tags including `pumpd` and `idea`. Read `references/pumpd-idea-intake.md` before organizing PUMPD ideas.
 
@@ -81,18 +81,10 @@ Default structure for future organization:
 00 Inbox/
 PUMPD/
   _PUMPD.md
-  Tasks/
-    _README.md
-    Todo/        (backlog: ideas, plans, capability docs, not-yet-started tasks)
-    Active/      (in progress)
-    Completed/   (shipped record)
-  Research/
-  Operations/
-    AI Tooling/
-    Deployment/
-  Decisions/
-  Assets/
-  Archive/
+  Research/      (active investigation)
+  Plans/         (approved intent; task state stays in Linear)
+  AI Tooling/    (PUMPD-specific agent workflow and operation)
+  Archive/       (shipped and superseded thinking)
 Harstem/
   _Harstem.md
   Planning/
@@ -120,10 +112,11 @@ Important current exceptions:
 
 Routing rules for new notes:
 
-- PUMPD launch/backlog/product planning, plans, and not-yet-started tasks -> `PUMPD/Tasks/Todo/`
-- Raw or early-stage PUMPD ideas -> `PUMPD/Tasks/Todo/`
-- PUMPD Codex/Claude/MCP/tooling/setup -> `PUMPD/Operations/AI Tooling/`
-- PUMPD deployment/CI/Supabase/EAS/release -> `PUMPD/Operations/Deployment/`
+- PUMPD backlog, status, assignment, and checklists -> Linear
+- PUMPD active investigation -> `PUMPD/Research/<Topic>.md`
+- PUMPD approved implementation intent -> promote the same note to `PUMPD/Plans/<Topic>.md`
+- PUMPD-specific Codex/Claude/Cyrus workflow -> `PUMPD/AI Tooling/`
+- Current deployment/CI/Supabase/EAS/release documentation -> relevant repository docs
 - PUMPD external research/comparisons/design briefs -> `PUMPD/Research/`
 - PUMPD durable choices -> `PUMPD/Decisions/`
 - Harstem project docs -> `Harstem/Planning/`, `Harstem/Research/`, or `Harstem/Content/`
@@ -171,15 +164,15 @@ rg --glob '*.md' --glob '!**/.obsidian/**' --glob '!**/.smart-env/**' 'search te
 # Create a new note with frontmatter
 python3 "$SKILL_DIR/scripts/new_note.py" \
   "$VAULT" \
-  'PUMPD/Tasks/Todo/Example Note.md' \
-  --title 'Example Note' \
-  --type plan \
-  --tags pumpd todo
+  'PUMPD/Research/Example Topic.md' \
+  --title 'Example Topic' \
+  --type research \
+  --tags pumpd research
 
 # Capture a structured PUMPD idea (idea notes use status: captured)
 python3 "$SKILL_DIR/scripts/new_note.py" \
   "$VAULT" \
-  'PUMPD/Tasks/Todo/Example Idea.md' \
+  '00 Inbox/Example Idea.md' \
   --title 'Example Idea' \
   --type idea \
   --status captured \

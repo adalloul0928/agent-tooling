@@ -16,7 +16,7 @@ description: >-
 Closes the self-improvement loop: turns the raw learnings log into concrete, **approved** improvements to the skills / agents / rules.
 
 ## Inputs
-- The learnings log: vault `PUMPD/Operations/AI Tooling/Agent Learnings.md` (or the existing legacy `Claude Code Learnings.md`) — only entries **not** yet marked `✅ promoted`.
+- The learnings log: vault `PUMPD/AI Tooling/Agent Learnings.md` — only entries **not** yet marked `✅ promoted`.
 - Any raw tool-failure log exposed by the active client — noisy; mine it for **recurring-error tallies** (same tool/error repeated), not individual entries.
 - The inventory of targets: the canonical `agent-tooling` plugins, project `.agents/skills`, project client adapters, project instructions, hooks, and any client-owned memory that is available.
 - _Optional:_ recent session summaries exposed by the active client — read **only** to enrich a vague learning, never as the primary signal.
