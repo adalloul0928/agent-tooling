@@ -381,25 +381,23 @@ Use this decision sequence:
    environment variable names without storing credentials.
 6. **How is it verified?** Add structural validation, desired-state profile
    checks, and a manual behavior or cloud canary as appropriate.
-7. **What is the rollback?** Retain the previous release ref or standalone copy
-   until both native clients pass normal-use canaries.
+7. **What is the rollback?** Record the previous known-good commit and retain a
+   standalone copy until both native clients pass normal-use canaries.
 
 ## Installation and update workflow
 
 For an `agent-tooling` release:
 
 1. Merge the source change to `main` after `./scripts/validate` passes.
-2. Create an immutable release tag for the merged commit.
-3. Update the release ref recorded by the desired-state profile.
-4. Refresh the `agent-tooling` catalog in Claude and Codex.
-5. Install or update `personal`, `developer-workflows`, `cyrus-workflows`,
+2. Refresh the `agent-tooling` catalog in Claude and Codex; both track `main`.
+3. Install or update `personal`, `developer-workflows`, `cyrus-workflows`,
    `pumpd-workflows`, `wet-in-seattle`, and `mobile-development` in the clients
    required by their profiles.
-6. Start fresh client sessions and run behavioral canaries.
-7. Authenticate new MCPs separately on each required local or hosted surface.
-8. Verify Claude Code cloud, Codex cloud, Claude.ai, and ChatGPT account state
+4. Start fresh client sessions and run behavioral canaries.
+5. Authenticate new MCPs separately on each required local or hosted surface.
+6. Verify Claude Code cloud, Codex cloud, Claude.ai, and ChatGPT account state
    separately when the capability is expected there.
-9. Remove a retained standalone copy only after the replacement has passed.
+7. Remove a retained standalone copy only after the replacement has passed.
 
 The private catalog only has to be registered once per local client. A new
 plugin in an already registered catalog still requires an explicit install;
