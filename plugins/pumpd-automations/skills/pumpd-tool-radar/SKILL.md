@@ -41,7 +41,14 @@ Local truth, in reading order:
   `patchedDependencies`, overrides.
 - `pnpm outdated -r` and `pnpm audit --prod` run at the repo root — installed
   vs latest across every workspace, plus advisories against installed
-  versions.
+  versions. Important: `outdated`'s *Current* column reads the hoisted
+  `node_modules`, not the lockfile, and the two drift apart on a checkout
+  that hasn't reinstalled. Cross-check every version that drives a verdict
+  against the `pnpm-lock.yaml` importers block; **the lockfile wins**, and a
+  divergence between them is itself worth an observation. Its *Latest*
+  column already honors `minimumReleaseAge`, so it answers "what may I take
+  today" — the raw registry pass below is what reveals a newer fix still
+  inside the hold.
 - `apps/mobile/package.json` — the app surface: Expo SDK line, React Native,
   and the core libraries.
 - `apps/backend/deno.json` + `deno.lock` + `apps/backend/package.json` — the
@@ -56,6 +63,12 @@ Forward diff, only for candidates the local pass surfaces: registry checks
 versions and publish dates, then web search and fetch for changelogs, release
 notes, GitHub releases, Expo SDK and React Native announcements, and
 Supabase, Sentry, and RevenueCat release notes.
+
+Request only the fields you need from the registry — `npm view <pkg> time
+dist-tags --json` rather than the whole packument, which is enormous for
+`expo` and `react-native`. Publish **dates** are the highest-value field in
+the run: they are what turns the `minimumReleaseAge` hold from decoration
+into a decision ("this fix exists but can't be taken until Friday").
 
 ## What to look for
 
@@ -104,7 +117,14 @@ evidence.
 
 Rank by the signal order above, leverage-weighted (a minor on react-native
 outranks a major on a leaf dev tool). File at most **7** suggestions per
-run; everything below the bar goes to Notable observations. Shape every
+run; everything below the bar goes to Notable observations.
+
+Advisories arrive in floods — an audit run reporting a hundred is normal,
+and one-per-advisory would consume the cap on transitive noise. Collapse
+them **per fixable direct dependency**: one suggestion for the direct
+package whose bump clears the advisories beneath it, naming them in the
+evidence. An advisory with no direct-dep fix available is an observation,
+not a suggestion — there is nothing to accept. Shape every
 suggestion as one specific decision with a named target ("upgrade X to 5.x",
 "align supabase-js across mobile/backend/website", "rebase or drop the
 expo-modules-jsi patch") — never a rolling "things are behind" state, which
@@ -123,6 +143,10 @@ Fingerprints:
   `deps/expo::sdk-57`, `deps/react-native-reanimated::5-0`. The target is
   the finding's identity: a declined `sdk-57` stays declined; `sdk-58`
   later is genuinely new. Never full patch versions.
+- Advisory-driven catch-ups usually resolve to a *minor* target, where a
+  version-named key would mint a fresh fingerprint every time upstream
+  moves — the self-deduping-forever failure. Name the advisory instead:
+  `deps/@sentry/react-native::undici-advisory-catchup`, not `::8-19`.
 - Skew and coherence: `deps/<package>::<finding>` — e.g.
   `deps/@supabase/supabase-js::backend-mobile-skew`.
 - Patches: `patches/<patch-file-base>::beyond-<patched-version>` — e.g.
@@ -151,7 +175,9 @@ never on a scheduled fire, never as a side effect of a normal run:
      then set the real cadence.
    - **Model:** Sonnet · **Permission mode:** the mode the run was granted
      during the Manual first run (reads, version-listing commands, web,
-     Linear) · **Worktree:** off — the run never writes to the repo.
+     Linear) · **Worktree:** off — the run never writes to the scanned repo
+     (the registry commands still reach the network and populate local
+     package caches; that is expected, and the repo stays untouched).
    - **Prompt:** the conventions' wrapper shape with this skill's name, the
      monorepo path, and the intended fire time baked in.
 3. Touch no other scheduled task.
