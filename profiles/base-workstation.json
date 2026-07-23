@@ -83,18 +83,6 @@
       }
     },
     {
-      "id": "codex.sentry-mcp",
-      "kind": "codex_mcp",
-      "server": "sentry",
-      "expected": "present",
-      "severity": "warning",
-      "install": {
-        "run": ["codex", "mcp", "add", "sentry", "--url",
-          "https://mcp.sentry.dev/mcp/avad-technologies-llc/pumpd"],
-        "note": "Sentry's hosted remote MCP. Browser OAuth per client on first use. On pumpd-workstation, Codex may instead receive Sentry via the sentry@openai-curated plugin; reconcile to avoid a duplicate server."
-      }
-    },
-    {
       "id": "claude.expo-mcp",
       "kind": "claude_mcp",
       "server": "expo",
@@ -595,6 +583,462 @@
           "--agent", "claude-code", "--skill", "webapp-testing"],
         "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
       }
+    },
+    {
+      "id": "codex.expo-skill-expo-router",
+      "kind": "path",
+      "path": "~/.agents/skills/expo-router/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "expo-router"],
+        "note": "Vendor-owned skill from expo/skills (MIT) \u2014 installed, never mirrored. Codex target: `skills add --agent codex` places skills under ~/.agents/skills, NOT ~/.codex/skills. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "codex.expo-skill-expo-module",
+      "kind": "path",
+      "path": "~/.agents/skills/expo-module/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "expo-module"],
+        "note": "Vendor-owned skill from expo/skills (MIT) \u2014 installed, never mirrored. Codex target: `skills add --agent codex` places skills under ~/.agents/skills, NOT ~/.codex/skills. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "codex.expo-skill-expo-tailwind-setup",
+      "kind": "path",
+      "path": "~/.agents/skills/expo-tailwind-setup/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "expo-tailwind-setup"],
+        "note": "Vendor-owned skill from expo/skills (MIT) \u2014 installed, never mirrored. Codex target: `skills add --agent codex` places skills under ~/.agents/skills, NOT ~/.codex/skills. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "codex.expo-skill-expo-upgrade",
+      "kind": "path",
+      "path": "~/.agents/skills/expo-upgrade/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "expo-upgrade"],
+        "note": "Vendor-owned skill from expo/skills (MIT) \u2014 installed, never mirrored. Codex target: `skills add --agent codex` places skills under ~/.agents/skills, NOT ~/.codex/skills. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "codex.expo-skill-eas-app-stores",
+      "kind": "path",
+      "path": "~/.agents/skills/eas-app-stores/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "eas-app-stores"],
+        "note": "Vendor-owned skill from expo/skills (MIT) \u2014 installed, never mirrored. Codex target: `skills add --agent codex` places skills under ~/.agents/skills, NOT ~/.codex/skills. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "codex.expo-skill-eas-workflows",
+      "kind": "path",
+      "path": "~/.agents/skills/eas-workflows/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "eas-workflows"],
+        "note": "Vendor-owned skill from expo/skills (MIT) \u2014 installed, never mirrored. Codex target: `skills add --agent codex` places skills under ~/.agents/skills, NOT ~/.codex/skills. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "codex.expo-skill-expo-examples",
+      "kind": "path",
+      "path": "~/.agents/skills/expo-examples/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "expo-examples"],
+        "note": "Vendor-owned skill from expo/skills (MIT) \u2014 installed, never mirrored. Codex target: `skills add --agent codex` places skills under ~/.agents/skills, NOT ~/.codex/skills. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "codex.expo-skill-expo-project-structure",
+      "kind": "path",
+      "path": "~/.agents/skills/expo-project-structure/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "expo-project-structure"],
+        "note": "Vendor-owned skill from expo/skills (MIT) \u2014 installed, never mirrored. Codex target: `skills add --agent codex` places skills under ~/.agents/skills, NOT ~/.codex/skills. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "codex.expo-skill-expo-dev-client",
+      "kind": "path",
+      "path": "~/.agents/skills/expo-dev-client/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "expo-dev-client"],
+        "note": "Vendor-owned skill from expo/skills (MIT) \u2014 installed, never mirrored. Codex target: `skills add --agent codex` places skills under ~/.agents/skills, NOT ~/.codex/skills. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "codex.swm-skill-detour-onboarding",
+      "kind": "path",
+      "path": "~/.agents/skills/detour-onboarding/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "detour-onboarding"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; no LICENSE file). Installed, never mirrored. Codex skills land under ~/.agents/skills."
+      }
+    },
+    {
+      "id": "codex.swm-skill-expo-horizon",
+      "kind": "path",
+      "path": "~/.agents/skills/expo-horizon/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "expo-horizon"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; no LICENSE file). Installed, never mirrored. Codex skills land under ~/.agents/skills."
+      }
+    },
+    {
+      "id": "codex.swm-skill-fishjam",
+      "kind": "path",
+      "path": "~/.agents/skills/fishjam/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "fishjam"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; no LICENSE file). Installed, never mirrored. Codex skills land under ~/.agents/skills."
+      }
+    },
+    {
+      "id": "codex.swm-skill-migrate-to-detour",
+      "kind": "path",
+      "path": "~/.agents/skills/migrate-to-detour/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "migrate-to-detour"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; no LICENSE file). Installed, never mirrored. Codex skills land under ~/.agents/skills."
+      }
+    },
+    {
+      "id": "codex.swm-skill-radon-mcp",
+      "kind": "path",
+      "path": "~/.agents/skills/radon-mcp/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "radon-mcp"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; no LICENSE file). Installed, never mirrored. Codex skills land under ~/.agents/skills."
+      }
+    },
+    {
+      "id": "codex.swm-skill-react-native-best-practices",
+      "kind": "path",
+      "path": "~/.agents/skills/react-native-best-practices/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "react-native-best-practices"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; no LICENSE file). Installed, never mirrored. Codex skills land under ~/.agents/skills."
+      }
+    },
+    {
+      "id": "codex.swm-skill-rnrepo",
+      "kind": "path",
+      "path": "~/.agents/skills/rnrepo/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "rnrepo"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; no LICENSE file). Installed, never mirrored. Codex skills land under ~/.agents/skills."
+      }
+    },
+    {
+      "id": "codex.swm-skill-typegpu",
+      "kind": "path",
+      "path": "~/.agents/skills/typegpu/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "typegpu"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; no LICENSE file). Installed, never mirrored. Codex skills land under ~/.agents/skills."
+      }
+    },
+    {
+      "id": "codex.callstack-skill-assess-react-native-migration",
+      "kind": "path",
+      "path": "~/.agents/skills/assess-react-native-migration/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "codex", "--skill", "assess-react-native-migration"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. Its `react-native-best-practices` is deliberately NOT installed here either: it collides by name with Software Mansion's and `skills add` has no rename option."
+      }
+    },
+    {
+      "id": "codex.callstack-skill-create-react-native-library",
+      "kind": "path",
+      "path": "~/.agents/skills/create-react-native-library/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "codex", "--skill", "create-react-native-library"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. Its `react-native-best-practices` is deliberately NOT installed here either: it collides by name with Software Mansion's and `skills add` has no rename option."
+      }
+    },
+    {
+      "id": "codex.callstack-skill-github",
+      "kind": "path",
+      "path": "~/.agents/skills/github/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "codex", "--skill", "github"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. Its `react-native-best-practices` is deliberately NOT installed here either: it collides by name with Software Mansion's and `skills add` has no rename option."
+      }
+    },
+    {
+      "id": "codex.callstack-skill-github-actions",
+      "kind": "path",
+      "path": "~/.agents/skills/github-actions/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "codex", "--skill", "github-actions"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. Its `react-native-best-practices` is deliberately NOT installed here either: it collides by name with Software Mansion's and `skills add` has no rename option."
+      }
+    },
+    {
+      "id": "codex.callstack-skill-react-native-brownfield-migration",
+      "kind": "path",
+      "path": "~/.agents/skills/react-native-brownfield-migration/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "codex", "--skill", "react-native-brownfield-migration"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. Its `react-native-best-practices` is deliberately NOT installed here either: it collides by name with Software Mansion's and `skills add` has no rename option."
+      }
+    },
+    {
+      "id": "codex.callstack-skill-react-native-tv-best-practices",
+      "kind": "path",
+      "path": "~/.agents/skills/react-native-tv-best-practices/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "codex", "--skill", "react-native-tv-best-practices"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. Its `react-native-best-practices` is deliberately NOT installed here either: it collides by name with Software Mansion's and `skills add` has no rename option."
+      }
+    },
+    {
+      "id": "codex.callstack-skill-react-navigation",
+      "kind": "path",
+      "path": "~/.agents/skills/react-navigation/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "codex", "--skill", "react-navigation"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. Its `react-native-best-practices` is deliberately NOT installed here either: it collides by name with Software Mansion's and `skills add` has no rename option."
+      }
+    },
+    {
+      "id": "codex.callstack-skill-upgrading-react-native",
+      "kind": "path",
+      "path": "~/.agents/skills/upgrading-react-native/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "codex", "--skill", "upgrading-react-native"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. Its `react-native-best-practices` is deliberately NOT installed here either: it collides by name with Software Mansion's and `skills add` has no rename option."
+      }
+    },
+    {
+      "id": "codex.callstack-skill-validate-skills",
+      "kind": "path",
+      "path": "~/.agents/skills/validate-skills/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "codex", "--skill", "validate-skills"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. Its `react-native-best-practices` is deliberately NOT installed here either: it collides by name with Software Mansion's and `skills add` has no rename option."
+      }
+    },
+    {
+      "id": "codex.supabase-skill-supabase",
+      "kind": "path",
+      "path": "~/.agents/skills/supabase/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "supabase/agent-skills", "-g", "-y",
+          "--agent", "codex", "--skill", "supabase"],
+        "note": "Vendor-owned skill from supabase/agent-skills (MIT). Installed, never mirrored."
+      }
+    },
+    {
+      "id": "codex.supabase-skill-supabase-postgres-best-practices",
+      "kind": "path",
+      "path": "~/.agents/skills/supabase-postgres-best-practices/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "supabase/agent-skills", "-g", "-y",
+          "--agent", "codex", "--skill", "supabase-postgres-best-practices"],
+        "note": "Vendor-owned skill from supabase/agent-skills (MIT). Installed, never mirrored."
+      }
+    },
+    {
+      "id": "codex.anthropics-skill-algorithmic-art",
+      "kind": "path",
+      "path": "~/.agents/skills/algorithmic-art/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "algorithmic-art"],
+        "note": "Vendor-owned skill from anthropics/skills; upstream license is UNSTATED (no LICENSE file, no README section). Installed, never mirrored. web-artifacts-builder and brand-guidelines are excluded from the Codex target on content grounds - they are specific to claude.ai artifacts and Anthropic brand respectively."
+      }
+    },
+    {
+      "id": "codex.anthropics-skill-canvas-design",
+      "kind": "path",
+      "path": "~/.agents/skills/canvas-design/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "canvas-design"],
+        "note": "Vendor-owned skill from anthropics/skills; upstream license is UNSTATED (no LICENSE file, no README section). Installed, never mirrored. web-artifacts-builder and brand-guidelines are excluded from the Codex target on content grounds - they are specific to claude.ai artifacts and Anthropic brand respectively."
+      }
+    },
+    {
+      "id": "codex.anthropics-skill-doc-coauthoring",
+      "kind": "path",
+      "path": "~/.agents/skills/doc-coauthoring/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "doc-coauthoring"],
+        "note": "Vendor-owned skill from anthropics/skills; upstream license is UNSTATED (no LICENSE file, no README section). Installed, never mirrored. web-artifacts-builder and brand-guidelines are excluded from the Codex target on content grounds - they are specific to claude.ai artifacts and Anthropic brand respectively."
+      }
+    },
+    {
+      "id": "codex.anthropics-skill-frontend-design",
+      "kind": "path",
+      "path": "~/.agents/skills/frontend-design/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "frontend-design"],
+        "note": "Vendor-owned skill from anthropics/skills; upstream license is UNSTATED (no LICENSE file, no README section). Installed, never mirrored. web-artifacts-builder and brand-guidelines are excluded from the Codex target on content grounds - they are specific to claude.ai artifacts and Anthropic brand respectively."
+      }
+    },
+    {
+      "id": "codex.anthropics-skill-internal-comms",
+      "kind": "path",
+      "path": "~/.agents/skills/internal-comms/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "internal-comms"],
+        "note": "Vendor-owned skill from anthropics/skills; upstream license is UNSTATED (no LICENSE file, no README section). Installed, never mirrored. web-artifacts-builder and brand-guidelines are excluded from the Codex target on content grounds - they are specific to claude.ai artifacts and Anthropic brand respectively."
+      }
+    },
+    {
+      "id": "codex.anthropics-skill-mcp-builder",
+      "kind": "path",
+      "path": "~/.agents/skills/mcp-builder/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "mcp-builder"],
+        "note": "Vendor-owned skill from anthropics/skills; upstream license is UNSTATED (no LICENSE file, no README section). Installed, never mirrored. web-artifacts-builder and brand-guidelines are excluded from the Codex target on content grounds - they are specific to claude.ai artifacts and Anthropic brand respectively."
+      }
+    },
+    {
+      "id": "codex.anthropics-skill-slack-gif-creator",
+      "kind": "path",
+      "path": "~/.agents/skills/slack-gif-creator/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "slack-gif-creator"],
+        "note": "Vendor-owned skill from anthropics/skills; upstream license is UNSTATED (no LICENSE file, no README section). Installed, never mirrored. web-artifacts-builder and brand-guidelines are excluded from the Codex target on content grounds - they are specific to claude.ai artifacts and Anthropic brand respectively."
+      }
+    },
+    {
+      "id": "codex.anthropics-skill-template-skill",
+      "kind": "path",
+      "path": "~/.agents/skills/template-skill/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "template-skill"],
+        "note": "Vendor-owned skill from anthropics/skills; upstream license is UNSTATED (no LICENSE file, no README section). Installed, never mirrored. web-artifacts-builder and brand-guidelines are excluded from the Codex target on content grounds - they are specific to claude.ai artifacts and Anthropic brand respectively."
+      }
+    },
+    {
+      "id": "codex.anthropics-skill-theme-factory",
+      "kind": "path",
+      "path": "~/.agents/skills/theme-factory/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "theme-factory"],
+        "note": "Vendor-owned skill from anthropics/skills; upstream license is UNSTATED (no LICENSE file, no README section). Installed, never mirrored. web-artifacts-builder and brand-guidelines are excluded from the Codex target on content grounds - they are specific to claude.ai artifacts and Anthropic brand respectively."
+      }
+    },
+    {
+      "id": "codex.anthropics-skill-webapp-testing",
+      "kind": "path",
+      "path": "~/.agents/skills/webapp-testing/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "codex", "--skill", "webapp-testing"],
+        "note": "Vendor-owned skill from anthropics/skills; upstream license is UNSTATED (no LICENSE file, no README section). Installed, never mirrored. web-artifacts-builder and brand-guidelines are excluded from the Codex target on content grounds - they are specific to claude.ai artifacts and Anthropic brand respectively."
+      }
     }
   ],
   "manual_checks": [
@@ -636,6 +1080,11 @@
     {
       "id": "supabase.mcp-oauth",
       "description": "Authenticate the Supabase hosted MCP (https://mcp.supabase.com/mcp) via browser OAuth, and re-auth when the session lapses.",
+      "last_verified": "2026-07-23"
+    },
+    {
+      "id": "codex.cli-on-path",
+      "description": "Codex CLI reachable as `codex` — verify with `codex --version`. The binary ships INSIDE the ChatGPT desktop app at /Applications/ChatGPT.app/Contents/Resources/codex and is not symlinked onto PATH by the installer, so `command -v codex` fails on a fresh machine even though Codex is installed and configured. Fix: ln -sf \"/Applications/ChatGPT.app/Contents/Resources/codex\" ~/.local/bin/codex. Manual rather than a path check because the app-bundle location is machine-specific and must not be committed into a recipe.",
       "last_verified": "2026-07-23"
     },
     {

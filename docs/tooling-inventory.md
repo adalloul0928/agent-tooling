@@ -224,8 +224,14 @@ guidance tells macOS users with local simulators not to auto-trigger it, and
 overlaps the Sentry MCP). `expo-project-structure` and `expo-dev-client` were
 added in their place.
 
-Installed **Claude-only** (`--agent claude-code`); Codex is deferred to its own
-pass. Two CLI details worth remembering: `skills add` defaults to *project*
+Installed for **both clients** as of 2026-07-23. Claude gets the full set via
+`--agent claude-code`; Codex gets 38 of them via `--agent codex`, which installs
+to **`~/.agents/skills/<name>/SKILL.md`** — *not* `~/.codex/skills/`. Two are
+excluded from Codex on content grounds rather than collision:
+`web-artifacts-builder` (specific to claude.ai artifacts) and `brand-guidelines`
+(applies Anthropic's brand). Nothing about these skills is client-specific — they
+are portable `SKILL.md` files, and which client has them is purely a function of
+the `--agent` flag used at install time. Two CLI details worth remembering: `skills add` defaults to *project*
 scope, so `-g` is required for a user-level install, and `--skill` accepts one
 skill per flag (repeat the flag to batch). Skills land at
 `~/.claude/skills/<name>/SKILL.md`.
@@ -320,6 +326,13 @@ plugin owns the full integration.
 | Other plugin-provided | Context7, Linear, and Playwright MCPs; Supabase skills paired with the user MCP | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel, and XcodeBuildMCP |
 | PUMPD project | `.mcp.json`: `supabase_local` | `.codex/config.toml`: `context7`, `playwright` |
 | Other intentional local capabilities | Supplied by the applicable plugin or local config | Figma, GitHub, Node REPL, Xcode tooling, and Sites design tooling where needed |
+
+**Codex takes hosted vendor MCPs from the curated catalog, never as raw MCPs.**
+`sentry`, `expo`, `linear`, `supabase`, and `github` are supplied by
+`@openai-curated` plugins; the `codex.duplicate-*-mcp` checks assert the raw
+equivalents stay **absent** so the two cannot both be enabled. This resolved the
+long-standing curated-vs-raw question on 2026-07-23 by observation — the curated
+plugins were already installed and enabled, and no raw twins existed.
 
 Project definitions may intentionally specialize or override user defaults.
 Avoid defining the same server twice at user scope and through a plugin. In

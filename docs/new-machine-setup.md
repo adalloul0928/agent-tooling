@@ -167,6 +167,43 @@ session. Keeping Sentry and Linear authenticated on this machine is what keeps
 them working; an unattended run that fires while a token has lapsed fails until
 the next interactive re-auth.
 
+## Step 5b — Codex
+
+Codex is configured separately from Claude, and its CLI is easy to miss.
+
+**The binary ships inside the ChatGPT desktop app** and is *not* symlinked onto
+`PATH` by the installer — so `command -v codex` fails even when Codex is fully
+installed and working. Symlink it:
+
+```bash
+ln -sf "/Applications/ChatGPT.app/Contents/Resources/codex" ~/.local/bin/codex
+codex --version                              # expect codex-cli 0.145.x
+```
+
+Then add the marketplace and install the owned plugins, mirroring Step 2:
+
+```bash
+codex plugin marketplace add adalloul0928/agent-tooling   # confirm syntax with `codex plugin --help`
+codex plugin list                                          # verify what is enabled
+codex mcp list                                             # Status + Auth per server
+```
+
+**Codex takes hosted vendor MCPs from the curated catalog, not as raw MCPs.**
+`sentry`, `expo`, `linear`, `supabase`, and `github` come from `@openai-curated`
+plugins. Do **not** `codex mcp add` raw twins — the `codex.duplicate-*-mcp`
+profile checks assert those stay absent, and enabling both is the failure mode
+they exist to catch.
+
+**Vendor skills install to a different directory than Claude's:**
+
+```bash
+npx skills@latest add <repo> -g -y --agent codex --skill <name>
+```
+
+lands in **`~/.agents/skills/<name>/SKILL.md`**, *not* `~/.codex/skills/`. The
+profile's `codex.*-skill-*` checks carry the exact per-skill recipes, so
+`./scripts/setup base-workstation --apply` handles this for you.
+
 ## Step 6 — verify
 
 ```bash
