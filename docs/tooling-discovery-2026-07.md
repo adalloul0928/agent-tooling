@@ -364,6 +364,23 @@ Items marked **[pending]** need an owner answer (listed at the end).
   **mobile = npm, backend = pnpm, edge/e2e = deno.** `worktree-bootstrap` detects per-dir.
 
 ### Changed items
+- **Codex "blocked on missing CLI" → FALSE PREMISE, resolved 2026-07-23.** Every Codex item was
+  deferred on the belief that the `codex` CLI was not installed. It is: the binary ships **inside
+  the ChatGPT desktop app** at `/Applications/ChatGPT.app/Contents/Resources/codex`
+  (`codex-cli 0.145.0-alpha.30`), merely not symlinked onto `PATH`, so `command -v codex` fails
+  while Codex is fully installed and configured. Running it showed Codex was **already near
+  parity**: the `agent-tooling` marketplace is added, all six owned plugins are installed and
+  enabled, and `openai-curated` supplies **expo, linear, supabase, sentry, github**.
+- **Codex curated-vs-raw → CURATED WINS (2026-07-23), decided by observation not judgment.**
+  `sentry@openai-curated` and `expo@openai-curated` are installed and enabled, and no raw `sentry`
+  or `expo` MCP exists, so the `codex.duplicate-*-mcp` "absent" assertions were already correct.
+  The advisory `codex.sentry-mcp` check added earlier that day asserted the **opposite** and was the
+  sole warning on `base-workstation`; it has been removed. One rule now: **Codex takes these from
+  the curated catalog, never as raw MCPs.**
+- **Codex skill placement — `~/.agents/skills`, not `~/.codex/skills`.** `skills add --agent codex`
+  installs to `~/.agents/skills/<name>/SKILL.md`. Verified empirically before writing checks; the
+  assumed path would have been wrong. The vendor skills were never Codex-incompatible — they are
+  portable `SKILL.md` files that had simply been installed with `--agent claude-code`.
 - **R2 Sentry stdio-token → REVISED to hosted OAuth remote (2026-07-23).** Owner chose Sentry's
   hosted MCP (`https://mcp.sentry.dev/mcp`, project-scoped `avad-technologies-llc/pumpd`) over the
   `@sentry/mcp-server` stdio + Doppler-token approach. Rationale: scheduled automations

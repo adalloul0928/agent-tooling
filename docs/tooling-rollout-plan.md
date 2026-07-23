@@ -102,32 +102,44 @@ one PR.
   Drive) — activation targets, not dead weight.
 - Verify Linear stays connected (`personal-task`/`sim-qa` depend on it).
 
-## Codex pass (deferred, consolidated)
+## Codex pass — resolved 2026-07-23
 
-Every 2026-07-23 item shipped **Claude-first** by owner decision, with the Codex
-side deferred into one dedicated pass rather than guessed at per item. That pass
-is **blocked on the `codex` CLI not being installed on this workstation** —
-nothing Codex-side could be observed, and inventing commands was deliberately
-avoided.
+**The blocker was a false premise.** This pass was recorded as blocked on "the
+`codex` CLI is not installed." It is installed — the binary ships **inside the
+ChatGPT desktop app** at `/Applications/ChatGPT.app/Contents/Resources/codex`
+(`codex-cli 0.145.0-alpha.30`), just not symlinked onto `PATH`, so
+`command -v codex` fails while Codex is fully configured. Symlinked into
+`~/.local/bin` and tracked as the `codex.cli-on-path` manual check, since the
+app-bundle path is machine-specific and must not be committed into a recipe.
 
-Decisions that have accumulated for it:
+Running it showed Codex was **already near parity**, so four of the five
+accumulated decisions resolved by observation:
 
-1. **Sentry** — curated `sentry@openai-curated` plugin vs a raw
-   `codex mcp add sentry --url`. `base-workstation` currently asserts the raw
-   server as *advisory*; `pumpd-workstation` tracks the curated plugin.
-2. **Expo** — the same question, but sharper: `pumpd-workstation` asserts
-   `codex.duplicate-expo-mcp` **absent**, so a `present` check would directly
-   contradict it. That is why no Codex expo check was added.
-3. **Vendor skills** — `expo/skills` plus the four Batch 3 collections were all
-   installed with `--agent claude-code`. Codex is an install-time flag
-   (`--agent`), **not** a hand-authored `.agents` adapter, which would mirror
-   upstream bodies against `AGENTS.md`.
-4. **`mcp-preflight`** — its Codex section is explicitly marked unverified and
-   tells the next person to confirm `codex mcp --help` before asserting anything.
-5. **`worktree-bootstrap` / `doppler-cli-skill`** — portable by construction, but
-   never exercised under Codex.
+| Decision | Resolution |
+|---|---|
+| Sentry curated-vs-raw | **Curated.** `sentry@openai-curated` installed + enabled; no raw MCP. The advisory `codex.sentry-mcp` check asserted the opposite and was **removed** |
+| Expo curated-vs-raw | **Curated.** `expo@openai-curated` installed + enabled; `codex.duplicate-expo-mcp` (absent) was already correct |
+| Owned plugins | Already done — marketplace added, all six installed + enabled |
+| Vendor skills | **The real gap.** 38 installed with `--agent codex`, tracked as `codex.*-skill-*` path checks |
+| `mcp-preflight` Codex section | Still unverified in the skill text; the state vocabulary (`enabled`/`disabled`, `OAuth`/`Bearer token`/`Unsupported`) is now observable and should be filled in |
 
-Settle curated-vs-raw **once, for all servers**, rather than per item.
+One rule replaces the curated-vs-raw question: **Codex takes sentry/expo/linear/
+supabase/github from the curated catalog, never as raw MCPs.** The
+`codex.duplicate-*-mcp` "absent" checks enforce it.
+
+**Skill placement gotcha:** `skills add --agent codex` installs to
+`~/.agents/skills/<name>/SKILL.md`, **not** `~/.codex/skills/`. Verified before
+writing checks; the assumed path would have been wrong.
+
+Two Codex-only exclusions on content grounds: `web-artifacts-builder` (about
+claude.ai artifacts) and `brand-guidelines` (Anthropic brand) — hence 38 rather
+than Claude's 40. Note the six `anthropics/skills` names excluded on both sides
+were justified by *Claude's* plugin set; in Codex only `pdf` genuinely collides,
+so `docx`/`pptx`/`xlsx`/`skill-creator`/`claude-api` could be revisited for
+stricter parity.
+
+Still open: **`pumpd-automations` on Codex, deferred by owner** — its advisory
+check remains as a marker.
 
 ## Cross-repo follow-ups (outside `agent-tooling`)
 
@@ -172,6 +184,19 @@ RN/Expo cursor rules · `GeLi2001/shopify-mcp` · Biome/knip/HealthKit/voltra
 MCPs.
 
 ## Open questions (owner)
+
+0. **`react-native-best-practices` — the profile contradicts the collision
+   decision (surfaced 2026-07-23).** `pumpd-workstation` asserts
+   `claude.callstack-react-native-plugin` →
+   `react-native-best-practices@callstack-agent-skills` **enabled** at project
+   scope. But the Batch 3 collision was resolved the other way: Software
+   Mansion's `react-native-best-practices` is the one installed (user scope,
+   file), and Callstack's was deliberately excluded because the two share a
+   directory name. Enabling the callstack plugin would put a second skill of that
+   name back in play. The check currently **fails**, so nothing is broken today —
+   but the profile is asking for something the rollout decided against. Either
+   drop the check (consistent with the collision decision) or reverse the
+   collision in Callstack's favour and drop SWM's; do not leave both asserted.
 
 1. `EXPO_PUBLIC_SECURE_STORAGE_KEY` — local `.env` only; how do release builds
    get it?
