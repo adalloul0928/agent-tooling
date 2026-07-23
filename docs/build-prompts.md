@@ -107,18 +107,28 @@ mirror. Validate with `./scripts/validate-static`.
   Expo is **OAuth-only with no PAT/CI fallback** — interactive use only; never
   depend on it in cloud/cron runs.
 
-- [ ] **expo/skills subset** — install + record:
+- [x] **expo/skills subset** — **Done 2026-07-23.** Installed 9 of the 23 skills
+  `expo/skills` ships (MIT, installed via the `skills` CLI, **not mirrored**),
+  tracked as `path` checks with per-skill recipes in
+  `profiles/base-workstation.json` and recorded as vendor-owned in
+  `docs/tooling-inventory.md`.
 
-  ```text
-  In the agent-tooling repo: install the official Expo skill collection with
-  `npx skills add expo/skills`, then confirm which of these are present and
-  useful — expo-router, expo-module, expo-tailwind-setup, expo-upgrade,
-  eas-app-stores, eas-workflows, eas-observe, eas-simulator, expo-examples.
-  Do NOT mirror the skill source into this repo. Record the desired subset as
-  path checks (on the installed SKILL.md locations) with the `npx skills add`
-  command as their install recipe in the appropriate profile, and list them in
-  docs/tooling-inventory.md as vendor-owned. Validate, branch, open a PR.
-  ```
+  Subset: `expo-router`, `expo-module`, `expo-tailwind-setup`, `expo-upgrade`,
+  `eas-app-stores`, `eas-workflows`, `expo-examples`, **`expo-project-structure`**,
+  **`expo-dev-client`**.
+
+  **Tuned from the original list** — dropped `eas-simulator` (its own description
+  tells macOS users with local simulators not to auto-trigger it; `ios-simulator-mcp`
+  and the planned `sim-coldstart` cover that) and `eas-observe` (paid EAS APM that
+  overlaps the Sentry MCP wired the same day); added `expo-project-structure` and
+  `expo-dev-client` instead. Subset size is deliberate — every installed skill's
+  description is loaded for trigger matching, so unused skills cost context on
+  every session.
+
+  Claude-only (`--agent claude-code`); Codex deferred to its own pass. Two CLI
+  gotchas worth keeping: `skills add` defaults to **project** scope so `-g` is
+  required, and `--skill` takes **one skill per flag** (comma-separated is
+  silently rejected — it just prints the full skill list).
 
 ---
 

@@ -115,6 +115,114 @@
           "https://mcp.supabase.com/mcp"],
         "note": "Supabase's hosted remote MCP (streamable HTTP), authenticated by browser OAuth — the committed recipe carries no headers or tokens. --scope user is required for the same reason as the other hosted MCPs."
       }
+    },
+    {
+      "id": "claude.expo-skill-eas-app-stores",
+      "kind": "path",
+      "path": "~/.claude/skills/eas-app-stores/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "eas-app-stores"],
+        "note": "Vendor-owned skill from expo/skills (MIT) — installed, never mirrored into this repo. -g is required: `skills add` defaults to project scope. --skill takes one skill per flag; repeat the flag to batch."
+      }
+    },
+    {
+      "id": "claude.expo-skill-eas-workflows",
+      "kind": "path",
+      "path": "~/.claude/skills/eas-workflows/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "eas-workflows"],
+        "note": "Vendor-owned skill from expo/skills (MIT) — installed, never mirrored. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.expo-skill-expo-dev-client",
+      "kind": "path",
+      "path": "~/.claude/skills/expo-dev-client/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "expo-dev-client"],
+        "note": "Vendor-owned skill from expo/skills (MIT) — installed, never mirrored. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.expo-skill-expo-examples",
+      "kind": "path",
+      "path": "~/.claude/skills/expo-examples/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "expo-examples"],
+        "note": "Vendor-owned skill from expo/skills (MIT) — installed, never mirrored. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.expo-skill-expo-module",
+      "kind": "path",
+      "path": "~/.claude/skills/expo-module/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "expo-module"],
+        "note": "Vendor-owned skill from expo/skills (MIT) — installed, never mirrored. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.expo-skill-expo-project-structure",
+      "kind": "path",
+      "path": "~/.claude/skills/expo-project-structure/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "expo-project-structure"],
+        "note": "Vendor-owned skill from expo/skills (MIT) — installed, never mirrored. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.expo-skill-expo-router",
+      "kind": "path",
+      "path": "~/.claude/skills/expo-router/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "expo-router"],
+        "note": "Vendor-owned skill from expo/skills (MIT) — installed, never mirrored. -g is required; `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.expo-skill-expo-tailwind-setup",
+      "kind": "path",
+      "path": "~/.claude/skills/expo-tailwind-setup/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "expo-tailwind-setup"],
+        "note": "Vendor-owned skill from expo/skills (MIT) — installed, never mirrored. -g is required; `skills add` defaults to project scope. Covers Tailwind v4 via react-native-css/NativeWind v5; the PUMPD app itself uses Uniwind, so treat this as reference rather than a directive."
+      }
+    },
+    {
+      "id": "claude.expo-skill-expo-upgrade",
+      "kind": "path",
+      "path": "~/.claude/skills/expo-upgrade/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "expo/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "expo-upgrade"],
+        "note": "Vendor-owned skill from expo/skills (MIT) — installed, never mirrored. -g is required; `skills add` defaults to project scope."
+      }
     }
   ],
   "manual_checks": [
