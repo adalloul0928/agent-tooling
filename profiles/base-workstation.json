@@ -124,7 +124,7 @@
     {
       "id": "sentry.mcp-oauth",
       "description": "Authenticate the Sentry hosted MCP (https://mcp.sentry.dev/mcp/avad-technologies-llc/pumpd) in each client via browser OAuth, and re-auth when the session lapses. Local scheduled runs (e.g. pumpd-sentry-miner) reuse the local OAuth session, so keeping this authed locally is what keeps those automations working.",
-      "last_verified": null
+      "last_verified": "2026-07-23"
     }
   ]
 }

@@ -72,7 +72,7 @@ mirror. Validate with `./scripts/validate-static`.
 
 ## Phase 1 — Batch 1 finish (connectors + first vendor install)
 
-- [ ] **Sentry MCP** — **REVISED 2026-07-23 → hosted OAuth remote** (supersedes the
+- [x] **Sentry MCP** — **REVISED 2026-07-23 → hosted OAuth remote** (supersedes the
   original stdio-token plan; see `docs/tooling-discovery-2026-07.md` → Changed
   items → R2). Owner chose Sentry's hosted MCP (`https://mcp.sentry.dev/mcp`,
   project-scoped `avad-technologies-llc/pumpd`) over `@sentry/mcp-server` stdio + a Doppler
@@ -80,11 +80,14 @@ mirror. Validate with `./scripts/validate-static`.
   **local** Sentry OAuth session, so the headless re-auth wall that motivated the
   stdio plan doesn't apply, and the owner accepts periodic browser re-auth.
   Landed as per-client checks `claude.sentry-mcp` / `codex.sentry-mcp` in
-  `profiles/base-workstation.json` with `claude mcp add --transport http sentry
-  <url>` / `codex mcp add sentry --url <url>` install recipes — no
+  `profiles/base-workstation.json` with `claude mcp add --scope user --transport
+  http sentry <url>` / `codex mcp add sentry --url <url>` install recipes — no
   `plugins/mobile-development/.mcp.json` block and no `SENTRY_ACCESS_TOKEN`.
-  **Box stays unchecked until the owner completes the browser OAuth per client**
-  (run the `claude mcp add` recipe, then trigger one Sentry tool).
+  `--scope user` is required: `claude mcp add` defaults to local/project scope,
+  which hides the server from the PUMPD checkout where the Sentry automations
+  run. **Done 2026-07-23** — registered at user scope and OAuth confirmed
+  (`claude mcp list` → `sentry … ✔ Connected`). Codex side still open: see the
+  `codex.duplicate-*-mcp` guards in `pumpd-workstation`.
 
 - [ ] **Expo MCP (both clients)** — already added to Claude (`claude mcp list`
   shows it "Needs authentication" → click OAuth in the app once). Then:
