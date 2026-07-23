@@ -373,7 +373,13 @@ mirror. Validate with `./scripts/validate-static`.
   Validate, branch, open a PR.
   ```
 
-- [ ] **Shopify AI Toolkit storefront skills** (install, read-only subset)
+- [ ] **Shopify AI Toolkit storefront skills** — **DEFERRED 2026-07-23 by owner;**
+  deliberately kept out of the grouped Batch 3 sweep. Targets the **IAWIS
+  storefront**, not PUMPD, so it does not belong with the React Native
+  collections. Two hard requirements if revived: set
+  `OPT_OUT_INSTRUMENTATION=true` **before first use** (it ships queries and code
+  to shopify.dev by default), and do **not** install `shopify-use-shopify-cli`
+  (store-write surface).
 
   ```text
   In the agent-tooling repo: adopt ONLY the storefront read-skills from the
@@ -413,7 +419,11 @@ mirror. Validate with `./scripts/validate-static`.
   vendor-owned + a profile check. Validate, branch, open a PR.
   ```
 
-- [ ] **Maestro MCP** (wire)
+- [ ] **Maestro MCP** (wire) — **DEFERRED 2026-07-23 by owner.** This is a Lane A
+  connector wire, not a skill install, so it was excluded from the grouped Batch 3
+  sweep. It is stdio and ships inside the Maestro CLI, so it needs no secrets —
+  confirm the launch command from the official Maestro MCP docs before wiring, and
+  add `claude_mcp` (+ Codex, in the Codex pass) checks with install recipes.
 
   ```text
   In the agent-tooling repo: add the Maestro MCP server (stdio; it ships inside

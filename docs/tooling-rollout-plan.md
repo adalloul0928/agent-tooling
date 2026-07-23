@@ -5,7 +5,9 @@ evidence, and the complete decision record live in
 [tooling-discovery-2026-07.md](tooling-discovery-2026-07.md); this doc tracks
 execution. Update the status columns as items land.
 
-Decisions recorded 2026-07-22: **31 approved · 9 deferred · 3 denied.**
+Decisions recorded 2026-07-22: **31 approved · 9 deferred · 3 denied.** Those
+counts are the original record and are **not** updated as items land; the status
+columns below plus the 2026-07-23 reversals and deferrals are the current truth.
 Scope: `agent-tooling`, client configs, and vendor catalogs only
 (`pumpd-dev-tools` is explicitly out of scope by owner decision).
 
@@ -52,7 +54,7 @@ one PR.
 | `create-pr` | C | **deferred** | Deferred 2026-07-23 pending a scoping decision. PUMPD's `/pr` already does the full gate, conventional title, Summary/Changes/Testing body, and Linear linking — R6 said *portablize + generalize, don't duplicate*. Gaps if revived: `/pr` targets `main` while **11 of the last 12 merged PRs went to `preview`** (live bug), is `disable-model-invocation: true` so "create pr" never triggers it, hardcodes `npm run …` (breaks backend/edge), has no commit/push, and is Claude-only. Open question: always-true rules (base `preview`; never pipe the gate through tail/head — it masks non-zero exit codes) may belong in `AGENTS.md` rather than a skill |
 | Review agent | C | **deferred** | Deferred 2026-07-23. Built-in `/code-review ultra` already does parallel multi-agent, severity-ranked, synthesized review; with `/code-review`, `/security-review`, thermo-nuclear, `pumpd-review`, `pumpd-security-scan`, and PUMPD's `review`/`quality` there are 6+ paths already. Would be the repo's **first packaged agent** (no `agents/` dir or manifest key exists) and agents are Claude-only per AGENTS.md, cutting against the portability thesis. Evidence was borrowed from R6's PR half (~19 create_pr sessions); no review-specific friction is recorded. If revived, build as a **skill**, not an agent |
 | `mcp-preflight` | C | **done** | `plugins/developer-workflows/skills/mcp-preflight/`. Everything observed from `claude mcp list` / `--help`, not recalled. Three states with unrelated fixes: `✔ Connected`; `! Needs authentication` → `claude mcp login <name>` (`--no-browser` for SSH/headless); `⏸ Pending approval` → an unapproved project `.mcp.json` server Claude never connects to (`reset-project-choices`). No `--json` on `list`; **don't key off the exit code**. Doppler-wrapped stdio servers usually fail because of Doppler, not the MCP. Doppler MCP dropped from scope (retired in #32); Codex side marked unverified — CLI not on PATH |
-| Permission allowlist | config | **deferred** | Via `fewer-permission-prompts`: git, gh, npm, pnpm, deno, cp, sips, `xcrun simctl list/boot` |
+| Permission allowlist | config | **deferred** | Deferred 2026-07-23 — owner is doing this one separately. Prefer `fewer-permission-prompts`, which scans real transcripts to produce a scoped allowlist instead of guessing: git, gh, npm, pnpm, deno, cp, sips, `xcrun simctl list/boot` |
 
 ## Batch 3 — vendor adopts + Maestro
 
@@ -61,10 +63,10 @@ one PR.
 | `software-mansion-labs/skills` | B | **done** (Claude) | All 8 installed. **LICENSE resolved: MIT, README-only — no LICENSE file**, which is why the API reported none. Its `react-native-best-practices` won the name collision with Callstack's and carries the Reanimated 4 / gestures / svg / worklets-bundle-mode content (those sub-skills are bundled, not separately installable). **The `.agents` Codex adapter is unnecessary** — `skills add --agent` handles Codex, and hand-authoring would mirror upstream bodies |
 | `callstackincubator/agent-skills` | B | **done** (Claude) | 9 of 10 installed (MIT). `react-native-best-practices` excluded — name collision with SWM's, and `skills add` has no rename option, so installing both silently overwrites one. **Cost:** its perf material (FPS/TTI/bundle/Hermes/FlashList) is not installed anywhere. **Correction:** the `react-native-testing` and react-compiler skills this row was justified by do not exist in the repo |
 | Supabase agent skills | B | **done** (Claude) | Both installed (MIT). Clean — no collisions, no corrections |
-| Shopify AI Toolkit storefront skills | B | pending | Read skills only (`shopify-storefront-graphql`, `shopify-custom-data`, `shopify-dev`); `OPT_OUT_INSTRUMENTATION=true`; exclude store-write CLI skill |
+| Shopify AI Toolkit storefront skills | B | **deferred** | Deferred 2026-07-23 by owner; kept out of the grouped Batch 3 sweep. Targets the IAWIS storefront rather than PUMPD, and needs `OPT_OUT_INSTRUMENTATION=true` set **before first use** (it ships queries + code to shopify.dev by default). Read skills only; exclude the store-write CLI skill |
 | `webapp-testing` (anthropics/skills) | B | **done** (Claude) | Installed in the grouped Batch 3 sweep |
 | `frontend-design` (anthropics/skills) | B | **done** (Claude) | Installed in the grouped Batch 3 sweep. **`anthropics/skills` states no license** (no LICENSE file, no README section, only THIRD_PARTY_NOTICES.md) — recorded as unstated, not assumed. 12 of 18 installed; docx/pdf/pptx/xlsx/skill-creator/claude-api excluded as already-registered plugin names |
-| Maestro MCP | A | pending | stdio, ships in Maestro CLI; plugin-scoped `.mcp.json` |
+| Maestro MCP | A | **deferred** | Deferred 2026-07-23 by owner. Lane A connector wire, not a skill install, so it was excluded from the grouped Batch 3 sweep. stdio, ships in the Maestro CLI; would go in a plugin-scoped `.mcp.json` with no secrets |
 
 ## Batch 4 — P2 builds
 
@@ -100,11 +102,69 @@ one PR.
   Drive) — activation targets, not dead weight.
 - Verify Linear stays connected (`personal-task`/`sim-qa` depend on it).
 
+## Codex pass (deferred, consolidated)
+
+Every 2026-07-23 item shipped **Claude-first** by owner decision, with the Codex
+side deferred into one dedicated pass rather than guessed at per item. That pass
+is **blocked on the `codex` CLI not being installed on this workstation** —
+nothing Codex-side could be observed, and inventing commands was deliberately
+avoided.
+
+Decisions that have accumulated for it:
+
+1. **Sentry** — curated `sentry@openai-curated` plugin vs a raw
+   `codex mcp add sentry --url`. `base-workstation` currently asserts the raw
+   server as *advisory*; `pumpd-workstation` tracks the curated plugin.
+2. **Expo** — the same question, but sharper: `pumpd-workstation` asserts
+   `codex.duplicate-expo-mcp` **absent**, so a `present` check would directly
+   contradict it. That is why no Codex expo check was added.
+3. **Vendor skills** — `expo/skills` plus the four Batch 3 collections were all
+   installed with `--agent claude-code`. Codex is an install-time flag
+   (`--agent`), **not** a hand-authored `.agents` adapter, which would mirror
+   upstream bodies against `AGENTS.md`.
+4. **`mcp-preflight`** — its Codex section is explicitly marked unverified and
+   tells the next person to confirm `codex mcp --help` before asserting anything.
+5. **`worktree-bootstrap` / `doppler-cli-skill`** — portable by construction, but
+   never exercised under Codex.
+
+Settle curated-vs-raw **once, for all servers**, rather than per item.
+
+## Cross-repo follow-ups (outside `agent-tooling`)
+
+Found while executing this rollout. Recorded here because the rollout's scope
+stops at this repo, so these will not otherwise get picked up:
+
+- **PUMPD `/pr` targets the wrong base.**
+  `pumpd-mobile-app/.claude/skills/pr/SKILL.md` diffs `main` and passes no
+  `--base`, but **11 of the last 12 merged PRs went to `preview`**. Live bug,
+  one-line fix.
+- **PUMPD `worktree` skill bootstraps incorrectly.**
+  `pumpd-mobile-app/.claude/skills/worktree/SKILL.md` blind-copies `.env` and
+  hardcodes `npm install` — wrong for backend (pnpm) and edge (deno). It should
+  delegate to `worktree-bootstrap`.
+- **`react-compiler` worktree is missing its `.env`** — the single bootstrap gap
+  observed across the 11 leaf worktrees.
+
 ## Deferred (investigate later)
 
-`sentry-triage` skill · `heroui-charts` note · `mcp-builder` · delete stray
-mobile `pnpm-lock.yaml` · `metro-mcp` · Radon AI MCP (paid gate) · `capture`
-universal inbox · Google Calendar connector · Next.js cursor-rule mining.
+`sentry-triage` skill · `heroui-charts` note · `metro-mcp` · Radon AI **MCP**
+(paid gate) · `capture` universal inbox · Google Calendar connector · Next.js
+cursor-rule mining.
+
+Corrections to this list as of 2026-07-23:
+
+- **`mcp-builder` is no longer deferred — it is installed**, as part of the
+  `anthropics/skills` adoption (everything except name collisions). Flagged here
+  because it entered via a batch install rather than its own decision.
+- **Radon:** the *MCP* remains deferred behind its paid gate, but the `radon-mcp`
+  **skill** is now installed as part of the Software Mansion collection. The skill
+  documents tools that are not connected — harmless, but do not read its presence
+  as adoption of the MCP.
+- **Delete stray mobile `pnpm-lock.yaml`** is now load-bearing rather than
+  cosmetic: that untracked, gitignored file is exactly what makes lockfile-based
+  package-manager detection pick pnpm in an npm project. `worktree-bootstrap`
+  works around it by treating the `packageManager` field as authoritative;
+  deleting the file would remove the trap at the source.
 
 ## Denied
 
