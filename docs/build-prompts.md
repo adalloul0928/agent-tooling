@@ -188,7 +188,26 @@ mirror. Validate with `./scripts/validate-static`.
   still does a blind `.env` copy and a hardcoded `npm install`. It should delegate
   to this skill — but that's a PUMPD-repo change.
 
-- [ ] **create-pr**
+- [ ] **create-pr** — **DEFERRED 2026-07-23, pending a scoping decision. Read this
+  before running the prompt below.** PUMPD's existing `/pr` skill
+  (`pumpd-mobile-app/.claude/skills/pr/SKILL.md`) already does the full gate
+  (lint + typecheck + test:run), a conventional-commit title, the
+  Summary/Changes/Testing body, Linear linking, and stop-on-failure — so most of
+  the prompt's stated value already exists. Discovery R6 said as much:
+  *"portablize + generalize, don't duplicate."*
+
+  Real gaps in `/pr` if this is revived: it diffs `main` and passes no `--base`,
+  so it targets **`main`** while **11 of the last 12 merged PRs went to
+  `preview`** (a live bug, one-line fix in the PUMPD repo); it is
+  `disable-model-invocation: true`, so typing "create pr" never triggers it, only
+  `/pr` does; it hardcodes `npm run …`, breaking in backend (pnpm) and edge
+  (deno); it has no commit/push step; and it is Claude-only.
+
+  Open question to settle first: the always-true rules (base = `preview`, never
+  pipe the gate through `tail`/`head` because that masks non-zero exit codes,
+  report real pass counts) arguably belong in `AGENTS.md`, where they are
+  unconditionally in context, rather than a skill that only helps when it
+  triggers.
 
   ```text
   Build the `create-pr` skill in the agent-tooling repo. Read AGENTS.md and the
@@ -204,7 +223,27 @@ mirror. Validate with `./scripts/validate-static`.
   ./scripts/validate-static. Branch, commit, open a PR.
   ```
 
-- [ ] **review agent**
+- [ ] **review agent** — **DEFERRED 2026-07-23. Read this before running the
+  prompt below.** Built-in **`/code-review ultra`** already implements the exact
+  described architecture — parallel multi-agent review over the branch, severity-
+  ranked, one synthesized verdict — alongside `/code-review` and
+  `/security-review`. Counting this repo's `thermo-nuclear-code-quality-review`,
+  `cyrus-workflows:pumpd-review`, `pumpd-automations:pumpd-security-scan`, and
+  PUMPD's own `review` / `quality`, there are already six-plus review paths; this
+  would be a seventh that composes three of them.
+
+  It would also be **the repo's first packaged agent** (no `agents/` dir and no
+  `agents` key exists in any manifest), and agents are Claude-only per
+  `AGENTS.md` — the prompt itself concedes a Codex equivalent is future work, so
+  it structurally cuts against the portability thesis.
+
+  Evidence is borrowed: R6 was originally `review-and-pr`, and its cited friction
+  (`create_pr`, ~19 sessions) is the **PR** half. No review-specific friction
+  number appears anywhere in the discovery.
+
+  If revived, build it as a **skill** that orchestrates the existing reviews, not
+  an agent — the one genuine delta is composing *this owner's* standards, which
+  needs no new agent surface.
 
   ```text
   Build a Claude-native `review` agent in the agent-tooling repo that composes
@@ -221,20 +260,31 @@ mirror. Validate with `./scripts/validate-static`.
   commit, open a PR.
   ```
 
-- [ ] **mcp-preflight**
+- [x] **mcp-preflight** — **Done 2026-07-23.** Built at
+  `plugins/developer-workflows/skills/mcp-preflight/SKILL.md`. The prompt said
+  "verify how each client exposes MCP auth state — do not guess," so everything in
+  it was observed from `claude mcp list` / `claude mcp --help`, not recalled.
 
-  ```text
-  Build the `mcp-preflight` skill in the agent-tooling repo. Read AGENTS.md and
-  the env-topology skill for shape. Place it at plugins/developer-workflows/
-  skills/mcp-preflight/SKILL.md. It inventories MCP servers that are connected
-  but unauthenticated at session start and prints the EXACT reconnect action per
-  connector and per client (e.g. the `claude mcp` command or `/command` for
-  Claude Code, the equivalent for Codex), for the servers this owner uses
-  (Sentry, Linear, Expo, Doppler, design). Verify how each client exposes MCP
-  auth state before asserting commands — do not guess. Acceptance: lists
-  unauthenticated MCPs with a correct, client-specific fix each; passes
-  ./scripts/validate-static. Branch, commit, open a PR.
-  ```
+  **Three states, three unrelated fixes** — the insight that makes it worth
+  having: `✔ Connected`; `! Needs authentication` → `claude mcp login <name>`;
+  `⏸ Pending approval` → a project `.mcp.json` server never approved, which
+  Claude does **not** connect to at all (`claude mcp reset-project-choices` to
+  redo choices). The last two look alike in a listing but one is an auth problem
+  and the other a trust problem.
+
+  Also verified and encoded: `claude mcp login --no-browser` for SSH/headless,
+  `logout`+`login` for stale credentials, no `--json` on `list` (parse text), and
+  **do not key off the exit code** — it reported `0` with everything healthy and
+  the unhealthy case was never observed, so asserting it would be a guess.
+
+  Highest-value diagnostic: a failing `heroui-pro` / `heroui-native-pro` /
+  `analytics-mcp` almost always means **Doppler**, not the MCP — they launch
+  through `doppler run`. Check `doppler me` first.
+
+  **Scope corrections:** the prompt lists *Doppler* among the servers to cover —
+  the Doppler MCP was retired in #32, so it's out. And the **Codex side could not
+  be verified** (CLI not on PATH), so the skill says so explicitly rather than
+  inventing commands.
 
 - [ ] **permission allowlist** (config, not a skill)
 
