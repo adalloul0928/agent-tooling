@@ -223,6 +223,378 @@
           "--agent", "claude-code", "--skill", "expo-upgrade"],
         "note": "Vendor-owned skill from expo/skills (MIT) — installed, never mirrored. -g is required; `skills add` defaults to project scope."
       }
+    },
+    {
+      "id": "claude.swm-skill-detour-onboarding",
+      "kind": "path",
+      "path": "~/.claude/skills/detour-onboarding/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "detour-onboarding"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; the repo has no LICENSE file, which is why license APIs report none). Installed, never mirrored. -g is required: `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.swm-skill-expo-horizon",
+      "kind": "path",
+      "path": "~/.claude/skills/expo-horizon/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "expo-horizon"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; the repo has no LICENSE file, which is why license APIs report none). Installed, never mirrored. -g is required: `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.swm-skill-fishjam",
+      "kind": "path",
+      "path": "~/.claude/skills/fishjam/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "fishjam"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; the repo has no LICENSE file, which is why license APIs report none). Installed, never mirrored. -g is required: `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.swm-skill-migrate-to-detour",
+      "kind": "path",
+      "path": "~/.claude/skills/migrate-to-detour/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "migrate-to-detour"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; the repo has no LICENSE file, which is why license APIs report none). Installed, never mirrored. -g is required: `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.swm-skill-radon-mcp",
+      "kind": "path",
+      "path": "~/.claude/skills/radon-mcp/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "radon-mcp"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; the repo has no LICENSE file, which is why license APIs report none). Installed, never mirrored. -g is required: `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.swm-skill-react-native-best-practices",
+      "kind": "path",
+      "path": "~/.claude/skills/react-native-best-practices/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "react-native-best-practices"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; the repo has no LICENSE file, which is why license APIs report none). Installed, never mirrored. -g is required: `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.swm-skill-rnrepo",
+      "kind": "path",
+      "path": "~/.claude/skills/rnrepo/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "rnrepo"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; the repo has no LICENSE file, which is why license APIs report none). Installed, never mirrored. -g is required: `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.swm-skill-typegpu",
+      "kind": "path",
+      "path": "~/.claude/skills/typegpu/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "software-mansion-labs/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "typegpu"],
+        "note": "Vendor-owned skill from software-mansion-labs/skills (MIT per README; the repo has no LICENSE file, which is why license APIs report none). Installed, never mirrored. -g is required: `skills add` defaults to project scope."
+      }
+    },
+    {
+      "id": "claude.callstack-skill-assess-react-native-migration",
+      "kind": "path",
+      "path": "~/.claude/skills/assess-react-native-migration/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "assess-react-native-migration"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. This collection also ships a `react-native-best-practices` skill that is deliberately NOT installed: it collides by name with Software Mansion's, and `skills add` has no rename option, so installing both silently overwrites one."
+      }
+    },
+    {
+      "id": "claude.callstack-skill-create-react-native-library",
+      "kind": "path",
+      "path": "~/.claude/skills/create-react-native-library/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "create-react-native-library"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. This collection also ships a `react-native-best-practices` skill that is deliberately NOT installed: it collides by name with Software Mansion's, and `skills add` has no rename option, so installing both silently overwrites one."
+      }
+    },
+    {
+      "id": "claude.callstack-skill-github",
+      "kind": "path",
+      "path": "~/.claude/skills/github/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "github"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. This collection also ships a `react-native-best-practices` skill that is deliberately NOT installed: it collides by name with Software Mansion's, and `skills add` has no rename option, so installing both silently overwrites one."
+      }
+    },
+    {
+      "id": "claude.callstack-skill-github-actions",
+      "kind": "path",
+      "path": "~/.claude/skills/github-actions/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "github-actions"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. This collection also ships a `react-native-best-practices` skill that is deliberately NOT installed: it collides by name with Software Mansion's, and `skills add` has no rename option, so installing both silently overwrites one."
+      }
+    },
+    {
+      "id": "claude.callstack-skill-react-native-brownfield-migration",
+      "kind": "path",
+      "path": "~/.claude/skills/react-native-brownfield-migration/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "react-native-brownfield-migration"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. This collection also ships a `react-native-best-practices` skill that is deliberately NOT installed: it collides by name with Software Mansion's, and `skills add` has no rename option, so installing both silently overwrites one."
+      }
+    },
+    {
+      "id": "claude.callstack-skill-react-native-tv-best-practices",
+      "kind": "path",
+      "path": "~/.claude/skills/react-native-tv-best-practices/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "react-native-tv-best-practices"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. This collection also ships a `react-native-best-practices` skill that is deliberately NOT installed: it collides by name with Software Mansion's, and `skills add` has no rename option, so installing both silently overwrites one."
+      }
+    },
+    {
+      "id": "claude.callstack-skill-react-navigation",
+      "kind": "path",
+      "path": "~/.claude/skills/react-navigation/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "react-navigation"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. This collection also ships a `react-native-best-practices` skill that is deliberately NOT installed: it collides by name with Software Mansion's, and `skills add` has no rename option, so installing both silently overwrites one."
+      }
+    },
+    {
+      "id": "claude.callstack-skill-upgrading-react-native",
+      "kind": "path",
+      "path": "~/.claude/skills/upgrading-react-native/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "upgrading-react-native"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. This collection also ships a `react-native-best-practices` skill that is deliberately NOT installed: it collides by name with Software Mansion's, and `skills add` has no rename option, so installing both silently overwrites one."
+      }
+    },
+    {
+      "id": "claude.callstack-skill-validate-skills",
+      "kind": "path",
+      "path": "~/.claude/skills/validate-skills/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "callstackincubator/agent-skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "validate-skills"],
+        "note": "Vendor-owned skill from callstackincubator/agent-skills (MIT). Installed, never mirrored. This collection also ships a `react-native-best-practices` skill that is deliberately NOT installed: it collides by name with Software Mansion's, and `skills add` has no rename option, so installing both silently overwrites one."
+      }
+    },
+    {
+      "id": "claude.supabase-skill-supabase",
+      "kind": "path",
+      "path": "~/.claude/skills/supabase/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "supabase/agent-skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "supabase"],
+        "note": "Vendor-owned skill from supabase/agent-skills (MIT). Installed, never mirrored."
+      }
+    },
+    {
+      "id": "claude.supabase-skill-supabase-postgres-best-practices",
+      "kind": "path",
+      "path": "~/.claude/skills/supabase-postgres-best-practices/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "supabase/agent-skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "supabase-postgres-best-practices"],
+        "note": "Vendor-owned skill from supabase/agent-skills (MIT). Installed, never mirrored."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-algorithmic-art",
+      "kind": "path",
+      "path": "~/.claude/skills/algorithmic-art/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "algorithmic-art"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-brand-guidelines",
+      "kind": "path",
+      "path": "~/.claude/skills/brand-guidelines/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "brand-guidelines"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-canvas-design",
+      "kind": "path",
+      "path": "~/.claude/skills/canvas-design/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "canvas-design"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-doc-coauthoring",
+      "kind": "path",
+      "path": "~/.claude/skills/doc-coauthoring/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "doc-coauthoring"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-frontend-design",
+      "kind": "path",
+      "path": "~/.claude/skills/frontend-design/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "frontend-design"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-internal-comms",
+      "kind": "path",
+      "path": "~/.claude/skills/internal-comms/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "internal-comms"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-mcp-builder",
+      "kind": "path",
+      "path": "~/.claude/skills/mcp-builder/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "mcp-builder"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-slack-gif-creator",
+      "kind": "path",
+      "path": "~/.claude/skills/slack-gif-creator/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "slack-gif-creator"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-template-skill",
+      "kind": "path",
+      "path": "~/.claude/skills/template-skill/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "template-skill"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-theme-factory",
+      "kind": "path",
+      "path": "~/.claude/skills/theme-factory/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "theme-factory"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-web-artifacts-builder",
+      "kind": "path",
+      "path": "~/.claude/skills/web-artifacts-builder/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "web-artifacts-builder"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
+    },
+    {
+      "id": "claude.anthropics-skill-webapp-testing",
+      "kind": "path",
+      "path": "~/.claude/skills/webapp-testing/SKILL.md",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": ["npx", "-y", "skills@latest", "add", "anthropics/skills", "-g", "-y",
+          "--agent", "claude-code", "--skill", "webapp-testing"],
+        "note": "Vendor-owned skill from anthropics/skills. License is UNSTATED upstream - no LICENSE file and no license section in the README, only THIRD_PARTY_NOTICES.md; recorded as observed rather than assumed. Installed, never mirrored. docx/pdf/pptx/xlsx/skill-creator/claude-api are deliberately NOT installed from here because they are already registered by the anthropic-skills and skill-creator plugins."
+      }
     }
   ],
   "manual_checks": [

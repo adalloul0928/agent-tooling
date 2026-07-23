@@ -286,7 +286,10 @@ mirror. Validate with `./scripts/validate-static`.
   be verified** (CLI not on PATH), so the skill says so explicitly rather than
   inventing commands.
 
-- [ ] **permission allowlist** (config, not a skill)
+- [ ] **permission allowlist** (config, not a skill) — **DEFERRED 2026-07-23 at
+  owner's request; they are doing this one separately.** Prefer the
+  `fewer-permission-prompts` skill, which scans real transcripts to produce a
+  scoped allowlist rather than guessing at commands.
 
   ```text
   In the agent-tooling repo (and/or the appropriate project settings), reduce
@@ -302,7 +305,25 @@ mirror. Validate with `./scripts/validate-static`.
 
 ## Phase 3 — Batch 3 vendor adopts + Maestro
 
-- [ ] **software-mansion-labs/skills** (install + Codex adapter)
+- [x] **software-mansion-labs/skills** — **Done 2026-07-23.** All 8 skills
+  installed via the `skills` CLI (installed, never mirrored), tracked as `path`
+  checks with per-skill recipes.
+
+  **LICENSE resolved:** MIT — but stated in the **README only**, with no LICENSE
+  file in the repo, which is exactly why the earlier API check "returned null".
+  Recorded as observed.
+
+  **Two corrections to the prompt.** (1) The Codex `.agents` adapter it asks for
+  is unnecessary work: `skills add` takes `--agent`, so Codex is an install-time
+  flag, not hand-authored files — and hand-authoring would mirror upstream bodies,
+  which `AGENTS.md` forbids. Left to the Codex pass. (2) The sub-skills it names
+  (animations/Reanimated 4, gestures, svg, multithreading/worklets,
+  enable-worklets-bundle-mode) are **not separately installable** — they are
+  bundled inside `react-native-best-practices`, so that one skill delivers all of
+  them.
+
+  **Collision:** this collection's `react-native-best-practices` is the one that
+  won over Callstack's — see below.
 
   ```text
   In the agent-tooling repo: adopt the Software Mansion RN skills
@@ -317,7 +338,20 @@ mirror. Validate with `./scripts/validate-static`.
   enable-worklets-bundle-mode (the Uniwind x worklets Metro conflict).
   ```
 
-- [ ] **callstackincubator/agent-skills** (install)
+- [x] **callstackincubator/agent-skills** — **Done 2026-07-23.** 9 of 10 skills
+  installed (MIT, LICENSE file present).
+
+  **`react-native-best-practices` deliberately NOT installed** — it collides by
+  name with Software Mansion's, and `skills add` has no rename option, so
+  installing both silently overwrites one. Software Mansion's wins because it
+  covers Reanimated 4, Gesture Handler, svg and worklets bundle mode, i.e. the
+  libraries PUMPD runs. **Cost:** Callstack's performance material (FPS, TTI,
+  bundle size, Hermes, FlashList) is not installed anywhere — revisit if perf work
+  becomes a focus.
+
+  **Correction:** discovery justified this collection as *"react-native-testing
+  (matches RNTL) + react-compiler ref"*. Neither skill exists in the repo; that
+  content lives inside the colliding skill.
 
   ```text
   In the agent-tooling repo: adopt callstackincubator/agent-skills. Confirm its
@@ -327,7 +361,9 @@ mirror. Validate with `./scripts/validate-static`.
   recipes. Validate, branch, open a PR.
   ```
 
-- [ ] **Supabase agent skills** (install)
+- [x] **Supabase agent skills** — **Done 2026-07-23.** Both skills installed
+  (`supabase`, `supabase-postgres-best-practices`); MIT, LICENSE file present.
+  Clean — no collisions, no corrections.
 
   ```text
   In the agent-tooling repo: install the official Supabase agent skills with
@@ -351,7 +387,8 @@ mirror. Validate with `./scripts/validate-static`.
   vendor-owned + profile checks. Validate, branch, open a PR.
   ```
 
-- [ ] **webapp-testing** (install)
+- [x] **webapp-testing** — **Done 2026-07-23.** Installed from `anthropics/skills`
+  as part of the grouped Batch 3 install (Playwright visual-QA loop).
 
   ```text
   In the agent-tooling repo: adopt the `webapp-testing` skill from
@@ -359,7 +396,16 @@ mirror. Validate with `./scripts/validate-static`.
   the repo. Record as vendor-owned + a profile check. Validate, branch, open a PR.
   ```
 
-- [ ] **frontend-design** (install)
+- [x] **frontend-design** — **Done 2026-07-23.** Installed from `anthropics/skills`
+  as part of the grouped Batch 3 install.
+
+  **License note for the whole `anthropics/skills` collection:** it states **no
+  license** — no LICENSE file and no README license section, only
+  `THIRD_PARTY_NOTICES.md`. Recorded as *unstated* rather than assumed. We install
+  rather than mirror, so practical risk is low. 12 of 18 skills installed;
+  `docx`/`pdf`/`pptx`/`xlsx`/`skill-creator`/`claude-api` were excluded because the
+  installed `anthropic-skills` and `skill-creator` plugins already register those
+  names.
 
   ```text
   In the agent-tooling repo: adopt the `frontend-design` skill from
