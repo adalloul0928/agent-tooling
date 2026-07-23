@@ -2,7 +2,7 @@
 
 This document is the canonical map for deciding what tooling exists, who owns
 it, where it lives, and how it reaches Claude and Codex. It describes the
-desired state as of 2026-07-13. Profiles and `scripts/doctor` turn the locally
+desired state as of 2026-07-17. Profiles and `scripts/doctor` turn the locally
 observable parts of this model into checks; hosted account state and live
 authentication still require manual verification.
 
@@ -95,9 +95,9 @@ skill installation is not required.
 | --- | --- | --- | --- |
 | `personal` | `obsidian-vault`, `dad-daily-update`, `personal-task`, `personal-task-done` | User/workstation | First-party |
 | `developer-workflows` | `thermo-nuclear-code-quality-review` | User/workstation; reusable across projects | First-party |
-| `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | PUMPD project/worktree | First-party |
-| `pumpd-workflows` | `pumpd-local-cleanup` | PUMPD project/worktree | First-party |
-| `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle project/worktree | First-party |
+| `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | PUMPD target; Claude project scope, Codex user install | First-party |
+| `pumpd-workflows` | `pumpd-local-cleanup` | PUMPD target; Claude project scope, Codex user install | First-party |
+| `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle target; Claude project scope, Codex user install | First-party |
 | `mobile-development` | None; MCP-only | User/workstation; reusable local mobile tooling | First-party wrapper around third-party MCPs |
 
 The `wet-in-seattle` wrapper and reporting skill are first-party. The bundled
@@ -120,6 +120,76 @@ implementations without publishing a misleading `deferred` bundle.
 Every owned plugin has one physical skill core under `plugins/<plugin>/skills`
 and separate Claude and Codex manifests. Keep shared workflow logic portable;
 put client-specific declarations in the native adapters.
+
+As of Codex CLI 0.145.0-alpha.18, plugin installation and enablement are
+user-scoped. Fresh-process canaries confirmed that plugin declarations in a
+project `.codex/config.toml` do not activate those plugins. Profiles therefore
+record the intended project audience for Codex, but do not claim native project
+plugin isolation. Project-critical Codex behavior must remain in committed
+project skills/MCPs, or the user plugin must stay enabled globally until Codex
+adds a supported project scope.
+
+## Current workstation cheat sheet
+
+This is the verified local snapshot as of 2026-07-17. It is intentionally
+grouped by source and scope: a plugin may contribute many skills or MCPs, and a
+project-scoped Claude plugin appears inactive when Claude is opened outside its
+matching checkout. Claude.ai and ChatGPT account apps/connectors are separate
+hosted inventories and are not counted here.
+
+### Claude Code
+
+| Type | Source/scope | Current items |
+| --- | --- | --- |
+| Owned plugins | `agent-tooling`, user | `personal`, `developer-workflows`, `mobile-development` |
+| Owned plugins | `agent-tooling`, project | `cyrus-workflows`, `pumpd-workflows`, `wet-in-seattle` |
+| Official plugin | Anthropic, user | `skill-creator` |
+| Official plugin records | Anthropic, matching PUMPD/IAWIS checkout or worktree | `code-review`, `code-simplifier`, `context7`, `frontend-design`, `linear`, `playwright`, `security-guidance`, `sentry`, `shopify-ai-toolkit`, `supabase` |
+| Third-party plugin | Callstack, project | `react-native-best-practices` |
+| Base MCPs | User/plugin | `supabase`, `ios-simulator-mcp`, `heroui-native`, `heroui-native-pro` |
+| PUMPD MCPs | Plugin/project | `context7`, `linear`, `playwright`, `sentry`, `supabase_local` |
+| IAWIS MCPs | Plugin/project | `analytics-mcp`, `shadcn` |
+
+Claude first-party skills are the 14 skills listed in the owned-plugin table
+above. PUMPD adds the nine committed project skills listed below. There are no
+active standalone skills under `~/.claude/skills`; owned skills arrive through
+plugins. Current vendor skill suites are:
+
+- `skill-creator`: 1 skill;
+- `frontend-design`: 1 skill;
+- `supabase`: 2 skills;
+- `sentry`: 10 skills;
+- Callstack `react-native-best-practices`: 14 skills;
+- `shopify-ai-toolkit`: 20 skills in its IAWIS worktree record.
+
+### Codex
+
+| Type | Source/scope | Current items |
+| --- | --- | --- |
+| Owned plugins | `agent-tooling`, user-wide | `personal`, `developer-workflows`, `mobile-development`, `pumpd-workflows`, `cyrus-workflows`, `wet-in-seattle` |
+| Runtime/bundled plugins | OpenAI-managed | `documents`, `pdf`, `spreadsheets`, `presentations`, `template-creator`, `sites`, `browser`, `chrome`, `visualize` |
+| Curated plugins | OpenAI-managed | `linear`, `vercel`, `github`, `sentry`, `build-ios-apps`, `expo`, `supabase` |
+| Owned MCPs | Plugin-provided, user-wide | `analytics-mcp`, `ios-simulator-mcp`, `heroui-native`, `heroui-native-pro` |
+| Runtime/vendor MCPs | Bundled or curated | `node_repl`, `sites-design-picker`, `xcodebuildmcp`, `github`, `linear` |
+| Direct user MCPs | Local config | `figma`, retained legacy `heroui-pro`, disabled `computer-use` |
+| PUMPD MCPs | Committed project config | `context7`, `playwright` |
+| Standalone authored skills | `~/.codex/skills` | `chronicle`, `figma` |
+
+Codex also receives the same 14 first-party skills from `agent-tooling` and the
+nine PUMPD project skills from the checkout. OpenAI runtime and curated plugins
+currently contribute these skill suites:
+
+- artifact/runtime: `documents`, `pdf`, `spreadsheets`, `presentations`,
+  `template-creator`, `sites`, `browser`, `chrome`, and `visualize`;
+- service workflows: `linear`, `github`, `sentry`, and `supabase`;
+- larger vendor suites: `build-ios-apps` (9 skills), `expo` (13 skills), and
+  `vercel` (47 skills).
+
+The HTML Atlas expands every current vendor/runtime skill name while keeping
+the large suites collapsed by default. In current Codex, `analytics-mcp` and
+the PUMPD/IAWIS-targeted owned skills are globally visible because installed
+plugins are user-scoped; committed project skills and MCPs remain the reliable
+project boundary.
 
 ## Role of Microsoft APM
 
@@ -215,21 +285,15 @@ only path rules may remain under `.claude/rules`.
 
 ## Special local skills
 
-Licensed HeroUI skill content remains machine-local and must not be committed
-or redistributed:
+The active standalone Codex skill directory intentionally contains only:
 
-- `heroui-native-pro`
-- `heroui-react-pro`
-- `heroui-pro-design-taste`
+- `figma`, paired with the authenticated Figma MCP;
+- `chronicle`, which depends on machine-specific history and permissions.
 
-The following should be reviewed individually before consolidation:
-
-- `figma`: prefer an official vendor plugin when it provides the needed
-  capability; otherwise retain the local skill and MCP pairing;
-- `find-skills`: retain only if its discovery behavior adds value beyond the
-  native catalogs;
-- `chronicle`: keep local while it depends on machine-specific history or
-  permissions.
+Former standalone HeroUI, discovery, review, Git, and project workflow skills
+are archived for rollback and are not part of the active inventory. Licensed
+HeroUI credentials remain machine-local; the active HeroUI Native Pro MCP reads
+its token from Doppler rather than publishing licensed skill content.
 
 ## MCP placement
 
@@ -239,10 +303,10 @@ plugin owns the full integration.
 
 | Scope | Claude | Codex |
 | --- | --- | --- |
-| User raw MCPs | `claude_design` | Only broadly reusable servers not already supplied by a plugin/runtime |
+| User raw MCPs | Authenticated remote `supabase` | Figma, HeroUI Pro, Node REPL, and disabled Computer Use runtime entry |
 | Wet In Seattle plugin | Doppler-backed `analytics-mcp` | Doppler-backed `analytics-mcp` |
 | Mobile Development plugin | `ios-simulator-mcp`, `heroui-native`, Doppler-backed `heroui-native-pro` | Same three plugin-provided MCPs |
-| Other plugin-provided | Context7, Linear, Playwright, Sentry, Supabase | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel |
+| Other plugin-provided | Context7, Linear, Playwright, and Sentry MCPs; Supabase skills paired with the user MCP | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel, and XcodeBuildMCP |
 | PUMPD project | `.mcp.json`: `supabase_local` | `.codex/config.toml`: `context7`, `playwright` |
 | Other intentional local capabilities | Supplied by the applicable plugin or local config | Figma, GitHub, Node REPL, Xcode tooling, and Sites design tooling where needed |
 
@@ -250,7 +314,9 @@ Project definitions may intentionally specialize or override user defaults.
 Avoid defining the same server twice at user scope and through a plugin. In
 particular, raw definitions for Analytics, HeroUI, or iOS Simulator are not
 part of the desired state once their owned plugin replacement is installed and
-verified.
+verified. The current Codex `heroui-pro` remote entry is a deliberate legacy
+exception retained by user choice; the Doppler-backed
+`mobile-development:heroui-native-pro` MCP is the managed replacement.
 
 No MCP secret belongs in this repository. The `wet-in-seattle` and
 `mobile-development` plugins commit only Doppler project/config identifiers
@@ -272,10 +338,10 @@ The same principle applies to ChatGPT account apps and local Codex plugins or
 MCPs. Install only the hosted apps that improve the hosted experience; do not
 try to mirror every local development tool into chat.
 
-`disableClaudeAiConnectors` should remain unset until the required local
-Linear, Supabase, and PUMPD twins are authenticated and validated. Once the
-local path is reliable, set it to `true` to enforce the intended separation:
-hosted connectors for chat, local plugins/MCPs for Claude Code.
+`disableClaudeAiConnectors` is enabled at user scope after validating the local
+Linear, Supabase, mobile-development, and project paths. This enforces the
+intended separation: hosted connectors for chat and deliberate local
+plugins/MCPs for Claude Code.
 
 ## Authentication
 

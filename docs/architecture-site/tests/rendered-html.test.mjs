@@ -38,6 +38,11 @@ test("server-renders the Agent Tooling Atlas", async () => {
   assert.match(html, /Who owns what/);
   assert.match(html, /Every atom has one job/);
   assert.match(html, /Small bundles, explicit projects/);
+  assert.match(html, /Current workstation cheat sheet/);
+  assert.match(html, /What is installed, where it comes from, and where it appears/);
+  assert.match(html, /Owned plugin skills/);
+  assert.match(html, /analytics-mcp/);
+  assert.match(html, /Standalone home skills/);
   assert.match(html, /personal/);
   assert.match(html, /developer-workflows/);
   assert.match(html, /cyrus-workflows/);
@@ -63,6 +68,9 @@ test("keeps the guide interactive, accessible, and free of starter artifacts", a
   assert.match(page, /role="tablist"/);
   assert.match(page, /aria-selected/);
   assert.match(page, /aria-label="Scrollable capability ownership matrix"/);
+  assert.match(page, /aria-label="Choose a local client inventory"/);
+  assert.match(page, /activeCheatClient/);
+  assert.match(page, /Standalone authored skills/);
   assert.match(page, /aria-label="Profile composition diagram"/);
   assert.match(page, /aria-label="Capability installation and authentication flow"/);
   assert.match(page, /prefers-reduced-motion|StatusPill/);
