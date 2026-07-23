@@ -106,6 +106,29 @@
       "server": "ios-simulator-mcp",
       "expected": "absent",
       "severity": "warning"
+    },
+    {
+      "id": "claude.pumpd-automations-plugin",
+      "kind": "claude_plugin",
+      "plugin": "pumpd-automations@agent-tooling",
+      "expected": "enabled",
+      "install": {
+        "run": [
+          "claude",
+          "plugin",
+          "install",
+          "pumpd-automations@agent-tooling"
+        ],
+        "note": "Supplies the ten scheduled automation skills (pumpd-sentry-miner, pumpd-tool-radar, etc.). Deliberately user-scoped rather than project-scoped like pumpd-workflows/cyrus-workflows: automations fire unattended in whatever directory the scheduler uses, so a project-scoped plugin would not be active. Note a registered scheduled task carries its own SKILL.md copy under ~/.claude/scheduled-tasks/ and runs without this plugin; the plugin is what makes the automations invocable interactively."
+      }
+    },
+    {
+      "id": "codex.pumpd-automations-plugin",
+      "kind": "codex_plugin",
+      "plugin": "pumpd-automations@agent-tooling",
+      "expected": "enabled",
+      "severity": "warning",
+      "note": "Advisory pending the Codex pass; the codex CLI is not installed on this workstation."
     }
   ]
 }

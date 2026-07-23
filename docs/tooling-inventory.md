@@ -99,6 +99,18 @@ skill installation is not required.
 | `pumpd-workflows` | `pumpd-local-cleanup` | PUMPD target; Claude project scope, Codex user install | First-party |
 | `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle target; Claude project scope, Codex user install | First-party |
 | `mobile-development` | None; MCP-only | User/workstation; reusable local mobile tooling | First-party wrapper around third-party MCPs |
+| `pumpd-automations` | `pumpd-sentry-miner`, `pumpd-product-miner`, `pumpd-tool-radar`, `pumpd-ai-tooling-radar`, `pumpd-agent-retro`, `pumpd-appstore-readiness`, `pumpd-docs-freshness`, `pumpd-security-scan`, `pumpd-setup-scout`, `pumpd-haiku-window-starter` | PUMPD target; **user scope** in both clients | First-party |
+
+`pumpd-automations` is user-scoped rather than project-scoped like
+`cyrus-workflows` and `pumpd-workflows`: its skills fire unattended from the
+scheduler in whatever directory that run uses, so a project-scoped plugin would
+not be active. Two dependencies are not satisfied by installing the plugin —
+**Linear**, which nearly every automation files Triage suggestions into, is an
+account-side connector rather than a local MCP, and **schedules** live in
+machine-local `~/.claude/scheduled-tasks/<id>/SKILL.md`. A registered task
+carries its own copy of the skill and fires without the plugin; the plugin is
+what makes the automations invocable interactively. See
+[new-machine-setup.md](new-machine-setup.md).
 
 The `wet-in-seattle` wrapper and reporting skill are first-party. The bundled
 `analytics-mcp` executable is Google's third-party server, launched locally
