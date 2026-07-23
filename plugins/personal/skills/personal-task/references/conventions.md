@@ -13,7 +13,7 @@
 - **`personal`** label = Aren's hands-on work; it powers the personal board (filter `assignee:me` + `label:personal`, **Board** layout grouped by **Status**).
 - Statuses: Triage · Backlog · **Todo** (default for new) · In Progress · In Review · Blocked · Plan Requested · Plan Review · Ready for Implementation · Ready to Merge · Done · Canceled.
 - Surface labels: `mobile`, `backend`, `admin`, `website`, `catalog`, `docs`.
-- **AI-driven work is the opposite of personal** — it carries a `delegate` (Codex/Cyrus) and/or labels `codex-intake` / `ai:1`–`ai:5` / `orchestrator` / `pumpd-agent` / `cyrus-stage` / `graphite` / `ai-scan`. Never tag those `personal`.
+- **AI-driven work is the opposite of personal** — it carries a `delegate` (Codex/Cyrus) and/or labels `codex-intake` / `ai:1`–`ai:5` / `orchestrator` / `pumpd-agent` / `cyrus-stage` / `stacked` / `ai-scan`. Never tag those `personal`.
 
 ## Frontmatter (filled by `scripts/new_task_docs.py`)
 Standalone task note:

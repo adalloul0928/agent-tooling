@@ -2,7 +2,7 @@
 name: pumpd-review
 description: >-
   Adversarially review a PUMPD plan BEFORE it goes to Linear. Spawns a red-team
-  panel (assumptions · failure modes · sequencing & the Graphite stack ·
+  panel (assumptions · failure modes · sequencing & the PR stack ·
   security/privacy) plus a completeness/consistency critic and a cross-model Codex (gpt-5.5) lens — each told to assume
   the plan is flawed and find what breaks — then synthesizes a filtered
   punch-list of MATERIAL holes and gates handoff to /pumpd-decompose. Use after
@@ -14,7 +14,7 @@ description: >-
 The quality gate between `/pumpd-plan` and `/pumpd-decompose`. A hole caught here costs one edit; the same hole caught after Cyrus has built a stacked-PR series costs a rebuild.
 
 ## Principle: adversarial, not agreeable
-A single "review this" pass is too soft — it nods along. This spawns **independent skeptics with distinct lenses**, each told to **assume the plan is flawed and find what breaks**, then keeps only **material** findings (would cause a bug, rework, a security issue, or a broken Graphite stack) — not style nits. One lens is **cross-model (Codex / gpt-5.5)** — a skeptic that shares none of Claude's blind spots; where the two models disagree is the highest-signal finding.
+A single "review this" pass is too soft — it nods along. This spawns **independent skeptics with distinct lenses**, each told to **assume the plan is flawed and find what breaks**, then keeps only **material** findings (would cause a bug, rework, a security issue, or a broken PR stack) — not style nits. One lens is **cross-model (Codex / gpt-5.5)** — a skeptic that shares none of Claude's blind spots; where the two models disagree is the highest-signal finding.
 
 ## Inputs
 - A plan note (`PUMPD/Tasks/Todo/<Feature> — Plan.md`). Also load its [[<Feature> — Research]] note and the constitution (`AGENTS.md` + relevant `.claude/rules/`) for the completeness/coupling lenses.
@@ -24,7 +24,7 @@ A single "review this" pass is too soft — it nods along. This spawns **indepen
 2. **Spawn the panel in parallel** (Agent tool — `general-purpose`; use `Explore` for the repo-grep lenses). Give each reviewer the **full plan** and this framing: *"Assume this plan is flawed. Find the holes a careful engineer catches before building. Be specific; propose a concrete fix for each. Ignore style/nits — only surface issues that would cause a bug, rework, a security problem, or a broken build/stack."* The five reviewers:
    - **L1 · Assumptions & unknowns** — what does the plan take for granted? what's underspecified, hand-waved, or "TBD"? what external fact must hold that isn't verified?
    - **L2 · Failure modes & edge cases** — error / empty / offline / race / bad-data / partial-failure paths the plan ignores; the rollback story.
-   - **L3 · Sequencing & the Graphite stack** *(repo-grounded)* — does §8 build **foundational-first**? Is the dependency chain **linear** (A→B→C, no diamonds)? Do `[P]` "parallel" tasks truly touch **disjoint files** (no hidden coupling)? Any task > ~200 LOC or not one coherent change? Does the repo compile/pass at each step?
+   - **L3 · Sequencing & the PR stack** *(repo-grounded)* — does §8 build **foundational-first**? Is the dependency chain **linear** (A→B→C, no diamonds)? Do `[P]` "parallel" tasks truly touch **disjoint files** (no hidden coupling)? Any task > ~200 LOC or not one coherent change? Does the repo compile/pass at each step?
    - **L4 · Security / privacy & data** *(repo-grounded)* — secrets handling, PII, Supabase RLS, data egress, third-party data sharing. Especially live for observability/analytics features.
    - **C · Completeness & consistency** — every Goal & §10 criterion maps to a §8 task; every task has target files + EARS acceptance + a verify command + autonomy; §4 sources present; constitution respected (base `preview`, package boundaries, testing bar).
    Each returns findings as a structured list: `{severity: blocker|major|minor, where: <section/task>, hole: <what>, why: <impact>, fix: <concrete suggestion>}`.

@@ -27,8 +27,8 @@ Two surfaces of the `pumpd-mobile-app` monorepo: **`apps/mobile`** (React Native
 1. Summary · 2. Problem/Context · 3. Goals/**Non-Goals** · 4. Research & **Decisions** (link the research note) · 5. Approach/Architecture · **6. File Structure / Surfaces** · 7. Data Model/Contracts (only if touching Supabase/API) · **8. Decomposition** · 9. Risks/Blockers · 10. **Acceptance Criteria (EARS, testable)** · 11. Rollout/Milestones · 12. Open Questions.
 
 ## Rules that make the plan agent-ready
-- **§6 File Structure BEFORE §8 Decomposition.** Decide which **`apps/mobile`** and/or **`apps/backend`** files change first, then cut tasks along those seams. This is what produces clean, independently-mergeable issues (= clean Graphite stacks, no overlapping PRs).
-- **Each §8 task is a future Linear issue = one Graphite PR.** Give every task: a title, target **Files**, **EARS acceptance** ("WHEN x THE SYSTEM SHALL y"), a **Verify** command (`pnpm …`), **Depends on** (the task below it, or — for the foundational one), `[P]` if parallel, and an **Autonomy** (`ai:1`–`ai:5`). Aim for one coherent change, < ~200 LOC each.
+- **§6 File Structure BEFORE §8 Decomposition.** Decide which **`apps/mobile`** and/or **`apps/backend`** files change first, then cut tasks along those seams. This is what produces clean, independently-mergeable issues (= clean PR stacks, no overlapping PRs).
+- **Each §8 task is a future Linear issue = one stacked PR.** Give every task: a title, target **Files**, **EARS acceptance** ("WHEN x THE SYSTEM SHALL y"), a **Verify** command (`pnpm …`), **Depends on** (the task below it, or — for the foundational one), `[P]` if parallel, and an **Autonomy** (`ai:1`–`ai:5`). Aim for one coherent change, < ~200 LOC each.
 - **Cite the docs (§4 + §5).** Carry the research note's source links into the plan — every decision in §4 and the chosen approach in §5 links to the **official doc / release / reference repo** it's based on, and §4 ends with a consolidated **Sources** list. Anyone (or the Cyrus agent) should be able to click straight to the source. No sourceless claims.
 
 ## Steps
