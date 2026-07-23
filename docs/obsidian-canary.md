@@ -35,8 +35,9 @@ than assumed from a fixed tool-name prefix.
   confirmed.
 - Existing unrelated modifications are preserved and reported.
 - Protected paths and overwrite attempts are refused.
-- New PUMPD tasks route through `PUMPD/Tasks/`; AI tooling routes through
-  `PUMPD/Operations/AI Tooling/`.
+- PUMPD task state routes to Linear, active investigation routes to
+  `PUMPD/Research/`, approved plans route to `PUMPD/Plans/`, and PUMPD-specific
+  agent workflow notes route to `PUMPD/AI Tooling/`.
 - Supporting scripts resolve relative to the installed skill directory.
 
 ## Update canary

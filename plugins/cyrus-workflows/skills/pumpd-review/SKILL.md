@@ -17,10 +17,10 @@ The quality gate between `/pumpd-plan` and `/pumpd-decompose`. A hole caught her
 A single "review this" pass is too soft — it nods along. This spawns **independent skeptics with distinct lenses**, each told to **assume the plan is flawed and find what breaks**, then keeps only **material** findings (would cause a bug, rework, a security issue, or a broken Graphite stack) — not style nits. One lens is **cross-model (Codex / gpt-5.5)** — a skeptic that shares none of Claude's blind spots; where the two models disagree is the highest-signal finding.
 
 ## Inputs
-- A plan note (`PUMPD/Tasks/Todo/<Feature> — Plan.md`). Also load its [[<Feature> — Research]] note and the constitution (`AGENTS.md` + relevant `.claude/rules/`) for the completeness/coupling lenses.
+- A plan note (`PUMPD/Plans/<Topic>.md`). Load its Research Summary, sources, and the constitution (`AGENTS.md` + relevant `.claude/rules/`) for the completeness/coupling lenses.
 
 ## Steps
-1. **Load** the plan, research note, and constitution. Note the surfaces/files §6 says it touches (drives the repo-grounded lenses).
+1. **Load** the plan, its retained research and sources, and the constitution. Note the surfaces/files §6 says it touches (drives the repo-grounded lenses).
 2. **Spawn the panel in parallel** (Agent tool — `general-purpose`; use `Explore` for the repo-grep lenses). Give each reviewer the **full plan** and this framing: *"Assume this plan is flawed. Find the holes a careful engineer catches before building. Be specific; propose a concrete fix for each. Ignore style/nits — only surface issues that would cause a bug, rework, a security problem, or a broken build/stack."* The five reviewers:
    - **L1 · Assumptions & unknowns** — what does the plan take for granted? what's underspecified, hand-waved, or "TBD"? what external fact must hold that isn't verified?
    - **L2 · Failure modes & edge cases** — error / empty / offline / race / bad-data / partial-failure paths the plan ignores; the rollback story.

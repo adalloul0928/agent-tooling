@@ -36,7 +36,7 @@ class NewNoteTests(unittest.TestCase):
         )
 
     def test_creates_structured_pumpd_idea_without_overwriting(self) -> None:
-        relative_path = "PUMPD/Tasks/Todo/Example Idea.md"
+        relative_path = "PUMPD/Research/Example Topic.md"
         result = self.run_script(
             relative_path,
             "--title",
@@ -56,7 +56,7 @@ class NewNoteTests(unittest.TestCase):
         self.assertIn('title: "Example Idea"', content)
         self.assertIn('status: "captured"', content)
         self.assertIn('project: "PUMPD"', content)
-        self.assertIn('area: "Tasks / Todo"', content)
+        self.assertIn('area: "Research"', content)
         self.assertIn("## Raw Idea", content)
 
         second = self.run_script(
@@ -101,7 +101,7 @@ class NewNoteTests(unittest.TestCase):
 
     def test_rejects_non_vault_and_non_markdown_targets(self) -> None:
         not_markdown = self.run_script(
-            "PUMPD/Tasks/Todo/Bad.txt",
+            "PUMPD/Research/Bad.txt",
             "--title",
             "Bad",
         )
