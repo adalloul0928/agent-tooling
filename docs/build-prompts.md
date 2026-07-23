@@ -10,32 +10,42 @@ below.)
 
 ## Driver prompt — paste this into each new session
 
-Instead of copying individual blocks, paste this once per session and it picks
-up the next item:
+Run the session in **plan mode** (in the Claude Code TUI, press Shift+Tab to
+cycle the permission mode to "plan") so the plan comes back with native
+approve / reject buttons. Then paste this once per session:
 
 ```text
-You are helping roll out tooling in the agent-tooling repo. Start on the latest
-main (git checkout main && git pull). Open docs/build-prompts.md and find the
-FIRST unchecked item — a line starting with "- [ ]". Do EXACTLY that one item,
-following the copy-paste prompt block beneath it and the repo conventions in
-AGENTS.md (portable Claude Code + Codex, no hard-coded client paths; validate
-with ./scripts/validate-static).
+You are helping roll out tooling in the agent-tooling repo, ONE item per
+session, with a plan-and-approve gate. Start on the latest main
+(git checkout main && git pull). Open docs/build-prompts.md and find the FIRST
+unchecked item — a line starting with "- [ ]".
 
-- Build item (skill/agent): build it, validate, then change its "- [ ]" to
-  "- [x]" in docs/build-prompts.md, commit on a new branch, and open a PR to main.
-- Install item: run the install, record it in the right profile +
-  docs/tooling-inventory.md, check its box, commit + PR.
-- Connector item needing a token mint or OAuth click: do the parts you can
-  (write config, add profile checks), then STOP and print the exact human steps
-  I must take. Do NOT check the box or claim it done until I confirm.
+DO NOT change any files yet. First:
+1. Read that item's prompt block plus AGENTS.md, docs/tooling-rollout-plan.md,
+   and plugins/developer-workflows/skills/env-topology/SKILL.md as a reference,
+   and inspect whatever the item touches.
+2. Present a concise PLAN for that ONE item for my approval: what you'll
+   create or change and where it lives, how you'll validate
+   (./scripts/validate-static), any human steps I'll need (token mints / OAuth),
+   and any open questions. Present it via plan mode so I get approve / reject
+   buttons. If I want changes, revise the plan and re-present it — do not start
+   until I approve.
 
-Do ONE item only. If the first unchecked item is blocked on a human step I
-haven't done yet, say so and either wait or move to the next item if I tell you
-to. End by reporting which item you did, the PR link, and anything I need to do
+After I approve:
+- Build/install the item, validate with ./scripts/validate-static, change its
+  "- [ ]" to "- [x]" in docs/build-prompts.md, commit on a new branch, and open
+  a PR to main. Portable across Claude Code + Codex; no hard-coded client paths;
+  never commit secrets.
+- If it's a connector needing a token/OAuth from me, do the config parts, then
+  STOP and print the exact human steps; don't check the box until I confirm.
+
+Do ONE item only. End by reporting the item, the PR link, and anything I must do
 by hand.
 ```
 
-To target a specific item instead, append: "Skip to the `<name>` item."
+To target a specific item instead, append: "Skip to the `<name>` item." If a
+plan looks off, just chat with it — it revises and re-presents before doing any
+work.
 
 ## How to use
 
