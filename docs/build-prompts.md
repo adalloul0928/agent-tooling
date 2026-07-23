@@ -89,12 +89,11 @@ mirror. Validate with `./scripts/validate-static`.
   (`claude mcp list` → `sentry … ✔ Connected`). Codex side still open: see the
   `codex.duplicate-*-mcp` guards in `pumpd-workstation`.
 
-- [ ] **Expo MCP** — **REVISED 2026-07-23 → Claude only; Codex deferred.** Landed
+- [x] **Expo MCP** — **REVISED 2026-07-23 → Claude only; Codex deferred.** Landed
   as `claude.expo-mcp` in `profiles/base-workstation.json` with recipe
   `claude mcp add --scope user --transport http expo https://mcp.expo.dev/mcp`,
-  plus an `expo.mcp-oauth` manual check. Already registered at user scope, so the
-  check passes; **box flips once the owner completes browser OAuth** (`/mcp` in an
-  interactive `claude` terminal → authenticate expo).
+  plus an `expo.mcp-oauth` manual check. **Done 2026-07-23** — registered at user
+  scope and OAuth confirmed connected in Claude by the owner.
 
   The original prompt also asked for a `codex_mcp` check and
   `codex mcp add expo --url …`. That was **dropped deliberately**:

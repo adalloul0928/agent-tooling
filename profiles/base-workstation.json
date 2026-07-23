@@ -151,12 +151,12 @@
     {
       "id": "expo.mcp-oauth",
       "description": "Authenticate the Expo hosted MCP (https://mcp.expo.dev/mcp) via browser OAuth in each client, and re-auth when the session lapses. OAuth-only: there is no PAT/header fallback, so this MCP works interactively but must not be depended on in cloud or cron runs.",
-      "last_verified": null
+      "last_verified": "2026-07-23"
     },
     {
       "id": "supabase.mcp-oauth",
       "description": "Authenticate the Supabase hosted MCP (https://mcp.supabase.com/mcp) via browser OAuth, and re-auth when the session lapses.",
-      "last_verified": null
+      "last_verified": "2026-07-23"
     }
   ]
 }
