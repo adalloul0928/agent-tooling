@@ -93,6 +93,28 @@
           "https://mcp.sentry.dev/mcp/avad-technologies-llc/pumpd"],
         "note": "Sentry's hosted remote MCP. Browser OAuth per client on first use. On pumpd-workstation, Codex may instead receive Sentry via the sentry@openai-curated plugin; reconcile to avoid a duplicate server."
       }
+    },
+    {
+      "id": "claude.expo-mcp",
+      "kind": "claude_mcp",
+      "server": "expo",
+      "expected": "present",
+      "install": {
+        "run": ["claude", "mcp", "add", "--scope", "user", "--transport", "http", "expo",
+          "https://mcp.expo.dev/mcp"],
+        "note": "Expo's hosted remote MCP (streamable HTTP). --scope user is required; `claude mcp add` otherwise registers it only in the directory it was run from. OAuth-only with no PAT/CI fallback, so it works interactively but must never be relied on in cloud/cron runs. No Codex twin is asserted here: pumpd-workstation deliberately expects a raw Codex expo MCP to be absent (codex.duplicate-expo-mcp), because Codex receives expo from the openai-curated catalog."
+      }
+    },
+    {
+      "id": "claude.supabase-mcp",
+      "kind": "claude_mcp",
+      "server": "supabase",
+      "expected": "present",
+      "install": {
+        "run": ["claude", "mcp", "add", "--scope", "user", "--transport", "http", "supabase",
+          "https://mcp.supabase.com/mcp"],
+        "note": "Supabase's hosted remote MCP (streamable HTTP), authenticated by browser OAuth — the committed recipe carries no headers or tokens. --scope user is required for the same reason as the other hosted MCPs."
+      }
     }
   ],
   "manual_checks": [
@@ -124,6 +146,16 @@
     {
       "id": "sentry.mcp-oauth",
       "description": "Authenticate the Sentry hosted MCP (https://mcp.sentry.dev/mcp/avad-technologies-llc/pumpd) in each client via browser OAuth, and re-auth when the session lapses. Local scheduled runs (e.g. pumpd-sentry-miner) reuse the local OAuth session, so keeping this authed locally is what keeps those automations working.",
+      "last_verified": "2026-07-23"
+    },
+    {
+      "id": "expo.mcp-oauth",
+      "description": "Authenticate the Expo hosted MCP (https://mcp.expo.dev/mcp) via browser OAuth in each client, and re-auth when the session lapses. OAuth-only: there is no PAT/header fallback, so this MCP works interactively but must not be depended on in cloud or cron runs.",
+      "last_verified": "2026-07-23"
+    },
+    {
+      "id": "supabase.mcp-oauth",
+      "description": "Authenticate the Supabase hosted MCP (https://mcp.supabase.com/mcp) via browser OAuth, and re-auth when the session lapses.",
       "last_verified": "2026-07-23"
     }
   ]

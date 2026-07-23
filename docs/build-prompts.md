@@ -89,20 +89,23 @@ mirror. Validate with `./scripts/validate-static`.
   (`claude mcp list` → `sentry … ✔ Connected`). Codex side still open: see the
   `codex.duplicate-*-mcp` guards in `pumpd-workstation`.
 
-- [ ] **Expo MCP (both clients)** — already added to Claude (`claude mcp list`
-  shows it "Needs authentication" → click OAuth in the app once). Then:
-  - Codex: run `codex mcp add expo --url https://mcp.expo.dev/mcp` and OAuth once.
-  - Wire prompt:
+- [x] **Expo MCP** — **REVISED 2026-07-23 → Claude only; Codex deferred.** Landed
+  as `claude.expo-mcp` in `profiles/base-workstation.json` with recipe
+  `claude mcp add --scope user --transport http expo https://mcp.expo.dev/mcp`,
+  plus an `expo.mcp-oauth` manual check. **Done 2026-07-23** — registered at user
+  scope and OAuth confirmed connected in Claude by the owner.
 
-  ```text
-  In the agent-tooling repo, add claude_mcp + codex_mcp checks for the Expo MCP
-  server "expo" (https://mcp.expo.dev/mcp) to profiles/base-workstation.json,
-  each with an install recipe (`claude mcp add --transport http expo <url>` /
-  `codex mcp add expo --url <url>`) and a manual_checks note that first use needs
-  browser OAuth per client. Record it in docs/tooling-inventory.md, noting it is
-  OAuth-only with no CI/headless fallback. Validate with ./scripts/validate-static,
-  branch, open a PR.
-  ```
+  The original prompt also asked for a `codex_mcp` check and
+  `codex mcp add expo --url …`. That was **dropped deliberately**:
+  `pumpd-workstation` already asserts `codex.duplicate-expo-mcp` →
+  `expected: absent` (Codex receives expo from the `openai-curated` catalog), so a
+  `present` check on the same server would be a direct contradiction. Owner's call
+  was to finish Claude first, then do a dedicated Codex pass that settles
+  curated-vs-raw for expo *and* sentry together. `codex` CLI was also not on PATH,
+  so that side could not be verified here.
+
+  Expo is **OAuth-only with no PAT/CI fallback** — interactive use only; never
+  depend on it in cloud/cron runs.
 
 - [ ] **expo/skills subset** — install + record:
 
