@@ -70,6 +70,29 @@
       "setting": "disableClaudeAiConnectors",
       "expected": true,
       "severity": "warning"
+    },
+    {
+      "id": "claude.sentry-mcp",
+      "kind": "claude_mcp",
+      "server": "sentry",
+      "expected": "present",
+      "install": {
+        "run": ["claude", "mcp", "add", "--scope", "user", "--transport", "http", "sentry",
+          "https://mcp.sentry.dev/mcp/avad-technologies-llc/pumpd"],
+        "note": "Sentry's hosted remote MCP (streamable HTTP). --scope user is required: `claude mcp add` defaults to local/project scope, which would make the server visible only in the directory it was added from and hide it from the PUMPD checkout where the Sentry automations run. First use opens browser OAuth; re-auth in the browser when the session lapses. This is a client-local registration, independent of the claude.ai account connectors that disableClaudeAiConnectors turns off."
+      }
+    },
+    {
+      "id": "codex.sentry-mcp",
+      "kind": "codex_mcp",
+      "server": "sentry",
+      "expected": "present",
+      "severity": "warning",
+      "install": {
+        "run": ["codex", "mcp", "add", "sentry", "--url",
+          "https://mcp.sentry.dev/mcp/avad-technologies-llc/pumpd"],
+        "note": "Sentry's hosted remote MCP. Browser OAuth per client on first use. On pumpd-workstation, Codex may instead receive Sentry via the sentry@openai-curated plugin; reconcile to avoid a duplicate server."
+      }
     }
   ],
   "manual_checks": [
@@ -97,6 +120,11 @@
       "id": "hosted.chatgpt-account",
       "description": "Verify supported ChatGPT/Codex hosted plugins and connectors separately from local Codex.",
       "last_verified": null
+    },
+    {
+      "id": "sentry.mcp-oauth",
+      "description": "Authenticate the Sentry hosted MCP (https://mcp.sentry.dev/mcp/avad-technologies-llc/pumpd) in each client via browser OAuth, and re-auth when the session lapses. Local scheduled runs (e.g. pumpd-sentry-miner) reuse the local OAuth session, so keeping this authed locally is what keeps those automations working.",
+      "last_verified": "2026-07-23"
     }
   ]
 }

@@ -364,6 +364,16 @@ Items marked **[pending]** need an owner answer (listed at the end).
   **mobile = npm, backend = pnpm, edge/e2e = deno.** `worktree-bootstrap` detects per-dir.
 
 ### Changed items
+- **R2 Sentry stdio-token → REVISED to hosted OAuth remote (2026-07-23).** Owner chose Sentry's
+  hosted MCP (`https://mcp.sentry.dev/mcp`, project-scoped `avad-technologies-llc/pumpd`) over the
+  `@sentry/mcp-server` stdio + Doppler-token approach. Rationale: scheduled automations
+  (`pumpd-sentry-miner`) run from **local** Claude and reuse the **local** Sentry OAuth session, so
+  the headless re-auth wall that motivated the original stdio switch does not apply here; owner
+  accepts periodic browser re-auth. Added per client via `claude mcp add --transport http` /
+  `codex mcp add --url`, tracked as `claude.sentry-mcp` / `codex.sentry-mcp` in `base-workstation`.
+  No `plugins/mobile-development/.mcp.json` block and no `SENTRY_ACCESS_TOKEN` — the earlier
+  "remove OAuth-remote connector" note is void. Note `sentry@openai-curated` still supplies Codex a
+  Sentry capability on `pumpd-workstation`; reconcile the raw vs curated server if both are enabled.
 - **R6 review-and-pr → SPLIT.** `create-pr` = mechanical action skill (full gate → commit → push
   → PR to `preview`). Plus a **review agent** (subagent) composing existing review skills —
   `thermo-nuclear-code-quality-review`, `security-review`, a correctness pass — in parallel, one

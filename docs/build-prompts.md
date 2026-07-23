@@ -72,32 +72,22 @@ mirror. Validate with `./scripts/validate-static`.
 
 ## Phase 1 — Batch 1 finish (connectors + first vendor install)
 
-- [ ] **Sentry MCP** — DECIDED: stdio `@sentry/mcp-server` + `SENTRY_ACCESS_TOKEN`
-  via Doppler. Research confirmed the claude.ai "Web" connector works in Claude
-  Code CLI only under an active subscription login (not with an API key /
-  setup-token) and can never re-auth headlessly — that is the ~52-session
-  re-auth wall — and you already run `disableClaudeAiConnectors: true`, so it is
-  off in your CLI today. stdio is the only headless-safe, cross-client (Claude
-  Code + Codex), no-re-auth option; keep `disableClaudeAiConnectors: true` so the
-  stdio server doesn't collide with a duplicate OAuth connector. Human step
-  first: mint a Sentry User Auth Token (scopes `org:read, project:read,
-  project:write, team:read, team:write, event:write`) and set it into Doppler:
-  `doppler secrets set SENTRY_ACCESS_TOKEN --project agent-tooling --config prd`.
-  Then the wire prompt:
-
-  ```text
-  In the agent-tooling repo, add a Sentry MCP server to
-  plugins/mobile-development/.mcp.json using the EXISTING heroui-native-pro block
-  in that file as the exact pattern: launch @sentry/mcp-server (stdio) with its
-  access token injected at runtime via `doppler run --project agent-tooling
-  --config prd --only-secrets SENTRY_ACCESS_TOKEN --no-fallback --command "exec
-  npx -y @sentry/mcp-server@latest --access-token=$SENTRY_ACCESS_TOKEN"`. Verify
-  the exact server package, flag, and required scopes against the official Sentry
-  MCP docs first; never commit the token. Add matching claude_mcp + codex_mcp
-  checks (with install recipes) to profiles/base-workstation.json and record the
-  server in docs/tooling-inventory.md. Validate with ./scripts/validate-static,
-  then branch and open a PR to main.
-  ```
+- [x] **Sentry MCP** — **REVISED 2026-07-23 → hosted OAuth remote** (supersedes the
+  original stdio-token plan; see `docs/tooling-discovery-2026-07.md` → Changed
+  items → R2). Owner chose Sentry's hosted MCP (`https://mcp.sentry.dev/mcp`,
+  project-scoped `avad-technologies-llc/pumpd`) over `@sentry/mcp-server` stdio + a Doppler
+  token: the scheduled automations run from **local** Claude and reuse the
+  **local** Sentry OAuth session, so the headless re-auth wall that motivated the
+  stdio plan doesn't apply, and the owner accepts periodic browser re-auth.
+  Landed as per-client checks `claude.sentry-mcp` / `codex.sentry-mcp` in
+  `profiles/base-workstation.json` with `claude mcp add --scope user --transport
+  http sentry <url>` / `codex mcp add sentry --url <url>` install recipes — no
+  `plugins/mobile-development/.mcp.json` block and no `SENTRY_ACCESS_TOKEN`.
+  `--scope user` is required: `claude mcp add` defaults to local/project scope,
+  which hides the server from the PUMPD checkout where the Sentry automations
+  run. **Done 2026-07-23** — registered at user scope and OAuth confirmed
+  (`claude mcp list` → `sentry … ✔ Connected`). Codex side still open: see the
+  `codex.duplicate-*-mcp` guards in `pumpd-workstation`.
 
 - [ ] **Expo MCP (both clients)** — already added to Claude (`claude mcp list`
   shows it "Needs authentication" → click OAuth in the app once). Then:

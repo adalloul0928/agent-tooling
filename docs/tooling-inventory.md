@@ -245,11 +245,11 @@ plugin owns the full integration.
 
 | Scope | Claude | Codex |
 | --- | --- | --- |
-| User raw MCPs | Authenticated remote `supabase` | Figma, Node REPL, and disabled Computer Use runtime entry |
+| User raw MCPs | Authenticated remote `supabase` and `sentry` (hosted `mcp.sentry.dev`, project-scoped `avad-technologies-llc/pumpd`, browser OAuth) | Figma, Node REPL, authenticated remote `sentry`, and disabled Computer Use runtime entry |
 | Developer Workflows plugin | Doppler-backed `heroui-pro` | Doppler-backed `heroui-pro` |
 | Wet In Seattle plugin | Doppler-backed `analytics-mcp` | Doppler-backed `analytics-mcp` |
 | Mobile Development plugin | `ios-simulator-mcp`, `heroui-native`, Doppler-backed `heroui-native-pro` | Same three plugin-provided MCPs |
-| Other plugin-provided | Context7, Linear, Playwright, and Sentry MCPs; Supabase skills paired with the user MCP | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel, and XcodeBuildMCP |
+| Other plugin-provided | Context7, Linear, and Playwright MCPs; Supabase skills paired with the user MCP | Curated/runtime equivalents such as Linear, GitHub, Sentry, Supabase, Expo, Vercel, and XcodeBuildMCP |
 | PUMPD project | `.mcp.json`: `supabase_local` | `.codex/config.toml`: `context7`, `playwright` |
 | Other intentional local capabilities | Supplied by the applicable plugin or local config | Figma, GitHub, Node REPL, Xcode tooling, and Sites design tooling where needed |
 
