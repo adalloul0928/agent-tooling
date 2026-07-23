@@ -47,7 +47,7 @@ one PR.
 
 | Item | Lane | Status | Notes |
 |---|---|---|---|
-| `doppler-cli-skill` | C | pending | Names-only env-mesh queries via Doppler CLI; feeds env-topology; works where the MCP isn't loaded (CI/headless/Codex) |
+| `doppler-cli-skill` | C | **done** | `plugins/developer-workflows/skills/doppler-cli-skill/`. Names-only live queries via the Doppler CLI; live companion to `env-topology`'s static map. **Primary** Doppler path, not a fallback — the Doppler MCP was retired the same day (see Connector posture). Encodes the verified config topology (`preview` not `stg` on `pumpd-website`; `prd`-only on `agent-tooling`/`pumpd-ci`/`pumpd-keymat`) and the `doppler run` injection pattern |
 | `worktree-bootstrap` | C | pending | Detect per-dir manager (mobile npm, backend pnpm, edge deno) → install → materialize env (mobile `eas env:pull`; others `doppler run`) → patch-package. No blind `.env` copy |
 | `create-pr` | C | pending | Full gate (lint + typecheck + entire suite, real counts, no tail/head) → commit → push → PR to `preview`; Linear link |
 | Review agent | C | pending | Claude-native agent composing thermo-nuclear + security-review + correctness in parallel; one synthesized verdict |
@@ -89,7 +89,13 @@ one PR.
 
 ## Connector posture (approved)
 
-- Keep the Doppler MCP; harden to a read-only scoped token (`--project/--config`).
+- **Doppler MCP: retired 2026-07-23** (reverses the earlier "keep + harden"
+  decision). It was not installed on any surface, was used 7× in 60 days, served
+  stale cached tokens, and is secret-bearing + experimental. `doppler-cli-skill`
+  is now the primary way to query Doppler — names-only by rule, and it also works
+  in CI, headless, and non-Claude clients. Do **not** reinstate the MCP. The
+  Doppler **CLI** stays load-bearing: it injects secrets at runtime for every
+  tokened MCP (`heroui-pro`, `heroui-native-pro`, `analytics-mcp`).
 - Keep idle personal connectors mounted (TickTick, Gmail, Raindrop, Canva,
   Drive) — activation targets, not dead weight.
 - Verify Linear stays connected (`personal-task`/`sim-qa` depend on it).

@@ -397,11 +397,25 @@ Items marked **[pending]** need an owner answer (listed at the end).
   default); skip `shopify-use-shopify-cli` (store-write). Consume, don't fork.
 - **R19 reanimated-worklets → DROPPED**, replaced by SWM skills (below) — they cover
   worklets/bundle-mode properly. The real pain is Bundle Mode × Uniwind, not the directive.
-- **Doppler MCP → KEEP (owner) + harden + add CLI skill.** Keep the MCP as interactive console
-  (harden to a read-only scoped token, `--project/--config`). No official Doppler *coding* skill
-  exists → **build a first-party Doppler CLI skill** that feeds `env-topology` and runs in
-  CI/headless/Codex where the MCP isn't loaded. Keep runtime-injection for launching tokened
-  servers. Three distinct lanes.
+- ~~**Doppler MCP → KEEP (owner) + harden + add CLI skill.**~~ **SUPERSEDED 2026-07-23 — see
+  "Doppler MCP → RETIRED" below.** (Original: keep the MCP as interactive console, hardened to a
+  read-only scoped token; build a first-party Doppler CLI skill that feeds `env-topology` and runs
+  in CI/headless/Codex where the MCP isn't loaded; keep runtime-injection for launching tokened
+  servers. Three distinct lanes.)
+- **Doppler MCP → RETIRED (2026-07-23), reversing the KEEP decision above.** Auditing the three
+  Doppler lanes before building the CLI skill showed the MCP lane was empty and not worth
+  refilling: it was **installed on no surface** (Claude user scope held only `expo`/`sentry`/
+  `supabase`; the `command = "doppler"` entry in Codex config is `heroui-pro` being *launched
+  through* Doppler — the injection lane, not the MCP), it was used **7× in 60 days** against a
+  friction profile that was *"knowledge, not access"*, it served **stale cached tokens**, and it is
+  secret-bearing + experimental (5★) against this repo's no-secrets posture. C2 and C3 had both
+  independently said SKIP; the owner override predated the CLI skill's existence. `doppler-cli-skill`
+  now covers the same live-lookup need names-only and in strictly more contexts (CI, headless,
+  non-Claude clients), consistent with the repo's own heuristic that knowledge/reference → skill
+  *"even when an MCP exists"*. **Two lanes remain, not three:** the CLI skill (live queries) and
+  runtime injection (`doppler run` launching tokened servers). Do not reinstate the MCP. This also
+  resolves the open question about whether the connected server was official `@dopplerhq/mcp-server`
+  or a community fork — moot, since nothing is connected.
 - **GitHub MCP → REMOVED** (owner: `gh` CLI suffices).
 
 ### New candidates (round-2 research)
