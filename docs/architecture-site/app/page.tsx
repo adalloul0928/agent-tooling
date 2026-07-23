@@ -407,6 +407,12 @@ const ownedBundles = [
     skills: ["ios-simulator-mcp", "heroui-native", "heroui-native-pro"],
     note: "MCP-only bundle for reusable mobile tooling. Doppler injects the licensed HeroUI Native Pro token without committing it.",
   },
+  {
+    name: "mobile-development",
+    scope: "Base workstation",
+    skills: ["ios-simulator-mcp", "heroui-native", "heroui-native-pro"],
+    note: "MCP-only bundle for reusable mobile tooling. Doppler injects the licensed HeroUI Native Pro token without committing it.",
+  },
 ];
 
 const projectSkills = [

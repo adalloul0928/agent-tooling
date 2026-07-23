@@ -103,7 +103,7 @@
     {
       "id": "codex.duplicate-ios-simulator-mcp",
       "kind": "codex_mcp",
-      "server": "ios_simulator",
+      "server": "ios-simulator-mcp",
       "expected": "absent",
       "severity": "warning"
     }
