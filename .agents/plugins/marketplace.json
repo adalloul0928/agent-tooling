@@ -17,7 +17,6 @@
       "category": "Productivity"
     },
     {
-<<<<<<< HEAD
       "name": "developer-workflows",
       "source": {
         "source": "local",
@@ -30,8 +29,6 @@
       "category": "Developer Tools"
     },
     {
-=======
->>>>>>> codex/add-tooling-bundles
       "name": "pumpd-workflows",
       "source": {
         "source": "local",
@@ -44,17 +41,10 @@
       "category": "Developer Tools"
     },
     {
-<<<<<<< HEAD
       "name": "cyrus-workflows",
       "source": {
         "source": "local",
         "path": "./plugins/cyrus-workflows"
-=======
-      "name": "agent-ops",
-      "source": {
-        "source": "local",
-        "path": "./plugins/agent-ops"
->>>>>>> codex/add-tooling-bundles
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -63,24 +53,16 @@
       "category": "Developer Tools"
     },
     {
-<<<<<<< HEAD
       "name": "wet-in-seattle",
       "source": {
         "source": "local",
         "path": "./plugins/wet-in-seattle"
-=======
-      "name": "personal-productivity",
-      "source": {
-        "source": "local",
-        "path": "./plugins/personal-productivity"
->>>>>>> codex/add-tooling-bundles
       },
       "policy": {
         "installation": "AVAILABLE",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
-<<<<<<< HEAD
     },
     {
       "name": "mobile-development",
@@ -93,8 +75,6 @@
         "authentication": "ON_INSTALL"
       },
       "category": "Developer Tools"
-=======
->>>>>>> codex/add-tooling-bundles
     }
   ]
 }

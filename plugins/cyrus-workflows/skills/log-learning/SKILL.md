@@ -14,7 +14,7 @@ description: >-
 Append one dated block to the learnings log so `/pumpd-retro` can act on it later. Fast and low-ceremony — the point is to capture friction the *moment* it happens, not to fix it now.
 
 ## Where
-`PUMPD/Operations/AI Tooling/Agent Learnings.md` in the Obsidian vault. If the legacy `Claude Code Learnings.md` already exists, keep using it until it is deliberately renamed. Locate the vault through the connected Obsidian capability or `$OBSIDIAN_VAULT`; ask once if neither is available. Append under the `## Inbox` heading (newest near the top, above `<!-- new entries go here -->`).
+`PUMPD/AI Tooling/Agent Learnings.md` in the Obsidian vault. Locate the vault through the connected Obsidian capability or `$OBSIDIAN_VAULT`; ask once if neither is available. Append under the `## Inbox` heading (newest near the top, above `<!-- new entries go here -->`).
 
 ## Format — append exactly one block
 ```

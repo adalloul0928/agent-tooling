@@ -19,8 +19,8 @@ Turns a research note into the durable, consistent plan that becomes a Linear ep
 Two surfaces of the `pumpd-mobile-app` monorepo: **`apps/mobile`** (React Native / Expo) and **`apps/backend`** (Supabase / Deno — edge functions, migrations, RLS). §6 File Structure and §8 tasks target those (+ shared `packages/*`); set `surface` to `mobile`, `backend`, or both. Don't plan changes to `apps/admin` (Next.js), `apps/website`, `apps/catalog`, or `apps/docs` — flag any such dependency as out-of-scope.
 
 ## Inputs
-- The research note from `/pumpd-research` (`PUMPD/Research/<Feature> — Research.md`). If none exists, run `/pumpd-research` first.
-- Template: `PUMPD/_Templates/Plan Template.md` (the canonical 12-section format — follow it exactly).
+- The research note from `/pumpd-research` (`PUMPD/Research/<Topic>.md`). If none exists, run `/pumpd-research` first.
+- The canonical 12-section format below. The workflow owns the format; it does not depend on a vault template.
 - Constitution: the repo's `AGENTS.md` + the rules for your surface(s) — **mobile** `.claude/rules/mobile-*.md`, **backend** `.claude/rules/backend-edge-functions.md` + `shared-types.md` (+ `apps/backend/AGENTS.md`). Comply; don't restate.
 
 ## The canonical format (12 sections — every plan, every time)
@@ -36,12 +36,12 @@ Two surfaces of the `pumpd-mobile-app` monorepo: **`apps/mobile`** (React Native
 2. **Draft section by section, with incremental approval.** Present §1-5, get a nod; then §6 (file structure) — this is the load-bearing one, confirm it; then §8 decomposition; then risks/acceptance/milestones. Don't dump the whole plan silently.
 3. **Decompose** per the rules above. Order bottom-up: the foundational task (branches off `preview`) first; mark `[P]` tasks that can run independently. Map tasks → milestones (phases).
 4. **Self-review before finishing** (a quick `/analyze`-style pass): no placeholders/"TBD"; no contradictions; every Goal/§10 criterion has a task; every task names files + a verify command; the dependency chain is linear (A→B→C), not a diamond.
-5. **Write** to `PUMPD/Tasks/Todo/<Feature> — Plan.md` from the template. Set frontmatter `feature`, `surface` (`[mobile]`, `[backend]`, or both), `autonomy`. Cross-link the research note both ways.
+5. **Promote the same topic note.** Move `PUMPD/Research/<Topic>.md` to `PUMPD/Plans/<Topic>.md`, change `type` to `plan`, and retain a concise Research Summary plus the full source list before the 12 plan sections. Do not create a parallel research/plan pair. Set frontmatter `feature`, `surface` (`[mobile]`, `[backend]`, or both), and `autonomy`.
 6. **Review gate.** Run **`/pumpd-review`** on the plan — an adversarial red-team panel + completeness critic that returns a punch-list of material holes. Address blockers and re-run until it's **CLEAR** or **PROCEED-WITH-NOTES**. A plan should not reach `/pumpd-decompose` un-reviewed.
 7. **Hand off.** Summarize the decomposition (task list + dependency order) and the review verdict, then offer to run `/pumpd-decompose` to create the Linear Project + issues.
 
 ## Output
-One plan note in `PUMPD/Tasks/Todo/`. Show `git -C <vault> status --short`. Do not commit unless asked. Leave `linear-project:` blank — `/pumpd-decompose` fills it.
+One plan note in `PUMPD/Plans/`. Show `git -C <vault> status --short`. Do not commit unless asked. Leave `linear-project:` blank — `/pumpd-decompose` fills it.
 
 ## Gate
 Do not proceed to `/pumpd-decompose` until (a) `/pumpd-review` returns CLEAR or PROCEED-WITH-NOTES and (b) the user approves the plan. Decomposition is the expensive, hard-to-undo step.
