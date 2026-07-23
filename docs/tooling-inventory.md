@@ -245,7 +245,7 @@ plugin owns the full integration.
 
 | Scope | Claude | Codex |
 | --- | --- | --- |
-| User raw MCPs | Authenticated remote `supabase` and `sentry` (hosted `mcp.sentry.dev`, project-scoped `avad-technologies-llc/pumpd`, browser OAuth) | Figma, Node REPL, authenticated remote `sentry`, and disabled Computer Use runtime entry |
+| User raw MCPs | Authenticated remote `supabase`, `sentry` (project-scoped `avad-technologies-llc/pumpd`), and `expo` — all hosted, browser-OAuth, registered at **user** scope with `install` recipes in `base-workstation`. `expo` is OAuth-only with no PAT/CI fallback | Figma, Node REPL, authenticated remote `sentry`, and disabled Computer Use runtime entry |
 | Developer Workflows plugin | Doppler-backed `heroui-pro` | Doppler-backed `heroui-pro` |
 | Wet In Seattle plugin | Doppler-backed `analytics-mcp` | Doppler-backed `analytics-mcp` |
 | Mobile Development plugin | `ios-simulator-mcp`, `heroui-native`, Doppler-backed `heroui-native-pro` | Same three plugin-provided MCPs |
