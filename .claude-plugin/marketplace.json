@@ -34,6 +34,11 @@
       "name": "mobile-development",
       "source": "./plugins/mobile-development",
       "description": "Reusable iOS Simulator and HeroUI Native MCP tooling"
+    },
+    {
+      "name": "pumpd-automations",
+      "source": "./plugins/pumpd-automations",
+      "description": "Scheduled PUMPD automation skills that scan, report, and file Linear Triage suggestions"
     }
   ]
 }

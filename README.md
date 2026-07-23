@@ -9,7 +9,7 @@ an application repository.
 
 ## Status
 
-The dual catalogs publish six focused native plugins from shared skill cores
+The dual catalogs publish seven focused native plugins from shared skill cores
 and native MCP adapters:
 
 - `personal`: Obsidian vault, family check-in, and personal task workflows;
@@ -17,6 +17,8 @@ and native MCP adapters:
 - `cyrus-workflows`: PUMPD research, planning, review, delegation, learning,
   and retrospective workflows for Cyrus;
 - `pumpd-workflows`: small local PUMPD maintenance workflows outside Cyrus;
+- `pumpd-automations`: scheduled PUMPD scans that report and file Linear
+  Triage suggestions;
 - `wet-in-seattle`: IAWIS workflows with a Doppler-backed Analytics MCP.
 - `mobile-development`: reusable iOS Simulator and HeroUI Native MCPs, with
   HeroUI Native Pro authentication injected by Doppler.
