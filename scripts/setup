@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""Apply-mode twin of scripts/doctor: plan and run install recipes for a profile.
+
+doctor observes and never mutates; setup executes the fixes doctor reports.
+The contract:
+
+- Profiles remain the single source of desired state. A check may carry an
+  optional `install` object describing how to satisfy it on a fresh machine:
+
+      {
+        "id": "claude.expo-mcp",
+        "kind": "claude_mcp",
+        "server": "expo",
+        "install": {
+          "run": ["claude", "mcp", "add", "--transport", "http", "expo",
+                   "https://mcp.expo.dev/mcp"],
+          "note": "First use opens browser OAuth to the Expo account."
+        }
+      }
+
+- `install.run` is a command (list preferred; a string runs through the shell).
+  `${variables}` and `~` expand exactly as in doctor checks.
+- `install.note` is printed with the plan (OAuth prompts, follow-up steps).
+- Checks without a recipe: `claude_plugin` falls back to
+  `claude plugin install <plugin>`; everything else is listed as TODO rather
+  than guessed.
+- Recipes are committed repo content: never embed secrets or tokens. Commands
+  that need credentials must fetch them at runtime (Doppler) or stay manual.
+
+Default is a dry-run plan; pass --apply to execute. Manual checks are always
+printed as a closing checklist.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from importlib.machinery import SourceFileLoader
+from importlib.util import module_from_spec, spec_from_loader
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_PROFILES_DIR = REPO_ROOT / "profiles"
+
+
+def load_doctor():
+    loader = SourceFileLoader("agent_tooling_doctor", str(REPO_ROOT / "scripts" / "doctor"))
+    spec = spec_from_loader(loader.name, loader)
+    module = module_from_spec(spec)
+    sys.modules[loader.name] = module
+    loader.exec_module(module)
+    return module
+
+
+def plan_action(check: dict[str, Any], result: dict[str, Any], context) -> dict[str, Any]:
+    action: dict[str, Any] = {
+        "id": check["id"],
+        "kind": check["kind"],
+        "status": result["status"],
+        "message": result["message"],
+        "command": None,
+        "note": None,
+    }
+    install = check.get("install")
+    if isinstance(install, dict):
+        run = install.get("run")
+        if isinstance(run, list):
+            action["command"] = [context.expand(str(item)) for item in run]
+        elif isinstance(run, str):
+            action["command"] = context.expand(run)
+        note = install.get("note")
+        if isinstance(note, str):
+            action["note"] = note
+        return action
+
+    if check["kind"] == "claude_plugin" and check.get("expected", "enabled") == "enabled":
+        action["command"] = ["claude", "plugin", "install", check["plugin"]]
+        return action
+
+    return action
+
+
+def execute(command) -> int:
+    if isinstance(command, str):
+        completed = subprocess.run(command, shell=True)
+    else:
+        completed = subprocess.run(command)
+    return completed.returncode
+
+
+def render_command(command) -> str:
+    if isinstance(command, str):
+        return command
+    return " ".join(str(part) for part in command)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("profile", nargs="?", default="pumpd-workstation", help="profile name or JSON path")
+    parser.add_argument("--profiles-dir", type=Path, default=DEFAULT_PROFILES_DIR)
+    parser.add_argument("--home", type=Path, default=Path.home(), help="home directory to inspect")
+    parser.add_argument("--project-root", type=Path, help="override the profile's project_root variable")
+    parser.add_argument("--apply", action="store_true", help="execute planned commands (default: dry-run)")
+    parser.add_argument("--only", action="append", default=[], help="limit to specific check ids (repeatable)")
+    parser.add_argument("--include-warnings", action="store_true", help="also plan fixes for WARN results")
+    parser.add_argument("--json", action="store_true", help="emit the plan as JSON and exit")
+    args = parser.parse_args()
+
+    doctor = load_doctor()
+    try:
+        selected = doctor.profile_path(args.profile, args.profiles_dir)
+        profile = doctor.load_profile(selected, args.profiles_dir.resolve())
+        if args.project_root is not None:
+            if "project_root" not in profile["variables"]:
+                raise doctor.ProfileError("--project-root requires a profile with a project_root variable")
+            profile["variables"]["project_root"] = str(args.project_root.resolve())
+        doctor.validate_definition(profile)
+        report = doctor.run(profile, args.home)
+    except (OSError, doctor.ProfileError, KeyError, TypeError) as exc:
+        print(f"setup configuration error: {exc}", file=sys.stderr)
+        return 65
+
+    context = doctor.Context(home=args.home.resolve(), variables=profile["variables"])
+    checks_by_id = {check["id"]: check for check in profile["checks"]}
+    wanted_statuses = {"fail", "warn"} if args.include_warnings else {"fail"}
+
+    actions = []
+    for result in report["results"]:
+        if result["status"] not in wanted_statuses:
+            continue
+        if args.only and result["id"] not in args.only:
+            continue
+        check = checks_by_id.get(result["id"])
+        if check is None:
+            continue
+        actions.append(plan_action(check, result, context))
+
+    manual = [item for item in report["results"] if item["status"] == "manual"]
+
+    if args.json:
+        print(json.dumps({"profile": report["profile"], "actions": actions, "manual": manual}, indent=2))
+        return 0
+
+    print(f"profile: {report['profile']}  (doctor: "
+          + ", ".join(f"{key}={report['summary'][key]}" for key in ("pass", "warn", "fail", "manual")) + ")")
+    print()
+
+    if not actions:
+        print("nothing to fix — all required checks pass.")
+    runnable = [action for action in actions if action["command"] is not None]
+    todo = [action for action in actions if action["command"] is None]
+
+    for action in runnable:
+        print(f"[run ] {action['id']}")
+        print(f"        $ {render_command(action['command'])}")
+        if action["note"]:
+            print(f"        note: {action['note']}")
+    for action in todo:
+        print(f"[todo] {action['id']} — no install recipe; add an `install` block to this check")
+        print(f"        state: {action['message']}")
+
+    failures = []
+    if args.apply and runnable:
+        print()
+        for action in runnable:
+            print(f"→ {action['id']}: {render_command(action['command'])}")
+            code = execute(action["command"])
+            if code != 0:
+                failures.append((action["id"], code))
+                print(f"  exited {code}", file=sys.stderr)
+        print()
+        after = doctor.run(profile, args.home)
+        print("doctor after apply: "
+              + ", ".join(f"{key}={after['summary'][key]}" for key in ("pass", "warn", "fail", "manual")))
+        if after["summary"]["fail"] or failures:
+            for check_id, code in failures:
+                print(f"fix failed: {check_id} (exit {code})", file=sys.stderr)
+            return 1
+    elif runnable:
+        print()
+        print(f"dry-run: {len(runnable)} command(s) planned — re-run with --apply to execute.")
+
+    if manual:
+        print()
+        print("manual checklist (setup never automates these):")
+        for item in manual:
+            print(f"○ {item['id']} — {item['message']}")
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
