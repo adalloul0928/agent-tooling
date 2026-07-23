@@ -122,3 +122,16 @@ Rules:
   need credentials fetch them at runtime (Doppler) or stay in `manual_checks`.
 - Vendor skills installed via `npx skills add` are tracked as `path` checks on
   the installed `SKILL.md` with the add command as their recipe.
+- **Recipes must pin scope explicitly.** Both installers this repo relies on
+  default to the *current directory*, not the user: `claude mcp add` needs
+  `--scope user` and `skills add` needs `-g`. A recipe that omits them appears to
+  succeed while registering the capability only where it happened to run — which
+  is not reproducible, and hides it from the checkouts that need it. Both bugs
+  were hit on 2026-07-23; `claude mcp list` showed the server while `doctor`
+  correctly reported it missing, because doctor reads user scope.
+- **A `warning`-severity check's `install` recipe never executes.** `setup` only
+  plans fixes for *failing required* checks, so an advisory check reports
+  "nothing to fix" and its recipe is inert. Give a check `warning` severity when
+  you want drift surfaced but not auto-repaired; leave it required when you want
+  `setup --apply` to reproduce it. Deciding severity is therefore a decision
+  about automation, not just about noise.
