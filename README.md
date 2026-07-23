@@ -73,6 +73,13 @@ remain candidates for a later optional layer. See [docs/apm-spike.md](docs/apm-s
    Git-review canaries.
 5. Remove the matching standalone copies only after the relevant canaries pass.
 
+## Setting up a new machine
+
+[docs/new-machine-setup.md](docs/new-machine-setup.md) is the ordered runbook:
+prerequisites, `doppler login`, marketplace and plugin installs,
+`./scripts/setup <profile> --apply`, MCP OAuth, the automations, and the
+account-side steps that cannot be automated.
+
 ## Validation
 
 Run the cross-client validation and isolated Claude/Codex install smoke tests:
