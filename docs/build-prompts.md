@@ -75,7 +75,7 @@ mirror. Validate with `./scripts/validate-static`.
 - [ ] **Sentry MCP** — **REVISED 2026-07-23 → hosted OAuth remote** (supersedes the
   original stdio-token plan; see `docs/tooling-discovery-2026-07.md` → Changed
   items → R2). Owner chose Sentry's hosted MCP (`https://mcp.sentry.dev/mcp`,
-  org-scoped `avad-technologies-llc`) over `@sentry/mcp-server` stdio + a Doppler
+  project-scoped `avad-technologies-llc/pumpd`) over `@sentry/mcp-server` stdio + a Doppler
   token: the scheduled automations run from **local** Claude and reuse the
   **local** Sentry OAuth session, so the headless re-auth wall that motivated the
   stdio plan doesn't apply, and the owner accepts periodic browser re-auth.

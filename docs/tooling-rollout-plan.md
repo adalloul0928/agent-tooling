@@ -39,7 +39,7 @@ one PR.
 |---|---|---|---|
 | `env-topology` skill | C | **done** | `plugins/developer-workflows/skills/env-topology/`; validate-static green; Codex-side smoke test pending (codex CLI not on the authoring shell's PATH) |
 | `scripts/setup` apply mode + `install` recipe convention | C | **done** | Documented in [profiles-and-doctor.md](profiles-and-doctor.md); dry-run default |
-| Sentry → hosted OAuth remote (`mcp.sentry.dev`) | A | landed · owner OAuth | **Decision revised 2026-07-23:** owner chose Sentry's hosted remote MCP over the stdio-token approach. Added per client via `claude mcp add --transport http` / `codex mcp add --url` (org-scoped `avad-technologies-llc`), tracked as `claude.sentry-mcp` / `codex.sentry-mcp` in `base-workstation`. Local OAuth, reused by local scheduled runs; no detached-cloud/headless path. Owner completes the browser OAuth per client |
+| Sentry → hosted OAuth remote (`mcp.sentry.dev`) | A | landed · owner OAuth | **Decision revised 2026-07-23:** owner chose Sentry's hosted remote MCP over the stdio-token approach. Added per client via `claude mcp add --transport http` / `codex mcp add --url` (project-scoped `avad-technologies-llc/pumpd`), tracked as `claude.sentry-mcp` / `codex.sentry-mcp` in `base-workstation`. Local OAuth, reused by local scheduled runs; no detached-cloud/headless path. Owner completes the browser OAuth per client |
 | Expo MCP (both clients) | A | pending | `claude mcp add --transport http expo https://mcp.expo.dev/mcp` / `codex mcp add expo --url …`; owner clicks OAuth per client. OAuth-only — never relied on in CI/cron |
 | `expo/skills` subset | B | pending | expo-router, expo-module, expo-tailwind-setup, expo-upgrade, eas-app-stores, eas-workflows, eas-observe, eas-simulator, expo-examples |
 
