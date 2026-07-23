@@ -134,22 +134,26 @@ mirror. Validate with `./scripts/validate-static`.
 
 ## Phase 2 — Batch 2 workflow core (build)
 
-- [ ] **doppler-cli-skill**
+- [x] **doppler-cli-skill** — **Done 2026-07-23.** Built at
+  `plugins/developer-workflows/skills/doppler-cli-skill/SKILL.md` as the live
+  companion to `env-topology`'s static map: that skill says where a variable
+  *should* live, this one says what is *actually* in Doppler now.
 
-  ```text
-  Build the `doppler-cli-skill` skill in the agent-tooling repo. Read AGENTS.md,
-  docs/tooling-rollout-plan.md, and plugins/developer-workflows/skills/
-  env-topology/SKILL.md first (this skill is env-topology's live companion).
-  Place it at plugins/developer-workflows/skills/doppler-cli-skill/SKILL.md.
-  It teaches an agent to answer env/secret-placement questions LIVE via the
-  Doppler CLI (names only) in contexts where the Doppler MCP is not loaded
-  (CI, headless, Codex): `doppler projects --json`, `doppler configs --project
-  <p> --json`, `doppler secrets --only-names --project <p> --config <c>`. Hard
-  rule the skill must enforce: NEVER print secret values — names only, always
-  `--only-names`. Confirm the real project/config names by running the commands
-  yourself while authoring. Acceptance: passes ./scripts/validate-static; never
-  emits values. Branch claude/doppler-cli-skill, commit, open a PR to main.
-  ```
+  **Reframed from the original prompt.** It was written as a fallback "for
+  contexts where the Doppler MCP is not loaded." The Doppler MCP was **retired
+  the same day** (not installed on any surface, 7 uses in 60 days, served stale
+  cached tokens, secret-bearing + experimental — see
+  `docs/tooling-discovery-2026-07.md` → *Doppler MCP → RETIRED*), so this skill is
+  the **primary** Doppler path, not a backup. Two lanes remain, not three: this
+  skill for live queries, and `doppler run` for runtime injection into tokened
+  servers.
+
+  Encodes the hard names-only rule (including that plain `doppler secrets`
+  without `--only-names` prints values — the actual footgun), the config topology
+  verified live at authoring time (`preview` not `stg` on `pumpd-website`;
+  `prd`-only on `agent-tooling`/`pumpd-ci`/`pumpd-keymat`), a config-diff recipe
+  for "why does prd work but dev not", and troubleshooting for doppler-wrapped
+  MCPs that fail to start.
 
 - [ ] **worktree-bootstrap**
 
