@@ -192,6 +192,32 @@ These lists are the intended inventory, not a claim that every item is enabled
 or authenticated on every machine. Profiles should require only the stable
 subset that is genuinely expected.
 
+### Vendor skills installed with the `skills` CLI
+
+`expo/skills` (MIT, <https://github.com/expo/skills>) is **installed, not
+mirrored**. A deliberate 9-skill subset of the 23 it ships is tracked as `path`
+checks in `base-workstation`, each carrying its own
+`npx skills@latest add expo/skills -g -y --agent claude-code --skill <name>`
+recipe:
+
+`eas-app-stores`, `eas-workflows`, `expo-dev-client`, `expo-examples`,
+`expo-module`, `expo-project-structure`, `expo-router`, `expo-tailwind-setup`,
+`expo-upgrade`.
+
+Subset size is deliberate: every installed skill's description is loaded for
+trigger matching, so unused skills are a standing context cost. Two skills the
+July discovery had listed were dropped at install time — `eas-simulator` (its own
+guidance tells macOS users with local simulators not to auto-trigger it, and
+`ios-simulator-mcp` covers that need) and `eas-observe` (paid EAS APM that
+overlaps the Sentry MCP). `expo-project-structure` and `expo-dev-client` were
+added in their place.
+
+Installed **Claude-only** (`--agent claude-code`); Codex is deferred to its own
+pass. Two CLI details worth remembering: `skills add` defaults to *project*
+scope, so `-g` is required for a user-level install, and `--skill` accepts one
+skill per flag (repeat the flag to batch). Skills land at
+`~/.claude/skills/<name>/SKILL.md`.
+
 ## PUMPD project-owned skills
 
 Skills required to work correctly in PUMPD live in the PUMPD repository, not
