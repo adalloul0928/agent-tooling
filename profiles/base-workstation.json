@@ -77,9 +77,9 @@
       "server": "sentry",
       "expected": "present",
       "install": {
-        "run": ["claude", "mcp", "add", "--transport", "http", "sentry",
+        "run": ["claude", "mcp", "add", "--scope", "user", "--transport", "http", "sentry",
           "https://mcp.sentry.dev/mcp/avad-technologies-llc/pumpd"],
-        "note": "Sentry's hosted remote MCP (streamable HTTP). First use opens browser OAuth; re-auth in the browser when the session lapses. This is a local MCP registration, independent of the claude.ai account connectors that disableClaudeAiConnectors turns off."
+        "note": "Sentry's hosted remote MCP (streamable HTTP). --scope user is required: `claude mcp add` defaults to local/project scope, which would make the server visible only in the directory it was added from and hide it from the PUMPD checkout where the Sentry automations run. First use opens browser OAuth; re-auth in the browser when the session lapses. This is a client-local registration, independent of the claude.ai account connectors that disableClaudeAiConnectors turns off."
       }
     },
     {
