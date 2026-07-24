@@ -45,6 +45,8 @@ Install **Claude Code** from its official installer, then confirm `claude` is on
 
 ```bash
 uv tool install skills-ref                  # provides the `agentskills` binary
+uv tool update-shell                        # REQUIRED: puts ~/.local/bin on PATH
+exec $SHELL -l                              # reload so the change takes effect
 agentskills --version                       # expect 0.1.1+
 ```
 
@@ -145,9 +147,43 @@ They need three things beyond the plugin itself:
    state, so **a new Mac starts with none of them** and each must be re-created.
 
    Ask Claude to set one up by name, e.g. *"set pumpd-sentry-miner up as a
-   recurring task."* As of 2026-07-23 only `pumpd-tool-radar` was registered, and
-   as manual-only — so there is very little to re-create today. Check the source
-   machine with `list_scheduled_tasks` before assuming otherwise.
+   recurring task."*
+
+   **Enumerate the source machine first — do not trust a count from any doc,
+   including this one.** The store is per-session, so what one machine reports is
+   not what another has. `list_scheduled_tasks` shows only the sessions it can
+   see; read the JSON directly (below) for the true picture.
+
+### The `cwd` trap — the highest-risk step on this page
+
+Every scheduled task carries a **working directory**, inherited from whichever
+session created it. It decides which repo the automation actually inspects.
+
+**Nothing surfaces it.** The scheduled-task tools return `taskId`, `description`,
+`path`, `schedule`, `enabled` and `jitterSeconds` — **not `cwd`**. Neither you nor
+an agent can see or set it through them. It lives only in the desktop app store:
+
+```
+~/Library/Application Support/Claude/claude-code-sessions/<workspace>/<session>/scheduled-tasks.json
+```
+
+Read it directly:
+
+```bash
+find ~/Library/Application\ Support/Claude/claude-code-sessions \
+  -name scheduled-tasks.json -exec \
+  jq -r '.scheduledTasks[] | "\(.id)  cwd=\(.cwd)"' {} \;
+```
+
+**On a new machine every task inherits the cwd of the session that created it**,
+which is usually wrong — and the failure is silent. A miner pointed at the wrong
+repo does not error; it finds nothing and files nothing, which is
+indistinguishable from a genuinely quiet week. Set each task's `cwd` to the repo
+it is meant to inspect (the PUMPD automations want the PUMPD checkout;
+`pumpd-setup-scout` wants `agent-tooling`), then **restart the desktop app** —
+edits are not picked up live — and re-read the file to confirm they survived.
+
+Verify this before trusting a single scheduled run.
 
 **Plugin vs schedule — they are independent, which is easy to misread.** A
 registered scheduled task carries **its own copy** of the skill at

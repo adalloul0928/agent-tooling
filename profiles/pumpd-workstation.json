@@ -56,13 +56,6 @@
       "expected": "enabled"
     },
     {
-      "id": "claude.callstack-react-native-plugin",
-      "kind": "claude_plugin",
-      "plugin": "react-native-best-practices@callstack-agent-skills",
-      "path": "${project_root}/.claude/settings.json",
-      "expected": "enabled"
-    },
-    {
       "id": "codex.linear-plugin",
       "kind": "codex_plugin",
       "plugin": "linear@openai-curated",
@@ -128,7 +121,7 @@
       "plugin": "pumpd-automations@agent-tooling",
       "expected": "enabled",
       "severity": "warning",
-      "note": "Advisory pending the Codex pass; the codex CLI is not installed on this workstation."
+      "note": "Advisory: owner defers the pumpd-automations install on Codex. (The codex CLI IS installed — it ships inside the ChatGPT desktop app at /Applications/ChatGPT.app/Contents/Resources/codex and is symlinked onto PATH; see the codex.cli-on-path manual check.)"
     }
   ]
 }

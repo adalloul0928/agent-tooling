@@ -364,6 +364,21 @@ Items marked **[pending]** need an owner answer (listed at the end).
   **mobile = npm, backend = pnpm, edge/e2e = deno.** `worktree-bootstrap` detects per-dir.
 
 ### Changed items
+- **Callstack vs Software Mansion `react-native-best-practices` → RESOLVED 2026-07-23 for SWM.**
+  `pumpd-workstation` had asserted `react-native-best-practices@callstack-agent-skills` should be
+  enabled at project scope, contradicting the Batch 3 decision to install SWM's. Nothing forced
+  the callstack plugin — the profile merely asserted it, and the assertion was ours to change. The
+  check is **deleted** and the runbook does not add the `callstack-agent-skills` marketplace, so no
+  second skill of that name can ever appear. Cost stands: Callstack's perf material (FPS, TTI,
+  Hermes, FlashList) is installed nowhere.
+- **`pumpd-project.json` described an architecture PUMPD never adopted (corrected 2026-07-23).**
+  The profile assumed `.agents/skills/<name>/SKILL.md` canonical with `.claude/skills` as adapter.
+  Verified against the checkout and both `origin/main` and `origin/preview`: **there is no
+  `.agents/` directory at all**, no `AGENTS.md`, and no `.codex/`. Those checks are now advisory
+  rather than required — recorded intent should not permanently fail doctor and mask real drift.
+  `backend-review` and `fix-review` were deleted outright: they exist in neither scope on any
+  branch. Result: `pumpd-workstation` fails dropped 23 → 7, and the remaining seven are genuine,
+  actionable drift.
 - **Codex "blocked on missing CLI" → FALSE PREMISE, resolved 2026-07-23.** Every Codex item was
   deferred on the belief that the `codex` CLI was not installed. It is: the binary ships **inside
   the ChatGPT desktop app** at `/Applications/ChatGPT.app/Contents/Resources/codex`

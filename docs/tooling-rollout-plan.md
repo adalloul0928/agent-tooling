@@ -141,6 +141,27 @@ stricter parity.
 Still open: **`pumpd-automations` on Codex, deferred by owner** — its advisory
 check remains as a marker.
 
+## Fresh-machine validation — 2026-07-23
+
+A real install on a second Mac took doctor from 1 → 70 passing and 51 → 29
+failing, and surfaced six defects, all since fixed and all verified independently:
+
+- **Scheduled-task `cwd` is invisible.** The store keeps it; no tool exposes it.
+  A new machine gets every task pointed at the wrong repo **with no symptom** — a
+  miner in the wrong directory finds nothing and files nothing, which looks
+  exactly like a quiet week. Now the most prominent warning in the runbook.
+- **`~/.local/bin` is not on PATH after `uv tool install`.** `agentskills
+  --version` failed on the very next line of Step 0. `uv tool update-shell` added.
+- **The marketplace `ref` assertion was unsatisfiable.** `claude plugin
+  marketplace add` accepts only `--scope`/`--sparse`, so the documented command
+  records no ref and the check could never pass. Dropped from both marketplace
+  checks; presence is still asserted.
+- **`mcp-preflight` stated a falsehood** ("the Codex CLI is not installed") and
+  has been rewritten with the observed Codex vocabulary.
+- **Runbook Step 5 quoted a task count from one machine.** The store is
+  per-session, so counts are not portable; it now says to enumerate the source.
+- **A stale "codex CLI is not installed" note** survived in `pumpd-workstation`.
+
 ## Cross-repo follow-ups (outside `agent-tooling`)
 
 Found while executing this rollout. Recorded here because the rollout's scope
@@ -185,19 +206,13 @@ MCPs.
 
 ## Open questions (owner)
 
-0. **`react-native-best-practices` — the profile contradicts the collision
-   decision (surfaced 2026-07-23).** `pumpd-workstation` asserts
-   `claude.callstack-react-native-plugin` →
-   `react-native-best-practices@callstack-agent-skills` **enabled** at project
-   scope. But the Batch 3 collision was resolved the other way: Software
-   Mansion's `react-native-best-practices` is the one installed (user scope,
-   file), and Callstack's was deliberately excluded because the two share a
-   directory name. Enabling the callstack plugin would put a second skill of that
-   name back in play. The check currently **fails**, so nothing is broken today —
-   but the profile is asking for something the rollout decided against. Either
-   drop the check (consistent with the collision decision) or reverse the
-   collision in Callstack's favour and drop SWM's; do not leave both asserted.
-
+0. ~~**`react-native-best-practices` — profile contradicts the collision
+   decision.**~~ **RESOLVED 2026-07-23 in Software Mansion's favour.** Nothing
+   forced Callstack's plugin — `pumpd-workstation` merely asserted it, and that
+   assertion was ours to change. `claude.callstack-react-native-plugin` has been
+   **deleted**, and the runbook does not add the `callstack-agent-skills`
+   marketplace. Only SWM's skill is installed, in both clients, so no second skill
+   of that name can appear.
 1. `EXPO_PUBLIC_SECURE_STORAGE_KEY` — local `.env` only; how do release builds
    get it?
 2. Doppler `pumpd-backend` `SUPABASE_AUTH_*` → remote Supabase push mechanism?
