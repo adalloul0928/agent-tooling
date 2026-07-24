@@ -12,9 +12,7 @@
       "kind": "path",
       "path": "${project_root}/AGENTS.md",
       "path_type": "file",
-      "expected": "present",
-      "severity": "warning",
-      "note": "PUMPD uses CLAUDE.md only; AGENTS.md does not exist in that checkout (verified 2026-07-23). Advisory rather than required until the repo adopts the shared canonical instruction layer."
+      "expected": "present"
     },
     {
       "id": "pumpd.claude-wrapper",
@@ -42,128 +40,12 @@
       "kind": "path",
       "path": "${project_root}/.codex/config.toml",
       "path_type": "file",
-      "expected": "present",
-      "severity": "warning",
-      "note": "PUMPD has no .codex/ directory (verified 2026-07-23). Advisory rather than required for the same reason as the .agents checks."
+      "expected": "present"
     },
     {
       "id": "pumpd.codex-hooks",
       "kind": "path",
       "path": "${project_root}/.codex/hooks.json",
-      "path_type": "file",
-      "expected": "present",
-      "severity": "warning",
-      "note": "PUMPD has no .codex/ directory (verified 2026-07-23). Advisory rather than required for the same reason as the .agents checks."
-    },
-    {
-      "id": "pumpd.architecture-canonical",
-      "kind": "path",
-      "path": "${project_root}/.agents/skills/pumpd-architecture/SKILL.md",
-      "path_type": "file",
-      "expected": "present",
-      "severity": "warning",
-      "note": "PUMPD has not adopted the .agents-canonical layout: the repo has no .agents/ directory on any branch (verified 2026-07-23 against origin/main and origin/preview). Advisory rather than required so this recorded intent does not permanently fail doctor and mask real drift. Promote back to required if/when PUMPD adopts the layout."
-    },
-    {
-      "id": "pumpd.architecture-claude",
-      "kind": "path",
-      "path": "${project_root}/.claude/skills/pumpd-architecture/SKILL.md",
-      "path_type": "file",
-      "expected": "present"
-    },
-    {
-      "id": "pumpd.ui-patterns-canonical",
-      "kind": "path",
-      "path": "${project_root}/.agents/skills/pumpd-ui-patterns/SKILL.md",
-      "path_type": "file",
-      "expected": "present",
-      "severity": "warning",
-      "note": "PUMPD has not adopted the .agents-canonical layout: the repo has no .agents/ directory on any branch (verified 2026-07-23 against origin/main and origin/preview). Advisory rather than required so this recorded intent does not permanently fail doctor and mask real drift. Promote back to required if/when PUMPD adopts the layout."
-    },
-    {
-      "id": "pumpd.ui-patterns-claude",
-      "kind": "path",
-      "path": "${project_root}/.claude/skills/pumpd-ui-patterns/SKILL.md",
-      "path_type": "file",
-      "expected": "present"
-    },
-    {
-      "id": "pumpd.testing-canonical",
-      "kind": "path",
-      "path": "${project_root}/.agents/skills/pumpd-testing/SKILL.md",
-      "path_type": "file",
-      "expected": "present",
-      "severity": "warning",
-      "note": "PUMPD has not adopted the .agents-canonical layout: the repo has no .agents/ directory on any branch (verified 2026-07-23 against origin/main and origin/preview). Advisory rather than required so this recorded intent does not permanently fail doctor and mask real drift. Promote back to required if/when PUMPD adopts the layout."
-    },
-    {
-      "id": "pumpd.testing-claude",
-      "kind": "path",
-      "path": "${project_root}/.claude/skills/pumpd-testing/SKILL.md",
-      "path_type": "file",
-      "expected": "present"
-    },
-    {
-      "id": "pumpd.supabase-patterns-canonical",
-      "kind": "path",
-      "path": "${project_root}/.agents/skills/pumpd-supabase-patterns/SKILL.md",
-      "path_type": "file",
-      "expected": "present",
-      "severity": "warning",
-      "note": "PUMPD has not adopted the .agents-canonical layout: the repo has no .agents/ directory on any branch (verified 2026-07-23 against origin/main and origin/preview). Advisory rather than required so this recorded intent does not permanently fail doctor and mask real drift. Promote back to required if/when PUMPD adopts the layout."
-    },
-    {
-      "id": "pumpd.supabase-patterns-claude",
-      "kind": "path",
-      "path": "${project_root}/.claude/skills/pumpd-supabase-patterns/SKILL.md",
-      "path_type": "file",
-      "expected": "present"
-    },
-    {
-      "id": "pumpd.quality-canonical",
-      "kind": "path",
-      "path": "${project_root}/.agents/skills/quality/SKILL.md",
-      "path_type": "file",
-      "expected": "present",
-      "severity": "warning",
-      "note": "PUMPD has not adopted the .agents-canonical layout: the repo has no .agents/ directory on any branch (verified 2026-07-23 against origin/main and origin/preview). Advisory rather than required so this recorded intent does not permanently fail doctor and mask real drift. Promote back to required if/when PUMPD adopts the layout."
-    },
-    {
-      "id": "pumpd.quality-claude",
-      "kind": "path",
-      "path": "${project_root}/.claude/skills/quality/SKILL.md",
-      "path_type": "file",
-      "expected": "present"
-    },
-    {
-      "id": "pumpd.sync-types-canonical",
-      "kind": "path",
-      "path": "${project_root}/.agents/skills/sync-types/SKILL.md",
-      "path_type": "file",
-      "expected": "present",
-      "severity": "warning",
-      "note": "PUMPD has not adopted the .agents-canonical layout: the repo has no .agents/ directory on any branch (verified 2026-07-23 against origin/main and origin/preview). Advisory rather than required so this recorded intent does not permanently fail doctor and mask real drift. Promote back to required if/when PUMPD adopts the layout."
-    },
-    {
-      "id": "pumpd.sync-types-claude",
-      "kind": "path",
-      "path": "${project_root}/.claude/skills/sync-types/SKILL.md",
-      "path_type": "file",
-      "expected": "present"
-    },
-    {
-      "id": "pumpd.ios-simulator-skill-canonical",
-      "kind": "path",
-      "path": "${project_root}/.agents/skills/pumpd-ios-simulator/SKILL.md",
-      "path_type": "file",
-      "expected": "present",
-      "severity": "warning",
-      "note": "PUMPD has not adopted the .agents-canonical layout: the repo has no .agents/ directory on any branch (verified 2026-07-23 against origin/main and origin/preview). Advisory rather than required so this recorded intent does not permanently fail doctor and mask real drift. Promote back to required if/when PUMPD adopts the layout."
-    },
-    {
-      "id": "pumpd.ios-simulator-skill-claude",
-      "kind": "path",
-      "path": "${project_root}/.claude/skills/pumpd-ios-simulator/SKILL.md",
       "path_type": "file",
       "expected": "present"
     },
@@ -179,9 +61,7 @@
       "kind": "project_codex_mcp",
       "path": "${project_root}/.codex/config.toml",
       "server": "context7",
-      "expected": "present",
-      "severity": "warning",
-      "note": "Advisory because its parent file is advisory: PUMPD has no .codex/config.toml (verified 2026-07-23), so requiring a server inside it could never pass. Promote back to required together with pumpd.codex-config. Note pumpd.claude-supabase-local stays REQUIRED by contrast - .mcp.json does exist there, so a missing supabase_local is genuine drift."
+      "expected": "present"
     },
     {
       "id": "pumpd.duplicate-claude-heroui-native",

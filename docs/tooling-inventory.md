@@ -266,38 +266,29 @@ No `.agents` adapter is hand-authored for any of these. `skills add` takes an
 `--agent` flag, so Codex support is an install-time argument rather than mirrored
 files — which also keeps the no-redistribution rule intact.
 
-## PUMPD project-owned skills
+## PUMPD project instructions and config
 
-Skills required to work correctly in PUMPD live in the PUMPD repository, not
-in this user-tooling repository. Their canonical copies are under
-`.agents/skills`; Claude receives relative adapters under `.claude/skills`.
-That write-once arrangement is repository-local and committed, so local and
-cloud agents can receive the same project contract.
+**PUMPD no longer carries its own skills.** They were added in #939/#941 and
+**removed in #959 (`chore(agent): remove project skills`)**; `origin/main` and
+`origin/preview` both carry zero. Every profile check asserting them has been
+deleted — the model where PUMPD ships project-scoped skills is over. Capability
+that PUMPD needs from an agent now comes from this repo's plugins or from vendor
+collections, not from files in the app repo.
 
-Current project skills — **verified against the checkout 2026-07-23**, because
-this list had drifted in both directions:
+What PUMPD **does** still own, and what the profile still asserts (all verified
+present on `origin/main`): `AGENTS.md` as the shared canonical instruction layer
+with `CLAUDE.md` as the Claude entry point, `.codex/config.toml` and
+`.codex/hooks.json`, and `.mcp.json` supplying `supabase_local`. Claude-only path
+rules may remain under `.claude/rules`.
 
-- `pumpd-architecture`, `pumpd-ios-simulator`, `pumpd-supabase-patterns`,
-  `pumpd-testing`, `pumpd-ui-patterns`, `quality`, `sync-types`
-- also present, though previously recorded as *intentionally excluded*:
-  `generate-e2e-tests`, `generate-unit-tests`, `pumpd-figma-implement`
-- plus: `doc-sync`, `pr`, `pumpd-ux-polish`, `research`, `resolve-pr-comments`,
-  `review`, `worktree`
-
-**`backend-review` and `fix-review` do not exist** in either scope, on any
-branch — they were listed here as current but were never committed. Their profile
-checks have been deleted rather than left asserting fiction.
-
-**The `.agents`-canonical model is aspirational for PUMPD, not implemented.** The
-repo has **no `.agents/` directory at all** (verified against `origin/main` and
-`origin/preview`), no `AGENTS.md`, and no `.codex/`. Only `.claude/skills` exists.
-The corresponding profile checks are therefore **advisory, not required** — they
-record intent without permanently failing doctor and masking real drift. Promote
-them back to required if and when PUMPD adopts the layout.
-
-Project instructions follow the same ownership rule: `AGENTS.md` is the shared
-canonical instruction layer and `CLAUDE.md` is the Claude entry point. Claude-
-only path rules may remain under `.claude/rules`.
+> **Verification warning, learned the hard way.** Two rounds of conclusions about
+> this section were wrong because they were drawn from a local checkout **999
+> commits behind `origin/main`** — first "these skills are committed" (they had
+> been deleted), then "the `.agents` layout was never adopted" (it was adopted,
+> then removed, and `AGENTS.md`/`.codex/` were never removed at all). **Check
+> project claims against a freshly fetched `origin/<branch>`, never a working
+> tree**, and re-run `git fetch` before reading `git ls-tree origin/...` — a stale
+> remote ref reports the old world with total confidence.
 
 ## Special local skills
 
