@@ -11,8 +11,7 @@
       "id": "claude.agent-tooling-marketplace",
       "kind": "claude_marketplace",
       "name": "agent-tooling",
-      "expected": "present",
-      "ref": "${agent_tooling_ref}"
+      "expected": "present"
     },
     {
       "id": "claude.personal-plugin",
@@ -24,8 +23,7 @@
       "id": "codex.agent-tooling-marketplace",
       "kind": "codex_marketplace",
       "name": "agent-tooling",
-      "expected": "present",
-      "ref": "${agent_tooling_ref}"
+      "expected": "present"
     },
     {
       "id": "codex.personal-plugin",

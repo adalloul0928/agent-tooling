@@ -74,13 +74,44 @@ while debugging.
 - **A healthy listing is a point-in-time check.** OAuth lapses later; re-run
   before depending on a connector for unattended work.
 
-## Codex — unverified
+## Codex
 
-The Codex CLI is not installed on this machine, so its MCP auth-state output and
-reconnect commands could not be observed. **Do not assert Codex commands from
-memory.** Inspect `codex mcp --help` (or the current Codex docs) on a machine
-that has it, confirm the real state vocabulary, then record it here. Until then,
-treat this skill as Claude-verified only and say so rather than guessing.
+**Finding the CLI is the first hurdle.** The `codex` binary ships *inside* the
+ChatGPT desktop app and is not symlinked onto `PATH` by the installer, so
+`command -v codex` can fail on a machine where Codex is fully installed and
+running. Before concluding it is missing:
+
+```bash
+ls /Applications/ChatGPT.app/Contents/Resources/codex
+ln -sf "/Applications/ChatGPT.app/Contents/Resources/codex" ~/.local/bin/codex
+```
+
+Then triage the same way:
+
+```bash
+codex mcp list        # two tables: stdio servers, then HTTP/remote servers
+codex plugin list     # marketplaces and their installed/enabled plugins
+```
+
+Codex reports a different vocabulary from Claude — do not map them onto each
+other:
+
+| Column | Values | Meaning |
+|---|---|---|
+| `Status` | `enabled` / `disabled` | whether the server is active at all |
+| `Auth` | `OAuth` / `Bearer token` / `Unsupported` | `Unsupported` is normal for **stdio** servers, which have no auth concept — it is not a fault |
+
+Fixes: `codex mcp login <name>` / `codex mcp logout <name>`, mirroring Claude's.
+
+**Check the plugin layer before the server layer.** Codex takes several hosted
+vendor MCPs from the **curated catalog** rather than as raw servers — `sentry`,
+`expo`, `linear`, `supabase`, and `github` come from `@openai-curated` plugins.
+A server "missing" from `codex mcp list` is therefore often correct: look for
+the plugin in `codex plugin list` instead. Adding a raw twin creates a duplicate
+the profile's `codex.duplicate-*-mcp` checks exist to catch.
+
+The Doppler diagnostic applies identically — `analytics-mcp`, `heroui-pro`, and
+`heroui-native-pro` launch through `doppler run` on this side too.
 
 ## Reporting
 
