@@ -371,14 +371,18 @@ Items marked **[pending]** need an owner answer (listed at the end).
   check is **deleted** and the runbook does not add the `callstack-agent-skills` marketplace, so no
   second skill of that name can ever appear. Cost stands: Callstack's perf material (FPS, TTI,
   Hermes, FlashList) is installed nowhere.
-- **`pumpd-project.json` described an architecture PUMPD never adopted (corrected 2026-07-23).**
-  The profile assumed `.agents/skills/<name>/SKILL.md` canonical with `.claude/skills` as adapter.
-  Verified against the checkout and both `origin/main` and `origin/preview`: **there is no
-  `.agents/` directory at all**, no `AGENTS.md`, and no `.codex/`. Those checks are now advisory
-  rather than required — recorded intent should not permanently fail doctor and mask real drift.
-  `backend-review` and `fix-review` were deleted outright: they exist in neither scope on any
-  branch. Result: `pumpd-workstation` fails dropped 23 → 7, and the remaining seven are genuine,
-  actionable drift.
+- **`pumpd-project.json` — CORRECTED 2026-07-24, superseding the 2026-07-23 entry.** That entry
+  claimed PUMPD "never adopted" the `.agents`-canonical layout. Wrong, and wrong for an instructive
+  reason: it was concluded from a working tree **999 commits behind `origin/main`**, and from a
+  `git ls-tree origin/main` read against a **stale remote ref** that had not been fetched. The
+  truth: PUMPD *did* adopt project skills (#939, #941) and then **deliberately removed them in
+  #959** (`chore(agent): remove project skills`). `AGENTS.md`, `.codex/config.toml`,
+  `.codex/hooks.json` and `.mcp.json` were **never removed** and are present on `origin/main`, so
+  the 2026-07-23 decision to downgrade those four checks to advisory was also wrong and has been
+  reverted to required. All 14 skill checks are deleted: PUMPD no longer ships project skills, by
+  decision rather than by omission. Verified against a current checkout: **zero `pumpd.*`
+  failures.** Method rule that follows: validate project claims against a freshly fetched
+  `origin/<branch>`, never a working tree.
 - **Codex "blocked on missing CLI" → FALSE PREMISE, resolved 2026-07-23.** Every Codex item was
   deferred on the belief that the `codex` CLI was not installed. It is: the binary ships **inside
   the ChatGPT desktop app** at `/Applications/ChatGPT.app/Contents/Resources/codex`
