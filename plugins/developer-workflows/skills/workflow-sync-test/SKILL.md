@@ -13,3 +13,5 @@ Confirm that this skill is available from the shared developer-workflows bundle.
 
 Report that the marketplace update succeeded and identify this skill as the
 published synchronization test.
+
+This revision verifies the guarded merge workflow after its initial setup.
