@@ -1,0 +1,58 @@
+name: Guarded auto-merge
+
+on:
+  workflow_run:
+    workflows:
+      - Validate agent tooling
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.pull_requests[0] != null
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the pull request
+        id: pull
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          pr="$(gh pr view "$PR_NUMBER" --json isDraft,mergeStateStatus,headRefOid,author --jq '.')"
+          test "$(jq -r '.isDraft' <<<"$pr")" = false
+          test "$(jq -r '.mergeStateStatus' <<<"$pr")" = CLEAN
+          test "$(jq -r '.headRefOid' <<<"$pr")" = "$VALIDATED_SHA"
+          test "$(jq -r '.author.login' <<<"$pr")" != "github-actions[bot]"
+          printf 'number=%s\nsha=%s\n' "$PR_NUMBER" "$VALIDATED_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse workflow changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pull.outputs.number }}
+        run: |
+          set -euo pipefail
+          if gh api --paginate "repos/${{ github.repository }}/pulls/$PR_NUMBER/files" --jq '.[].filename' | grep -q '^\.github/workflows/'; then
+            echo 'Refusing to auto-merge a pull request that changes a workflow.' >&2
+            exit 1
+          fi
+
+      - name: Squash merge the validated pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pull.outputs.number }}
+          VALIDATED_SHA: ${{ steps.pull.outputs.sha }}
+        run: |
+          gh api --method PUT "repos/${{ github.repository }}/pulls/$PR_NUMBER/merge" \
+            -f sha="$VALIDATED_SHA" \
+            -f merge_method=squash
