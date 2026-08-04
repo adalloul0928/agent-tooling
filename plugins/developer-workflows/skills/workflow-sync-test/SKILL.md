@@ -19,3 +19,5 @@ repository-target correction.
 
 It also confirms the repository grants the guarded workflow its required merge
 permission.
+
+This final revision verifies the guarded workflow performs the merge itself.
