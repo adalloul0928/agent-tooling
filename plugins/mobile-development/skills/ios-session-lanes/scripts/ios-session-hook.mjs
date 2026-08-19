@@ -113,13 +113,15 @@ function sessionContext(payload, client, root, bootstrapResult) {
 		`Branch: ${currentBranch(root)}`,
 		bootstrapMessage,
 		`PUMPD iOS lane identity: ${sessionKey(client, sessionId)}.`,
-		"Default to a simulator lane. Ask before selecting the physical iPhone lane.",
+		`Before first launch, check \`ios-session-lane status --client ${client} --session-id ${sessionId}\`. Reconnect without asking if it exists.`,
+		"If no lane exists and the user did not already specify the choices, ask once: Simulator + Local (Recommended), Simulator + Preview, or Physical iPhone (Preview + Tailscale). Allow a custom answer.",
+		"Preset mapping: simulator-local, simulator-preview, iphone-preview. Custom lanes must explicitly set target, backend, and exposure; simulator-preview-tailscale is also available.",
 		"When iOS or Metro is needed, do not run raw Expo, simulator mutation, or undirected device-controller commands.",
-		`Start or reconnect: \`${laneCommand(client, sessionId)}\`. The native fingerprint selects a compatible installed or cached binary, otherwise a local Xcode build.`,
+		`After confirmation, start with \`${laneCommand(client, sessionId, "--preset <preset>")}\`. The native fingerprint selects a compatible installed or cached binary, otherwise a local Xcode build.`,
 		`Status: \`ios-session-lane status --client ${client} --session-id ${sessionId}\` for the assigned Metro port and simulator UDID.`,
 		`Input: \`ios-session-lane control --client ${client} --session-id ${sessionId} -- <agent-device args>\`. SimView is read-only; Maestro requires its lane lease.`,
 		"Local Supabase is shared. Consume the running stack; only its registered owner may start, stop, or reset it.",
-		"Physical lanes use Tailscale plus remote development Supabase. If the phone is unreachable, use the reported simulator fallback; never request an EAS development build.",
+		"Physical lanes use Tailscale plus Preview Supabase. If the phone is unreachable, use the reported simulator fallback; never request an EAS development build.",
 	].join("\n");
 }
 
@@ -152,7 +154,7 @@ async function handlePreTool(payload, client) {
 		const command = shellCommand(payload);
 		const reason = directIosReason(command) || directBackendReason(command) || directWorktreeReason(command);
 		if (reason) {
-			deny(`${reason} Use ${laneCommand(client, sessionId)} for iOS, or ios-session-lane backend-up --client ${client} --session-id ${sessionId} for the shared backend owner.`);
+			deny(`${reason} Check this session's lane status, ask the user for a lane preset if none exists, then use ${laneCommand(client, sessionId, "--preset <preset>")} for iOS. Use ios-session-lane backend-up --client ${client} --session-id ${sessionId} only for the shared backend owner.`);
 		}
 		return;
 	}
@@ -161,7 +163,7 @@ async function handlePreTool(payload, client) {
 	if (!controllerTool) return;
 	const lane = await getLane(client, sessionId);
 	if (!lane) {
-		deny(`Acquire the chat's iOS lane first with ${laneCommand(client, sessionId)}.`);
+		deny(`No lane exists. Ask the user to choose simulator-local, simulator-preview, iphone-preview, or custom settings, then run ${laneCommand(client, sessionId, "--preset <preset>")}.`);
 		return;
 	}
 	if (lane.target?.kind !== "simulator") {

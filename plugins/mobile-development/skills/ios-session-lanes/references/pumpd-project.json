@@ -67,6 +67,39 @@
   "controllers": {
     "agentDeviceVersion": "0.20.10"
   },
+  "laneSelection": {
+    "defaultPreset": "simulator-local",
+    "presets": {
+      "simulator-local": {
+        "target": "simulator",
+        "backend": "local",
+        "expose": "local",
+        "controller": "agent-device",
+        "build": false
+      },
+      "simulator-preview": {
+        "target": "simulator",
+        "backend": "preview",
+        "expose": "local",
+        "controller": "agent-device",
+        "build": false
+      },
+      "simulator-preview-tailscale": {
+        "target": "simulator",
+        "backend": "preview",
+        "expose": "tailscale",
+        "controller": "agent-device",
+        "build": false
+      },
+      "iphone-preview": {
+        "target": "physical:arens-iphone-pro",
+        "backend": "preview",
+        "expose": "tailscale",
+        "controller": "agent-device",
+        "build": false
+      }
+    }
+  },
   "physicalDevices": {
     "arens-iphone-pro": {
       "displayNames": ["Aren's iPhone Pro", "Arens iPhone Pro", "Aren’s iPhone Pro"],

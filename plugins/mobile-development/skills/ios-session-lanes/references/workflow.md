@@ -86,10 +86,32 @@ Each chat identity is `<client>:<session-id>`. Its registry entry owns:
 - one input-controller lease;
 - evidence and log paths.
 
+### Confirm the lane preset
+
+Before creating the first lane for a chat, the agent checks status and asks one
+compact question unless the user already supplied the choices:
+
+| Preset | Device | Supabase | Metro exposure | Default use |
+|---|---|---|---|---|
+| `simulator-local` | assigned simulator | shared local | local Mac | recommended |
+| `simulator-preview` | assigned simulator | hosted Preview | local Mac | avoid local backend coupling |
+| `simulator-preview-tailscale` | assigned simulator | hosted Preview | Tailscale | advanced remote access |
+| `iphone-preview` | Aren's physical iPhone | hosted Preview | Tailscale | joint physical-device testing |
+
+If the user says “use defaults,” choose `simulator-local`. A custom selection
+must explicitly provide `--target`, `--backend local|preview`, and
+`--expose local|tailscale`. Binary reuse/build and controller selection remain
+automatic unless the task specifically requires an override.
+
+Do not combine a named preset with custom target, backend, or exposure flags.
+After a lane has been created, a plain `up` for the same client/session reuses
+the choices recorded in the registry; do not ask the user again.
+
 Start or reconnect a simulator lane:
 
 ```bash
-ios-session-lane up --client codex --session-id <id>
+ios-session-lane up --client codex --session-id <id> \
+  --preset simulator-local
 ios-session-lane status --client codex --session-id <id>
 ios-session-lane doctor --client codex --session-id <id>
 ```
@@ -168,7 +190,7 @@ are denied by the client hooks.
 
 ## Shared local Supabase
 
-Simulator lanes default to `--backend local`. The registry discovers the
+The recommended simulator preset uses `--backend local`. The registry discovers the
 running Supabase Docker bind mount and compares its backend contract digest
 against the consuming worktree. A healthy stack mounted from another worktree
 is accepted only when compatible.
@@ -199,11 +221,11 @@ Physical-device mode is always an explicit choice:
 
 ```bash
 ios-session-lane up --client codex --session-id <id> \
-  --target physical:arens-iphone-pro
+  --preset iphone-preview
 ```
 
-The named phone is one exclusive lane. It uses a Tailscale Metro URL and remote
-development Supabase; local Supabase is never exposed. The same installed
+The named phone is one exclusive lane. It uses a Tailscale Metro URL and hosted
+Preview Supabase; local Supabase is never exposed. The same installed
 development binary can load different JavaScript bundles from different Metro
 URLs, but one physical phone can actively belong to only one chat lane at a
 time.

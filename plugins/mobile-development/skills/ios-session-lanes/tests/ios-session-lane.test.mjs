@@ -14,8 +14,12 @@ import {
 	safeWorktreeName,
 } from "../scripts/create-worktree.mjs";
 import {
+	applyRecordedLaneSelection,
 	classifySimulatorBootResult,
+	lanePreset,
+	laneSelectionIsConfirmed,
 	nativeCacheKey,
+	normalizeBackendChoice,
 	parseOptions,
 	parseTarget,
 	sessionKey,
@@ -90,7 +94,7 @@ test("worktree creator produces safe client-specific branch names", () => {
 	assert.throws(() => safeWorktreeName("../../"), /safe worktree name/);
 });
 
-test("CLI parsing keeps local Supabase as the default", () => {
+test("CLI parsing recommends local Supabase but requires confirmation", () => {
 	const parsed = parseOptions([
 		"up",
 		"--client",
@@ -103,7 +107,75 @@ test("CLI parsing keeps local Supabase as the default", () => {
 	assert.equal(parsed.options.backend, "local");
 	assert.equal(parsed.options.build, true);
 	assert.equal(parsed.options.client, "codex");
+	assert.equal(parsed.options.preset, "simulator-local");
+	assert.equal(parsed.options.presetExplicit, false);
 	assert.equal(parsed.options.sessionId, "thread-1");
+	assert.equal(laneSelectionIsConfirmed(parsed.options), false);
+});
+
+test("lane presets encode the user-facing device, backend, and network choices", () => {
+	const local = parseOptions(["up", "--preset", "simulator-local"]);
+	assert.equal(local.options.target, "simulator");
+	assert.equal(local.options.backend, "local");
+	assert.equal(local.options.expose, "local");
+	assert.equal(laneSelectionIsConfirmed(local.options), true);
+
+	const preview = parseOptions(["up", "--preset", "simulator-preview"]);
+	assert.equal(preview.options.target, "simulator");
+	assert.equal(preview.options.backend, "preview");
+	assert.equal(preview.options.expose, "local");
+
+	const iphone = lanePreset("iphone-preview");
+	assert.equal(iphone.target, "physical:arens-iphone-pro");
+	assert.equal(iphone.backend, "preview");
+	assert.equal(iphone.expose, "tailscale");
+	assert.throws(() => lanePreset("unknown"), /Unknown lane preset/);
+});
+
+test("custom lane choices must explicitly cover target, backend, and exposure", () => {
+	const custom = parseOptions([
+		"up",
+		"--target",
+		"simulator",
+		"--backend",
+		"remote",
+		"--expose",
+		"tailscale",
+	]);
+	assert.equal(custom.options.backend, "preview");
+	assert.equal(custom.options.preset, "custom");
+	assert.equal(laneSelectionIsConfirmed(custom.options), true);
+	assert.equal(normalizeBackendChoice("local"), "local");
+	assert.equal(normalizeBackendChoice("remote"), "preview");
+
+	const incomplete = parseOptions(["up", "--backend", "preview"]);
+	assert.equal(laneSelectionIsConfirmed(incomplete.options), false);
+	assert.throws(
+		() =>
+			parseOptions([
+				"up",
+				"--preset",
+				"simulator-local",
+				"--backend",
+				"preview",
+			]),
+		/Do not combine --preset/,
+	);
+});
+
+test("an existing lane reconnects from its recorded choices without asking again", () => {
+	const parsed = parseOptions(["up", "--client", "codex", "--session-id", "thread-1"]);
+	const restored = applyRecordedLaneSelection(parsed.options, {
+		backend: "preview",
+		exposure: "tailscale",
+		preset: "simulator-preview-tailscale",
+		requestedTarget: { alias: "automatic", kind: "simulator" },
+	});
+	assert.equal(restored, true);
+	assert.equal(parsed.options.backend, "preview");
+	assert.equal(parsed.options.expose, "tailscale");
+	assert.equal(parsed.options.preset, "simulator-preview-tailscale");
+	assert.equal(laneSelectionIsConfirmed(parsed.options), true);
 });
 
 test("lane targets reserve the simulator pool and the named physical iPhone", () => {

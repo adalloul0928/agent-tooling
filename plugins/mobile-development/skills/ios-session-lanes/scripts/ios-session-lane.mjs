@@ -65,7 +65,8 @@ const maxIosRuntimeMajor = Number(
 const appId = profile.mobile.appId;
 const appScheme = profile.mobile.scheme;
 const cachedAppName = profile.mobile.cachedAppName;
-const registryVersion = 3;
+const laneSelection = profile.laneSelection;
+const registryVersion = 4;
 const buildLockTimeoutMs = 30 * 60 * 1000;
 const simulatorControlTimeoutMs = 10 * 60 * 1000;
 const simulatorBootTimeoutMs = profile.simulators.bootTimeoutSeconds * 1000;
@@ -105,26 +106,62 @@ export function nativeCacheKey(fingerprint, xcodeVersion, architecture) {
 	return hashText(`${fingerprint}\0${xcodeVersion}\0${architecture}`);
 }
 
+export function normalizeBackendChoice(value) {
+	return value === "remote" ? "preview" : value;
+}
+
+export function lanePreset(name) {
+	const preset = laneSelection.presets[name];
+	if (!preset) {
+		throw new Error(
+			`Unknown lane preset ${name}. Choose one of: ${Object.keys(
+				laneSelection.presets,
+			).join(", ")}.`,
+		);
+	}
+	return structuredClone(preset);
+}
+
+function requestedPreset(args) {
+	const separator = args.indexOf("--");
+	const searchable = separator >= 0 ? args.slice(0, separator) : args;
+	const index = searchable.indexOf("--preset");
+	if (index < 0) {
+		return { explicit: false, name: laneSelection.defaultPreset };
+	}
+	return {
+		explicit: true,
+		name: requireValue(searchable, index + 1, "--preset"),
+	};
+}
+
 export function parseOptions(args) {
+	const selectedPreset = requestedPreset(args);
+	const preset = lanePreset(selectedPreset.name);
 	const options = {
 		acknowledgeSharedReset: false,
-		backend: "local",
+		backend: preset.backend,
 		backendExplicit: false,
-		build: false,
+		build: preset.build,
 		client: process.env.IOS_SESSION_LANES_CLIENT ?? "",
-		controller: "agent-device",
+		controller: preset.controller,
 		controllerArgs: [],
+		controllerExplicit: false,
 		dopplerConfig:
 			process.env.IOS_SESSION_LANES_DOPPLER_CONFIG ??
 			profile.backend.dopplerConfig,
-		expose: "local",
+		expose: preset.expose,
 		exposeExplicit: false,
 		forceController: false,
 		json: false,
+		preset: selectedPreset.name,
+		presetExplicit: selectedPreset.explicit,
 		quiet: false,
+		recordedSelection: false,
 		sessionId: process.env.IOS_SESSION_LANES_SESSION_ID ?? "",
 		staleAfterMinutes: 120,
-		target: "simulator",
+		target: preset.target,
+		targetExplicit: false,
 		udid: "",
 	};
 	const positionals = [];
@@ -141,6 +178,7 @@ export function parseOptions(args) {
 		else if (arg === "--force-controller") options.forceController = true;
 		else if (arg === "--acknowledge-shared-reset")
 			options.acknowledgeSharedReset = true;
+		else if (arg === "--preset") index += 1;
 		else if (arg === "--client") options.client = requireValue(args, ++index, arg);
 		else if (arg === "--session-id")
 			options.sessionId = requireValue(args, ++index, arg);
@@ -149,17 +187,38 @@ export function parseOptions(args) {
 			options.backendExplicit = true;
 		} else if (arg === "--doppler-config")
 			options.dopplerConfig = requireValue(args, ++index, arg);
-		else if (arg === "--target") options.target = requireValue(args, ++index, arg);
-		else if (arg === "--udid") options.udid = requireValue(args, ++index, arg);
-		else if (arg === "--controller")
+		else if (arg === "--target") {
+			options.target = requireValue(args, ++index, arg);
+			options.targetExplicit = true;
+		} else if (arg === "--udid") options.udid = requireValue(args, ++index, arg);
+		else if (arg === "--controller") {
 			options.controller = requireValue(args, ++index, arg);
-		else if (arg === "--expose") {
+			options.controllerExplicit = true;
+		} else if (arg === "--expose") {
 			options.expose = requireValue(args, ++index, arg);
 			options.exposeExplicit = true;
 		} else if (arg === "--stale-after-minutes")
 			options.staleAfterMinutes = Number(requireValue(args, ++index, arg));
 		else if (arg.startsWith("--")) throw new Error(`Unknown option ${arg}`);
 		else positionals.push(arg);
+	}
+	options.backend = normalizeBackendChoice(options.backend);
+	if (
+		options.presetExplicit &&
+		(options.targetExplicit || options.backendExplicit || options.exposeExplicit)
+	) {
+		throw new Error(
+			"Do not combine --preset with --target, --backend, or --expose. " +
+				"Choose a preset or provide all three custom choices.",
+		);
+	}
+	if (
+		!options.presetExplicit &&
+		options.targetExplicit &&
+		options.backendExplicit &&
+		options.exposeExplicit
+	) {
+		options.preset = "custom";
 	}
 
 	return { command: positionals[0] ?? "help", options };
@@ -174,13 +233,15 @@ export async function up(options) {
 	assertDarwin();
 	assertSession(options);
 	assertBootstrap();
+	const key = sessionKey(options.client, options.sessionId);
+	applyRecordedLaneSelection(options, readRegistry().lanes[key]);
+	assertLaneSelection(options);
 	const requestedTarget = parseTarget(options.target);
 	prepareTargetDefaults(options, requestedTarget);
 	assertBackendChoice(options.backend);
 	assertExposureChoice(options.expose);
 	assertControllerChoice(options.controller);
 	ensureDirectoryLayout();
-	const key = sessionKey(options.client, options.sessionId);
 	let target = requestedTarget;
 	let physicalFallback = null;
 	if (requestedTarget.kind === "physical") {
@@ -205,9 +266,15 @@ export async function up(options) {
 					`Session ${key} already owns a lane in ${existing.worktree}. Run down there before changing worktrees.`,
 				);
 			}
-			if (existing.backend !== options.backend && metroProcessOwned(existing)) {
+			const metroRunning = metroProcessOwned(existing);
+			if (existing.backend !== options.backend && metroRunning) {
 				throw new Error(
 					`Lane ${key} is already running with backend=${existing.backend}. Run down before switching backends.`,
+				);
+			}
+			if (existing.exposure !== options.expose && metroRunning) {
+				throw new Error(
+					`Lane ${key} is already running with exposure=${existing.exposure}. Run down before switching exposure.`,
 				);
 			}
 			if (
@@ -220,6 +287,8 @@ export async function up(options) {
 				);
 			}
 			existing.backend = options.backend;
+			existing.exposure = options.expose;
+			existing.preset = options.preset;
 			existing.updatedAt = now();
 			return existing;
 		}
@@ -250,6 +319,7 @@ export async function up(options) {
 				worktreeHash: hashText(repoRoot).slice(0, 16),
 			},
 			native: null,
+			preset: options.preset,
 			requestedTarget,
 			sessionId: options.sessionId,
 			target: allocatedTarget,
@@ -265,7 +335,7 @@ export async function up(options) {
 		if (lane.target.kind === "simulator") {
 			lane = await bootLaneSimulator(key, lane);
 		}
-		const metroHost = resolveMetroHost(lane.exposure, lane.target.kind);
+		const metroHost = resolveMetroHost(lane.exposure);
 		const environment = resolveMetroEnvironment(lane.backend);
 		if (!metroProcessOwned(lane)) {
 			if (!(await isPortAvailable(lane.metro.port))) {
@@ -725,6 +795,8 @@ function normalizeRegistry(parsed) {
 		simulatorQuarantine: parsed.resources?.simulatorQuarantine ?? {},
 	};
 	for (const [key, lane] of Object.entries(registry.lanes)) {
+		lane.backend = normalizeBackendChoice(lane.backend);
+		lane.preset = lane.preset ?? "legacy";
 		if (!lane.metro) {
 			lane.metro = {
 				cwd: lane.worktree,
@@ -780,20 +852,50 @@ function assertBootstrap() {
 
 function prepareTargetDefaults(options, target) {
 	if (target.kind !== "physical") return;
-	if (options.backendExplicit && options.backend !== "remote") {
-		throw new Error("Physical lanes must use --backend remote; local Supabase is never exposed.");
+	if (options.backendExplicit && options.backend !== "preview") {
+		throw new Error("Physical lanes must use --backend preview; local Supabase is never exposed.");
 	}
 	if (options.exposeExplicit && options.expose !== "tailscale") {
 		throw new Error("Physical lanes must use --expose tailscale.");
 	}
-	options.backend = "remote";
+	options.backend = "preview";
 	options.expose = "tailscale";
 }
 
 function assertBackendChoice(backend) {
-	if (backend !== "local" && backend !== "remote") {
-		throw new Error('--backend must be either "local" or "remote".');
+	if (backend !== "local" && backend !== "preview") {
+		throw new Error('--backend must be either "local" or "preview".');
 	}
+}
+
+export function laneSelectionIsConfirmed(options) {
+	return Boolean(
+		options.presetExplicit ||
+		options.recordedSelection ||
+		(options.targetExplicit && options.backendExplicit && options.exposeExplicit)
+	);
+}
+
+export function applyRecordedLaneSelection(options, lane) {
+	if (laneSelectionIsConfirmed(options) || !lane) return false;
+	const requestedTarget = lane.requestedTarget ?? lane.target;
+	options.target =
+		requestedTarget.kind === "physical"
+			? `physical:${requestedTarget.alias}`
+			: "simulator";
+	options.backend = normalizeBackendChoice(lane.backend);
+	options.expose = lane.exposure;
+	options.preset = lane.preset ?? "legacy";
+	options.recordedSelection = true;
+	return true;
+}
+
+function assertLaneSelection(options) {
+	if (laneSelectionIsConfirmed(options)) return;
+	throw new Error(
+		"Lane choices were not confirmed. Ask the user to choose a lane preset, then pass " +
+			`--preset <name>. Recommended: ${laneSelection.defaultPreset}.`,
+	);
 }
 
 function assertExposureChoice(expose) {
@@ -1227,8 +1329,8 @@ function allocatePhysical(registry, target) {
 	return target;
 }
 
-function resolveMetroHost(exposure, targetKind) {
-	if (exposure === "local" || targetKind === "simulator") return "127.0.0.1";
+function resolveMetroHost(exposure) {
+	if (exposure === "local") return "127.0.0.1";
 	const result = runCaptured("tailscale", ["ip", "-4"]);
 	const address = result.stdout
 		.split(/\r?\n/)
@@ -1240,7 +1342,7 @@ function resolveMetroHost(exposure, targetKind) {
 
 function resolveMetroEnvironment(backend) {
 	const environment = { ...process.env, APP_VARIANT: "development" };
-	if (backend === "remote") {
+	if (backend === "preview") {
 		environment.EXPO_PUBLIC_USE_LOCAL_SUPABASE = "false";
 		return environment;
 	}
@@ -1937,7 +2039,7 @@ async function collectEvidence(lane) {
 			}
 		}
 		checks.push(check("shared-backend", compatible, detail));
-	} else checks.push(check("remote-backend", true, "EAS development environment"));
+	} else checks.push(check("preview-backend", true, "EAS Preview development environment"));
 	const registry = readRegistry();
 	const lease = registry.resources.controllers[targetResourceKey(lane.target)];
 	checks.push(
@@ -2165,7 +2267,7 @@ function describeLane(lane) {
 		lane.target.kind === "simulator"
 			? `${lane.target.name} (${lane.target.udid})`
 			: `${lane.target.alias} (${lane.target.deviceId})`;
-	return `${lane.key} -> Metro ${lane.metro.url ?? `:${lane.metro.port}`} (pid ${
+	return `${lane.key} [${lane.preset ?? "custom"}; ${lane.backend}/${lane.exposure}] -> Metro ${lane.metro.url ?? `:${lane.metro.port}`} (pid ${
 		lane.metro.pid ?? "stopped"
 	}), ${target}, ${lane.native?.decision ?? "native unchecked"}, ${lane.worktree}`;
 }
@@ -2201,7 +2303,8 @@ function sleep(milliseconds) {
 
 function printHelp() {
 	console.log(`Usage:
-  ios-session-lane up --client <claude|codex> --session-id <id> [--target simulator|physical:arens-iphone-pro] [--backend local|remote]
+  ios-session-lane up --client <claude|codex> --session-id <id> --preset <simulator-local|simulator-preview|simulator-preview-tailscale|iphone-preview>
+  ios-session-lane up --client <claude|codex> --session-id <id> --target <target> --backend <local|preview> --expose <local|tailscale>
   ios-session-lane status|doctor --client <client> --session-id <id> [--json]
   ios-session-lane list [--json]
   ios-session-lane down --client <client> --session-id <id>
@@ -2216,7 +2319,7 @@ function printHelp() {
   ios-session-lane backend-reset --client <client> --session-id <id> --acknowledge-shared-reset
 
 Simulator lanes automatically reuse a fingerprint-compatible local .app or create one
-with Xcode. Physical lanes use hosted development Supabase and Tailscale. They never
+with Xcode. Physical lanes use hosted Preview Supabase and Tailscale. They never
 request an EAS development build; physical-device execution requires joint testing.`);
 }
 
