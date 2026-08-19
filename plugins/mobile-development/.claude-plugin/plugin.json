@@ -1,6 +1,6 @@
 {
   "name": "mobile-development",
-  "description": "Reusable iOS Simulator and HeroUI Native MCP tooling",
+  "description": "Isolated PUMPD iOS session lanes plus reusable Simulator and HeroUI Native tooling",
   "author": {
     "name": "Arend Alloul"
   },

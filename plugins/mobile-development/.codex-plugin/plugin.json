@@ -1,14 +1,14 @@
 {
   "name": "mobile-development",
-  "description": "Reusable iOS Simulator and HeroUI Native MCP tooling",
+  "description": "Isolated PUMPD iOS session lanes plus reusable Simulator and HeroUI Native tooling",
   "author": {
     "name": "Arend Alloul"
   },
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Mobile Development",
-    "shortDescription": "Use iOS Simulator and HeroUI Native tooling",
-    "longDescription": "Reusable local MCP tooling for iOS Simulator automation, public HeroUI Native documentation, and licensed HeroUI Native Pro components.",
+    "shortDescription": "Run isolated iOS lanes and mobile tooling",
+    "longDescription": "User-scoped PUMPD iOS session lanes for Claude and Codex, plus reusable local Simulator automation, public HeroUI Native documentation, and licensed HeroUI Native Pro components.",
     "developerName": "Arend Alloul",
     "category": "Developer Tools",
     "capabilities": ["Read", "Write"],

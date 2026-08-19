@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "id": "pumpd-mobile-app",
+  "displayName": "PUMPD",
+  "match": {
+    "originContains": ["PUMPD-MOBILE-APP/pumpd-mobile-app", "pumpd-mobile-app"],
+    "requiredPaths": [
+      "apps/mobile/app.config.ts",
+      "apps/mobile/eas.json",
+      "apps/backend/supabase/config.toml",
+      "pnpm-lock.yaml"
+    ]
+  },
+  "mobile": {
+    "root": "apps/mobile",
+    "environmentFile": ".env.local",
+    "easEnvironment": "development",
+    "requiredEnvironmentNames": [
+      "APP_VARIANT",
+      "EXPO_PUBLIC_SUPABASE_KEY",
+      "EXPO_PUBLIC_SUPABASE_URL",
+      "GOOGLE_IOS_URL_SCHEME"
+    ],
+    "appId": "com.avadworkout.pumpdmobileapp.development",
+    "scheme": "pumpdmobileappdevelopment",
+    "cachedAppName": "PUMPDDevelopment.app",
+    "renderTimeoutSeconds": 180
+  },
+  "backend": {
+    "root": "apps/backend",
+    "config": "apps/backend/supabase/config.toml",
+    "dopplerProject": "pumpd-backend",
+    "dopplerConfig": "dev_personal",
+    "requiredDopplerNames": [
+      "AI_MODEL",
+      "AI_PROVIDER",
+      "GITHUB_BUG_REPORT_REPO_NAME",
+      "GITHUB_BUG_REPORT_REPO_OWNER",
+      "GITHUB_BUG_REPORT_TOKEN",
+      "GOOGLE_GENERATIVE_AI_API_KEY",
+      "OPENAI_API_KEY",
+      "POSTHOG_HOST",
+      "POSTHOG_PROJECT_TOKEN",
+      "SUPABASE_AUTH_APPLE_SECRET",
+      "SUPABASE_AUTH_SMS_TWILIO_VERIFY_AUTH_TOKEN"
+    ],
+    "contractPaths": [
+      "apps/backend/supabase/config.toml",
+      "apps/backend/supabase/migrations",
+      "apps/backend/supabase/schemas",
+      "packages/types/database.generated.ts",
+      "packages/types/ai-coach.ts"
+    ]
+  },
+  "simulators": {
+    "namePrefix": "PUMPD Agent Lane ",
+    "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-Air",
+    "maximum": 6,
+    "maximumRuntimeMajor": 26,
+    "bootTimeoutSeconds": 900
+  },
+  "metro": {
+    "firstPort": 8081,
+    "lastPort": 8119,
+    "readyTimeoutSeconds": 180
+  },
+  "controllers": {
+    "agentDeviceVersion": "0.20.10"
+  },
+  "physicalDevices": {
+    "arens-iphone-pro": {
+      "displayNames": ["Aren's iPhone Pro", "Arens iPhone Pro", "Aren’s iPhone Pro"],
+      "jointTestRequired": true
+    }
+  },
+  "worktrees": {
+    "defaultBase": "origin/preview",
+    "directoryName": "pumpd-mobile-app-worktrees",
+    "parentLevels": 2
+  }
+}
