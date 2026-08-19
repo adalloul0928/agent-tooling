@@ -480,6 +480,15 @@ existing `plugins/personal/skills/` (obsidian-vault, personal-task,
 dad-daily-update) for shape and voice, and be written in capability terms so it
 works in both clients.
 
+> **Superseded 2026-08-11:** the Life OS implementation consolidated these
+> narrow prompts into the `life-os-*` suite and a shared audited runtime. The
+> official Gmail plugin replaces a duplicated email connector/triage skill;
+> `life-os-communications` composes Gmail and iMessage; `life-os-capture`
+> subsumes TickTick capture; daily/weekly/journal/habit behavior lives in the
+> corresponding Life OS skills. Raindrop remains deferred because it is outside
+> the approved Life OS source set. Keep the prompts below as historical input,
+> not as an active build queue.
+
 - [ ] **ticktick-capture**
 
   ```text

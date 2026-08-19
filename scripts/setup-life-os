@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RUNTIME="$REPO_ROOT/plugins/personal/runtime/lifeos_cli.py"
+LAUNCHER_DIR="$HOME/.local/bin"
+LAUNCHER="$LAUNCHER_DIR/lifeos"
+
+for command in python3 npm brew; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    printf 'missing prerequisite: %s\n' "$command" >&2
+    exit 69
+  fi
+done
+
+if ! command -v ticktick >/dev/null 2>&1; then
+  npm install --global @ticktick/ticktick-cli@0.1.12
+fi
+
+if ! command -v imsg >/dev/null 2>&1; then
+  brew install steipete/tap/imsg
+fi
+
+python3 "$RUNTIME" init
+chmod 700 "$RUNTIME"
+mkdir -p "$LAUNCHER_DIR"
+
+if [[ -e "$LAUNCHER" && ! -L "$LAUNCHER" ]]; then
+  printf 'refusing to replace non-symlink launcher: %s\n' "$LAUNCHER" >&2
+  exit 73
+fi
+
+ln -sfn "$RUNTIME" "$LAUNCHER"
+
+printf '\nLocal Life OS runtime installed. Human authorization remains required for:\n'
+printf '  - TickTick: ticktick auth login\n'
+printf '  - Gmail: connect each account through the official Gmail plugin\n'
+printf '  - iMessage: Full Disk Access; Messages Automation for confirmed sends\n'
+printf '  - Oura: register and authorize an OAuth application\n'
+printf '  - Apple Health: configure a deliberately limited JSON export\n\n'
+"$LAUNCHER" doctor

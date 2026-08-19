@@ -1,0 +1,179 @@
+name: Release macOS app
+
+on:
+  push:
+    tags:
+      - "agent-tooling-app-v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Sign, notarize, and publish
+    runs-on: xcode-27
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/agent-tooling-macos
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Resolve release version
+        run: |
+          version="${GITHUB_REF_NAME#agent-tooling-app-v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid app release tag: $GITHUB_REF_NAME" >&2
+            exit 64
+          fi
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "DMG_NAME=Agent-Tooling-$version-arm64.dmg" >> "$GITHUB_ENV"
+
+      - name: Require release credentials
+        env:
+          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          for value in CERTIFICATE CERTIFICATE_PASSWORD NOTARY_KEY NOTARY_KEY_ID NOTARY_ISSUER_ID; do
+            if [[ -z "${!value}" ]]; then
+              echo "Missing required GitHub Actions secret for $value" >&2
+              exit 78
+            fi
+          done
+
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          keychain_path="$RUNNER_TEMP/agent-tooling-signing.keychain-db"
+          keychain_password=$(openssl rand -base64 32)
+
+          printf '%s' "$CERTIFICATE" | base64 -D > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain_path"
+          security list-keychain -d user -s "$keychain_path"
+
+          identity=$(security find-identity -v -p codesigning "$keychain_path" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)
+          if [[ -z "$identity" ]]; then
+            echo "The certificate does not contain a Developer ID Application identity" >&2
+            exit 78
+          fi
+          echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+
+      - name: Prepare notarization key
+        env:
+          NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY_BASE64 }}
+        run: |
+          printf '%s' "$NOTARY_KEY" | base64 -D > "$RUNNER_TEMP/notary-api-key.p8"
+          chmod 600 "$RUNNER_TEMP/notary-api-key.p8"
+
+      - name: Validate source and release scripts
+        run: |
+          swift format lint --strict -r Sources Tests Package.swift
+          bash -n scripts/package-app.sh scripts/create-dmg.sh
+          shellcheck_version=0.11.0
+          shellcheck_archive="shellcheck-v${shellcheck_version}.darwin.aarch64.tar.xz"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/$shellcheck_archive" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${shellcheck_version}/$shellcheck_archive"
+          printf '%s  %s\n' \
+            '56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79' \
+            "$RUNNER_TEMP/$shellcheck_archive" | shasum -a 256 --check
+          tar -xJf "$RUNNER_TEMP/$shellcheck_archive" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/shellcheck-v${shellcheck_version}/shellcheck" -x scripts/package-app.sh scripts/create-dmg.sh
+          plutil -lint Resources/Info.plist
+
+      - name: Run tests and strict release build
+        run: |
+          swift test --disable-sandbox
+          swift build --configuration release -Xswiftc -warnings-as-errors
+
+      - name: Build and sign release app
+        env:
+          AGENT_TOOLING_CONFIGURATION: release
+          AGENT_TOOLING_VERSION: ${{ env.RELEASE_VERSION }}
+          AGENT_TOOLING_BUILD_NUMBER: ${{ github.run_number }}
+          AGENT_TOOLING_CODE_SIGN_IDENTITY: ${{ env.SIGNING_IDENTITY }}
+        run: ./scripts/package-app.sh "$RUNNER_TEMP/Agent Tooling.app"
+
+      - name: Verify Developer ID signature
+        run: |
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/Agent Tooling.app"
+          codesign -dv --verbose=4 "$RUNNER_TEMP/Agent Tooling.app" 2>&1 | tee "$RUNNER_TEMP/codesign-details.txt"
+          grep -q "flags=.*runtime" "$RUNNER_TEMP/codesign-details.txt"
+          grep -q "TeamIdentifier=" "$RUNNER_TEMP/codesign-details.txt"
+
+      - name: Create signed disk image
+        env:
+          AGENT_TOOLING_CODE_SIGN_IDENTITY: ${{ env.SIGNING_IDENTITY }}
+        run: ./scripts/create-dmg.sh "$RUNNER_TEMP/Agent Tooling.app" "$RUNNER_TEMP/$DMG_NAME"
+
+      - name: Notarize and staple disk image
+        env:
+          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          xcrun notarytool submit "$RUNNER_TEMP/$DMG_NAME" \
+            --key "$RUNNER_TEMP/notary-api-key.p8" \
+            --key-id "$NOTARY_KEY_ID" \
+            --issuer "$NOTARY_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "$RUNNER_TEMP/$DMG_NAME"
+          xcrun stapler validate "$RUNNER_TEMP/$DMG_NAME"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$RUNNER_TEMP/$DMG_NAME"
+
+      - name: Create checksum and release notes
+        run: |
+          cd "$RUNNER_TEMP"
+          shasum -a 256 "$DMG_NAME" > "$DMG_NAME.sha256"
+          cat > release-notes.md <<EOF
+          ## Agent Tooling $RELEASE_VERSION
+
+          Native macOS control center for Codex, Claude Code, and Gemini CLI tooling.
+
+          **Requirements:** Apple Silicon Mac running macOS 26 or newer.
+
+          Download the DMG, open it, and drag **Agent Tooling** into **Applications**. The app is Developer ID signed and notarized by Apple.
+          EOF
+
+      - name: Upload notarized release artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Agent-Tooling-${{ env.RELEASE_VERSION }}-macOS-arm64
+          path: |
+            ${{ runner.temp }}/${{ env.DMG_NAME }}
+            ${{ runner.temp }}/${{ env.DMG_NAME }}.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "$RUNNER_TEMP/$DMG_NAME" \
+            "$RUNNER_TEMP/$DMG_NAME.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Agent Tooling $RELEASE_VERSION" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+
+      - name: Remove temporary keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/agent-tooling-signing.keychain-db" 2>/dev/null || true

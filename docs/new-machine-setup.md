@@ -240,6 +240,49 @@ lands in **`~/.agents/skills/<name>/SKILL.md`**, *not* `~/.codex/skills/`. The
 profile's `codex.*-skill-*` checks carry the exact per-skill recipes, so
 `./scripts/setup base-workstation --apply` handles this for you.
 
+## Step 5c — Personal AI / Life OS Mac mini
+
+On the always-on Life OS host, apply the dedicated profile after the normal
+Codex setup:
+
+```bash
+./scripts/life-os-host-preflight
+./scripts/setup life-os-workstation --apply
+./scripts/setup-life-os
+./scripts/activate-life-os --open-gates
+lifeos doctor
+```
+
+Do not skip the first command. It must report the intended Mac mini, disabled AC
+system sleep, ChatGPT installed/running/opening at login, and an online private
+tailnet. Remote Login is reported separately so another tailnet device can
+maintain the host without exposing a public service.
+
+If the source checkout is dirty with unrelated work, use
+`./scripts/deploy-life-os-to-host --host <tailscale-host>` for a dry-run preview
+and add `--apply` only after reviewing the fixed Life OS file set. The deployer
+requires an existing remote Git checkout, refuses overlapping changes, never
+deletes remote files, and runs remote static validation. It also requires
+non-interactive SSH key authentication; authorize the source workstation's
+public key on the Mac mini rather than placing a password in a script or config.
+
+This installs the official Gmail plugin, TickTick CLI, signed `imsg` CLI, local
+runtime launcher, private state directory, policy, voice artifacts, and SQLite
+ledger. It intentionally stops at the human gates:
+
+1. authorize TickTick with `ticktick auth login`;
+2. install and connect each approved Gmail account through the Codex Gmail connector;
+3. grant the Codex/terminal parent Full Disk Access for iMessage reads and grant
+   Messages Automation only for a confirmed send canary;
+4. register and authorize the Oura OAuth application with minimum `daily` scope;
+5. configure a deliberately limited Health Auto Export JSON flow;
+6. recreate and verify the four Codex Scheduled tasks listed in
+   [life-os.md](life-os.md).
+
+Use `./scripts/doctor life-os-workstation` for the reproducible local state and
+`lifeos doctor` for behavioral connector readiness. Neither one treats an
+installed-but-unauthenticated connector as an empty data source.
+
 ## Step 6 — verify
 
 ```bash
@@ -261,7 +304,7 @@ prints at the end of its run.
 | claude.ai connectors (Linear, Gmail, Drive, TickTick, Raindrop, …) | Account-side; enabled in the web UI. `claude mcp login <name>` can *authenticate* a connector but cannot *enable* one |
 | ChatGPT / Codex account apps | Account-side, and separate from local Codex MCPs |
 | OAuth grants | Require a human and a browser |
-| Scheduled tasks | Machine-local (`~/.claude/scheduled-tasks/`) |
+| Scheduled tasks | Machine/account-local; Claude and Codex schedules must each be recreated and behaviorally verified |
 | Doppler login | Machine-local credential |
 
 Note `disableClaudeAiConnectors: true` is set at user scope. That governs the

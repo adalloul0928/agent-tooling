@@ -1,0 +1,133 @@
+{
+  "$schema": "../schemas/profile.schema.json",
+  "schema_version": 1,
+  "name": "life-os-workstation",
+  "description": "Local-first Personal AI / Life OS runtime, connectors, and account-side gates for Aren's always-on Mac mini.",
+  "extends": [
+    "base-workstation"
+  ],
+  "variables": {
+    "agent_tooling_root": "~/ws/agent-tooling"
+  },
+  "checks": [
+    {
+      "id": "codex.gmail-plugin",
+      "kind": "codex_plugin",
+      "plugin": "gmail@openai-curated",
+      "expected": "enabled",
+      "install": {
+        "run": [
+          "codex",
+          "plugin",
+          "add",
+          "gmail@openai-curated",
+          "--json"
+        ],
+        "note": "Installation does not authenticate a Gmail account. Connect each approved Gmail account through the Codex Gmail connector."
+      }
+    },
+    {
+      "id": "life-os.runtime-source",
+      "kind": "path",
+      "path": "${agent_tooling_root}/plugins/personal/runtime/lifeos_cli.py",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "life-os.activation-script",
+      "kind": "path",
+      "path": "${agent_tooling_root}/scripts/activate-life-os",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "life-os.host-preflight",
+      "kind": "path",
+      "path": "${agent_tooling_root}/scripts/life-os-host-preflight",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "life-os.remote-deployer",
+      "kind": "path",
+      "path": "${agent_tooling_root}/scripts/deploy-life-os-to-host",
+      "path_type": "file",
+      "expected": "present"
+    },
+    {
+      "id": "life-os.launcher",
+      "kind": "path",
+      "path": "~/.local/bin/lifeos",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": [
+          "${agent_tooling_root}/scripts/setup-life-os"
+        ],
+        "note": "Installs the TickTick and imsg CLIs when missing, initializes private local state, and creates the launcher. OAuth and macOS privacy permissions remain manual."
+      }
+    },
+    {
+      "id": "life-os.config",
+      "kind": "path",
+      "path": "~/Library/Application Support/LifeOS/config.json",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": [
+          "${agent_tooling_root}/scripts/setup-life-os"
+        ]
+      }
+    },
+    {
+      "id": "life-os.ledger",
+      "kind": "path",
+      "path": "~/Library/Application Support/LifeOS/life-os.sqlite3",
+      "path_type": "file",
+      "expected": "present",
+      "install": {
+        "run": [
+          "${agent_tooling_root}/scripts/setup-life-os"
+        ]
+      }
+    }
+  ],
+  "manual_checks": [
+    {
+      "id": "life-os.production-host-readiness",
+      "description": "Run `./scripts/life-os-host-preflight` on the production Mac mini. Required checks are Mac mini hardware, AC system sleep disabled, ChatGPT installed/running/opening at login, and a live private Tailscale connection; Remote Login is reported separately for remote maintenance."
+    },
+    {
+      "id": "life-os.ticktick-oauth",
+      "description": "Verified 2026-08-11: OAuth succeeded and bounded reads observed 25 projects and 160 open tasks. Re-run `ticktick auth status` and the bounded canary after token or machine changes."
+    },
+    {
+      "id": "life-os.gmail-accounts",
+      "description": "Connect and behaviorally verify every approved Gmail account through the Codex Gmail connector; installation alone is insufficient."
+    },
+    {
+      "id": "life-os.imessage-permissions",
+      "description": "On this host, ChatGPT.app is the observed parent of the Codex runtime. Grant that desktop app Full Disk Access, restart it, verify bounded `imsg` reads, and grant Messages Automation only before a confirmed send canary."
+    },
+    {
+      "id": "life-os.oura-oauth",
+      "description": "Register an Oura OAuth application with minimum daily scope, exchange the authorization code, and verify a bounded read-only sync."
+    },
+    {
+      "id": "life-os.apple-health-export",
+      "description": "Configure a deliberately limited Health Auto Export JSON flow and verify ingestion; the Life OS never writes health data."
+    },
+    {
+      "id": "life-os.voice-profile",
+      "description": "Review a bounded representative sample and approve the iMessage, personal email, and professional email voice rules."
+    },
+    {
+      "id": "life-os.codex-schedules",
+      "description": "The 2026-08-11 evening review completed safely with connector blind spots and durable output. Verify connected first runs for morning, communications, evening, and weekly tasks, plus duplicate prevention, in the local agent-tooling project."
+    },
+    {
+      "id": "life-os.personal-plugin-publication",
+      "description": "Local non-copying Codex/Claude skill symlinks are installed on this workstation. After explicit commit/push approval, refresh personal@agent-tooling and verify implicit invocation on another machine; Scheduled tasks read the local skill files before publication."
+    }
+  ]
+}

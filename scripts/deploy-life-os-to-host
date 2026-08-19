@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/deploy-life-os-to-host --host <tailscale-host> [--target <relative-path>] [--apply]
+
+Safely previews or transfers only the Life OS implementation into an existing
+agent-tooling checkout on a private Tailscale host. The default is a dry run.
+
+Options:
+  --host HOST       Tailscale DNS name or host alias (required)
+  --target PATH     Path below the remote user's home (default: ws/agent-tooling)
+  --apply           Perform the scoped transfer after all checks pass
+  -h, --help        Show this help
+EOF
+}
+
+host=""
+target="ws/agent-tooling"
+apply=false
+
+while (($#)); do
+  case "$1" in
+    --host)
+      [[ $# -ge 2 ]] || { printf 'error: --host needs a value\n' >&2; exit 2; }
+      host="$2"
+      shift 2
+      ;;
+    --target)
+      [[ $# -ge 2 ]] || { printf 'error: --target needs a value\n' >&2; exit 2; }
+      target="$2"
+      shift 2
+      ;;
+    --apply)
+      apply=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'error: unknown argument: %s\n' "$1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+[[ -n "$host" ]] || { printf 'error: --host is required\n' >&2; exit 2; }
+[[ "$host" =~ ^([A-Za-z0-9._-]+@)?[A-Za-z0-9._-]+$ ]] || { printf 'error: unsafe host value\n' >&2; exit 2; }
+[[ -n "$target" && "$target" != "." && "$target" != "/" && "$target" != "~" ]] || {
+  printf 'error: target must be a specific path below the remote home\n' >&2
+  exit 2
+}
+[[ "$target" != /* && "$target" != *".."* && "$target" =~ ^[A-Za-z0-9._/-]+$ ]] || {
+  printf 'error: target must be a safe relative path without ..\n' >&2
+  exit 2
+}
+
+for command_name in git rsync ssh; do
+  command -v "$command_name" >/dev/null || { printf 'error: %s is required\n' "$command_name" >&2; exit 2; }
+done
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+declare -a paths=(
+  "plugins/personal/runtime/"
+  "plugins/personal/.claude-plugin/plugin.json"
+  "plugins/personal/.codex-plugin/plugin.json"
+  "profiles/life-os-workstation.json"
+  "scripts/activate-life-os"
+  "scripts/deploy-life-os-to-host"
+  "scripts/life-os-host-preflight"
+  "scripts/setup-life-os"
+  "scripts/validate-static"
+  "tests/test_life_os_runtime.py"
+  "tests/test_life_os_skills.py"
+)
+
+while IFS= read -r skill_dir; do
+  paths+=("$skill_dir/")
+done < <(find plugins/personal/skills -mindepth 1 -maxdepth 1 -type d -name 'life-os-*' -print | sort)
+
+for path in "${paths[@]}"; do
+  [[ -e "${path%/}" ]] || { printf 'error: missing deployment source: %s\n' "$path" >&2; exit 2; }
+done
+
+ssh_options=(-o BatchMode=yes -o ConnectTimeout=5)
+remote_home="$(ssh "${ssh_options[@]}" "$host" 'printf %s "$HOME"')"
+[[ "$remote_home" =~ ^/[A-Za-z0-9._/-]+$ ]] || {
+  printf 'error: remote home path is unavailable or unsafe\n' >&2
+  exit 2
+}
+remote_root="$remote_home/$target"
+
+# remote_root is locally validated before interpolation.
+# shellcheck disable=SC2029
+ssh "${ssh_options[@]}" "$host" "test -d \"$remote_root/.git\"" || {
+  printf 'error: remote target is not an existing Git checkout: %s:%s\n' "$host" "$target" >&2
+  printf 'Clone agent-tooling there first; this scoped deployer never creates a partial repository.\n' >&2
+  exit 2
+}
+
+# remote_root is locally validated before interpolation.
+# shellcheck disable=SC2029
+remote_changes="$({
+  printf '%s\n' "${paths[@]}" | sed 's:/$::'
+} | ssh "${ssh_options[@]}" "$host" "cd \"$remote_root\" && xargs git status --porcelain --" 2>/dev/null || true)"
+if [[ -n "$remote_changes" ]]; then
+  printf 'error: remote checkout has changes overlapping the Life OS deployment scope:\n%s\n' "$remote_changes" >&2
+  exit 2
+fi
+
+rsync_options=(
+  -a
+  --relative
+  --itemize-changes
+  --exclude '__pycache__/'
+  --exclude '*.pyc'
+)
+if [[ "$apply" != true ]]; then
+  rsync_options+=(--dry-run)
+  printf 'Dry run only. Re-run with --apply after reviewing the itemized files.\n'
+else
+  printf 'Applying scoped Life OS transfer; no files outside the allowlist are included or deleted.\n'
+fi
+
+rsync "${rsync_options[@]}" -e "ssh -o BatchMode=yes -o ConnectTimeout=5" \
+  "${paths[@]}" "$host:$remote_root/"
+
+if [[ "$apply" == true ]]; then
+  # remote_root is locally validated before interpolation.
+  # shellcheck disable=SC2029
+  ssh "${ssh_options[@]}" "$host" \
+    "cd \"$remote_root\" && chmod 755 scripts/activate-life-os scripts/deploy-life-os-to-host scripts/life-os-host-preflight scripts/setup-life-os && ./scripts/validate-static"
+  printf 'Scoped transfer and remote static validation succeeded. Account and privacy canaries remain machine-local.\n'
+fi

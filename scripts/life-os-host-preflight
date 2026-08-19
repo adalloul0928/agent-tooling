@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Read-only production-host readiness checks for the Life OS Mac mini."""
+
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import socket
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+
+def run(*args: str, timeout: float = 10) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            args,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return subprocess.CompletedProcess(args, 127, "", str(exc))
+
+
+def check(name: str, status: str, detail: str, *, required: bool = True) -> dict[str, Any]:
+    return {"name": name, "status": status, "detail": detail, "required": required}
+
+
+def model_name() -> str | None:
+    result = run("system_profiler", "SPHardwareDataType")
+    match = re.search(r"^\s*Model Name:\s*(.+?)\s*$", result.stdout, re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def ac_sleep_minutes() -> int | None:
+    result = run("pmset", "-g", "custom")
+    in_ac = False
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if stripped.endswith("Power:"):
+            in_ac = stripped == "AC Power:"
+            continue
+        if in_ac:
+            match = re.match(r"sleep\s+(\d+)\s*$", stripped)
+            if match:
+                return int(match.group(1))
+    return None
+
+
+def chatgpt_running() -> bool:
+    result = run("pgrep", "-f", "/Applications/ChatGPT.app/Contents/")
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def login_items() -> tuple[set[str], str | None]:
+    result = run(
+        "osascript",
+        "-e",
+        'tell application "System Events" to get the name of every login item',
+    )
+    if result.returncode != 0:
+        return set(), (result.stderr or result.stdout).strip() or "System Events did not return login items"
+    return {item.strip() for item in result.stdout.split(",") if item.strip()}, None
+
+
+def tailscale_ready() -> tuple[bool, str]:
+    executable = shutil.which("tailscale")
+    if not executable:
+        return False, "tailscale is not on PATH"
+    result = run(executable, "status", "--json")
+    if result.returncode != 0:
+        return False, (result.stderr or result.stdout).strip() or "tailnet status unavailable"
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False, "tailnet status was not valid JSON"
+    online = bool(payload.get("Self", {}).get("Online"))
+    return online, "private tailnet is online" if online else "this host is not online in the tailnet"
+
+
+def remote_login_ready() -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", 22), timeout=0.25):
+            return True
+    except OSError:
+        return False
+
+
+def main() -> int:
+    checks: list[dict[str, Any]] = []
+
+    model = model_name()
+    checks.append(
+        check(
+            "production-host",
+            "ready" if model == "Mac mini" else "wrong_host",
+            "Mac mini" if model == "Mac mini" else f"expected Mac mini; observed {model or 'unknown model'}",
+        )
+    )
+
+    sleep = ac_sleep_minutes()
+    checks.append(
+        check(
+            "ac-system-sleep",
+            "ready" if sleep == 0 else "needs_configuration",
+            "AC system sleep is disabled" if sleep == 0 else f"AC system sleep is {sleep if sleep is not None else 'unknown'} minute(s)",
+        )
+    )
+
+    installed = Path("/Applications/ChatGPT.app").is_dir()
+    checks.append(
+        check(
+            "chatgpt-installed",
+            "ready" if installed else "missing",
+            "ChatGPT.app is installed" if installed else "ChatGPT.app is not installed in /Applications",
+        )
+    )
+    running = chatgpt_running()
+    checks.append(
+        check(
+            "chatgpt-running",
+            "ready" if running else "not_running",
+            "ChatGPT.app has a running process" if running else "ChatGPT.app is not running",
+        )
+    )
+
+    items, item_error = login_items()
+    if item_error:
+        checks.append(check("chatgpt-login-item", "unknown", item_error))
+    else:
+        is_login_item = "ChatGPT" in items or "Codex" in items
+        checks.append(
+            check(
+                "chatgpt-login-item",
+                "ready" if is_login_item else "needs_configuration",
+                "ChatGPT/Codex opens at login" if is_login_item else "ChatGPT/Codex is not configured to open at login",
+            )
+        )
+
+    tailnet_ok, tailnet_detail = tailscale_ready()
+    checks.append(check("tailscale", "ready" if tailnet_ok else "needs_configuration", tailnet_detail))
+
+    remote_login = remote_login_ready()
+    checks.append(
+        check(
+            "remote-login",
+            "ready" if remote_login else "needs_configuration",
+            "SSH Remote Login is reachable locally" if remote_login else "SSH Remote Login is not listening on port 22",
+            required=False,
+        )
+    )
+
+    required_ready = all(item["status"] == "ready" for item in checks if item["required"])
+    report = {
+        "status": "ready" if required_ready else "needs_attention",
+        "checks": checks,
+        "notes": [
+            "This command is read-only.",
+            "Remote access remains Tailscale-only; this does not configure a public endpoint.",
+            "Full Disk Access and Gmail/Oura authorization are verified separately by lifeos doctor.",
+        ],
+    }
+    json.dump(report, sys.stdout, indent=2)
+    sys.stdout.write("\n")
+    return 0 if required_ready else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

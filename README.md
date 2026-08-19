@@ -7,12 +7,23 @@ platform-native manifests that package them. It does not contain machine-local
 settings, OAuth state, secrets, or project-critical instructions that belong in
 an application repository.
 
+## macOS app
+
+The repository also contains the native [Agent Tooling macOS app](apps/agent-tooling-macos/README.md),
+a local-first control center for skills, MCP servers, plugins, configurations,
+sync, and guarded client operations across Codex, Claude Code, and Gemini CLI.
+
+Versioned `agent-tooling-app-v*` tags build a Developer ID-signed and notarized
+DMG through GitHub Actions. The one-time credential setup and release procedure
+are documented in [docs/macos-app-release.md](docs/macos-app-release.md).
+
 ## Status
 
 The dual catalogs publish seven focused native plugins from shared skill cores
 and native MCP adapters:
 
-- `personal`: Obsidian vault, family check-in, and personal task workflows;
+- `personal`: local-first Personal AI / Life OS, Obsidian vault, communication,
+  planning/review, family check-in, and personal task workflows;
 - `developer-workflows`: reusable cross-project development quality workflows;
 - `cyrus-workflows`: PUMPD research, planning, review, delegation, learning,
   and retrospective workflows for Cyrus;

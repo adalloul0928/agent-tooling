@@ -93,7 +93,7 @@ skill installation is not required.
 
 | Plugin | Skills | Intended scope | Ownership |
 | --- | --- | --- | --- |
-| `personal` | `obsidian-vault`, `dad-daily-update`, `personal-task`, `personal-task-done` | User/workstation | First-party |
+| `personal` | `obsidian-vault`, `dad-daily-update`, `personal-task`, `personal-task-done`; Life OS: `life-os-setup`, `life-os-capture`, `life-os-daily-plan`, `life-os-day-review`, `life-os-communications`, `life-os-weekly-review`, `life-os-journal`, `life-os-voice`, `life-os-meeting`, `life-os-decision`, `life-os-health-review`, `life-os-relationship-review`, `life-os-strategic-review`, `life-os-chief-of-staff`; bundled local runtime | User/workstation | First-party |
 | `developer-workflows` | `thermo-nuclear-code-quality-review`; Doppler-backed `heroui-pro` MCP | User/workstation; reusable across projects | First-party wrapper around the third-party MCP |
 | `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | PUMPD target; Claude project scope, Codex user install | First-party |
 | `pumpd-workflows` | `pumpd-local-cleanup` | PUMPD target; Claude project scope, Codex user install | First-party |

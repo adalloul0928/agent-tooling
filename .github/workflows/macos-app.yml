@@ -1,0 +1,86 @@
+name: Validate macOS app
+
+on:
+  pull_request:
+    paths:
+      - "apps/agent-tooling-macos/**"
+      - ".github/workflows/macos-app.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/agent-tooling-macos/**"
+      - ".github/workflows/macos-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test and package
+    runs-on: xcode-27
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/agent-tooling-macos
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Validate source and release scripts
+        run: |
+          swift format lint --strict -r Sources Tests Package.swift
+          bash -n scripts/package-app.sh scripts/create-dmg.sh
+          shellcheck_version=0.11.0
+          shellcheck_archive="shellcheck-v${shellcheck_version}.darwin.aarch64.tar.xz"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/$shellcheck_archive" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${shellcheck_version}/$shellcheck_archive"
+          printf '%s  %s\n' \
+            '56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79' \
+            "$RUNNER_TEMP/$shellcheck_archive" | shasum -a 256 --check
+          tar -xJf "$RUNNER_TEMP/$shellcheck_archive" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/shellcheck-v${shellcheck_version}/shellcheck" -x scripts/package-app.sh scripts/create-dmg.sh
+          plutil -lint Resources/Info.plist
+
+      - name: Run tests and strict release build
+        run: |
+          swift test --disable-sandbox
+          swift build --configuration release -Xswiftc -warnings-as-errors
+
+      - name: Build release app
+        env:
+          AGENT_TOOLING_CONFIGURATION: release
+          AGENT_TOOLING_VERSION: 0.1.0
+          AGENT_TOOLING_BUILD_NUMBER: ${{ github.run_number }}
+        run: ./scripts/package-app.sh "$RUNNER_TEMP/Agent Tooling.app"
+
+      - name: Verify app bundle
+        run: |
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/Agent Tooling.app"
+          test -f "$RUNNER_TEMP/Agent Tooling.app/Contents/Resources/AgentTooling_AgentToolingApp.bundle/Contents/Resources/Assets.car"
+          file "$RUNNER_TEMP/Agent Tooling.app/Contents/MacOS/AgentTooling"
+
+      - name: Create unsigned CI disk image
+        run: ./scripts/create-dmg.sh "$RUNNER_TEMP/Agent Tooling.app" "$RUNNER_TEMP/Agent-Tooling-ci-arm64.dmg"
+
+      - name: Upload disk image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Agent-Tooling-macOS-arm64
+          path: ${{ runner.temp }}/Agent-Tooling-ci-arm64.dmg
+          if-no-files-found: error
+          retention-days: 14

@@ -79,15 +79,19 @@ one PR.
 
 | Item | Status | Notes |
 |---|---|---|
-| `ticktick-capture` | pending | NL quick-add → right project/tag/date/priority |
-| `email-triage` | pending | Draft-only — never sends; sensitive labels for private mail |
-| `weekly-review` | pending | TickTick + Linear + Obsidian + Raindrop → vault review note |
-| `daily-plan` | pending | Composes with built-in `morning`; TickTick due dates as schedule source |
-| `raindrop-tidy` | pending | Connector-native find-misplaced/find-mistagged |
-| `read-later-digest` | pending | Raindrop → summarize → note/task |
-| `imessage-catchup` | pending | Send only on explicit per-message confirm; never paste contents |
-| `habit-review` | pending | TickTick habits/check-ins/streaks |
-| `personal-journal` | pending | Dad-update Q&A pattern → Obsidian `Personal/` |
+| `life-os-capture` | **done** | Replaces `ticktick-capture`; routes tasks, notes, commitments, decisions, and calendar proposals with provenance/idempotency |
+| Official Gmail plugin + `life-os-communications` | **done (auth pending)** | Replaces duplicate `email-triage`; Gmail/iMessage follow-ups, bounded voice drafts, exact per-message send confirmation |
+| `life-os-weekly-review` | **done** | TickTick + commitments + communications + Obsidian + relationships + optional read-only health → canonical vault review |
+| `life-os-daily-plan` | **done** | Morning brief and three priorities from TickTick calendar/tasks, commitments, communications, Obsidian, and optional health |
+| `life-os-day-review` | **done** | Evening reconstruction, commitment resolution, and tomorrow preparation |
+| `life-os-journal` | **done** | Self-facing reflection Q&A → designated Obsidian journal root |
+| `life-os-voice` | **done (sample approval pending)** | Bounded iMessage/personal email/professional email modes; learns from approved corrections, not wholesale history |
+| `life-os-meeting`, `life-os-decision` | **done** | Meeting prep/debrief routing and decision journal with outcome revisit |
+| `life-os-health-review`, `life-os-relationship-review` | **done (data auth pending)** | Read-only health trends and evidence-bounded relationship attention |
+| `life-os-strategic-review`, `life-os-chief-of-staff` | **done** | Monthly/quarterly direction and policy-preserving cross-system orchestration |
+| Production Mac mini deployment | **pending host access** | Current behavioral canaries ran on a MacBook Pro. The Mac mini is online through private Tailscale and Screen Sharing, but SSH Remote Login is disabled; run `scripts/life-os-host-preflight` and repeat machine-local OAuth/privacy/schedule canaries on the mini |
+| `raindrop-tidy`, `read-later-digest` | deferred | Raindrop is outside the current TickTick/Obsidian/Gmail/iMessage/health Life OS scope; do not mount it without a renewed user requirement |
+| Legacy `habit-review`, `imessage-catchup` prompts | superseded | Habit evidence is included in weekly/strategic reviews; iMessage catch-up is composed inside communications rather than duplicated |
 
 ## Connector posture (approved)
 

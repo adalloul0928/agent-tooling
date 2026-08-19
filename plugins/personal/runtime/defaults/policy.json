@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "default_decision": "confirm",
+  "actions": {
+    "automatic": [
+      "read.*",
+      "classify.*",
+      "draft.*",
+      "ledger.*",
+      "review.create",
+      "journal.create",
+      "obsidian.create_designated",
+      "ticktick.create_followup",
+      "commitment.resolve_unambiguous"
+    ],
+    "confirm": [
+      "gmail.send",
+      "imessage.send",
+      "calendar.create",
+      "calendar.update",
+      "ticktick.create_task",
+      "ticktick.update_due",
+      "ticktick.update_priority",
+      "obsidian.edit_existing",
+      "contact.proactive",
+      "source.archive",
+      "source.delete"
+    ],
+    "never": [
+      "bulk_delete.*",
+      "credentials.*",
+      "permissions.*",
+      "financial.transaction",
+      "health.write",
+      "medical.claim"
+    ]
+  },
+  "thresholds": {
+    "automatic_followup_confidence": 0.85,
+    "candidate_commitment_confidence": 0.55,
+    "stale_relationship_days": 30
+  },
+  "recipient_overrides": {},
+  "untrusted_sources": [
+    "gmail",
+    "imessage",
+    "web",
+    "documents"
+  ]
+}

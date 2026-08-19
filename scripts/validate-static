@@ -109,6 +109,12 @@ printf 'Validating bundled helper scripts...\n'
 while IFS= read -r script; do
   bash -n "$script"
 done < <(find "$REPO_ROOT/plugins" -type f -path '*/scripts/*.sh' -print | sort)
+while IFS= read -r script; do
+  bash -n "$script"
+done < <(rg -l '^#!/usr/bin/env bash$' "$REPO_ROOT/scripts" | sort)
+while IFS= read -r script; do
+  PYTHONPYCACHEPREFIX="${TMPDIR:-/tmp}/agent-tooling-pycache" python3 -m py_compile "$script"
+done < <(rg -l '^#!/usr/bin/env python3$' "$REPO_ROOT/scripts" | sort)
 
 PYTHONPYCACHEPREFIX="${TMPDIR:-/tmp}/agent-tooling-pycache" \
   python3 -m compileall -q "$REPO_ROOT/plugins"

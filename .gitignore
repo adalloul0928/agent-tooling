@@ -1,16 +1,59 @@
 .DS_Store
 *.log
+*.orig
+*~
 
 .env
 .env.*
 !.env.example
+*.cer
+*.mobileprovision
+*.p12
+*.p8
+*.pem
+*.provisionprofile
 
 .tmp/
 tmp/
 dist/
 coverage/
 node_modules/
+.worktrees/
+
+# Swift Package Manager and Xcode-generated state. Keep Package.resolved
+# eligible for version control because this repository ships an application.
+.build/
+**/.swiftpm/xcode/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.hmap
+*.dSYM
+*.dSYM.zip
+*.ipa
+*.xcarchive/
+*.app/
+*.dmg
+*.pkg
+
+# Local coverage, database, and test-run artifacts.
+*.profraw
+*.profdata
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 .venv/
 __pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Optional dependency and release-tool output.
+Carthage/Build/
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
 
 .claude/settings.local.json

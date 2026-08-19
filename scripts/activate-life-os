@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+umask 077
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LIFEOS="${LIFE_OS_BIN:-$HOME/.local/bin/lifeos}"
+OPEN_GATES=false
+
+usage() {
+  printf 'Usage: %s [--open-gates]\n' "$0"
+  printf '  --open-gates  Open or wait for user-owned OAuth/privacy approval flows.\n'
+}
+
+case "${1:-}" in
+  "") ;;
+  --open-gates) OPEN_GATES=true ;;
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  *)
+    usage >&2
+    exit 64
+    ;;
+esac
+
+for command in jq ticktick imsg tailscale; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    printf 'missing required command: %s\n' "$command" >&2
+    exit 69
+  fi
+done
+
+if [[ ! -x "$LIFEOS" ]]; then
+  printf 'Life OS launcher is unavailable: %s\n' "$LIFEOS" >&2
+  printf 'Run %s/scripts/setup-life-os first.\n' "$REPO_ROOT" >&2
+  exit 69
+fi
+
+ACTIVATION_TMP="$(mktemp -d "${TMPDIR:-/tmp}/life-os-activation.XXXXXX")"
+trap 'rm -r "$ACTIVATION_TMP"' EXIT
+
+printf 'Initializing local state...\n'
+"$LIFEOS" init >/dev/null
+
+ticktick_status="$(ticktick auth status 2>&1 || true)"
+if [[ "$ticktick_status" == *"Not signed in"* || "$ticktick_status" == *"not signed in"* ]]; then
+  if [[ "$OPEN_GATES" == true ]]; then
+    printf 'Opening TickTick OAuth. Complete the browser flow to continue...\n'
+    ticktick auth login
+    ticktick_status="$(ticktick auth status 2>&1 || true)"
+  fi
+fi
+
+if [[ "$ticktick_status" != *"Not signed in"* && "$ticktick_status" != *"not signed in"* ]]; then
+  printf 'Running bounded TickTick read canary...\n'
+  ticktick project list --json >"$ACTIVATION_TMP/ticktick-projects.json"
+  ticktick task filter --status 0 --json >"$ACTIVATION_TMP/ticktick-tasks.json"
+  project_count="$(jq 'if type == "array" then length elif (.data? | type) == "array" then .data | length elif (.projects? | type) == "array" then .projects | length else 0 end' "$ACTIVATION_TMP/ticktick-projects.json")"
+  task_count="$(jq 'if type == "array" then length elif (.data? | type) == "array" then .data | length elif (.tasks? | type) == "array" then .tasks | length else 0 end' "$ACTIVATION_TMP/ticktick-tasks.json")"
+  ticktick_metadata="$(jq -cn --argjson projects "$project_count" --argjson tasks "$task_count" '{bounded_project_read:true,bounded_task_read:true,project_count:$projects,open_task_count:$tasks}')"
+  "$LIFEOS" connector-verify ticktick --identity ticktick-account --metadata-json "$ticktick_metadata" >/dev/null
+  printf 'TickTick ready: %s project(s), %s open task(s) observed.\n' "$project_count" "$task_count"
+else
+  printf 'TickTick pending: run "%s --open-gates" and approve the browser OAuth flow.\n' "$0"
+fi
+
+if imsg chats --limit 1 --json >"$ACTIVATION_TMP/imessage-chat.json" 2>"$ACTIVATION_TMP/imessage-error.txt"; then
+  printf 'Running bounded iMessage read canary...\n'
+  "$LIFEOS" imessage-recent --lookback-hours 24 --chat-limit 1 --message-limit 1 >"$ACTIVATION_TMP/imessage-snapshot.json"
+  chat_count="$(jq '.chats | length' "$ACTIVATION_TMP/imessage-snapshot.json")"
+  message_count="$(jq '[.chats[].messages[]?] | length' "$ACTIVATION_TMP/imessage-snapshot.json")"
+  imessage_metadata="$(jq -cn --argjson chats "$chat_count" --argjson messages "$message_count" '{bounded_chat_read:true,lookback_hours:24,chat_limit:1,message_limit:1,chat_count:$chats,message_count:$messages,raw_bodies_retained:false}')"
+  "$LIFEOS" connector-verify imessage --identity local-messages-database --metadata-json "$imessage_metadata" >/dev/null
+  printf 'iMessage ready: bounded read succeeded; raw bodies were not retained.\n'
+else
+  if [[ "$OPEN_GATES" == true ]]; then
+    open 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'
+  fi
+  printf 'iMessage pending: grant ChatGPT.app Full Disk Access, then restart ChatGPT.\n'
+fi
+
+health_inbox="$HOME/Library/Application Support/LifeOS/health-inbox"
+health_file="$(find "$health_inbox" -maxdepth 1 -type f -name '*.json' -print -quit)"
+if [[ -n "$health_file" ]]; then
+  printf 'Ingesting one deliberately exported Apple Health JSON file...\n'
+  "$LIFEOS" health-ingest "$health_file" >/dev/null
+else
+  printf 'Apple Health pending: no deliberately limited JSON export is available.\n'
+fi
+
+if jq -e '.oura.client_id | type == "string" and length > 0' "$HOME/Library/Application Support/LifeOS/config.json" >/dev/null; then
+  printf 'Running bounded Oura read canary...\n'
+  "$LIFEOS" oura-sync >/dev/null
+else
+  printf '%s\n' 'Oura pending: register the configured loopback redirect and run "lifeos oura-authorize".'
+fi
+
+tailscale status --json >"$ACTIVATION_TMP/tailscale.json"
+printf 'Tailscale ready: private tailnet status is available.\n'
+
+printf '\nLive readiness:\n'
+"$LIFEOS" doctor
+
+printf '\nGmail must be connected through the Gmail connector in the Codex app.\n'
+printf '%s\n' 'After connecting, run a bounded read-only Gmail search and record "lifeos connector-verify gmail".'

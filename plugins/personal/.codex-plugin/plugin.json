@@ -1,22 +1,23 @@
 {
   "name": "personal",
-  "description": "Personal vault, family check-in, and task-management workflows",
+  "description": "Local-first Personal AI / Life OS, vault, communication, review, family, and task workflows",
   "author": {
     "name": "Arend Alloul"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Personal",
-    "shortDescription": "Manage personal notes and tasks",
-    "longDescription": "Safely manage Arend's Obsidian vault and synchronized personal task workflows across Obsidian and Linear.",
+    "shortDescription": "Run a local-first Personal AI / Life OS",
+    "longDescription": "Safely coordinate Arend's TickTick tasks and calendar, Obsidian vault, Gmail, iMessage, reviews, commitments, voice, meetings, relationships, and read-only health context through portable workflows and an audited local runtime.",
     "developerName": "Arend Alloul",
     "category": "Productivity",
     "capabilities": [
       "Read",
-      "Write"
+      "Write",
+      "Interactive"
     ],
     "defaultPrompt": [
-      "Use the matching personal skill for this vault or task workflow."
+      "Use the narrow matching personal or Life OS skill and preserve its source-of-truth, privacy, and confirmation boundaries."
     ]
   }
 }

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "timezone": "America/Los_Angeles",
+  "vault": {
+    "path": "~/Obsidian/obsidian-vault",
+    "write_roots": [
+      "Personal/Life/Journal",
+      "Personal/Life/Meetings",
+      "Personal/Life/Decisions",
+      "Personal/Reviews"
+    ],
+    "path_patterns": {
+      "daily_plan": "Personal/Reviews/Daily/{date} Plan.md",
+      "day_review": "Personal/Reviews/Daily/{date} Review.md",
+      "weekly_review": "Personal/Reviews/Weekly/{iso_year}-W{iso_week}.md",
+      "journal": "Personal/Life/Journal/{year}/{date}.md",
+      "meeting": "Personal/Life/Meetings/{date} - {slug}.md",
+      "decision": "Personal/Life/Decisions/{date} - {slug}.md",
+      "health_review": "Personal/Reviews/Health/{date}.md",
+      "monthly_review": "Personal/Reviews/Strategic/{year}-{month}.md",
+      "quarterly_review": "Personal/Reviews/Strategic/{year}-Q{quarter}.md"
+    }
+  },
+  "gmail": {
+    "accounts": [],
+    "connector": "official-gmail-plugin",
+    "draft_only": true
+  },
+  "ticktick": {
+    "followup_project": "AI Follow-ups",
+    "default_project": null
+  },
+  "imessage": {
+    "lookback_hours": 72,
+    "send_requires_confirmation": true
+  },
+  "oura": {
+    "client_id": null,
+    "redirect_uri": "http://127.0.0.1:8765/callback",
+    "scopes": [
+      "daily"
+    ],
+    "endpoints": [
+      "daily_sleep",
+      "daily_readiness",
+      "daily_activity",
+      "daily_stress"
+    ]
+  },
+  "health": {
+    "source": "health-auto-export-json",
+    "read_only": true,
+    "metrics": [
+      "sleep",
+      "steps",
+      "active_energy",
+      "resting_heart_rate",
+      "heart_rate_variability",
+      "workouts"
+    ]
+  },
+  "schedules": {
+    "morning_brief": "07:00",
+    "communications_review": "12:30",
+    "evening_review": "20:30",
+    "weekly_review": "Sunday 17:00"
+  }
+}
