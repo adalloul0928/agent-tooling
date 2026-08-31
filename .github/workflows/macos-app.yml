@@ -101,7 +101,15 @@ jobs:
           test -x "$helper"
           file "$helper"
           codesign --verify --strict --verbose=2 "$helper"
-          test -f "$RUNNER_TEMP/Agent Tooling.app/Contents/Resources/AgentTooling_AgentToolingApp.bundle/Contents/Resources/Assets.car"
+          resources="$RUNNER_TEMP/Agent Tooling.app/Contents/Resources/AgentTooling_AgentToolingApp.bundle/Contents/Resources"
+          if [[ -f "$resources/Assets.car" ]]; then
+            file "$resources/Assets.car"
+          else
+            test -f "$resources/Assets.xcassets/ClientClaude.imageset/claude.svg"
+            test -f "$resources/Assets.xcassets/ClientCodex.imageset/codex-light.svg"
+            test -f "$resources/Assets.xcassets/ClientCodex.imageset/codex-dark.svg"
+            test -f "$resources/Assets.xcassets/ClientGemini.imageset/gemini.svg"
+          fi
           file "$RUNNER_TEMP/Agent Tooling.app/Contents/MacOS/AgentTooling"
 
       - name: Create unsigned CI disk image

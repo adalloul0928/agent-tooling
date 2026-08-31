@@ -1,11 +1,24 @@
 import AgentToolingCore
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import AgentToolingApp
 
 @Suite("External navigation request queue")
 struct AppNavigationStateTests {
+    @Test("Brand icons are available as a compiled catalog or source assets")
+    func brandIconsAreAvailableAcrossSwiftToolchains() {
+        if ClientBrandAssets.hasCompiledCatalog {
+            return
+        }
+
+        for client in ClientKind.allCases {
+            #expect(ClientBrandAssets.image(for: client, colorScheme: .light) != nil)
+            #expect(ClientBrandAssets.image(for: client, colorScheme: .dark) != nil)
+        }
+    }
+
     @Test("Queues distinct skill requests in FIFO order")
     @MainActor
     func queuesSkillRequestsInFIFOOrder() {
