@@ -13,8 +13,14 @@
         "--only-secrets",
         "HEROUI_PRO_PERSONAL_TOKEN",
         "--no-fallback",
-        "--command",
-        "exec npx -y mcp-remote@0.1.38 https://mcp.heroui.pro/mcp --header 'x-heroui-personal-token:$''{HEROUI_PRO_PERSONAL_TOKEN}'"
+        "--",
+        "npx",
+        "-y",
+        "mcp-remote@0.1.38",
+        "https://mcp.heroui.pro/mcp",
+        "--header",
+        "x-heroui-personal-token:${HEROUI_PRO_PERSONAL_TOKEN}",
+        "--silent"
       ]
     }
   }

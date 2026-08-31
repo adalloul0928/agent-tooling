@@ -30,12 +30,7 @@ struct OverviewView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     pageHeading
 
-                    HStack(alignment: .top, spacing: 14) {
-                        libraryPanel
-                            .frame(width: 360)
-                        appsPanel
-                            .frame(maxWidth: .infinity)
-                    }
+                    ToolingMatrixView(rows: matrixRows, onSelect: navigate)
 
                     HStack(alignment: .top, spacing: 14) {
                         attentionPanel
@@ -69,65 +64,42 @@ struct OverviewView: View {
         }
     }
 
-    private var libraryPanel: some View {
-        VStack(spacing: 0) {
-            PanelHeader("Library") {
-                Button("Open") { navigate(.skills) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(AgentTheme.blue)
-            }
-
-            OverviewValueRow(label: "Skills", value: "\(model.skills.count)")
-            Divider().opacity(0.35)
-            OverviewValueRow(label: "MCP servers", value: "\(model.mcpServers.count)")
-            Divider().opacity(0.35)
-            OverviewValueRow(label: "Plugins", value: "\(model.plugins.count)")
-            Divider().opacity(0.35)
-
-            Button {
-                navigate(.profiles)
-            } label: {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Configuration")
-                            .font(.callout.weight(.medium))
-                        Text(model.activeProfile?.summary ?? "Choose which tools belong on this Mac.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    Spacer()
-                    Text(model.activeProfile?.name ?? "Not selected")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(14)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .standardPanel()
+    private var matrixRows: [ToolingMatrixRow] {
+        [
+            ToolingMatrixRow(
+                id: .skills,
+                title: "Skills",
+                symbol: "doc.text",
+                libraryCount: model.skills.count,
+                installedCounts: installedCounts(for: model.skills.map(\.clients))
+            ),
+            ToolingMatrixRow(
+                id: .mcpServers,
+                title: "MCP servers",
+                symbol: "network",
+                libraryCount: model.mcpServers.count,
+                installedCounts: installedCounts(for: model.mcpServers.map(\.clients))
+            ),
+            ToolingMatrixRow(
+                id: .plugins,
+                title: "Plugins",
+                symbol: "puzzlepiece.extension",
+                libraryCount: model.plugins.count,
+                installedCounts: installedCounts(for: model.plugins.map(\.clients))
+            ),
+        ]
     }
 
-    private var appsPanel: some View {
-        VStack(spacing: 0) {
-            PanelHeader("Apps") {
-                Button("Manage") { navigate(.syncCenter) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(AgentTheme.blue)
-            }
-
-            ForEach(Array(ClientKind.allCases.enumerated()), id: \.element) { index, client in
-                ClientSummaryRow(client: client, observations: observations(for: client))
-                if index < ClientKind.allCases.count - 1 {
-                    Divider().opacity(0.35)
-                }
-            }
-        }
-        .standardPanel()
+    private func installedCounts(for clientLists: [[ClientState]]) -> [ClientKind: Int] {
+        Dictionary(
+            uniqueKeysWithValues: ClientKind.allCases.map { client in
+                (
+                    client,
+                    clientLists.filter { states in
+                        states.contains { $0.client == client && $0.reportsLocalPresence }
+                    }.count
+                )
+            })
     }
 
     private var attentionPanel: some View {
@@ -229,76 +201,6 @@ struct OverviewView: View {
             .filter { $0.aggregateState == .attention || $0.aggregateState == .unavailable }
             .map { OverviewAttention(id: "mcp-\($0.id)", title: $0.name, detail: $0.summary, state: $0.aggregateState) }
         return Array((targets + configurationChecks + servers).prefix(4))
-    }
-
-    private func observations(for client: ClientKind) -> [TargetObservation] {
-        TargetSurface.allCases.compactMap { surface in
-            guard surface.client == client else { return nil }
-            return model.targetObservations.first(where: { $0.surface == surface })
-        }
-    }
-}
-
-private struct OverviewValueRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(value)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-        }
-        .font(.callout)
-        .padding(.horizontal, 14)
-        .frame(minHeight: 42)
-    }
-}
-
-private struct ClientSummaryRow: View {
-    let client: ClientKind
-    let observations: [TargetObservation]
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ClientBrandIcon(client: client, size: 22)
-                .frame(width: 24)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(client.rawValue)
-                    .font(.callout.weight(.medium))
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            StatusBadge(
-                state: state,
-                text: statusText
-            )
-        }
-        .padding(.horizontal, 14)
-        .frame(minHeight: 58)
-    }
-
-    private var installed: Bool { !observations.isEmpty && observations.allSatisfy(\.isCommandAvailable) }
-    private var state: HealthState { observations.isEmpty ? .pending : installed ? .healthy : .attention }
-    private var statusText: String {
-        if observations.isEmpty { return "Not checked" }
-        if installed { return "Available" }
-        return observations.contains(where: \.installed) ? "Configuration only" : "Not found"
-    }
-
-    private var detail: String {
-        if observations.isEmpty { return "Run Check setup to inspect this app." }
-        let versions = observations.compactMap(\.version)
-        if let first = versions.first { return first }
-        return observations.first?.notes.first ?? "Configuration path checked"
     }
 
 }

@@ -1,0 +1,5 @@
+node_modules/
+dist/
+coverage/
+raycast-env.d.ts
+.DS_Store

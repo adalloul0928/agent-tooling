@@ -2,12 +2,13 @@ import AppKit
 import SwiftUI
 
 enum AgentTheme {
-    // Keep the interface neutral. Blue belongs to actions and selection;
-    // red belongs to failures. Everything else uses semantic system colors.
+    // Quartz: macOS system surfaces, SF typography, and one blue action color.
+    // The window material is the only glass layer; content surfaces are quiet
+    // and substantially opaque so the desktop never becomes interface noise.
     static let blue = Color(nsColor: .systemBlue)
-    static let desktopGlassOpacity = 0.80
+    static let desktopGlassOpacity = 0.96
 
-    static let panelCornerRadius: CGFloat = 10
+    static let panelCornerRadius: CGFloat = 12
     static let sidebarWidth: CGFloat = 232
     static let collapsedSidebarWidth: CGFloat = 64
     static let contentBackground = Color(nsColor: .windowBackgroundColor)
@@ -53,6 +54,7 @@ private final class WindowConfigurationView: NSView {
 
     func configureWindow() {
         guard let window else { return }
+        window.identifier = NSUserInterfaceItemIdentifier("agent-tooling-main")
         window.isOpaque = false
         window.backgroundColor = .clear
         window.titlebarAppearsTransparent = true
@@ -73,13 +75,14 @@ extension View {
 }
 
 private struct ControlSurfaceModifier: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
         content
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(AgentTheme.controlBackground.opacity(0.72))
+                    .fill(AgentTheme.controlBackground.opacity(reduceTransparency ? 1 : 0.90))
             }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -96,6 +99,8 @@ private struct PaneMaterialModifier: ViewModifier {
 }
 
 struct ControlGroupBoxStyle: GroupBoxStyle {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     func makeBody(configuration: Configuration) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             configuration.label
@@ -110,7 +115,7 @@ struct ControlGroupBoxStyle: GroupBoxStyle {
         }
         .background {
             RoundedRectangle(cornerRadius: AgentTheme.panelCornerRadius, style: .continuous)
-                .fill(AgentTheme.controlBackground.opacity(0.64))
+                .fill(AgentTheme.controlBackground.opacity(reduceTransparency ? 1 : 0.88))
         }
         .overlay {
             RoundedRectangle(cornerRadius: AgentTheme.panelCornerRadius, style: .continuous)

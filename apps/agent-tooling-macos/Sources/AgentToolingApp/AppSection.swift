@@ -4,6 +4,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case overview = "Overview"
     case marketplace = "Marketplace"
     case skills = "Skills"
+    case insights = "Insights"
     case mcpServers = "MCP Servers"
     case plugins = "Plugins"
     case profiles = "Configurations"
@@ -19,9 +20,10 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .overview: "square.grid.2x2"
         case .marketplace: "storefront"
         case .skills: "doc.text"
+        case .insights: "magnifyingglass"
         case .mcpServers: "network"
         case .plugins: "puzzlepiece.extension"
-        case .profiles: "person.crop.circle"
+        case .profiles: "slider.horizontal.3"
         case .syncCenter: "arrow.triangle.2.circlepath"
         case .activity: "clock.arrow.circlepath"
         case .accounts: "person.badge.key"
@@ -31,7 +33,7 @@ enum AppSection: String, CaseIterable, Identifiable {
 
     var navigationGroup: NavigationGroup {
         switch self {
-        case .overview, .marketplace, .skills, .mcpServers, .plugins, .profiles: .manage
+        case .overview, .marketplace, .skills, .insights, .mcpServers, .plugins, .profiles: .manage
         case .syncCenter, .activity, .accounts, .settings: .operations
         }
     }

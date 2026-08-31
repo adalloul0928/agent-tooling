@@ -160,16 +160,15 @@ private struct PlanStepRow: View {
                         }
                 }
                 if let source = step.sourcePath, let destination = step.destinationPath {
-                    Text("\(source) → \(destination)")
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .textSelection(.enabled)
+                    HStack(spacing: 6) {
+                        CompactPathText(path: source)
+                        Image(systemName: "arrow.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        CompactPathText(path: destination)
+                    }
                 } else if let destination = step.destinationPath {
-                    Text(destination)
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                    CompactPathText(path: destination)
                 }
                 if let fingerprint = step.sourceFingerprint {
                     Text("Reviewed source: \(fingerprint.prefix(12))")

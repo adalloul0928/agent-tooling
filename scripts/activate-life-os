@@ -81,13 +81,14 @@ else
   printf 'iMessage pending: grant ChatGPT.app Full Disk Access, then restart ChatGPT.\n'
 fi
 
-health_inbox="$HOME/Library/Application Support/LifeOS/health-inbox"
-health_file="$(find "$health_inbox" -maxdepth 1 -type f -name '*.json' -print -quit)"
-if [[ -n "$health_file" ]]; then
-  printf 'Ingesting one deliberately exported Apple Health JSON file...\n'
-  "$LIFEOS" health-ingest "$health_file" >/dev/null
+printf 'Scanning configured Apple Health JSON inboxes...\n'
+health_scan="$("$LIFEOS" health-scan)"
+health_files="$(jq -r '.files_ingested' <<<"$health_scan")"
+health_records="$(jq -r '.records_written' <<<"$health_scan")"
+if (( health_files > 0 && health_records > 0 )); then
+  printf 'Apple Health ready: %s file(s), %s allowlisted record(s) ingested.\n' "$health_files" "$health_records"
 else
-  printf 'Apple Health pending: no deliberately limited JSON export is available.\n'
+  printf 'Apple Health pending: configure a limited Health Auto Export v2 JSON automation to iCloud Drive.\n'
 fi
 
 if jq -e '.oura.client_id | type == "string" and length > 0' "$HOME/Library/Application Support/LifeOS/config.json" >/dev/null; then

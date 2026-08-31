@@ -50,13 +50,17 @@
   "health": {
     "source": "health-auto-export-json",
     "read_only": true,
+    "inbox_paths": [
+      "~/Library/Application Support/LifeOS/health-inbox",
+      "~/Library/Mobile Documents/com~apple~CloudDocs/AutoExport/Life OS Health"
+    ],
     "metrics": [
-      "sleep",
-      "steps",
+      "sleep_analysis",
+      "step_count",
       "active_energy",
       "resting_heart_rate",
-      "heart_rate_variability",
-      "workouts"
+      "heart_rate_variability_sdnn",
+      "workout"
     ]
   },
   "schedules": {

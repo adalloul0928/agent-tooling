@@ -12,7 +12,7 @@ Read `../../runtime/references/workflow-contract.md` and use `../../runtime/temp
 
 ## Step 1 — establish provenance and freshness
 
-Run `lifeos doctor`, synchronize the requested bounded Oura range, and ingest only deliberately exported Apple Health metrics. Report missing dates, devices, or sources. Do not merge apparently similar metrics without naming their source and unit.
+Run `lifeos doctor`, synchronize the requested bounded Oura range when authorized, and run `lifeos health-scan` to ingest only the configured Apple Health allowlist. Report missing dates, devices, or sources. Do not merge apparently similar metrics without naming their source and unit.
 
 ## Step 2 — use trends
 

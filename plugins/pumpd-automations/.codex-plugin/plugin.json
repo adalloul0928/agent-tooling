@@ -11,7 +11,12 @@
     "longDescription": "Recurring PUMPD automation skills for the always-on agent machine: each run scans its sources, produces one succinct report, and files capped, deduplicated suggestions to Linear Triage.",
     "developerName": "Arend Alloul",
     "category": "Developer Tools",
-    "capabilities": ["Read", "Write"],
-    "defaultPrompt": ["Run the requested PUMPD automation skill and follow its shared conventions."]
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Run the requested PUMPD automation skill and follow its shared conventions."
+    ]
   }
 }

@@ -54,8 +54,9 @@ assembly_root=$(mktemp -d "${TMPDIR:-/tmp}/agent-tooling-package.XXXXXX")
 assembled_bundle="$assembly_root/Agent Tooling.app"
 trap 'rm -rf "$assembly_root"' EXIT
 
-mkdir -p "$assembled_bundle/Contents/MacOS" "$assembled_bundle/Contents/Resources"
+mkdir -p "$assembled_bundle/Contents/MacOS" "$assembled_bundle/Contents/Helpers" "$assembled_bundle/Contents/Resources"
 ditto "$binary_directory/AgentTooling" "$assembled_bundle/Contents/MacOS/AgentTooling"
+ditto "$binary_directory/agent-tooling" "$assembled_bundle/Contents/Helpers/agent-tooling"
 if [[ -d "$binary_directory/AgentTooling_AgentToolingApp.bundle" ]]; then
   ditto \
     "$binary_directory/AgentTooling_AgentToolingApp.bundle" \
@@ -72,11 +73,13 @@ if [[ -n "$build_number" ]]; then
 fi
 
 chmod +x "$assembled_bundle/Contents/MacOS/AgentTooling"
+chmod +x "$assembled_bundle/Contents/Helpers/agent-tooling"
 
 signing_arguments=(--force --sign "$signing_identity")
 if [[ "$signing_identity" != "-" ]]; then
   signing_arguments+=(--options runtime --timestamp)
 fi
+codesign "${signing_arguments[@]}" "$assembled_bundle/Contents/Helpers/agent-tooling"
 codesign "${signing_arguments[@]}" "$assembled_bundle"
 codesign --verify --deep --strict "$assembled_bundle"
 

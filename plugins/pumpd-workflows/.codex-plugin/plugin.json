@@ -11,7 +11,12 @@
     "longDescription": "Small local PUMPD maintenance workflows that are intentionally separate from the Cyrus planning and delegation pipeline.",
     "developerName": "Arend Alloul",
     "category": "Developer Tools",
-    "capabilities": ["Read", "Write"],
-    "defaultPrompt": ["Use the PUMPD local cleanup skill for this maintenance task."]
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use the PUMPD local cleanup skill for this maintenance task."
+    ]
   }
 }

@@ -81,15 +81,36 @@ struct ProfilesView: View {
             .frame(height: 44)
             .background(AgentTheme.controlBackground.opacity(0.45))
 
-            List(orderedProfiles, selection: $selectedID) { profile in
-                ProfileCollectionRow(profile: profile, active: profile.id == model.activeProfileID)
-                    .tag(profile.id)
-                    .listRowBackground(selectedID == profile.id ? AgentTheme.blue.opacity(0.13) : Color.clear)
-                    .accessibilityLabel(profile.name)
-                    .accessibilityValue(profile.id == selectedID ? "Selected" : profile.id == model.activeProfileID ? "Current" : "")
+            if orderedProfiles.isEmpty {
+                EmptyStateView(
+                    symbol: "slider.horizontal.3",
+                    title: "No configurations yet",
+                    message: "Create a configuration to describe the tools a Mac or project should use.",
+                    actionTitle: "New Configuration"
+                ) {
+                    showingNewProfile = true
+                }
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(orderedProfiles) { profile in
+                            Button {
+                                selectedID = profile.id
+                            } label: {
+                                ProfileCollectionRow(
+                                    profile: profile,
+                                    active: profile.id == model.activeProfileID,
+                                    selected: profile.id == selectedID
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(profile.name)
+                            .accessibilityValue(
+                                profile.id == selectedID ? "Selected" : profile.id == model.activeProfileID ? "Current" : "")
+                        }
+                    }
+                }
             }
-            .listStyle(.inset)
-            .scrollContentBackground(.hidden)
         }
         .paneMaterial()
     }
@@ -100,7 +121,7 @@ struct ProfilesView: View {
             ProfileDetailView(profile: profile).environment(model)
         } else {
             EmptyStateView(
-                symbol: "person.crop.circle", title: "Select a configuration",
+                symbol: "slider.horizontal.3", title: "Select a configuration",
                 message: "Configurations describe what should be installed, connected, and healthy for a workspace.")
         }
     }
@@ -119,10 +140,11 @@ struct ProfilesView: View {
 private struct ProfileCollectionRow: View {
     let profile: ToolingProfile
     let active: Bool
+    let selected: Bool
 
     var body: some View {
         HStack(spacing: 11) {
-            SymbolTile(symbol: active ? "person.crop.circle.badge.checkmark" : "person.crop.circle", size: 36)
+            SymbolTile(symbol: active ? "slider.horizontal.3" : "slider.horizontal.2.square", size: 36)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(profile.name).font(.callout.weight(.semibold))
@@ -135,7 +157,16 @@ private struct ProfileCollectionRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .padding(.horizontal, 13)
         .padding(.vertical, 7)
+        .frame(minHeight: 64)
+        .background {
+            if selected { AgentTheme.blue.opacity(0.13) }
+        }
+        .overlay(alignment: .leading) {
+            if selected { Rectangle().fill(AgentTheme.blue).frame(width: 3) }
+        }
+        .contentShape(Rectangle())
     }
 
     private var checkSummary: String {
@@ -152,7 +183,7 @@ private struct ProfileDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 14) {
-                    SymbolTile(symbol: "person.crop.circle.badge.checkmark", size: 48)
+                    SymbolTile(symbol: "slider.horizontal.3", size: 48)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(profile.name).font(.title2.weight(.semibold))
                         Text(profile.summary).font(.callout).foregroundStyle(.secondary)
@@ -180,10 +211,11 @@ private struct ProfileDetailView: View {
                         }
                         Divider()
                         LabeledValueRow("Project folder") {
-                            Text(profile.projectRoot ?? "Not applicable")
-                                .font(profile.projectRoot == nil ? .caption : .system(.caption, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
+                            if let projectRoot = profile.projectRoot {
+                                CompactPathText(path: projectRoot)
+                            } else {
+                                Text("Not applicable").foregroundStyle(.secondary)
+                            }
                         }
                         Divider()
                         LabeledValueRow("Inherits from") {

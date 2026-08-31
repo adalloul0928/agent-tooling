@@ -33,7 +33,7 @@ struct AccountsView: View {
                         Text("Cloud connections")
                             .font(.title2.weight(.semibold))
                         Text(
-                            "A local installation does not sync plugins, connectors, OAuth sessions, or workspace policy to cloud products. Verify each account surface separately."
+                            "Cloud authorization stays with each provider. Record when you last checked it; Agent Tooling never copies credentials."
                         )
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -170,17 +170,22 @@ private struct ConnectorCard: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(binding.target.displayName) · \(binding.scope.displayName)").font(.caption.weight(.semibold))
                         Text(binding.guidance).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        if let date = binding.lastVerifiedAt {
+                            Text("Recorded \(date.formatted(.relative(presentation: .named)))")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                     Spacer()
-                    Button(binding.status == .verified ? "Verify again" : "Mark verified") {
+                    Button(binding.status == .verified ? "Record again" : "Record verification") {
                         model.markConnectorBindingVerified(connectorID: connector.id, bindingID: binding.id)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .accessibilityLabel(
                         binding.status == .verified
-                            ? "Verify \(connector.name) again for \(binding.target.displayName)"
-                            : "Mark \(connector.name) verified for \(binding.target.displayName)"
+                            ? "Record another verification for \(connector.name) in \(binding.target.displayName)"
+                            : "Record verification for \(connector.name) in \(binding.target.displayName)"
                     )
                     .disabled(model.isInteractionLocked)
                 }
@@ -307,7 +312,7 @@ private struct AccountSurfaceCard: View {
                 .frame(width: 42, height: 42)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(account.name).font(.headline)
-                    Text(account.surface.displayName).font(.caption).foregroundStyle(.secondary)
+                    Text(accountSubtitle).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 StatusBadge(
@@ -325,11 +330,15 @@ private struct AccountSurfaceCard: View {
                     .accessibilityLabel("Open \(account.name) settings")
                 }
                 Spacer()
-                Button(account.status == .verified ? "Verify again" : "Mark verified", systemImage: "checkmark") {
+                Button(account.status == .verified ? "Record again" : "Record verification", systemImage: "checkmark") {
                     model.markAccountSurfaceVerified(account.id)
                 }
                 .buttonStyle(.borderedProminent)
-                .accessibilityLabel(account.status == .verified ? "Verify \(account.name) again" : "Mark \(account.name) verified")
+                .accessibilityLabel(
+                    account.status == .verified
+                        ? "Record another verification for \(account.name)"
+                        : "Record verification for \(account.name)"
+                )
                 .disabled(model.isInteractionLocked)
             }
         }
@@ -346,6 +355,11 @@ private struct AccountSurfaceCard: View {
             components.password == nil
         else { return nil }
         return components.url
+    }
+
+    private var accountSubtitle: String {
+        guard let date = account.lastVerifiedAt else { return account.surface.displayName }
+        return "\(account.surface.displayName) · checked \(date.formatted(.relative(presentation: .named)))"
     }
 
 }

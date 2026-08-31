@@ -1,273 +1,11 @@
-import Darwin
 import Foundation
 
-public struct CommandOutput: Sendable, Hashable {
-    public var status: Int32
-    public var standardOutput: String
-    public var standardError: String
-
-    public init(status: Int32, standardOutput: String, standardError: String) {
-        self.status = status
-        self.standardOutput = standardOutput
-        self.standardError = standardError
-    }
-}
-
-public protocol CommandRunning: Sendable {
-    func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput
-}
-
-public struct ProcessCommandRunner: CommandRunning {
-    private static let maximumCapturedBytes = 1_048_576
-    private static let readChunkBytes = 65_536
-    private let timeout: Duration
-
-    public init(timeout: Duration = .seconds(60)) {
-        self.timeout = timeout
-    }
-
-    public func run(executable: String, arguments: [String], currentDirectory: URL? = nil) async throws -> CommandOutput {
-        try Task.checkCancellation()
-        let controller = RunningProcessController()
-        return try await withTaskCancellationHandler {
-            try await withThrowingTaskGroup(of: CommandOutput.self) { group in
-                group.addTask(priority: .userInitiated) {
-                    try await Self.runProcess(
-                        executable: executable,
-                        arguments: arguments,
-                        currentDirectory: currentDirectory,
-                        controller: controller
-                    )
-                }
-                group.addTask {
-                    try await Task.sleep(for: timeout)
-                    controller.terminate(dueToTimeout: true)
-                    throw ProcessCommandRunnerError.timedOut(executable)
-                }
-
-                defer {
-                    group.cancelAll()
-                    controller.terminate()
-                }
-                guard let first = try await group.next() else {
-                    throw ProcessCommandRunnerError.missingResult(executable)
-                }
-                // The process and timeout tasks can become ready in the same
-                // scheduler turn after SIGTERM. A task group does not promise
-                // which ready child `next()` returns first, so never interpret
-                // the terminated process result as a successful command.
-                if controller.didTimeOut {
-                    throw ProcessCommandRunnerError.timedOut(executable)
-                }
-                return first
-            }
-        } onCancel: {
-            controller.terminate()
-        }
-    }
-
-    private static func runProcess(
-        executable: String,
-        arguments: [String],
-        currentDirectory: URL?,
-        controller: RunningProcessController
-    ) async throws -> CommandOutput {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [executable] + arguments
-        process.currentDirectoryURL = currentDirectory
-        var environment = ProcessInfo.processInfo.environment
-        let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
-        let applicationPaths = [
-            "\(home)/.local/bin",
-            "\(home)/.cargo/bin",
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-            "/usr/bin",
-            "/bin",
-            "/usr/sbin",
-            "/sbin",
-        ]
-        let inheritedPaths = environment["PATH"]?.split(separator: ":").map(String.init) ?? []
-        environment["PATH"] = Array(NSOrderedSet(array: applicationPaths + inheritedPaths)).compactMap { $0 as? String }.joined(
-            separator: ":")
-        process.environment = environment
-        let standardOutput = Pipe()
-        let standardError = Pipe()
-        process.standardOutput = standardOutput
-        process.standardError = standardError
-        let exitWaiter = ProcessExitWaiter()
-        process.terminationHandler = { _ in exitWaiter.signal() }
-        try process.run()
-        controller.install(process)
-        defer { controller.finish(process) }
-        // Native catalog commands can emit hundreds of kilobytes. Drain both
-        // pipes while the child runs; waiting first can fill a pipe buffer and
-        // deadlock setup checks indefinitely.
-        async let output = drain(standardOutput.fileHandleForReading)
-        async let error = drain(standardError.fileHandleForReading)
-        await exitWaiter.wait()
-        let capturedOutput = try await output
-        let capturedError = try await error
-        if controller.didTimeOut {
-            throw ProcessCommandRunnerError.timedOut(executable)
-        }
-        try Task.checkCancellation()
-        return CommandOutput(
-            status: process.terminationStatus,
-            standardOutput: capturedOutput.text,
-            standardError: capturedError.text
-        )
-    }
-
-    private static func drain(_ handle: FileHandle) async throws -> CapturedStream {
-        var captured = Data()
-        var wasTruncated = false
-        while let chunk = try handle.read(upToCount: readChunkBytes), !chunk.isEmpty {
-            let remaining = maximumCapturedBytes - captured.count
-            if remaining > 0 { captured.append(chunk.prefix(remaining)) }
-            if chunk.count > remaining { wasTruncated = true }
-        }
-        var text = String(decoding: captured, as: UTF8.self)
-        if wasTruncated { text += "\n[output truncated after \(maximumCapturedBytes) bytes]" }
-        return CapturedStream(text: text)
-    }
-}
-
-private struct CapturedStream: Sendable {
-    var text: String
-}
-
-private final class ProcessExitWaiter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<Void, Never>?
-    private var didExit = false
-
-    func wait() async {
-        await withCheckedContinuation { continuation in
-            lock.lock()
-            if didExit {
-                lock.unlock()
-                continuation.resume()
-            } else {
-                self.continuation = continuation
-                lock.unlock()
-            }
-        }
-    }
-
-    func signal() {
-        lock.lock()
-        didExit = true
-        let continuation = continuation
-        self.continuation = nil
-        lock.unlock()
-        continuation?.resume()
-    }
-}
-
-private final class RunningProcessController: @unchecked Sendable {
-    private let lock = NSLock()
-    private var process: Process?
-    private var processGroupIdentifier: pid_t?
-    private var terminationRequested = false
-    private var timeoutRequested = false
-
-    var didTimeOut: Bool {
-        lock.withLock { timeoutRequested }
-    }
-
-    func install(_ process: Process) {
-        let processIdentifier = process.processIdentifier
-        let groupIdentifier = Darwin.setpgid(processIdentifier, processIdentifier) == 0 ? processIdentifier : nil
-        lock.lock()
-        self.process = process
-        processGroupIdentifier = groupIdentifier
-        let terminateNow = terminationRequested
-        lock.unlock()
-        if terminateNow, process.isRunning { signal(process, groupIdentifier: groupIdentifier, signal: SIGTERM) }
-    }
-
-    func terminate(dueToTimeout: Bool = false) {
-        lock.lock()
-        terminationRequested = true
-        timeoutRequested = timeoutRequested || dueToTimeout
-        let process = process
-        let groupIdentifier = processGroupIdentifier
-        lock.unlock()
-        guard let process, process.isRunning else { return }
-        signal(process, groupIdentifier: groupIdentifier, signal: SIGTERM)
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) { [weak self, weak process] in
-            guard let self, let process else { return }
-            self.lock.lock()
-            let isCurrentProcess = self.process === process
-            let groupIdentifier = self.processGroupIdentifier
-            self.lock.unlock()
-            if isCurrentProcess, process.isRunning {
-                self.signal(process, groupIdentifier: groupIdentifier, signal: SIGKILL)
-            }
-        }
-    }
-
-    func finish(_ process: Process) {
-        lock.lock()
-        if self.process === process {
-            self.process = nil
-            processGroupIdentifier = nil
-        }
-        lock.unlock()
-    }
-
-    private func signal(_ process: Process, groupIdentifier: pid_t?, signal: Int32) {
-        if let groupIdentifier {
-            _ = Darwin.kill(-groupIdentifier, signal)
-        } else {
-            for descendant in descendantProcessIdentifiers(of: process.processIdentifier).reversed() {
-                _ = Darwin.kill(descendant, signal)
-            }
-            _ = Darwin.kill(process.processIdentifier, signal)
-        }
-    }
-
-    private func descendantProcessIdentifiers(of parent: pid_t) -> [pid_t] {
-        var result: [pid_t] = []
-        var pending = [parent]
-        var visited = Set([parent])
-        while let current = pending.popLast(), result.count < 1_024 {
-            let requiredBytes = Darwin.proc_listchildpids(current, nil, 0)
-            guard requiredBytes > 0 else { continue }
-            var children = [pid_t](repeating: 0, count: Int(requiredBytes) / MemoryLayout<pid_t>.stride)
-            let populatedBytes = children.withUnsafeMutableBytes {
-                Darwin.proc_listchildpids(current, $0.baseAddress, requiredBytes)
-            }
-            guard populatedBytes > 0 else { continue }
-            let populatedCount = min(Int(populatedBytes) / MemoryLayout<pid_t>.stride, children.count)
-            for child in children.prefix(populatedCount) where child > 0 && visited.insert(child).inserted {
-                result.append(child)
-                pending.append(child)
-            }
-        }
-        return result
-    }
-}
-
-public enum ProcessCommandRunnerError: LocalizedError, Sendable {
-    case timedOut(String)
-    case missingResult(String)
-
-    public var errorDescription: String? {
-        switch self {
-        case .timedOut(let command): "\(command) did not finish within the allowed time and was stopped."
-        case .missingResult(let command): "\(command) ended without returning a result."
-        }
-    }
-}
-
-public actor OperationEngine {
+public actor OperationExecutor {
     private let store: WorkspaceStore
     private let runner: any CommandRunning
     private let fileManager: FileManager
     private let homeURL: URL
+    private let commandPolicy: OperationCommandPolicy
 
     public init(
         store: WorkspaceStore,
@@ -279,6 +17,10 @@ public actor OperationEngine {
         self.runner = runner
         self.fileManager = fileManager
         self.homeURL = homeURL
+        self.commandPolicy = OperationCommandPolicy(
+            libraryURL: store.libraryURL,
+            gitBackupRoot: store.rootURL.appending(path: "exports/git-backup", directoryHint: .isDirectory).standardizedFileURL
+        )
     }
 
     /// Executes a plan built by an adapter. Steps intentionally continue after
@@ -332,6 +74,7 @@ public actor OperationEngine {
         let wasCancelled = results.contains { result in
             result.status == .skipped && result.output.localizedCaseInsensitiveContains("cancel")
         }
+        let hasCompletedAutomaticStep = results.contains { $0.status == .succeeded }
         let verification =
             results.isEmpty
             ? "No operation steps were provided. Nothing changed."
@@ -340,7 +83,9 @@ public actor OperationEngine {
                 : results.contains(where: { $0.status == .failed })
                     ? "Some steps failed. Re-scan the affected targets before retrying."
                     : results.contains(where: { $0.status == .manual })
-                        ? "The local changes are complete; finish the marked account or restart steps manually, then re-scan."
+                        ? hasCompletedAutomaticStep
+                            ? "The reviewed local changes completed. Finish the remaining manual checks, then check setup again."
+                            : "No local changes were made. Follow the manual guidance, then check setup again."
                         : "All requested local steps completed. A fresh scan is recorded after the operation."
         var receipt = OperationReceipt(
             planID: plan.id,
@@ -352,7 +97,7 @@ public actor OperationEngine {
             verificationSummary: verification
         )
         do {
-            try store.save(receipt, for: "receipt.\(receipt.id.uuidString)")
+            try store.saveEntity(receipt, id: receipt.id.uuidString, domain: .receipts)
         } catch {
             receipt.state = .attention
             receipt.verificationSummary += " The operation completed, but its receipt could not be saved: \(error.localizedDescription)"
@@ -459,7 +204,7 @@ public actor OperationEngine {
 
         case .command:
             guard let executable = step.executable else { throw OperationEngineError.malformedStep(step.title) }
-            try validateCommand(executable: executable, arguments: step.arguments)
+            try commandPolicy.validate(executable: executable, arguments: step.arguments)
             let workingDirectory = try commandWorkingDirectory(
                 step.currentDirectoryPath,
                 authorizedProjectRootPath: step.projectRootPath
@@ -554,7 +299,7 @@ public actor OperationEngine {
                 ].map { ($0.0.standardizedFileURL, $0.1.standardizedFileURL) })
         }
 
-        guard Self.isSafeMCPIdentifier(destination.lastPathComponent),
+        guard OperationCommandPolicy.isSafeMCPIdentifier(destination.lastPathComponent),
             let permitted = permittedSkillRoots.first(where: {
                 Self.samePath(destination.deletingLastPathComponent(), $0.root)
             })
@@ -872,162 +617,6 @@ public actor OperationEngine {
         }
     }
 
-    private func validateCommand(executable: String, arguments: [String]) throws {
-        guard Self.allowedCommands.contains(executable) else { throw OperationEngineError.commandNotAllowed(executable) }
-        guard arguments.count <= 64,
-            arguments.allSatisfy({ $0.count <= 8_192 && !$0.contains("\0") && !$0.contains("\n") && !$0.contains("\r") })
-        else {
-            throw OperationEngineError.commandArgumentsNotAllowed(executable)
-        }
-
-        switch executable {
-        case "git":
-            let target = gitBackupRoot.path(percentEncoded: false)
-            guard arguments == ["-C", target, "init"] || arguments == ["-C", target, "status", "--short"] else {
-                throw OperationEngineError.commandArgumentsNotAllowed(executable)
-            }
-        case "claude":
-            try validateClaudeCommand(arguments)
-        case "codex":
-            try validateCodexCommand(arguments)
-        case "gemini":
-            try validateGeminiCommand(arguments)
-        default:
-            throw OperationEngineError.commandNotAllowed(executable)
-        }
-    }
-
-    private func validateClaudeCommand(_ arguments: [String]) throws {
-        if arguments.count == 5,
-            ["install", "uninstall"].contains(arguments[1]),
-            arguments[0] == "plugin",
-            arguments[3] == "--scope",
-            arguments[4] == "user",
-            Self.isSafePluginIdentifier(arguments[2])
-        {
-            return
-        }
-        if arguments.count == 5,
-            arguments[0] == "mcp",
-            arguments[1] == "remove",
-            arguments[2] == "--scope",
-            ["user", "project", "local"].contains(arguments[3]),
-            Self.isSafeMCPIdentifier(arguments[4])
-        {
-            return
-        }
-        if arguments.count == 8,
-            arguments[0] == "mcp",
-            arguments[1] == "add",
-            arguments[2] == "--transport",
-            arguments[3] == "http",
-            arguments[4] == "--scope",
-            ["user", "project", "local"].contains(arguments[5]),
-            Self.isSafeMCPIdentifier(arguments[6]),
-            Self.isSafeHTTPDestination(arguments[7])
-        {
-            return
-        }
-        if arguments.count >= 9,
-            arguments[0] == "mcp",
-            arguments[1] == "add",
-            arguments[2] == "--transport",
-            arguments[3] == "stdio",
-            arguments[4] == "--scope",
-            ["user", "project", "local"].contains(arguments[5]),
-            Self.isSafeMCPIdentifier(arguments[6]),
-            arguments[7] == "--",
-            Self.isSafeStdioCommand(Array(arguments.dropFirst(8)))
-        {
-            return
-        }
-        throw OperationEngineError.commandArgumentsNotAllowed("claude")
-    }
-
-    private func validateCodexCommand(_ arguments: [String]) throws {
-        if arguments.count == 3,
-            arguments[0] == "plugin",
-            ["add", "remove"].contains(arguments[1]),
-            Self.isSafePluginIdentifier(arguments[2])
-        {
-            return
-        }
-        if arguments.count == 3,
-            arguments[0] == "mcp",
-            arguments[1] == "remove",
-            Self.isSafeMCPIdentifier(arguments[2])
-        {
-            return
-        }
-        if arguments.count == 5,
-            arguments[0] == "mcp",
-            arguments[1] == "add",
-            Self.isSafeMCPIdentifier(arguments[2]),
-            arguments[3] == "--url",
-            Self.isSafeHTTPDestination(arguments[4])
-        {
-            return
-        }
-        if arguments.count >= 5,
-            arguments[0] == "mcp",
-            arguments[1] == "add",
-            Self.isSafeMCPIdentifier(arguments[2]),
-            arguments[3] == "--",
-            Self.isSafeStdioCommand(Array(arguments.dropFirst(4)))
-        {
-            return
-        }
-        throw OperationEngineError.commandArgumentsNotAllowed("codex")
-    }
-
-    private func validateGeminiCommand(_ arguments: [String]) throws {
-        if arguments.count == 5,
-            arguments[0] == "mcp",
-            arguments[1] == "remove",
-            arguments[2] == "--scope",
-            ["user", "project"].contains(arguments[3]),
-            Self.isSafeMCPIdentifier(arguments[4])
-        {
-            return
-        }
-        if arguments.count == 8,
-            arguments[0] == "mcp",
-            arguments[1] == "add",
-            arguments[2] == "--scope",
-            ["user", "project"].contains(arguments[3]),
-            arguments[4] == "--transport",
-            arguments[5] == "http",
-            Self.isSafeMCPIdentifier(arguments[6]),
-            Self.isSafeHTTPDestination(arguments[7])
-        {
-            return
-        }
-        if arguments.count >= 9,
-            arguments[0] == "mcp",
-            arguments[1] == "add",
-            arguments[2] == "--scope",
-            ["user", "project"].contains(arguments[3]),
-            arguments[4] == "--transport",
-            arguments[5] == "stdio",
-            Self.isSafeMCPIdentifier(arguments[6]),
-            arguments[7] == "--",
-            Self.isSafeStdioCommand(Array(arguments.dropFirst(8)))
-        {
-            return
-        }
-        if arguments.count == 3,
-            arguments[0] == "extensions",
-            arguments[1] == "link"
-        {
-            let source = URL(fileURLWithPath: arguments[2]).standardizedFileURL
-            guard isContained(source, in: store.libraryURL) else {
-                throw OperationEngineError.commandArgumentsNotAllowed("gemini")
-            }
-            return
-        }
-        throw OperationEngineError.commandArgumentsNotAllowed("gemini")
-    }
-
     private func isContained(_ child: URL, in root: URL) -> Bool {
         let childPath = child.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -1036,7 +625,6 @@ public actor OperationEngine {
         return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
     }
 
-    private static let allowedCommands: Set<String> = ["claude", "codex", "gemini", "git"]
     private static let maximumTreeItems = 10_000
     private static let maximumTreeBytes = 384 * 1_024 * 1_024
     private static let maximumBackupMetadataBytes = 32 * 1_024 * 1_024
@@ -1049,46 +637,6 @@ public actor OperationEngine {
             && !value.hasPrefix("/")
             && !value.hasSuffix("/")
             && !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." })
-    }
-
-    private static func isSafeMCPIdentifier(_ value: String) -> Bool {
-        !value.isEmpty
-            && value.count <= 512
-            && !value.hasPrefix("-")
-            && value.unicodeScalars.allSatisfy { scalar in
-                CharacterSet.alphanumerics.contains(scalar) || "._-".unicodeScalars.contains(scalar)
-            }
-    }
-
-    private static func isSafePluginIdentifier(_ value: String) -> Bool {
-        !value.isEmpty
-            && value.count <= 512
-            && !value.hasPrefix("-")
-            && value.unicodeScalars.allSatisfy { scalar in
-                CharacterSet.alphanumerics.contains(scalar) || "._-@".unicodeScalars.contains(scalar)
-            }
-    }
-
-    private static func isSafeHTTPDestination(_ value: String) -> Bool {
-        guard SensitiveValueRedactor.redact(value) == value,
-            let components = URLComponents(string: value),
-            let scheme = components.scheme?.lowercased(),
-            ["http", "https"].contains(scheme),
-            components.host?.isEmpty == false
-        else { return false }
-        return components.user == nil
-            && components.password == nil
-            && components.query == nil
-            && components.fragment == nil
-    }
-
-    private static func isSafeStdioCommand(_ values: [String]) -> Bool {
-        guard let executable = values.first,
-            !executable.isEmpty,
-            !executable.hasPrefix("-"),
-            SensitiveValueRedactor.redact(values.joined(separator: " ")) == values.joined(separator: " ")
-        else { return false }
-        return values.allSatisfy { !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) }
     }
 
     private static func samePath(_ lhs: URL, _ rhs: URL) -> Bool {
@@ -1115,6 +663,8 @@ public actor OperationEngine {
 
     private static let maximumPersistedOutputCharacters = 60_000
 }
+
+public typealias OperationEngine = OperationExecutor
 
 public enum OperationEngineError: LocalizedError, Sendable {
     case malformedStep(String)

@@ -25,6 +25,8 @@ Gather:
 - Oura and Apple Health trend-level context when fresh;
 - last week's stated priorities for planned-versus-actual comparison.
 
+Run `lifeos health-scan` before reading Apple Health context. When Oura is authorized, synchronize exactly the review period before analyzing trends.
+
 Label missing sources and freshness. Do not infer a quiet week from an inaccessible connector.
 
 ## Step 3 — analyze honestly

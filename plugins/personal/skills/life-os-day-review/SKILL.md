@@ -20,6 +20,8 @@ Read:
 - today's Obsidian journal, meeting, and decision notes;
 - available activity/focus or health trends as context only.
 
+Run `lifeos health-scan` before reading Apple Health context. Synchronize Oura only for the bounded period needed by the review when it is authorized.
+
 Separate observed facts from inferred outcomes. Ask Aren a maximum of three questions, and only for matters the data cannot answer: what is worth remembering, what still occupies attention, and what should move/delegate/cancel.
 
 ## Step 2 — close loops carefully

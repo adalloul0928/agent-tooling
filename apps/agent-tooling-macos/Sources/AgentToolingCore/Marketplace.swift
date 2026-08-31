@@ -14,7 +14,6 @@ public final class MarketplaceService {
         static let summaryCharacters = 8_192
     }
 
-    private static let agentPluginSchema = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
     private let fileManager: FileManager
 
     public init(fileManager: FileManager = .default) {
@@ -387,9 +386,20 @@ public final class MarketplaceService {
             ?? "Local package with \(skillNames.count + (rootIsSkill ? 1 : 0)) skill\(skillNames.count + (rootIsSkill ? 1 : 0) == 1 ? "" : "s")."
         var components: Set<ComponentKind> = []
         if !skillNames.isEmpty || rootIsSkill { components.insert(.skill) }
-        let hasMCP =
-            try regularFile(packageRoot.appending(path: "mcp.json"), within: packageRoot) != nil
-            || regularFile(packageRoot.appending(path: ".mcp.json"), within: packageRoot) != nil
+        let portableMCPURL = try regularFile(packageRoot.appending(path: "mcp.json"), within: packageRoot)
+        let portableMCP: AgentPluginMCPLoadResult?
+        do {
+            portableMCP = try portableMCPURL.map {
+                try AgentPluginMCPConfigurationLoader.load(readData(at: $0, maximumBytes: Limit.manifestBytes))
+            }
+        } catch {
+            throw MarketplaceError.invalidManifest(
+                portableMCPURL?.path(percentEncoded: false) ?? packageRoot.appending(path: "mcp.json").path(percentEncoded: false),
+                error.localizedDescription
+            )
+        }
+        let hasLegacyMCP = try regularFile(packageRoot.appending(path: ".mcp.json"), within: packageRoot) != nil
+        let hasMCP = !(portableMCP?.servers.isEmpty ?? true) || hasLegacyMCP
         if hasMCP { components.insert(.mcpServer) }
         if try directory(packageRoot.appending(path: "agents"), within: packageRoot) != nil { components.insert(.agent) }
         if try directory(packageRoot.appending(path: "commands"), within: packageRoot) != nil { components.insert(.command) }
@@ -401,6 +411,9 @@ public final class MarketplaceService {
             packageLicense = manifestLicense
         } else {
             packageLicense = try license(at: packageRoot)
+        }
+        let portableMCPConflicts = portableMCP?.issues.map {
+            PackageConflict(id: "mcp:\($0.serverName)", summary: "\($0.serverName): \($0.message)")
         }
         return MarketplacePackage(
             id: "\(source.id.uuidString):\(rawName)",
@@ -415,9 +428,12 @@ public final class MarketplaceService {
             supportedClients: try supportedClients(
                 at: packageRoot, hasPortableManifest: portableManifestURL != nil, hasPortableSkill: !skillNames.isEmpty || rootIsSkill),
             hasExecutableContent: executable,
-            trustSummary: executable
-                ? "Review scripts, hooks, and permissions before installing" : "Review manifest and license before installing",
-            location: packageRoot.path(percentEncoded: false)
+            trustSummary: !(portableMCP?.issues.isEmpty ?? true)
+                ? "Review invalid portable MCP entries before installing"
+                : executable
+                    ? "Review scripts, hooks, and permissions before installing" : "Review manifest and license before installing",
+            location: packageRoot.path(percentEncoded: false),
+            conflicts: portableMCPConflicts?.isEmpty == true ? nil : portableMCPConflicts
         )
     }
 
@@ -458,81 +474,25 @@ public final class MarketplaceService {
 
     private func manifest(at url: URL, portable: Bool) throws -> [String: Any] {
         let data = try readData(at: url, maximumBytes: Limit.manifestBytes)
+        if portable {
+            do {
+                _ = try AgentPluginManifest.decodeAndValidate(data)
+            } catch {
+                throw MarketplaceError.invalidManifest(
+                    url.path(percentEncoded: false),
+                    error.localizedDescription
+                )
+            }
+        }
         guard let object = try? JSONSerialization.jsonObject(with: data),
             let manifest = object as? [String: Any]
         else {
             throw MarketplaceError.invalidManifest(url.path(percentEncoded: false), "The file must contain one JSON object.")
         }
-        if portable {
-            try validatePortableManifest(manifest, at: url)
-        } else if manifest["name"] != nil, safeCatalogIdentifier(manifest["name"] as? String) == nil {
+        if !portable, manifest["name"] != nil, safeCatalogIdentifier(manifest["name"] as? String) == nil {
             throw MarketplaceError.invalidManifest(url.path(percentEncoded: false), "The name is not a safe package identifier.")
         }
         return manifest
-    }
-
-    private func validatePortableManifest(_ manifest: [String: Any], at url: URL) throws {
-        guard manifest["$schema"] as? String == Self.agentPluginSchema else {
-            throw MarketplaceError.invalidManifest(
-                url.path(percentEncoded: false), "The Agent Plugins 1.0.0 schema identifier is required.")
-        }
-        guard let name = manifest["name"] as? String, isValidPortablePluginName(name) else {
-            throw MarketplaceError.invalidManifest(
-                url.path(percentEncoded: false), "The plugin name must satisfy the Agent Plugins 1.0.0 name rules.")
-        }
-        for key in ["version", "description", "homepage", "repository", "license"] {
-            guard let rawValue = manifest[key] else { continue }
-            guard let value = rawValue as? String,
-                value.count <= Limit.summaryCharacters,
-                !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
-            else {
-                throw MarketplaceError.invalidManifest(
-                    url.path(percentEncoded: false), "Field \(key) must be a bounded, single-line string.")
-            }
-        }
-        if let rawKeywords = manifest["keywords"] {
-            guard let keywords = rawKeywords as? [String],
-                keywords.count <= 256,
-                keywords.allSatisfy({
-                    !$0.isEmpty && $0.count <= 128 && !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
-                })
-            else {
-                throw MarketplaceError.invalidManifest(
-                    url.path(percentEncoded: false), "Field keywords must be a bounded array of nonempty strings.")
-            }
-        }
-        if let author = manifest["author"] {
-            guard let author = author as? [String: Any],
-                Set(author.keys).isSubset(of: ["name", "email", "url"]),
-                author.values.allSatisfy({ value in
-                    guard let value = value as? String else { return false }
-                    return value.count <= 1_024 && !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
-                })
-            else {
-                throw MarketplaceError.invalidManifest(
-                    url.path(percentEncoded: false), "Field author must contain only string name, email, and URL values.")
-            }
-        }
-        if let extensions = manifest["extensions"] {
-            guard let extensions = extensions as? [String: Any], extensions.values.allSatisfy({ $0 is [String: Any] }) else {
-                throw MarketplaceError.invalidManifest(url.path(percentEncoded: false), "Field extensions must map namespaces to objects.")
-            }
-        }
-    }
-
-    private func isValidPortablePluginName(_ value: String) -> Bool {
-        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-.")
-        let alphaNumeric = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789")
-        guard (1...64).contains(value.count),
-            value.unicodeScalars.allSatisfy(allowed.contains),
-            let first = value.unicodeScalars.first,
-            let last = value.unicodeScalars.last,
-            alphaNumeric.contains(first),
-            alphaNumeric.contains(last),
-            !value.contains("--"),
-            !value.contains("..")
-        else { return false }
-        return true
     }
 
     private func packageName(_ rawValue: String) throws -> String {

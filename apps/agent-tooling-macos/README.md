@@ -34,9 +34,10 @@ skill.
   extension and live-linked with `gemini extensions link`; Gemini owns its
   extension directory and loads the change in a new CLI session.
 - **Marketplace:** local folders, checked-out Git repositories, and Agent
-  Plugins packages are inspected locally. Claude and Codex listings are read
-  from their respective machine-readable native catalog commands. Gemini's
-  gallery remains a native source rather than an undocumented scraped API.
+  Plugins packages are inspected locally. The official MCP Registry is queried
+  through its documented API. Claude and Codex listings are read from their
+  respective machine-readable native catalog commands. Gemini's gallery
+  remains a native source rather than an undocumented scraped API.
 - **Connections:** the app records ownership, expected surfaces, and optional
   secret *reference names* only. OAuth tokens, API keys, and cloud connectors
   remain in their owning client, account, keychain, provider, or admin system.
@@ -45,6 +46,55 @@ Every client-affecting operation is first presented as a plan. The operation
 engine has a fixed executable allowlist, restricts file writes to managed or
 supported locations, moves replaced files to a rollback area, redacts receipts,
 and records partial per-target outcomes.
+
+## Create a skill with Codex
+
+The **New skill** action uses the locally installed Codex CLI and its bundled
+Skill Creator. It uses the account already reported by `codex login status`;
+the desktop app does not request, copy, or store an OpenAI API key. Claude is
+not configured or invoked as a generation provider.
+
+Codex writes only into a private staging directory. The app validates the
+canonical Agent Plugins package, shows every generated file, and requires each
+file to be opened before the package can be saved. Saving creates a separate
+installation plan; it still does not change Codex, Claude Code, or Gemini until
+that plan is approved. Codex is the default destination, while the other
+clients remain optional destinations for the same portable skill.
+
+Requirements:
+
+```sh
+codex login status
+test -f "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-creator/SKILL.md"
+```
+
+The generator uses `codex exec` with argv-only invocation, bounded stdin,
+workspace-write isolation, timeout/cancellation, redacted diagnostics, and a
+review-only output contract.
+
+## Raycast shortcuts
+
+The companion extension lives at
+[`integrations/raycast/agent-tooling`](../../integrations/raycast/agent-tooling).
+It can search the local inventory, queue a Codex skill request, check setup,
+open Sync, and focus the app. It finds the signed CLI helper inside
+`Agent Tooling.app/Contents/Helpers/agent-tooling`; no separate shell setup is
+needed for a packaged build.
+
+Until the extension is published in the Raycast Store, import it locally:
+
+```sh
+cd integrations/raycast/agent-tooling
+npm ci
+npx ray login
+npx ray profile
+npm run dev
+```
+
+Set `author` in the extension's `package.json` to the handle returned by
+`ray profile`, then assign the five command hotkeys in Raycast Settings. Skill
+instructions travel over stdin and the extension can only open review screens;
+all installation and sync mutations remain in the desktop app.
 
 ## Backup and restore
 

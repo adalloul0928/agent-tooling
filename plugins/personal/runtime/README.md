@@ -45,6 +45,7 @@ lifeos ticktick-create-followup ...
 lifeos imessage-recent
 lifeos imessage-send ...
 lifeos health-ingest <export.json>
+lifeos health-scan
 lifeos oura-authorize --client-id ...
 lifeos oura-sync
 lifeos context
@@ -54,3 +55,5 @@ lifeos reviews ...
 ```
 
 All command output is JSON so Codex, Claude, and unattended tasks can consume it without scraping prose.
+
+`health-scan` reads JSON files from the private health inbox and the configured Health Auto Export iCloud Drive folder. The default allowlist accepts only sleep analysis, step count, active energy, resting heart rate, HRV SDNN, and workouts. Other exported health categories are filtered rather than persisted.

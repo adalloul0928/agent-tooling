@@ -201,9 +201,16 @@ struct ClientStatusRows: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(clients.enumerated()), id: \.offset) { index, client in
-                LabeledValueRow(client.client.rawValue) {
+                HStack(spacing: 11) {
+                    ClientBrandIcon(client: client.client, size: 18)
+                        .frame(width: 22)
+                    Text(client.client.rawValue)
+                        .font(.callout.weight(.medium))
+                    Spacer(minLength: 20)
                     StatusBadge(state: client.state, text: client.detailWithRevision)
                 }
+                .padding(.horizontal, 14)
+                .frame(minHeight: 44)
                 if index < clients.count - 1 { Divider().opacity(0.45) }
             }
         }
@@ -217,6 +224,139 @@ struct SectionCaption: View {
         Text(text)
             .font(.caption.weight(.medium))
             .foregroundStyle(.secondary)
+    }
+}
+
+struct ToolingMatrixRow: Identifiable {
+    let id: AppSection
+    let title: String
+    let symbol: String
+    let libraryCount: Int
+    let installedCounts: [ClientKind: Int]
+}
+
+/// The product's signature view: one honest comparison between the managed
+/// inventory and the local state each client reported during the last check.
+struct ToolingMatrixView: View {
+    let rows: [ToolingMatrixRow]
+    var onSelect: ((AppSection) -> Void)?
+    private let clients: [ClientKind] = [.claude, .codex, .gemini]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PanelHeader("Installation map")
+
+            Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+                GridRow {
+                    Text("Tool")
+                        .frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
+                    columnHeader("Library", symbol: "books.vertical")
+                    ForEach(clients) { client in
+                        clientHeader(client)
+                    }
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 38)
+
+                Divider().opacity(0.35)
+
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    GridRow {
+                        Button {
+                            onSelect?(row.id)
+                        } label: {
+                            Label(row.title, systemImage: row.symbol)
+                                .font(.callout.weight(.medium))
+                                .frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(onSelect == nil)
+                        .accessibilityHint(onSelect == nil ? "" : "Opens \(row.title)")
+
+                        countCell(row.libraryCount)
+                        ForEach(clients) { client in
+                            countCell(row.installedCounts[client, default: 0])
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 46)
+
+                    if index < rows.count - 1 { Divider().opacity(0.28) }
+                }
+            }
+
+            Divider().opacity(0.35)
+            Text("Library shows known items. App columns show local installations found during the last check.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+        }
+        .standardPanel()
+    }
+
+    private func countCell(_ count: Int) -> some View {
+        Text(count, format: .number)
+            .font(.callout.monospacedDigit())
+            .foregroundStyle(count == 0 ? .tertiary : .primary)
+            .frame(minWidth: 92, maxWidth: .infinity, alignment: .center)
+    }
+
+    private func columnHeader(_ title: String, symbol: String) -> some View {
+        Label(title, systemImage: symbol)
+            .labelStyle(.titleAndIcon)
+            .frame(minWidth: 92, maxWidth: .infinity, alignment: .center)
+    }
+
+    private func clientHeader(_ client: ClientKind) -> some View {
+        HStack(spacing: 6) {
+            ClientBrandIcon(client: client, size: 14)
+            Text(shortName(client))
+        }
+        .frame(minWidth: 92, maxWidth: .infinity, alignment: .center)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(client.rawValue)
+    }
+
+    private func shortName(_ client: ClientKind) -> String {
+        switch client {
+        case .claude: "Claude"
+        case .codex: "Codex"
+        case .gemini: "Gemini"
+        }
+    }
+}
+
+struct CompactPathText: View {
+    let path: String
+    var lineLimit = 1
+
+    var body: some View {
+        Text(displayPath)
+            .font(.system(.caption, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .lineLimit(lineLimit)
+            .truncationMode(.middle)
+            .help(path)
+            .accessibilityLabel(path)
+    }
+
+    private var displayPath: String {
+        if let components = URLComponents(string: path),
+            let scheme = components.scheme,
+            let host = components.host,
+            !scheme.isEmpty,
+            !host.isEmpty
+        {
+            let suffix = components.path.split(separator: "/").suffix(1).first.map(String.init)
+            return suffix.map { "\(host)/…/\($0)" } ?? host
+        }
+
+        let components = URL(fileURLWithPath: path).standardized.pathComponents
+        guard components.count > 3 else { return path }
+        return "…/" + components.suffix(2).joined(separator: "/")
     }
 }
 

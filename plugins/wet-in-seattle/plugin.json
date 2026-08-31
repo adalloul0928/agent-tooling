@@ -1,0 +1,28 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "wet-in-seattle",
+  "description": "Analytics and operating workflows for It's Always Wet In Seattle",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "extensions": {
+    "com.agenttooling.adapters": {
+      "claude": {
+        "mcpServers": "./.mcp.json"
+      },
+      "codex": {
+        "skills": "./skills/",
+        "mcpServers": "./.mcp.json",
+        "interface": {
+          "displayName": "Wet In Seattle",
+          "shortDescription": "Run Wet In Seattle reporting workflows",
+          "longDescription": "Private analytics and operating workflows for the It's Always Wet In Seattle storefront.",
+          "developerName": "Arend Alloul",
+          "category": "Productivity",
+          "capabilities": ["Read", "Write"],
+          "defaultPrompt": ["Use the matching Wet In Seattle skill for this task."]
+        }
+      }
+    }
+  }
+}

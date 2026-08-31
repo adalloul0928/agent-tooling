@@ -32,8 +32,25 @@ while IFS=$'\t' read -r name claude_source codex_source; do
   fi
 
   plugin_root="$REPO_ROOT/${claude_source#./}"
+  canonical_manifest="$plugin_root/plugin.json"
   claude_manifest="$plugin_root/.claude-plugin/plugin.json"
   codex_manifest="$plugin_root/.codex-plugin/plugin.json"
+  if [[ ! -f "$canonical_manifest" ]]; then
+    printf 'Missing canonical Agent Plugins manifest: %s\n' "$canonical_manifest" >&2
+    exit 66
+  fi
+  if [[ "$(jq -r '.["$schema"]' "$canonical_manifest")" != 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json' ]]; then
+    printf 'Canonical manifest must use the Agent Plugins 1.0.0 schema: %s\n' "$canonical_manifest" >&2
+    exit 65
+  fi
+  if [[ "$(jq -r '.name' "$canonical_manifest")" != "$name" ]]; then
+    printf 'Canonical package name mismatch for %s.\n' "$name" >&2
+    exit 65
+  fi
+  if jq -e 'has("version")' "$canonical_manifest" >/dev/null; then
+    printf 'Canonical plugin manifest must omit version under Git-revision policy: %s\n' "$canonical_manifest" >&2
+    exit 65
+  fi
   for manifest in "$claude_manifest" "$codex_manifest"; do
     if [[ ! -f "$manifest" ]]; then
       printf 'Missing adapter manifest: %s\n' "$manifest" >&2
@@ -49,6 +66,33 @@ while IFS=$'\t' read -r name claude_source codex_source; do
       exit 65
     fi
   done
+
+  portable_mcp_config="$plugin_root/mcp.json"
+  if [[ -e "$portable_mcp_config" ]]; then
+    if [[ ! -f "$portable_mcp_config" || -L "$portable_mcp_config" ]]; then
+      printf 'Portable MCP configuration must be a regular non-symlink file: %s\n' "$portable_mcp_config" >&2
+      exit 66
+    fi
+    if [[ "$(jq -r '.["$schema"]' "$portable_mcp_config")" != 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json' ]]; then
+      printf 'Portable MCP configuration must use the Agent Plugins 1.0.0 schema: %s\n' "$portable_mcp_config" >&2
+      exit 65
+    fi
+    if ! jq -e '(keys | sort) == ["$schema", "mcpServers"] and (.mcpServers | type == "object")' "$portable_mcp_config" >/dev/null; then
+      printf 'Portable MCP configuration has unsupported top-level fields: %s\n' "$portable_mcp_config" >&2
+      exit 65
+    fi
+    if jq -e '.mcpServers[] | select(.type == "stdio") | .command | test("[[:space:]]")' "$portable_mcp_config" >/dev/null; then
+      printf 'Portable MCP commands must be one executable token: %s\n' "$portable_mcp_config" >&2
+      exit 65
+    fi
+    legacy_mcp_config="$plugin_root/.mcp.json"
+    if [[ -f "$legacy_mcp_config" ]] && ! jq -e --slurpfile legacy "$legacy_mcp_config" '
+      all(.mcpServers | to_entries[]; $legacy[0].mcpServers[.key] == .value)
+    ' "$portable_mcp_config" >/dev/null; then
+      printf 'Portable MCP entries must match their retained native adapter entries: %s\n' "$portable_mcp_config" >&2
+      exit 65
+    fi
+  fi
 
   claude_mcp_source="$(jq -r '.mcpServers // empty' "$claude_manifest")"
   codex_mcp_source="$(jq -r '.mcpServers // empty' "$codex_manifest")"
@@ -71,6 +115,14 @@ while IFS=$'\t' read -r name claude_source codex_source; do
       printf 'Plugin %s MCP declaration must contain at least one server.\n' "$name" >&2
       exit 65
     fi
+    if jq -e '.mcpServers[] | (.args // []) | any(. == "--command")' "$resolved_mcp_config" >/dev/null; then
+      printf 'Plugin %s MCP declaration must use argv execution rather than a shell command string.\n' "$name" >&2
+      exit 65
+    fi
+    if rg -n '\$HOME|~/' "$resolved_mcp_config"; then
+      printf 'Plugin %s MCP declaration must not contain a machine-dependent home path.\n' "$name" >&2
+      exit 65
+    fi
   fi
 
   while IFS= read -r link; do
@@ -88,6 +140,8 @@ done < <(
     | @tsv
   ' "$CLAUDE_CATALOG"
 )
+
+"$REPO_ROOT/scripts/generate-plugin-adapters" --check
 
 if jq -e '.plugins[] | has("version")' "$CLAUDE_CATALOG" >/dev/null; then
   printf 'Claude catalog entries must omit version under Git-revision policy.\n' >&2

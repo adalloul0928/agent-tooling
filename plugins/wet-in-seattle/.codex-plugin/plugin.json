@@ -12,7 +12,12 @@
     "longDescription": "Private analytics and operating workflows for the It's Always Wet In Seattle storefront.",
     "developerName": "Arend Alloul",
     "category": "Productivity",
-    "capabilities": ["Read", "Write"],
-    "defaultPrompt": ["Use the matching Wet In Seattle skill for this task."]
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use the matching Wet In Seattle skill for this task."
+    ]
   }
 }

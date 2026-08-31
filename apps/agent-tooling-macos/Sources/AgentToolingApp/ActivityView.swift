@@ -64,12 +64,18 @@ struct ActivityView: View {
                     filter = .all
                 }
             } else {
-                List(displayedActivities, selection: $selectedID) { receipt in
-                    ActivityCollectionRow(receipt: receipt)
-                        .tag(receipt.id)
-                        .listRowBackground(selectedID == receipt.id ? AgentTheme.blue.opacity(0.13) : Color.clear)
-                        .accessibilityLabel(receipt.displayTitle)
-                        .accessibilityValue(selectedID == receipt.id ? "Selected" : "")
+                List(selection: $selectedID) {
+                    ForEach(activityGroups) { group in
+                        Section(group.title) {
+                            ForEach(group.receipts) { receipt in
+                                ActivityCollectionRow(receipt: receipt)
+                                    .tag(receipt.id)
+                                    .listRowBackground(selectedID == receipt.id ? AgentTheme.blue.opacity(0.13) : Color.clear)
+                                    .accessibilityLabel(receipt.displayTitle)
+                                    .accessibilityValue(selectedID == receipt.id ? "Selected" : "")
+                            }
+                        }
+                    }
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
@@ -104,12 +110,38 @@ struct ActivityView: View {
         }
     }
 
+    private var activityGroups: [ActivityDayGroup] {
+        let calendar = Calendar.current
+        return Dictionary(grouping: displayedActivities) { calendar.startOfDay(for: $0.date) }
+            .map { date, receipts in
+                ActivityDayGroup(
+                    date: date,
+                    title: dayTitle(date, calendar: calendar),
+                    receipts: receipts
+                )
+            }
+            .sorted { $0.date > $1.date }
+    }
+
+    private func dayTitle(_ date: Date, calendar: Calendar) -> String {
+        if calendar.isDateInToday(date) { return "Today" }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
+    }
+
     private var selectedReceipt: ActivityReceipt? { model.activities.first { $0.id == selectedID } }
 
     private func selectFirstVisibleReceiptIfNeeded() {
         guard !displayedActivities.contains(where: { $0.id == selectedID }) else { return }
         selectedID = displayedActivities.first?.id
     }
+}
+
+private struct ActivityDayGroup: Identifiable {
+    let date: Date
+    let title: String
+    let receipts: [ActivityReceipt]
+    var id: Date { date }
 }
 
 private enum ActivityFilter: String, CaseIterable, Identifiable {
@@ -208,7 +240,7 @@ private struct ActivityReceiptDetail: View {
                             ForEach(Array(receipt.affectedPaths.enumerated()), id: \.offset) { index, path in
                                 HStack {
                                     Image(systemName: "doc").foregroundStyle(.secondary)
-                                    Text(path).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                                    CompactPathText(path: path)
                                     Spacer()
                                 }
                                 .padding(12)

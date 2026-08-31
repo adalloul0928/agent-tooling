@@ -4,6 +4,7 @@ import SwiftUI
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage("appearance") private var appearance = "System"
     @Binding var selection: AppSection
     @Binding var isCollapsed: Bool
@@ -57,7 +58,7 @@ struct SidebarView: View {
         }
         .padding(.horizontal, isCollapsed ? 8 : 11)
         .frame(width: isCollapsed ? AgentTheme.collapsedSidebarWidth : AgentTheme.sidebarWidth)
-        .background(AgentTheme.sidebarBackground.opacity(0.87))
+        .background(AgentTheme.sidebarBackground.opacity(reduceTransparency ? 1 : 0.94))
         .overlay(alignment: .topTrailing) {
             Rectangle().fill(AgentTheme.separator.opacity(0.45)).frame(width: 0.5)
         }
@@ -127,12 +128,7 @@ struct SidebarView: View {
 
     private func badge(for section: AppSection) -> String? {
         switch section {
-        case .skills: return model.skills.isEmpty ? nil : "\(model.skills.count)"
-        case .mcpServers: return model.mcpServers.isEmpty ? nil : "\(model.mcpServers.count)"
-        case .plugins:
-            return model.plugins.isEmpty ? nil : "\(model.plugins.count)"
         case .syncCenter: return model.attentionCount == 0 ? nil : "\(model.attentionCount)"
-        case .marketplace: return model.marketplacePackages.isEmpty ? nil : "\(model.marketplacePackages.count)"
         default: return nil
         }
     }

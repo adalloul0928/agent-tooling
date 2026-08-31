@@ -16,7 +16,7 @@ Obsidian, TickTick, Gmail, iMessage, Oura, and Apple Health remain authoritative
 - audited TickTick task/follow-up creation;
 - bounded iMessage reads and confirmed sends through `imsg`;
 - read-only Oura OAuth synchronization;
-- read-only Health Auto Export JSON ingestion;
+- read-only, allowlisted Health Auto Export v2 JSON ingestion and idempotent local/iCloud inbox scanning;
 - designated-root Obsidian writes;
 - machine-local `SOUL.md` and `voice-profile.md` artifacts.
 
@@ -75,10 +75,26 @@ They execute locally because local files and macOS-only data are required. The M
 | iMessage | Signed/notarized `imsg` CLI | Full Disk Access for the ChatGPT desktop app (the observed parent of this Codex runtime); Messages Automation only for an explicitly confirmed send canary |
 | Obsidian | Existing filesystem-first vault skill | Already readable; designated Life OS review/journal roots are the only automatic write locations |
 | Oura | OAuth2 adapter in the Life OS runtime | Register an API application with the configured loopback redirect, run `lifeos oura-authorize` with minimum `daily` scope, and verify a bounded sync |
-| Apple Health | Health Auto Export JSON ingestion | Install/configure the iPhone exporter with a deliberately limited metric set |
+| Apple Health | Health Auto Export v2 JSON ingestion through `lifeos health-scan` | Install/configure the iPhone exporter with the six deliberately limited metric categories below, then verify one real file |
 | Tailscale | Existing CLI/tailnet | Keep access private; do not use Funnel |
 
 An installed connector is not ready until a behavior canary succeeds. `lifeos doctor` deliberately distinguishes missing authentication/permission from an empty data source.
+
+### Apple Health exporter settings
+
+Use Health Auto Export's iCloud Drive automation rather than its foreground-only MCP server. The iCloud path is local-first, requires no additional cloud account, and remains usable by the always-on Mac mini when the iPhone is not actively serving a connection.
+
+Configure one automation named `Life OS Health` with:
+
+- destination: iCloud Drive (`AutoExport/Life OS Health`);
+- format: JSON, export version 2;
+- date organization: Day;
+- summarized/aggregated data: on, grouped by day;
+- metrics: Sleep Analysis, Step Count, Active Energy, Resting Heart Rate, and Heart Rate Variability SDNN;
+- workouts: enabled without GPS routes or detailed workout time series;
+- every symptom, medication, reproductive, ECG, state-of-mind, and other health category: off.
+
+The runtime scans both its private `health-inbox` and `~/Library/Mobile Documents/com~apple~CloudDocs/AutoExport/Life OS Health`. It canonicalizes legacy metric aliases, updates repeated daily aggregates rather than duplicating them, discards nested device/route metadata, and rejects metrics outside the allowlist. Run `lifeos health-scan` manually for the first real-file canary.
 
 ## Autonomy contract
 

@@ -31,7 +31,7 @@ Use the official or already-selected path for each authority:
 - iMessage: signed `imsg` CLI; Full Disk Access for reads and Messages Automation only for confirmed sends. SIP-disabled advanced features are not required.
 - Obsidian: the existing vault skill and configured local clone.
 - Oura: OAuth2 with the minimum `daily` scope; register the configured loopback redirect, pipe the client secret to `lifeos oura-authorize --client-id ...`, and keep secrets and refresh tokens in Keychain.
-- Apple Health: deliberately limited JSON export from an iPhone-side exporter; ingest read-only.
+- Apple Health: a deliberately limited Health Auto Export v2 JSON automation to iCloud Drive; scan and ingest read-only with `lifeos health-scan`. Configure only `sleep_analysis`, `step_count`, `active_energy`, `resting_heart_rate`, `heart_rate_variability_sdnn`, and workouts without routes. The runtime allowlist rejects other exported categories.
 - Remote access: Tailscale only. Never make a public Funnel or equivalent exposure.
 
 Account authorization and macOS privacy prompts require Aren to complete the provider or System Settings screen. Open only the exact screen or URL needed, then re-run the behavioral canary.
@@ -57,7 +57,7 @@ Canary with the smallest safe operation:
 3. iMessage: list one chat, then read a bounded recent window without writing bodies to the ledger.
 4. Obsidian: resolve the vault and write only a temporary test note inside a designated Life OS root; remove it only if Aren explicitly authorizes deletion, otherwise archive or leave it clearly marked.
 5. Oura: retrieve a bounded daily range.
-6. Apple Health: ingest a fixture or real deliberately limited JSON export.
+6. Apple Health: run `lifeos health-scan` against the configured local/iCloud inbox and ingest one real deliberately limited JSON v2 export. A fixture proves parsing only and must not be reported as a live connector canary.
 7. Tailscale: verify tailnet status without exposing a public endpoint.
 
 Installation is not proof. Authentication is not proof. A connector is ready only after its behavior succeeds.

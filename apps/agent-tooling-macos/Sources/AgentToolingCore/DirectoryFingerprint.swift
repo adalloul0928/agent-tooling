@@ -20,6 +20,7 @@ enum DirectoryFingerprint {
             )
         else { throw DirectoryFingerprintError.unsafeItem(normalizedRoot.path(percentEncoded: false)) }
 
+        let rootIsExecutable = try isExecutable(at: normalizedRoot, fileManager: fileManager)
         var entries: [Entry] = []
         var totalBytes = 0
         for case let url as URL in enumerator {
@@ -44,6 +45,7 @@ enum DirectoryFingerprint {
                     url: url,
                     relativePath: relativePath,
                     isDirectory: values.isDirectory == true,
+                    isExecutable: try isExecutable(at: url, fileManager: fileManager),
                     size: size,
                     resourceIdentifier: values.fileResourceIdentifier.map { String(describing: $0) },
                     modificationDate: values.contentModificationDate
@@ -51,9 +53,14 @@ enum DirectoryFingerprint {
         }
 
         var hasher = SHA256()
+        hasher.update(data: Data((rootIsExecutable ? "RX\0" : "R-\0").utf8))
         for entry in entries.sorted(by: { $0.relativePath < $1.relativePath }) {
             hasher.update(data: Data((entry.isDirectory ? "D\0" : "F\0").utf8))
             hasher.update(data: Data(entry.relativePath.utf8))
+            // Installation normalizes private read/write permissions while
+            // preserving whether an item is executable. Bind that meaningful
+            // mode bit so chmod +x/-x after review invalidates the fingerprint.
+            hasher.update(data: Data((entry.isExecutable ? "\0X" : "\0-").utf8))
             hasher.update(data: Data("\0\(entry.size)\0".utf8))
             guard !entry.isDirectory else { continue }
 
@@ -69,12 +76,21 @@ enum DirectoryFingerprint {
                 finalValues.isSymbolicLink != true,
                 finalValues.fileSize == entry.size,
                 finalValues.contentModificationDate == entry.modificationDate,
-                finalValues.fileResourceIdentifier.map({ String(describing: $0) }) == entry.resourceIdentifier
+                finalValues.fileResourceIdentifier.map({ String(describing: $0) }) == entry.resourceIdentifier,
+                try isExecutable(at: entry.url, fileManager: fileManager) == entry.isExecutable
             else {
                 throw DirectoryFingerprintError.changedWhileReading(entry.relativePath)
             }
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func isExecutable(at url: URL, fileManager: FileManager) throws -> Bool {
+        let attributes = try fileManager.attributesOfItem(atPath: url.path(percentEncoded: false))
+        guard let permissions = (attributes[.posixPermissions] as? NSNumber)?.intValue else {
+            throw DirectoryFingerprintError.unsafeItem(url.path(percentEncoded: false))
+        }
+        return permissions & 0o111 != 0
     }
 
     private static func relativePath(of child: URL, under root: URL) -> String? {
@@ -91,6 +107,7 @@ enum DirectoryFingerprint {
         var url: URL
         var relativePath: String
         var isDirectory: Bool
+        var isExecutable: Bool
         var size: Int
         var resourceIdentifier: String?
         var modificationDate: Date?

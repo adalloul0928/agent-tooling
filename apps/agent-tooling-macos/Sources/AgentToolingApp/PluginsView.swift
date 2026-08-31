@@ -112,16 +112,23 @@ private struct PluginCollectionRow: View {
                 Text("\(plugin.skills.count) skills · \(plugin.scope)").font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Text(installedIn)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if installedClients.isEmpty {
+                Text("Not installed").font(.caption).foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 5) {
+                    ForEach(installedClients) { client in
+                        ClientBrandIcon(client: client, size: 14)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Installed in \(installedClients.map(\.rawValue).joined(separator: ", "))")
+            }
         }
         .padding(.vertical, 6)
     }
 
-    private var installedIn: String {
-        let clients = plugin.clients.filter(\.reportsLocalPresence).map { $0.client.rawValue }
-        return clients.isEmpty ? "Not installed" : clients.joined(separator: ", ")
+    private var installedClients: [ClientKind] {
+        plugin.clients.filter(\.reportsLocalPresence).map(\.client)
     }
     private var pluginSymbol: String {
         switch plugin.id.split(separator: "@").first.map(String.init) ?? plugin.id {
@@ -182,14 +189,8 @@ private struct PluginDetailView: View {
                     }
                 }
 
-                GroupBox("Included skills") {
-                    if plugin.skills.isEmpty {
-                        Text("No skill files were reported by this plugin.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .padding(14)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
+                if !plugin.skills.isEmpty {
+                    GroupBox("Included skills") {
                         VStack(spacing: 0) {
                             ForEach(sortedSkills, id: \.self) { skill in
                                 HStack {
@@ -204,14 +205,8 @@ private struct PluginDetailView: View {
                     }
                 }
 
-                GroupBox("Enabled by configurations") {
-                    if enabledProfileNames.isEmpty {
-                        Text("No configuration requires this plugin.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .padding(14)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
+                if !enabledProfileNames.isEmpty {
+                    GroupBox("Enabled by configurations") {
                         VStack(spacing: 0) {
                             ForEach(enabledProfileNames, id: \.self) { profile in
                                 LabeledValueRow(profile) {
@@ -226,9 +221,7 @@ private struct PluginDetailView: View {
                 GroupBox("Source") {
                     VStack(spacing: 0) {
                         LabeledValueRow("Location") {
-                            Text(plugin.source)
-                                .font(.system(.caption, design: .monospaced))
-                                .textSelection(.enabled)
+                            CompactPathText(path: plugin.source)
                         }
                         Divider()
                         LabeledValueRow("Scope") { Text(plugin.scope).foregroundStyle(.secondary) }

@@ -154,6 +154,18 @@ def validate_definition(profile: dict[str, Any]) -> None:
             raise ProfileError(f"{check['id']} missing fields: {', '.join(sorted(missing))}")
         if check.get("severity", "required") not in {"required", "warning"}:
             raise ProfileError(f"{check['id']} has invalid severity")
+        install = check.get("install")
+        if install is not None:
+            if not isinstance(install, dict):
+                raise ProfileError(f"{check['id']} install must be an object")
+            run = install.get("run")
+            if not isinstance(run, list) or not run or not all(isinstance(item, str) and item for item in run):
+                raise ProfileError(f"{check['id']} install.run must be a non-empty string array")
+            for item in run:
+                context.expand(item)
+            note = install.get("note")
+            if note is not None and not isinstance(note, str):
+                raise ProfileError(f"{check['id']} install.note must be a string")
         for key in ("path", "ref"):
             value = check.get(key)
             if isinstance(value, str):

@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -15,7 +18,7 @@ concurrency:
 jobs:
   release:
     name: Sign, notarize, and publish
-    runs-on: xcode-27
+    runs-on: macos-26
     timeout-minutes: 45
     defaults:
       run:
@@ -114,6 +117,10 @@ jobs:
 
       - name: Verify Developer ID signature
         run: |
+          helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling"
+          test -x "$helper"
+          file "$helper"
+          codesign --verify --strict --verbose=2 "$helper"
           codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/Agent Tooling.app"
           codesign -dv --verbose=4 "$RUNNER_TEMP/Agent Tooling.app" 2>&1 | tee "$RUNNER_TEMP/codesign-details.txt"
           grep -q "flags=.*runtime" "$RUNNER_TEMP/codesign-details.txt"
@@ -142,7 +149,12 @@ jobs:
         run: |
           cd "$RUNNER_TEMP"
           shasum -a 256 "$DMG_NAME" > "$DMG_NAME.sha256"
-          cat > release-notes.md <<EOF
+          cd "$GITHUB_WORKSPACE/apps/agent-tooling-macos"
+          python3 scripts/generate-sbom.py \
+            "$RELEASE_VERSION" \
+            "$RUNNER_TEMP/$DMG_NAME.spdx.json" \
+            "$GITHUB_SHA"
+          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
           ## Agent Tooling $RELEASE_VERSION
 
           Native macOS control center for Codex, Claude Code, and Gemini CLI tooling.
@@ -152,6 +164,19 @@ jobs:
           Download the DMG, open it, and drag **Agent Tooling** into **Applications**. The app is Developer ID signed and notarized by Apple.
           EOF
 
+      - name: Attest release provenance
+        if: github.event.repository.visibility == 'public'
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: ${{ runner.temp }}/${{ env.DMG_NAME }}
+
+      - name: Attest release SBOM
+        if: github.event.repository.visibility == 'public'
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: ${{ runner.temp }}/${{ env.DMG_NAME }}
+          sbom-path: ${{ runner.temp }}/${{ env.DMG_NAME }}.spdx.json
+
       - name: Upload notarized release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -159,6 +184,7 @@ jobs:
           path: |
             ${{ runner.temp }}/${{ env.DMG_NAME }}
             ${{ runner.temp }}/${{ env.DMG_NAME }}.sha256
+            ${{ runner.temp }}/${{ env.DMG_NAME }}.spdx.json
           if-no-files-found: error
           retention-days: 30
 
@@ -169,6 +195,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "$RUNNER_TEMP/$DMG_NAME" \
             "$RUNNER_TEMP/$DMG_NAME.sha256" \
+            "$RUNNER_TEMP/$DMG_NAME.spdx.json" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --title "Agent Tooling $RELEASE_VERSION" \

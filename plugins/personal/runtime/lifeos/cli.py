@@ -156,6 +156,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     health = sub.add_parser("health-ingest", help="Ingest a Health Auto Export JSON file")
     health.add_argument("path", type=Path)
+    health_scan = sub.add_parser("health-scan", help="Ingest JSON exports from configured Apple Health inboxes")
+    health_scan.add_argument("--path", action="append", type=Path, dest="paths")
+    health_scan.add_argument("--max-files", type=int, default=100)
 
     oura = sub.add_parser("oura-sync", help="Synchronize read-only Oura daily summaries")
     oura.add_argument("--start-date")
@@ -370,6 +373,8 @@ def main(argv: list[str] | None = None) -> int:
             emit(action)
         elif args.command == "health-ingest":
             emit(lifeos.ingest_health_file(args.path))
+        elif args.command == "health-scan":
+            emit(lifeos.scan_health_inboxes(paths=args.paths, max_files=args.max_files))
         elif args.command == "oura-sync":
             emit(lifeos.oura_sync(start_date=args.start_date, end_date=args.end_date))
         elif args.command == "oura-auth-url":

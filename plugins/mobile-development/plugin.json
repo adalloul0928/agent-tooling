@@ -1,0 +1,27 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "mobile-development",
+  "description": "Isolated PUMPD iOS session lanes plus reusable Simulator and HeroUI Native tooling",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "extensions": {
+    "com.agenttooling.adapters": {
+      "claude": {
+        "mcpServers": "./.mcp.json"
+      },
+      "codex": {
+        "mcpServers": "./.mcp.json",
+        "interface": {
+          "displayName": "Mobile Development",
+          "shortDescription": "Run isolated iOS lanes and mobile tooling",
+          "longDescription": "User-scoped PUMPD iOS session lanes for Claude and Codex, plus reusable local Simulator automation, public HeroUI Native documentation, and licensed HeroUI Native Pro components.",
+          "developerName": "Arend Alloul",
+          "category": "Developer Tools",
+          "capabilities": ["Read", "Write"],
+          "defaultPrompt": ["Use the matching mobile development MCP tools for this task."]
+        }
+      }
+    }
+  }
+}

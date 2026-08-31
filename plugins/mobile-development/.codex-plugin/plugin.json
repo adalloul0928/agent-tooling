@@ -11,7 +11,12 @@
     "longDescription": "User-scoped PUMPD iOS session lanes for Claude and Codex, plus reusable local Simulator automation, public HeroUI Native documentation, and licensed HeroUI Native Pro components.",
     "developerName": "Arend Alloul",
     "category": "Developer Tools",
-    "capabilities": ["Read", "Write"],
-    "defaultPrompt": ["Use the matching mobile development MCP tools for this task."]
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use the matching mobile development MCP tools for this task."
+    ]
   }
 }

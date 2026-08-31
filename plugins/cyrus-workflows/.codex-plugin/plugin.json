@@ -11,7 +11,12 @@
     "longDescription": "Run the PUMPD research, planning, adversarial review, Linear decomposition, Cyrus setup, learning capture, and retrospective workflow.",
     "developerName": "Arend Alloul",
     "category": "Developer Tools",
-    "capabilities": ["Read", "Write"],
-    "defaultPrompt": ["Use the matching Cyrus workflow skill for this PUMPD task."]
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use the matching Cyrus workflow skill for this PUMPD task."
+    ]
   }
 }

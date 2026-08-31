@@ -4,16 +4,35 @@ import SwiftUI
 
 struct SkillsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AppNavigationState.self) private var navigation
+    var navigate: ((AppSection) -> Void)?
     @State private var query = ""
     @State private var scope: SkillScope = .all
     @State private var selectedID = ""
-    @State private var editorMode: SkillEditorMode?
+    @State private var skillBeingEdited: Skill?
+    @State private var codexCreatorPresented = false
+    @State private var pendingCodexRequestID: UUID?
+    @State private var installAfterCreator: CodexSkillInstallHandoff?
+    @State private var displayLimit = Self.pageSize
+
+    private static let pageSize = 12
+
+    init(navigate: ((AppSection) -> Void)? = nil) {
+        self.navigate = navigate
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             PageToolbar(title: "Skills") {
                 Button {
-                    editorMode = .new
+                    navigate?(.insights)
+                } label: {
+                    Label("Find opportunities", systemImage: "magnifyingglass")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityHint("Scans recent work for useful skills, plugins, and MCP servers")
+                Button {
+                    openCodexCreator()
                 } label: {
                     Label("New skill…", systemImage: "plus")
                 }
@@ -37,14 +56,9 @@ struct SkillsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .sheet(item: $editorMode) { mode in
-            SkillEditorSheet(mode: mode, existingSkill: mode == .edit ? selectedSkill : nil) { draft in
-                if mode == .new {
-                    if let created = model.createSkill(from: draft) {
-                        selectedID = created.id
-                        return true
-                    }
-                } else if let selectedSkill, let updated = model.updateSkill(id: selectedSkill.id, from: draft) {
+        .sheet(item: $skillBeingEdited) { skill in
+            SkillEditorSheet(existingSkill: skill) { draft in
+                if let updated = model.updateSkill(id: skill.id, from: draft) {
                     selectedID = updated.id
                     return true
                 }
@@ -52,9 +66,39 @@ struct SkillsView: View {
             }
             .environment(model)
         }
-        .onAppear { selectFirstVisibleSkillIfNeeded() }
+        .sheet(
+            isPresented: $codexCreatorPresented,
+            onDismiss: {
+                pendingCodexRequestID = nil
+                let handoff = installAfterCreator
+                installAfterCreator = nil
+                DispatchQueue.main.async {
+                    if let handoff {
+                        model.planInstall(
+                            skillID: handoff.skillID,
+                            targets: handoff.targets,
+                            includeFreshSessionCanary: true
+                        )
+                    }
+                    applyExternalNavigation()
+                }
+            }
+        ) {
+            CodexSkillCreatorSheet(pendingRequestID: pendingCodexRequestID) { skill, targets in
+                selectedID = skill.id
+                installAfterCreator = CodexSkillInstallHandoff(skillID: skill.id, targets: targets)
+            }
+            .environment(model)
+        }
+        .onAppear {
+            selectFirstVisibleSkillIfNeeded()
+            applyExternalNavigation()
+        }
+        .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
         .onChange(of: model.skills) { _, _ in selectFirstVisibleSkillIfNeeded() }
-        .onChange(of: filteredSkills.map(\.id)) { _, _ in selectFirstVisibleSkillIfNeeded() }
+        .onChange(of: visibleSkills.map(\.id)) { _, _ in selectFirstVisibleSkillIfNeeded() }
+        .onChange(of: query) { _, _ in displayLimit = Self.pageSize }
+        .onChange(of: scope) { _, _ in displayLimit = Self.pageSize }
     }
 
     private var collectionPane: some View {
@@ -111,6 +155,15 @@ struct SkillsView: View {
                                 .background(AgentTheme.controlBackground.opacity(0.45))
                             }
                         }
+                        if visibleSkills.count < filteredSkills.count {
+                            Button(showMoreLabel) {
+                                displayLimit += Self.pageSize
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(AgentTheme.blue)
+                            .frame(maxWidth: .infinity, minHeight: 42)
+                            .accessibilityHint("Loads the next skills")
+                        }
                     }
                 }
             }
@@ -121,7 +174,7 @@ struct SkillsView: View {
     @ViewBuilder
     private var detailPane: some View {
         if let skill = selectedSkill {
-            SkillDetailView(skill: skill, onEdit: { editorMode = .edit }, onInstall: { model.planInstall(skillID: skill.id) })
+            SkillDetailView(skill: skill, onEdit: { skillBeingEdited = skill }, onInstall: { model.planInstall(skillID: skill.id) })
         } else {
             EmptyStateView(
                 symbol: "doc.text", title: "Select a skill",
@@ -140,7 +193,7 @@ struct SkillsView: View {
 
     private var groupedSkills: [(String, [Skill])] {
         var groups: [String: [Skill]] = [:]
-        for skill in filteredSkills {
+        for skill in visibleSkills {
             groups[groupName(for: skill), default: []].append(skill)
         }
         return groups.map { group, skills in
@@ -151,8 +204,17 @@ struct SkillsView: View {
 
     private var selectedSkill: Skill? { model.skills.first { $0.id == selectedID } }
 
+    private var visibleSkills: [Skill] {
+        Array(filteredSkills.prefix(displayLimit))
+    }
+
+    private var showMoreLabel: String {
+        let remaining = filteredSkills.count - visibleSkills.count
+        return "Show \(min(Self.pageSize, remaining)) more"
+    }
+
     private func selectFirstVisibleSkillIfNeeded() {
-        guard !filteredSkills.contains(where: { $0.id == selectedID }) else { return }
+        guard !visibleSkills.contains(where: { $0.id == selectedID }) else { return }
         selectedID = groupedSkills.first?.1.first?.id ?? ""
     }
 
@@ -190,22 +252,42 @@ struct SkillsView: View {
         if !query.isEmpty {
             query = ""
         } else if model.skills.isEmpty {
-            editorMode = .new
+            openCodexCreator()
         } else {
             scope = .all
         }
     }
+
+    private func openCodexCreator(requestID: UUID? = nil) {
+        installAfterCreator = nil
+        pendingCodexRequestID = requestID
+        codexCreatorPresented = true
+    }
+
+    private func applyExternalNavigation() {
+        if let skillID = navigation.requestedSkillID,
+            model.skills.contains(where: { $0.id == skillID })
+        {
+            scope = .all
+            query = ""
+            displayLimit = max(Self.pageSize, model.skills.firstIndex(where: { $0.id == skillID }).map { $0 + 1 } ?? Self.pageSize)
+            selectedID = skillID
+        }
+        if !codexCreatorPresented, let requestID = navigation.requestedSkillCreationID {
+            navigation.consumeSkillCreationRequest(requestID)
+            openCodexCreator(requestID: requestID)
+        }
+    }
+}
+
+private struct CodexSkillInstallHandoff {
+    var skillID: String
+    var targets: Set<ClientKind>
 }
 
 private enum SkillScope: String, CaseIterable, Identifiable {
     case owned = "Managed"
     case all = "All"
-    var id: String { rawValue }
-}
-
-enum SkillEditorMode: String, Identifiable {
-    case new
-    case edit
     var id: String { rawValue }
 }
 
@@ -221,9 +303,19 @@ private struct SkillCollectionRow: View {
                 Text(skill.summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            Text(availability)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            if installedClients.isEmpty {
+                Text("Not installed")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 5) {
+                    ForEach(installedClients) { client in
+                        ClientBrandIcon(client: client, size: 14)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Installed in \(installedClients.map(\.rawValue).joined(separator: ", "))")
+            }
         }
         .padding(.horizontal, 13)
         .frame(height: 66)
@@ -236,9 +328,8 @@ private struct SkillCollectionRow: View {
         .contentShape(Rectangle())
     }
 
-    private var availability: String {
-        guard !skill.clients.isEmpty else { return "Not installed" }
-        return "\(skill.clients.filter(\.reportsLocalPresence).count) of \(skill.clients.count)"
+    private var installedClients: [ClientKind] {
+        skill.clients.filter(\.reportsLocalPresence).map(\.client)
     }
 
     private var symbol: String {
@@ -270,10 +361,12 @@ private struct SkillDetailView: View {
                         Text(skill.owned ? "Managed by Agent Tooling" : skill.bundle).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if skill.owned {
+                    if skill.owned, skill.authoringOrigin != .codexGenerated {
                         Button("Edit…", systemImage: "pencil", action: onEdit)
                             .buttonStyle(.bordered)
                             .disabled(model.isInteractionLocked)
+                    }
+                    if skill.owned {
                         Button("Review Install…", systemImage: "arrow.down.circle") { onInstall() }
                             .buttonStyle(.borderedProminent)
                             .disabled(model.isInteractionLocked)
@@ -286,25 +379,26 @@ private struct SkillDetailView: View {
 
                 GroupBox("Availability") { ClientStatusRows(clients: skill.clients) }
 
-                GroupBox("When it appears") {
-                    VStack(spacing: 0) {
-                        LabeledValueRow("Triggers") {
-                            if skill.triggers.isEmpty {
-                                Text("Not inferred from this installed source").foregroundStyle(.secondary)
-                            } else {
-                                VStack(alignment: .trailing, spacing: 5) {
-                                    ForEach(skill.triggers, id: \.self) { trigger in
-                                        Text(trigger)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                if !skill.triggers.isEmpty || !skill.negativeTrigger.isEmpty {
+                    GroupBox("When it appears") {
+                        VStack(spacing: 0) {
+                            if !skill.triggers.isEmpty {
+                                LabeledValueRow("Triggers") {
+                                    VStack(alignment: .trailing, spacing: 5) {
+                                        ForEach(skill.triggers, id: \.self) { trigger in
+                                            Text(trigger)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
                                 }
                             }
-                        }
-                        Divider()
-                        LabeledValueRow("Doesn’t appear for") {
-                            Text(skill.negativeTrigger.isEmpty ? "Not provided" : skill.negativeTrigger)
-                                .foregroundStyle(.secondary)
+                            if !skill.triggers.isEmpty && !skill.negativeTrigger.isEmpty { Divider() }
+                            if !skill.negativeTrigger.isEmpty {
+                                LabeledValueRow("Doesn’t appear for") {
+                                    Text(skill.negativeTrigger).foregroundStyle(.secondary)
+                                }
+                            }
                         }
                     }
                 }
@@ -315,7 +409,7 @@ private struct SkillDetailView: View {
                         Divider()
                         ForEach(skill.files, id: \.self) { file in
                             LabeledValueRow(file.hasSuffix("SKILL.md") ? "Definition" : "Bundled file") {
-                                Text(file).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                                CompactPathText(path: file)
                             }
                             if file != skill.files.last { Divider() }
                         }

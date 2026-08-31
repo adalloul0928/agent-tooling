@@ -453,20 +453,3 @@ public enum EncryptedSyncError: LocalizedError, Sendable {
         }
     }
 }
-
-private extension JSONEncoder {
-    static func agentTooling() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.sortedKeys]
-        return encoder
-    }
-}
-
-private extension JSONDecoder {
-    static func agentTooling() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }
-}

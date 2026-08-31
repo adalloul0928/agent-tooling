@@ -161,16 +161,25 @@ private struct MCPCollectionRow: View {
                 Text(server.summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            Text(availability)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if installedClients.isEmpty {
+                Text("Not configured")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 5) {
+                    ForEach(installedClients) { client in
+                        ClientBrandIcon(client: client, size: 14)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Configured in \(installedClients.map(\.rawValue).joined(separator: ", "))")
+            }
         }
         .padding(.vertical, 6)
     }
 
-    private var availability: String {
-        let count = server.clients.filter(\.reportsLocalPresence).count
-        return count == 0 ? "Not configured" : "\(count) app\(count == 1 ? "" : "s")"
+    private var installedClients: [ClientKind] {
+        server.clients.filter(\.reportsLocalPresence).map(\.client)
     }
 }
 
@@ -241,9 +250,7 @@ private struct MCPDetailView: View {
                         if let projectRoot = server.projectRoot {
                             Divider()
                             LabeledValueRow("Project folder") {
-                                Text(projectRoot)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .textSelection(.enabled)
+                                CompactPathText(path: projectRoot)
                             }
                         }
                     }

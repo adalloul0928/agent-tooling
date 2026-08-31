@@ -3,6 +3,9 @@ import SwiftUI
 
 struct AppShellView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AppNavigationState.self) private var navigation
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
     @State private var selection: AppSection
 
@@ -25,19 +28,21 @@ struct AppShellView: View {
 
                 destination
                     .id(selection)
-                    .transition(.opacity)
+                    .transition(reduceMotion ? .identity : .opacity)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(AgentTheme.contentBackground.opacity(0.88))
+                    .background(AgentTheme.contentBackground.opacity(reduceTransparency ? 1 : 0.94))
             }
         }
         .foregroundStyle(.primary)
         .tint(AgentTheme.blue)
-        .animation(.easeInOut(duration: 0.16), value: selection)
-        .animation(.snappy(duration: 0.22), value: sidebarCollapsed)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: selection)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.20), value: sidebarCollapsed)
         .groupBoxStyle(ControlGroupBoxStyle())
         .task {
             await model.bootstrap()
         }
+        .onAppear { applyExternalNavigation() }
+        .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
         .sheet(item: pendingPlanBinding) { plan in
             PlanReviewSheet(plan: plan)
                 .environment(model)
@@ -54,7 +59,8 @@ struct AppShellView: View {
         switch selection {
         case .overview: OverviewView(navigate: { selection = $0 })
         case .marketplace: MarketplaceView()
-        case .skills: SkillsView()
+        case .skills: SkillsView(navigate: { selection = $0 })
+        case .insights: InsightsView()
         case .mcpServers: MCPServersView()
         case .plugins: PluginsView(navigate: { selection = $0 })
         case .profiles: ProfilesView()
@@ -77,5 +83,11 @@ struct AppShellView: View {
             get: { model.pendingPlan },
             set: { if $0 == nil { model.discardPendingPlan() } }
         )
+    }
+
+    private func applyExternalNavigation() {
+        if let requestedSection = navigation.requestedSection {
+            selection = requestedSection
+        }
     }
 }

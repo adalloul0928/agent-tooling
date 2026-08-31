@@ -1,16 +1,7 @@
 name: Validate macOS app
 
 on:
-  pull_request:
-    paths:
-      - "apps/agent-tooling-macos/**"
-      - ".github/workflows/macos-app.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "apps/agent-tooling-macos/**"
-      - ".github/workflows/macos-app.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -23,7 +14,7 @@ concurrency:
 jobs:
   build:
     name: Test and package
-    runs-on: xcode-27
+    runs-on: macos-26
     timeout-minutes: 30
     defaults:
       run:
@@ -59,7 +50,42 @@ jobs:
       - name: Run tests and strict release build
         run: |
           swift test --disable-sandbox
+          swift test --disable-sandbox --sanitize=thread
           swift build --configuration release -Xswiftc -warnings-as-errors
+
+      - name: Smoke test Raycast CLI contract
+        run: |
+          cli=$(swift build --configuration release --show-bin-path)/agent-tooling
+          workspace="$RUNNER_TEMP/raycast-cli-workspace"
+          mkdir -p "$workspace"
+          printf '%s' 'Create a reusable release-readiness review skill.' \
+            | "$cli" request create-skill \
+                --provider codex \
+                --scope global \
+                --targets codex \
+                --instruction-stdin \
+                --workspace "$workspace" \
+                --json \
+            > "$RUNNER_TEMP/create-skill-response.json"
+          "$cli" search --query release --workspace "$workspace" --json \
+            > "$RUNNER_TEMP/search-response.json"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          created = json.loads((root / "create-skill-response.json").read_text())
+          searched = json.loads((root / "search-response.json").read_text())
+          assert created["schemaVersion"] == 1
+          assert created["request"]["state"] == "pending-review"
+          assert searched == {
+              "schemaVersion": 1,
+              "results": [],
+              "totalResults": 0,
+              "truncated": False,
+          }
+          PY
 
       - name: Build release app
         env:
@@ -71,6 +97,10 @@ jobs:
       - name: Verify app bundle
         run: |
           codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/Agent Tooling.app"
+          helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling"
+          test -x "$helper"
+          file "$helper"
+          codesign --verify --strict --verbose=2 "$helper"
           test -f "$RUNNER_TEMP/Agent Tooling.app/Contents/Resources/AgentTooling_AgentToolingApp.bundle/Contents/Resources/Assets.car"
           file "$RUNNER_TEMP/Agent Tooling.app/Contents/MacOS/AgentTooling"
 

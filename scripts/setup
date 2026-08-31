@@ -18,7 +18,8 @@ The contract:
         }
       }
 
-- `install.run` is a command (list preferred; a string runs through the shell).
+- `install.run` is a non-empty argument array. Shell command strings are
+  rejected by profile validation and are never executed.
   `${variables}` and `~` expand exactly as in doctor checks.
 - `install.note` is printed with the plan (OAuth prompts, follow-up steps).
 - Checks without a recipe: `claude_plugin` falls back to
@@ -35,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import subprocess
 import sys
 from importlib.machinery import SourceFileLoader
@@ -68,9 +70,7 @@ def plan_action(check: dict[str, Any], result: dict[str, Any], context) -> dict[
     if isinstance(install, dict):
         run = install.get("run")
         if isinstance(run, list):
-            action["command"] = [context.expand(str(item)) for item in run]
-        elif isinstance(run, str):
-            action["command"] = context.expand(run)
+            action["command"] = [context.expand(item) for item in run]
         note = install.get("note")
         if isinstance(note, str):
             action["note"] = note
@@ -83,18 +83,13 @@ def plan_action(check: dict[str, Any], result: dict[str, Any], context) -> dict[
     return action
 
 
-def execute(command) -> int:
-    if isinstance(command, str):
-        completed = subprocess.run(command, shell=True)
-    else:
-        completed = subprocess.run(command)
+def execute(command: list[str]) -> int:
+    completed = subprocess.run(command, shell=False)
     return completed.returncode
 
 
-def render_command(command) -> str:
-    if isinstance(command, str):
-        return command
-    return " ".join(str(part) for part in command)
+def render_command(command: list[str]) -> str:
+    return shlex.join(command)
 
 
 def main() -> int:

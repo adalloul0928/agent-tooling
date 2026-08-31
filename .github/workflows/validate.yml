@@ -25,8 +25,28 @@ jobs:
       - name: Install validation dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes jq ripgrep
+          sudo apt-get install --yes jq ripgrep shellcheck
           python -m pip install --disable-pip-version-check skills-ref==0.1.1
+
+      - name: Install pinned workflow linter
+        run: |
+          version=1.7.12
+          archive="actionlint_${version}_linux_amd64.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${version}/$archive"
+          printf '%s  %s\n' \
+            '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8' \
+            "$RUNNER_TEMP/$archive" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
+          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Lint workflows and shell scripts
+        run: |
+          actionlint
+          rg -l '^#!/usr/bin/env bash$' scripts plugins apps/agent-tooling-macos/scripts \
+            | sort -u \
+            | xargs shellcheck -x
 
       - name: Validate repository contract
         run: ./scripts/validate-static
@@ -42,3 +62,72 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  ios-session-lanes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: "22.20.0"
+
+      - name: Test iOS session lanes
+        run: node --test plugins/mobile-development/skills/ios-session-lanes/tests/ios-session-lane.test.mjs
+
+  documentation:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs/architecture-site
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: "22.20.0"
+          cache: npm
+          cache-dependency-path: docs/architecture-site/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Refuse high-severity advisories
+        run: npm audit --audit-level=high
+
+      - name: Build, test, and lint
+        run: |
+          npm test
+          npm run lint
+
+  raycast-extension:
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: integrations/raycast/agent-tooling
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: "22.22.2"
+          cache: npm
+          cache-dependency-path: integrations/raycast/agent-tooling/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Refuse high-severity production advisories
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Validate source, tests, and production build
+        run: npm run verify-source
+
+  macos-app:
+    uses: ./.github/workflows/macos-app.yml

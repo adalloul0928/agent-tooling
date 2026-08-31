@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "pumpd-workflows",
+  "description": "Local PUMPD maintenance workflows outside the Cyrus pipeline",
+  "author": {
+    "name": "Arend Alloul"
+  },
+  "extensions": {
+    "com.agenttooling.adapters": {
+      "claude": {},
+      "codex": {
+        "skills": "./skills/",
+        "interface": {
+          "displayName": "PUMPD Workflows",
+          "shortDescription": "Maintain local PUMPD agent worktrees",
+          "longDescription": "Small local PUMPD maintenance workflows that are intentionally separate from the Cyrus planning and delegation pipeline.",
+          "developerName": "Arend Alloul",
+          "category": "Developer Tools",
+          "capabilities": ["Read", "Write"],
+          "defaultPrompt": ["Use the PUMPD local cleanup skill for this maintenance task."]
+        }
+      }
+    }
+  }
+}

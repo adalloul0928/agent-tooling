@@ -16,7 +16,7 @@ Use the configured timezone and state the exact date. Read today plus tomorrow f
 
 ## Step 2 — gather bounded evidence
 
-1. Run `lifeos doctor` and `lifeos context`.
+1. Run `lifeos doctor`, then `lifeos health-scan`, then `lifeos context`. If Oura is authorized, synchronize only the bounded recent range needed for today and tomorrow.
 2. Read TickTick open tasks due/overdue and today's calendar/time blocks.
 3. Read open and candidate commitments.
 4. Use the official Gmail capability for urgent, needs-reply, and waiting-on threads in a bounded recent window.

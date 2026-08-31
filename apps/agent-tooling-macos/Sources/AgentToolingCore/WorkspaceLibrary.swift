@@ -107,8 +107,101 @@ public final class WorkspaceLibrary {
         )
     }
 
+    /// Adopts a Codex-generated package only after the person has reviewed it.
+    /// The staged bytes are fingerprinted again immediately before copying so
+    /// the review cannot silently diverge from the package saved to the local
+    /// library.
+    public func adoptCodexDraft(_ result: CodexSkillDraftResult) throws -> CreatedSkill {
+        let source = result.packageURL.standardizedFileURL
+        let draftsRoot = store.cacheURL.appending(path: "skill-drafts", directoryHint: .isDirectory).standardizedFileURL
+        let sourcePath = normalizedPath(source)
+        let requestDirectory = source.deletingLastPathComponent().standardizedFileURL
+        let requestIDText = String(requestDirectory.lastPathComponent.dropFirst("request-".count))
+        guard requestDirectory.deletingLastPathComponent().standardizedFileURL == draftsRoot,
+            requestDirectory.lastPathComponent.hasPrefix("request-"),
+            UUID(uuidString: requestIDText) == result.request.id,
+            source.lastPathComponent == "draft",
+            result.skillURL.standardizedFileURL
+                == source.appending(path: "skills/\(result.skillName)", directoryHint: .isDirectory).standardizedFileURL
+        else { throw WorkspaceLibraryError.unsafeGeneratedDraft(sourcePath) }
+
+        let currentFingerprint = try DirectoryFingerprint.sha256(
+            of: source,
+            fileManager: fileManager,
+            maximumItems: 256,
+            maximumBytes: 8 * 1_024 * 1_024
+        )
+        guard currentFingerprint == result.fingerprint else { throw WorkspaceLibraryError.generatedDraftChanged }
+
+        let id = try Self.normalizedIdentifier(result.skillName)
+        guard id == result.skillName, result.manifest.name == id else {
+            throw WorkspaceLibraryError.invalidSkillDefinition(id)
+        }
+        let definition = source.appending(path: "skills/\(id)/SKILL.md", directoryHint: .notDirectory)
+        let definitionText = try BoundedFileAccess.readUTF8(
+            at: definition,
+            maximumBytes: 512 * 1_024,
+            allowSymbolicLink: false
+        )
+        guard definitionText == result.skillMarkdown else { throw WorkspaceLibraryError.generatedDraftChanged }
+
+        let selectedTargets = Set(result.request.targets)
+        guard !selectedTargets.isEmpty else { throw WorkspaceLibraryError.noInstallTargets }
+        guard [.user, .project].contains(result.request.scope) else {
+            throw WorkspaceLibraryError.unsupportedSkillScope(result.request.scope.displayName)
+        }
+        var placement = SkillDraft()
+        placement.scope = result.request.scope
+        placement.projectRoot = result.request.projectRoot ?? ""
+        let projectRoot = try normalizedProjectRoot(for: placement)
+
+        let managedRoot = try managedPackagesURL()
+        let packageID = "local-\(id)"
+        let destination = managedRoot.appending(path: packageID, directoryHint: .isDirectory)
+        guard !fileManager.fileExists(atPath: destination.path(percentEncoded: false)) else {
+            throw WorkspaceLibraryError.alreadyExists(id)
+        }
+        let staging = managedRoot.appending(path: ".staging-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { removeTransientItemIfPresent(staging) }
+        try fileManager.copyItem(at: source, to: staging)
+        try validateStagedPackage(staging, skillID: id)
+        let copiedFingerprint = try DirectoryFingerprint.sha256(
+            of: staging,
+            fileManager: fileManager,
+            maximumItems: 256,
+            maximumBytes: 8 * 1_024 * 1_024
+        )
+        guard copiedFingerprint == result.fingerprint else { throw WorkspaceLibraryError.generatedDraftChanged }
+        try fileManager.moveItem(at: staging, to: destination)
+
+        let installedClients = selectedTargets.sorted { $0.rawValue < $1.rawValue }.map {
+            ClientState(client: $0, state: .pending, detail: "Generated locally · ready to install")
+        }
+        let skillURL = destination.appending(path: "skills/\(id)", directoryHint: .isDirectory)
+        let skill = Skill(
+            id: id,
+            name: id,
+            displayName: displayName(for: id),
+            summary: result.description,
+            bundle: packageID,
+            scope: result.request.scope.displayName,
+            owned: true,
+            triggers: [],
+            negativeTrigger: "",
+            files: try relativeFiles(in: skillURL),
+            clients: installedClients,
+            validationCount: 0,
+            projectRoot: projectRoot,
+            authoringOrigin: .codexGenerated
+        )
+        return CreatedSkill(skill: skill, packageURL: destination, skillURL: skillURL)
+    }
+
     public func updateSkill(_ existing: Skill, from draft: SkillDraft) throws -> CreatedSkill {
         guard existing.owned else { throw WorkspaceLibraryError.notManaged(existing.id) }
+        guard existing.authoringOrigin != .codexGenerated else {
+            throw WorkspaceLibraryError.generatedSkillRequiresSourceEdit(existing.id)
+        }
         try validate(draft)
         let packagesURL = try managedPackagesURL()
         let id = try Self.normalizedIdentifier(draft.name)
@@ -700,6 +793,9 @@ public enum WorkspaceLibraryError: LocalizedError, Sendable {
     case unsupportedSkillScope(String)
     case unsafeSource(String)
     case unsafeManagedLibrary(String)
+    case unsafeGeneratedDraft(String)
+    case generatedDraftChanged
+    case generatedSkillRequiresSourceEdit(String)
     case replacementRollbackFailed(String, String, String)
     case missingRollbackCopy(String)
 
@@ -725,6 +821,10 @@ public enum WorkspaceLibraryError: LocalizedError, Sendable {
         case .unsupportedSkillScope(let scope): "\(scope) is not a supported skill scope. Choose This Mac or Project."
         case .unsafeSource(let path): "The selected source is a symbolic link or unsafe folder: \(path)"
         case .unsafeManagedLibrary(let path): "The managed skill library is not a safe direct folder: \(path)"
+        case .unsafeGeneratedDraft(let path): "The generated skill draft is outside Agent Tooling's private staging folder: \(path)"
+        case .generatedDraftChanged: "The generated skill changed after review. Generate and review a fresh draft before saving it."
+        case .generatedSkillRequiresSourceEdit(let identifier):
+            "\(identifier) contains Codex-authored source files. Edit its source directly so the template editor cannot discard them."
         case .replacementRollbackFailed(let path, let replacement, let rollback):
             "Updating the managed package at \(path) failed, and restoring its previous copy also failed. Replacement error: \(replacement). Restore error: \(rollback)."
         case .missingRollbackCopy(let path): "The previous managed package needed for rollback is missing at \(path)."

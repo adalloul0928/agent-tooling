@@ -233,7 +233,7 @@ they exist to catch.
 **Vendor skills install to a different directory than Claude's:**
 
 ```bash
-npx skills@latest add <repo> -g -y --agent codex --skill <name>
+npx skills@1.5.18 add <repo> -g -y --agent codex --skill <name>
 ```
 
 lands in **`~/.agents/skills/<name>/SKILL.md`**, *not* `~/.codex/skills/`. The

@@ -1,6 +1,9 @@
 # Agent Tooling Atlas
 
-Interactive guide to the `agent-tooling` architecture: Microsoft APM, Claude and Codex product surfaces, skills, MCP servers, plugins, cloud configuration, and hosted account state.
+The single maintained product and architecture site for Agent Tooling. It
+explains the local-first macOS application, Claude Code, Codex, and Gemini
+targets, portable Agent Plugin packages, MCP servers, profiles, sync, and the
+boundary between local configuration and hosted account state.
 
 ## Local development
 
@@ -15,4 +18,9 @@ npm run dev
 npm test
 ```
 
-The guide is intentionally self-contained. It uses no persistent storage, authentication, external data, or runtime secrets.
+The guide is intentionally self-contained. It uses no persistent storage,
+authentication, external data, runtime server, or runtime secrets. It is a
+static Next.js export, which keeps the documentation supply chain smaller than
+the former Cloudflare/vinext starter. The retired
+`docs/current-tooling` starter was removed because it duplicated this app and
+carried unused D1, Drizzle, and authentication scaffolding.

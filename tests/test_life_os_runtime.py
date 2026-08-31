@@ -273,8 +273,96 @@ class LifeOSRuntimeTests(unittest.TestCase):
         result = self.runtime.ingest_health_file(export)
         self.assertEqual(result["records_written"], 2)
         events = self.runtime.store.list_events(source="apple_health")
-        self.assertEqual({event["event_type"] for event in events}, {"steps", "heart_rate_variability"})
+        self.assertEqual({event["event_type"] for event in events}, {"step_count", "heart_rate_variability_sdnn"})
         self.assertTrue(all(event["sensitivity"] == "health" for event in events))
+
+    def test_health_auto_export_v2_is_allowlisted_and_idempotent(self):
+        export = self.root / "health-v2.json"
+        export.write_text(
+            json.dumps(
+                {
+                    "data": {
+                        "metrics": [
+                            {
+                                "name": "step_count",
+                                "units": "count",
+                                "data": [{"date": "2026-08-10 00:00:00 -0700", "qty": 8123}],
+                            },
+                            {
+                                "name": "blood_glucose",
+                                "units": "mg/dL",
+                                "data": [{"date": "2026-08-10 08:00:00 -0700", "qty": 95}],
+                            },
+                        ],
+                        "workouts": [
+                            {
+                                "id": "workout-1",
+                                "name": "Strength Training",
+                                "start": "2026-08-10 09:00:00 -0700",
+                                "end": "2026-08-10 10:00:00 -0700",
+                                "duration": 3600,
+                            }
+                        ],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = self.runtime.ingest_health_file(export)
+        self.assertEqual(result["records_seen"], 3)
+        self.assertEqual(result["records_written"], 2)
+        self.assertEqual(result["records_filtered"], 1)
+        self.assertEqual(result["metrics"], ["step_count", "workout"])
+
+        export.write_text(
+            json.dumps(
+                {
+                    "data": {
+                        "metrics": [
+                            {
+                                "name": "step_count",
+                                "units": "count",
+                                "data": [{"date": "2026-08-10 00:00:00 -0700", "qty": 9000}],
+                            }
+                        ]
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.runtime.ingest_health_file(export)
+        events = self.runtime.store.list_events(source="apple_health")
+        self.assertEqual(len(events), 2)
+        steps = next(event for event in events if event["event_type"] == "step_count")
+        self.assertEqual(steps["payload"]["qty"], 9000)
+        self.assertNotIn("blood_glucose", {event["event_type"] for event in events})
+
+    def test_health_scan_reads_configured_inbox_without_duplicates(self):
+        inbox = self.root / "icloud" / "AutoExport" / "Life OS Health"
+        inbox.mkdir(parents=True)
+        export = inbox / "2026-08-10.json"
+        export.write_text(
+            json.dumps(
+                {
+                    "data": {
+                        "metrics": [
+                            {
+                                "name": "resting_heart_rate",
+                                "units": "bpm",
+                                "data": [{"date": "2026-08-10 08:00:00 -0700", "qty": 52}],
+                            }
+                        ]
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        first = self.runtime.scan_health_inboxes(paths=[inbox])
+        second = self.runtime.scan_health_inboxes(paths=[inbox])
+        self.assertEqual(first["status"], "ready")
+        self.assertEqual(first["files_ingested"], 1)
+        self.assertEqual(second["files_ingested"], 1)
+        self.assertEqual(len(self.runtime.store.list_events(source="apple_health")), 1)
 
     def test_decisions_and_drafts_are_idempotent(self):
         first = self.runtime.store.record_decision(

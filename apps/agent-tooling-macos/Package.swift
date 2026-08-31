@@ -9,6 +9,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "AgentTooling", targets: ["AgentToolingApp"]),
+        .executable(name: "agent-tooling", targets: ["AgentToolingCLI"]),
         .library(name: "AgentToolingCore", targets: ["AgentToolingCore"]),
     ],
     targets: [
@@ -24,9 +25,17 @@ let package = Package(
             dependencies: ["AgentToolingCore"],
             resources: [.process("Resources")]
         ),
+        .executableTarget(
+            name: "AgentToolingCLI",
+            dependencies: ["AgentToolingCore"]
+        ),
         .testTarget(
             name: "AgentToolingCoreTests",
             dependencies: ["AgentToolingCore"]
+        ),
+        .testTarget(
+            name: "AgentToolingAppTests",
+            dependencies: ["AgentToolingApp", "AgentToolingCore"]
         ),
     ]
 )

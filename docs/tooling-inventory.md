@@ -209,7 +209,7 @@ subset that is genuinely expected.
 `expo/skills` (MIT, <https://github.com/expo/skills>) is **installed, not
 mirrored**. A deliberate 9-skill subset of the 23 it ships is tracked as `path`
 checks in `base-workstation`, each carrying its own
-`npx skills@latest add expo/skills -g -y --agent claude-code --skill <name>`
+`npx skills@1.5.18 add expo/skills -g -y --agent claude-code --skill <name>`
 recipe:
 
 `eas-app-stores`, `eas-workflows`, `expo-dev-client`, `expo-examples`,

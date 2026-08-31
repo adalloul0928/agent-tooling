@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Generate Claude and Codex adapter manifests from canonical plugin.json files."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import sys
+from typing import Any
+
+
+SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+EXTENSION = "com.agenttooling.adapters"
+
+
+def render(value: dict[str, Any]) -> str:
+    return json.dumps(value, indent=2, ensure_ascii=False) + "\n"
+
+
+def adapter(manifest: dict[str, Any], client: str) -> dict[str, Any]:
+    result = {
+        key: manifest[key]
+        for key in ("name", "description", "author", "homepage", "repository", "license", "keywords")
+        if key in manifest
+    }
+    extensions = manifest.get("extensions", {})
+    adapter_extensions = extensions.get(EXTENSION, {}) if isinstance(extensions, dict) else {}
+    client_values = adapter_extensions.get(client, {}) if isinstance(adapter_extensions, dict) else {}
+    if not isinstance(client_values, dict):
+        raise ValueError(f"{EXTENSION}.{client} must be an object")
+    result.update(client_values)
+    return result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true", help="fail when generated adapters differ")
+    args = parser.parse_args()
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    plugins_root = root / "plugins"
+    failures: list[str] = []
+    for package_root in sorted(path for path in plugins_root.iterdir() if path.is_dir()):
+        manifest_path = package_root / "plugin.json"
+        if not manifest_path.is_file():
+            continue
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("$schema") != SCHEMA:
+            failures.append(f"{manifest_path}: unsupported or missing schema")
+            continue
+        if manifest.get("name") != package_root.name:
+            failures.append(f"{manifest_path}: name must match its package directory")
+            continue
+
+        for client, relative_path in (
+            ("claude", pathlib.Path(".claude-plugin/plugin.json")),
+            ("codex", pathlib.Path(".codex-plugin/plugin.json")),
+        ):
+            destination = package_root / relative_path
+            expected = render(adapter(manifest, client))
+            actual = destination.read_text(encoding="utf-8") if destination.is_file() else None
+            if args.check:
+                if actual != expected:
+                    failures.append(f"{destination}: run scripts/generate-plugin-adapters")
+            else:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(expected, encoding="utf-8")
+
+    if failures:
+        print("\n".join(failures), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -73,7 +73,7 @@ public final class WorkspaceStore: @unchecked Sendable {
             guard sqlite3_busy_timeout(handle, 5_000) == SQLITE_OK else {
                 throw WorkspaceStoreError.query(message(handle))
             }
-            try migrate()
+            try migrate(fileManager: fileManager)
             for url in [
                 databaseURL,
                 URL(fileURLWithPath: databaseURL.path(percentEncoded: false) + "-wal"),
@@ -158,7 +158,181 @@ public final class WorkspaceStore: @unchecked Sendable {
         }
     }
 
-    private func migrate() throws {
+    public func loadEntity<Value: Decodable>(
+        _ id: String,
+        domain: WorkspaceEntityDomain,
+        as type: Value.Type
+    ) throws -> Value? {
+        try Self.validateKey(id)
+        return try queue.sync {
+            guard let database else { throw WorkspaceStoreError.closed }
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            try prepare(
+                "SELECT payload FROM \(domain.tableName) WHERE id = ? LIMIT 1",
+                database: database,
+                statement: &statement
+            )
+            try bindText(id, at: 1, to: statement, database: database)
+            let result = sqlite3_step(statement)
+            if result == SQLITE_DONE { return nil }
+            guard result == SQLITE_ROW else { throw WorkspaceStoreError.query(message(database)) }
+            return try decodeColumn(statement: statement, key: "\(domain.rawValue).\(id)", as: type)
+        }
+    }
+
+    public func listEntities<Value: Decodable>(
+        domain: WorkspaceEntityDomain,
+        as type: Value.Type
+    ) throws -> [Value] {
+        try queue.sync {
+            guard let database else { throw WorkspaceStoreError.closed }
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            try prepare(
+                "SELECT id, payload FROM \(domain.tableName) ORDER BY id",
+                database: database,
+                statement: &statement
+            )
+            var values: [Value] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let id = sqlite3_column_text(statement, 0).map { String(cString: $0) } ?? "unknown"
+                values.append(try decodeColumn(statement: statement, column: 1, key: "\(domain.rawValue).\(id)", as: type))
+            }
+            guard sqlite3_errcode(database) == SQLITE_OK || sqlite3_errcode(database) == SQLITE_DONE else {
+                throw WorkspaceStoreError.query(message(database))
+            }
+            return values
+        }
+    }
+
+    public func saveEntity<Value: Encodable>(
+        _ value: Value,
+        id: String,
+        domain: WorkspaceEntityDomain
+    ) throws {
+        try Self.validateKey(id)
+        let data = try JSONEncoder.agentTooling().encode(value)
+        guard data.count <= Self.maximumRecordBytes else {
+            throw WorkspaceStoreError.recordTooLarge("\(domain.rawValue).\(id)")
+        }
+        try queue.sync {
+            guard let database else { throw WorkspaceStoreError.closed }
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            try prepare(
+                "INSERT INTO \(domain.tableName)(id, payload, updated_at) VALUES(?, ?, ?) "
+                    + "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at",
+                database: database,
+                statement: &statement
+            )
+            try bindText(id, at: 1, to: statement, database: database)
+            try bindData(data, at: 2, to: statement, database: database)
+            guard sqlite3_bind_double(statement, 3, Date.now.timeIntervalSince1970) == SQLITE_OK,
+                sqlite3_step(statement) == SQLITE_DONE
+            else {
+                throw WorkspaceStoreError.query(message(database))
+            }
+        }
+    }
+
+    public func removeEntity(_ id: String, domain: WorkspaceEntityDomain) throws {
+        try Self.validateKey(id)
+        try queue.sync {
+            guard let database else { throw WorkspaceStoreError.closed }
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            try prepare("DELETE FROM \(domain.tableName) WHERE id = ?", database: database, statement: &statement)
+            try bindText(id, at: 1, to: statement, database: database)
+            guard sqlite3_step(statement) == SQLITE_DONE else {
+                throw WorkspaceStoreError.query(message(database))
+            }
+        }
+    }
+
+    /// Persists the workspace as normalized entity rows in one transaction.
+    /// A legacy snapshot shadow is retained for one compatibility cycle so an
+    /// older app can still open the workspace during the migration canary.
+    public func saveWorkspaceSnapshot(_ snapshot: WorkspaceSnapshot) throws {
+        let metadata = WorkspaceMetadata(snapshot: snapshot)
+        let packageRecords: [StoredWorkspacePackage] =
+            snapshot.skills.map(StoredWorkspacePackage.skill)
+            + snapshot.mcpServers.map(StoredWorkspacePackage.mcpServer)
+            + snapshot.plugins.map(StoredWorkspacePackage.plugin)
+            + snapshot.marketplacePackages.map(StoredWorkspacePackage.marketplace)
+        let bindingRecords: [StoredTargetBinding] =
+            snapshot.accountSurfaces.map(StoredTargetBinding.account)
+            + snapshot.connectors.map(StoredTargetBinding.connector)
+        let locks = snapshot.marketplacePackages.compactMap { package -> StoredEntityValue<SourceLock>? in
+            guard let lock = package.provenance?.lock else { return nil }
+            return StoredEntityValue(id: "marketplace:\(package.id)", value: lock)
+        }
+        let entityRecords: [WorkspaceEntityDomain: [StoredEntityPayload]] = [
+            .packages: try packageRecords.map { try entityPayload($0, id: $0.stableID) },
+            .sources: try snapshot.sources.map {
+                try entityPayload($0, id: $0.id.uuidString.lowercased())
+            },
+            .sourceLocks: try locks.map { try entityPayload($0.value, id: $0.id) },
+            .profiles: try snapshot.profiles.map { try entityPayload($0, id: $0.id) },
+            .targetBindings: try bindingRecords.map { try entityPayload($0, id: $0.stableID) },
+            .observedStates: try snapshot.targetObservations.map { try entityPayload($0, id: $0.id) },
+            .receipts: try snapshot.operationReceipts.map {
+                try entityPayload($0, id: $0.id.uuidString.lowercased())
+            },
+        ]
+        let metadataData = try encodeRecord(metadata)
+        let compatibilityData = try encodeRecord(snapshot)
+
+        try queue.sync {
+            guard let database else { throw WorkspaceStoreError.closed }
+            try execute("BEGIN IMMEDIATE", database: database)
+            do {
+                for domain in WorkspaceEntityDomain.allCases where domain != .plans {
+                    try replaceEntities(entityRecords[domain] ?? [], domain: domain, database: database)
+                }
+                try upsertWorkspaceMetadata(metadataData, database: database)
+                try upsertStateRecord(key: "workspace.snapshot", data: compatibilityData, database: database)
+                try execute("COMMIT", database: database)
+            } catch {
+                try? execute("ROLLBACK", database: database)
+                throw error
+            }
+        }
+    }
+
+    /// Loads normalized state first. Existing blob-only workspaces are
+    /// migrated transactionally on first open and remain import-compatible.
+    public func loadWorkspaceSnapshot() throws -> WorkspaceSnapshot? {
+        guard let metadata: WorkspaceMetadata = try loadWorkspaceMetadata() else {
+            guard let legacy = try load("workspace.snapshot", as: WorkspaceSnapshot.self) else { return nil }
+            try WorkspaceSnapshotValidator.validate(legacy, mode: .localState)
+            try saveWorkspaceSnapshot(legacy)
+            return legacy
+        }
+        let packageRecords = try listEntities(domain: .packages, as: StoredWorkspacePackage.self)
+        let bindings = try listEntities(domain: .targetBindings, as: StoredTargetBinding.self)
+        return WorkspaceSnapshot(
+            skills: packageRecords.compactMap(\.skill),
+            mcpServers: packageRecords.compactMap(\.mcpServer),
+            plugins: packageRecords.compactMap(\.plugin),
+            profiles: try listEntities(domain: .profiles, as: ToolingProfile.self),
+            activities: metadata.activities,
+            operationReceipts: try listEntities(domain: .receipts, as: OperationReceipt.self),
+            targetObservations: try listEntities(domain: .observedStates, as: TargetObservation.self),
+            sources: try listEntities(domain: .sources, as: ToolingSource.self),
+            marketplacePackages: packageRecords.compactMap(\.marketplace),
+            accountSurfaces: bindings.compactMap(\.account),
+            connectors: bindings.compactMap(\.connector),
+            activeProfileID: metadata.activeProfileID,
+            importedRepositoryPath: metadata.importedRepositoryPath,
+            backupConfiguration: metadata.backupConfiguration,
+            encryptedSyncConfiguration: metadata.encryptedSyncConfiguration,
+            preferences: metadata.preferences,
+            managedPolicies: metadata.managedPolicies
+        )
+    }
+
+    private func migrate(fileManager: FileManager) throws {
         try queue.sync {
             guard let database else { throw WorkspaceStoreError.closed }
             try execute("PRAGMA journal_mode = WAL", database: database)
@@ -173,9 +347,26 @@ public final class WorkspaceStore: @unchecked Sendable {
                     "CREATE TABLE IF NOT EXISTS state_records (key TEXT PRIMARY KEY NOT NULL, payload BLOB NOT NULL, updated_at REAL NOT NULL)"
                 ),
                 (2, "CREATE INDEX IF NOT EXISTS state_records_updated_at ON state_records(updated_at DESC)"),
+                (
+                    3,
+                    WorkspaceEntityDomain.allCases.map { domain in
+                        "CREATE TABLE IF NOT EXISTS \(domain.tableName) "
+                            + "(id TEXT PRIMARY KEY NOT NULL, payload BLOB NOT NULL, updated_at REAL NOT NULL);"
+                            + "CREATE INDEX IF NOT EXISTS \(domain.tableName)_updated_at "
+                            + "ON \(domain.tableName)(updated_at DESC);"
+                    }.joined()
+                ),
+                (
+                    4,
+                    "CREATE TABLE IF NOT EXISTS workspace_metadata "
+                        + "(id INTEGER PRIMARY KEY NOT NULL CHECK(id = 1), payload BLOB NOT NULL, updated_at REAL NOT NULL)"
+                ),
             ]
             for (version, sql) in migrations {
                 if try !migrationExists(version, database: database) {
+                    if version >= 3, try stateRecordsExist(database: database) {
+                        try createMigrationBackup(version: version, database: database, fileManager: fileManager)
+                    }
                     try execute("BEGIN IMMEDIATE", database: database)
                     do {
                         try execute(sql, database: database)
@@ -190,6 +381,49 @@ public final class WorkspaceStore: @unchecked Sendable {
                 }
             }
         }
+    }
+
+    private func stateRecordsExist(database: OpaquePointer) throws -> Bool {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        try prepare("SELECT 1 FROM state_records LIMIT 1", database: database, statement: &statement)
+        let result = sqlite3_step(statement)
+        if result == SQLITE_ROW { return true }
+        if result == SQLITE_DONE { return false }
+        throw WorkspaceStoreError.query(message(database))
+    }
+
+    private func createMigrationBackup(
+        version: Int,
+        database: OpaquePointer,
+        fileManager: FileManager
+    ) throws {
+        let backupURL = rootURL.appending(path: "agent-tooling.pre-migration-v\(version).sqlite")
+        try Self.refuseSymbolicLink(at: backupURL, fileManager: fileManager)
+        if fileManager.fileExists(atPath: backupURL.path(percentEncoded: false)) { return }
+
+        var backupDatabase: OpaquePointer?
+        guard
+            sqlite3_open_v2(
+                backupURL.path(percentEncoded: false),
+                &backupDatabase,
+                SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX,
+                nil
+            ) == SQLITE_OK, let backupDatabase
+        else {
+            if let backupDatabase { sqlite3_close(backupDatabase) }
+            throw WorkspaceStoreError.migrationBackup(backupURL.path(percentEncoded: false))
+        }
+        defer { sqlite3_close(backupDatabase) }
+        guard let backup = sqlite3_backup_init(backupDatabase, "main", database, "main") else {
+            throw WorkspaceStoreError.migrationBackup(backupURL.path(percentEncoded: false))
+        }
+        let stepResult = sqlite3_backup_step(backup, -1)
+        let finishResult = sqlite3_backup_finish(backup)
+        guard stepResult == SQLITE_DONE, finishResult == SQLITE_OK else {
+            throw WorkspaceStoreError.migrationBackup(backupURL.path(percentEncoded: false))
+        }
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: backupURL.path(percentEncoded: false))
     }
 
     private func migrationExists(_ version: Int, database: OpaquePointer) throws -> Bool {
@@ -214,6 +448,83 @@ public final class WorkspaceStore: @unchecked Sendable {
         }
     }
 
+    private func replaceEntities(
+        _ records: [StoredEntityPayload],
+        domain: WorkspaceEntityDomain,
+        database: OpaquePointer
+    ) throws {
+        try execute("DELETE FROM \(domain.tableName)", database: database)
+        for record in records {
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            try prepare(
+                "INSERT INTO \(domain.tableName)(id, payload, updated_at) VALUES(?, ?, ?)",
+                database: database,
+                statement: &statement
+            )
+            try bindText(record.id, at: 1, to: statement, database: database)
+            try bindData(record.payload, at: 2, to: statement, database: database)
+            guard sqlite3_bind_double(statement, 3, Date.now.timeIntervalSince1970) == SQLITE_OK,
+                sqlite3_step(statement) == SQLITE_DONE
+            else { throw WorkspaceStoreError.query(message(database)) }
+        }
+    }
+
+    private func upsertWorkspaceMetadata(_ data: Data, database: OpaquePointer) throws {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        try prepare(
+            "INSERT INTO workspace_metadata(id, payload, updated_at) VALUES(1, ?, ?) "
+                + "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at",
+            database: database,
+            statement: &statement
+        )
+        try bindData(data, at: 1, to: statement, database: database)
+        guard sqlite3_bind_double(statement, 2, Date.now.timeIntervalSince1970) == SQLITE_OK,
+            sqlite3_step(statement) == SQLITE_DONE
+        else { throw WorkspaceStoreError.query(message(database)) }
+    }
+
+    private func upsertStateRecord(key: String, data: Data, database: OpaquePointer) throws {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        try prepare(
+            "INSERT INTO state_records(key, payload, updated_at) VALUES(?, ?, ?) "
+                + "ON CONFLICT(key) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at",
+            database: database,
+            statement: &statement
+        )
+        try bindText(key, at: 1, to: statement, database: database)
+        try bindData(data, at: 2, to: statement, database: database)
+        guard sqlite3_bind_double(statement, 3, Date.now.timeIntervalSince1970) == SQLITE_OK,
+            sqlite3_step(statement) == SQLITE_DONE
+        else { throw WorkspaceStoreError.query(message(database)) }
+    }
+
+    private func loadWorkspaceMetadata() throws -> WorkspaceMetadata? {
+        try queue.sync {
+            guard let database else { throw WorkspaceStoreError.closed }
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            try prepare("SELECT payload FROM workspace_metadata WHERE id = 1", database: database, statement: &statement)
+            let result = sqlite3_step(statement)
+            if result == SQLITE_DONE { return nil }
+            guard result == SQLITE_ROW else { throw WorkspaceStoreError.query(message(database)) }
+            return try decodeColumn(statement: statement, key: "workspace.metadata", as: WorkspaceMetadata.self)
+        }
+    }
+
+    private func encodeRecord<Value: Encodable>(_ value: Value) throws -> Data {
+        let data = try JSONEncoder.agentTooling().encode(value)
+        guard data.count <= Self.maximumRecordBytes else { throw WorkspaceStoreError.recordTooLarge("normalized entity") }
+        return data
+    }
+
+    private func entityPayload<Value: Encodable>(_ value: Value, id: String) throws -> StoredEntityPayload {
+        try Self.validateKey(id)
+        return StoredEntityPayload(id: id, payload: try encodeRecord(value))
+    }
+
     private func prepare(_ sql: String, database: OpaquePointer, statement: inout OpaquePointer?) throws {
         guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
             throw WorkspaceStoreError.query(message(database))
@@ -224,6 +535,34 @@ public final class WorkspaceStore: @unchecked Sendable {
         guard sqlite3_bind_text(statement, index, value, -1, sqliteTransient) == SQLITE_OK else {
             throw WorkspaceStoreError.query(message(database))
         }
+    }
+
+    private func bindData(_ data: Data, at index: Int32, to statement: OpaquePointer?, database: OpaquePointer) throws {
+        let result = data.withUnsafeBytes { raw in
+            sqlite3_bind_blob(statement, index, raw.baseAddress, Int32(data.count), sqliteTransient)
+        }
+        guard result == SQLITE_OK else { throw WorkspaceStoreError.query(message(database)) }
+    }
+
+    private func decodeColumn<Value: Decodable>(
+        statement: OpaquePointer?,
+        column: Int32 = 0,
+        key: String,
+        as type: Value.Type
+    ) throws -> Value {
+        let count = Int(sqlite3_column_bytes(statement, column))
+        guard count >= 0, count <= Self.maximumRecordBytes else {
+            throw WorkspaceStoreError.recordTooLarge(key)
+        }
+        let data: Data
+        if count == 0 {
+            data = Data()
+        } else if let bytes = sqlite3_column_blob(statement, column) {
+            data = Data(bytes: bytes, count: count)
+        } else {
+            throw WorkspaceStoreError.query("Missing payload for \(key).")
+        }
+        return try JSONDecoder.agentTooling().decode(Value.self, from: data)
     }
 
     private func message(_ database: OpaquePointer) -> String {
@@ -265,6 +604,96 @@ public final class WorkspaceStore: @unchecked Sendable {
     }
 }
 
+private struct WorkspaceMetadata: Codable {
+    var activities: [ActivityReceipt]
+    var activeProfileID: String
+    var importedRepositoryPath: String?
+    var backupConfiguration: BackupConfiguration
+    var encryptedSyncConfiguration: EncryptedSyncConfiguration
+    var preferences: WorkspacePreferences
+    var managedPolicies: [ManagedPolicy]
+
+    init(snapshot: WorkspaceSnapshot) {
+        activities = snapshot.activities
+        activeProfileID = snapshot.activeProfileID
+        importedRepositoryPath = snapshot.importedRepositoryPath
+        backupConfiguration = snapshot.backupConfiguration
+        encryptedSyncConfiguration = snapshot.encryptedSyncConfiguration
+        preferences = snapshot.preferences
+        managedPolicies = snapshot.managedPolicies
+    }
+}
+
+private struct StoredEntityPayload {
+    var id: String
+    var payload: Data
+}
+
+private struct StoredEntityValue<Value> {
+    var id: String
+    var value: Value
+}
+
+private enum StoredWorkspacePackage: Codable {
+    case skill(Skill)
+    case mcpServer(MCPServer)
+    case plugin(Plugin)
+    case marketplace(MarketplacePackage)
+
+    var skill: Skill? { if case .skill(let value) = self { value } else { nil } }
+    var mcpServer: MCPServer? { if case .mcpServer(let value) = self { value } else { nil } }
+    var plugin: Plugin? { if case .plugin(let value) = self { value } else { nil } }
+    var marketplace: MarketplacePackage? { if case .marketplace(let value) = self { value } else { nil } }
+
+    var stableID: String {
+        switch self {
+        case .skill(let value): "skill:\(value.id)"
+        case .mcpServer(let value): "mcp:\(value.id)"
+        case .plugin(let value): "plugin:\(value.id)"
+        case .marketplace(let value): "marketplace:\(value.id)"
+        }
+    }
+}
+
+private enum StoredTargetBinding: Codable {
+    case account(AccountSurface)
+    case connector(ConnectorRecord)
+
+    var account: AccountSurface? { if case .account(let value) = self { value } else { nil } }
+    var connector: ConnectorRecord? { if case .connector(let value) = self { value } else { nil } }
+
+    var stableID: String {
+        switch self {
+        case .account(let value): "account:\(value.id.uuidString.lowercased())"
+        case .connector(let value): "connector:\(value.id.uuidString.lowercased())"
+        }
+    }
+}
+
+public enum WorkspaceEntityDomain: String, Codable, CaseIterable, Sendable {
+    case packages
+    case sources
+    case sourceLocks
+    case profiles
+    case targetBindings
+    case observedStates
+    case plans
+    case receipts
+
+    fileprivate var tableName: String {
+        switch self {
+        case .packages: "packages"
+        case .sources: "sources"
+        case .sourceLocks: "source_locks"
+        case .profiles: "profiles"
+        case .targetBindings: "target_bindings"
+        case .observedStates: "observed_states"
+        case .plans: "operation_plans"
+        case .receipts: "operation_receipts"
+        }
+    }
+}
+
 public enum WorkspaceStoreError: LocalizedError, Sendable {
     case openDatabase(String)
     case closed
@@ -272,6 +701,7 @@ public enum WorkspaceStoreError: LocalizedError, Sendable {
     case recordTooLarge(String)
     case invalidKey
     case unsafePath(String)
+    case migrationBackup(String)
 
     public var errorDescription: String? {
         switch self {
@@ -281,23 +711,7 @@ public enum WorkspaceStoreError: LocalizedError, Sendable {
         case .recordTooLarge(let key): "The local workspace record \(key) exceeds the supported size limit."
         case .invalidKey: "The local workspace record key is empty, unsafe, or too long."
         case .unsafePath(let path): "The local workspace path is not a safe, direct file-system location: \(path)"
+        case .migrationBackup(let path): "The workspace migration stopped because a safety backup could not be created at \(path)."
         }
-    }
-}
-
-private extension JSONEncoder {
-    static func agentTooling() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.sortedKeys]
-        return encoder
-    }
-}
-
-private extension JSONDecoder {
-    static func agentTooling() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
     }
 }

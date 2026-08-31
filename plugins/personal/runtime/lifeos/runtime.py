@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 import plistlib
+import re
 import secrets
 import shutil
 import subprocess
@@ -21,6 +22,15 @@ from .store import Store, stable_id, utcnow
 
 class LifeOSError(RuntimeError):
     pass
+
+
+HEALTH_METRIC_ALIASES = {
+    "sleep": "sleep_analysis",
+    "steps": "step_count",
+    "heart_rate_variability": "heart_rate_variability_sdnn",
+    "hrv": "heart_rate_variability_sdnn",
+    "workouts": "workout",
+}
 
 
 class LifeOS:
@@ -472,18 +482,54 @@ class LifeOS:
         path = path.expanduser().resolve()
         if not path.is_file():
             raise LifeOSError(f"health export does not exist: {path}")
-        data = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_bytes()
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise LifeOSError(f"health export is not valid UTF-8 JSON: {path}") from exc
         records = self._extract_health_records(data)
+        allowed_metrics = {
+            self._canonical_health_metric(metric)
+            for metric in self.config.get("health", {}).get("metrics", [])
+            if metric
+        }
         written = 0
-        for index, record in enumerate(records):
-            source_id = str(record.get("id") or record.get("uuid") or stable_id(path.name, index, json.dumps(record, sort_keys=True)))
-            occurred = record.get("date") or record.get("startDate") or record.get("start_date") or record.get("timestamp") or utcnow()
-            metric = record.get("name") or record.get("type") or record.get("metric") or "health.metric"
+        filtered = 0
+        observed_metrics: set[str] = set()
+        for record in records:
+            occurred = (
+                record.get("date")
+                or record.get("start")
+                or record.get("startDate")
+                or record.get("start_date")
+                or record.get("timestamp")
+                or utcnow()
+            )
+            metric = self._canonical_health_metric(
+                record.get("type") or record.get("metric") or record.get("name") or "health.metric"
+            )
+            if allowed_metrics and metric not in allowed_metrics:
+                filtered += 1
+                continue
+            observed_metrics.add(metric)
+            source_id = str(
+                record.get("id")
+                or record.get("uuid")
+                or stable_id(
+                    "apple_health",
+                    metric,
+                    occurred,
+                    record.get("source", ""),
+                    record.get("start") or record.get("startDate") or record.get("start_date") or "",
+                    record.get("end") or record.get("endDate") or record.get("end_date") or "",
+                )
+            )
             safe_payload = {
                 key: value
                 for key, value in record.items()
                 if key not in {"notes", "sourceName", "device", "metadata"} and not isinstance(value, (dict, list))
             }
+            safe_payload["metric"] = metric
             self.store.record_event(
                 {
                     "source": "apple_health",
@@ -496,8 +542,66 @@ class LifeOS:
                 }
             )
             written += 1
-        self.store.set_checkpoint("apple_health", path.name, {"records": written})
-        return {"file": str(path), "records_seen": len(records), "records_written": written}
+        metadata = {
+            "behavior_verified": written > 0,
+            "exporter": "health-auto-export-json-v2",
+            "file_sha256": hashlib.sha256(raw).hexdigest(),
+            "metrics": sorted(observed_metrics),
+            "records": written,
+            "records_filtered": filtered,
+            "records_seen": len(records),
+        }
+        self.store.set_checkpoint("apple_health", path.name, metadata)
+        return {
+            "file": str(path),
+            "metrics": sorted(observed_metrics),
+            "records_filtered": filtered,
+            "records_seen": len(records),
+            "records_written": written,
+        }
+
+    def scan_health_inboxes(
+        self,
+        *,
+        paths: list[Path] | None = None,
+        max_files: int = 100,
+    ) -> dict[str, Any]:
+        if max_files < 1:
+            raise LifeOSError("health scan max_files must be positive")
+        configured = paths or [
+            Path(item).expanduser()
+            for item in self.config.get("health", {}).get("inbox_paths", [])
+            if item
+        ]
+        candidates: dict[Path, None] = {}
+        scanned_roots: list[str] = []
+        for root in [self.health_inbox, *configured]:
+            resolved = root.expanduser().resolve()
+            if str(resolved) not in scanned_roots:
+                scanned_roots.append(str(resolved))
+            if not resolved.is_dir():
+                continue
+            for candidate in resolved.rglob("*.json"):
+                if candidate.is_file() and not candidate.name.startswith("."):
+                    candidates[candidate.resolve()] = None
+        ordered = sorted(candidates, key=lambda item: (item.stat().st_mtime_ns, str(item)))[:max_files]
+        results: list[dict[str, Any]] = []
+        errors: list[dict[str, str]] = []
+        for candidate in ordered:
+            try:
+                results.append(self.ingest_health_file(candidate))
+            except (LifeOSError, OSError) as exc:
+                errors.append({"file": str(candidate), "error": str(exc)})
+        return {
+            "errors": errors,
+            "files_found": len(candidates),
+            "files_ingested": len(results),
+            "records_filtered": sum(int(item["records_filtered"]) for item in results),
+            "records_written": sum(int(item["records_written"]) for item in results),
+            "results": results,
+            "roots": scanned_roots,
+            "status": "ready" if results and not errors else ("empty" if not candidates else "needs_attention"),
+        }
 
     def oura_sync(self, *, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
         config = self.config.get("oura", {})
@@ -864,25 +968,60 @@ class LifeOS:
             return records
         if not isinstance(data, dict):
             return records
-        for key in ("data", "metrics", "workouts", "records"):
+        if isinstance(data.get("data"), dict):
+            return LifeOS._extract_health_records(data["data"])
+
+        metrics = data.get("metrics")
+        if isinstance(metrics, list):
+            for metric in metrics:
+                if not isinstance(metric, dict):
+                    continue
+                metric_name = metric.get("name") or metric.get("type") or "health.metric"
+                units = metric.get("units") or metric.get("unit")
+                points = metric.get("data")
+                if isinstance(points, list):
+                    for point in points:
+                        if isinstance(point, dict):
+                            normalized = dict(point)
+                            normalized["type"] = metric_name
+                            if units is not None:
+                                normalized.setdefault("unit", units)
+                            records.append(normalized)
+                else:
+                    normalized = dict(metric)
+                    normalized.setdefault("type", metric_name)
+                    records.append(normalized)
+        elif isinstance(metrics, dict):
+            for metric_name, items in metrics.items():
+                if isinstance(items, list):
+                    for item in items:
+                        if isinstance(item, dict):
+                            normalized = dict(item)
+                            normalized.setdefault("type", metric_name)
+                            records.append(normalized)
+
+        for key, event_type in (("workouts", "workout"), ("records", "health.metric")):
             value = data.get(key)
             if isinstance(value, list):
                 for item in value:
                     if isinstance(item, dict):
                         normalized = dict(item)
-                        normalized.setdefault("type", key.removesuffix("s"))
+                        normalized.setdefault("type", event_type)
                         records.append(normalized)
-            elif isinstance(value, dict):
-                for metric_name, items in value.items():
-                    if isinstance(items, list):
-                        for item in items:
-                            if isinstance(item, dict):
-                                normalized = dict(item)
-                                normalized.setdefault("type", metric_name)
-                                records.append(normalized)
+
+        value = data.get("data")
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    records.append(dict(item))
         if not records and any(key in data for key in ("date", "startDate", "timestamp", "value")):
             records.append(data)
         return records
+
+    @staticmethod
+    def _canonical_health_metric(value: object) -> str:
+        normalized = re.sub(r"[^a-z0-9]+", "_", str(value).strip().casefold()).strip("_")
+        return HEALTH_METRIC_ALIASES.get(normalized, normalized)
 
     @staticmethod
     def _run(

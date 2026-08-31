@@ -37,5 +37,5 @@ printf '  - TickTick: ticktick auth login\n'
 printf '  - Gmail: connect each account through the official Gmail plugin\n'
 printf '  - iMessage: Full Disk Access; Messages Automation for confirmed sends\n'
 printf '  - Oura: register and authorize an OAuth application\n'
-printf '  - Apple Health: configure a deliberately limited JSON export\n\n'
+printf '  - Apple Health: configure a deliberately limited Health Auto Export v2 JSON automation to iCloud Drive\n\n'
 "$LAUNCHER" doctor

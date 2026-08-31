@@ -15,8 +15,8 @@
         "--only-secrets",
         "GOOGLE_PROJECT_ID",
         "--no-fallback",
-        "--command",
-        "exec \"$HOME/.local/bin/analytics-mcp\""
+        "--",
+        "analytics-mcp"
       ]
     }
   }

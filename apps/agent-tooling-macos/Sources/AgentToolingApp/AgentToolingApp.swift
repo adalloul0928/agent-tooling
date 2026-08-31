@@ -8,10 +8,22 @@ struct AgentToolingApplication: App {
     @AppStorage("appearance") private var appearance = "System"
     @AppStorage("showMenuBarItem") private var showMenuBarItem = true
     @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
+    @State private var navigation = AppNavigationState()
 
     init() {
         do {
-            _model = State(initialValue: try AppModel.live())
+            let launchContext = LaunchContext.current
+            if let workspaceRoot = launchContext.workspaceRoot {
+                _model = State(
+                    initialValue: try AppModel(
+                        store: WorkspaceStore(rootURL: workspaceRoot),
+                        homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser
+                    )
+                )
+            } else {
+                _model = State(
+                    initialValue: try AppModel.live(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser))
+            }
             _startupError = State(initialValue: nil)
         } catch {
             _model = State(initialValue: nil)
@@ -25,6 +37,7 @@ struct AgentToolingApplication: App {
                 if let model {
                     AppShellView(initialSelection: launchSelection)
                         .environment(model)
+                        .environment(navigation)
                 } else {
                     StartupFailureView(message: startupError ?? "The local workspace could not be opened.") {
                         loadModel()
@@ -35,6 +48,13 @@ struct AgentToolingApplication: App {
             .containerBackground(.clear, for: .window)
             .background(WindowConfigurator())
             .preferredColorScheme(colorScheme)
+            .onOpenURL { url in
+                guard navigation.open(url: url) else {
+                    model?.presentError("Agent Tooling rejected an invalid or unsupported link.")
+                    return
+                }
+                bringMainWindowForward()
+            }
         }
         .defaultSize(width: 1_440, height: 900)
         .windowStyle(.hiddenTitleBar)
@@ -95,12 +115,53 @@ struct AgentToolingApplication: App {
 
     private func loadModel() {
         do {
-            model = try AppModel.live()
+            let launchContext = LaunchContext.current
+            if let workspaceRoot = launchContext.workspaceRoot {
+                model = try AppModel(
+                    store: WorkspaceStore(rootURL: workspaceRoot),
+                    homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser
+                )
+            } else {
+                model = try AppModel.live(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
+            }
             startupError = nil
         } catch {
             model = nil
             startupError = error.localizedDescription
         }
+    }
+
+    private func bringMainWindowForward() {
+        NSApp.unhide(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "agent-tooling-main" }) {
+            window.deminiaturize(nil)
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+}
+
+/// Development-only launch overrides let visual and interaction tests use a
+/// disposable workspace instead of touching the person's real library.
+private struct LaunchContext {
+    var workspaceRoot: URL?
+    var homeRoot: URL?
+
+    static var current: LaunchContext {
+        let arguments = ProcessInfo.processInfo.arguments
+        return LaunchContext(
+            workspaceRoot: value(after: "--agent-tooling-workspace", in: arguments).map {
+                URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.resolvingSymlinksInPath()
+            },
+            homeRoot: value(after: "--agent-tooling-home", in: arguments).map {
+                URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.resolvingSymlinksInPath()
+            }
+        )
+    }
+
+    private static func value(after flag: String, in arguments: [String]) -> String? {
+        guard let index = arguments.firstIndex(of: flag), arguments.indices.contains(index + 1) else { return nil }
+        return arguments[index + 1]
     }
 }
 

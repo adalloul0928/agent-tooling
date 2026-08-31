@@ -4,8 +4,13 @@ import SwiftUI
 
 struct MarketplaceView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AppNavigationState.self) private var navigation
     @State private var selectedPackageID: String?
     @State private var query = ""
+    @State private var componentFilter: MarketplaceComponentFilter = .all
+    @State private var displayLimit = Self.pageSize
+
+    private static let pageSize = 12
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,13 +34,13 @@ struct MarketplaceView: View {
             GeometryReader { proxy in
                 HSplitView {
                     sourcePane.frame(
-                        minWidth: 270, idealWidth: 320, maxWidth: 380, minHeight: proxy.size.height, maxHeight: proxy.size.height,
+                        minWidth: 210, idealWidth: 250, maxWidth: 300, minHeight: proxy.size.height, maxHeight: proxy.size.height,
                         alignment: .topLeading)
                     packagePane.frame(
-                        minWidth: 440, idealWidth: 540, maxWidth: 680, minHeight: proxy.size.height, maxHeight: proxy.size.height,
+                        minWidth: 310, idealWidth: 390, maxWidth: 480, minHeight: proxy.size.height, maxHeight: proxy.size.height,
                         alignment: .topLeading)
                     detailPane.frame(
-                        minWidth: 360, maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height,
+                        minWidth: 340, maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height,
                         alignment: .topLeading)
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
@@ -43,11 +48,28 @@ struct MarketplaceView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
-            if selectedPackageID == nil { selectedPackageID = filteredPackages.first?.id }
+            applyExternalNavigation()
+            selectFirstPackageAfterListUpdate(ifNeeded: selectedPackageID == nil)
         }
-        .onChange(of: filteredPackages.map(\.id)) { _, ids in
-            if selectedPackageID == nil || !ids.contains(selectedPackageID ?? "") { selectedPackageID = ids.first }
+        .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
+        .onChange(of: visiblePackages.map(\.id)) { _, ids in
+            let selectionIsInvalid = selectedPackageID == nil || !ids.contains(selectedPackageID ?? "")
+            selectFirstPackageAfterListUpdate(ifNeeded: selectionIsInvalid)
         }
+        .onChange(of: query) { _, _ in displayLimit = Self.pageSize }
+        .onChange(of: componentFilter) { _, _ in displayLimit = Self.pageSize }
+    }
+
+    private func applyExternalNavigation() {
+        guard let requestedID = navigation.requestedMarketplacePackageID,
+            model.marketplacePackages.contains(where: { $0.id == requestedID })
+        else { return }
+        query = ""
+        componentFilter = .all
+        if let index = filteredPackages.firstIndex(where: { $0.id == requestedID }) {
+            displayLimit = max(Self.pageSize, index + 1)
+        }
+        selectedPackageID = requestedID
     }
 
     private var sourcePane: some View {
@@ -65,13 +87,11 @@ struct MarketplaceView: View {
                 .padding(.horizontal, 6)
             }
             VStack(alignment: .leading, spacing: 6) {
-                Label("Native catalogs stay native", systemImage: "checkmark.shield")
+                Label("Reviewed locally", systemImage: "checkmark.shield")
                     .font(.caption.weight(.semibold))
-                Text(
-                    "Imported packages are inspected locally. Claude and Codex remain install authorities for their catalogs; Gemini extensions stay in Gemini’s gallery and CLI flow."
-                )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                Text("Catalog installs stay with their native client. Added folders are inspected before review.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             .padding(13)
         }
@@ -84,7 +104,15 @@ struct MarketplaceView: View {
                 TextField("Search packages", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Search marketplace packages")
-                Text("\(filteredPackages.count)")
+                Picker("Component", selection: $componentFilter) {
+                    ForEach(MarketplaceComponentFilter.allCases) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 112)
+                .accessibilityLabel("Package component")
+                Text(packageCountLabel)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
@@ -103,12 +131,23 @@ struct MarketplaceView: View {
                     if query.isEmpty { chooseSource() } else { query = "" }
                 }
             } else {
-                List(filteredPackages, selection: $selectedPackageID) { package in
-                    MarketplacePackageRow(package: package)
-                        .tag(package.id)
-                        .listRowBackground(selectedPackageID == package.id ? AgentTheme.blue.opacity(0.13) : Color.clear)
-                        .accessibilityLabel(package.name)
-                        .accessibilityValue(selectedPackageID == package.id ? "Selected" : "")
+                List(selection: $selectedPackageID) {
+                    ForEach(visiblePackages) { package in
+                        MarketplacePackageRow(package: package)
+                            .tag(package.id)
+                            .listRowBackground(selectedPackageID == package.id ? AgentTheme.blue.opacity(0.13) : Color.clear)
+                            .accessibilityLabel(package.name)
+                            .accessibilityValue(selectedPackageID == package.id ? "Selected" : "")
+                    }
+                    if visiblePackages.count < filteredPackages.count {
+                        Button(showMoreLabel) {
+                            displayLimit += Self.pageSize
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(AgentTheme.blue)
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .accessibilityHint("Loads the next marketplace results")
+                    }
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
@@ -154,10 +193,50 @@ struct MarketplaceView: View {
                                 Text(localState(for: package))
                                     .foregroundStyle(.secondary)
                             }
+                            if let ownership = package.ownership {
+                                Divider()
+                                LabeledValueRow("Ownership") {
+                                    Text(ownership.displayName).foregroundStyle(.secondary)
+                                }
+                            }
+                            if let updateStatus = package.updateStatus {
+                                Divider()
+                                LabeledValueRow("Updates") {
+                                    Text(updateStatus.displayName).foregroundStyle(.secondary)
+                                }
+                            }
                             Divider()
                             LabeledValueRow("Trust") { Text(package.trustSummary).foregroundStyle(.secondary) }
                             Divider()
                             LabeledValueRow("License") { Text(package.license ?? "Not declared").foregroundStyle(.secondary) }
+                            if let revision = package.provenance?.lock?.revision ?? package.revision {
+                                Divider()
+                                LabeledValueRow("Locked revision") {
+                                    Text(revision).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                                }
+                            }
+                            if let digest = package.provenance?.lock?.digest {
+                                Divider()
+                                LabeledValueRow("Digest") {
+                                    Text(digest).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                                }
+                            }
+                            if let credentials = package.requestedCredentialNames, !credentials.isEmpty {
+                                Divider()
+                                LabeledValueRow("Configuration names") {
+                                    Text(credentials.joined(separator: ", "))
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(.secondary)
+                                        .textSelection(.enabled)
+                                }
+                            }
+                            if let conflicts = package.conflicts, !conflicts.isEmpty {
+                                Divider()
+                                LabeledValueRow("Conflicts") {
+                                    Text(conflicts.map(\.summary).joined(separator: "\n"))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                             Divider()
                             LabeledValueRow("Executable content") {
                                 Label(
@@ -169,7 +248,7 @@ struct MarketplaceView: View {
                             Divider()
                             LabeledValueRow("Source") {
                                 VStack(alignment: .trailing, spacing: 6) {
-                                    Text(package.location).font(.system(.caption, design: .monospaced)).lineLimit(2).textSelection(.enabled)
+                                    CompactPathText(path: package.location, lineLimit: 2)
                                     if canOpen(package.location) {
                                         Button("Open Source", systemImage: "arrow.up.right.square") {
                                             open(package.location)
@@ -220,10 +299,11 @@ struct MarketplaceView: View {
 
     private var filteredPackages: [MarketplacePackage] {
         model.marketplacePackages.filter { package in
-            query.isEmpty
-                || [package.name, package.publisher, package.summary, package.components.map(\.displayName).joined(separator: " ")].joined(
-                    separator: " "
-                ).localizedCaseInsensitiveContains(query)
+            componentFilter.matches(package)
+                && (query.isEmpty
+                    || [package.name, package.publisher, package.summary, package.components.map(\.displayName).joined(separator: " ")]
+                        .joined(separator: " ")
+                        .localizedCaseInsensitiveContains(query))
         }
         .sorted {
             let nameOrder = $0.name.localizedCaseInsensitiveCompare($1.name)
@@ -233,10 +313,37 @@ struct MarketplaceView: View {
 
     private var selectedPackage: MarketplacePackage? { model.marketplacePackages.first { $0.id == selectedPackageID } }
 
+    private var visiblePackages: [MarketplacePackage] {
+        Array(filteredPackages.prefix(displayLimit))
+    }
+
+    private var packageCountLabel: String {
+        visiblePackages.count == filteredPackages.count
+            ? "\(filteredPackages.count)"
+            : "\(visiblePackages.count) of \(filteredPackages.count)"
+    }
+
+    private var showMoreLabel: String {
+        let remaining = filteredPackages.count - visiblePackages.count
+        return "Show \(min(Self.pageSize, remaining)) more"
+    }
+
     private var sortedSources: [ToolingSource] {
         model.sources.sorted {
             let nameOrder = $0.name.localizedCaseInsensitiveCompare($1.name)
             return nameOrder == .orderedSame ? $0.id.uuidString < $1.id.uuidString : nameOrder == .orderedAscending
+        }
+    }
+
+    /// SwiftUI's macOS List is backed by NSTableView. Deferring selection until
+    /// the current update completes avoids mutating its selection from inside a
+    /// table delegate callback when filters or catalog results change.
+    private func selectFirstPackageAfterListUpdate(ifNeeded: Bool) {
+        guard ifNeeded else { return }
+        let firstID = visiblePackages.first?.id
+        Task { @MainActor in
+            await Task.yield()
+            selectedPackageID = firstID
         }
     }
 
@@ -285,6 +392,24 @@ struct MarketplaceView: View {
             NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: location)])
         } else {
             model.presentError("The package source is no longer available. Refresh Marketplace to update this listing.")
+        }
+    }
+}
+
+private enum MarketplaceComponentFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case skills = "Skills"
+    case plugins = "Plugins"
+    case mcpServers = "MCP"
+
+    var id: String { rawValue }
+
+    func matches(_ package: MarketplacePackage) -> Bool {
+        switch self {
+        case .all: true
+        case .skills: package.components.contains(.skill)
+        case .plugins: package.components.contains(.plugin)
+        case .mcpServers: package.components.contains(.mcpServer)
         }
     }
 }

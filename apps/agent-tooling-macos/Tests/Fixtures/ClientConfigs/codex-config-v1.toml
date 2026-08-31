@@ -1,0 +1,9 @@
+# Versioned fallback fixture for Codex table discovery.
+[mcp_servers."company.docs"]
+url = "https://example.com/mcp"
+
+[mcp_servers."company.docs".headers]
+Authorization = "Bearer fixture-value-never-read-by-scanner"
+
+[plugins."vendor.tool"]
+enabled = true

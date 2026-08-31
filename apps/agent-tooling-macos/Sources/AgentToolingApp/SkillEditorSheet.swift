@@ -5,8 +5,7 @@ import SwiftUI
 struct SkillEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
-    let mode: SkillEditorMode
-    let existingSkill: Skill?
+    let existingSkill: Skill
     let onSave: (SkillDraft) -> Bool
 
     @State private var draft: SkillDraft
@@ -14,24 +13,21 @@ struct SkillEditorSheet: View {
 
     private let steps = ["Purpose", "Triggers", "Placement", "Files", "Review"]
 
-    init(mode: SkillEditorMode, existingSkill: Skill?, onSave: @escaping (SkillDraft) -> Bool) {
-        self.mode = mode
+    init(existingSkill: Skill, onSave: @escaping (SkillDraft) -> Bool) {
         self.existingSkill = existingSkill
         self.onSave = onSave
         var initial = SkillDraft()
-        if let existingSkill {
-            initial.name = existingSkill.name
-            initial.purpose = existingSkill.summary
-            initial.triggers = existingSkill.triggers + Array(repeating: "", count: max(0, 3 - existingSkill.triggers.count))
-            initial.negativeTrigger = existingSkill.negativeTrigger
-            initial.includeScript = existingSkill.files.contains { $0.hasPrefix("scripts/") }
-            initial.includeReference = existingSkill.files.contains { $0.hasPrefix("references/") }
-            initial.selectedTargets = Set(existingSkill.clients.map(\.client))
-            initial.scope = ToolingScope.allCases.first(where: { $0.displayName == existingSkill.scope }) ?? .user
-            initial.projectRoot = existingSkill.projectRoot ?? ""
-            initial.syncClients = false
-            initial.runCanary = false
-        }
+        initial.name = existingSkill.name
+        initial.purpose = existingSkill.summary
+        initial.triggers = existingSkill.triggers + Array(repeating: "", count: max(0, 3 - existingSkill.triggers.count))
+        initial.negativeTrigger = existingSkill.negativeTrigger
+        initial.includeScript = existingSkill.files.contains { $0.hasPrefix("scripts/") }
+        initial.includeReference = existingSkill.files.contains { $0.hasPrefix("references/") }
+        initial.selectedTargets = Set(existingSkill.clients.map(\.client))
+        initial.scope = ToolingScope.allCases.first(where: { $0.displayName == existingSkill.scope }) ?? .user
+        initial.projectRoot = existingSkill.projectRoot ?? ""
+        initial.syncClients = false
+        initial.runCanary = false
         _draft = State(initialValue: initial)
     }
 
@@ -60,9 +56,9 @@ struct SkillEditorSheet: View {
     private var header: some View {
         HStack(spacing: 13) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(mode == .new ? "New skill" : "Edit skill")
+                Text("Edit skill")
                     .font(.title2.weight(.semibold))
-                Text("Create once in the managed local library, then review each target installation.")
+                Text("Update the managed source, then review any target installation changes.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -126,7 +122,7 @@ struct SkillEditorSheet: View {
                 TextField("release-readiness", text: $draft.name)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Skill name")
-                    .disabled(mode == .edit)
+                    .disabled(true)
             }
             FormField(title: "Purpose", help: "One sentence from the user’s point of view") {
                 VStack(alignment: .trailing, spacing: 5) {
@@ -352,8 +348,9 @@ struct SkillEditorSheet: View {
     }
 
     private var nameCollision: Bool {
-        guard mode == .new else { return false }
-        return model.skills.contains { $0.name.caseInsensitiveCompare(normalizedName) == .orderedSame }
+        model.skills.contains {
+            $0.id != existingSkill.id && $0.name.caseInsensitiveCompare(normalizedName) == .orderedSame
+        }
     }
 
     private var nameValidationMessage: String {
@@ -409,12 +406,7 @@ struct SkillEditorSheet: View {
     }
 
     private var saveButtonTitle: String {
-        switch (mode, draft.syncClients) {
-        case (.new, true): "Create and Review Install"
-        case (.new, false): "Create Skill"
-        case (.edit, true): "Save and Review Install"
-        case (.edit, false): "Save Changes"
-        }
+        draft.syncClients ? "Save and Review Install" : "Save Changes"
     }
 
     private func targetBinding(_ client: ClientKind) -> Binding<Bool> {

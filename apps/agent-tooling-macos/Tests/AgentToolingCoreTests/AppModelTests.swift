@@ -261,6 +261,7 @@ struct AppModelTests {
         #expect(portableManifest?["$schema"] as? String == "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json")
         #expect(portableManifest?["schema_version"] == nil)
 
+        let approvedPlan = try #require(model.pendingPlan)
         await model.executePendingPlan()
 
         for path in [
@@ -273,6 +274,18 @@ struct AppModelTests {
         #expect(model.operationReceipts.first?.results.contains { $0.status == .succeeded } == true)
         #expect(model.operationReceipts.first?.results.contains { $0.status == .manual } == true)
         #expect(model.operationReceipts.first?.targetSurfaces.count == 3)
+        let recordedPlan = try store.loadEntity(
+            approvedPlan.id.uuidString.lowercased(),
+            domain: .plans,
+            as: OperationPlan.self
+        )
+        #expect(recordedPlan?.id == approvedPlan.id)
+        #expect(
+            try recordedPlan.map { try OperationPlanApproval.review($0).digest }
+                == OperationPlanApproval.review(approvedPlan).digest
+        )
+        let recordedReceipts = try store.listEntities(domain: .receipts, as: OperationReceipt.self)
+        #expect(recordedReceipts.contains { $0.planID == approvedPlan.id })
     }
 
     @Test func skillAuthoringBoundsInputAndCreatesAnExecutableScript() throws {
@@ -1204,6 +1217,22 @@ struct AppModelTests {
             _ = try await runner.run(executable: "sleep", arguments: ["5"], currentDirectory: nil)
         }
 
+        // Leave room for a saturated concurrent test runner while still
+        // proving that the five-second child did not run to completion.
+        #expect(start.duration(to: .now) < .seconds(4))
+    }
+
+    @Test func processRunnerDoesNotLetAppCommandsWaitForInteractiveInput() async throws {
+        let runner = ProcessCommandRunner(timeout: .seconds(3))
+        let start = ContinuousClock.now
+
+        let output = try await runner.run(
+            executable: "sh",
+            arguments: ["-c", "read value"],
+            currentDirectory: nil
+        )
+
+        #expect(output.status != 0)
         #expect(start.duration(to: .now) < .seconds(2))
     }
 
@@ -1229,6 +1258,23 @@ struct AppModelTests {
         #expect(receipt.results.contains(where: { $0.status == .skipped }))
         #expect(receipt.verificationSummary.contains("stopped"))
         #expect(!receipt.verificationSummary.contains("All requested local steps completed"))
+    }
+
+    @Test func manualOnlyOperationReceiptDoesNotClaimLocalChangesCompleted() async throws {
+        let root = try temporaryDirectory()
+        let store = try WorkspaceStore(rootURL: root.appending(path: "workspace", directoryHint: .isDirectory))
+        let engine = OperationEngine(store: store, homeURL: root.appending(path: "home"))
+        let plan = OperationPlan(
+            kind: .installSkill,
+            title: "Manual guidance",
+            summary: "Nothing should be written.",
+            steps: [OperationStep(kind: .manual, title: "Create a skill", detail: "Add a portable skill first.")]
+        )
+
+        let receipt = await engine.execute(plan)
+
+        #expect(receipt.state == .pending)
+        #expect(receipt.verificationSummary == "No local changes were made. Follow the manual guidance, then check setup again.")
     }
 
     @Test func marketplaceInspectsPortablePackageAndFlagsExecutableContent() throws {
@@ -1945,7 +1991,7 @@ struct AppModelTests {
         ]
         let loadedSnapshot = try store.load("workspace.snapshot", as: WorkspaceSnapshot.self)
         let persisted = try #require(loadedSnapshot)
-        try store.save(
+        try store.saveWorkspaceSnapshot(
             WorkspaceSnapshot(
                 skills: persisted.skills,
                 mcpServers: persisted.mcpServers,
@@ -1964,8 +2010,7 @@ struct AppModelTests {
                 encryptedSyncConfiguration: persisted.encryptedSyncConfiguration,
                 preferences: persisted.preferences,
                 managedPolicies: persisted.managedPolicies
-            ),
-            for: "workspace.snapshot")
+            ))
         let reloadedModel = try AppModel(
             store: store, runner: StubRunner(versions: [:]), homeURL: root.appending(path: "home", directoryHint: .isDirectory))
         reloadedModel.planMarketplaceInstall(packageID: "codex:calendar", client: .codex)

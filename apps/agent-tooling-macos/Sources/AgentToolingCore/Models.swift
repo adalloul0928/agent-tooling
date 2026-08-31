@@ -15,6 +15,11 @@ public enum ClientKind: String, Codable, CaseIterable, Identifiable, Sendable {
     public var id: String { rawValue }
 }
 
+public enum SkillAuthoringOrigin: String, Codable, Hashable, Sendable {
+    case manual
+    case codexGenerated
+}
+
 public struct ClientState: Identifiable, Codable, Hashable, Sendable {
     public var id: ClientKind { client }
     public let client: ClientKind
@@ -56,6 +61,9 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
     public var files: [String]
     public var clients: [ClientState]
     public var validationCount: Int
+    /// Older snapshots omit this field. Generated packages use it to avoid
+    /// passing rich source through the lossy template editor.
+    public var authoringOrigin: SkillAuthoringOrigin?
 
     public init(
         id: String,
@@ -70,7 +78,8 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
         files: [String],
         clients: [ClientState],
         validationCount: Int,
-        projectRoot: String? = nil
+        projectRoot: String? = nil,
+        authoringOrigin: SkillAuthoringOrigin? = nil
     ) {
         self.id = id
         self.name = name
@@ -85,6 +94,7 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
         self.files = files
         self.clients = clients
         self.validationCount = validationCount
+        self.authoringOrigin = authoringOrigin
     }
 }
 
