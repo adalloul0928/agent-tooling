@@ -101,7 +101,11 @@ jobs:
           test -x "$helper"
           file "$helper"
           codesign --verify --strict --verbose=2 "$helper"
-          resources="$RUNNER_TEMP/Agent Tooling.app/Contents/Resources/AgentTooling_AgentToolingApp.bundle/Contents/Resources"
+          resource_bundle="$RUNNER_TEMP/Agent Tooling.app/Contents/Resources/AgentTooling_AgentToolingApp.bundle"
+          resources="$resource_bundle"
+          if [[ -d "$resource_bundle/Contents/Resources" ]]; then
+            resources="$resource_bundle/Contents/Resources"
+          fi
           if [[ -f "$resources/Assets.car" ]]; then
             file "$resources/Assets.car"
           else
