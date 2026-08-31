@@ -370,27 +370,48 @@ public final class MarketplaceService {
         let claudeManifestURL = try regularFile(packageRoot.appending(path: ".claude-plugin/plugin.json"), within: packageRoot)
         let codexManifestURL = try regularFile(packageRoot.appending(path: ".codex-plugin/plugin.json"), within: packageRoot)
         let manifestURL = portableManifestURL ?? claudeManifestURL ?? codexManifestURL
-        let manifest = try manifestURL.map { try manifest(at: $0, portable: portableManifestURL == $0) }
+        let manifest: [String: Any]?
+        if let manifestURL {
+            let isPortableManifest = portableManifestURL == manifestURL
+            manifest = try self.manifest(at: manifestURL, portable: isPortableManifest)
+        } else {
+            manifest = nil
+        }
 
         let skillDirectories = try validSkillDirectories(at: packageRoot)
         let skillNames = skillDirectories.map(\.lastPathComponent)
         let rootSkillURL = try regularFile(packageRoot.appending(path: "SKILL.md"), within: packageRoot)
-        let rootIsSkill = try rootSkillURL.map { try validSkill(at: $0, expectedName: packageRoot.lastPathComponent) } ?? false
+        let rootIsSkill: Bool
+        if let rootSkillURL {
+            rootIsSkill = try validSkill(at: rootSkillURL, expectedName: packageRoot.lastPathComponent)
+        } else {
+            rootIsSkill = false
+        }
         guard manifest != nil || !skillNames.isEmpty || rootIsSkill else { return nil }
 
-        let rawName = try packageName(manifest?["name"] as? String ?? packageRoot.lastPathComponent)
-        let rootSkillDescription = try rootSkillURL.flatMap { try skillDescription(at: $0) }
-        let description =
-            boundedSummary(manifest?["description"] as? String)
-            ?? rootSkillDescription
-            ?? "Local package with \(skillNames.count + (rootIsSkill ? 1 : 0)) skill\(skillNames.count + (rootIsSkill ? 1 : 0) == 1 ? "" : "s")."
+        let manifestName = manifest?["name"] as? String
+        let rawName = try packageName(manifestName ?? packageRoot.lastPathComponent)
+        let rootSkillDescription: String?
+        if let rootSkillURL {
+            rootSkillDescription = try skillDescription(at: rootSkillURL)
+        } else {
+            rootSkillDescription = nil
+        }
+        let manifestDescriptionValue = manifest?["description"] as? String
+        let manifestDescription = boundedSummary(manifestDescriptionValue)
+        let skillCount = skillNames.count + (rootIsSkill ? 1 : 0)
+        let fallbackDescription = "Local package with \(skillCount) skill\(skillCount == 1 ? "" : "s")."
+        let description = manifestDescription ?? rootSkillDescription ?? fallbackDescription
         var components: Set<ComponentKind> = []
         if !skillNames.isEmpty || rootIsSkill { components.insert(.skill) }
         let portableMCPURL = try regularFile(packageRoot.appending(path: "mcp.json"), within: packageRoot)
         let portableMCP: AgentPluginMCPLoadResult?
         do {
-            portableMCP = try portableMCPURL.map {
-                try AgentPluginMCPConfigurationLoader.load(readData(at: $0, maximumBytes: Limit.manifestBytes))
+            if let portableMCPURL {
+                let mcpData = try readData(at: portableMCPURL, maximumBytes: Limit.manifestBytes)
+                portableMCP = try AgentPluginMCPConfigurationLoader.load(mcpData)
+            } else {
+                portableMCP = nil
             }
         } catch {
             throw MarketplaceError.invalidManifest(
@@ -407,7 +428,8 @@ public final class MarketplaceService {
         if manifest != nil { components.insert(.plugin) }
         let executable = try hasActiveContent(at: packageRoot, skillDirectories: skillDirectories, manifest: manifest, hasMCP: hasMCP)
         let packageLicense: String?
-        if let manifestLicense = boundedSummary(manifest?["license"] as? String) {
+        let manifestLicenseValue = manifest?["license"] as? String
+        if let manifestLicense = boundedSummary(manifestLicenseValue) {
             packageLicense = manifestLicense
         } else {
             packageLicense = try license(at: packageRoot)
