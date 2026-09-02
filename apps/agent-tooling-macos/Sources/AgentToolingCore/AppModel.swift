@@ -54,6 +54,7 @@ public final class AppModel {
     private let toolingInsightsService: ToolingInsightsService
     private var pendingRestoreSnapshot: WorkspaceSnapshot?
     private var pendingEncryptedSyncSnapshot: WorkspaceSnapshot?
+    private var pendingSkillAdoption: SkillAdoption?
     public private(set) var encryptedSyncImportPreview: EncryptedSyncImportPreview?
     private var hasBootstrapped = false
 
@@ -438,6 +439,11 @@ public final class AppModel {
             encryptedSyncImportPreview = nil
             pendingEncryptedSyncSnapshot = nil
         }
+        if let adoption = pendingSkillAdoption, adoption.plan.id == pendingPlan.id {
+            if completedRequiredSteps { applyAdoptedSkills(adoption) }
+            library.discardAdoption(adoption)
+            pendingSkillAdoption = nil
+        }
         isExecutingPlan = false
         if !Task.isCancelled {
             await runDoctor()
@@ -461,6 +467,10 @@ public final class AppModel {
         pendingPlan = nil
         pendingRestoreSnapshot = nil
         pendingEncryptedSyncSnapshot = nil
+        if let adoption = pendingSkillAdoption {
+            library.discardAdoption(adoption)
+            pendingSkillAdoption = nil
+        }
     }
 
     public func presentError(_ message: String) {
@@ -628,6 +638,108 @@ public final class AppModel {
         if let cleanupError {
             presentError("The pending Codex skill request could not be removed: \(cleanupError.localizedDescription)")
         }
+    }
+
+    /// A discovered skill can be adopted once a scan has recorded where its
+    /// files are. Without that path the app would have to guess a location, so
+    /// the row is not offered for adoption until the next setup check.
+    public func canAdoptSkill(id: String) -> Bool {
+        guard let skill = skills.first(where: { $0.id == id }), !skill.owned else { return false }
+        return observedSkillSourcePath(for: id) != nil
+    }
+
+    /// Indexed in one pass. The Skills list asks for this on every layout pass
+    /// with a few hundred rows on screen, so it must not be quadratic.
+    public var adoptableSkillIDs: [String] {
+        let sources = observedSkillSourcePaths()
+        return skills.filter { !$0.owned && sources[$0.id] != nil }.map(\.id)
+    }
+
+    /// Builds one reviewable plan that copies the selected discovered skills
+    /// into the managed library. Nothing is written until the plan is approved,
+    /// and the clients keep their own copies either way.
+    public func planSkillAdoption(skillIDs: Set<String>) {
+        guard ensureReadyForChange() else { return }
+        let sources = observedSkillSourcePaths()
+        let candidates =
+            skills
+            .filter { skillIDs.contains($0.id) }
+            .map { SkillAdoptionCandidate(skill: $0, sourcePath: sources[$0.id]) }
+        guard !candidates.isEmpty else {
+            lastError = "The selected skills are no longer available. Check setup again, then try adopting them."
+            return
+        }
+        do {
+            let adoption = try library.adoptionPlan(
+                for: candidates,
+                reservedIdentifiers: Set(skills.map(\.id)).subtracting(skillIDs)
+            )
+            pendingSkillAdoption = adoption
+            pendingPlan = adoption.plan
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    /// Uses only what the last setup check actually observed. Client folder
+    /// layouts differ per plugin, so a guessed path could copy the wrong tree.
+    /// Surfaces are read in a stable order so the same skill observed by two
+    /// clients always adopts the same copy.
+    private func observedSkillSourcePaths() -> [String: String] {
+        var paths: [String: String] = [:]
+        for observation in targetObservations.sorted(by: { $0.surface.displayName < $1.surface.displayName }) {
+            for (id, metadata) in observation.skillMetadata where paths[id] == nil {
+                paths[id] = metadata.path
+            }
+        }
+        return paths
+    }
+
+    private func observedSkillSourcePath(for skillID: String) -> String? {
+        observedSkillSourcePaths()[skillID]
+    }
+
+    /// Records the adopted packages after the approved plan wrote them. The
+    /// managed-library checker runs against the committed copy so a skill only
+    /// reports validation it actually passed.
+    private func applyAdoptedSkills(_ adoption: SkillAdoption) {
+        var adopted: [Skill] = []
+        var unchecked: [String] = []
+        for var skill in adoption.skills {
+            do {
+                skill.validationCount = try library.validateSkill(skill)
+            } catch {
+                skill.validationCount = 0
+                unchecked.append(skill.displayName)
+            }
+            adopted.append(skill)
+        }
+        let adoptedIDs = Set(adopted.map(\.id))
+        skills.removeAll { adoptedIDs.contains($0.id) }
+        skills.insert(contentsOf: adopted, at: 0)
+
+        var detail =
+            "The managed library now owns \(adopted.count) portable package\(adopted.count == 1 ? "" : "s"). Each client keeps its own copy; installing from Agent Tooling replaces it with the managed source."
+        if !unchecked.isEmpty {
+            detail +=
+                " Not validated by the managed-library checker: \(unchecked.prefix(5).joined(separator: ", "))."
+        }
+        if !adoption.rejections.isEmpty {
+            detail += " Skipped: \(adoption.rejections.prefix(5).map { "\($0.displayName) — \($0.reason)" }.joined(separator: " "))"
+        }
+        activities.insert(
+            ActivityReceipt(
+                kind: .configuration,
+                title: adopted.count == 1
+                    ? "\(adopted.first?.displayName ?? "Skill") adopted into the managed library"
+                    : "\(adopted.count) skills adopted into the managed library",
+                detail: boundedActivityDetail(detail),
+                date: .now,
+                state: unchecked.isEmpty && adoption.rejections.isEmpty ? .healthy : .pending,
+                affectedPaths: adopted.prefix(20).map { library.skillURL(for: $0).path(percentEncoded: false) }
+            ),
+            at: 0
+        )
     }
 
     public func planInstall(

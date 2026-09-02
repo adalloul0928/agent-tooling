@@ -416,6 +416,62 @@ struct EmptyStateView: View {
     }
 }
 
+// MARK: - Bulk selection
+
+/// The mark that says a row is picked. It sits inside the row rather than in a
+/// gutter, so turning selection on does not reflow the list.
+struct SelectionCheckbox: View {
+    let selected: Bool
+    var enabled = true
+
+    var body: some View {
+        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+            .font(.system(size: 15))
+            .foregroundStyle(tint)
+            .accessibilityHidden(true)
+    }
+
+    private var tint: Color {
+        if selected { return .white }
+        return enabled ? Color.secondary : Color.secondary.opacity(0.3)
+    }
+}
+
+/// The bar a collection floats over its list while rows are picked: how many,
+/// the one action they were picked for, and the way back out. It never replaces
+/// the page toolbar, so the page's own actions stay where they were.
+struct SelectionActionBar: View {
+    let count: Int
+    let actionTitle: String
+    var isActionEnabled = true
+    let action: () -> Void
+    let clear: () -> Void
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Text("\(count) selected")
+                .font(.callout.weight(.medium))
+                .monospacedDigit()
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Button("Clear", action: clear)
+                .buttonStyle(.bordered)
+            Button(actionTitle, action: action)
+                .buttonStyle(.borderedProminent)
+                .disabled(!isActionEnabled)
+                .lineLimit(1)
+        }
+        .buttonBorderShape(.capsule)
+        .padding(.horizontal, 13)
+        .frame(height: 48)
+        .standardPanel()
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        .padding(12)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(count) selected")
+    }
+}
+
 /// Key on the left at a fixed width, value on the left of its own column.
 struct LabeledValueRow<Trailing: View>: View {
     let label: String
