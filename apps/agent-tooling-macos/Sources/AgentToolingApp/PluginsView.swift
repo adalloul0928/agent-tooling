@@ -9,7 +9,7 @@ struct PluginsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Plugins") {
+            PageToolbar(title: "Plugins", context: "\(model.plugins.count) installed") {
                 Button {
                     Task { await model.runDoctor() }
                 } label: {
@@ -59,9 +59,9 @@ struct PluginsView: View {
                 }
             } else {
                 List(filteredPlugins, selection: $selectedID) { plugin in
-                    PluginCollectionRow(plugin: plugin)
+                    PluginCollectionRow(plugin: plugin, selected: selectedID == plugin.id)
                         .tag(plugin.id)
-                        .listRowBackground(selectedID == plugin.id ? AgentTheme.blue.opacity(0.13) : Color.clear)
+                        .listRowBackground(SelectionRowBackground(selected: selectedID == plugin.id))
                         .accessibilityLabel(plugin.name)
                         .accessibilityValue(plugin.id == selectedID ? "Selected" : "")
                 }
@@ -103,42 +103,25 @@ struct PluginsView: View {
 
 private struct PluginCollectionRow: View {
     let plugin: Plugin
+    let selected: Bool
 
     var body: some View {
         HStack(spacing: 11) {
-            SymbolTile(symbol: pluginSymbol, size: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(plugin.name).font(.callout.weight(.semibold)).lineLimit(1)
-                Text("\(plugin.skills.count) skills · \(plugin.scope)").font(.caption).foregroundStyle(.secondary)
+            KindTile(kind: .plugin, size: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(plugin.name)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .lineLimit(1)
+                Text("\(plugin.skills.count) skills · \(plugin.scope)")
+                    .font(.caption)
+                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                    .lineLimit(1)
             }
-            Spacer()
-            if installedClients.isEmpty {
-                Text("Not installed").font(.caption).foregroundStyle(.secondary)
-            } else {
-                HStack(spacing: 5) {
-                    ForEach(installedClients) { client in
-                        ClientBrandIcon(client: client, size: 14)
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Installed in \(installedClients.map(\.rawValue).joined(separator: ", "))")
-            }
+            Spacer(minLength: 12)
+            ClientMarks(present: Set(plugin.clients.filter(\.reportsLocalPresence).map(\.client)))
         }
         .padding(.vertical, 6)
-    }
-
-    private var installedClients: [ClientKind] {
-        plugin.clients.filter(\.reportsLocalPresence).map(\.client)
-    }
-    private var pluginSymbol: String {
-        switch plugin.id.split(separator: "@").first.map(String.init) ?? plugin.id {
-        case "developer-workflows": "hammer.fill"
-        case "personal": "person.crop.circle.fill"
-        case "pumpd-workflows", "cyrus-workflows": "figure.strengthtraining.traditional"
-        case "wet-in-seattle": "drop.fill"
-        case "mobile-development": "iphone"
-        default: "puzzlepiece.extension.fill"
-        }
     }
 }
 
@@ -150,9 +133,9 @@ private struct PluginDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 14) {
-                    SymbolTile(symbol: "puzzlepiece.extension.fill", size: 48)
+                    KindTile(kind: .plugin, size: 40)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(plugin.name).font(.title2.weight(.semibold))
+                        Text(plugin.name).font(.title3.weight(.semibold))
                         Text(plugin.summary).font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -162,13 +145,13 @@ private struct PluginDetailView: View {
                     VStack(spacing: 0) {
                         ForEach(plugin.clients) { client in
                             HStack(spacing: 12) {
-                                Image(systemName: client.state == .healthy ? "checkmark.circle" : "circle")
-                                    .foregroundStyle(.secondary)
+                                ClientDisc(client: client.client, size: 30)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(client.client.rawValue).font(.callout.weight(.medium))
                                     Text(client.detail).font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
+                                StatusGlyph(state: client.state, size: 14)
                                 if client.reportsLocalPresence {
                                     Button("Remove…") {
                                         Task { await model.planPluginRemoval(pluginID: plugin.id, client: client.client) }
@@ -221,7 +204,7 @@ private struct PluginDetailView: View {
                 GroupBox("Source") {
                     VStack(spacing: 0) {
                         LabeledValueRow("Location") {
-                            CompactPathText(path: plugin.source)
+                            LocationText(path: plugin.source)
                         }
                         Divider()
                         LabeledValueRow("Scope") { Text(plugin.scope).foregroundStyle(.secondary) }

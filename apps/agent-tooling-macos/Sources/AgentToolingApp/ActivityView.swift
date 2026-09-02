@@ -9,7 +9,7 @@ struct ActivityView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Activity") {
+            PageToolbar(title: "Activity", context: "\(model.activities.count) receipts") {
                 Button {
                     selectedID = displayedActivities.first?.id
                 } label: {
@@ -68,9 +68,9 @@ struct ActivityView: View {
                     ForEach(activityGroups) { group in
                         Section(group.title) {
                             ForEach(group.receipts) { receipt in
-                                ActivityCollectionRow(receipt: receipt)
+                                ActivityCollectionRow(receipt: receipt, selected: selectedID == receipt.id)
                                     .tag(receipt.id)
-                                    .listRowBackground(selectedID == receipt.id ? AgentTheme.blue.opacity(0.13) : Color.clear)
+                                    .listRowBackground(SelectionRowBackground(selected: selectedID == receipt.id))
                                     .accessibilityLabel(receipt.displayTitle)
                                     .accessibilityValue(selectedID == receipt.id ? "Selected" : "")
                             }
@@ -162,33 +162,28 @@ private enum ActivityFilter: String, CaseIterable, Identifiable {
 
 private struct ActivityCollectionRow: View {
     let receipt: ActivityReceipt
+    let selected: Bool
 
     var body: some View {
         HStack(spacing: 11) {
-            SymbolTile(symbol: symbol, size: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(receipt.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
-                Text(receipt.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            StatusGlyph(state: receipt.state, size: 16, tint: selected ? Color.white : nil)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(receipt.displayTitle)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .lineLimit(1)
+                Text(receipt.detail)
+                    .font(.caption)
+                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                    .lineLimit(1)
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                StatusDot(state: receipt.state, size: 7)
-                Text(receipt.date, style: .relative).font(.caption2).foregroundStyle(.secondary)
-            }
+            Spacer(minLength: 12)
+            Text(receipt.date, style: .relative)
+                .font(.caption2)
+                .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, 6)
     }
-
-    private var symbol: String {
-        switch receipt.kind {
-        case .sync: "arrow.triangle.2.circlepath"
-        case .validation: "checkmark.seal"
-        case .authentication: "person.badge.key"
-        case .configuration: "slider.horizontal.3"
-        case .publication: "arrow.up.doc"
-        }
-    }
-
 }
 
 private struct ActivityReceiptDetail: View {
@@ -198,9 +193,9 @@ private struct ActivityReceiptDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 14) {
-                    SymbolTile(symbol: receipt.state == .healthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill", size: 48)
+                    KindTile(kind: .activity, size: 40)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(receipt.displayTitle).font(.title2.weight(.semibold))
+                        Text(receipt.displayTitle).font(.title3.weight(.semibold))
                         Text(receipt.detail).font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -240,7 +235,7 @@ private struct ActivityReceiptDetail: View {
                             ForEach(Array(receipt.affectedPaths.enumerated()), id: \.offset) { index, path in
                                 HStack {
                                     Image(systemName: "doc").foregroundStyle(.secondary)
-                                    CompactPathText(path: path)
+                                    LocationText(path: path)
                                     Spacer()
                                 }
                                 .padding(12)

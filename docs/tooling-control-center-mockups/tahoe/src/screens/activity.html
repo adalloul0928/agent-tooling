@@ -1,0 +1,43 @@
+<!-- @screen id="activity" title="Activity" sidebar="activity" -->
+<!-- @lede Receipts, grouped by day. An applied plan expands into what was written per client, with the verification result and a rollback that restores the named backup. -->
+<!-- @note What changed|Sub-steps use brand marks instead of client names, so a receipt reads as a column of glyphs and verbs. Failures keep their plain-language cause and the retry that fixed them. -->
+<!-- @note Material|One card per event; the expanded receipt is the same card, taller. No timeline rail, no colored stripes. -->
+<!-- @note Interaction|Roll Back This Plan… restores backup B-142 and writes a new receipt; Receipt JSON exports the redacted record. -->
+<div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">Activity</div><div class="sub">Receipts for the last 90 days</div></div>
+  <span class="sp"></span>
+  <span class="pop">All Events<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span>
+  <span class="search" style="width:190px"><svg class="ic"><use href="#s-search"/></svg>Search</span>
+</div>
+<div class="content compact stack" style="padding-top:10px">
+  <div>
+    <div class="day">Today</div>
+    <div class="grp"><div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Verification completed · 34 items match their receipts</div></div><span class="when">9:41 AM</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div></div>
+  </div>
+  <div>
+    <div class="day">Yesterday</div>
+    <div class="grp">
+      <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Applied sync plan S-118 · 6 changes across 3 clients</div><div class="s">Receipt R-208 · backup B-142 (1.2 MB) · finished in 14 s</div></div><span class="when">6:12 PM</span><svg class="ic chev"><use href="#s-chev-d"/></svg></div>
+      <div class="subrows">
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark"><use href="#b-claude"/></svg><span class="w">Installed skill</span> sync-agent-tooling · user</div>
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark"><use href="#b-claude"/></svg><span class="w">Declared MCP server</span> heroui-pro · project pumpd</div>
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><span class="w">Installed skill</span> sync-agent-tooling · user</div>
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><span class="w">Declared MCP server</span> supabase · project pumpd</div>
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><span class="w">Removed skill</span> workflow-sync-test · backup kept</div>
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark"><use href="#b-gemini"/></svg><span class="w">Rewrote servers block</span> settings · timeout added</div>
+        <div class="subrow" style="padding-top:8px"><svg class="ic gOK"><use href="#s-shield"/></svg><span>Post-apply verification: 12 of 12 checksums match</span><span class="sp" style="flex:1"></span><span class="f12 gA w500">Receipt JSON</span><span class="btn xs"><svg class="ic"><use href="#s-uturn"/></svg>Roll Back This Plan…</span></div>
+      </div>
+      <div class="row"><svg class="ic ic16 gW"><use href="#s-warn"/></svg><div class="rt"><div class="p">Applied 5 of 6 · Gemini settings write failed</div><div class="s">Permission denied on the settings file · plan S-117, retried successfully as S-118</div></div><span class="btn xs">Show Log</span><span class="when">5:58 PM</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="day">Friday, August 28</div>
+    <div class="grp">
+      <div class="row"><svg class="ic ic16 t2"><use href="#s-uturn"/></svg><div class="rt"><div class="p">Rolled back plugin simview to 3f9d2e1</div><div class="s">Backup B-139 restored · verification passed</div></div><span class="when">4:20 PM</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+      <div class="row"><svg class="ic ic16 gE"><use href="#s-x-c"/></svg><div class="rt"><div class="p">Marketplace refresh failed · github.com unreachable</div><div class="s">anthropics/skills skipped · succeeded on retry at 9:30 AM</div></div><span class="when">9:12 AM</span></div>
+      <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Post-sync canary passed in all three clients</div><div class="s">Each client answered a scripted prompt</div></div><span class="when">9:02 AM</span></div>
+    </div>
+  </div>
+  <div class="f11 t3" style="margin:0 2px">Older receipts are archived monthly · <span class="gA">change this in Settings</span></div>
+</div>

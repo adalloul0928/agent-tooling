@@ -1,0 +1,31 @@
+<!-- @screen id="settings" title="Settings" sidebar="" layout="settings" -->
+<!-- @lede Settings is its own preference window, the way macOS expects. Sources are the trust boundary: each row says who publishes it and whether it is signed, and unsigned sources always require review. -->
+<!-- @note What changed|Icons and labels in the tab strip, one group of sources, three plain sentences of policy. Nothing else. -->
+<!-- @note Material|The small window is the same glass shell; the paper inset carries the content. -->
+<!-- @note Interaction|Unchecking a source hides its items from Discover without removing anything installed. The update policy defaults to staging in Sync. -->
+<div class="stb">Settings</div>
+<div class="tabs">
+  <div class="tab"><svg class="ic"><use href="#s-gear"/></svg>General</div>
+  <div class="tab on"><svg class="ic"><use href="#s-globe"/></svg>Sources</div>
+  <div class="tab"><svg class="ic"><use href="#s-drive"/></svg>Backups</div>
+  <div class="tab"><svg class="ic"><use href="#s-cpu"/></svg>Runtimes</div>
+  <div class="tab"><svg class="ic"><use href="#s-pulse"/></svg>Diagnostics</div>
+</div>
+<div class="paper">
+  <div class="content stack" style="padding:18px 20px 20px">
+    <div class="f12 t2">Agent Tooling installs skills, MCP servers, and plugins from these sources.</div>
+    <div class="grp">
+      <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm library"><svg class="ic"><use href="#s-books"/></svg></span><div class="rt"><div class="p">aren/agent-tooling</div><div class="s">Local Git · yours</div></div><span class="f12 t2">8 installed</span></div>
+      <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm library"><svg class="ic"><use href="#s-globe"/></svg></span><div class="rt"><div class="p">anthropics/skills</div><div class="s">GitHub · signed releases</div></div><span class="f12 t2">4 installed</span></div>
+      <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm library"><svg class="ic"><use href="#s-globe"/></svg></span><div class="rt"><div class="p">MCP Registry</div><div class="s">registry.modelcontextprotocol.io · signed</div></div><span class="f12 t2">2 installed</span></div>
+      <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm library"><svg class="ic"><use href="#s-globe"/></svg></span><div class="rt"><div class="p">community/awesome-agents</div><div class="s">GitHub · unsigned — items always require review before install</div></div><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>Unsigned</span></div>
+    </div>
+    <div class="hs6"><span class="btn xs" style="padding:0 7px"><svg class="ic"><use href="#s-plus"/></svg></span><span class="btn xs" style="padding:0 7px"><svg class="ic"><use href="#s-minus"/></svg></span></div>
+    <div class="vs" style="gap:9px">
+      <div class="hs"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span>Refresh sources daily at 8:00 AM</span></div>
+      <div class="hs"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span>Require signed sources for automatic updates</span></div>
+      <div class="hs"><span>When updates are available</span><span class="pop sm">Add to Sync for review<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span></div>
+    </div>
+    <div class="f11 t3">Downloads are verified against the source's manifest before anything is staged.</div>
+  </div>
+</div>

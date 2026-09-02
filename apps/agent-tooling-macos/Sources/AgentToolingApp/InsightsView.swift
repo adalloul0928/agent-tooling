@@ -627,8 +627,7 @@ private struct CoverageRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            ClientBrandIcon(client: coverage.client, size: 18)
-                .frame(width: 22, height: 22)
+            ClientDisc(client: coverage.client, size: 30)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
                     Text(coverage.sourceName)
@@ -683,11 +682,7 @@ private struct RecommendationRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 13) {
-            Image(systemName: symbol)
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(.secondary)
-                .frame(width: 24, height: 24)
-                .accessibilityHidden(true)
+            KindTile(kind: recommendationKind, size: 28)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(recommendation.title)
@@ -715,13 +710,11 @@ private struct RecommendationRow: View {
         .padding(.vertical, 13)
     }
 
-    private var symbol: String {
+    private var recommendationKind: ToolingKind {
         switch recommendation.kind {
-        case .useExistingSkill: "doc.text"
-        case .createCustomSkill: "square.and.pencil"
-        case .marketplaceSkill: "shippingbox"
-        case .mcpServer: "server.rack"
-        case .plugin: "puzzlepiece.extension"
+        case .useExistingSkill, .createCustomSkill, .marketplaceSkill: .skill
+        case .mcpServer: .mcpServer
+        case .plugin: .plugin
         }
     }
 
@@ -783,8 +776,8 @@ private struct QualityFindingRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 13) {
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(severityColor)
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
@@ -811,8 +804,16 @@ private struct QualityFindingRow: View {
     private var symbol: String {
         switch finding.severity {
         case .information: "info.circle"
-        case .warning: "exclamationmark.triangle"
-        case .actionRequired: "exclamationmark.circle"
+        case .warning: "exclamationmark.triangle.fill"
+        case .actionRequired: "exclamationmark.circle.fill"
+        }
+    }
+
+    private var severityColor: Color {
+        switch finding.severity {
+        case .information: .secondary
+        case .warning: AgentTheme.warning
+        case .actionRequired: AgentTheme.failure
         }
     }
 }

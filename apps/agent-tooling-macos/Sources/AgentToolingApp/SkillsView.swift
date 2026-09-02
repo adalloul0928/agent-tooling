@@ -8,6 +8,7 @@ struct SkillsView: View {
     var navigate: ((AppSection) -> Void)?
     @State private var query = ""
     @State private var scope: SkillScope = .all
+    @State private var clientFilter: SkillClientFilter = .all
     @State private var selectedID = ""
     @State private var skillBeingEdited: Skill?
     @State private var codexCreatorPresented = false
@@ -23,7 +24,7 @@ struct SkillsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Skills") {
+            PageToolbar(title: "Skills", context: toolbarContext) {
                 Button {
                     navigate?(.insights)
                 } label: {
@@ -99,21 +100,33 @@ struct SkillsView: View {
         .onChange(of: visibleSkills.map(\.id)) { _, _ in selectFirstVisibleSkillIfNeeded() }
         .onChange(of: query) { _, _ in displayLimit = Self.pageSize }
         .onChange(of: scope) { _, _ in displayLimit = Self.pageSize }
+        .onChange(of: clientFilter) { _, _ in displayLimit = Self.pageSize }
     }
 
     private var collectionPane: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
+            VStack(spacing: 9) {
                 TextField("Search skills", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Search skills")
-                Picker("Scope", selection: $scope) {
-                    ForEach(SkillScope.allCases) { scope in Text(scope.rawValue).tag(scope) }
+                HStack(spacing: 8) {
+                    Picker("Scope", selection: $scope) {
+                        ForEach(SkillScope.allCases) { scope in
+                            Text(scopeLabel(for: scope)).tag(scope)
+                        }
+                    }
+                    .labelsHidden()
+                    .accessibilityLabel("Skill scope")
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    Spacer(minLength: 0)
+                    Picker("App", selection: $clientFilter) {
+                        ForEach(SkillClientFilter.allCases) { filter in Text(filter.rawValue).tag(filter) }
+                    }
+                    .labelsHidden()
+                    .accessibilityLabel("Filter by app")
+                    .fixedSize()
                 }
-                .labelsHidden()
-                .accessibilityLabel("Skill scope")
-                .pickerStyle(.segmented)
-                .frame(width: 130)
             }
             .padding(12)
 
@@ -185,9 +198,19 @@ struct SkillsView: View {
     private var filteredSkills: [Skill] {
         model.skills.filter { skill in
             (scope == .all || skill.owned)
+                && clientFilter.matches(skill)
                 && (query.isEmpty
                     || [skill.name, skill.displayName, skill.summary, skill.bundle].joined(separator: " ").localizedCaseInsensitiveContains(
                         query))
+        }
+    }
+
+    /// Counts sit in the segmented control so an empty Managed list explains
+    /// itself instead of looking like missing data.
+    private func scopeLabel(for scope: SkillScope) -> String {
+        switch scope {
+        case .owned: "Managed \(model.skills.filter(\.owned).count)"
+        case .all: "All \(model.skills.count)"
         }
     }
 
@@ -213,6 +236,12 @@ struct SkillsView: View {
         return "Show \(min(Self.pageSize, remaining)) more"
     }
 
+    private var toolbarContext: String {
+        let managed = model.skills.filter(\.owned).count
+        let discovered = model.skills.count - managed
+        return discovered > 0 ? "\(managed) managed · \(discovered) discovered" : "\(managed) managed"
+    }
+
     private func selectFirstVisibleSkillIfNeeded() {
         guard !visibleSkills.contains(where: { $0.id == selectedID }) else { return }
         selectedID = groupedSkills.first?.1.first?.id ?? ""
@@ -233,24 +262,31 @@ struct SkillsView: View {
 
     private var emptyStateTitle: String {
         if !query.isEmpty { return "No matching skills" }
+        if clientFilter != .all { return "Nothing for \(clientFilter.rawValue)" }
         return model.skills.isEmpty ? "No skills yet" : "No managed skills"
     }
 
     private var emptyStateMessage: String {
         if !query.isEmpty { return "Try a different search term." }
+        if clientFilter != .all {
+            return "No \(scope == .owned ? "managed" : "installed") skill reports \(clientFilter.rawValue) as an app it is present in."
+        }
         return model.skills.isEmpty
             ? "Create a reusable workflow or check setup again to discover installed skills."
-            : "Switch to All to browse installed vendor and standalone skills."
+            : "\(model.skills.count) skill\(model.skills.count == 1 ? " was" : "s were") found on this Mac, but none of them is managed by Agent Tooling yet. Switch to All to browse them."
     }
 
     private var emptyStateActionTitle: String {
         if !query.isEmpty { return "Clear Search" }
+        if clientFilter != .all { return "Show Any App" }
         return model.skills.isEmpty ? "Create Skill" : "Show All"
     }
 
     private func performEmptyStateAction() {
         if !query.isEmpty {
             query = ""
+        } else if clientFilter != .all {
+            clientFilter = .all
         } else if model.skills.isEmpty {
             openCodexCreator()
         } else {
@@ -291,57 +327,53 @@ private enum SkillScope: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+private enum SkillClientFilter: String, CaseIterable, Identifiable {
+    case all = "Any app"
+    case claude = "Claude Code"
+    case codex = "Codex"
+    case gemini = "Gemini CLI"
+
+    var id: String { rawValue }
+
+    var client: ClientKind? {
+        switch self {
+        case .all: nil
+        case .claude: .claude
+        case .codex: .codex
+        case .gemini: .gemini
+        }
+    }
+
+    func matches(_ skill: Skill) -> Bool {
+        guard let client else { return true }
+        return skill.clients.contains { $0.client == client && $0.reportsLocalPresence }
+    }
+}
+
 private struct SkillCollectionRow: View {
     let skill: Skill
     let selected: Bool
 
     var body: some View {
         HStack(spacing: 11) {
-            SymbolTile(symbol: skill.owned ? symbol : "shippingbox", size: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(skill.displayName).font(.callout.weight(.semibold)).lineLimit(1)
-                Text(skill.summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
-            Spacer()
-            if installedClients.isEmpty {
-                Text("Not installed")
+            KindTile(kind: .skill, size: 28, ghost: !skill.owned)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(skill.displayName)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .lineLimit(1)
+                Text(skill.summary)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                HStack(spacing: 5) {
-                    ForEach(installedClients) { client in
-                        ClientBrandIcon(client: client, size: 14)
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Installed in \(installedClients.map(\.rawValue).joined(separator: ", "))")
+                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                    .lineLimit(1)
             }
+            Spacer(minLength: 12)
+            ClientMarks(present: Set(skill.clients.filter(\.reportsLocalPresence).map(\.client)))
         }
         .padding(.horizontal, 13)
-        .frame(height: 66)
-        .background {
-            if selected { AgentTheme.blue.opacity(0.13) }
-        }
-        .overlay(alignment: .leading) {
-            if selected { Rectangle().fill(AgentTheme.blue).frame(width: 3) }
-        }
+        .frame(height: 52)
+        .rowSelection(selected)
         .contentShape(Rectangle())
-    }
-
-    private var installedClients: [ClientKind] {
-        skill.clients.filter(\.reportsLocalPresence).map(\.client)
-    }
-
-    private var symbol: String {
-        switch skill.name {
-        case "sync-agent-tooling": "arrow.triangle.2.circlepath"
-        case "skill-forge": "doc.badge.plus"
-        case "mcp-preflight": "network"
-        case "worktree-bootstrap": "folder"
-        case "workflow-sync-test": "checkmark"
-        case "obsidian-vault": "square.and.pencil"
-        default: "doc.text"
-        }
     }
 }
 
@@ -355,9 +387,9 @@ private struct SkillDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 13) {
-                    SymbolTile(symbol: "doc.text", size: 46)
+                    KindTile(kind: .skill, size: 40, ghost: !skill.owned)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(skill.displayName).font(.title2.weight(.semibold))
+                        Text(skill.displayName).font(.title3.weight(.semibold))
                         Text(skill.owned ? "Managed by Agent Tooling" : skill.bundle).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -384,13 +416,7 @@ private struct SkillDetailView: View {
                         VStack(spacing: 0) {
                             if !skill.triggers.isEmpty {
                                 LabeledValueRow("Triggers") {
-                                    VStack(alignment: .trailing, spacing: 5) {
-                                        ForEach(skill.triggers, id: \.self) { trigger in
-                                            Text(trigger)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
+                                    TagCloud(tags: skill.triggers)
                                 }
                             }
                             if !skill.triggers.isEmpty && !skill.negativeTrigger.isEmpty { Divider() }
@@ -409,7 +435,7 @@ private struct SkillDetailView: View {
                         Divider()
                         ForEach(skill.files, id: \.self) { file in
                             LabeledValueRow(file.hasSuffix("SKILL.md") ? "Definition" : "Bundled file") {
-                                CompactPathText(path: file)
+                                LocationText(path: file)
                             }
                             if file != skill.files.last { Divider() }
                         }

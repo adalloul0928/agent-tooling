@@ -3,16 +3,20 @@ import SwiftUI
 
 struct OverviewView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let navigate: (AppSection) -> Void
     @State private var selectedReceipt: ActivityReceipt?
+    @State private var revealed = false
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Overview") {
+            PageToolbar(title: "This Mac", context: lastScanText) {
+                profileMenu
+
                 Button {
                     Task { await model.runDoctor() }
                 } label: {
-                    Label(model.isRunningDoctor ? "Checking…" : "Check setup", systemImage: "stethoscope")
+                    Label(model.isRunningDoctor ? "Checking…" : "Check Now", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
                 .disabled(model.isInteractionLocked)
@@ -20,7 +24,17 @@ struct OverviewView: View {
                 Button {
                     Task { await model.runSync() }
                 } label: {
-                    Label(model.isSyncing ? "Preparing…" : "Review sync", systemImage: "arrow.triangle.2.circlepath")
+                    HStack(spacing: 6) {
+                        Label(model.isSyncing ? "Preparing…" : "Review Sync", systemImage: "arrow.triangle.2.circlepath")
+                        if model.attentionCount > 0 {
+                            Text("\(model.attentionCount)")
+                                .contentTransition(.numericText())
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6)
+                                .frame(height: 16)
+                                .background(Capsule().fill(Color.white.opacity(0.25)))
+                        }
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(model.isInteractionLocked)
@@ -28,17 +42,36 @@ struct OverviewView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    pageHeading
+                    SyncConduitView(
+                        managedCount: managedCount,
+                        discoveredCount: discoveredCount,
+                        profileName: model.activeProfile?.name ?? "No configuration",
+                        desiredCount: desiredCount,
+                        pendingCount: model.attentionCount,
+                        terminals: terminals,
+                        onLibrary: { navigate(.skills) },
+                        onProfile: { navigate(.profiles) },
+                        onClient: { _ in navigate(.syncCenter) }
+                    )
 
-                    ToolingMatrixView(rows: matrixRows, onSelect: navigate)
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            attentionCard
+                            if !recommendations.isEmpty {
+                                recommendationsCard
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
 
-                    HStack(alignment: .top, spacing: 14) {
-                        attentionPanel
-                        activityPanel
+                        activityCard
+                            .frame(maxWidth: .infinity)
                     }
+                    .opacity(revealed ? 1 : 0)
+                    .offset(y: revealed ? 0 : 10)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.45).delay(0.35), value: revealed)
                 }
                 .frame(maxWidth: 1_100)
-                .padding(24)
+                .padding(EdgeInsets(top: 4, leading: 22, bottom: 22, trailing: 22))
                 .frame(maxWidth: .infinity)
             }
             .scrollIndicators(.hidden)
@@ -46,129 +79,110 @@ struct OverviewView: View {
         .sheet(item: $selectedReceipt) { receipt in
             ReceiptDetailSheet(receipt: receipt)
         }
-    }
-
-    private var pageHeading: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("This Mac")
-                    .font(.title2.weight(.semibold))
-                Text("Manage the tools available to Claude Code, Codex, and Gemini CLI.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text(lastScanText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        .onAppear {
+            DispatchQueue.main.async { revealed = true }
         }
     }
 
-    private var matrixRows: [ToolingMatrixRow] {
-        [
-            ToolingMatrixRow(
-                id: .skills,
-                title: "Skills",
-                symbol: "doc.text",
-                libraryCount: model.skills.count,
-                installedCounts: installedCounts(for: model.skills.map(\.clients))
-            ),
-            ToolingMatrixRow(
-                id: .mcpServers,
-                title: "MCP servers",
-                symbol: "network",
-                libraryCount: model.mcpServers.count,
-                installedCounts: installedCounts(for: model.mcpServers.map(\.clients))
-            ),
-            ToolingMatrixRow(
-                id: .plugins,
-                title: "Plugins",
-                symbol: "puzzlepiece.extension",
-                libraryCount: model.plugins.count,
-                installedCounts: installedCounts(for: model.plugins.map(\.clients))
-            ),
-        ]
-    }
-
-    private func installedCounts(for clientLists: [[ClientState]]) -> [ClientKind: Int] {
-        Dictionary(
-            uniqueKeysWithValues: ClientKind.allCases.map { client in
-                (
-                    client,
-                    clientLists.filter { states in
-                        states.contains { $0.client == client && $0.reportsLocalPresence }
-                    }.count
-                )
-            })
-    }
-
-    private var attentionPanel: some View {
-        VStack(spacing: 0) {
-            PanelHeader("Needs attention") {
-                if !attentionItems.isEmpty {
-                    Button("Review") { navigate(.syncCenter) }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(AgentTheme.blue)
+    private var profileMenu: some View {
+        Menu {
+            ForEach(model.profiles) { profile in
+                Button {
+                    model.applyProfile(id: profile.id)
+                } label: {
+                    if profile.id == model.activeProfileID {
+                        Label(profile.name, systemImage: "checkmark")
+                    } else {
+                        Text(profile.name)
+                    }
                 }
             }
+            Divider()
+            Button("Manage Configurations…") { navigate(.profiles) }
+        } label: {
+            HStack(spacing: 7) {
+                KindTile(kind: .profile, size: 18)
+                Text(model.activeProfile?.name ?? "No configuration")
+                    .lineLimit(1)
+            }
+        }
+        .menuStyle(.button)
+        .buttonStyle(.bordered)
+        .fixedSize()
+        .disabled(model.isInteractionLocked)
+        .accessibilityLabel("Active configuration")
+    }
 
+    private var attentionCard: some View {
+        TitledCard("Needs attention", count: attentionItems.isEmpty ? nil : "\(attentionItems.count)") {
             if attentionItems.isEmpty {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("No local issues found")
-                            .font(.callout.weight(.medium))
-                        Text("Account sign-in and fresh-session checks remain manual.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
+                InfoRow("No local issues found", detail: "Account sign-in and fresh-session checks remain manual.") {
+                    StatusGlyph(state: .healthy, size: 16)
                 }
-                .padding(16)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(attentionItems) { item in
-                        AttentionRow(item: item)
-                        if item.id != attentionItems.last?.id { Divider().opacity(0.35) }
+                ForEach(attentionItems) { item in
+                    InfoRow(item.title, detail: item.detail) {
+                        StatusGlyph(state: item.state, size: 16)
+                    } trailing: {
+                        Button("Review") { navigate(.syncCenter) }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                     }
+                    if item.id != attentionItems.last?.id { Divider().opacity(0.35) }
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .top)
-        .standardPanel()
     }
 
-    private var activityPanel: some View {
-        VStack(spacing: 0) {
-            PanelHeader("Recent activity") {
-                Button("View all") { navigate(.activity) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(AgentTheme.blue)
+    private var recommendationsCard: some View {
+        TitledCard("Recommendations", count: "\(recommendations.count) new") {
+            ForEach(Array(recommendations.enumerated()), id: \.element.id) { index, recommendation in
+                Button {
+                    navigate(.insights)
+                } label: {
+                    InfoRow(recommendation.title, detail: recommendation.summary) {
+                        Image(systemName: "lightbulb")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AgentTheme.blue)
+                            .frame(width: 18)
+                    } trailing: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens Insights")
+                if index < recommendations.count - 1 { Divider().opacity(0.35) }
             }
+        }
+    }
 
+    private var activityCard: some View {
+        TitledCard("Recent activity") {
+            Button("Show All") { navigate(.activity) }
+                .buttonStyle(.plain)
+                .foregroundStyle(AgentTheme.blue)
+        } content: {
             if model.activities.isEmpty {
                 Text("Checks and reviewed changes will appear here.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                    .padding(16)
+                    .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(recentActivities) { receipt in
-                        Button {
-                            selectedReceipt = receipt
-                        } label: {
-                            ActivityCompactRow(receipt: receipt)
-                        }
-                        .buttonStyle(.plain)
-                        if receipt.id != recentActivities.last?.id { Divider().opacity(0.35) }
+                ForEach(recentActivities) { receipt in
+                    Button {
+                        selectedReceipt = receipt
+                    } label: {
+                        ActivityCompactRow(receipt: receipt)
                     }
+                    .buttonStyle(.plain)
+                    if receipt.id != recentActivities.last?.id { Divider().opacity(0.35) }
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .top)
-        .standardPanel()
     }
 
     private var lastScanText: String {
@@ -178,9 +192,34 @@ struct OverviewView: View {
         return "Checked \(date.formatted(.relative(presentation: .named)))"
     }
 
+    private var managedCount: Int {
+        model.skills.filter(\.owned).count + model.plugins.count + model.mcpServers.filter(\.isManagedDefinition).count
+    }
+
+    private var discoveredCount: Int {
+        model.skills.filter { !$0.owned }.count + model.mcpServers.filter { !$0.isManagedDefinition }.count
+    }
+
+    private var desiredCount: Int {
+        guard let profile = model.activeProfile else { return 0 }
+        let effective = model.effectiveProfile(for: profile.id) ?? profile
+        return effective.enabledPlugins.count + effective.requiredMCPs.count
+    }
+
+    private var terminals: [ConduitTerminal] {
+        [ClientKind.claude, .codex, .gemini].map { client in
+            let verdict = model.clientVerdict(for: client)
+            return ConduitTerminal(client: client, state: verdict.state, text: verdict.text)
+        }
+    }
+
+    private var recommendations: [ToolRecommendation] {
+        Array((model.insightsReport?.recommendations ?? []).prefix(2))
+    }
+
     private var recentActivities: [ActivityReceipt] {
         var seenTitles = Set<String>()
-        return Array(model.activities.filter { seenTitles.insert($0.displayTitle).inserted }.prefix(3))
+        return Array(model.activities.filter { seenTitles.insert($0.displayTitle).inserted }.prefix(5))
     }
 
     private var attentionItems: [OverviewAttention] {
@@ -202,7 +241,6 @@ struct OverviewView: View {
             .map { OverviewAttention(id: "mcp-\($0.id)", title: $0.name, detail: $0.summary, state: $0.aggregateState) }
         return Array((targets + configurationChecks + servers).prefix(4))
     }
-
 }
 
 private struct OverviewAttention: Identifiable {
@@ -212,52 +250,18 @@ private struct OverviewAttention: Identifiable {
     let state: HealthState
 }
 
-private struct AttentionRow: View {
-    let item: OverviewAttention
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: item.state == .unavailable ? "xmark.circle" : "exclamationmark.triangle")
-                .foregroundStyle(item.state == .unavailable ? Color.red : Color.secondary)
-                .frame(width: 16)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.title)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
-                Text(item.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .frame(minHeight: 54)
-    }
-}
-
 struct ActivityCompactRow: View {
     let receipt: ActivityReceipt
 
     var body: some View {
-        HStack(spacing: 10) {
-            StatusDot(state: receipt.state)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(receipt.displayTitle)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
-                Text(receipt.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
+        InfoRow(receipt.displayTitle, detail: receipt.detail) {
+            StatusGlyph(state: receipt.state, size: 16)
+        } trailing: {
             Text(receipt.date, style: .relative)
                 .font(.caption)
                 .foregroundStyle(.tertiary)
+                .monospacedDigit()
         }
-        .padding(.horizontal, 14)
-        .frame(minHeight: 48)
         .contentShape(Rectangle())
     }
 }
@@ -270,12 +274,15 @@ struct ReceiptDetailSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(receipt?.displayTitle ?? "Receipt")
-                            .font(.title2.weight(.semibold))
-                        Text(receipt?.date.formatted() ?? "")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: 12) {
+                        KindTile(kind: .activity, size: 40)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(receipt?.displayTitle ?? "Receipt")
+                                .font(.title3.weight(.semibold))
+                            Text(receipt?.date.formatted() ?? "")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     if let receipt {

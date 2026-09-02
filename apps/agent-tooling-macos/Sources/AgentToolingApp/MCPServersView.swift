@@ -11,7 +11,7 @@ struct MCPServersView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "MCP Servers") {
+            PageToolbar(title: "MCP Servers", context: toolbarContext) {
                 Button {
                     showingAddServer = true
                 } label: {
@@ -77,9 +77,9 @@ struct MCPServersView: View {
                 )
             } else {
                 List(filteredServers, selection: $selectedID) { server in
-                    MCPCollectionRow(server: server)
+                    MCPCollectionRow(server: server, selected: selectedID == server.id)
                         .tag(server.id)
-                        .listRowBackground(selectedID == server.id ? AgentTheme.blue.opacity(0.13) : Color.clear)
+                        .listRowBackground(SelectionRowBackground(selected: selectedID == server.id))
                         .accessibilityLabel(server.name)
                         .accessibilityValue(server.id == selectedID ? "Selected" : "")
                 }
@@ -114,6 +114,11 @@ struct MCPServersView: View {
     }
 
     private var selectedServer: MCPServer? { model.mcpServers.first { $0.id == selectedID } }
+
+    private var toolbarContext: String {
+        let usable = model.mcpServers.filter { $0.aggregateState == .healthy }.count
+        return "\(model.mcpServers.count) configured · \(usable) usable"
+    }
     private func selectFirstVisibleServerIfNeeded() {
         guard !filteredServers.contains(where: { $0.id == selectedID }) else { return }
         selectedID = filteredServers.first?.id ?? ""
@@ -152,34 +157,26 @@ private enum MCPFilter: String, CaseIterable, Identifiable {
 
 private struct MCPCollectionRow: View {
     let server: MCPServer
+    let selected: Bool
 
     var body: some View {
         HStack(spacing: 11) {
-            SymbolTile(symbol: server.transport == .http ? "network" : "terminal", size: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(server.name).font(.callout.weight(.semibold))
-                Text(server.summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
-            Spacer()
-            if installedClients.isEmpty {
-                Text("Not configured")
+            KindTile(kind: .mcpServer, size: 28, ghost: !server.isManagedDefinition)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(server.name)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .lineLimit(1)
+                Text("\(server.transport.rawValue) · \(server.scope)")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                HStack(spacing: 5) {
-                    ForEach(installedClients) { client in
-                        ClientBrandIcon(client: client, size: 14)
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Configured in \(installedClients.map(\.rawValue).joined(separator: ", "))")
+                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                    .lineLimit(1)
             }
+            Spacer(minLength: 12)
+            ClientMarks(present: Set(server.clients.filter(\.reportsLocalPresence).map(\.client)), size: 13)
+            StatusGlyph(state: server.aggregateState, size: 13, tint: selected ? Color.white : nil)
         }
         .padding(.vertical, 6)
-    }
-
-    private var installedClients: [ClientKind] {
-        server.clients.filter(\.reportsLocalPresence).map(\.client)
     }
 }
 
@@ -191,9 +188,9 @@ private struct MCPDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 14) {
-                    SymbolTile(symbol: server.transport == .http ? "network" : "terminal", size: 48)
+                    KindTile(kind: .mcpServer, size: 40, ghost: !server.isManagedDefinition)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(server.name).font(.title2.weight(.semibold))
+                        Text(server.name).font(.title3.weight(.semibold))
                         Text(server.summary).font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -230,6 +227,10 @@ private struct MCPDetailView: View {
                     }
                 }
 
+                if let attention = server.clients.first(where: { $0.state == .attention }) {
+                    AttentionBanner(title: "\(attention.client.rawValue) needs attention", message: attention.detail)
+                }
+
                 GroupBox("Client connections") {
                     ClientStatusRows(clients: server.clients)
                 }
@@ -250,7 +251,7 @@ private struct MCPDetailView: View {
                         if let projectRoot = server.projectRoot {
                             Divider()
                             LabeledValueRow("Project folder") {
-                                CompactPathText(path: projectRoot)
+                                LocationText(path: projectRoot)
                             }
                         }
                     }
@@ -328,9 +329,9 @@ private struct AddMCPServerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                SymbolTile(symbol: "network", size: 42)
+                KindTile(kind: .mcpServer, size: 40)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Add MCP server").font(.title2.weight(.semibold))
+                    Text("Add MCP server").font(.title3.weight(.semibold))
                     Text(step == 0 ? "Connection" : "Clients & review").foregroundStyle(.secondary)
                 }
                 Spacer()

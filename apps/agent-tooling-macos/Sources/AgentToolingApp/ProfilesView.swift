@@ -10,7 +10,7 @@ struct ProfilesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Configurations") {
+            PageToolbar(title: "Configurations", context: "\(model.profiles.count) defined") {
                 Button {
                     if let profile = selectedProfile { editingProfile = profile }
                 } label: {
@@ -144,28 +144,35 @@ private struct ProfileCollectionRow: View {
 
     var body: some View {
         HStack(spacing: 11) {
-            SymbolTile(symbol: active ? "slider.horizontal.3" : "slider.horizontal.2.square", size: 36)
-            VStack(alignment: .leading, spacing: 3) {
+            KindTile(kind: .profile, size: 28)
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(profile.name).font(.callout.weight(.semibold))
-                    if active { Text("Current").font(.caption2).foregroundStyle(.secondary) }
+                    Text(profile.name)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(selected ? Color.white : Color.primary)
+                        .lineLimit(1)
+                    if active {
+                        Text("Current")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(selected ? Color.white : AgentTheme.blue)
+                            .padding(.horizontal, 6)
+                            .frame(height: 16)
+                            .background(Capsule().fill(selected ? Color.white.opacity(0.22) : AgentTheme.blue.opacity(0.12)))
+                    }
                 }
-                Text(profile.summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(profile.summary)
+                    .font(.caption)
+                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                    .lineLimit(1)
             }
-            Spacer()
+            Spacer(minLength: 12)
             Text(checkSummary)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
         }
         .padding(.horizontal, 13)
-        .padding(.vertical, 7)
-        .frame(minHeight: 64)
-        .background {
-            if selected { AgentTheme.blue.opacity(0.13) }
-        }
-        .overlay(alignment: .leading) {
-            if selected { Rectangle().fill(AgentTheme.blue).frame(width: 3) }
-        }
+        .frame(minHeight: 52)
+        .rowSelection(selected)
         .contentShape(Rectangle())
     }
 
@@ -183,9 +190,9 @@ private struct ProfileDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 14) {
-                    SymbolTile(symbol: "slider.horizontal.3", size: 48)
+                    KindTile(kind: .profile, size: 40)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(profile.name).font(.title2.weight(.semibold))
+                        Text(profile.name).font(.title3.weight(.semibold))
                         Text(profile.summary).font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -212,7 +219,7 @@ private struct ProfileDetailView: View {
                         Divider()
                         LabeledValueRow("Project folder") {
                             if let projectRoot = profile.projectRoot {
-                                CompactPathText(path: projectRoot)
+                                LocationText(path: projectRoot)
                             } else {
                                 Text("Not applicable").foregroundStyle(.secondary)
                             }
@@ -235,13 +242,7 @@ private struct ProfileDetailView: View {
                         VStack(spacing: 0) {
                             ForEach(profile.checks) { check in
                                 HStack(spacing: 11) {
-                                    Image(
-                                        systemName: check.state == .healthy
-                                            ? "checkmark.circle.fill"
-                                            : check.manual ? "hand.raised.circle.fill" : "exclamationmark.circle.fill"
-                                    )
-                                    .foregroundStyle(check.state == .attention || check.state == .unavailable ? Color.red : Color.secondary)
-                                    .font(.title3)
+                                    StatusGlyph(state: check.state, size: 16)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(legacyCheckTitle(check)).font(.callout.weight(.medium))
                                         Text(
@@ -305,7 +306,8 @@ private struct ProfileInventoryRow: View {
     let kind: String
     let value: String
     var body: some View {
-        HStack {
+        HStack(spacing: 10) {
+            KindTile(kind: kind == "Plugin" ? .plugin : .mcpServer, size: 22)
             Text(value).font(.callout)
             Spacer()
             Text(kind).font(.caption).foregroundStyle(.secondary)
@@ -339,9 +341,9 @@ private struct ProfileEditorSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                SymbolTile(symbol: "slider.horizontal.3", size: 42)
+                KindTile(kind: .profile, size: 40)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Edit configuration").font(.title2.weight(.semibold))
+                    Text("Edit configuration").font(.title3.weight(.semibold))
                     Text("Only portable settings are included; machine-local secrets stay excluded.").foregroundStyle(.secondary)
                 }
                 Spacer()

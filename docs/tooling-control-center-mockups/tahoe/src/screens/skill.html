@@ -1,0 +1,71 @@
+<!-- @screen id="skill" title="Skill" sidebar="library" -->
+<!-- @lede One skill, read left to right: where it is on this Mac, then where it comes from. Paths live behind the ⓘ, which opens a popover with the location and a Reveal in Finder link. -->
+<!-- @note What changed|Per-client rows carry brand marks and a verdict instead of paths. The Source group keeps only identity and revision; the file location is one hover away. -->
+<!-- @note Material|The header sits directly on the paper; groups below are white cards with hairlines, never cards inside cards. -->
+<!-- @note Interaction|Hover or focus the ⓘ to see the popover (it works in this mockup). Review… on the Codex row opens Sync scoped to that one item. -->
+<div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-chev-l"/></svg></span>
+  <div><div class="ttl">rebase-document-push</div><div class="sub">Skill · developer-workflows</div></div>
+  <span class="sp"></span>
+  <span class="btn"><svg class="ic"><use href="#s-shield"/></svg>Verify Now</span>
+  <span class="btn"><svg class="ic"><use href="#s-play"/></svg>Run in Claude Code</span>
+  <span class="ico"><svg class="ic"><use href="#s-ellipsis"/></svg></span>
+</div>
+<div class="content">
+  <div class="hero-row">
+    <span class="tile lg skill"><svg class="ic"><use href="#s-doc"/></svg></span>
+    <div class="grow"><h1>rebase-document-push</h1><div class="s">Prepare a branch or worktree for handoff: rebase, document, verify, push</div></div>
+    <span class="chip ok"><svg class="ic"><use href="#s-check-c"/></svg>Up to date</span>
+  </div>
+  <div class="two eq">
+    <div class="stack">
+      <div>
+        <div class="gt">On this Mac <span class="n">per client</span></div>
+        <div class="grp">
+          <div class="row"><span class="disc"><svg class="mark"><use href="#b-claude"/></svg></span><div class="rt"><div class="p">Claude Code</div><div class="s">Installed · user scope</div></div><span class="st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Verified today, 9:41 AM</span></div>
+          <div class="row"><span class="disc"><svg class="mark codex"><use href="#b-codex"/></svg></span><div class="rt"><div class="p">Codex</div><div class="s">Installed · the local copy was edited on Friday</div></div><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>Differs from desired</span><span class="btn xs">Review…</span></div>
+          <div class="row" style="opacity:.62"><span class="disc"><svg class="mark"><use href="#b-gemini"/></svg></span><div class="rt"><div class="p">Gemini CLI</div><div class="s">This client does not run skills</div></div><span class="st gT">Not supported</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="gt">Usage &amp; health</div>
+        <div class="grp">
+          <div class="row"><svg class="ic ic16 t2"><use href="#s-clock"/></svg><div class="rt"><div class="p">Used 23 times in the last 30 days</div><div class="s">Most recently yesterday at 4:52 PM, by Claude Code</div></div></div>
+          <div class="row"><svg class="ic ic16 gOK"><use href="#s-shield"/></svg><div class="rt"><div class="p">Matches install receipt R-171</div><div class="s">All 4 files verified today · 4 backup snapshots</div></div><span class="btn xs">Show Receipt</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="gt">History</div>
+        <div class="grp">
+          <div class="row" style="min-height:40px"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Verified in Claude Code</div><div class="s">Receipt R-171 · 4 files match</div></div><span class="when">Today, 9:41 AM</span></div>
+          <div class="row" style="min-height:40px"><svg class="ic ic16 gW"><use href="#s-pencil"/></svg><div class="rt"><div class="p">Codex copy edited outside Agent Tooling</div><div class="s">Now differs from desired · shown in Sync</div></div><span class="when">Friday</span></div>
+          <div class="row" style="min-height:40px"><svg class="ic ic16 t2"><use href="#s-download"/></svg><div class="rt"><div class="p">Installed in Claude Code and Codex</div><div class="s">From aren/agent-tooling · backup B-121 kept</div></div><span class="when">Aug 12</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="stack">
+      <div>
+        <div class="gt">Source</div>
+        <div class="grp">
+          <div class="row kv"><span class="k">Marketplace</span><span class="grow hs6"><span class="tile sm library"><svg class="ic"><use href="#s-books"/></svg></span>aren/agent-tooling <span class="t3">· local Git</span></span></div>
+          <div class="row kv"><span class="k">Location</span><span class="grow hs4">skills / rebase-document-push<button class="info r" aria-label="Show file location"><svg class="ic"><use href="#s-info-c"/></svg><span class="tip">Local folder<span class="mono">~/ws/agent-tooling/plugins/developer-workflows/skills/rebase-document-push</span><a href="#">Reveal in Finder</a></span></button></span></div>
+          <div class="row kv"><span class="k">Revision</span><span class="grow hs6"><span class="mono">e4a91d7</span><span class="t2">committed August 12</span></span><span class="f12 gA w500">History</span></div>
+          <div class="row kv"><span class="k">Desired scope</span><span class="grow"><span class="pop sm">User<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span></span><span class="f11 t3">changes apply through Sync</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="gt">Triggers <span class="n">from SKILL.md</span></div>
+        <div class="grp"><div class="tags"><span class="tag">“rebase this worktree on preview and push it”</span><span class="tag">“prepare this branch for handoff”</span><span class="tag">“update, document, and push this branch”</span></div>
+          <div class="row" style="min-height:36px;padding-top:6px;padding-bottom:8px"><span class="f11 t3">Does not run for read-only status checks or direct work on main.</span></div></div>
+      </div>
+      <div>
+        <div class="gt">Files <span class="n">4</span></div>
+        <div class="grp">
+          <div class="row" style="min-height:36px;padding-top:6px;padding-bottom:6px"><svg class="ic ic16 t2"><use href="#s-doc"/></svg><div class="rt"><div class="p">SKILL.md</div></div><span class="f11 t3">3.1 KB</span></div>
+          <div class="row" style="min-height:36px;padding-top:6px;padding-bottom:6px"><svg class="ic ic16 t2"><use href="#s-folder"/></svg><div class="rt"><div class="p">references</div></div><span class="f11 t3">2 files</span></div>
+          <div class="row" style="min-height:36px;padding-top:6px;padding-bottom:6px"><svg class="ic ic16 t2"><use href="#s-terminal"/></svg><div class="rt"><div class="p">scripts / verify-handoff.sh</div></div><span class="f11 t3">runs with your shell</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

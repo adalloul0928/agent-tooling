@@ -6,11 +6,11 @@ struct SyncCenterView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Sync") {
+            PageToolbar(title: "Sync", context: toolbarContext) {
                 Button {
                     Task { await model.runDoctor() }
                 } label: {
-                    Label(model.isRunningDoctor ? "Checking…" : "Check apps", systemImage: "stethoscope")
+                    Label(model.isRunningDoctor ? "Checking…" : "Check Clients", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
                 .disabled(model.isInteractionLocked)
@@ -18,7 +18,7 @@ struct SyncCenterView: View {
                 Button {
                     Task { await model.runSync() }
                 } label: {
-                    Label(model.isSyncing ? "Preparing…" : "Review changes", systemImage: "arrow.triangle.2.circlepath")
+                    Label(model.isSyncing ? "Preparing…" : "Review Changes", systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(model.isInteractionLocked)
@@ -26,107 +26,86 @@ struct SyncCenterView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Keep apps aligned")
-                            .font(.title2.weight(.semibold))
-                        Text("Compare local state first. Review the exact plan before Agent Tooling changes a client.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text("Compare local state first. Review the exact plan before Agent Tooling changes a client.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 2)
 
                     ToolingMatrixView(rows: matrixRows)
 
-                    HStack(alignment: .top, spacing: 14) {
-                        targetPanel.frame(maxWidth: .infinity)
-                        receiptsPanel.frame(maxWidth: .infinity)
+                    HStack(alignment: .top, spacing: 16) {
+                        clientsCard.frame(maxWidth: .infinity)
+                        receiptsCard.frame(maxWidth: .infinity)
                     }
                 }
-                .padding(24)
-                .frame(maxWidth: 1_020)
+                .padding(EdgeInsets(top: 4, leading: 22, bottom: 22, trailing: 22))
+                .frame(maxWidth: 1_060)
                 .frame(maxWidth: .infinity)
             }
+            .scrollIndicators(.hidden)
         }
     }
 
-    private var targetPanel: some View {
-        VStack(spacing: 0) {
-            PanelHeader("Apps") {
-                Text("Read-only check")
-            }
+    private var toolbarContext: String {
+        model.attentionCount == 0
+            ? "Clients match the desired configuration"
+            : "\(model.attentionCount) \(model.attentionCount == 1 ? "item needs" : "items need") attention"
+    }
 
+    private var clientsCard: some View {
+        TitledCard("Clients", count: "read-only check") {
             if model.targetObservations.isEmpty {
                 EmptyStateView(
-                    symbol: "stethoscope",
-                    title: "Apps have not been checked",
-                    message: "Check apps to inspect known configuration paths and command-line tools."
+                    symbol: "arrow.clockwise",
+                    title: "Clients have not been checked",
+                    message: "Check clients to inspect known configuration paths and command-line tools."
                 )
                 .frame(height: 210)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(sortedTargets) { target in
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(target.surface.displayName)
-                                    .font(.callout.weight(.medium))
-                                Text(target.version ?? "Command-line tool not found")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            StatusBadge(
-                                state: target.isCommandAvailable ? .healthy : .attention,
-                                text: target.isCommandAvailable ? "Available" : (target.installed ? "Configuration only" : "Not found")
-                            )
+                ForEach(sortedTargets) { target in
+                    InfoRow(target.surface.displayName, detail: target.version ?? "Command-line tool not found") {
+                        if let client = target.surface.client {
+                            ClientDisc(client: client, size: 28)
+                        } else {
+                            SymbolTile(symbol: "app", size: 28)
                         }
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 54)
-                        if target.id != sortedTargets.last?.id { Divider().opacity(0.35) }
+                    } trailing: {
+                        StatusBadge(
+                            state: target.isCommandAvailable ? .healthy : .attention,
+                            text: target.isCommandAvailable ? "Available" : (target.installed ? "Configuration only" : "Not found")
+                        )
                     }
+                    if target.id != sortedTargets.last?.id { Divider().opacity(0.35) }
                 }
             }
         }
-        .standardPanel()
     }
 
-    private var receiptsPanel: some View {
-        VStack(spacing: 0) {
-            PanelHeader("Recent changes") {
-                Text(
-                    model.operationReceipts.count > 4
-                        ? "Showing 4 of \(model.operationReceipts.count)" : "\(model.operationReceipts.count) saved")
-            }
-
+    private var receiptsCard: some View {
+        TitledCard(
+            "Recent changes",
+            count: model.operationReceipts.count > 4
+                ? "showing 4 of \(model.operationReceipts.count)" : "\(model.operationReceipts.count) saved"
+        ) {
             if model.operationReceipts.isEmpty {
                 Text("No files have been changed. Review changes creates a plan before anything is written.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                    .padding(16)
+                    .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(recentReceipts) { receipt in
-                        HStack(spacing: 10) {
-                            StatusDot(state: receipt.state)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(receipt.title).font(.callout.weight(.medium))
-                                Text(receipt.verificationSummary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            Spacer()
-                            Text(receipt.createdAt, style: .relative)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 52)
-                        if receipt.id != recentReceipts.last?.id { Divider().opacity(0.35) }
+                ForEach(recentReceipts) { receipt in
+                    InfoRow(receipt.title, detail: receipt.verificationSummary) {
+                        StatusGlyph(state: receipt.state, size: 16)
+                    } trailing: {
+                        Text(receipt.createdAt, style: .relative)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
                     }
+                    if receipt.id != recentReceipts.last?.id { Divider().opacity(0.35) }
                 }
             }
         }
-        .standardPanel()
     }
 
     private var sortedTargets: [TargetObservation] {
@@ -137,15 +116,15 @@ struct SyncCenterView: View {
         [
             ToolingMatrixRow(
                 id: .skills, title: "Skills", symbol: "doc.text", libraryCount: model.skills.count,
-                installedCounts: installedCounts(for: model.skills.map(\.clients))
+                installedCounts: installedCounts(for: model.skills.map(\.clients)), kind: .skill
             ),
             ToolingMatrixRow(
-                id: .mcpServers, title: "MCP servers", symbol: "network", libraryCount: model.mcpServers.count,
-                installedCounts: installedCounts(for: model.mcpServers.map(\.clients))
+                id: .mcpServers, title: "MCP servers", symbol: "server.rack", libraryCount: model.mcpServers.count,
+                installedCounts: installedCounts(for: model.mcpServers.map(\.clients)), kind: .mcpServer
             ),
             ToolingMatrixRow(
                 id: .plugins, title: "Plugins", symbol: "puzzlepiece.extension", libraryCount: model.plugins.count,
-                installedCounts: installedCounts(for: model.plugins.map(\.clients))
+                installedCounts: installedCounts(for: model.plugins.map(\.clients)), kind: .plugin
             ),
         ]
     }

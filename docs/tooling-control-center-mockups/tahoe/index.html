@@ -1,0 +1,1109 @@
+<title>Agent Tooling Tahoe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&display=swap">
+<style>/* ==========================================================================
+   Agent Tooling Tahoe — mockup system
+   Scene = a macOS 26 desktop with one Liquid Glass window.
+   Gallery = the page around the scenes, themed by the viewer.
+   ========================================================================== */
+
+/* ---------- gallery tokens (viewer theme, three states) ---------- */
+:root{
+  --g-bg:#EDEFF3; --g-bg2:#E4E7ED; --g-panel:#FFFFFF; --g-ink:#15171C; --g-muted:#5D6270;
+  --g-faint:#979DA9; --g-hair:rgba(21,23,28,.10); --g-hair2:rgba(21,23,28,.18); --g-accent:#0A6BE0;
+  --g-chip:rgba(21,23,28,.05); --g-shadow:0 30px 80px rgba(20,26,44,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --g-bg:#0B0D13; --g-bg2:#10131B; --g-panel:#151821; --g-ink:#ECEEF3; --g-muted:#9BA1AE;
+    --g-faint:#5C6273; --g-hair:rgba(255,255,255,.09); --g-hair2:rgba(255,255,255,.16); --g-accent:#7FA9FF;
+    --g-chip:rgba(255,255,255,.06); --g-shadow:0 30px 80px rgba(0,0,0,.55);
+  }
+}
+:root[data-theme="dark"]{
+  --g-bg:#0B0D13; --g-bg2:#10131B; --g-panel:#151821; --g-ink:#ECEEF3; --g-muted:#9BA1AE;
+  --g-faint:#5C6273; --g-hair:rgba(255,255,255,.09); --g-hair2:rgba(255,255,255,.16); --g-accent:#7FA9FF;
+  --g-chip:rgba(255,255,255,.06); --g-shadow:0 30px 80px rgba(0,0,0,.55);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--g-bg); color:var(--g-ink);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",system-ui,sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+.display{font-family:"Familjen Grotesk",-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;letter-spacing:-.02em}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--g-accent);outline-offset:2px;border-radius:6px}
+.num{font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- gallery layout ---------- */
+.hero{max-width:1320px;margin:0 auto;padding:56px 32px 18px}
+.eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--g-accent);font-weight:600}
+.hero h1{font-size:clamp(30px,4.4vw,48px);font-weight:600;margin:10px 0 10px;line-height:1.05;text-wrap:balance}
+.hero p{max-width:66ch;color:var(--g-muted);font-size:15px;margin:0 0 8px}
+.hero p b{color:var(--g-ink);font-weight:600}
+
+.sys{max-width:1320px;margin:22px auto 0;padding:0 32px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.sys .card{background:var(--g-panel);border:1px solid var(--g-hair);border-radius:14px;padding:14px 16px;min-height:118px}
+.sys h3{margin:0 0 8px;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--g-faint);font-weight:600}
+.sys p{margin:0;color:var(--g-muted);font-size:13px;line-height:1.45}
+.sys p b{color:var(--g-ink);font-weight:600}
+.swatches{display:flex;gap:6px;margin:6px 0 8px;flex-wrap:wrap}
+.swatch{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--g-muted)}
+.swatch i{width:16px;height:16px;border-radius:5px;display:inline-block;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12)}
+
+.nav-wrap{position:sticky;top:0;z-index:40;padding:12px 32px;background:linear-gradient(var(--g-bg) 60%,rgba(0,0,0,0));pointer-events:none}
+.nav{pointer-events:auto;max-width:1320px;margin:0 auto;display:flex;align-items:center;gap:6px;padding:5px;border-radius:999px;
+  background:var(--g-panel);border:1px solid var(--g-hair);box-shadow:0 8px 30px rgba(0,0,0,.10);overflow-x:auto;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nav a{flex:none;font-size:12.5px;font-weight:500;color:var(--g-muted);text-decoration:none;padding:6px 12px;border-radius:999px;white-space:nowrap}
+.nav a:hover{color:var(--g-ink);background:var(--g-chip)}
+.nav a.on{color:var(--g-ink);background:var(--g-chip)}
+.nav .sp{flex:1}
+.mode{flex:none;display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--g-chip);margin-left:6px}
+.mode button{border:0;background:transparent;color:var(--g-muted);font:inherit;font-size:12px;font-weight:500;padding:4px 11px;border-radius:999px;cursor:pointer}
+.mode button.on{background:var(--g-panel);color:var(--g-ink);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+
+.shot{max-width:1320px;margin:0 auto;padding:44px 32px 6px}
+.shot header{display:flex;align-items:baseline;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.shot header h2{margin:0;font-size:22px;font-weight:600}
+.shot header .k{font-size:12px;color:var(--g-faint);letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+.shot header p{margin:0;color:var(--g-muted);font-size:14px;flex-basis:100%}
+.notes{max-width:1320px;margin:14px auto 0;padding:0 32px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.notes div{border-top:1px solid var(--g-hair2);padding-top:10px;font-size:13px;color:var(--g-muted);line-height:1.45}
+.notes b{display:block;color:var(--g-ink);font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px}
+
+.legend{max-width:1320px;margin:56px auto 0;padding:0 32px 80px}
+.legend h2{font-size:22px;font-weight:600;margin:0 0 6px}
+.legend p{color:var(--g-muted);max-width:70ch;margin:0 0 18px}
+.legend .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.legend .card{background:var(--g-panel);border:1px solid var(--g-hair);border-radius:14px;padding:14px 16px}
+.legend h3{margin:0 0 8px;font-size:13px;font-weight:600}
+.legend ul{margin:0;padding:0;list-style:none}
+.legend li{display:block;font-size:13px;color:var(--g-muted);padding:7px 0;border-top:1px solid var(--g-hair);line-height:1.5}
+.legend li:first-child{border-top:0}
+.legend li b{color:var(--g-ink);font-weight:600;margin-right:3px}
+.legend code{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:11.5px;background:var(--g-chip);padding:1px 5px;border-radius:4px}
+
+/* ---------- scene scaler ---------- */
+.frame{position:relative;width:100%;aspect-ratio:1320/860;border-radius:22px;overflow:hidden;box-shadow:var(--g-shadow)}
+.frame .scene{position:absolute;left:0;top:0;transform-origin:0 0}
+
+@media (max-width:900px){
+  .sys{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .notes,.legend .grid{grid-template-columns:1fr}
+  .hero,.shot,.notes,.legend,.sys{padding-left:18px;padding-right:18px}
+  .nav-wrap{padding:10px 18px;position:static}
+  .nav{flex-wrap:wrap;border-radius:18px}
+  .hero p{max-width:100%}
+}
+
+/* ==========================================================================
+   SCENE — desktop + window
+   ========================================================================== */
+.scene{
+  width:1320px;height:860px;position:relative;overflow:hidden;border-radius:22px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",system-ui,sans-serif;
+  font-size:13px;line-height:1.35;color:var(--t1);-webkit-font-smoothing:antialiased;
+
+  /* wallpaper */
+  --wall-base:#D6DDF0; --wall-a:#B4CEFA; --wall-b:#E2C9F6; --wall-c:#FBCFBC; --wall-d:#B2E2E8; --wall-hi:rgba(255,255,255,.6);
+  /* materials */
+  --glass:rgba(255,255,255,.34); --glass-edge:rgba(255,255,255,.75); --glass-blur:30px;
+  --paper:rgba(247,248,251,.90); --paper-edge:rgba(255,255,255,.85);
+  --card:#FFFFFF; --card-hair:rgba(20,24,40,.09); --sep:rgba(20,24,40,.07); --inset:rgba(20,24,40,.035);
+  /* ink */
+  --t1:#1B1C21; --t2:#66676F; --t3:#9A9BA4;
+  /* accent */
+  --acc:#0A6BE0; --acc-t:#0A63CE; --acc-soft:rgba(10,107,224,.12); --sel:#0A6BE0; --sel-ink:#FFFFFF;
+  /* semantic */
+  --ok:#2EA44F; --warn:#DB8B00; --err:#DE4A3F;
+  --warn-bg:rgba(219,139,0,.10); --warn-ring:rgba(219,139,0,.32);
+  --diff-add:rgba(46,164,79,.14); --diff-del:rgba(222,74,63,.10);
+  /* controls */
+  --field:#FFFFFF; --ring:rgba(20,24,40,.13);
+  --btn:#FFFFFF; --btn-ring:rgba(20,24,40,.11); --btn-sh:0 1px 1.5px rgba(20,24,40,.09);
+  --seg:rgba(20,24,40,.06); --seg-on:#FFFFFF;
+  --pri-a:#3D8EF8; --pri-b:#0A6BE0;
+  /* identity */
+  --k-skill:#FF8A1F; --k-plugin:#B457F0; --k-mcp:#22A6C9; --k-profile:#5E5CE6; --k-library:#4A5068; --k-client:#8E8E98;
+  --codex:#111111;
+  --tl-r:#FF5F57; --tl-y:#FEBC2E; --tl-g:#28C840;
+}
+.scene[data-mode="dark"]{
+  --wall-base:#090C18; --wall-a:#17275C; --wall-b:#2C2154; --wall-c:#3E2A3F; --wall-d:#0E3441; --wall-hi:rgba(120,150,255,.10);
+  --glass:rgba(22,25,38,.42); --glass-edge:rgba(255,255,255,.14); --glass-blur:34px;
+  --paper:rgba(26,28,36,.90); --paper-edge:rgba(255,255,255,.09);
+  --card:#24262F; --card-hair:rgba(255,255,255,.085); --sep:rgba(255,255,255,.07); --inset:rgba(255,255,255,.045);
+  --t1:#F0F1F5; --t2:#A5A8B5; --t3:#6E717E;
+  --acc:#0A84FF; --acc-t:#5EA8FF; --acc-soft:rgba(10,132,255,.20); --sel:#0A84FF; --sel-ink:#FFFFFF;
+  --ok:#3BD160; --warn:#FFB224; --err:#FF5C54;
+  --warn-bg:rgba(255,178,36,.12); --warn-ring:rgba(255,178,36,.32);
+  --diff-add:rgba(59,209,96,.16); --diff-del:rgba(255,92,84,.14);
+  --field:rgba(255,255,255,.07); --ring:rgba(255,255,255,.15);
+  --btn:rgba(255,255,255,.12); --btn-ring:rgba(255,255,255,.06); --btn-sh:0 1px 1.5px rgba(0,0,0,.30);
+  --seg:rgba(255,255,255,.08); --seg-on:rgba(255,255,255,.20);
+  --pri-a:#3B95FF; --pri-b:#0A6FDE;
+  --k-skill:#FF9D45; --k-plugin:#C77DFF; --k-mcp:#4CC4E3; --k-profile:#7D7BFF; --k-library:#7A8098; --k-client:#8E8E98;
+  --codex:#ECECEC;
+}
+.scene *{box-sizing:border-box;margin:0;padding:0}
+
+.wall{position:absolute;inset:0;
+  background:
+    radial-gradient(62% 70% at 10% 16%, var(--wall-a) 0%, rgba(0,0,0,0) 62%),
+    radial-gradient(55% 62% at 90% 20%, var(--wall-b) 0%, rgba(0,0,0,0) 62%),
+    radial-gradient(70% 62% at 80% 94%, var(--wall-c) 0%, rgba(0,0,0,0) 60%),
+    radial-gradient(52% 58% at 12% 90%, var(--wall-d) 0%, rgba(0,0,0,0) 60%),
+    var(--wall-base);
+}
+.wall::before{content:"";position:absolute;inset:-20%;
+  background:linear-gradient(112deg,rgba(0,0,0,0) 34%,var(--wall-hi) 50%,rgba(0,0,0,0) 66%);
+  }
+
+.wall::after{content:"";position:absolute;inset:0;
+  background:radial-gradient(40% 30% at 50% 110%, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 70%)}
+.scene[data-mode="dark"] .wall::after{background:radial-gradient(40% 30% at 50% 110%, rgba(90,120,255,.12) 0%, rgba(0,0,0,0) 70%)}
+
+.menubar{position:absolute;left:0;right:0;top:0;height:28px;display:flex;align-items:center;gap:18px;padding:0 18px;font-size:12.5px;font-weight:500;color:var(--t1);
+  background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);-webkit-backdrop-filter:blur(30px) saturate(1.6)}
+.menubar .apple{width:14px;height:14px}
+.menubar b{font-weight:700}
+.menubar .sp{flex:1}
+.menubar .r{display:flex;gap:14px;font-size:12px;font-weight:500}
+
+/* window */
+.win{position:absolute;left:60px;top:60px;width:1200px;height:760px;border-radius:20px;overflow:hidden;
+  background:var(--glass);
+  backdrop-filter:blur(var(--glass-blur)) saturate(1.7);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.7);
+  box-shadow:0 36px 90px rgba(10,14,30,.26),0 8px 24px rgba(10,14,30,.12),inset 0 0 0 .5px var(--glass-edge);
+  display:flex}
+.scene[data-mode="dark"] .win{box-shadow:0 36px 90px rgba(0,0,0,.6),0 8px 24px rgba(0,0,0,.4),inset 0 0 0 .5px var(--glass-edge)}
+.win::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:linear-gradient(160deg,rgba(255,255,255,.28) 0%,rgba(255,255,255,0) 28%)}
+.scene[data-mode="dark"] .win::before{background:linear-gradient(160deg,rgba(255,255,255,.08) 0%,rgba(255,255,255,0) 28%)}
+
+.tl{position:absolute;left:18px;top:18px;display:flex;gap:8px;z-index:3}
+.tl i{width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.16)}
+.tl i:nth-child(1){background:var(--tl-r)}.tl i:nth-child(2){background:var(--tl-y)}.tl i:nth-child(3){background:var(--tl-g)}
+
+/* sidebar (glass) */
+.sb{width:226px;flex:none;display:flex;flex-direction:column;padding:52px 10px 12px;position:relative}
+.sb-h{font-size:11px;font-weight:600;color:var(--t3);padding:14px 10px 5px;letter-spacing:.02em}
+.it{height:30px;display:flex;align-items:center;gap:8px;padding:0 9px;border-radius:8px;font-size:13px;color:var(--t1);position:relative;white-space:nowrap}
+.it .ic{width:16px;height:16px;color:var(--t2);flex:none}
+.it .mark{width:16px;height:16px;flex:none}
+.it.on{background:var(--sel);color:var(--sel-ink);box-shadow:0 1px 3px rgba(10,80,200,.25),inset 0 .5px 0 rgba(255,255,255,.25)}
+.it.on .ic{color:var(--sel-ink)}
+.bdg{margin-left:auto;font-size:11px;color:var(--t3);font-variant-numeric:tabular-nums}
+.it.on .bdg{color:rgba(255,255,255,.85)}
+.it .tw{margin-left:auto;width:13px;height:13px;color:var(--warn)}
+.it.on .tw{color:#fff}
+.sb-foot{margin-top:auto;padding:10px 9px 0;font-size:11px;color:var(--t2);display:flex;gap:7px;align-items:center;border-top:.5px solid var(--sep)}
+.sb-foot .ic{width:13px;height:13px;color:var(--ok)}
+
+/* content paper */
+.paper{flex:1;min-width:0;margin:8px 8px 8px 0;border-radius:14px;background:var(--paper);
+  box-shadow:inset 0 0 0 .5px var(--paper-edge),0 1px 2px rgba(20,24,40,.06);display:flex;flex-direction:column;overflow:hidden;position:relative}
+.tb{flex:none;height:54px;display:flex;align-items:center;gap:10px;padding:0 18px 0 16px}
+.tb .ttl{font-size:15px;font-weight:600;white-space:nowrap;letter-spacing:-.01em}
+.tb .sub{font-size:11.5px;color:var(--t2);font-weight:400;margin-top:1px;white-space:nowrap}
+.tb .sp{flex:1}
+.tb .ico{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;color:var(--t2);flex:none}
+.tb .ico .ic{width:16px;height:16px}
+.tb .ico:hover{background:var(--inset)}
+.content{flex:1;min-height:0;padding:14px 22px 22px;overflow:hidden}
+.content.pad0{padding:0}
+
+/* ---------- controls (Tahoe capsules) ---------- */
+.btn{height:28px;padding:0 13px;border-radius:999px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;
+  background:var(--btn);box-shadow:0 0 0 .5px var(--btn-ring),var(--btn-sh),inset 0 .5px 0 rgba(255,255,255,.5);color:var(--t1);white-space:nowrap;flex:none}
+.scene[data-mode="dark"] .btn{box-shadow:0 0 0 .5px var(--btn-ring),var(--btn-sh),inset 0 .5px 0 rgba(255,255,255,.08)}
+.btn .ic{width:14px;height:14px;color:var(--t2)}
+.btn.pri{background:linear-gradient(180deg,var(--pri-a),var(--pri-b));color:#fff;
+  box-shadow:0 1px 2px rgba(10,90,210,.45),inset 0 .5px 0 rgba(255,255,255,.35)}
+.btn.pri .ic{color:#fff}
+.btn.sm{height:24px;font-size:12px;padding:0 10px}
+.btn.xs{height:22px;font-size:11.5px;padding:0 9px}
+.btn.dstr{color:var(--err)}
+.btn .cnt{background:rgba(255,255,255,.22);border-radius:999px;padding:0 6px;font-size:11px;font-weight:600;line-height:16px}
+.pop{height:28px;display:inline-flex;align-items:center;gap:7px;padding:0 4px 0 12px;border-radius:999px;
+  background:var(--btn);box-shadow:0 0 0 .5px var(--btn-ring),var(--btn-sh);font-size:13px;white-space:nowrap;flex:none}
+.pop .ud{width:18px;height:18px;background:linear-gradient(180deg,var(--pri-a),var(--pri-b));border-radius:999px;color:#fff;display:grid;place-items:center;flex:none}
+.pop .ud .ic{width:11px;height:11px}
+.pop.sm{height:22px;font-size:12px;padding-left:9px}
+.pop.sm .ud{width:15px;height:15px}
+.seg{display:inline-flex;background:var(--seg);border-radius:999px;padding:2px;height:28px;flex:none}
+.seg span{padding:0 12px;font-size:12.5px;line-height:24px;border-radius:999px;color:var(--t2);white-space:nowrap}
+.seg .on{background:var(--seg-on);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.14),0 0 0 .5px rgba(0,0,0,.04)}
+.scene[data-mode="dark"] .seg .on{color:#fff}
+.search{height:28px;border-radius:999px;background:var(--field);box-shadow:inset 0 0 0 .5px var(--ring);
+  display:flex;align-items:center;gap:7px;padding:0 11px;color:var(--t3);font-size:13px;width:220px;flex:none}
+.search .ic{width:14px;height:14px;color:var(--t3);flex:none}
+.search .q{color:var(--t1)}
+.search .cur{width:1px;height:14px;background:var(--acc);margin-left:-4px}
+.search.focus{box-shadow:inset 0 0 0 .5px var(--acc),0 0 0 3px rgba(10,120,255,.28)}
+.fld{min-height:26px;border-radius:8px;background:var(--field);box-shadow:inset 0 0 0 .5px var(--ring);padding:3px 9px;font-size:13px;display:flex;align-items:center;gap:6px}
+.fld.area{align-items:flex-start;padding:6px 9px;line-height:1.45}
+.fld .ph{color:var(--t3)}
+.cb{width:15px;height:15px;border-radius:4.5px;background:var(--field);box-shadow:inset 0 0 0 .5px var(--ring),0 .5px 1px rgba(0,0,0,.05);flex:none;display:grid;place-items:center}
+.cb.c{background:linear-gradient(180deg,var(--pri-a),var(--pri-b));box-shadow:none;color:#fff}
+.cb.c .ic{width:10px;height:10px}
+.cb.dis{opacity:.4}
+.sw{width:30px;height:18px;border-radius:999px;background:rgba(120,120,128,.32);position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.sw.on{background:var(--ok)}.sw.on::after{left:14px}
+.lbl{font-size:11.5px;font-weight:500;color:var(--t2);margin-bottom:5px}
+
+/* ---------- groups & rows ---------- */
+.grp{background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--card-hair),0 1px 2px rgba(20,24,40,.04)}
+.gt{font-size:13px;font-weight:600;margin:0 2px 7px;display:flex;align-items:center;gap:7px}
+.gt .n{font-size:11.5px;color:var(--t3);font-weight:400}
+.gt .ic{width:14px;height:14px;color:var(--t2)}
+.gt .r{margin-left:auto;font-size:12px;color:var(--acc-t);font-weight:500}
+.stack>*+*{margin-top:16px}
+.tight>*+*{margin-top:12px}
+.row{display:flex;align-items:center;gap:11px;padding:9px 13px;font-size:13px;min-height:44px}
+.row+.row,.row+.xrow,.xrow+.row,.xrow+.xrow{border-top:.5px solid var(--sep)}
+.xrow{padding:10px 13px}
+.rt{flex:1;min-width:0}
+.rt .p{line-height:1.3;font-weight:500}
+.rt .s{font-size:11.5px;color:var(--t2);margin-top:2px;line-height:1.4}
+.kv .k{width:132px;flex:none;color:var(--t2)}
+.kv{min-height:38px;padding:8px 13px}
+.chev{color:var(--t3);width:14px;height:14px;flex:none}
+.row.sel{background:var(--sel);color:var(--sel-ink)}
+.row.sel .s,.row.sel .t2,.row.sel .t3,.row.sel .st,.row.sel .chev{color:rgba(255,255,255,.78)!important}
+.row.sel .p{color:#fff}
+.row.sel .ic{color:#fff}
+.row.sel+.row{border-top-color:transparent}
+
+/* identity tiles */
+.tile{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#fff;flex:none;
+  background:var(--k);box-shadow:inset 0 .5px 0 rgba(255,255,255,.35),0 .5px 1.5px rgba(0,0,0,.14)}
+.tile .ic{width:15px;height:15px}
+.tile.sm{width:22px;height:22px;border-radius:6px}.tile.sm .ic{width:12px;height:12px}
+.tile.lg{width:40px;height:40px;border-radius:11px}.tile.lg .ic{width:21px;height:21px}
+.tile.skill{--k:var(--k-skill)} .tile.plugin{--k:var(--k-plugin)} .tile.mcp{--k:var(--k-mcp)}
+.tile.profile{--k:var(--k-profile)} .tile.library{--k:var(--k-library)} .tile.client{--k:var(--k-client)}
+.tile.ghost{background:transparent;color:var(--t3);box-shadow:inset 0 0 0 1.2px var(--t3);--dash:1}
+.tile.ghost .ic{width:13px;height:13px}
+.tile.ghost.dash{box-shadow:none;outline:1.2px dashed var(--t3);outline-offset:-1.2px}
+
+/* client brand marks */
+.mark{width:18px;height:18px;flex:none;display:inline-block;vertical-align:middle}
+.mark.lg{width:26px;height:26px}
+.marks{display:inline-flex;gap:8px;align-items:center}
+.marks .mark{width:15px;height:15px}
+.marks .mark.dim{opacity:.22;filter:grayscale(1)}
+.disc{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--card);flex:none;
+  box-shadow:0 0 0 .5px var(--card-hair),0 2px 6px rgba(20,24,40,.10),inset 0 .5px 0 rgba(255,255,255,.6)}
+.disc .mark{width:18px;height:18px}
+.disc.lg{width:44px;height:44px}.disc.lg .mark{width:24px;height:24px}
+
+/* status */
+.st{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--t2);white-space:nowrap;font-weight:500}
+.st .ic{width:13px;height:13px;flex:none}
+.gOK{color:var(--ok)} .gW{color:var(--warn)} .gE{color:var(--err)} .gA{color:var(--acc-t)} .gT{color:var(--t3)}
+.chip{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap;
+  background:var(--inset);color:var(--t2)}
+.chip .ic{width:12px;height:12px}
+.chip.ok{background:rgba(46,164,79,.12);color:var(--ok)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.err{background:rgba(222,74,63,.12);color:var(--err)}
+.chip.acc{background:var(--acc-soft);color:var(--acc-t)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
+.dot.warn{background:var(--warn)}.dot.err{background:var(--err)}.dot.off{background:var(--t3)}
+
+/* info affordance + popover */
+.info{position:relative;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;
+  color:var(--t3);border:0;background:transparent;font:inherit;cursor:default;vertical-align:middle;margin-left:2px}
+.info .ic{width:13px;height:13px}
+.info:hover,.info:focus-visible{color:var(--acc-t)}
+.info .tip{position:absolute;top:100%;left:50%;transform:translate(-50%,6px);z-index:20;width:max-content;min-width:180px;max-width:300px;
+  background:var(--card);border-radius:10px;padding:8px 11px;text-align:left;white-space:normal;line-height:1.4;
+  box-shadow:0 10px 30px rgba(10,14,30,.22),0 0 0 .5px var(--card-hair);opacity:0;pointer-events:none;font-size:11.5px;color:var(--t1)}
+.info .tip .mono{display:block;margin-top:3px;color:var(--t2);word-break:break-all}
+.info.r .tip{left:auto;right:-6px;transform:translate(0,6px)}
+.info.r:hover .tip,.info.r:focus-visible .tip,.info.r.open .tip{transform:translate(0,3px)}
+.info .tip a{display:inline-block;margin-top:6px;color:var(--acc-t);text-decoration:none;font-weight:500}
+.info:hover .tip,.info:focus-visible .tip{opacity:1;transform:translate(-50%,3px)}
+.info.open .tip{opacity:1;transform:translate(-50%,3px)}
+
+/* type helpers */
+.t2{color:var(--t2)}.t3{color:var(--t3)}
+.f11{font-size:11px}.f12{font-size:12px}.f14{font-size:14px}
+.w500{font-weight:500}.w600{font-weight:600}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11px}
+.hs,.hs4,.hs6,.hs12,.hs14{display:flex;align-items:center;gap:8px}.hs4{gap:4px}.hs6{gap:6px}.hs12{gap:12px}.hs14{gap:14px}
+.vs{display:flex;flex-direction:column}
+.grow{flex:1;min-width:0}
+.ic{display:inline-block;vertical-align:middle;flex:none}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* two-pane */
+.split{display:flex;height:100%;min-height:0}
+.rail{width:300px;flex:none;border-right:.5px solid var(--sep);display:flex;flex-direction:column;min-height:0}
+.rail .rows{flex:1;min-height:0;overflow:hidden}
+.rail .row{padding:9px 12px}
+.detail{flex:1;min-width:0;padding:16px 22px 22px;overflow:hidden}
+
+/* table */
+.thead{display:flex;align-items:center;gap:11px;padding:6px 13px;font-size:11px;font-weight:600;color:var(--t3);border-bottom:.5px solid var(--sep)}
+.col{flex:none}
+.c-name{flex:1;min-width:0}.c-kind{width:96px}.c-scope{width:120px}.c-clients{width:84px}.c-state{width:150px}
+
+/* banner */
+.banner{display:flex;align-items:center;gap:10px;padding:10px 13px;border-radius:12px;background:var(--warn-bg);box-shadow:inset 0 0 0 .5px var(--warn-ring)}
+.banner .ic{width:16px;height:16px;color:var(--warn)}
+.banner .p{font-weight:600}
+.banner .s{font-size:11.5px;color:var(--t2);margin-top:1px}
+
+/* diff */
+.diff{border-radius:9px;background:var(--inset);padding:8px 0;font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:11px;line-height:1.55}
+.diff div{padding:1px 12px 1px 28px;position:relative;white-space:pre;color:var(--t2)}
+.diff .add{background:var(--diff-add);color:var(--t1)}.diff .del{background:var(--diff-del);color:var(--t1)}
+.diff .add::before,.diff .del::before{position:absolute;left:12px;font-weight:700}
+.diff .add::before{content:"+";color:var(--ok)}.diff .del::before{content:"−";color:var(--err)}
+
+/* sheet & dim */
+.dim{position:absolute;inset:0;background:rgba(20,24,40,.28);z-index:8;border-radius:inherit}
+.scene[data-mode="dark"] .dim{background:rgba(0,0,0,.45)}
+.sheet{position:absolute;z-index:9;left:50%;top:48px;transform:translateX(-50%);width:720px;border-radius:18px;
+  background:var(--paper);backdrop-filter:blur(40px) saturate(1.5);-webkit-backdrop-filter:blur(40px) saturate(1.5);
+  box-shadow:0 30px 80px rgba(10,14,30,.35),0 0 0 .5px var(--glass-edge),inset 0 .5px 0 rgba(255,255,255,.6);overflow:hidden}
+.scene[data-mode="dark"] .sheet{box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 .5px var(--glass-edge)}
+.sheet-h{display:flex;align-items:center;gap:12px;padding:18px 20px 12px}
+.sheet-h h2{font-size:16px;font-weight:600}
+.sheet-h .s{font-size:11.5px;color:var(--t2);margin-top:2px}
+.sheet-b{padding:4px 20px 18px}
+.sheet-f{display:flex;align-items:center;gap:10px;padding:12px 20px 16px;border-top:.5px solid var(--sep)}
+.steps{display:flex;gap:4px;margin-left:auto}
+.steps i{width:34px;height:4px;border-radius:2px;background:var(--inset)}
+.steps i.done{background:var(--acc)}
+
+/* settings window */
+.win.settings{left:50%;top:50%;transform:translate(-50%,-50%);width:720px;height:566px;flex-direction:column}
+.win.settings .stb{height:52px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;position:relative}
+.win.settings .tabs{display:flex;justify-content:center;gap:4px;padding:0 0 10px}
+.win.settings .tab{display:flex;flex-direction:column;align-items:center;gap:4px;width:74px;padding:6px 0;border-radius:9px;font-size:11px;color:var(--t2)}
+.win.settings .tab .ic{width:20px;height:20px;color:var(--t2)}
+.win.settings .tab.on{background:var(--inset);color:var(--t1)}
+.win.settings .tab.on .ic{color:var(--acc)}
+.win.settings .paper{margin:0 10px 10px}
+
+/* conduit (signature) */
+.flow{display:grid;grid-template-columns:auto 1fr auto 1fr auto;align-items:center;gap:0;padding:18px 22px 16px}
+.node{display:flex;align-items:center;gap:11px;min-width:0}
+.node .nm{font-weight:600;font-size:13.5px;letter-spacing:-.01em;white-space:nowrap}
+.node .s{font-size:11.5px;color:var(--t2);margin-top:1px;white-space:nowrap}
+.conn{position:relative;height:120px}
+.conn svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.conn .line{fill:none;stroke:var(--t3);stroke-width:1.5;stroke-linecap:round;opacity:.7}
+.conn .line.hot{stroke:var(--acc);stroke-dasharray:4 5;opacity:1}
+.conn .line.warm{stroke:var(--warn);stroke-dasharray:4 5;opacity:1}
+.scene.live .conn .line.hot,.scene.live .conn .line.warm{animation:flow 1.6s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-18}}
+@media (prefers-reduced-motion:reduce){.conn .line.hot,.conn .line.warm{animation:none}}
+.conn .pill{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2}
+.terms{display:flex;flex-direction:column;gap:8px}
+.term{display:flex;align-items:center;gap:10px;height:34px;padding:0 12px 0 4px;border-radius:999px;background:var(--card);
+  box-shadow:0 0 0 .5px var(--card-hair),0 1px 2px rgba(20,24,40,.05)}
+.term .disc{width:28px;height:28px;box-shadow:none;background:transparent}
+.term .disc .mark{width:17px;height:17px}
+.term .nm{font-weight:600;font-size:12.5px;white-space:nowrap;min-width:84px}
+.term .st{font-size:11.5px}
+.term .chev{margin-left:2px}
+
+/* additions */
+.mark.codex{color:var(--codex)}
+.pill .chip{background:var(--card);box-shadow:0 0 0 .5px var(--card-hair),0 1px 3px rgba(20,24,40,.08);color:var(--acc-t);height:19px}
+.grp .link{display:block;padding:10px 13px;font-size:12.5px;color:var(--acc-t);font-weight:500;border-top:.5px solid var(--sep)}
+.tag{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;background:var(--inset);font-size:12px;color:var(--t1);white-space:nowrap}
+.tags{display:flex;flex-wrap:wrap;gap:6px;padding:10px 13px}
+.hero-row{display:flex;align-items:center;gap:14px;padding:4px 2px 14px}
+.hero-row h1{font-size:19px;font-weight:600;letter-spacing:-.015em;line-height:1.2}
+.hero-row .s{font-size:12.5px;color:var(--t2);margin-top:2px}
+.two{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;align-items:start}
+.two.eq{grid-template-columns:1fr 1fr}
+.ic16{width:16px;height:16px}
+.ic18{width:18px;height:18px}
+.when{font-size:11.5px;color:var(--t3);white-space:nowrap;font-variant-numeric:tabular-nums}
+.seg .tile{width:14px;height:14px;border-radius:4px;display:inline-grid;vertical-align:-2px;margin-right:6px;box-shadow:none}
+.seg .tile .ic{width:9px;height:9px}
+
+/* pass-2 additions */
+.conn .lbl2{position:absolute;left:50%;bottom:-3px;transform:translateX(-50%);font-size:11px;font-weight:500;color:var(--acc-t);white-space:nowrap}
+.compact .row{min-height:38px;padding:6px 12px}
+.h14{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.mono-block{background:var(--inset);border-radius:9px;padding:10px 12px;font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:11px;line-height:1.55;white-space:pre;color:var(--t1);overflow:hidden}
+.mono-block .k{color:var(--acc-t)}.mono-block .c{color:var(--t3)}
+.subrow{display:flex;align-items:center;gap:9px;padding:5px 13px 5px 42px;font-size:12px;color:var(--t2)}
+.subrow .ic{width:13px;height:13px}
+.subrow .mark{width:13px;height:13px}
+.subrow .w{color:var(--t1)}
+.subrows{padding:2px 0 8px}
+.chead{display:flex;align-items:center;gap:8px;padding:9px 2px 5px;font-size:13px;font-weight:600}
+.chead .mark{width:16px;height:16px}
+.chead .n{font-size:11.5px;color:var(--t3);font-weight:400}
+.foot{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--card-hair);margin-top:auto}
+.foot .ic{width:15px;height:15px;color:var(--t2)}
+.day{font-size:11.5px;font-weight:600;color:var(--t3);margin:0 2px 6px}
+.para{font-size:12.5px;color:var(--t2);line-height:1.5;max-width:64ch}
+.rail .rh{display:flex;align-items:center;gap:8px;padding:10px 12px 8px;font-size:11.5px;font-weight:600;color:var(--t3)}
+.rail .rh .n{font-weight:400}
+.rail .row{min-height:52px}
+.rail .row .p{font-weight:500}
+.rail .row.sel .btn{background:rgba(255,255,255,.18);color:#fff;box-shadow:none}
+.mark.dim{opacity:.22;filter:grayscale(1)}
+.tile.ghost{color:var(--t3)}
+.row .kv-r{margin-left:auto;text-align:right}
+.ev{display:flex;align-items:center;gap:10px;padding:7px 13px;font-size:12px;border-top:.5px solid var(--sep)}
+.ev:first-child{border-top:0}
+.ev .mark{width:14px;height:14px}
+.ev .t{flex:1;min-width:0;color:var(--t1)}
+.ev .when{font-size:11.5px}
+.opt{display:flex;align-items:center;gap:10px;padding:8px 13px;font-size:13px}
+.opt+.opt{border-top:.5px solid var(--sep)}
+.opt .mark{width:16px;height:16px}
+.opt .s{margin-left:auto;font-size:11.5px;color:var(--t3)}
+@media (max-width:600px){.sys{grid-template-columns:1fr}.hero{padding-top:36px}}
+</style>
+<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">
+<defs><linearGradient id="gm" x1="1" y1="23" x2="23" y2="1" gradientUnits="userSpaceOnUse"><stop stop-color="#4E82EE"/><stop offset="1" stop-color="#A066E7"/></linearGradient></defs>
+<symbol id="s-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></symbol>
+<symbol id="s-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 18h5M10.5 21h3M12 3a6 6 0 0 0-3.4 10.9c.6.5.9 1.1 1 1.9h4.8c.1-.8.4-1.4 1-1.9A6 6 0 0 0 12 3z"/></symbol>
+<symbol id="s-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5 5.3 5h13.4L20 9.5M4 9.5h16M4.5 9.5v9.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V9.5M9.5 20.5v-6h5v6"/></symbol>
+<symbol id="s-books" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 4.5h3.5v15H4.5zM10 4.5h3.5v15H10zM15.4 5.7l3.3-.8 3.5 14.5-3.3.8z"/></symbol>
+<symbol id="s-mcp" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="6.5" rx="2"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="2"/><circle cx="7" cy="7.25" r="1" fill="currentColor" stroke="none"/><circle cx="7" cy="16.75" r="1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="s-sync" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6"/><path d="M17.7 2.5v4h-4M6.3 21.5v-4h4"/></symbol>
+<symbol id="s-clock-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7.5V12l3 2"/><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 3v4h-4"/></symbol>
+<symbol id="s-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.7M12 18.5v2.7M21.2 12h-2.7M5.5 12H2.8M18.5 5.5l-1.9 1.9M7.4 16.6l-1.9 1.9M18.5 18.5l-1.9-1.9M7.4 7.4 5.5 5.5"/></symbol>
+<symbol id="s-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5A1.5 1.5 0 0 1 7.5 3.5z"/><path d="M14 3.5v4.5h4M9 12h6M9 15.5h6"/></symbol>
+<symbol id="s-puzzle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 4.6a2.1 2.1 0 0 1 4.2 0V6h3.6A1.6 1.6 0 0 1 18.9 7.6V11h.9a2.1 2.1 0 0 1 0 4.2h-.9v3.2a1.6 1.6 0 0 1-1.6 1.6h-3.6v-1.4a2.1 2.1 0 0 0-4.2 0V20H6.6A1.6 1.6 0 0 1 5 18.4v-3.2h1.4a2.1 2.1 0 0 0 0-4.2H5V7.6A1.6 1.6 0 0 1 6.6 6h2.9z"/></symbol>
+<symbol id="s-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h2.6M11.4 7H20M4 12h8.6M17.4 12H20M4 17h1.6M10.4 17H20"/><circle cx="9" cy="7" r="2.2"/><circle cx="15" cy="12" r="2.2"/><circle cx="8" cy="17" r="2.2"/></symbol>
+<symbol id="s-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="s-check-c" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12.5l3 3 6-6.5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="s-warn" viewBox="0 0 24 24"><path d="M10.6 4.2a1.6 1.6 0 0 1 2.8 0l7.4 13.2A1.6 1.6 0 0 1 19.4 20H4.6a1.6 1.6 0 0 1-1.4-2.6z" fill="currentColor"/><path d="M12 9v4.6" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.7" r="1.1" fill="#fff"/></symbol>
+<symbol id="s-x-c" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></symbol>
+<symbol id="s-info-c" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><circle cx="12" cy="7.8" r="1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="s-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+<symbol id="s-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5.5l6.5 6.5L9 18.5"/></symbol>
+<symbol id="s-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 9l6.5 6.5L18.5 9"/></symbol>
+<symbol id="s-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5.5 8.5 12 15 18.5"/></symbol>
+<symbol id="s-updown" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 9.5 12 5l4.5 4.5M7.5 14.5 12 19l4.5-4.5"/></symbol>
+<symbol id="s-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20 20"/></symbol>
+<symbol id="s-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="s-arrow-up-c" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16.5v-9M8.5 11 12 7.5 15.5 11"/></symbol>
+<symbol id="s-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="15.5" r="4"/><path d="M11.4 12.6 20 4M17 7l3 3M14 10l2.5 2.5"/></symbol>
+<symbol id="s-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.8-4 3.8-6 7.5-6s6.7 2 7.5 6"/></symbol>
+<symbol id="s-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4.5l2 2H19a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z"/></symbol>
+<symbol id="s-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 20 8v8l-8 4.5L4 16V8z"/><path d="M4 8l8 4.5L20 8M12 12.5v8"/></symbol>
+<symbol id="s-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l1-4L16 5a1.8 1.8 0 0 1 2.5 0L19 5.5a1.8 1.8 0 0 1 0 2.5L8.5 18.5z"/><path d="M14.5 6.5l3 3"/></symbol>
+<symbol id="s-archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="4" rx="1"/><path d="M5 8.5v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-10M10 12.5h4"/></symbol>
+<symbol id="s-sidebar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M9.5 5v14"/></symbol>
+<symbol id="s-ellipsis" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="18" cy="12" r="1.7" fill="currentColor"/></symbol>
+<symbol id="s-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.5v6c0 4.5-3 7.8-7 9.5-4-1.7-7-5-7-9.5v-6z"/><path d="M9 12l2 2 4-4.5"/></symbol>
+<symbol id="s-dash-c" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="8.5" stroke-dasharray="3.4 3.2"/></symbol>
+<symbol id="s-empty-c" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="8.5"/></symbol>
+<symbol id="s-uturn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 9H15a4 4 0 0 1 0 8h-3.5"/><path d="M10.5 5.5 7 9l3.5 3.5"/></symbol>
+<symbol id="s-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.5 3.8 5.3 3.8 8.5s-1.2 6-3.8 8.5c-2.6-2.5-3.8-5.3-3.8-8.5S9.4 6 12 3.5z"/></symbol>
+<symbol id="s-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M7.5 9.5l3 2.5-3 2.5M12.5 15h4"/></symbol>
+<symbol id="s-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 3.5v4h-4"/></symbol>
+<symbol id="s-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5.5v13l10-6.5z"/></symbol>
+<symbol id="s-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="10.5" width="13" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+<symbol id="s-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></symbol>
+<symbol id="s-arrow-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
+<symbol id="s-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+<symbol id="s-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9.5 3v3.5M14.5 3v3.5M9.5 17.5V21M14.5 17.5V21M3 9.5h3.5M3 14.5h3.5M17.5 9.5H21M17.5 14.5H21"/></symbol>
+<symbol id="s-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12h4l2.5-6 4 12 2.5-6h4"/></symbol>
+<symbol id="s-drive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="9" width="17" height="10" rx="2.5"/><path d="M6.5 9 8.8 5h6.4L17.5 9"/><circle cx="16.5" cy="14" r="1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="s-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+<symbol id="s-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></symbol>
+<symbol id="s-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+<symbol id="s-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.5V6a1.5 1.5 0 0 1 3 0v5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v6.5M17 12.5V9a1.5 1.5 0 0 1 3 0v6a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.8-2.4L4.6 14.9a1.5 1.5 0 0 1 2.4-1.8L8 14.5"/></symbol>
+<symbol id="b-claude" viewBox="0 0 24 24"><path fill="#D97757" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></symbol>
+<symbol id="b-codex" viewBox="0 0 24 24"><path fill="currentColor" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></symbol>
+<symbol id="b-gemini" viewBox="0 0 24 24"><path fill="url(#gm)" d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></symbol>
+</svg>
+
+<header class="hero">
+  <div class="eyebrow">Agent Tooling · macOS 26 · design pass 3</div>
+  <h1 class="display">One window, real glass, fewer words.</h1>
+  <p>Three earlier passes each got one thing right. <b>Glasshouse v4</b> had the material and the colour identity you asked for. The <b>August canvas</b> had the information architecture, a single state language, and a world of sample data that agrees with itself. The <b>native prototype</b> has the right bones. This pass keeps all three and makes the window read as a macOS 26 app: a translucent sidebar over a calm desktop, capsule controls on an opaque pane, colour reserved for what a thing <em>is</em> and for the one thing that needs you.</p>
+  <p>Eleven screens, every one in light and dark. Paths sit behind ⓘ popovers that work in this mockup. Type is SF Pro through the system stack, so open it on a Mac.</p>
+</header>
+<div class="sys">
+  <div class="card"><h3>Material</h3><p><b>One glass sheet.</b> The window and its sidebar blur the desktop; the content pane is a 90% paper inset with a concentric radius. Sheets are deeper frost. Nothing else is translucent, so text never fights the wallpaper.</p></div>
+  <div class="card"><h3>Identity, not status</h3>
+    <div class="swatches"><span class="swatch"><i style="background:#FF8A1F"></i>Skill</span><span class="swatch"><i style="background:#B457F0"></i>Plugin</span><span class="swatch"><i style="background:#22A6C9"></i>MCP server</span><span class="swatch"><i style="background:#5E5CE6"></i>Profile</span><span class="swatch"><i style="background:#0A6BE0"></i>Selection</span></div>
+    <p>Tiles say what a thing is; the three brand marks say where it runs. Green, amber and red appear only as small glyphs beside words.</p></div>
+  <div class="card"><h3>Type &amp; density</h3><p>SF Pro at 13 and 11.5, one 19px name per screen, SF Mono only for revisions and commands. <b>Every row is a tile, a name, one clause, and a verdict.</b></p></div>
+  <div class="card"><h3>Words that do work</h3><p>File locations live behind ⓘ with a Reveal in Finder link. Buttons say what will happen: <b>Sign In…</b>, <b>Adopt…</b>, <b>Apply 6 Changes…</b>. Nothing writes to a client outside Sync Review.</p></div>
+</div>
+<div class="nav-wrap"><nav class="nav" aria-label="Screens"><a href="#s-overview">Overview</a><a href="#s-library">Library</a><a href="#s-skill">Skill</a><a href="#s-mcp">MCP Servers</a><a href="#s-discover">Discover</a><a href="#s-newskill">New Skill</a><a href="#s-sync">Sync Review</a><a href="#s-activity">Activity</a><a href="#s-client">Claude Code</a><a href="#s-recs">Recommendations</a><a href="#s-settings">Settings</a><span class="sp"></span><div class="mode" role="group" aria-label="Mockup appearance"><button type="button" data-mode="light" class="on">Light</button><button type="button" data-mode="dark">Dark</button></div></nav></div>
+<section class="shot" id="s-overview"><header><h2 class="display">Overview</h2><p>Answers “is everything okay?” with the sync path itself. The library flows through the active profile into three clients; pending changes ride the line and each terminal carries its own verdict.</p></header><div class="frame"><div class="scene" data-mode="light"><div class="wall"></div><div class="menubar"><span class="apple">&#xF8FF;</span><b>Agent Tooling</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span><span class="r"><span>Tue Sep 1</span><span>9:41 AM</span></span></div><div class="win"><div class="tl"><i></i><i></i><i></i></div><div class="sb"><div class="it on"><svg class="ic"><use href="#s-grid"/></svg><span>Overview</span></div><div class="it"><svg class="ic"><use href="#s-bulb"/></svg><span>Recommendations</span><span class="bdg">4</span></div><div class="it"><svg class="ic"><use href="#s-bag"/></svg><span>Discover</span></div><div class="sb-h">Manage</div><div class="it"><svg class="ic"><use href="#s-books"/></svg><span>Library</span></div><div class="it"><svg class="ic"><use href="#s-mcp"/></svg><span>MCP Servers</span></div><div class="it"><svg class="ic"><use href="#s-sync"/></svg><span>Sync</span><span class="bdg">6</span></div><div class="it"><svg class="ic"><use href="#s-clock-arrow"/></svg><span>Activity</span></div><div class="sb-h">Clients</div><div class="it"><svg class="mark"><use href="#b-claude"/></svg><span>Claude Code</span></div><div class="it"><svg class="mark codex"><use href="#b-codex"/></svg><span>Codex</span><svg class="ic tw"><use href="#s-warn"/></svg></div><div class="it"><svg class="mark"><use href="#b-gemini"/></svg><span>Gemini CLI</span></div><div class="sb-foot"><svg class="ic"><use href="#s-check-c"/></svg><span>Backed up yesterday, 6:12 PM</span></div></div><div class="paper"><div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">This Mac</div><div class="sub">Checked 9:41 AM · Tuesday, September 1</div></div>
+  <span class="sp"></span>
+  <span class="pop"><span class="tile sm profile"><svg class="ic"><use href="#s-sliders"/></svg></span>Base workstation<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span>
+  <span class="btn"><svg class="ic"><use href="#s-refresh"/></svg>Check Now</span>
+  <span class="btn pri"><svg class="ic"><use href="#s-sync"/></svg>Sync<span class="cnt">6</span></span>
+</div>
+<div class="content stack">
+  <div class="grp flow">
+    <div class="node"><span class="tile lg library"><svg class="ic"><use href="#s-books"/></svg></span><div><div class="nm">Library</div><div class="s">14 managed · 2 discovered</div></div></div>
+    <div class="conn"><svg viewBox="0 0 100 118" preserveAspectRatio="none"><path class="line" d="M0 59H100" pathLength="100" vector-effect="non-scaling-stroke"/></svg></div>
+    <div class="node"><span class="tile lg profile"><svg class="ic"><use href="#s-sliders"/></svg></span><div><div class="nm">Base workstation</div><div class="s">Profile · 20 items desired</div></div></div>
+    <div class="conn"><svg viewBox="0 0 100 118" preserveAspectRatio="none">
+      <path class="line hot" d="M0 59H34" pathLength="100" vector-effect="non-scaling-stroke"/>
+      <path class="line" d="M34 59C62 59 62 17 100 17" pathLength="100" vector-effect="non-scaling-stroke"/>
+      <path class="line warm" d="M34 59H100" pathLength="100" vector-effect="non-scaling-stroke"/>
+      <path class="line" d="M34 59C62 59 62 101 100 101" pathLength="100" vector-effect="non-scaling-stroke"/>
+    </svg><span class="lbl2">6 changes pending</span></div>
+    <div class="terms">
+      <div class="term"><span class="disc"><svg class="mark"><use href="#b-claude"/></svg></span><span class="nm">Claude Code</span><span class="st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Verified 9:41 AM</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+      <div class="term"><span class="disc"><svg class="mark codex"><use href="#b-codex"/></svg></span><span class="nm">Codex</span><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>1 item held back</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+      <div class="term"><span class="disc"><svg class="mark"><use href="#b-gemini"/></svg></span><span class="nm">Gemini CLI</span><span class="st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Verified 9:41 AM</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+    </div>
+  </div>
+
+  <div class="two">
+    <div class="stack">
+      <div>
+        <div class="gt">Needs attention <span class="n">3</span></div>
+        <div class="grp">
+          <div class="row"><svg class="ic ic16 gW"><use href="#s-warn"/></svg><div class="rt"><div class="p">Sentry needs to be signed in again</div><div class="s">Sign-in expired Thursday · Claude Code and Codex</div></div><span class="btn sm">Sign In…</span></div>
+          <div class="row"><svg class="ic ic16 gW"><use href="#s-warn"/></svg><div class="rt"><div class="p">Codex settings were edited by hand</div><div class="s">Friday · one server entry is held out of Sync until you decide</div></div><span class="btn sm">Review…</span></div>
+          <div class="row"><svg class="ic ic16 gA"><use href="#s-arrow-up-c"/></svg><div class="rt"><div class="p">Update available for developer-workflows</div><div class="s">10 skills · from aren/agent-tooling</div></div><span class="btn sm">Update</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="gt">Recommendations <span class="n">4 new</span></div>
+        <div class="grp">
+          <div class="row"><svg class="ic ic16 gA"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Your release-notes routine could become a skill</div><div class="s">Seen in five Codex sessions this week</div></div><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+          <div class="row"><svg class="ic ic16 gA"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Install context7 for live library docs</div><div class="s">Claude Code fetched web documentation in 14 sessions</div></div><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="gt">Recent activity <span class="r">Show All</span></div>
+      <div class="grp">
+        <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Verification completed</div><div class="s">34 items match their receipts</div></div><span class="when">9:41 AM</span></div>
+        <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Applied sync plan S-118 · 6 changes</div><div class="s">Backup B-142 created first · all checksums verified</div></div><span class="when">Yesterday</span></div>
+        <div class="row"><svg class="ic ic16 gW"><use href="#s-warn"/></svg><div class="rt"><div class="p">Applied 5 of 6 · one write failed</div><div class="s">Gemini settings: permission denied · retried as S-118</div></div><span class="when">Yesterday</span></div>
+        <div class="row"><svg class="ic ic16 t2"><use href="#s-uturn"/></svg><div class="rt"><div class="p">Rolled back simview to 3f9d2e1</div><div class="s">Backup B-139 restored · verification passed</div></div><span class="when">Friday</span></div>
+        <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Post-sync canary passed in all three clients</div><div class="s">Each client answered a scripted prompt</div></div><span class="when">Friday</span></div>
+      </div>
+    </div>
+  </div>
+</div></div></div></div></div></section><div class="notes"><div><b>What changed</b>The last pass stacked four lists. This keeps two and turns the client list into the conduit, so state reads as a path before any label is parsed. The only large text is the place name.</div><div><b>Material</b>Menu bar and sidebar are genuine glass over the desktop; the content pane is a 90% paper with a concentric 14px radius, so rows stay crisp.</div><div><b>Interaction</b>The dashed segment moves only while changes are pending and stops under Reduce Motion. Terminals open the client page; the Sync button carries the count.</div></div><section class="shot" id="s-library"><header><h2 class="display">Library</h2><p>Everything Agent Tooling manages, in one table. Kind is carried by the tile, not a column; availability is three brand marks; status is a glyph plus two words at most.</p></header><div class="frame"><div class="scene" data-mode="light"><div class="wall"></div><div class="menubar"><span class="apple">&#xF8FF;</span><b>Agent Tooling</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span><span class="r"><span>Tue Sep 1</span><span>9:41 AM</span></span></div><div class="win"><div class="tl"><i></i><i></i><i></i></div><div class="sb"><div class="it"><svg class="ic"><use href="#s-grid"/></svg><span>Overview</span></div><div class="it"><svg class="ic"><use href="#s-bulb"/></svg><span>Recommendations</span><span class="bdg">4</span></div><div class="it"><svg class="ic"><use href="#s-bag"/></svg><span>Discover</span></div><div class="sb-h">Manage</div><div class="it on"><svg class="ic"><use href="#s-books"/></svg><span>Library</span></div><div class="it"><svg class="ic"><use href="#s-mcp"/></svg><span>MCP Servers</span></div><div class="it"><svg class="ic"><use href="#s-sync"/></svg><span>Sync</span><span class="bdg">6</span></div><div class="it"><svg class="ic"><use href="#s-clock-arrow"/></svg><span>Activity</span></div><div class="sb-h">Clients</div><div class="it"><svg class="mark"><use href="#b-claude"/></svg><span>Claude Code</span></div><div class="it"><svg class="mark codex"><use href="#b-codex"/></svg><span>Codex</span><svg class="ic tw"><use href="#s-warn"/></svg></div><div class="it"><svg class="mark"><use href="#b-gemini"/></svg><span>Gemini CLI</span></div><div class="sb-foot"><svg class="ic"><use href="#s-check-c"/></svg><span>Backed up yesterday, 6:12 PM</span></div></div><div class="paper"><div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">Library</div><div class="sub">14 managed · 2 discovered</div></div>
+  <span class="sp"></span>
+  <span class="seg"><span class="on">All</span><span><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span>Skills</span><span><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span>MCP Servers</span><span><span class="tile plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span>Plugins</span></span>
+  <span class="search"><svg class="ic"><use href="#s-search"/></svg>Search library</span>
+  <span class="btn pri"><svg class="ic"><use href="#s-plus"/></svg>New Skill…</span>
+</div>
+<div class="content stack">
+  <div>
+    <div class="gt">Managed <span class="n">14 · showing 8</span></div>
+    <div class="grp">
+      <div class="thead"><span class="col" style="width:28px"></span><span class="c-name">Name</span><span class="col c-scope">Scope</span><span class="col c-clients">Clients</span><span class="col c-state">Status</span></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">skill-forge</div><div class="s">Scaffold and iterate on new skills</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Up to date</span></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">sync-agent-tooling</div><div class="s">Mirror shared skills into every client</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Up to date</span></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">mcp-preflight</div><div class="s">Validate MCP declarations before install</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gA"><use href="#s-arrow-up-c"/></svg>Update available</span></div>
+      <div class="row sel"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">rebase-document-push</div><div class="s">Rebase, document, and push a worktree branch</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex" style="color:#fff"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic"><use href="#s-check-c"/></svg>Up to date</span></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">supabase</div><div class="s">Database, auth, and storage tools</div></div><span class="col c-scope t2">Project · pumpd</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Connected</span></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">sentry</div><div class="s">Error monitoring and issue triage</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gW"><use href="#s-warn"/></svg>Sign-in required</span></div>
+      <div class="row"><span class="tile plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span><div class="rt"><div class="p">developer-workflows</div><div class="s">10 skills for Git, CI, and release flow</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gA"><use href="#s-arrow-up-c"/></svg>Update available</span></div>
+      <div class="row"><span class="tile plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span><div class="rt"><div class="p">mobile-development</div><div class="s">iOS Simulator and HeroUI Native servers</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Up to date</span></div>
+            <span class="link">Show 6 more</span>
+    </div>
+  </div>
+  <div>
+    <div class="gt">Discovered on this Mac <span class="n">not managed</span></div>
+    <div class="grp">
+      <div class="row"><span class="tile ghost dash"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">canvas-design</div><div class="s">Installed by hand · not part of any profile</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex dim"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state hs6"><span class="btn xs">Adopt…</span><span class="btn xs">Ignore</span></span></div>
+      <div class="row"><span class="tile ghost dash"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">playwright</div><div class="s">Declared in Gemini CLI settings · not in any profile</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark dim"><use href="#b-claude"/></svg><svg class="mark codex dim"><use href="#b-codex"/></svg><svg class="mark"><use href="#b-gemini"/></svg></span><span class="col c-state hs6"><span class="btn xs">Adopt…</span><span class="btn xs">Ignore</span></span></div>
+    </div>
+  </div>
+</div></div></div></div></div></section><div class="notes"><div><b>What changed</b>The Kind column is gone: orange, purple, and teal tiles say skill, plugin, or MCP server, and the segmented control doubles as the legend. Descriptions shrank to one clause.</div><div><b>Material</b>The table is a single white group on the paper; selection is the system blue capsule-cornered row, the same shape as sidebar selection.</div><div><b>Interaction</b>Discovered items sit in their own quiet group with dashed tiles and two buttons; nothing there changes until you choose Adopt.</div></div><section class="shot" id="s-skill"><header><h2 class="display">Skill</h2><p>One skill, read left to right: where it is on this Mac, then where it comes from. Paths live behind the ⓘ, which opens a popover with the location and a Reveal in Finder link.</p></header><div class="frame"><div class="scene" data-mode="light"><div class="wall"></div><div class="menubar"><span class="apple">&#xF8FF;</span><b>Agent Tooling</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span><span class="r"><span>Tue Sep 1</span><span>9:41 AM</span></span></div><div class="win"><div class="tl"><i></i><i></i><i></i></div><div class="sb"><div class="it"><svg class="ic"><use href="#s-grid"/></svg><span>Overview</span></div><div class="it"><svg class="ic"><use href="#s-bulb"/></svg><span>Recommendations</span><span class="bdg">4</span></div><div class="it"><svg class="ic"><use href="#s-bag"/></svg><span>Discover</span></div><div class="sb-h">Manage</div><div class="it on"><svg class="ic"><use href="#s-books"/></svg><span>Library</span></div><div class="it"><svg class="ic"><use href="#s-mcp"/></svg><span>MCP Servers</span></div><div class="it"><svg class="ic"><use href="#s-sync"/></svg><span>Sync</span><span class="bdg">6</span></div><div class="it"><svg class="ic"><use href="#s-clock-arrow"/></svg><span>Activity</span></div><div class="sb-h">Clients</div><div class="it"><svg class="mark"><use href="#b-claude"/></svg><span>Claude Code</span></div><div class="it"><svg class="mark codex"><use href="#b-codex"/></svg><span>Codex</span><svg class="ic tw"><use href="#s-warn"/></svg></div><div class="it"><svg class="mark"><use href="#b-gemini"/></svg><span>Gemini CLI</span></div><div class="sb-foot"><svg class="ic"><use href="#s-check-c"/></svg><span>Backed up yesterday, 6:12 PM</span></div></div><div class="paper"><div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-chev-l"/></svg></span>
+  <div><div class="ttl">rebase-document-push</div><div class="sub">Skill · developer-workflows</div></div>
+  <span class="sp"></span>
+  <span class="btn"><svg class="ic"><use href="#s-shield"/></svg>Verify Now</span>
+  <span class="btn"><svg class="ic"><use href="#s-play"/></svg>Run in Claude Code</span>
+  <span class="ico"><svg class="ic"><use href="#s-ellipsis"/></svg></span>
+</div>
+<div class="content">
+  <div class="hero-row">
+    <span class="tile lg skill"><svg class="ic"><use href="#s-doc"/></svg></span>
+    <div class="grow"><h1>rebase-document-push</h1><div class="s">Prepare a branch or worktree for handoff: rebase, document, verify, push</div></div>
+    <span class="chip ok"><svg class="ic"><use href="#s-check-c"/></svg>Up to date</span>
+  </div>
+  <div class="two eq">
+    <div class="stack">
+      <div>
+        <div class="gt">On this Mac <span class="n">per client</span></div>
+        <div class="grp">
+          <div class="row"><span class="disc"><svg class="mark"><use href="#b-claude"/></svg></span><div class="rt"><div class="p">Claude Code</div><div class="s">Installed · user scope</div></div><span class="st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Verified today, 9:41 AM</span></div>
+          <div class="row"><span class="disc"><svg class="mark codex"><use href="#b-codex"/></svg></span><div class="rt"><div class="p">Codex</div><div class="s">Installed · the local copy was edited on Friday</div></div><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>Differs from desired</span><span class="btn xs">Review…</span></div>
+          <div class="row" style="opacity:.62"><span class="disc"><svg class="mark"><use href="#b-gemini"/></svg></span><div class="rt"><div class="p">Gemini CLI</div><div class="s">This client does not run skills</div></div><span class="st gT">Not supported</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="gt">Usage &amp; health</div>
+        <div class="grp">
+          <div class="row"><svg class="ic ic16 t2"><use href="#s-clock"/></svg><div class="rt"><div class="p">Used 23 times in the last 30 days</div><div class="s">Most recently yesterday at 4:52 PM, by Claude Code</div></div></div>
+          <div class="row"><svg class="ic ic16 gOK"><use href="#s-shield"/></svg><div class="rt"><div class="p">Matches install receipt R-171</div><div class="s">All 4 files verified today · 4 backup snapshots</div></div><span class="btn xs">Show Receipt</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="gt">History</div>
+        <div class="grp">
+          <div class="row" style="min-height:40px"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Verified in Claude Code</div><div class="s">Receipt R-171 · 4 files match</div></div><span class="when">Today, 9:41 AM</span></div>
+          <div class="row" style="min-height:40px"><svg class="ic ic16 gW"><use href="#s-pencil"/></svg><div class="rt"><div class="p">Codex copy edited outside Agent Tooling</div><div class="s">Now differs from desired · shown in Sync</div></div><span class="when">Friday</span></div>
+          <div class="row" style="min-height:40px"><svg class="ic ic16 t2"><use href="#s-download"/></svg><div class="rt"><div class="p">Installed in Claude Code and Codex</div><div class="s">From aren/agent-tooling · backup B-121 kept</div></div><span class="when">Aug 12</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="stack">
+      <div>
+        <div class="gt">Source</div>
+        <div class="grp">
+          <div class="row kv"><span class="k">Marketplace</span><span class="grow hs6"><span class="tile sm library"><svg class="ic"><use href="#s-books"/></svg></span>aren/agent-tooling <span class="t3">· local Git</span></span></div>
+          <div class="row kv"><span class="k">Location</span><span class="grow hs4">skills / rebase-document-push<button class="info r" aria-label="Show file location"><svg class="ic"><use href="#s-info-c"/></svg><span class="tip">Local folder<span class="mono">~/ws/agent-tooling/plugins/developer-workflows/skills/rebase-document-push</span><a href="#">Reveal in Finder</a></span></button></span></div>
+          <div class="row kv"><span class="k">Revision</span><span class="grow hs6"><span class="mono">e4a91d7</span><span class="t2">committed August 12</span></span><span class="f12 gA w500">History</span></div>
+          <div class="row kv"><span class="k">Desired scope</span><span class="grow"><span class="pop sm">User<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span></span><span class="f11 t3">changes apply through Sync</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="gt">Triggers <span class="n">from SKILL.md</span></div>
+        <div class="grp"><div class="tags"><span class="tag">“rebase this worktree on preview and push it”</span><span class="tag">“prepare this branch for handoff”</span><span class="tag">“update, document, and push this branch”</span></div>
+          <div class="row" style="min-height:36px;padding-top:6px;padding-bottom:8px"><span class="f11 t3">Does not run for read-only status checks or direct work on main.</span></div></div>
+      </div>
+      <div>
+        <div class="gt">Files <span class="n">4</span></div>
+        <div class="grp">
+          <div class="row" style="min-height:36px;padding-top:6px;padding-bottom:6px"><svg class="ic ic16 t2"><use href="#s-doc"/></svg><div class="rt"><div class="p">SKILL.md</div></div><span class="f11 t3">3.1 KB</span></div>
+          <div class="row" style="min-height:36px;padding-top:6px;padding-bottom:6px"><svg class="ic ic16 t2"><use href="#s-folder"/></svg><div class="rt"><div class="p">references</div></div><span class="f11 t3">2 files</span></div>
+          <div class="row" style="min-height:36px;padding-top:6px;padding-bottom:6px"><svg class="ic ic16 t2"><use href="#s-terminal"/></svg><div class="rt"><div class="p">scripts / verify-handoff.sh</div></div><span class="f11 t3">runs with your shell</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div></div></div></div></section><div class="notes"><div><b>What changed</b>Per-client rows carry brand marks and a verdict instead of paths. The Source group keeps only identity and revision; the file location is one hover away.</div><div><b>Material</b>The header sits directly on the paper; groups below are white cards with hairlines, never cards inside cards.</div><div><b>Interaction</b>Hover or focus the ⓘ to see the popover (it works in this mockup). Review… on the Codex row opens Sync scoped to that one item.</div></div><section class="shot" id="s-mcp"><header><h2 class="display">MCP Servers</h2><p>Configured is not the same as usable. The rail shows connection state as a dot; the detail separates the connection, where the server is declared per client, and what it can do.</p></header><div class="frame"><div class="scene" data-mode="light"><div class="wall"></div><div class="menubar"><span class="apple">&#xF8FF;</span><b>Agent Tooling</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span><span class="r"><span>Tue Sep 1</span><span>9:41 AM</span></span></div><div class="win"><div class="tl"><i></i><i></i><i></i></div><div class="sb"><div class="it"><svg class="ic"><use href="#s-grid"/></svg><span>Overview</span></div><div class="it"><svg class="ic"><use href="#s-bulb"/></svg><span>Recommendations</span><span class="bdg">4</span></div><div class="it"><svg class="ic"><use href="#s-bag"/></svg><span>Discover</span></div><div class="sb-h">Manage</div><div class="it"><svg class="ic"><use href="#s-books"/></svg><span>Library</span></div><div class="it on"><svg class="ic"><use href="#s-mcp"/></svg><span>MCP Servers</span></div><div class="it"><svg class="ic"><use href="#s-sync"/></svg><span>Sync</span><span class="bdg">6</span></div><div class="it"><svg class="ic"><use href="#s-clock-arrow"/></svg><span>Activity</span></div><div class="sb-h">Clients</div><div class="it"><svg class="mark"><use href="#b-claude"/></svg><span>Claude Code</span></div><div class="it"><svg class="mark codex"><use href="#b-codex"/></svg><span>Codex</span><svg class="ic tw"><use href="#s-warn"/></svg></div><div class="it"><svg class="mark"><use href="#b-gemini"/></svg><span>Gemini CLI</span></div><div class="sb-foot"><svg class="ic"><use href="#s-check-c"/></svg><span>Backed up yesterday, 6:12 PM</span></div></div><div class="paper"><div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">MCP Servers</div><div class="sub">5 configured · 4 usable</div></div>
+  <span class="sp"></span>
+  <span class="btn"><svg class="ic"><use href="#s-pulse"/></svg>Test All</span>
+  <span class="btn pri"><svg class="ic"><use href="#s-plus"/></svg>Add Server…</span>
+</div>
+<div class="content pad0 split">
+  <div class="rail">
+    <div class="rh">Connections <span class="n">5</span><span class="sp" style="flex:1"></span><span class="seg" style="height:22px"><span class="on" style="line-height:18px;font-size:11.5px;padding:0 9px">All</span><span style="line-height:18px;font-size:11.5px;padding:0 9px">Issues</span></span></div>
+    <div class="rows">
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">supabase</div><div class="s">HTTP · project pumpd</div></div><span class="dot"></span></div>
+      <div class="row sel"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">sentry</div><div class="s">HTTP · user</div></div><svg class="ic" style="width:14px;height:14px;color:#fff"><use href="#s-warn"/></svg></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">heroui-pro</div><div class="s">HTTP · project pumpd</div></div><span class="dot"></span></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">ios-simulator</div><div class="s">stdio · runs locally</div></div><span class="dot"></span></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">expo</div><div class="s">stdio · user</div></div><svg class="ic t3" style="width:13px;height:13px"><use href="#s-empty-c"/></svg></div>
+    </div>
+    <div class="f11 t3" style="padding:10px 12px">An empty circle means the server has never connected.</div>
+  </div>
+  <div class="detail stack">
+    <div class="hero-row" style="padding-bottom:4px">
+      <span class="tile lg mcp"><svg class="ic"><use href="#s-mcp"/></svg></span>
+      <div class="grow"><h1>sentry</h1><div class="s">MCP server · Streamable HTTP · added from MCP Registry</div></div>
+      <span class="btn"><svg class="ic"><use href="#s-pulse"/></svg>Test Connection</span>
+    </div>
+    <div class="banner"><svg class="ic"><use href="#s-warn"/></svg><div class="grow"><div class="p">Sign-in required</div><div class="s">The saved OAuth token expired Thursday. Sentry tools are unavailable in Claude Code and Codex until you sign in again.</div></div><span class="btn pri sm"><svg class="ic"><use href="#s-key"/></svg>Sign In…</span></div>
+    <div class="stack">
+      <div>
+        <div class="gt">Connection</div>
+        <div class="grp">
+          <div class="row kv"><span class="k">Endpoint</span><span class="grow hs4">mcp.sentry.dev<button class="info" aria-label="Show full endpoint"><svg class="ic"><use href="#s-info-c"/></svg><span class="tip">Endpoint<span class="mono">https://mcp.sentry.dev/mcp</span></span></button></span></div>
+          <div class="row kv"><span class="k">Authentication</span><span class="grow">OAuth 2.1</span><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>Expired Thursday, 2:14 PM</span></div>
+          <div class="row kv"><span class="k">Last connection</span><span class="grow">Thursday, 2:07 PM <span class="t3">· 210 ms · 14 tools</span></span><span class="f12 gA w500">Open Log</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="gt">Declared in</div>
+        <div class="grp">
+          <div class="row"><span class="disc"><svg class="mark"><use href="#b-claude"/></svg></span><div class="rt"><div class="p">Claude Code</div><div class="s">User scope</div></div><span class="st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Matches desired</span></div>
+          <div class="row"><span class="disc"><svg class="mark codex"><use href="#b-codex"/></svg></span><div class="rt"><div class="p">Codex</div><div class="s">User scope · edited by hand</div></div><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>Held out of Sync</span></div>
+          <div class="row" style="opacity:.75"><span class="disc"><svg class="mark"><use href="#b-gemini"/></svg></span><div class="rt"><div class="p">Gemini CLI</div><div class="s">Not declared</div></div><span class="btn xs">Add…</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="gt">Tools <span class="n">14 from the last connection</span><span class="r">Show All</span></div>
+      <div class="grp"><div class="tags"><span class="tag mono">search_issues</span><span class="tag mono">get_event</span><span class="tag mono">resolve_issue_alert</span><span class="tag mono">list_projects</span><span class="tag mono">get_issue_details</span><span class="tag mono">list_releases</span><span class="tag">+ 8 more</span></div></div>
+    </div>
+    <div class="hs" style="margin-top:auto"><span class="f12 gE w500">Remove Server…</span><span class="sp" style="flex:1"></span><span class="f11 t3">Configuration lives in each client's own file; Agent Tooling edits it only through Sync.</span></div>
+  </div>
+</div></div></div></div></div></section><div class="notes"><div><b>What changed</b>The banner is the one loud element and it names the exact fix. Transport, endpoint and tool names are demoted to a key-value group; the full URL is behind the ⓘ.</div><div><b>Material</b>Rail and detail share the paper; the warning tint is the only colored surface on the screen.</div><div><b>Interaction</b>Sign In… opens the provider's OAuth flow in the browser for the affected clients only. Add… on Gemini stages a declaration for Sync rather than writing anything now.</div></div><section class="shot" id="s-discover"><header><h2 class="display">Discover</h2><p>Search across every source at once. Each result carries its kind tile and its source; the install pane explains what a server needs, where it will run, and that installing only stages changes for Sync.</p></header><div class="frame"><div class="scene" data-mode="light"><div class="wall"></div><div class="menubar"><span class="apple">&#xF8FF;</span><b>Agent Tooling</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span><span class="r"><span>Tue Sep 1</span><span>9:41 AM</span></span></div><div class="win"><div class="tl"><i></i><i></i><i></i></div><div class="sb"><div class="it"><svg class="ic"><use href="#s-grid"/></svg><span>Overview</span></div><div class="it"><svg class="ic"><use href="#s-bulb"/></svg><span>Recommendations</span><span class="bdg">4</span></div><div class="it on"><svg class="ic"><use href="#s-bag"/></svg><span>Discover</span></div><div class="sb-h">Manage</div><div class="it"><svg class="ic"><use href="#s-books"/></svg><span>Library</span></div><div class="it"><svg class="ic"><use href="#s-mcp"/></svg><span>MCP Servers</span></div><div class="it"><svg class="ic"><use href="#s-sync"/></svg><span>Sync</span><span class="bdg">6</span></div><div class="it"><svg class="ic"><use href="#s-clock-arrow"/></svg><span>Activity</span></div><div class="sb-h">Clients</div><div class="it"><svg class="mark"><use href="#b-claude"/></svg><span>Claude Code</span></div><div class="it"><svg class="mark codex"><use href="#b-codex"/></svg><span>Codex</span><svg class="ic tw"><use href="#s-warn"/></svg></div><div class="it"><svg class="mark"><use href="#b-gemini"/></svg><span>Gemini CLI</span></div><div class="sb-foot"><svg class="ic"><use href="#s-check-c"/></svg><span>Backed up yesterday, 6:12 PM</span></div></div><div class="paper"><div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">Discover</div><div class="sub">412 items from 4 sources</div></div>
+  <span class="sp"></span>
+  <span class="seg"><span class="on">All</span><span>Skills</span><span>MCP Servers</span><span>Plugins</span></span>
+  <span class="search focus"><svg class="ic"><use href="#s-search"/></svg><span class="q">docs</span><span class="cur"></span></span>
+</div>
+<div class="content pad0 split">
+  <div class="rail" style="width:340px">
+    <div class="rh">Results <span class="n">6 of 31 for “docs”</span></div>
+    <div class="rows">
+      <div class="row sel"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">context7</div><div class="s">MCP Registry · live library docs for any framework</div></div><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">webapp-testing</div><div class="s">anthropics/skills · drive and test local web apps</div></div><span class="btn xs">Get</span></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">pdf</div><div class="s">anthropics/skills · fill, split, and generate PDFs</div></div><span class="st"><svg class="ic gOK"><use href="#s-check"/></svg>Installed</span></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">playwright</div><div class="s">MCP Registry · browser automation over MCP</div></div><span class="btn xs">Get</span></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">doc-coauthoring</div><div class="s">anthropics/skills · structured docs, specs, proposals</div></div><span class="st"><svg class="ic gOK"><use href="#s-check"/></svg>Installed</span></div>
+      <div class="row"><span class="tile plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span><div class="rt"><div class="p">mkdocs-toolkit</div><div class="s">community/awesome-agents · publish project docs</div></div><span class="btn xs">Get</span></div>
+    </div>
+    <div class="f11 t3" style="padding:10px 12px">Sources refreshed today at 8:05 AM · <span class="gA">Settings › Sources</span></div>
+  </div>
+  <div class="detail stack">
+    <div class="hero-row" style="padding-bottom:2px">
+      <span class="tile lg mcp"><svg class="ic"><use href="#s-mcp"/></svg></span>
+      <div class="grow"><h1>context7</h1><div class="s">MCP server · Upstash · MCP Registry</div></div>
+      <span class="chip ok"><svg class="ic"><use href="#s-shield"/></svg>Signed publisher</span>
+    </div>
+    <p class="para">Serves version-matched documentation for thousands of libraries directly into the agent's context, replacing ad-hoc web fetches with a fast local lookup.</p>
+    <div>
+      <div class="gt">Details</div>
+      <div class="grp">
+        <div class="row kv"><span class="k">Transport</span><span class="grow hs4">stdio · runs on this Mac<button class="info" aria-label="Show launch command"><svg class="ic"><use href="#s-info-c"/></svg><span class="tip">Launch command<span class="mono">npx -y @upstash/context7-mcp</span></span></button></span></div>
+        <div class="row kv"><span class="k">Requires</span><span class="grow">Node 18 or later</span><span class="st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Found v22.19 on this Mac</span></div>
+        <div class="row kv"><span class="k">Tools</span><span class="grow hs6">2 <span class="tag mono">resolve-library-id</span><span class="tag mono">query-docs</span></span></div>
+        <div class="row kv"><span class="k">Works with</span><span class="grow marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark"><use href="#b-gemini"/></svg><span class="f12 t2" style="margin-left:4px">all three clients</span></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="gt">Install</div>
+      <div class="grp">
+        <div class="opt"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><svg class="mark"><use href="#b-claude"/></svg>Claude Code<span class="s">user scope</span></div>
+        <div class="opt"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><svg class="mark codex"><use href="#b-codex"/></svg>Codex<span class="s">user scope</span></div>
+        <div class="opt"><span class="cb"></span><svg class="mark"><use href="#b-gemini"/></svg>Gemini CLI<span class="s">not selected</span></div>
+        <div class="opt" style="border-top:.5px solid var(--sep)"><span class="t2" style="width:98px">Scope</span><span class="pop sm">User<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span></div>
+        <div class="opt" style="border-top:.5px solid var(--sep);background:var(--inset)"><span class="f12 t2">Adds <b class="w600" style="color:var(--t1)">2 changes</b> to Sync for review — nothing runs until you apply them.</span><span class="sp" style="flex:1"></span><span class="btn pri sm"><svg class="ic"><use href="#s-download"/></svg>Install…</span></div>
+      </div>
+    </div>
+  </div>
+</div></div></div></div></div></section><div class="notes"><div><b>What changed</b>Results are one line each: tile, name, source. Trust is a chip (Signed publisher), not a paragraph; the launch command is behind the ⓘ.</div><div><b>Material</b>The search field is the only focused control on the screen and carries the system focus ring.</div><div><b>Interaction</b>Checking a client adds that many changes to Sync; the count in the footer updates live. Nothing downloads until the plan is applied.</div></div><section class="shot" id="s-newskill"><header><h2 class="display">New Skill</h2><p>Codex drafts, you review. The sheet is the deepest frost in the app: the Library stays visible beneath it so creation never feels like leaving. Step three of four is the only place a numbered sequence appears, because the flow really is one.</p></header><div class="frame"><div class="scene" data-mode="light"><div class="wall"></div><div class="menubar"><span class="apple">&#xF8FF;</span><b>Agent Tooling</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span><span class="r"><span>Tue Sep 1</span><span>9:41 AM</span></span></div><div class="win"><div class="tl"><i></i><i></i><i></i></div><div class="sb"><div class="it"><svg class="ic"><use href="#s-grid"/></svg><span>Overview</span></div><div class="it"><svg class="ic"><use href="#s-bulb"/></svg><span>Recommendations</span><span class="bdg">4</span></div><div class="it"><svg class="ic"><use href="#s-bag"/></svg><span>Discover</span></div><div class="sb-h">Manage</div><div class="it on"><svg class="ic"><use href="#s-books"/></svg><span>Library</span></div><div class="it"><svg class="ic"><use href="#s-mcp"/></svg><span>MCP Servers</span></div><div class="it"><svg class="ic"><use href="#s-sync"/></svg><span>Sync</span><span class="bdg">6</span></div><div class="it"><svg class="ic"><use href="#s-clock-arrow"/></svg><span>Activity</span></div><div class="sb-h">Clients</div><div class="it"><svg class="mark"><use href="#b-claude"/></svg><span>Claude Code</span></div><div class="it"><svg class="mark codex"><use href="#b-codex"/></svg><span>Codex</span><svg class="ic tw"><use href="#s-warn"/></svg></div><div class="it"><svg class="mark"><use href="#b-gemini"/></svg><span>Gemini CLI</span></div><div class="sb-foot"><svg class="ic"><use href="#s-check-c"/></svg><span>Backed up yesterday, 6:12 PM</span></div></div><div class="paper"><div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">Library</div><div class="sub">14 managed · 2 discovered</div></div>
+  <span class="sp"></span>
+  <span class="seg"><span class="on">All</span><span><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span>Skills</span><span><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span>MCP Servers</span><span><span class="tile plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span>Plugins</span></span>
+  <span class="search"><svg class="ic"><use href="#s-search"/></svg>Search library</span>
+  <span class="btn pri"><svg class="ic"><use href="#s-plus"/></svg>New Skill…</span>
+</div>
+<div class="content stack">
+  <div>
+    <div class="gt">Managed <span class="n">14 · showing 8</span></div>
+    <div class="grp">
+      <div class="thead"><span class="col" style="width:28px"></span><span class="c-name">Name</span><span class="col c-scope">Scope</span><span class="col c-clients">Clients</span><span class="col c-state">Status</span></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">skill-forge</div><div class="s">Scaffold and iterate on new skills</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Up to date</span></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">sync-agent-tooling</div><div class="s">Mirror shared skills into every client</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Up to date</span></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">mcp-preflight</div><div class="s">Validate MCP declarations before install</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gA"><use href="#s-arrow-up-c"/></svg>Update available</span></div>
+      <div class="row sel"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">rebase-document-push</div><div class="s">Rebase, document, and push a worktree branch</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex" style="color:#fff"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic"><use href="#s-check-c"/></svg>Up to date</span></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">supabase</div><div class="s">Database, auth, and storage tools</div></div><span class="col c-scope t2">Project · pumpd</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Connected</span></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">sentry</div><div class="s">Error monitoring and issue triage</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gW"><use href="#s-warn"/></svg>Sign-in required</span></div>
+      <div class="row"><span class="tile plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span><div class="rt"><div class="p">developer-workflows</div><div class="s">10 skills for Git, CI, and release flow</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gA"><use href="#s-arrow-up-c"/></svg>Update available</span></div>
+      <div class="row"><span class="tile plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span><div class="rt"><div class="p">mobile-development</div><div class="s">iOS Simulator and HeroUI Native servers</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Up to date</span></div>
+            <span class="link">Show 6 more</span>
+    </div>
+  </div>
+  <div>
+    <div class="gt">Discovered on this Mac <span class="n">not managed</span></div>
+    <div class="grp">
+      <div class="row"><span class="tile ghost dash"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">canvas-design</div><div class="s">Installed by hand · not part of any profile</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex dim"><use href="#b-codex"/></svg><svg class="mark dim"><use href="#b-gemini"/></svg></span><span class="col c-state hs6"><span class="btn xs">Adopt…</span><span class="btn xs">Ignore</span></span></div>
+      <div class="row"><span class="tile ghost dash"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">playwright</div><div class="s">Declared in Gemini CLI settings · not in any profile</div></div><span class="col c-scope t2">User</span><span class="col c-clients marks"><svg class="mark dim"><use href="#b-claude"/></svg><svg class="mark codex dim"><use href="#b-codex"/></svg><svg class="mark"><use href="#b-gemini"/></svg></span><span class="col c-state hs6"><span class="btn xs">Adopt…</span><span class="btn xs">Ignore</span></span></div>
+    </div>
+  </div>
+</div></div><div class="dim"></div><div class="sheet">
+  <div class="sheet-h"><span class="tile lg skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="grow"><h2>New Skill</h2><div class="s">Codex drafted this from your request — “turn my release-notes routine into a skill.”</div></div><div class="vs" style="align-items:flex-end;gap:6px"><span class="f11 t3">Step 3 of 4 · Review</span><span class="steps"><i class="done"></i><i class="done"></i><i class="done"></i><i></i></span></div></div>
+  <div class="sheet-b tight">
+    <div class="two eq" style="gap:12px">
+      <div><div class="lbl">Name</div><div class="fld mono" style="font-size:12px">release-notes</div></div>
+      <div><div class="lbl">Applies when someone says</div><div class="fld"><span class="tag">release notes</span><span class="tag">changelog</span><span class="tag">a new tag</span></div></div>
+    </div>
+    <div><div class="lbl">Description</div><div class="fld area">Draft release notes from merged pull requests and commits since the last tag, in the voice of the release runbook.</div></div>
+    <div><div class="hs" style="margin-bottom:5px"><span class="lbl" style="margin:0">SKILL.md</span><span class="sp" style="flex:1"></span><span class="f12 gA w500">Open in Editor</span></div>
+      <div class="mono-block"><span class="c">---</span>
+<span class="k">name:</span> release-notes
+<span class="k">description:</span> Draft release notes from merged PRs since the last tag.
+<span class="c">---</span>
+1. Collect merged pull requests since the previous release tag.
+2. Group changes: features, fixes, tooling; skip release-only commits.
+3. Match the voice and section order of the release runbook.
+4. Write to CHANGELOG.md and open the result for review.</div></div>
+    <div class="grp">
+      <div class="opt"><span class="t2" style="width:98px">Install to</span><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><svg class="mark"><use href="#b-claude"/></svg>Claude Code<span style="width:14px"></span><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><svg class="mark codex"><use href="#b-codex"/></svg>Codex<span style="width:14px"></span><span class="cb dis"></span><svg class="mark dim"><use href="#b-gemini"/></svg><span class="t3">Gemini CLI · no skill support</span></div>
+      <div class="opt"><span class="t2" style="width:98px">Scope</span><span class="pop sm">User<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span><span class="s">installs through Sync review</span></div>
+    </div>
+  </div>
+  <div class="sheet-f"><span class="f11 t3">Draft saved locally — nothing is installed yet.</span><span class="sp" style="flex:1"></span><span class="btn">Cancel</span><span class="btn">Back</span><span class="btn pri">Continue</span></div>
+</div></div></div></div></section><div class="notes"><div><b>What changed</b>Two fields and a preview instead of a form wall. Trigger phrases are a field of their own, since triggers are what people get wrong. Gemini shows why it is disabled, in five words.</div><div><b>Material</b>Sheet at 90% paper over blur 40, sitting on a dimmed window. Same capsule buttons as everywhere else.</div><div><b>Interaction</b>Continue moves to the install plan; nothing is written until that plan is approved in Sync. The draft autosaves locally.</div></div><section class="shot" id="s-sync"><header><h2 class="display">Sync Review</h2><p>The one screen that writes. Changes are grouped by client under its brand mark, each with a checkbox, a tile for what kind of thing changes, and one clause about why. A held-back item asks for a decision instead of failing silently.</p></header><div class="frame"><div class="scene" data-mode="light"><div class="wall"></div><div class="menubar"><span class="apple">&#xF8FF;</span><b>Agent Tooling</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span><span class="r"><span>Tue Sep 1</span><span>9:41 AM</span></span></div><div class="win"><div class="tl"><i></i><i></i><i></i></div><div class="sb"><div class="it"><svg class="ic"><use href="#s-grid"/></svg><span>Overview</span></div><div class="it"><svg class="ic"><use href="#s-bulb"/></svg><span>Recommendations</span><span class="bdg">4</span></div><div class="it"><svg class="ic"><use href="#s-bag"/></svg><span>Discover</span></div><div class="sb-h">Manage</div><div class="it"><svg class="ic"><use href="#s-books"/></svg><span>Library</span></div><div class="it"><svg class="ic"><use href="#s-mcp"/></svg><span>MCP Servers</span></div><div class="it on"><svg class="ic"><use href="#s-sync"/></svg><span>Sync</span><span class="bdg">6</span></div><div class="it"><svg class="ic"><use href="#s-clock-arrow"/></svg><span>Activity</span></div><div class="sb-h">Clients</div><div class="it"><svg class="mark"><use href="#b-claude"/></svg><span>Claude Code</span></div><div class="it"><svg class="mark codex"><use href="#b-codex"/></svg><span>Codex</span><svg class="ic tw"><use href="#s-warn"/></svg></div><div class="it"><svg class="mark"><use href="#b-gemini"/></svg><span>Gemini CLI</span></div><div class="sb-foot"><svg class="ic"><use href="#s-check-c"/></svg><span>Backed up yesterday, 6:12 PM</span></div></div><div class="paper"><div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">Sync Review</div><div class="sub">Profile · Base workstation</div></div>
+  <span class="sp"></span>
+  <span class="f12 t2">Checked 2 minutes ago</span>
+  <span class="ico"><svg class="ic"><use href="#s-refresh"/></svg></span>
+</div>
+<div class="content compact vs" style="padding-top:10px">
+  <div style="margin:0 2px 4px"><div class="h14">Six changes bring Claude Code, Codex, and Gemini CLI up to the desired configuration.</div><div class="f12 t2" style="margin-top:2px">Nothing is applied until you approve. A backup is created first, and every change is written to a receipt.</div></div>
+  <div class="chead"><svg class="mark"><use href="#b-claude"/></svg>Claude Code <span class="n">2 changes</span></div>
+  <div class="grp">
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span><div class="rt"><div class="p">Update developer-workflows</div><div class="s">10 skills · last changed August 27</div></div><span class="f12 gA w500">Show diff</span></div>
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm library"><svg class="ic"><use href="#s-gear"/></svg></span><div class="rt"><div class="p">Restore project settings for pumpd</div><div class="s">1 key differs from desired</div></div><span class="f12 gA w500">Show diff</span></div>
+  </div>
+  <div class="chead"><svg class="mark codex"><use href="#b-codex"/></svg>Codex <span class="n">3 changes</span></div>
+  <div class="grp">
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span><div class="rt"><div class="p">Update developer-workflows</div><div class="s">Mirrors Claude Code</div></div></div>
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">Update mcp-preflight</div><div class="s">One file changed upstream</div></div></div>
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">Declare MCP server expo</div><div class="s">User scope · added from Discover · connects for the first time after apply</div></div></div>
+  </div>
+  <div class="chead"><svg class="mark"><use href="#b-gemini"/></svg>Gemini CLI <span class="n">1 change</span></div>
+  <div class="grp">
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">Rewrite the servers block in Gemini settings</div><div class="s">Adds the timeout key Gemini expects, so the file matches the desired declaration</div></div><span class="f12 gA w500">Hide diff</span></div>
+    <div class="xrow" style="padding-top:0"><div class="diff"><div>"mcpServers": {</div><div class="del">  "supabase": { "httpUrl": "https://mcp.supabase.com/mcp" }</div><div class="add">  "supabase": { "httpUrl": "https://mcp.supabase.com/mcp", "timeout": 30000 }</div><div>}</div></div></div>
+  </div>
+  <div class="chead" style="color:var(--warn)"><svg class="ic" style="width:15px;height:15px"><use href="#s-warn"/></svg>Held back <span class="n">needs a decision</span></div>
+  <div class="grp" style="background:var(--warn-bg);box-shadow:inset 0 0 0 .5px var(--warn-ring)">
+    <div class="row"><span class="tile sm mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">Update MCP server sentry in Codex</div><div class="s">Codex settings were edited by hand near this entry. Choose how to resolve before it can sync.</div></div><span class="hs6"><span class="btn xs">Open File</span><span class="btn xs">Keep Local</span><span class="btn xs">Use Desired…</span></span></div>
+  </div>
+  <div class="foot" style="margin-top:12px"><svg class="ic"><use href="#s-drive"/></svg><span class="f12 t2">Backup B-143 will be created before anything changes · receipts are kept for 90 days</span><span class="sp" style="flex:1"></span><span class="btn sm">Cancel</span><span class="btn pri sm">Apply 6 Changes…</span></div>
+</div></div></div></div></div></section><div class="notes"><div><b>What changed</b>Revision hashes are gone from the rows; the diff is shown only where a file is actually rewritten. The footer names the backup that will exist before anything changes.</div><div><b>Material</b>Checked rows stay white; the held-back group is the only tinted surface, and the diff block is an inset well rather than a terminal.</div><div><b>Interaction</b>Unchecking a row removes it from the plan and from the button label. Apply 6 Changes… opens the receipt live as each client is written.</div></div><section class="shot" id="s-activity"><header><h2 class="display">Activity</h2><p>Receipts, grouped by day. An applied plan expands into what was written per client, with the verification result and a rollback that restores the named backup.</p></header><div class="frame"><div class="scene" data-mode="light"><div class="wall"></div><div class="menubar"><span class="apple">&#xF8FF;</span><b>Agent Tooling</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span><span class="r"><span>Tue Sep 1</span><span>9:41 AM</span></span></div><div class="win"><div class="tl"><i></i><i></i><i></i></div><div class="sb"><div class="it"><svg class="ic"><use href="#s-grid"/></svg><span>Overview</span></div><div class="it"><svg class="ic"><use href="#s-bulb"/></svg><span>Recommendations</span><span class="bdg">4</span></div><div class="it"><svg class="ic"><use href="#s-bag"/></svg><span>Discover</span></div><div class="sb-h">Manage</div><div class="it"><svg class="ic"><use href="#s-books"/></svg><span>Library</span></div><div class="it"><svg class="ic"><use href="#s-mcp"/></svg><span>MCP Servers</span></div><div class="it"><svg class="ic"><use href="#s-sync"/></svg><span>Sync</span><span class="bdg">6</span></div><div class="it on"><svg class="ic"><use href="#s-clock-arrow"/></svg><span>Activity</span></div><div class="sb-h">Clients</div><div class="it"><svg class="mark"><use href="#b-claude"/></svg><span>Claude Code</span></div><div class="it"><svg class="mark codex"><use href="#b-codex"/></svg><span>Codex</span><svg class="ic tw"><use href="#s-warn"/></svg></div><div class="it"><svg class="mark"><use href="#b-gemini"/></svg><span>Gemini CLI</span></div><div class="sb-foot"><svg class="ic"><use href="#s-check-c"/></svg><span>Backed up yesterday, 6:12 PM</span></div></div><div class="paper"><div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">Activity</div><div class="sub">Receipts for the last 90 days</div></div>
+  <span class="sp"></span>
+  <span class="pop">All Events<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span>
+  <span class="search" style="width:190px"><svg class="ic"><use href="#s-search"/></svg>Search</span>
+</div>
+<div class="content compact stack" style="padding-top:10px">
+  <div>
+    <div class="day">Today</div>
+    <div class="grp"><div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Verification completed · 34 items match their receipts</div></div><span class="when">9:41 AM</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div></div>
+  </div>
+  <div>
+    <div class="day">Yesterday</div>
+    <div class="grp">
+      <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Applied sync plan S-118 · 6 changes across 3 clients</div><div class="s">Receipt R-208 · backup B-142 (1.2 MB) · finished in 14 s</div></div><span class="when">6:12 PM</span><svg class="ic chev"><use href="#s-chev-d"/></svg></div>
+      <div class="subrows">
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark"><use href="#b-claude"/></svg><span class="w">Installed skill</span> sync-agent-tooling · user</div>
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark"><use href="#b-claude"/></svg><span class="w">Declared MCP server</span> heroui-pro · project pumpd</div>
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><span class="w">Installed skill</span> sync-agent-tooling · user</div>
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><span class="w">Declared MCP server</span> supabase · project pumpd</div>
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><span class="w">Removed skill</span> workflow-sync-test · backup kept</div>
+        <div class="subrow"><svg class="ic gOK"><use href="#s-check"/></svg><svg class="mark"><use href="#b-gemini"/></svg><span class="w">Rewrote servers block</span> settings · timeout added</div>
+        <div class="subrow" style="padding-top:8px"><svg class="ic gOK"><use href="#s-shield"/></svg><span>Post-apply verification: 12 of 12 checksums match</span><span class="sp" style="flex:1"></span><span class="f12 gA w500">Receipt JSON</span><span class="btn xs"><svg class="ic"><use href="#s-uturn"/></svg>Roll Back This Plan…</span></div>
+      </div>
+      <div class="row"><svg class="ic ic16 gW"><use href="#s-warn"/></svg><div class="rt"><div class="p">Applied 5 of 6 · Gemini settings write failed</div><div class="s">Permission denied on the settings file · plan S-117, retried successfully as S-118</div></div><span class="btn xs">Show Log</span><span class="when">5:58 PM</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="day">Friday, August 28</div>
+    <div class="grp">
+      <div class="row"><svg class="ic ic16 t2"><use href="#s-uturn"/></svg><div class="rt"><div class="p">Rolled back plugin simview to 3f9d2e1</div><div class="s">Backup B-139 restored · verification passed</div></div><span class="when">4:20 PM</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+      <div class="row"><svg class="ic ic16 gE"><use href="#s-x-c"/></svg><div class="rt"><div class="p">Marketplace refresh failed · github.com unreachable</div><div class="s">anthropics/skills skipped · succeeded on retry at 9:30 AM</div></div><span class="when">9:12 AM</span></div>
+      <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Post-sync canary passed in all three clients</div><div class="s">Each client answered a scripted prompt</div></div><span class="when">9:02 AM</span></div>
+    </div>
+  </div>
+  <div class="f11 t3" style="margin:0 2px">Older receipts are archived monthly · <span class="gA">change this in Settings</span></div>
+</div></div></div></div></div></section><div class="notes"><div><b>What changed</b>Sub-steps use brand marks instead of client names, so a receipt reads as a column of glyphs and verbs. Failures keep their plain-language cause and the retry that fixed them.</div><div><b>Material</b>One card per event; the expanded receipt is the same card, taller. No timeline rail, no colored stripes.</div><div><b>Interaction</b>Roll Back This Plan… restores backup B-142 and writes a new receipt; Receipt JSON exports the redacted record.</div></div><section class="shot" id="s-client"><header><h2 class="display">Claude Code</h2><p>A client is a first-class page: the binary, the profile it follows, what Agent Tooling manages inside it, and what it found there that it does not manage.</p></header><div class="frame"><div class="scene" data-mode="light"><div class="wall"></div><div class="menubar"><span class="apple">&#xF8FF;</span><b>Agent Tooling</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span><span class="r"><span>Tue Sep 1</span><span>9:41 AM</span></span></div><div class="win"><div class="tl"><i></i><i></i><i></i></div><div class="sb"><div class="it"><svg class="ic"><use href="#s-grid"/></svg><span>Overview</span></div><div class="it"><svg class="ic"><use href="#s-bulb"/></svg><span>Recommendations</span><span class="bdg">4</span></div><div class="it"><svg class="ic"><use href="#s-bag"/></svg><span>Discover</span></div><div class="sb-h">Manage</div><div class="it"><svg class="ic"><use href="#s-books"/></svg><span>Library</span></div><div class="it"><svg class="ic"><use href="#s-mcp"/></svg><span>MCP Servers</span></div><div class="it"><svg class="ic"><use href="#s-sync"/></svg><span>Sync</span><span class="bdg">6</span></div><div class="it"><svg class="ic"><use href="#s-clock-arrow"/></svg><span>Activity</span></div><div class="sb-h">Clients</div><div class="it on"><svg class="mark"><use href="#b-claude"/></svg><span>Claude Code</span></div><div class="it"><svg class="mark codex"><use href="#b-codex"/></svg><span>Codex</span><svg class="ic tw"><use href="#s-warn"/></svg></div><div class="it"><svg class="mark"><use href="#b-gemini"/></svg><span>Gemini CLI</span></div><div class="sb-foot"><svg class="ic"><use href="#s-check-c"/></svg><span>Backed up yesterday, 6:12 PM</span></div></div><div class="paper"><div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">Claude Code</div><div class="sub">Client</div></div>
+  <span class="sp"></span>
+  <span class="btn"><svg class="ic"><use href="#s-folder"/></svg>Open Config Folder</span>
+  <span class="ico"><svg class="ic"><use href="#s-ellipsis"/></svg></span>
+</div>
+<div class="content stack">
+  <div class="hero-row" style="padding-bottom:0">
+    <span class="disc lg"><svg class="mark"><use href="#b-claude"/></svg></span>
+    <div class="grow"><h1>Claude Code</h1><div class="s">2.1.47 from Homebrew · 20 managed items</div></div>
+    <span class="chip ok"><svg class="ic"><use href="#s-shield"/></svg>Binary verified</span>
+    <span class="pop"><span class="tile sm profile"><svg class="ic"><use href="#s-sliders"/></svg></span>Base workstation<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span>
+  </div>
+  <div class="two eq">
+    <div>
+      <div class="gt">Managed for this client</div>
+      <div class="grp">
+        <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">Skills</div><div class="s">12 installed · all verified today at 9:41 AM</div></div><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+        <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">MCP servers</div><div class="s">5 declared · sentry needs sign-in</div></div><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>1</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+        <div class="row"><span class="tile plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span><div class="rt"><div class="p">Plugins</div><div class="s">3 installed · developer-workflows update pending</div></div><span class="st"><svg class="ic gA"><use href="#s-arrow-up-c"/></svg>1</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+        <div class="row"><span class="tile library"><svg class="ic"><use href="#s-gear"/></svg></span><div class="rt"><div class="p">Settings files</div><div class="s">2 files managed · match desired</div></div><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+      </div>
+    </div>
+    <div class="stack">
+      <div>
+        <div class="gt">Scopes</div>
+        <div class="grp">
+          <div class="row"><svg class="ic ic18 t2"><use href="#s-person"/></svg><div class="rt"><div class="p hs4">User<button class="info" aria-label="Show user scope folder"><svg class="ic"><use href="#s-info-c"/></svg><span class="tip">User scope folder<span class="mono">~/.claude</span><a href="#">Reveal in Finder</a></span></button></div><div class="s">14 items</div></div><span class="st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Verified today</span></div>
+          <div class="row"><svg class="ic ic18 t2"><use href="#s-folder"/></svg><div class="rt"><div class="p hs4">Project · pumpd<button class="info" aria-label="Show project folder"><svg class="ic"><use href="#s-info-c"/></svg><span class="tip">Project folder<span class="mono">~/ws/pumpd/.claude</span><a href="#">Reveal in Finder</a></span></button></div><div class="s">6 items · 1 differs from desired</div></div><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>Review in Sync</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="gt">Sessions <span class="n">last 14 days</span></div>
+        <div class="grp">
+          <div class="row"><svg class="ic ic16 t2"><use href="#s-clock"/></svg><div class="rt"><div class="p">128 sessions · 9 skills used</div><div class="s">Most used: rebase-document-push, mcp-preflight, skill-forge</div></div><span class="f12 gA w500">Insights</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="gt">On this Mac <span class="n">outside Agent Tooling</span></div>
+    <div class="grp">
+      <div class="row"><span class="tile ghost dash"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">canvas-design was found in your Claude skills folder</div><div class="s">Installed by hand on August 12 · not part of any profile</div></div><span class="btn xs">Adopt…</span></div>
+      <div class="row"><svg class="ic ic16 gW"><use href="#s-warn"/></svg><div class="rt"><div class="p">2 unmanaged keys in settings</div><div class="s">statusLine and spinnerTips were added outside Agent Tooling</div></div><span class="btn xs">Review…</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="gt">Recent receipts <span class="n">this client</span><span class="r">Show All</span></div>
+    <div class="grp compact">
+      <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Verified 20 managed items</div><div class="s">Receipt R-171</div></div><span class="when">Today, 9:41 AM</span></div>
+      <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Installed skill sync-agent-tooling · user scope</div><div class="s">Plan S-118 · backup B-142</div></div><span class="when">Yesterday, 6:12 PM</span></div>
+      <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Declared MCP server heroui-pro · project pumpd</div><div class="s">Plan S-118 · backup B-142</div></div><span class="when">Yesterday, 6:12 PM</span></div>
+    </div>
+  </div>
+</div></div></div></div></div></section><div class="notes"><div><b>What changed</b>Four managed groups become four rows with tiles and counts; scopes show folders by role, with the real path behind the ⓘ. Unmanaged findings get the dashed tile and an Adopt… button, the same as in Library.</div><div><b>Material</b>The brand mark sits in a glass disc on the paper; everything else is the standard row grammar.</div><div><b>Interaction</b>Each managed row drills into Library filtered to this client. Review in Sync opens the plan scoped to the pumpd project.</div></div><section class="shot" id="s-recs"><header><h2 class="display">Recommendations</h2><p>Suggestions with their evidence beside them. The rail is four sentences; the detail shows the sessions that produced the suggestion, so acting on it is a decision, not a leap of faith.</p></header><div class="frame"><div class="scene" data-mode="light"><div class="wall"></div><div class="menubar"><span class="apple">&#xF8FF;</span><b>Agent Tooling</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span><span class="r"><span>Tue Sep 1</span><span>9:41 AM</span></span></div><div class="win"><div class="tl"><i></i><i></i><i></i></div><div class="sb"><div class="it"><svg class="ic"><use href="#s-grid"/></svg><span>Overview</span></div><div class="it on"><svg class="ic"><use href="#s-bulb"/></svg><span>Recommendations</span><span class="bdg">4</span></div><div class="it"><svg class="ic"><use href="#s-bag"/></svg><span>Discover</span></div><div class="sb-h">Manage</div><div class="it"><svg class="ic"><use href="#s-books"/></svg><span>Library</span></div><div class="it"><svg class="ic"><use href="#s-mcp"/></svg><span>MCP Servers</span></div><div class="it"><svg class="ic"><use href="#s-sync"/></svg><span>Sync</span><span class="bdg">6</span></div><div class="it"><svg class="ic"><use href="#s-clock-arrow"/></svg><span>Activity</span></div><div class="sb-h">Clients</div><div class="it"><svg class="mark"><use href="#b-claude"/></svg><span>Claude Code</span></div><div class="it"><svg class="mark codex"><use href="#b-codex"/></svg><span>Codex</span><svg class="ic tw"><use href="#s-warn"/></svg></div><div class="it"><svg class="mark"><use href="#b-gemini"/></svg><span>Gemini CLI</span></div><div class="sb-foot"><svg class="ic"><use href="#s-check-c"/></svg><span>Backed up yesterday, 6:12 PM</span></div></div><div class="paper"><div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">Recommendations</div><div class="sub">4 suggestions · scanned today at 8:05 AM</div></div>
+  <span class="sp"></span>
+  <span class="btn"><svg class="ic"><use href="#s-refresh"/></svg>Scan Now</span>
+</div>
+<div class="content pad0 split">
+  <div class="rail" style="width:380px">
+    <div class="rows">
+      <div class="row sel"><svg class="ic ic16" style="color:#fff"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Turn your release-notes routine into a skill</div><div class="s">Same seven steps in five Codex sessions this week</div></div></div>
+      <div class="row"><svg class="ic ic16 gA"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Install context7 for live library docs</div><div class="s">Claude Code fetched web documentation in 14 sessions</div></div></div>
+      <div class="row"><svg class="ic ic16 gA"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Fix worktree-bootstrap</div><div class="s">Failed 3 of its last 9 runs at the install step</div></div></div>
+      <div class="row"><svg class="ic ic16 gA"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Archive the wet-in-seattle plugin</div><div class="s">No runs in 60 days</div></div></div>
+    </div>
+    <div class="f11 t3" style="padding:10px 12px;line-height:1.45">Drawn from 212 Claude Code and Codex sessions over the last 14 days. Analysis runs entirely on this Mac; transcripts never leave it.</div>
+  </div>
+  <div class="detail stack">
+    <div class="hero-row" style="padding-bottom:2px">
+      <span class="tile lg skill"><svg class="ic"><use href="#s-doc"/></svg></span>
+      <div class="grow"><h1>Turn your release-notes routine into a skill</h1><div class="s">You assembled release notes by hand five times this week, about 25 minutes per run. A draft is ready to review.</div></div>
+    </div>
+    <div class="hs"><span class="btn pri"><svg class="ic"><use href="#s-pencil"/></svg>Draft with Codex…</span><span class="btn">Show Sessions</span><span class="sp" style="flex:1"></span><span class="btn">Dismiss</span></div>
+    <div>
+      <div class="gt">Evidence <span class="n">5 sessions</span></div>
+      <div class="grp">
+        <div class="ev"><svg class="mark codex"><use href="#b-codex"/></svg><span class="t">Release notes for 1.8.3 · collected PRs, grouped by area, matched the runbook voice</span><span class="when">Mon 4:12 PM · 27 min</span></div>
+        <div class="ev"><svg class="mark codex"><use href="#b-codex"/></svg><span class="t">Release notes for 1.8.2 · same steps, plus a manual CHANGELOG edit</span><span class="when">Thu 11:30 AM · 24 min</span></div>
+        <div class="ev"><svg class="mark codex"><use href="#b-codex"/></svg><span class="t">Hotfix notes for 1.8.1 · skipped the grouping step</span><span class="when">Wed 6:02 PM · 19 min</span></div>
+        <div class="ev"><svg class="mark codex"><use href="#b-codex"/></svg><span class="t">Release notes for 1.8.0 · asked for the runbook twice</span><span class="when">Aug 26 · 31 min</span></div>
+        <div class="ev"><svg class="mark codex"><use href="#b-codex"/></svg><span class="t">Draft notes for the App Store listing · reused the 1.8.0 structure</span><span class="when">Aug 25 · 22 min</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="gt">What the draft will do</div>
+      <div class="grp">
+        <div class="row" style="min-height:40px"><svg class="ic ic16 t2"><use href="#s-check"/></svg><div class="rt"><div class="p">Collect merged pull requests since the previous tag</div></div></div>
+        <div class="row" style="min-height:40px"><svg class="ic ic16 t2"><use href="#s-check"/></svg><div class="rt"><div class="p">Group by features, fixes, and tooling · skip release-only commits</div></div></div>
+        <div class="row" style="min-height:40px"><svg class="ic ic16 t2"><use href="#s-check"/></svg><div class="rt"><div class="p">Write to CHANGELOG.md in the runbook's voice and open it for review</div></div></div>
+      </div>
+    </div>
+    <div class="f11 t3" style="margin-top:auto">Suggestions never change anything on their own · <span class="gA">Configure scanning</span></div>
+  </div>
+</div></div></div></div></div></section><div class="notes"><div><b>What changed</b>The single-column list became a rail and an evidence pane, which is what the empty half of the screen was for. Every suggestion has exactly one primary action.</div><div><b>Material</b>Evidence rows are the plainest surface in the app: mark, sentence, time.</div><div><b>Interaction</b>Draft with Codex… opens the New Skill sheet pre-filled from these sessions. Dismiss hides the suggestion for 30 days and is undoable in Activity.</div></div><section class="shot" id="s-settings"><header><h2 class="display">Settings</h2><p>Settings is its own preference window, the way macOS expects. Sources are the trust boundary: each row says who publishes it and whether it is signed, and unsigned sources always require review.</p></header><div class="frame"><div class="scene" data-mode="light"><div class="wall"></div><div class="menubar"><span class="apple">&#xF8FF;</span><b>Agent Tooling</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span><span class="r"><span>Tue Sep 1</span><span>9:41 AM</span></span></div><div class="win settings"><div class="tl"><i></i><i></i><i></i></div><div class="stb">Settings</div>
+<div class="tabs">
+  <div class="tab"><svg class="ic"><use href="#s-gear"/></svg>General</div>
+  <div class="tab on"><svg class="ic"><use href="#s-globe"/></svg>Sources</div>
+  <div class="tab"><svg class="ic"><use href="#s-drive"/></svg>Backups</div>
+  <div class="tab"><svg class="ic"><use href="#s-cpu"/></svg>Runtimes</div>
+  <div class="tab"><svg class="ic"><use href="#s-pulse"/></svg>Diagnostics</div>
+</div>
+<div class="paper">
+  <div class="content stack" style="padding:18px 20px 20px">
+    <div class="f12 t2">Agent Tooling installs skills, MCP servers, and plugins from these sources.</div>
+    <div class="grp">
+      <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm library"><svg class="ic"><use href="#s-books"/></svg></span><div class="rt"><div class="p">aren/agent-tooling</div><div class="s">Local Git · yours</div></div><span class="f12 t2">8 installed</span></div>
+      <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm library"><svg class="ic"><use href="#s-globe"/></svg></span><div class="rt"><div class="p">anthropics/skills</div><div class="s">GitHub · signed releases</div></div><span class="f12 t2">4 installed</span></div>
+      <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm library"><svg class="ic"><use href="#s-globe"/></svg></span><div class="rt"><div class="p">MCP Registry</div><div class="s">registry.modelcontextprotocol.io · signed</div></div><span class="f12 t2">2 installed</span></div>
+      <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm library"><svg class="ic"><use href="#s-globe"/></svg></span><div class="rt"><div class="p">community/awesome-agents</div><div class="s">GitHub · unsigned — items always require review before install</div></div><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>Unsigned</span></div>
+    </div>
+    <div class="hs6"><span class="btn xs" style="padding:0 7px"><svg class="ic"><use href="#s-plus"/></svg></span><span class="btn xs" style="padding:0 7px"><svg class="ic"><use href="#s-minus"/></svg></span></div>
+    <div class="vs" style="gap:9px">
+      <div class="hs"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span>Refresh sources daily at 8:00 AM</span></div>
+      <div class="hs"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span>Require signed sources for automatic updates</span></div>
+      <div class="hs"><span>When updates are available</span><span class="pop sm">Add to Sync for review<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span></div>
+    </div>
+    <div class="f11 t3">Downloads are verified against the source's manifest before anything is staged.</div>
+  </div>
+</div></div></div></div></section><div class="notes"><div><b>What changed</b>Icons and labels in the tab strip, one group of sources, three plain sentences of policy. Nothing else.</div><div><b>Material</b>The small window is the same glass shell; the paper inset carries the content.</div><div><b>Interaction</b>Unchecking a source hides its items from Discover without removing anything installed. The update policy defaults to staging in Sync.</div></div>
+<section class="legend">
+  <h2 class="display">What carried over, what changed</h2>
+  <p>The screens above are a synthesis, not a fourth direction. Here is where each part came from, and what a SwiftUI build should reach for.</p>
+  <div class="grid">
+    <div class="card"><h3>Kept from the August canvas</h3><ul>
+      <li><b>IA.</b> Overview · Recommendations · Discover / Library · MCP Servers · Sync · Activity / one page per client. Settings is its own window.</li>
+      <li><b>State language.</b> Desired, discovered (dashed), installed, verified (seal + time), needs attention (amber + one action), will change (checked rows).</li>
+      <li><b>One world.</b> Plan S-118 applied yesterday, S-119 pending with six changes, backup B-143 next, Sentry sign-in expired Thursday, developer-workflows update waiting.</li>
+    </ul></div>
+    <div class="card"><h3>Restored from Glasshouse v4</h3><ul>
+      <li><b>Glass.</b> A luminous desktop refracting through the sidebar and window edge; the paper stays opaque enough to read.</li>
+      <li><b>Icon vocabulary.</b> Orange skill, purple plugin, teal MCP, indigo profile tiles, plus the real Claude, Codex and Gemini marks for availability.</li>
+      <li><b>Fewer words.</b> No paths in rows. Hover the ⓘ on Skill, MCP Servers, Discover, and Claude Code to see the location popover.</li>
+    </ul></div>
+    <div class="card"><h3>New in this pass</h3><ul>
+      <li><b>The conduit.</b> Overview draws library → profile → clients as one path, with pending changes on the trunk and a verdict at each terminal.</li>
+      <li><b>Tahoe controls.</b> Capsule buttons, 20px window radius, concentric 14px pane, a menu bar in the scene so the glass has something to refract.</li>
+      <li><b>Evidence panes.</b> Recommendations shows the sessions behind a suggestion; Skill shows its history and files; Activity expands a receipt in place.</li>
+    </ul></div>
+  </div>
+  <h2 class="display" style="margin-top:44px">Hand-off to SwiftUI</h2>
+  <p>Everything on these screens maps to existing native material; nothing needs a custom renderer.</p>
+  <div class="grid">
+    <div class="card"><h3>Material</h3><ul>
+      <li><b>Window &amp; sidebar</b> — the existing <code>DesktopGlassBackground</code> (<code>NSVisualEffectView</code>, behind-window) at full strength instead of 0.96 opacity; sidebar rows on <code>.glassEffect()</code>.</li>
+      <li><b>Paper</b> — <code>RoundedRectangle(14, .continuous)</code> filled with <code>.windowBackgroundColor</code> at 0.90, inset 8pt.</li>
+      <li><b>Sheets</b> — standard <code>.sheet</code> with <code>.presentationBackground(.thickMaterial)</code>.</li>
+    </ul></div>
+    <div class="card"><h3>Components</h3><ul>
+      <li><b>Capsules</b> — <code>.buttonStyle(.glass)</code> / <code>.borderedProminent</code> with <code>.buttonBorderShape(.capsule)</code>.</li>
+      <li><b>Tiles</b> — SF Symbols <code>doc.text</code>, <code>puzzlepiece.extension</code>, <code>server.rack</code>, <code>slider.horizontal.3</code> on 8pt rounded fills of systemOrange, systemPurple, systemTeal, systemIndigo.</li>
+      <li><b>Marks</b> — the existing <code>ClientBrandIcon</code>; dimmed at 22% + grayscale for “not available here”.</li>
+    </ul></div>
+    <div class="card"><h3>State &amp; motion</h3><ul>
+      <li><b>Glyphs</b> — <code>checkmark.circle.fill</code>, <code>exclamationmark.triangle.fill</code>, <code>xmark.circle.fill</code>, <code>arrow.up.circle</code>; always beside a label.</li>
+      <li><b>Popovers</b> — <code>.popover</code> from an <code>info.circle</code> button with a <code>Reveal in Finder</code> link.</li>
+      <li><b>Conduit</b> — a <code>Path</code> with a phase-animated dash while a plan is pending; gated on <code>accessibilityReduceMotion</code>.</li>
+    </ul></div>
+  </div>
+</section>
+<script>
+(function(){
+  var frames = document.querySelectorAll('.frame');
+  function fit(){ frames.forEach(function(f){ var s = f.querySelector('.scene'); if (s) s.style.transform = 'scale(' + (f.clientWidth / 1320) + ')'; }); }
+  if (window.ResizeObserver) { new ResizeObserver(fit).observe(document.body); }
+  window.addEventListener('resize', fit); fit();
+
+  var btns = document.querySelectorAll('.mode button');
+  function viewerDark(){ var t = document.documentElement.getAttribute('data-theme'); if (t === 'dark') return true; if (t === 'light') return false; return window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches; }
+  function apply(m){ document.querySelectorAll('.scene').forEach(function(s){ s.setAttribute('data-mode', m); }); btns.forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode') === m); }); }
+  var saved = null; try { saved = localStorage.getItem('att-mode'); } catch (e) {}
+  apply(saved === 'dark' || saved === 'light' ? saved : (viewerDark() ? 'dark' : 'light'));
+  btns.forEach(function(b){ b.addEventListener('click', function(){ var m = b.getAttribute('data-mode'); apply(m); try { localStorage.setItem('att-mode', m); } catch (e) {} }); });
+
+  if (window.IntersectionObserver) {
+    var live = new IntersectionObserver(function(es){ es.forEach(function(e){ var s = e.target.querySelector('.scene'); if (s) s.classList.toggle('live', e.isIntersecting); }); }, { rootMargin: '10% 0px' });
+    frames.forEach(function(f){ live.observe(f); });
+  } else { document.querySelectorAll('.scene').forEach(function(s){ s.classList.add('live'); }); }
+  var links = Array.prototype.slice.call(document.querySelectorAll('.nav a'));
+  if (window.IntersectionObserver) {
+    var io = new IntersectionObserver(function(es){ es.forEach(function(e){ if (e.isIntersecting) { links.forEach(function(l){ l.classList.toggle('on', l.getAttribute('href') === '#' + e.target.id); }); } }); }, { rootMargin: '-35% 0px -55% 0px' });
+    document.querySelectorAll('.shot').forEach(function(s){ io.observe(s); });
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('.info') : null;
+    document.querySelectorAll('.info.open').forEach(function(i){ if (i !== b) i.classList.remove('open'); });
+    if (b) b.classList.toggle('open');
+  });
+})();
+</script>
