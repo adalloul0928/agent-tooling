@@ -9,6 +9,8 @@ struct MarketplaceView: View {
     @State private var query = ""
     @State private var componentFilter: MarketplaceComponentFilter = .all
     @State private var clientFilter: MarketplaceClientFilter = .all
+    @State private var classificationFilter: MarketplaceClassificationFilter = .all
+    @State private var sortOrder: MarketplaceSortOrder = .relevance
     @State private var selectedSourceID: UUID?
     @State private var displayLimit = Self.pageSize
 
@@ -61,6 +63,8 @@ struct MarketplaceView: View {
         .onChange(of: query) { _, _ in displayLimit = Self.pageSize }
         .onChange(of: componentFilter) { _, _ in displayLimit = Self.pageSize }
         .onChange(of: clientFilter) { _, _ in displayLimit = Self.pageSize }
+        .onChange(of: classificationFilter) { _, _ in displayLimit = Self.pageSize }
+        .onChange(of: sortOrder) { _, _ in displayLimit = Self.pageSize }
         .onChange(of: selectedSourceID) { _, _ in displayLimit = Self.pageSize }
     }
 
@@ -71,6 +75,7 @@ struct MarketplaceView: View {
         query = ""
         componentFilter = .all
         clientFilter = .all
+        classificationFilter = .all
         selectedSourceID = nil
         if let index = filteredPackages.firstIndex(where: { $0.id == requestedID }) {
             displayLimit = max(Self.pageSize, index + 1)
@@ -117,7 +122,7 @@ struct MarketplaceView: View {
                 TextField("Search packages", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Search marketplace packages")
-                HStack(spacing: 8) {
+                FlowLayout(spacing: 8) {
                     Picker("Component", selection: $componentFilter) {
                         ForEach(MarketplaceComponentFilter.allCases) { filter in
                             Text(filter.rawValue).tag(filter)
@@ -134,29 +139,48 @@ struct MarketplaceView: View {
                     .labelsHidden()
                     .fixedSize()
                     .accessibilityLabel("Filter by app")
+                    Picker("Provenance", selection: $classificationFilter) {
+                        ForEach(MarketplaceClassificationFilter.allCases) { filter in
+                            Text(filter.rawValue).tag(filter)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .help(classificationFilter.measurement)
+                    .accessibilityLabel("Filter by provenance")
+                    Picker("Sort", selection: $sortOrder) {
+                        ForEach(MarketplaceSortOrder.allCases) { order in
+                            Text(order.displayName).tag(order)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .help(sortOrder.measurement)
+                    .accessibilityLabel("Sort packages")
+                }
+                HStack(spacing: 6) {
+                    if let source = selectedSource {
+                        HStack(spacing: 6) {
+                            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                                .foregroundStyle(AgentTheme.blue)
+                            Text(source.name).font(.caption.weight(.semibold)).lineLimit(1)
+                            Button {
+                                selectedSourceID = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill").imageScale(.small)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Show every source")
+                        }
+                        .padding(.horizontal, 9)
+                        .frame(height: 24)
+                        .background(AgentTheme.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    }
                     Spacer(minLength: 0)
                     Text(packageCountLabel)
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                }
-                if let source = selectedSource {
-                    HStack(spacing: 6) {
-                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                            .foregroundStyle(AgentTheme.blue)
-                        Text(source.name).font(.caption.weight(.semibold)).lineLimit(1)
-                        Button {
-                            selectedSourceID = nil
-                        } label: {
-                            Image(systemName: "xmark.circle.fill").imageScale(.small)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("Show every source")
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 9)
-                    .frame(height: 26)
-                    .background(AgentTheme.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
             }
             .padding(12)
@@ -173,6 +197,7 @@ struct MarketplaceView: View {
                         query = ""
                         componentFilter = .all
                         clientFilter = .all
+                        classificationFilter = .all
                         selectedSourceID = nil
                     } else {
                         chooseSource()
@@ -181,11 +206,16 @@ struct MarketplaceView: View {
             } else {
                 List(selection: $selectedPackageID) {
                     ForEach(visiblePackages) { package in
-                        MarketplacePackageRow(package: package, selected: selectedPackageID == package.id)
-                            .tag(package.id)
-                            .listRowBackground(SelectionRowBackground(selected: selectedPackageID == package.id))
-                            .accessibilityLabel(package.name)
-                            .accessibilityValue(selectedPackageID == package.id ? "Selected" : "")
+                        MarketplacePackageRow(
+                            package: package,
+                            selected: selectedPackageID == package.id,
+                            verdict: MarketplaceProvenanceClassifier.classify(package),
+                            detail: rowDetail(for: package)
+                        )
+                        .tag(package.id)
+                        .listRowBackground(SelectionRowBackground(selected: selectedPackageID == package.id))
+                        .accessibilityLabel(package.name)
+                        .accessibilityValue(selectedPackageID == package.id ? "Selected" : "")
                     }
                     if visiblePackages.count < filteredPackages.count {
                         Button(showMoreLabel) {
@@ -216,11 +246,23 @@ struct MarketplaceView: View {
                             Text(package.publisher).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
+                        ProvenanceBadge(verdict: MarketplaceProvenanceClassifier.classify(package))
                     }
                     Text(package.summary).font(.callout).foregroundStyle(.secondary)
 
                     GroupBox("Review") {
                         VStack(spacing: 0) {
+                            LabeledValueRow("Provenance") {
+                                let verdict = MarketplaceProvenanceClassifier.classify(package)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    ProvenanceBadge(verdict: verdict)
+                                    Text(verdict.evidence)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            Divider()
                             LabeledValueRow("Contents") {
                                 Text(
                                     package.components.map(\.displayName).sorted().joined(separator: ", ").nilIfEmpty
@@ -272,10 +314,7 @@ struct MarketplaceView: View {
                             if let credentials = package.requestedCredentialNames, !credentials.isEmpty {
                                 Divider()
                                 LabeledValueRow("Configuration names") {
-                                    Text(credentials.joined(separator: ", "))
-                                        .font(.caption.monospaced())
-                                        .foregroundStyle(.secondary)
-                                        .textSelection(.enabled)
+                                    RequestedCredentialNames(names: credentials)
                                 }
                             }
                             if let conflicts = package.conflicts, !conflicts.isEmpty {
@@ -309,6 +348,26 @@ struct MarketplaceView: View {
                         }
                     }
 
+                    GroupBox("Grades") {
+                        VStack(spacing: 0) {
+                            PackageGradeRows(verdicts: MarketplaceGrading.grades(for: package, reachability: reachability(for: package)))
+                            Divider()
+                            Text(
+                                "Every grade above measures one thing this Mac can check without running anything. Hover a line to read exactly what it measured; a line with nothing to measure stays \"Not graded\" rather than passing."
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                        }
+                    }
+
+                    if package.components.contains(.mcpServer) {
+                        DeclaredToolsCard(tools: package.tools, sourceName: package.sourceName)
+                    }
+
                     if package.nativeInstalls.isEmpty {
                         Button("Review Source…", systemImage: "checklist") {
                             model.reviewMarketplacePackage(package.id)
@@ -316,24 +375,7 @@ struct MarketplaceView: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(model.isInteractionLocked)
                     } else {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Native install routes").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                            FlowLayout(spacing: 8) {
-                                ForEach(package.nativeInstalls) { route in
-                                    Button {
-                                        model.planMarketplaceInstall(
-                                            packageID: package.id, client: route.client, remove: route.reportsInstalled(in: package))
-                                    } label: {
-                                        HStack(spacing: 7) {
-                                            ClientBrandIcon(client: route.client, size: 14)
-                                            Text(route.isInstalledActionTitle(package: package))
-                                        }
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .disabled(model.isInteractionLocked)
-                                }
-                            }
-                        }
+                        installRoutes(for: package)
                     }
                 }
                 .padding(22)
@@ -345,28 +387,95 @@ struct MarketplaceView: View {
         }
     }
 
+    /// Install routes state the scope they will use in Claude's own words. The
+    /// app does not offer a scope it cannot execute: each vendor route carries
+    /// one, and other scopes are chosen inside the client itself.
+    @ViewBuilder
+    private func installRoutes(for package: MarketplacePackage) -> some View {
+        let scopes = Set(package.nativeInstalls.map(\.scope))
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Native install routes").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            if scopes.count == 1, let scope = scopes.first {
+                InstallScopeNote(scope: scope)
+            }
+            FlowLayout(spacing: 8) {
+                ForEach(package.nativeInstalls) { route in
+                    Button {
+                        model.planMarketplaceInstall(
+                            packageID: package.id, client: route.client, remove: route.reportsInstalled(in: package))
+                    } label: {
+                        HStack(spacing: 7) {
+                            ClientBrandIcon(client: route.client, size: 14)
+                            Text(route.isInstalledActionTitle(package: package))
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isInteractionLocked)
+                    .help("\(route.detail) Scope: \(route.scope.marketplaceInstallTitle).")
+                }
+            }
+            if scopes.count > 1 {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(package.nativeInstalls) { route in
+                        HStack(spacing: 6) {
+                            ClientBrandIcon(client: route.client, size: 12)
+                            Text("\(route.client.rawValue) · \(route.scope.marketplaceInstallTitle)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            Text("Agent Tooling runs each vendor route exactly as it is published. Another scope is chosen inside the client itself.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// What the last refresh could say about the catalog behind a package.
+    /// Grading uses this instead of guessing that silence means healthy.
+    private func reachability(for package: MarketplacePackage) -> SourceReachability {
+        guard let source = model.sources.first(where: { matches($0, package) }) else { return .unknown }
+        if source.trustSummary.localizedCaseInsensitiveContains("unavailable") {
+            return .unreachable(source.trustSummary)
+        }
+        guard let refreshedAt = source.lastRefreshedAt else { return .unknown }
+        return .reachable(refreshedAt)
+    }
+
+    /// The second line of a row's verdict column. It follows the sort, so a
+    /// person ordering by update date can see the dates they are ordering by.
+    private func rowDetail(for package: MarketplacePackage) -> String {
+        if sortOrder == .recentlyUpdated {
+            guard let update = package.lastUpdate else { return "No update date" }
+            return "Updated \(update.date.formatted(date: .abbreviated, time: .omitted))"
+        }
+        return "\(package.components.count) component\(package.components.count == 1 ? "" : "s")"
+    }
+
     private var filteredPackages: [MarketplacePackage] {
-        model.marketplacePackages.filter { package in
+        let matches = model.marketplacePackages.filter { package in
             componentFilter.matches(package)
                 && clientFilter.matches(package)
+                && classificationFilter.matches(package)
                 && matchesSelectedSource(package)
                 && (query.isEmpty
                     || [package.name, package.publisher, package.summary, package.components.map(\.displayName).joined(separator: " ")]
                         .joined(separator: " ")
                         .localizedCaseInsensitiveContains(query))
         }
-        .sorted {
-            let nameOrder = $0.name.localizedCaseInsensitiveCompare($1.name)
-            return nameOrder == .orderedSame ? $0.id < $1.id : nameOrder == .orderedAscending
-        }
+        return MarketplaceSorting.sorted(matches, by: sortOrder, searchTerm: query)
     }
 
     private var selectedPackage: MarketplacePackage? { model.marketplacePackages.first { $0.id == selectedPackageID } }
 
     private var hasActiveFilter: Bool {
-        !query.isEmpty || componentFilter != .all || clientFilter != .all || selectedSourceID != nil
+        !query.isEmpty || componentFilter != .all || clientFilter != .all || classificationFilter != .all || selectedSourceID != nil
     }
 
+    /// The empty state names the source and the filter that produced the
+    /// emptiness, so nothing reads as a failure that is really a filter.
     private var emptyPackageMessage: String {
         guard hasActiveFilter else {
             return "Refresh native catalogs or add a local folder, checked-out Git repository, or Agent Plugin package."
@@ -375,6 +484,9 @@ struct MarketplaceView: View {
             return
                 "\(source.name) publishes no \(componentFilter.rawValue.lowercased()) packages. Native client catalogs list plugins; skills come from Agent Plugins folders and Git checkouts you add."
         }
+        if let source = selectedSource, let classification = classificationFilter.classification {
+            return "Nothing from \(source.name) is classified \(classification.displayName). \(classification.definition)"
+        }
         if let source = selectedSource {
             return "\(source.name) has nothing matching the current filters."
         }
@@ -382,7 +494,10 @@ struct MarketplaceView: View {
             return
                 "No catalog here publishes standalone skills. Add a local folder or Git checkout containing Agent Plugins packages to see skills."
         }
-        return "Try a different package name, publisher, component, or app."
+        if let classification = classificationFilter.classification {
+            return "No package here is classified \(classification.displayName). \(classificationFilter.measurement)"
+        }
+        return "Try a different package name, publisher, component, app, or provenance."
     }
 
     private var selectedSource: ToolingSource? {
@@ -392,34 +507,30 @@ struct MarketplaceView: View {
 
     /// Native catalogs do not carry a source identifier, so each package is
     /// matched back to the row that produced it by its catalog prefix.
-    private func matchesSelectedSource(_ package: MarketplacePackage) -> Bool {
-        guard let source = selectedSource else { return true }
+    private func matches(_ source: ToolingSource, _ package: MarketplacePackage) -> Bool {
         switch source.kind {
         case .localFolder, .gitRepository:
-            return package.sourceID == source.id
+            package.sourceID == source.id
         case .claudeMarketplace:
-            return package.id.hasPrefix("claude:")
+            package.id.hasPrefix("claude:")
         case .openAIPluginDirectory:
-            return package.id.hasPrefix("codex:")
+            package.id.hasPrefix("codex:")
         case .mcpRegistry:
-            return package.id.hasPrefix("mcp-registry:")
+            package.id.hasPrefix("mcp-registry:")
         case .agentPlugins, .geminiExtensionGallery:
-            return false
+            false
         }
+    }
+
+    private func matchesSelectedSource(_ package: MarketplacePackage) -> Bool {
+        guard let source = selectedSource else { return true }
+        return matches(source, package)
     }
 
     /// A one-line inventory per source, so an empty component filter is
     /// explained by the catalog rather than looking like a failure.
     private func contentsSummary(for source: ToolingSource) -> String? {
-        let packages = model.marketplacePackages.filter { package in
-            switch source.kind {
-            case .localFolder, .gitRepository: package.sourceID == source.id
-            case .claudeMarketplace: package.id.hasPrefix("claude:")
-            case .openAIPluginDirectory: package.id.hasPrefix("codex:")
-            case .mcpRegistry: package.id.hasPrefix("mcp-registry:")
-            case .agentPlugins, .geminiExtensionGallery: false
-            }
-        }
+        let packages = model.marketplacePackages.filter { matches(source, $0) }
         guard !packages.isEmpty else { return nil }
         let counts: [(String, Int)] = [
             ("skill", packages.filter { $0.components.contains(.skill) }.count),
@@ -536,6 +647,62 @@ private enum MarketplaceClientFilter: String, CaseIterable, Identifiable {
     }
 }
 
+private enum MarketplaceClassificationFilter: String, CaseIterable, Identifiable {
+    case all = "Any provenance"
+    case reference = "Reference"
+    case official = "Official"
+    case community = "Community"
+    case unverified = "Unverified"
+
+    var id: String { rawValue }
+
+    var classification: PackageClassification? {
+        switch self {
+        case .all: nil
+        case .reference: .reference
+        case .official: .official
+        case .community: .community
+        case .unverified: .unverified
+        }
+    }
+
+    var measurement: String {
+        guard let classification else {
+            return
+                "Provenance says who a catalog verified, not whether a package is safe. Only the official MCP registry verifies a publisher at all."
+        }
+        return classification.definition
+    }
+
+    func matches(_ package: MarketplacePackage) -> Bool {
+        guard let classification else { return true }
+        return MarketplaceProvenanceClassifier.classify(package).classification == classification
+    }
+}
+
+/// One line stating the scope an install will use, in Claude Code's own
+/// vocabulary, so the word on screen matches the word in the client.
+private struct InstallScopeNote: View {
+    let scope: ToolingScope
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: "person.crop.square")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Scope: \(scope.marketplaceInstallTitle)")
+                    .font(.caption.weight(.medium))
+                Text(scope.marketplaceInstallDetail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private enum MarketplaceComponentFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case skills = "Skills"
@@ -648,9 +815,14 @@ private enum MarketplaceLocation {
     }
 }
 
+/// Tile, name, one clause, verdict. The verdict column carries the provenance
+/// badge over whichever local fact matters most: where it is installed, or the
+/// date the current sort is ordering by.
 private struct MarketplacePackageRow: View {
     let package: MarketplacePackage
     let selected: Bool
+    let verdict: PackageClassificationVerdict
+    let detail: String
 
     var body: some View {
         HStack(spacing: 11) {
@@ -666,12 +838,16 @@ private struct MarketplacePackageRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 12)
-            if package.isInstalled {
-                ClientMarks(present: Set(package.installedClients), size: 13)
-            } else {
-                Text("\(package.components.count) component\(package.components.count == 1 ? "" : "s")")
-                    .font(.caption)
-                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+            VStack(alignment: .trailing, spacing: 3) {
+                ProvenanceBadge(verdict: verdict, tint: selected ? .white : nil)
+                if package.isInstalled {
+                    ClientMarks(present: Set(package.installedClients), size: 12)
+                } else {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                        .lineLimit(1)
+                }
             }
         }
         .padding(.vertical, 6)

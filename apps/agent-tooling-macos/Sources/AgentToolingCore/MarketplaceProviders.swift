@@ -52,7 +52,16 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
     public let id = "mcp.official-registry"
     public let displayName = "Official MCP Registry"
 
-    private static let maximumResponseBytes = 4_194_304
+    private enum Limit {
+        static let responseBytes = 4_194_304
+        static let tools = 200
+        static let schemaFields = 60
+    }
+
+    /// The registry's own `_meta` namespaces, spelled once.
+    private static let registryOfficialMetaKey = "io.modelcontextprotocol.registry/official"
+    private static let registryPublisherMetaKey = "io.modelcontextprotocol.registry/publisher-provided"
+
     private let baseURL: URL
     private let loader: any HTTPDataLoading
 
@@ -100,7 +109,7 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
         guard (200..<300).contains(response.statusCode) else {
             throw MarketplaceProviderError.httpStatus(response.statusCode)
         }
-        guard data.count <= Self.maximumResponseBytes else {
+        guard data.count <= Limit.responseBytes else {
             throw MarketplaceProviderError.responseTooLarge
         }
 
@@ -118,6 +127,7 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
 
     private static func marketplacePackage(_ entry: RegistryEntry) -> MarketplacePackage? {
         let server = entry.server
+        let declaredTools = declaredTools(in: server)
         guard let name = bounded(server.name, limit: 256), let version = bounded(server.version, limit: 256) else {
             return nil
         }
@@ -139,7 +149,7 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
             id: "mcp-registry:\(name)@\(version)",
             name: name,
             publisher: publisher,
-            summary: bounded(server.description, limit: 8_192) ?? "No description provided.",
+            summary: bounded(server.description, limit: 8_192) ?? MarketplaceCopy.missingRegistryDescription,
             sourceName: "Official MCP Registry",
             revision: version,
             components: [.mcpServer],
@@ -158,8 +168,119 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
             ),
             requestedCredentialNames: credentialNames,
             ownership: .managed,
-            updateStatus: .unknown
+            updateStatus: .unknown,
+            lastUpdate: lastUpdate(entry),
+            tools: declaredTools
         )
+    }
+
+    /// The registry records when it last accepted a change to a listing. That
+    /// is the only update date this app can defend, so it is the only one it
+    /// keeps — publish dates are used only when no update date exists.
+    private static func lastUpdate(_ entry: RegistryEntry) -> PackageUpdateRecord? {
+        guard case .object(let official)? = entry.meta[registryOfficialMetaKey] else { return nil }
+        let candidates = [official["updatedAt"], official["publishedAt"]]
+        for candidate in candidates {
+            guard case .string(let text)? = candidate, let date = timestamp(text) else { continue }
+            return PackageUpdateRecord(date: date, origin: .catalogListing)
+        }
+        return nil
+    }
+
+    private static func timestamp(_ value: String) -> Date? {
+        guard value.count <= 64 else { return nil }
+        if let date = try? Date(value, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) { return date }
+        return try? Date(value, strategy: Date.ISO8601FormatStyle())
+    }
+
+    /// Tool lists are publisher metadata, not an observation: the registry
+    /// schema has no tools field, and a handful of publishers put one in their
+    /// own `_meta` block. Where nobody published one the package carries `nil`
+    /// so the UI can say so instead of drawing an empty table.
+    private static func declaredTools(in server: RegistryServer) -> [MCPToolDescriptor]? {
+        var candidates: [JSONValue] = []
+        if let tools = server.tools { candidates.append(.array(tools)) }
+        if case .object(let published)? = server.meta[registryPublisherMetaKey] {
+            if let tools = published["tools"] { candidates.append(tools) }
+            // Publishers namespace their own metadata, so a tool list is often
+            // one level down under a reverse-DNS key of their choosing.
+            for value in published.values {
+                guard case .object(let nested) = value, let tools = nested["tools"] else { continue }
+                candidates.append(tools)
+            }
+        }
+        for candidate in candidates {
+            guard case .array(let entries) = candidate, !entries.isEmpty else { continue }
+            var seen: Set<String> = []
+            let tools = entries.prefix(Limit.tools).compactMap { entry -> MCPToolDescriptor? in
+                guard let tool = toolDescriptor(entry), seen.insert(tool.name).inserted else { return nil }
+                return tool
+            }
+            if !tools.isEmpty { return tools }
+        }
+        return nil
+    }
+
+    private static func toolDescriptor(_ value: JSONValue) -> MCPToolDescriptor? {
+        guard case .object(let fields) = value,
+            case .string(let rawName)? = fields["name"],
+            let name = bounded(rawName, limit: 128)
+        else { return nil }
+        let input = schemaFields(fields["inputSchema"])
+        let output = schemaFields(fields["outputSchema"])
+        return MCPToolDescriptor(
+            name: name,
+            title: string(fields["title"], limit: 128),
+            summary: string(fields["description"], limit: 1_024),
+            annotations: annotations(fields["annotations"]),
+            inputFields: input.fields,
+            outputFields: output.fields,
+            declaresInputSchema: input.declared,
+            declaresOutputSchema: output.declared
+        )
+    }
+
+    /// MCP's hints are read exactly as declared. An absent hint stays absent:
+    /// the specification's defaults are a client's own risk posture, not a
+    /// statement the publisher made, and the app does not put words in their
+    /// mouth.
+    private static func annotations(_ value: JSONValue?) -> MCPToolAnnotations {
+        guard case .object(let fields)? = value else { return MCPToolAnnotations() }
+        return MCPToolAnnotations(
+            readOnly: flag(fields["readOnlyHint"] ?? fields["readOnly"]),
+            destructive: flag(fields["destructiveHint"] ?? fields["destructive"]),
+            idempotent: flag(fields["idempotentHint"] ?? fields["idempotent"]),
+            openWorld: flag(fields["openWorldHint"] ?? fields["openWorld"])
+        )
+    }
+
+    /// Only property names, declared types, and the required list are read.
+    /// Defaults and examples are dropped here so a value from a catalog can
+    /// never reach a display or a plan.
+    private static func schemaFields(_ value: JSONValue?) -> (fields: [MCPSchemaField], declared: Bool) {
+        guard case .object(let schema)? = value else { return ([], false) }
+        guard case .object(let properties)? = schema["properties"] else { return ([], true) }
+        var required: Set<String> = []
+        if case .array(let names)? = schema["required"] {
+            for case .string(let name) in names.prefix(Limit.schemaFields) { required.insert(name) }
+        }
+        let fields = properties.keys.sorted().prefix(Limit.schemaFields).compactMap { key -> MCPSchemaField? in
+            guard let name = bounded(key, limit: 128) else { return nil }
+            var type: String?
+            if case .object(let property)? = properties[key] { type = string(property["type"], limit: 32) }
+            return MCPSchemaField(name: name, type: type, isRequired: required.contains(key))
+        }
+        return (fields, true)
+    }
+
+    private static func flag(_ value: JSONValue?) -> Bool? {
+        guard case .bool(let flag)? = value else { return nil }
+        return flag
+    }
+
+    private static func string(_ value: JSONValue?, limit: Int) -> String? {
+        guard case .string(let text)? = value else { return nil }
+        return bounded(text, limit: limit)
     }
 
     private static func reviewedNativeInstalls(server: RegistryServer, credentialNames: [String]) -> [NativeInstall] {
@@ -352,6 +473,19 @@ private struct RegistryMetadata: Decodable {
 
 private struct RegistryEntry: Decodable {
     var server: RegistryServer
+    /// The registry's own record for the listing, including the dates it keeps.
+    var meta: [String: JSONValue]
+
+    private enum CodingKeys: String, CodingKey {
+        case server
+        case meta = "_meta"
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        server = try container.decode(RegistryServer.self, forKey: .server)
+        meta = (try? container.decodeIfPresent([String: JSONValue].self, forKey: .meta)).flatMap { $0 } ?? [:]
+    }
 }
 
 private struct RegistryServer: Decodable {
@@ -361,19 +495,28 @@ private struct RegistryServer: Decodable {
     var repository: RegistryRepository?
     var packages: [RegistryPackage]
     var remotes: [RegistryRemote]
+    /// Publisher-supplied metadata. The registry does not validate its shape,
+    /// so everything read from it is bounded and optional.
+    var meta: [String: JSONValue]
+    /// Not part of the published schema today; read anyway so the listing wins
+    /// if the registry ever adopts a first-class tools field.
+    var tools: [JSONValue]?
 
     private enum CodingKeys: String, CodingKey {
-        case name, description, version, repository, packages, remotes
+        case name, description, version, repository, packages, remotes, tools
+        case meta = "_meta"
     }
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
-        description = try container.decodeIfPresent(String.self, forKey: .description) ?? "No description provided."
+        description = try container.decodeIfPresent(String.self, forKey: .description) ?? MarketplaceCopy.missingRegistryDescription
         version = try container.decode(String.self, forKey: .version)
         repository = try container.decodeIfPresent(RegistryRepository.self, forKey: .repository)
         packages = try container.decodeIfPresent([RegistryPackage].self, forKey: .packages) ?? []
         remotes = try container.decodeIfPresent([RegistryRemote].self, forKey: .remotes) ?? []
+        meta = (try? container.decodeIfPresent([String: JSONValue].self, forKey: .meta)).flatMap { $0 } ?? [:]
+        tools = (try? container.decodeIfPresent([JSONValue].self, forKey: .tools)).flatMap { $0 }
     }
 }
 
