@@ -19,6 +19,43 @@ public struct CreatedSkill: Sendable {
     }
 }
 
+/// One discovered skill offered for adoption, paired with the on-disk source a
+/// setup check actually observed. Adoption never guesses a location: a skill
+/// the scan could not place is reported and skipped rather than searched for.
+public struct SkillAdoptionCandidate: Sendable {
+    public var skill: Skill
+    public var sourcePath: String?
+
+    public init(skill: Skill, sourcePath: String?) {
+        self.skill = skill
+        self.sourcePath = sourcePath
+    }
+}
+
+/// A candidate left out of an adoption plan, with the reason a person can act
+/// on. One unusable skill never cancels the rest of the batch.
+public struct SkillAdoptionRejection: Identifiable, Hashable, Sendable {
+    public let id: String
+    public var displayName: String
+    public var reason: String
+
+    public init(id: String, displayName: String, reason: String) {
+        self.id = id
+        self.displayName = displayName
+        self.reason = reason
+    }
+}
+
+/// A prepared adoption. Nothing has entered the managed library yet: the
+/// reviewed copy waits in a hidden staging folder until the plan is approved,
+/// and `discardAdoption` removes it when it is not.
+public struct SkillAdoption: Sendable {
+    public var plan: OperationPlan
+    public var skills: [Skill]
+    public var rejections: [SkillAdoptionRejection]
+    var stagedLibraryURL: URL
+}
+
 /// Owns only the app's managed package library. Imports and native client
 /// locations remain separate so a user can work entirely without Git.
 public final class WorkspaceLibrary {
@@ -28,6 +65,15 @@ public final class WorkspaceLibrary {
     public static let maximumTriggerLength = 512
     public static let maximumNegativeTriggerLength = 4_096
     public static let maximumProjectPathLength = 4_096
+    public static let maximumAdoptionBatch = 500
+
+    /// Mirrors the operation engine's copy limits so an oversized batch fails
+    /// while it is still only a plan instead of part-way through execution.
+    private static let maximumStagedLibraryItems = 10_000
+    private static let maximumStagedLibraryBytes = 384 * 1_024 * 1_024
+    private static let maximumAdoptedSkillItems = 2_000
+    private static let maximumAdoptedSkillBytes = 32 * 1_024 * 1_024
+    private static let adoptionStagingPrefix = ".adoption-"
 
     public let store: WorkspaceStore
     private let fileManager: FileManager
@@ -195,6 +241,254 @@ public final class WorkspaceLibrary {
             authoringOrigin: .codexGenerated
         )
         return CreatedSkill(skill: skill, packageURL: destination, skillURL: skillURL)
+    }
+
+    /// Prepares one reviewable plan that copies discovered skills into the
+    /// managed library. A client's own copy is never moved or removed: the
+    /// library gains a managed package that then becomes the canonical source
+    /// for installing, editing, and backing that skill up.
+    ///
+    /// The operation engine only accepts a copy whose source already sits
+    /// inside the managed library, so the reviewed bytes are staged there first
+    /// and the plan replaces the library with that exact fingerprinted copy.
+    /// Every existing package is carried forward unchanged.
+    ///
+    /// `reservedIdentifiers` are the names other records outside this batch
+    /// already answer to. A plugin-provided skill loses its namespace when it
+    /// becomes portable, and two different skills must never end up sharing the
+    /// resulting name.
+    public func adoptionPlan(
+        for candidates: [SkillAdoptionCandidate],
+        reservedIdentifiers: Set<String> = []
+    ) throws -> SkillAdoption {
+        guard !candidates.isEmpty else {
+            throw WorkspaceLibraryError.noAdoptableSkills("Select at least one discovered skill.")
+        }
+        guard candidates.count <= Self.maximumAdoptionBatch else {
+            throw WorkspaceLibraryError.adoptionBatchTooLarge(Self.maximumAdoptionBatch)
+        }
+        let libraryRoot = try managedLibraryURL()
+        _ = try managedPackagesURL()
+        removeAbandonedAdoptionStaging(in: libraryRoot)
+        let staging = libraryRoot.appending(path: "\(Self.adoptionStagingPrefix)\(UUID().uuidString)", directoryHint: .isDirectory)
+        var isPrepared = false
+        defer { if !isPrepared { removeTransientItemIfPresent(staging) } }
+        try stageCurrentLibrary(from: libraryRoot, to: staging)
+
+        let stagedPackages = staging.appending(path: "packages", directoryHint: .isDirectory)
+        var adopted: [Skill] = []
+        var rejections: [SkillAdoptionRejection] = []
+        for candidate in candidates {
+            do {
+                adopted.append(
+                    try stageAdoptedPackage(for: candidate, in: stagedPackages, reservedIdentifiers: reservedIdentifiers))
+            } catch {
+                rejections.append(
+                    SkillAdoptionRejection(
+                        id: candidate.skill.id,
+                        displayName: candidate.skill.displayName,
+                        reason: error.localizedDescription
+                    ))
+            }
+        }
+        guard !adopted.isEmpty else { throw WorkspaceLibraryError.noAdoptableSkills(Self.skippedSummary(rejections)) }
+
+        try normalizePrivatePermissions(under: staging)
+        let fingerprint = try DirectoryFingerprint.sha256(
+            of: staging,
+            fileManager: fileManager,
+            maximumItems: Self.maximumStagedLibraryItems,
+            maximumBytes: Self.maximumStagedLibraryBytes
+        )
+        let plan = OperationPlan(
+            kind: .createSkill,
+            title: adopted.count == 1 ? "Adopt \(adopted.first?.displayName ?? "")" : "Adopt \(adopted.count) skills",
+            summary: Self.adoptionSummary(adopted: adopted, rejections: rejections),
+            scope: .user,
+            steps: [
+                OperationStep(
+                    kind: .copyDirectory,
+                    title: "Add \(adopted.count) skill\(adopted.count == 1 ? "" : "s") to the managed library",
+                    detail:
+                        "Replaces the managed package library with the reviewed copy prepared here. It carries every existing managed package forward unchanged and adds \(Self.nameList(adopted.map(\.displayName))). The previous library is kept as a rollback copy.",
+                    sourcePath: staging.path(percentEncoded: false),
+                    sourceFingerprint: fingerprint,
+                    destinationPath: store.libraryURL.path(percentEncoded: false),
+                    stopsOnFailure: true
+                )
+            ],
+            requiresConfirmation: true
+        )
+        isPrepared = true
+        return SkillAdoption(plan: plan, skills: adopted, rejections: rejections, stagedLibraryURL: staging)
+    }
+
+    /// Removes the staged copy an unapproved adoption prepared. An approved
+    /// adoption already replaced the library, so a missing folder is expected.
+    public func discardAdoption(_ adoption: SkillAdoption) {
+        removeTransientItemIfPresent(adoption.stagedLibraryURL)
+    }
+
+    /// Copies the library's current visible contents into the replacement.
+    /// Hidden entries are another operation's transient staging or rollback
+    /// copies, so they are left behind rather than promoted.
+    private func stageCurrentLibrary(from libraryRoot: URL, to staging: URL) throws {
+        try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
+        let contents =
+            (try? fileManager.contentsOfDirectory(
+                at: libraryRoot,
+                includingPropertiesForKeys: [.isSymbolicLinkKey],
+                options: [.skipsHiddenFiles]
+            )) ?? []
+        for item in contents.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            let values = try item.resourceValues(forKeys: [.isSymbolicLinkKey])
+            guard values.isSymbolicLink != true else {
+                throw WorkspaceLibraryError.unsafeManagedLibrary(item.path(percentEncoded: false))
+            }
+            try fileManager.copyItem(at: item, to: staging.appending(path: item.lastPathComponent))
+        }
+        try fileManager.createDirectory(
+            at: staging.appending(path: "packages", directoryHint: .isDirectory),
+            withIntermediateDirectories: true
+        )
+    }
+
+    /// Stages one discovered skill as a portable package inside the replacement
+    /// library. Anything the operation engine would later refuse — a symbolic
+    /// link, a missing source, a definition the managed-library checker rejects
+    /// — is refused here so the rest of the batch can continue.
+    private func stageAdoptedPackage(
+        for candidate: SkillAdoptionCandidate,
+        in stagedPackages: URL,
+        reservedIdentifiers: Set<String>
+    ) throws -> Skill {
+        guard !candidate.skill.owned else { throw WorkspaceLibraryError.adoptionAlreadyManaged(candidate.skill.id) }
+        guard let rawPath = candidate.sourcePath?.trimmingCharacters(in: .whitespacesAndNewlines), !rawPath.isEmpty else {
+            throw WorkspaceLibraryError.adoptionSourceUnknown
+        }
+        let source = URL(fileURLWithPath: rawPath).standardizedFileURL
+        let sourceValues = try? source.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard sourceValues?.isSymbolicLink != true else { throw WorkspaceLibraryError.adoptionSourceLinked(rawPath) }
+        guard sourceValues?.isDirectory == true else { throw WorkspaceLibraryError.adoptionSourceMissing(rawPath) }
+
+        let id = try adoptedIdentifier(for: candidate.skill)
+        guard !reservedIdentifiers.contains(id) else { throw WorkspaceLibraryError.adoptionIdentifierTaken(id) }
+        let packageID = "local-\(id)"
+        let packageURL = stagedPackages.appending(path: packageID, directoryHint: .isDirectory)
+        guard !fileManager.fileExists(atPath: packageURL.path(percentEncoded: false)) else {
+            throw WorkspaceLibraryError.alreadyExists(id)
+        }
+        // Fingerprinting the client's folder before copying is the symbolic
+        // link and size gate: it refuses exactly what the engine would refuse
+        // at execution, while the source is still only being inspected.
+        _ = try DirectoryFingerprint.sha256(
+            of: source,
+            fileManager: fileManager,
+            maximumItems: Self.maximumAdoptedSkillItems,
+            maximumBytes: Self.maximumAdoptedSkillBytes
+        )
+
+        var isStaged = false
+        defer { if !isStaged { removeTransientItemIfPresent(packageURL) } }
+        let skillURL =
+            packageURL
+            .appending(path: "skills", directoryHint: .isDirectory)
+            .appending(path: id, directoryHint: .isDirectory)
+        try fileManager.createDirectory(at: skillURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fileManager.copyItem(at: source, to: skillURL)
+        try writePortablePackageManifest(manifestName: id, displayName: displayName(for: id), packageURL: packageURL)
+        try validateStagedPackage(packageURL, skillID: id)
+        _ = try validateSkillDefinition(at: skillURL.appending(path: "SKILL.md", directoryHint: .notDirectory), id: id)
+        let files = try relativeFiles(in: skillURL)
+        isStaged = true
+
+        // Adoption inherits the clients that already report the skill, so a
+        // later install refreshes those copies from the managed source instead
+        // of claiming targets the skill was never present in.
+        let presentClients = candidate.skill.clients.filter(\.reportsLocalPresence)
+        return Skill(
+            id: id,
+            name: id,
+            displayName: displayName(for: id),
+            summary: candidate.skill.summary,
+            bundle: packageID,
+            scope: ToolingScope.user.displayName,
+            owned: true,
+            triggers: [],
+            negativeTrigger: "",
+            files: files,
+            clients: presentClients.isEmpty ? candidate.skill.clients : presentClients,
+            validationCount: 0
+        )
+    }
+
+    /// A discovered skill can be namespaced by the plugin that provides it
+    /// (`plugin:skill`). The managed library is portable, so adoption keeps
+    /// only the skill's own portable name.
+    private func adoptedIdentifier(for skill: Skill) throws -> String {
+        let raw = skill.id.split(separator: ":").last.map(String.init) ?? skill.id
+        return try Self.normalizedIdentifier(raw)
+    }
+
+    /// An adoption that was prepared but never approved leaves its staged copy
+    /// behind when the app quits. Only one plan can await review at a time, so
+    /// any staging folder still present belongs to an abandoned review.
+    private func removeAbandonedAdoptionStaging(in libraryRoot: URL) {
+        let names = (try? fileManager.contentsOfDirectory(atPath: libraryRoot.path(percentEncoded: false))) ?? []
+        for name in names where name.hasPrefix(Self.adoptionStagingPrefix) {
+            removeTransientItemIfPresent(libraryRoot.appending(path: name, directoryHint: .isDirectory))
+        }
+    }
+
+    /// Applies the same private permissions the operation engine applies to a
+    /// staged copy. Doing it before the fingerprint is taken keeps the reviewed
+    /// value equal to the one the engine recomputes at execution.
+    private func normalizePrivatePermissions(under root: URL) throws {
+        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path(percentEncoded: false))
+        guard
+            let enumerator = fileManager.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey],
+                options: []
+            )
+        else { throw WorkspaceLibraryError.unsafeManagedLibrary(root.path(percentEncoded: false)) }
+        for case let item as URL in enumerator {
+            let values = try item.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey])
+            guard values.isSymbolicLink != true else {
+                throw WorkspaceLibraryError.unsafeManagedLibrary(item.path(percentEncoded: false))
+            }
+            let path = item.path(percentEncoded: false)
+            if values.isDirectory == true {
+                try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: path)
+            } else if values.isRegularFile == true {
+                let existing = (try fileManager.attributesOfItem(atPath: path)[.posixPermissions] as? NSNumber)?.intValue ?? 0
+                try fileManager.setAttributes([.posixPermissions: existing & 0o111 == 0 ? 0o600 : 0o700], ofItemAtPath: path)
+            }
+        }
+    }
+
+    private static func adoptionSummary(adopted: [Skill], rejections: [SkillAdoptionRejection]) -> String {
+        let base =
+            "Copy \(adopted.count) discovered skill\(adopted.count == 1 ? "" : "s") into Agent Tooling's managed library. Each client keeps its own files; the library copy becomes the one Agent Tooling installs, edits, and backs up."
+        guard !rejections.isEmpty else { return base }
+        return "\(base) \(skippedSummary(rejections))"
+    }
+
+    private static func skippedSummary(_ rejections: [SkillAdoptionRejection]) -> String {
+        guard !rejections.isEmpty else { return "" }
+        let listed = rejections.prefix(3).map { "\($0.displayName) — \($0.reason)" }.joined(separator: " ")
+        let remaining = rejections.count - min(3, rejections.count)
+        let suffix = remaining > 0 ? " \(remaining) more \(remaining == 1 ? "was" : "were") skipped." : ""
+        return "Skipped \(rejections.count) skill\(rejections.count == 1 ? "" : "s"): \(listed)\(suffix)"
+    }
+
+    private static func nameList(_ names: [String]) -> String {
+        switch names.count {
+        case 0: ""
+        case 1: names.first ?? ""
+        case 2: names.joined(separator: " and ")
+        default: "\(names.prefix(2).joined(separator: ", ")), and \(names.count - 2) more"
+        }
     }
 
     public func updateSkill(_ existing: Skill, from draft: SkillDraft) throws -> CreatedSkill {
@@ -491,22 +785,30 @@ public final class WorkspaceLibrary {
     }
 
     public func validateSkill(_ skill: Skill) throws -> Int {
-        let file = skillURL(for: skill).appending(path: "SKILL.md", directoryHint: .notDirectory)
+        try validateSkillDefinition(
+            at: skillURL(for: skill).appending(path: "SKILL.md", directoryHint: .notDirectory),
+            id: skill.id
+        )
+    }
+
+    /// The managed-library checker addressed by file rather than by record, so
+    /// a staged package can be held to the same rule before a plan offers it.
+    private func validateSkillDefinition(at file: URL, id: String) throws -> Int {
         let contents = try BoundedFileAccess.readUTF8(at: file, allowSymbolicLink: false)
         let lines = contents.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         guard lines.first?.trimmingCharacters(in: .whitespaces) == "---",
             let closingDelimiter = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "---" }),
             closingDelimiter > 1
         else {
-            throw WorkspaceLibraryError.invalidSkillDefinition(skill.id)
+            throw WorkspaceLibraryError.invalidSkillDefinition(id)
         }
         let frontmatter = lines[1..<closingDelimiter]
-        guard frontmatter.contains(where: { $0.trimmingCharacters(in: .whitespaces) == "name: \(skill.id)" }),
+        guard frontmatter.contains(where: { $0.trimmingCharacters(in: .whitespaces) == "name: \(id)" }),
             frontmatter.contains(where: {
                 let line = $0.trimmingCharacters(in: .whitespaces)
                 return line.hasPrefix("description:") && line.dropFirst("description:".count).trimmingCharacters(in: .whitespaces).count > 2
             })
-        else { throw WorkspaceLibraryError.invalidSkillDefinition(skill.id) }
+        else { throw WorkspaceLibraryError.invalidSkillDefinition(id) }
         return 3
     }
 
@@ -730,6 +1032,23 @@ public final class WorkspaceLibrary {
         }
     }
 
+    /// The managed library root, checked the way the packages folder is.
+    /// Adoption replaces this whole folder through a reviewed plan, so it must
+    /// never be a symbolic link or a file.
+    private func managedLibraryURL() throws -> URL {
+        let root = store.libraryURL.standardizedFileURL
+        let values = try? root.resourceValues(forKeys: [.isSymbolicLinkKey])
+        guard values?.isSymbolicLink != true else {
+            throw WorkspaceLibraryError.unsafeManagedLibrary(root.path(percentEncoded: false))
+        }
+        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+        let createdValues = try root.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard createdValues.isDirectory == true, createdValues.isSymbolicLink != true else {
+            throw WorkspaceLibraryError.unsafeManagedLibrary(root.path(percentEncoded: false))
+        }
+        return root
+    }
+
     private func managedPackagesURL() throws -> URL {
         let root = packagesURL.standardizedFileURL
         let values = try? root.resourceValues(forKeys: [.isSymbolicLinkKey])
@@ -798,6 +1117,13 @@ public enum WorkspaceLibraryError: LocalizedError, Sendable {
     case generatedSkillRequiresSourceEdit(String)
     case replacementRollbackFailed(String, String, String)
     case missingRollbackCopy(String)
+    case adoptionSourceUnknown
+    case adoptionSourceLinked(String)
+    case adoptionSourceMissing(String)
+    case adoptionAlreadyManaged(String)
+    case adoptionIdentifierTaken(String)
+    case adoptionBatchTooLarge(Int)
+    case noAdoptableSkills(String)
 
     public var errorDescription: String? {
         switch self {
@@ -828,6 +1154,14 @@ public enum WorkspaceLibraryError: LocalizedError, Sendable {
         case .replacementRollbackFailed(let path, let replacement, let rollback):
             "Updating the managed package at \(path) failed, and restoring its previous copy also failed. Replacement error: \(replacement). Restore error: \(rollback)."
         case .missingRollbackCopy(let path): "The previous managed package needed for rollback is missing at \(path)."
+        case .adoptionSourceUnknown: "The last setup check did not record where its files are. Check setup again, then adopt it."
+        case .adoptionSourceLinked(let path): "Its source at \(path) is a symbolic link. Adopt the folder it points to instead."
+        case .adoptionSourceMissing(let path): "Its source folder at \(path) is no longer on this Mac."
+        case .adoptionAlreadyManaged(let identifier): "\(identifier) is already managed by Agent Tooling."
+        case .adoptionIdentifierTaken(let identifier):
+            "Another skill on this Mac already uses the portable name \(identifier). Adopt that one instead, or rename this one first."
+        case .adoptionBatchTooLarge(let maximum): "Adopt at most \(maximum) skills at a time."
+        case .noAdoptableSkills(let detail): "No selected skill could be adopted. \(detail)"
         }
     }
 }
