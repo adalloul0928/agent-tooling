@@ -10,6 +10,7 @@ let package = Package(
     products: [
         .executable(name: "AgentTooling", targets: ["AgentToolingApp"]),
         .executable(name: "agent-tooling", targets: ["AgentToolingCLI"]),
+        .executable(name: "agent-tooling-mcp", targets: ["AgentToolingMCP"]),
         .library(name: "AgentToolingCore", targets: ["AgentToolingCore"]),
     ],
     targets: [
@@ -29,9 +30,17 @@ let package = Package(
             name: "AgentToolingCLI",
             dependencies: ["AgentToolingCore"]
         ),
+        .executableTarget(
+            name: "AgentToolingMCP",
+            dependencies: ["AgentToolingCore"]
+        ),
         .testTarget(
             name: "AgentToolingCoreTests",
             dependencies: ["AgentToolingCore"]
+        ),
+        .testTarget(
+            name: "AgentToolingMCPTests",
+            dependencies: ["AgentToolingMCP", "AgentToolingCore"]
         ),
         .testTarget(
             name: "AgentToolingAppTests",

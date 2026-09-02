@@ -57,7 +57,7 @@ struct AgentToolingCLI {
         let unavailable = observations.filter { !$0.isCommandAvailable }.map(\.surface)
         try writeJSON(
             DoctorReport(
-                schemaVersion: integrationSchemaVersion,
+                schemaVersion: IntegrationResponseLimits.schemaVersion,
                 isHealthy: unavailable.isEmpty,
                 unavailableTargets: unavailable,
                 observations: observations
@@ -73,91 +73,23 @@ struct AgentToolingCLI {
         )
         try options.requireNoPositionals()
         let query = (options.value(for: "--query") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard query.count <= 512, !containsUnsupportedControlCharacter(query) else {
+        guard query.count <= IntegrationResponseLimits.searchQueryMaximumCharacters,
+            !IntegrationTextSanitizer.containsUnsupportedControlCharacter(query)
+        else {
             throw CLIError.invalidValue("--query")
         }
         let limit: Int
         if let rawLimit = options.value(for: "--limit") {
-            guard let parsedLimit = Int(rawLimit), (1...integrationSearchMaximumLimit).contains(parsedLimit) else {
+            guard let parsedLimit = Int(rawLimit), (1...IntegrationResponseLimits.searchMaximumLimit).contains(parsedLimit) else {
                 throw CLIError.invalidValue("--limit")
             }
             limit = parsedLimit
         } else {
-            limit = integrationSearchDefaultLimit
+            limit = IntegrationResponseLimits.searchDefaultLimit
         }
         let store = try WorkspaceStore(rootURL: options.fileURL(for: "--workspace"))
         let snapshot = try store.loadWorkspaceSnapshot() ?? WorkspaceSnapshot()
-        let normalizedQuery = query.lowercased()
-        var results: [IntegrationSearchResult] = []
-
-        results.append(
-            contentsOf: snapshot.skills.compactMap { skill in
-                guard isIntegrationSafeIdentifier(skill.id),
-                    matchesSearch(
-                        normalizedQuery,
-                        values: [skill.id, skill.displayName, skill.summary, skill.bundle, skill.scope]
-                    )
-                else { return nil }
-                return IntegrationSearchResult(
-                    id: skill.id,
-                    kind: "skill",
-                    name: bounded(skill.displayName, maximum: 512),
-                    description: boundedOptional(skill.summary, maximum: 2_048),
-                    source: boundedOptional(nonPathSource(skill.bundle), maximum: 512),
-                    scope: boundedOptional(skill.scope, maximum: 512),
-                    targets: uniqueIntegrationTargets(skill.clients.map(\.client)),
-                    status: skill.owned ? "Managed" : "Observed"
-                )
-            })
-        results.append(
-            contentsOf: snapshot.mcpServers.compactMap { server in
-                guard isIntegrationSafeIdentifier(server.id),
-                    matchesSearch(normalizedQuery, values: [server.id, server.name, server.summary, server.scope])
-                else { return nil }
-                return IntegrationSearchResult(
-                    id: server.id,
-                    kind: "mcp-server",
-                    name: bounded(server.name, maximum: 512),
-                    description: boundedOptional(server.summary, maximum: 2_048),
-                    source: server.isManagedDefinition ? "Managed library" : "Local configuration",
-                    scope: boundedOptional(server.scope, maximum: 512),
-                    targets: uniqueIntegrationTargets(server.clients.map(\.client)),
-                    status: server.aggregateState.rawValue.capitalized
-                )
-            })
-        results.append(
-            contentsOf: snapshot.plugins.compactMap { plugin in
-                guard isIntegrationSafeIdentifier(plugin.id),
-                    matchesSearch(
-                        normalizedQuery,
-                        values: [plugin.id, plugin.name, plugin.summary, plugin.source, plugin.scope]
-                    )
-                else { return nil }
-                return IntegrationSearchResult(
-                    id: plugin.id,
-                    kind: "plugin",
-                    name: bounded(plugin.name, maximum: 512),
-                    description: boundedOptional(plugin.summary, maximum: 2_048),
-                    source: boundedOptional(nonPathSource(plugin.source), maximum: 512),
-                    scope: boundedOptional(plugin.scope, maximum: 512),
-                    targets: uniqueIntegrationTargets(plugin.clients.map(\.client)),
-                    status: plugin.installed ? "Installed" : "Available"
-                )
-            })
-
-        results.sort {
-            if $0.kind != $1.kind { return $0.kind < $1.kind }
-            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-        }
-        let totalResults = results.count
-        let limitedResults = Array(results.prefix(limit))
-        try writeJSON(
-            IntegrationSearchResponse(
-                schemaVersion: integrationSchemaVersion,
-                results: limitedResults,
-                totalResults: totalResults,
-                truncated: limitedResults.count < totalResults
-            ))
+        try writeJSON(IntegrationSearchIndex.response(for: snapshot, query: query, limit: limit))
     }
 
     private static func request(_ arguments: [String]) throws {
@@ -192,7 +124,7 @@ struct AgentToolingCLI {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !instruction.isEmpty,
             instruction.count <= CodexSkillDraftRequest.maximumInstructionCharacters,
-            !containsUnsupportedControlCharacter(instruction, allowsLineBreaks: true)
+            !IntegrationTextSanitizer.containsUnsupportedControlCharacter(instruction, allowsLineBreaks: true)
         else { throw CLIError.invalidInstruction }
 
         let scope: ToolingScope
@@ -202,7 +134,8 @@ struct AgentToolingCLI {
         default: throw CLIError.invalidValue("--scope")
         }
 
-        let targets = try parseIntegrationTargets(options.value(for: "--targets"))
+        guard let rawTargets = options.value(for: "--targets") else { throw CLIError.missingOption("--targets LIST") }
+        guard let targets = IntegrationTextSanitizer.parseTargets(rawTargets) else { throw CLIError.invalidValue("--targets") }
         let proposedName: String?
         if let name = options.value(for: "--name"), !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             proposedName = try WorkspaceLibrary.normalizedIdentifier(name)
@@ -238,7 +171,7 @@ struct AgentToolingCLI {
         try store.saveCodexSkillDraftRequest(draftRequest)
         try writeJSON(
             IntegrationRequestResponse(
-                schemaVersion: integrationSchemaVersion,
+                schemaVersion: IntegrationResponseLimits.schemaVersion,
                 request: .init(id: draftRequest.id, state: "pending-review")
             ))
     }
@@ -335,17 +268,6 @@ struct AgentToolingCLI {
     }
 }
 
-private let integrationSchemaVersion = 1
-private let integrationSearchDefaultLimit = 100
-private let integrationSearchMaximumLimit = 100
-
-private struct DoctorReport: Encodable {
-    var schemaVersion: Int
-    var isHealthy: Bool
-    var unavailableTargets: [TargetSurface]
-    var observations: [TargetObservation]
-}
-
 private struct CLIOptions {
     private var positionals: [String] = []
     private var values: [String: String] = [:]
@@ -421,96 +343,5 @@ private enum CLIError: LocalizedError {
         case .invalidInstruction: "Provide a non-empty UTF-8 instruction no larger than 64 KB."
         case .unknownRequest(let request): "Unknown request type '\(request)'."
         }
-    }
-}
-
-private struct IntegrationSearchResponse: Encodable {
-    var schemaVersion: Int
-    var results: [IntegrationSearchResult]
-    var totalResults: Int
-    var truncated: Bool
-}
-
-private struct IntegrationSearchResult: Encodable {
-    var id: String
-    var kind: String
-    var name: String
-    var description: String?
-    var source: String?
-    var scope: String?
-    var targets: [String]
-    var status: String?
-}
-
-private struct IntegrationRequestResponse: Encodable {
-    struct Reference: Encodable {
-        var id: UUID
-        var state: String
-    }
-
-    var schemaVersion: Int
-    var request: Reference
-}
-
-private func parseIntegrationTargets(_ rawValue: String?) throws -> [ClientKind] {
-    guard let rawValue else { throw CLIError.missingOption("--targets LIST") }
-    var targets: Set<ClientKind> = []
-    for rawTarget in rawValue.split(separator: ",", omittingEmptySubsequences: false) {
-        switch rawTarget.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "codex": targets.insert(.codex)
-        case "claude", "claude-code": targets.insert(.claude)
-        case "gemini", "gemini-cli": targets.insert(.gemini)
-        default: throw CLIError.invalidValue("--targets")
-        }
-    }
-    guard !targets.isEmpty else { throw CLIError.invalidValue("--targets") }
-    return targets.sorted { $0.rawValue < $1.rawValue }
-}
-
-private func integrationTargetName(_ target: ClientKind) -> String {
-    switch target {
-    case .codex: "codex"
-    case .claude: "claude-code"
-    case .gemini: "gemini"
-    }
-}
-
-private func uniqueIntegrationTargets(_ targets: [ClientKind]) -> [String] {
-    Set(targets.map(integrationTargetName)).sorted()
-}
-
-private func matchesSearch(_ query: String, values: [String]) -> Bool {
-    query.isEmpty || values.contains { $0.localizedCaseInsensitiveContains(query) }
-}
-
-private func bounded(_ value: String, maximum: Int) -> String {
-    String(value.prefix(maximum))
-}
-
-private func boundedOptional(_ value: String?, maximum: Int) -> String? {
-    guard let value else { return nil }
-    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? nil : bounded(trimmed, maximum: maximum)
-}
-
-private func nonPathSource(_ value: String) -> String? {
-    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty, !trimmed.hasPrefix("/"), !trimmed.hasPrefix("~") else { return nil }
-    return trimmed
-}
-
-private func isIntegrationSafeIdentifier(_ value: String) -> Bool {
-    guard let first = value.unicodeScalars.first,
-        CharacterSet.alphanumerics.contains(first),
-        value.count <= 256
-    else { return false }
-    let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._:@+-"))
-    return value.unicodeScalars.allSatisfy { allowed.contains($0) }
-}
-
-private func containsUnsupportedControlCharacter(_ value: String, allowsLineBreaks: Bool = false) -> Bool {
-    value.unicodeScalars.contains { scalar in
-        if allowsLineBreaks, scalar == "\n" || scalar == "\r" || scalar == "\t" { return false }
-        return CharacterSet.controlCharacters.contains(scalar)
     }
 }
