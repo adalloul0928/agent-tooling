@@ -372,13 +372,15 @@ struct MarketplaceView: View {
             return "Refresh native catalogs or add a local folder, checked-out Git repository, or Agent Plugin package."
         }
         if let source = selectedSource, componentFilter != .all {
-            return "\(source.name) publishes no \(componentFilter.rawValue.lowercased()) packages. Native client catalogs list plugins; skills come from Agent Plugins folders and Git checkouts you add."
+            return
+                "\(source.name) publishes no \(componentFilter.rawValue.lowercased()) packages. Native client catalogs list plugins; skills come from Agent Plugins folders and Git checkouts you add."
         }
         if let source = selectedSource {
             return "\(source.name) has nothing matching the current filters."
         }
         if componentFilter == .skills {
-            return "No catalog here publishes standalone skills. Add a local folder or Git checkout containing Agent Plugins packages to see skills."
+            return
+                "No catalog here publishes standalone skills. Add a local folder or Git checkout containing Agent Plugins packages to see skills."
         }
         return "Try a different package name, publisher, component, or app."
     }

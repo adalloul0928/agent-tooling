@@ -119,7 +119,8 @@ struct SyncConduitView: View {
 
             ZStack(alignment: .bottom) {
                 TimelineView(.animation(paused: !animate)) { context in
-                    let phase = animate
+                    let phase =
+                        animate
                         ? -CGFloat(context.date.timeIntervalSinceReferenceDate * 16).truncatingRemainder(dividingBy: 18)
                         : 0
                     Path { path in
@@ -139,7 +140,8 @@ struct SyncConduitView: View {
                     let control = split + (width - split) * 0.55
                     let attention = terminal.state == .attention || terminal.state == .unavailable
                     TimelineView(.animation(paused: !(attention && animate))) { context in
-                        let phase = attention && animate
+                        let phase =
+                            attention && animate
                             ? -CGFloat(context.date.timeIntervalSinceReferenceDate * 16).truncatingRemainder(dividingBy: 18)
                             : 0
                         Path { path in
