@@ -130,6 +130,144 @@ struct MarketplaceProviderTests {
         )
     }
 
+    @Test func officialRegistryDecodesDeclaredToolsAnnotationsAndUpdateDate() async throws {
+        let payload = Data(
+            #"""
+            {
+              "servers": [{
+                "server": {
+                  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+                  "name": "io.github.example/notes",
+                  "description": "A reviewed notes server.",
+                  "version": "1.4.0",
+                  "repository": {"url": "https://github.com/example/notes", "source": "github"},
+                  "remotes": [{"type": "streamable-http", "url": "https://example.com/mcp"}],
+                  "_meta": {
+                    "io.modelcontextprotocol.registry/publisher-provided": {
+                      "com.example.notes": {
+                        "tools": [
+                          {
+                            "name": "search_notes",
+                            "description": "Search the notebook.",
+                            "annotations": {"readOnlyHint": true, "idempotentHint": true},
+                            "inputSchema": {
+                              "type": "object",
+                              "properties": {
+                                "query": {"type": "string"},
+                                "api_key": {"type": "string", "default": "default-value-must-never-render"}
+                              },
+                              "required": ["query"]
+                            },
+                            "outputSchema": {"type": "object", "properties": {"matches": {"type": "array"}}}
+                          },
+                          {
+                            "name": "delete_note",
+                            "description": "Delete a note permanently.",
+                            "annotations": {"destructiveHint": true, "readOnlyHint": false, "openWorldHint": false}
+                          },
+                          {"name": "list_tags"}
+                        ]
+                      }
+                    }
+                  }
+                },
+                "_meta": {
+                  "io.modelcontextprotocol.registry/official": {
+                    "status": "active",
+                    "publishedAt": "2026-01-02T03:04:05.123456Z",
+                    "updatedAt": "2026-06-07T08:09:10.987654Z",
+                    "isLatest": true
+                  }
+                }
+              }],
+              "metadata": {"count": 1}
+            }
+            """#.utf8
+        )
+        let provider = try OfficialMCPRegistryProvider(loader: MarketplaceHTTPStub(payload: payload))
+
+        let page = try await provider.search(MarketplaceQuery())
+
+        let package = try #require(page.packages.first)
+        let tools = try #require(package.tools)
+        #expect(tools.map(\.name) == ["search_notes", "delete_note", "list_tags"])
+
+        let search = try #require(tools.first(where: { $0.name == "search_notes" }))
+        #expect(search.annotations.readOnly == true)
+        #expect(search.annotations.idempotent == true)
+        // Nothing was declared about destruction, so nothing is claimed.
+        #expect(search.annotations.destructive == nil)
+        #expect(search.annotations.openWorld == nil)
+        #expect(search.inputFields.map(\.name) == ["api_key", "query"])
+        #expect(search.inputFields.first(where: { $0.name == "api_key" })?.isSecretLike == true)
+        #expect(search.inputFields.first(where: { $0.name == "query" })?.isRequired == true)
+        #expect(search.declaresInputSchema)
+        #expect(search.outputFields.map(\.name) == ["matches"])
+
+        let delete = try #require(tools.first(where: { $0.name == "delete_note" }))
+        #expect(delete.annotations.destructive == true)
+        #expect(delete.annotations.declaredLabels.first == "Destructive")
+        #expect(delete.declaresInputSchema == false)
+
+        let listTags = try #require(tools.first(where: { $0.name == "list_tags" }))
+        #expect(listTags.annotations.isEmpty)
+        #expect(listTags.inputFields.isEmpty)
+
+        // Schema defaults are dropped at decode time, so no catalog value can
+        // reach a display or a plan.
+        let encoded = try String(decoding: AgentToolingCoding.encoder().encode(package), as: UTF8.self)
+        #expect(!encoded.contains("must-never-render"))
+
+        let update = try #require(package.lastUpdate)
+        #expect(update.origin == .catalogListing)
+        let expected = try #require(
+            try? Date("2026-06-07T08:09:10.987654Z", strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)))
+        #expect(abs(update.date.timeIntervalSince(expected)) < 1)
+    }
+
+    @Test func officialRegistryLeavesToolsAndDatesUnclaimedWhenThePayloadOmitsThem() async throws {
+        let payload = Data(
+            #"""
+            {
+              "servers": [
+                {"server": {
+                  "name": "io.github.example/plain",
+                  "description": "A listing with no publisher metadata at all.",
+                  "version": "1.0.0",
+                  "remotes": [{"type": "streamable-http", "url": "https://example.com/plain"}]
+                }},
+                {"server": {
+                  "name": "io.github.example/unannotated",
+                  "description": "A listing whose tools declare no annotations.",
+                  "version": "1.0.0",
+                  "_meta": {
+                    "io.modelcontextprotocol.registry/publisher-provided": {
+                      "tools": [{"name": "fetch_page", "description": "Fetch one page."}]
+                    }
+                  }
+                }}
+              ],
+              "metadata": {"count": 2}
+            }
+            """#.utf8
+        )
+        let provider = try OfficialMCPRegistryProvider(loader: MarketplaceHTTPStub(payload: payload))
+
+        let page = try await provider.search(MarketplaceQuery())
+
+        let plain = try #require(page.packages.first(where: { $0.name == "io.github.example/plain" }))
+        #expect(plain.tools == nil)
+        #expect(plain.lastUpdate == nil)
+
+        let unannotated = try #require(page.packages.first(where: { $0.name == "io.github.example/unannotated" }))
+        let tool = try #require(unannotated.tools?.first)
+        #expect(tool.name == "fetch_page")
+        #expect(tool.annotations.isEmpty)
+        #expect(tool.annotations.declaredLabels.isEmpty)
+        #expect(tool.declaresInputSchema == false)
+        #expect(tool.declaresOutputSchema == false)
+    }
+
     @Test func officialRegistryKeepsListingsWhenOneEntryIsIncomplete() async throws {
         let payload = Data(
             #"""
