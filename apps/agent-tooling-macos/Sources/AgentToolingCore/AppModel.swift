@@ -16,6 +16,9 @@ public final class AppModel {
     public private(set) var accountSurfaces: [AccountSurface]
     public private(set) var connectors: [ConnectorRecord]
     public private(set) var operationReceipts: [OperationReceipt]
+    /// Installed copies compared against the fingerprint recorded when they
+    /// were reviewed. Refreshed by `runDoctor()`.
+    public private(set) var installDrift: [InstalledPackageDrift] = []
     public private(set) var mcpRuntimeStatuses: [MCPRuntimeStatus] = []
     public private(set) var mcpRuntimeServers: [MCPRuntimeServer] = []
     public private(set) var pendingPlan: OperationPlan?
@@ -304,6 +307,11 @@ public final class AppModel {
         let observations = await adapters.scanAll(homeURL: homeURL, runner: runner)
         let compiled = InventoryCompiler.compile(observations: observations, homeURL: homeURL)
         let missing = observations.filter { !$0.isCommandAvailable }.map { $0.surface.displayName }
+        // Compare every install this app can prove it made against the
+        // fingerprint recorded when the operator reviewed it. Drift is
+        // reported as information; it never changes the setup-check state.
+        installDrift = await InstalledPackageDriftInspector.inspect(store: store)
+        let driftSummary = InstalledPackageDriftInspector.summary(for: installDrift)
         let state: HealthState = missing.isEmpty ? .healthy : .attention
         var candidate = currentSnapshot()
         candidate.targetObservations = observations
@@ -314,9 +322,12 @@ public final class AppModel {
             ActivityReceipt(
                 kind: .validation,
                 title: "Setup check completed",
-                detail: missing.isEmpty
-                    ? "Claude Code, Codex, and Gemini CLI were inspected from local state."
-                    : "Not found: \(Array(Set(missing)).sorted().joined(separator: ", ")). Existing configuration was still inspected.",
+                detail: [
+                    missing.isEmpty
+                        ? "Claude Code, Codex, and Gemini CLI were inspected from local state."
+                        : "Not found: \(Array(Set(missing)).sorted().joined(separator: ", ")). Existing configuration was still inspected.",
+                    driftSummary,
+                ].compactMap { $0 }.joined(separator: " "),
                 date: start,
                 state: state,
                 command: "Local configuration inspection",
@@ -1857,8 +1868,16 @@ public final class AppModel {
             state: receipt.state,
             command: commands.first,
             duration: receipt.results.reduce(0) { $0 + $1.finishedAt.timeIntervalSince($1.startedAt) },
-            affectedPaths: paths
+            affectedPaths: paths,
+            operationReceiptID: receipt.id
         )
+    }
+
+    /// Plan-time safety review: what a step would remove, whether Agent Tooling
+    /// can prove it owns the destination, and what the content scan found. It
+    /// only reads; approving the plan remains a separate, explicit act.
+    public func safetyReview(for plan: OperationPlan) -> OperationPlanSafetyReview {
+        OperationPlanSafetyReviewer.fromStore(store).review(plan)
     }
 
     private func activityKind(for kind: OperationKind) -> ActivityKind {

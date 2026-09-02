@@ -7,6 +7,9 @@ struct PlanReviewSheet: View {
     let plan: OperationPlan
     @State private var isSubmitting = false
     @State private var executionTask: Task<Void, Never>?
+    /// Computed before approval, never during execution. A person cannot
+    /// consent to a removal they were only told about afterwards.
+    @State private var safetyReview: OperationPlanSafetyReview?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,11 +38,22 @@ struct PlanReviewSheet: View {
                     }
                     .font(.caption)
 
+                    if let headline = safetyReview?.headline {
+                        AttentionBanner(
+                            title: "Before you approve",
+                            message: headline
+                        )
+                    }
+
                     Text("Planned steps")
                         .font(.headline)
                     VStack(spacing: 0) {
                         ForEach(Array(plan.steps.enumerated()), id: \.element.id) { index, step in
-                            PlanStepRow(number: index + 1, step: step)
+                            PlanStepRow(
+                                number: index + 1,
+                                step: step,
+                                review: safetyReview?.review(forStep: step.id)
+                            )
                             if index < plan.steps.count - 1 { Divider().opacity(0.25) }
                         }
                     }
@@ -107,6 +121,9 @@ struct PlanReviewSheet: View {
         .frame(width: 840, height: 670)
         .background(AgentTheme.contentBackground)
         .interactiveDismissDisabled(isSubmitting || model.isExecutingPlan)
+        .task(id: plan.id) {
+            safetyReview = model.safetyReview(for: plan)
+        }
         .onDisappear {
             if isSubmitting { executionTask?.cancel() }
         }
@@ -130,6 +147,7 @@ struct PlanReviewSheet: View {
 private struct PlanStepRow: View {
     let number: Int
     let step: OperationStep
+    var review: OperationStepSafetyReview?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -144,6 +162,9 @@ private struct PlanStepRow: View {
                         Text("Manual")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    }
+                    if review?.isBlocked == true {
+                        StatusBadge(state: .attention, text: "Blocked", tint: AgentTheme.failure)
                     }
                 }
                 Text(step.detail).font(.caption).foregroundStyle(.secondary)
@@ -176,8 +197,156 @@ private struct PlanStepRow: View {
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                 }
+                if let review {
+                    if let blockReason = review.blockReason {
+                        PlanFindingPanel(
+                            symbol: "hand.raised",
+                            tint: AgentTheme.failure,
+                            title: "This step will not run",
+                            message: blockReason
+                        )
+                    }
+                    if let replacement = review.replacement, let headline = replacement.removalHeadline {
+                        PlanRemovalPanel(headline: headline, diff: replacement)
+                    }
+                    if let contentRisk = review.contentRisk, !contentRisk.isClean {
+                        PlanContentRiskPanel(report: contentRisk)
+                    }
+                }
             }
         }
         .padding(15)
     }
+}
+
+/// A neutral, bordered note under a step. Colour is a small glyph only, so a
+/// finding informs the decision without shouting at the operator.
+private struct PlanFindingPanel<Content: View>: View {
+    let symbol: String
+    let tint: Color
+    let title: String
+    var message: String?
+    @ViewBuilder var content: Content
+
+    init(
+        symbol: String,
+        tint: Color,
+        title: String,
+        message: String? = nil,
+        @ViewBuilder content: () -> Content = { EmptyView() }
+    ) {
+        self.symbol = symbol
+        self.tint = tint
+        self.title = title
+        self.message = message
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: symbol)
+                .font(.caption)
+                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.caption.weight(.semibold))
+                if let message {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                content
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(tint.opacity(0.28), lineWidth: 0.5)
+        }
+        .padding(.top, 2)
+    }
+}
+
+/// Names every file the update would delete, before approval.
+private struct PlanRemovalPanel: View {
+    let headline: String
+    let diff: DirectoryReplacementDiff
+
+    var body: some View {
+        PlanFindingPanel(symbol: "trash", tint: AgentTheme.warning, title: headline) {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(diff.removedPaths.prefix(Self.listLimit), id: \.self) { path in
+                    Text(path)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                if diff.removedPaths.count > Self.listLimit {
+                    Text("and \(diff.removedPaths.count - Self.listLimit) more")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                if diff.isTruncated {
+                    Text("The folders were too large to compare completely, so this list may be incomplete.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private static let listLimit = 12
+}
+
+/// Content-scan findings, shown in the same sheet as the approve button so the
+/// operator decides with the finding in front of them. Nothing is dropped or
+/// filtered on their behalf.
+private struct PlanContentRiskPanel: View {
+    let report: ContentRiskReport
+
+    var body: some View {
+        PlanFindingPanel(
+            symbol: "doc.text.magnifyingglass",
+            tint: report.maliciousCount > 0 ? AgentTheme.failure : AgentTheme.warning,
+            title: report.headline
+        ) {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(report.findings.prefix(Self.listLimit)) { finding in
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Image(systemName: finding.category.symbolName)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text("\(finding.severity.displayName) · \(finding.headline)")
+                                .font(.caption.weight(.medium))
+                        }
+                        Text(finding.location)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                        Text(finding.evidence)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .textSelection(.enabled)
+                        Text(finding.guidance)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if report.findings.count > Self.listLimit {
+                    Text("and \(report.findings.count - Self.listLimit) more findings")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    private static let listLimit = 8
 }

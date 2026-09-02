@@ -1274,7 +1274,10 @@ struct AppModelTests {
         let receipt = await engine.execute(plan)
 
         #expect(receipt.state == .pending)
-        #expect(receipt.verificationSummary == "No local changes were made. Follow the manual guidance, then check setup again.")
+        // The summary now itemizes the batch before repeating the guidance.
+        #expect(receipt.verificationSummary.hasPrefix("succeeded 0 · failed 0 · skipped 0 · manual 1."))
+        #expect(
+            receipt.verificationSummary.hasSuffix("No local changes were made. Follow the manual guidance, then check setup again."))
     }
 
     @Test func marketplaceInspectsPortablePackageAndFlagsExecutableContent() throws {

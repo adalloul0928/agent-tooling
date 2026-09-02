@@ -289,6 +289,11 @@ public struct ActivityReceipt: Identifiable, Codable, Hashable, Sendable {
     public var command: String?
     public var duration: TimeInterval?
     public var affectedPaths: [String]
+    /// Links back to the operation receipt that produced this entry so the
+    /// Activity detail can itemize every step instead of showing one aggregate
+    /// verdict. Optional: entries that did not come from a plan have none, and
+    /// records written before this field existed decode as `nil`.
+    public var operationReceiptID: UUID?
 
     public init(
         id: UUID = UUID(),
@@ -299,7 +304,8 @@ public struct ActivityReceipt: Identifiable, Codable, Hashable, Sendable {
         state: HealthState,
         command: String? = nil,
         duration: TimeInterval? = nil,
-        affectedPaths: [String] = []
+        affectedPaths: [String] = [],
+        operationReceiptID: UUID? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -310,6 +316,7 @@ public struct ActivityReceipt: Identifiable, Codable, Hashable, Sendable {
         self.command = command
         self.duration = duration
         self.affectedPaths = affectedPaths
+        self.operationReceiptID = operationReceiptID
     }
 
     /// Keeps receipts created by early alpha builds readable without rewriting
