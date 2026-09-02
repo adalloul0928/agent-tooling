@@ -9,7 +9,7 @@ struct AccountsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Accounts") {
+            PageToolbar(title: "Accounts", context: "Metadata only · credentials stay with each provider") {
                 Button {
                     Task { await model.runDoctor() }
                 } label: {
@@ -165,8 +165,7 @@ private struct ConnectorCard: View {
             }
             ForEach(connector.bindings) { binding in
                 HStack(spacing: 8) {
-                    Image(systemName: binding.status == .verified ? "checkmark.circle.fill" : "circle.dashed")
-                        .foregroundStyle(.secondary)
+                    StatusGlyph(state: binding.status == .verified ? .healthy : .pending, size: 14)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(binding.target.displayName) · \(binding.scope.displayName)").font(.caption.weight(.semibold))
                         Text(binding.guidance).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -304,7 +303,7 @@ private struct AccountSurfaceCard: View {
             HStack(alignment: .top, spacing: 12) {
                 Group {
                     if let client = account.surface.client {
-                        ClientBrandIcon(client: client, size: 28)
+                        ClientDisc(client: client, size: 42)
                     } else {
                         SymbolTile(symbol: "person.crop.circle", size: 42)
                     }

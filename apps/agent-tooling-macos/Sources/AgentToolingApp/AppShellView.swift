@@ -15,26 +15,26 @@ struct AppShellView: View {
 
     var body: some View {
         ZStack {
-            DesktopGlassBackground()
-                .opacity(AgentTheme.desktopGlassOpacity)
-                .ignoresSafeArea()
+            if reduceTransparency {
+                AgentTheme.contentBackground.ignoresSafeArea()
+            } else {
+                DesktopGlassBackground().ignoresSafeArea()
+                AmbientBackdrop().opacity(0.92)
+            }
 
             HStack(spacing: 0) {
                 SidebarView(selection: $selection, isCollapsed: $sidebarCollapsed)
-
-                Rectangle()
-                    .fill(AgentTheme.separator.opacity(0.48))
-                    .frame(width: 0.5)
 
                 destination
                     .id(selection)
                     .transition(reduceMotion ? .identity : .opacity)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(AgentTheme.contentBackground.opacity(reduceTransparency ? 1 : 0.94))
+                    .paperPane()
             }
         }
         .foregroundStyle(.primary)
         .tint(AgentTheme.blue)
+        .buttonBorderShape(.capsule)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: selection)
         .animation(reduceMotion ? nil : .snappy(duration: 0.20), value: sidebarCollapsed)
         .groupBoxStyle(ControlGroupBoxStyle())

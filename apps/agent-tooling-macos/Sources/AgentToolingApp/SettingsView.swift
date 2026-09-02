@@ -633,8 +633,7 @@ private struct SettingsClientRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ClientBrandIcon(client: client, size: 24)
-                .frame(width: 34, height: 34)
+            ClientDisc(client: client, size: 34)
             VStack(alignment: .leading, spacing: 3) {
                 Text(client.rawValue).font(.callout.weight(.medium))
                 Text(detail).font(.caption).foregroundStyle(.secondary)

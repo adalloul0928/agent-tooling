@@ -129,4 +129,41 @@ struct MarketplaceProviderTests {
                 ]
         )
     }
+
+    @Test func officialRegistryKeepsListingsWhenOneEntryIsIncomplete() async throws {
+        let payload = Data(
+            #"""
+            {
+              "servers": [
+                {"server": {
+                  "name": "ai.example/empty-repository",
+                  "description": "Published with an empty repository object.",
+                  "version": "0.1.0",
+                  "repository": {},
+                  "remotes": [{"type": "streamable-http", "url": "https://example.com/mcp"}]
+                }},
+                {"server": {
+                  "description": "Missing the required name field.",
+                  "version": "9.9.9"
+                }},
+                {"server": {
+                  "name": "ai.example/healthy",
+                  "description": "A complete listing.",
+                  "version": "2.0.0",
+                  "repository": {"url": "https://github.com/example/healthy"},
+                  "remotes": [{"type": "streamable-http", "url": "https://example.com/healthy"}]
+                }}
+              ],
+              "metadata": {"count": 3}
+            }
+            """#.utf8
+        )
+        let provider = try OfficialMCPRegistryProvider(loader: MarketplaceHTTPStub(payload: payload))
+
+        let page = try await provider.search(MarketplaceQuery())
+
+        #expect(page.packages.map(\.name) == ["ai.example/empty-repository", "ai.example/healthy"])
+        let sparse = try #require(page.packages.first(where: { $0.name == "ai.example/empty-repository" }))
+        #expect(sparse.location == "https://registry.modelcontextprotocol.io")
+    }
 }

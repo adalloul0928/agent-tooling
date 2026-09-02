@@ -2,63 +2,232 @@ import AgentToolingCore
 import AppKit
 import SwiftUI
 
-struct StatusDot: View {
+// MARK: - Identity
+
+/// The object vocabulary. A tile says what a thing is; the three brand marks
+/// say where it runs; a status glyph beside a label says how it is doing.
+enum ToolingKind {
+    case skill, plugin, mcpServer, profile, library, activity, source, connection, account, settings
+
+    var color: Color {
+        switch self {
+        case .skill: AgentTheme.skill
+        case .plugin: AgentTheme.plugin
+        case .mcpServer: AgentTheme.mcpServer
+        case .profile: AgentTheme.profile
+        case .library, .activity, .source, .connection, .account, .settings: AgentTheme.graphite
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .skill: "doc.text"
+        case .plugin: "puzzlepiece.extension"
+        case .mcpServer: "server.rack"
+        case .profile: "slider.horizontal.3"
+        case .library: "books.vertical"
+        case .activity: "clock.arrow.circlepath"
+        case .source: "shippingbox"
+        case .connection: "link"
+        case .account: "person.crop.circle"
+        case .settings: "gearshape"
+        }
+    }
+}
+
+struct KindTile: View {
+    let kind: ToolingKind
+    var size: CGFloat = 28
+    /// Discovered on this Mac but not managed by Agent Tooling: the same tile
+    /// at reduced presence, so long lists of vendor items stay quiet.
+    var ghost = false
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(kind.color.gradient)
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(.white.opacity(0.22), lineWidth: 0.5)
+            Image(systemName: kind.symbol)
+                .font(.system(size: size * 0.5, weight: .medium))
+                .foregroundStyle(.white)
+        }
+        .frame(width: size, height: size)
+        .opacity(ghost ? 0.5 : 1)
+        .accessibilityHidden(true)
+    }
+
+    private var radius: CGFloat { max(6, size * 0.28) }
+}
+
+/// A neutral graphite tile for objects outside the four identity kinds.
+struct SymbolTile: View {
+    let symbol: String
+    var size: CGFloat = 34
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: max(6, size * 0.28), style: .continuous)
+                .fill(AgentTheme.graphite.gradient)
+            Image(systemName: symbol)
+                .font(.system(size: size * 0.46, weight: .medium))
+                .foregroundStyle(.white)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Clients
+
+/// All three marks, always in the same order; absent clients are dimmed.
+struct ClientMarks: View {
+    let present: Set<ClientKind>
+    var size: CGFloat = 15
+    private let order: [ClientKind] = [.claude, .codex, .gemini]
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ForEach(order) { client in
+                ClientBrandIcon(client: client, size: size)
+                    .opacity(present.contains(client) ? 1 : 0.22)
+                    .grayscale(present.contains(client) ? 0 : 1)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            present.isEmpty
+                ? "Not installed in any client"
+                : "Installed in \(order.filter(present.contains).map(\.rawValue).joined(separator: ", "))")
+    }
+}
+
+struct ClientDisc: View {
+    let client: ClientKind
+    var size: CGFloat = 34
+    var bordered = true
+
+    var body: some View {
+        ZStack {
+            if bordered {
+                Circle().fill(AgentTheme.controlBackground)
+                Circle().strokeBorder(AgentTheme.separator.opacity(0.5), lineWidth: 0.5)
+            }
+            ClientBrandIcon(client: client, size: size * 0.53)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// Accent selection for `List` rows, matching `rowSelection` on custom rows.
+struct SelectionRowBackground: View {
+    let selected: Bool
+
+    var body: some View {
+        if selected {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(AgentTheme.blue)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 1)
+        } else {
+            Color.clear
+        }
+    }
+}
+
+// MARK: - Status
+
+struct StatusGlyph: View {
     let state: HealthState
-    var size: CGFloat = 8
+    var size: CGFloat = 14
+    /// Selected rows draw the glyph in white so it stays legible on the accent fill.
+    var tint: Color?
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: max(size + 2, 10), weight: .medium))
-            .foregroundStyle(state == .unavailable ? Color.red : Color.secondary)
+            .font(.system(size: size, weight: .medium))
+            .foregroundStyle(tint ?? color)
+            .frame(width: size + 2, height: size + 2)
             .accessibilityHidden(true)
     }
 
     private var symbol: String {
         switch state {
-        case .healthy: "checkmark"
-        case .attention: "exclamationmark"
+        case .healthy: "checkmark.circle.fill"
+        case .attention: "exclamationmark.triangle.fill"
         case .pending: "clock"
-        case .unavailable: "xmark"
+        case .unavailable: "xmark.circle.fill"
         }
+    }
+
+    private var color: Color {
+        switch state {
+        case .healthy: AgentTheme.ok
+        case .attention: AgentTheme.warning
+        case .pending: .secondary
+        case .unavailable: AgentTheme.failure
+        }
+    }
+}
+
+struct StatusDot: View {
+    let state: HealthState
+    var size: CGFloat = 8
+
+    var body: some View {
+        StatusGlyph(state: state, size: max(size + 4, 12))
     }
 }
 
 struct StatusBadge: View {
     let state: HealthState
     let text: String
+    var tint: Color?
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: symbol)
+        HStack(spacing: 5) {
+            StatusGlyph(state: state, size: 13, tint: tint)
             Text(text)
                 .lineLimit(1)
         }
-        .font(.caption)
-        .foregroundStyle(state == .unavailable ? Color.red : Color.secondary)
+        .font(.caption.weight(.medium))
+        .foregroundStyle(tint ?? Color.secondary)
         .accessibilityElement(children: .combine)
     }
+}
 
-    private var symbol: String {
-        switch state {
-        case .healthy: "checkmark"
-        case .attention: "exclamationmark"
-        case .pending: "clock"
-        case .unavailable: "xmark"
+struct AttentionBanner<Action: View>: View {
+    let title: String
+    let message: String
+    @ViewBuilder let action: Action
+
+    init(title: String, message: String, @ViewBuilder action: () -> Action = { EmptyView() }) {
+        self.title = title
+        self.message = message
+        self.action = action()
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            StatusGlyph(state: .attention, size: 16)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.callout.weight(.semibold))
+                Text(message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            action
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 10)
+        .background(AgentTheme.warning.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(AgentTheme.warning.opacity(0.32), lineWidth: 0.5)
         }
     }
 }
 
-struct SymbolTile: View {
-    let symbol: String
-    var size: CGFloat = 34
-
-    var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: size * 0.42, weight: .regular))
-            .foregroundStyle(.secondary)
-            .frame(width: size, height: size)
-    }
-}
+// MARK: - Toolbar and cards
 
 struct PageToolbar<Actions: View>: View {
     let title: String
@@ -72,14 +241,16 @@ struct PageToolbar<Actions: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .font(.system(.title3, design: .default, weight: .semibold))
-
-            if let context {
-                Text(context)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                if let context {
+                    Text(context)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
@@ -87,10 +258,10 @@ struct PageToolbar<Actions: View>: View {
             HStack(spacing: 8) {
                 actions
             }
+            .buttonBorderShape(.capsule)
         }
-        .padding(.horizontal, 23)
+        .padding(.horizontal, 18)
         .frame(height: 54)
-        .overlay(alignment: .bottom) { Divider().opacity(0.32) }
     }
 }
 
@@ -106,15 +277,116 @@ struct PanelHeader<Trailing: View>: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.system(.subheadline, design: .default, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
             Spacer()
             trailing
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 17)
-        .frame(height: 49)
-        .overlay(alignment: .bottom) { Divider().opacity(0.12) }
+        .padding(.horizontal, 14)
+        .frame(height: 44)
+        .overlay(alignment: .bottom) { Divider().opacity(0.3) }
+    }
+}
+
+/// Title above, card below. Cards are only ever a list of rows.
+struct TitledCard<Trailing: View, Content: View>: View {
+    private let title: String
+    private let count: String?
+    private let trailing: Trailing
+    private let content: Content
+
+    init(_ title: String, count: String? = nil, @ViewBuilder trailing: () -> Trailing, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.count = count
+        self.trailing = trailing()
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 7) {
+                Text(title).font(.subheadline.weight(.semibold))
+                if let count {
+                    Text(count).font(.caption).foregroundStyle(.tertiary)
+                }
+                Spacer()
+                trailing
+                    .font(.caption.weight(.medium))
+            }
+            .padding(.horizontal, 2)
+            VStack(spacing: 0) {
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .standardPanel()
+        }
+    }
+}
+
+extension TitledCard where Trailing == EmptyView {
+    init(_ title: String, count: String? = nil, @ViewBuilder content: () -> Content) {
+        self.init(title, count: count, trailing: { EmptyView() }, content: content)
+    }
+}
+
+/// The row grammar: a leading tile or glyph, a name, one clause, a verdict.
+struct InfoRow<Leading: View, Trailing: View>: View {
+    let title: String
+    let detail: String?
+    let leading: Leading
+    let trailing: Trailing
+
+    init(_ title: String, detail: String? = nil, @ViewBuilder leading: () -> Leading, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.detail = detail
+        self.leading = leading()
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 11) {
+            leading
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 12)
+            trailing
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 8)
+        .frame(minHeight: 44)
+    }
+}
+
+extension InfoRow where Trailing == EmptyView {
+    init(_ title: String, detail: String? = nil, @ViewBuilder leading: () -> Leading) {
+        self.init(title, detail: detail, leading: leading, trailing: { EmptyView() })
+    }
+}
+
+struct TagCloud: View {
+    let tags: [String]
+
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(tags, id: \.self) { tag in
+                Text(tag)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .padding(.horizontal, 9)
+                    .frame(height: 22)
+                    .background(Color.primary.opacity(0.055), in: Capsule())
+            }
+        }
     }
 }
 
@@ -138,9 +410,13 @@ struct EmptyStateView: View {
                     .disabled(!isActionEnabled)
             }
         }
+        // Panes lay their content out from the top edge, so an empty state has
+        // to claim the remaining space itself to sit in the middle of the pane.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
+/// Key on the left at a fixed width, value on the left of its own column.
 struct LabeledValueRow<Trailing: View>: View {
     let label: String
     @ViewBuilder let trailing: Trailing
@@ -151,19 +427,21 @@ struct LabeledValueRow<Trailing: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 20) {
+        HStack(alignment: .firstTextBaseline, spacing: 14) {
             Text(label)
                 .foregroundStyle(.secondary)
-            Spacer(minLength: 24)
+                .frame(width: 132, alignment: .leading)
             trailing
-                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .font(.callout)
         .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.vertical, 10)
     }
 }
 
+/// Commands stay behind a disclosure: explicit when opened, never the
+/// dominant visual.
 struct CommandDisclosure: View {
     let title: String
     let command: String
@@ -202,15 +480,14 @@ struct ClientStatusRows: View {
         VStack(spacing: 0) {
             ForEach(Array(clients.enumerated()), id: \.offset) { index, client in
                 HStack(spacing: 11) {
-                    ClientBrandIcon(client: client.client, size: 18)
-                        .frame(width: 22)
+                    ClientDisc(client: client.client, size: 30)
                     Text(client.client.rawValue)
                         .font(.callout.weight(.medium))
                     Spacer(minLength: 20)
                     StatusBadge(state: client.state, text: client.detailWithRevision)
                 }
-                .padding(.horizontal, 14)
-                .frame(minHeight: 44)
+                .padding(.horizontal, 13)
+                .frame(minHeight: 46)
                 if index < clients.count - 1 { Divider().opacity(0.45) }
             }
         }
@@ -227,16 +504,19 @@ struct SectionCaption: View {
     }
 }
 
+// MARK: - Installation map
+
 struct ToolingMatrixRow: Identifiable {
     let id: AppSection
     let title: String
     let symbol: String
     let libraryCount: Int
     let installedCounts: [ClientKind: Int]
+    var kind: ToolingKind?
 }
 
-/// The product's signature view: one honest comparison between the managed
-/// inventory and the local state each client reported during the last check.
+/// One honest comparison between the managed inventory and the local state
+/// each client reported during the last check.
 struct ToolingMatrixView: View {
     let rows: [ToolingMatrixRow]
     var onSelect: ((AppSection) -> Void)?
@@ -267,9 +547,16 @@ struct ToolingMatrixView: View {
                         Button {
                             onSelect?(row.id)
                         } label: {
-                            Label(row.title, systemImage: row.symbol)
-                                .font(.callout.weight(.medium))
-                                .frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
+                            HStack(spacing: 9) {
+                                if let kind = row.kind {
+                                    KindTile(kind: kind, size: 22)
+                                } else {
+                                    Image(systemName: row.symbol).foregroundStyle(.secondary)
+                                }
+                                Text(row.title)
+                                    .font(.callout.weight(.medium))
+                            }
+                            .frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
                         .disabled(onSelect == nil)
@@ -329,6 +616,89 @@ struct ToolingMatrixView: View {
     }
 }
 
+// MARK: - Locations
+
+/// Paths never sit in a row. A short name identifies the place; the ⓘ opens a
+/// popover with the full location and a Reveal in Finder link.
+struct LocationText: View {
+    let path: String
+    var label: String?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(label ?? LocationText.shortName(for: path))
+                .font(.callout)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            PathInfoButton(path: path)
+        }
+    }
+
+    static func shortName(for path: String) -> String {
+        if let components = URLComponents(string: path),
+            let scheme = components.scheme,
+            let host = components.host,
+            !scheme.isEmpty,
+            !host.isEmpty
+        {
+            let suffix = components.path.split(separator: "/").suffix(1).first.map(String.init)
+            return suffix.map { "\(host) / \($0)" } ?? host
+        }
+        let components = URL(fileURLWithPath: path).standardized.pathComponents.filter { $0 != "/" }
+        guard components.count > 2 else { return components.joined(separator: " / ") }
+        return components.suffix(2).joined(separator: " / ")
+    }
+}
+
+struct PathInfoButton: View {
+    let path: String
+    @State private var isPresented = false
+
+    var body: some View {
+        Button {
+            isPresented.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.tertiary)
+                .frame(width: 18, height: 18)
+        }
+        .buttonStyle(.plain)
+        .help(path)
+        .accessibilityLabel("Show location")
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(isWebURL ? "Address" : "Location")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(path)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                if canReveal {
+                    Button("Reveal in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                    }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                }
+            }
+            .padding(12)
+            .frame(minWidth: 220, maxWidth: 440, alignment: .leading)
+        }
+    }
+
+    private var isWebURL: Bool {
+        guard let components = URLComponents(string: path), let scheme = components.scheme?.lowercased() else { return false }
+        return ["http", "https"].contains(scheme) && components.host?.isEmpty == false
+    }
+
+    private var canReveal: Bool {
+        !isWebURL && FileManager.default.fileExists(atPath: path)
+    }
+}
+
+/// Kept for the plan review and settings, where the exact path is the point.
 struct CompactPathText: View {
     let path: String
     var lineLimit = 1

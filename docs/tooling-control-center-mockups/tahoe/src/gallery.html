@@ -1,0 +1,91 @@
+<title>Agent Tooling Tahoe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&display=swap">
+<style>{{CSS}}</style>
+{{SPRITE}}
+<header class="hero">
+  <div class="eyebrow">Agent Tooling · macOS 26 · design pass 3</div>
+  <h1 class="display">One window, real glass, fewer words.</h1>
+  <p>Three earlier passes each got one thing right. <b>Glasshouse v4</b> had the material and the colour identity you asked for. The <b>August canvas</b> had the information architecture, a single state language, and a world of sample data that agrees with itself. The <b>native prototype</b> has the right bones. This pass keeps all three and makes the window read as a macOS 26 app: a translucent sidebar over a calm desktop, capsule controls on an opaque pane, colour reserved for what a thing <em>is</em> and for the one thing that needs you.</p>
+  <p>Eleven screens, every one in light and dark. Paths sit behind ⓘ popovers that work in this mockup. Type is SF Pro through the system stack, so open it on a Mac.</p>
+</header>
+<div class="sys">
+  <div class="card"><h3>Material</h3><p><b>One glass sheet.</b> The window and its sidebar blur the desktop; the content pane is a 90% paper inset with a concentric radius. Sheets are deeper frost. Nothing else is translucent, so text never fights the wallpaper.</p></div>
+  <div class="card"><h3>Identity, not status</h3>
+    <div class="swatches"><span class="swatch"><i style="background:#FF8A1F"></i>Skill</span><span class="swatch"><i style="background:#B457F0"></i>Plugin</span><span class="swatch"><i style="background:#22A6C9"></i>MCP server</span><span class="swatch"><i style="background:#5E5CE6"></i>Profile</span><span class="swatch"><i style="background:#0A6BE0"></i>Selection</span></div>
+    <p>Tiles say what a thing is; the three brand marks say where it runs. Green, amber and red appear only as small glyphs beside words.</p></div>
+  <div class="card"><h3>Type &amp; density</h3><p>SF Pro at 13 and 11.5, one 19px name per screen, SF Mono only for revisions and commands. <b>Every row is a tile, a name, one clause, and a verdict.</b></p></div>
+  <div class="card"><h3>Words that do work</h3><p>File locations live behind ⓘ with a Reveal in Finder link. Buttons say what will happen: <b>Sign In…</b>, <b>Adopt…</b>, <b>Apply 6 Changes…</b>. Nothing writes to a client outside Sync Review.</p></div>
+</div>
+<div class="nav-wrap"><nav class="nav" aria-label="Screens">{{NAV}}<span class="sp"></span><div class="mode" role="group" aria-label="Mockup appearance"><button type="button" data-mode="light" class="on">Light</button><button type="button" data-mode="dark">Dark</button></div></nav></div>
+{{SECTIONS}}
+<section class="legend">
+  <h2 class="display">What carried over, what changed</h2>
+  <p>The screens above are a synthesis, not a fourth direction. Here is where each part came from, and what a SwiftUI build should reach for.</p>
+  <div class="grid">
+    <div class="card"><h3>Kept from the August canvas</h3><ul>
+      <li><b>IA.</b> Overview · Recommendations · Discover / Library · MCP Servers · Sync · Activity / one page per client. Settings is its own window.</li>
+      <li><b>State language.</b> Desired, discovered (dashed), installed, verified (seal + time), needs attention (amber + one action), will change (checked rows).</li>
+      <li><b>One world.</b> Plan S-118 applied yesterday, S-119 pending with six changes, backup B-143 next, Sentry sign-in expired Thursday, developer-workflows update waiting.</li>
+    </ul></div>
+    <div class="card"><h3>Restored from Glasshouse v4</h3><ul>
+      <li><b>Glass.</b> A luminous desktop refracting through the sidebar and window edge; the paper stays opaque enough to read.</li>
+      <li><b>Icon vocabulary.</b> Orange skill, purple plugin, teal MCP, indigo profile tiles, plus the real Claude, Codex and Gemini marks for availability.</li>
+      <li><b>Fewer words.</b> No paths in rows. Hover the ⓘ on Skill, MCP Servers, Discover, and Claude Code to see the location popover.</li>
+    </ul></div>
+    <div class="card"><h3>New in this pass</h3><ul>
+      <li><b>The conduit.</b> Overview draws library → profile → clients as one path, with pending changes on the trunk and a verdict at each terminal.</li>
+      <li><b>Tahoe controls.</b> Capsule buttons, 20px window radius, concentric 14px pane, a menu bar in the scene so the glass has something to refract.</li>
+      <li><b>Evidence panes.</b> Recommendations shows the sessions behind a suggestion; Skill shows its history and files; Activity expands a receipt in place.</li>
+    </ul></div>
+  </div>
+  <h2 class="display" style="margin-top:44px">Hand-off to SwiftUI</h2>
+  <p>Everything on these screens maps to existing native material; nothing needs a custom renderer.</p>
+  <div class="grid">
+    <div class="card"><h3>Material</h3><ul>
+      <li><b>Window &amp; sidebar</b> — the existing <code>DesktopGlassBackground</code> (<code>NSVisualEffectView</code>, behind-window) at full strength instead of 0.96 opacity; sidebar rows on <code>.glassEffect()</code>.</li>
+      <li><b>Paper</b> — <code>RoundedRectangle(14, .continuous)</code> filled with <code>.windowBackgroundColor</code> at 0.90, inset 8pt.</li>
+      <li><b>Sheets</b> — standard <code>.sheet</code> with <code>.presentationBackground(.thickMaterial)</code>.</li>
+    </ul></div>
+    <div class="card"><h3>Components</h3><ul>
+      <li><b>Capsules</b> — <code>.buttonStyle(.glass)</code> / <code>.borderedProminent</code> with <code>.buttonBorderShape(.capsule)</code>.</li>
+      <li><b>Tiles</b> — SF Symbols <code>doc.text</code>, <code>puzzlepiece.extension</code>, <code>server.rack</code>, <code>slider.horizontal.3</code> on 8pt rounded fills of systemOrange, systemPurple, systemTeal, systemIndigo.</li>
+      <li><b>Marks</b> — the existing <code>ClientBrandIcon</code>; dimmed at 22% + grayscale for “not available here”.</li>
+    </ul></div>
+    <div class="card"><h3>State &amp; motion</h3><ul>
+      <li><b>Glyphs</b> — <code>checkmark.circle.fill</code>, <code>exclamationmark.triangle.fill</code>, <code>xmark.circle.fill</code>, <code>arrow.up.circle</code>; always beside a label.</li>
+      <li><b>Popovers</b> — <code>.popover</code> from an <code>info.circle</code> button with a <code>Reveal in Finder</code> link.</li>
+      <li><b>Conduit</b> — a <code>Path</code> with a phase-animated dash while a plan is pending; gated on <code>accessibilityReduceMotion</code>.</li>
+    </ul></div>
+  </div>
+</section>
+<script>
+(function(){
+  var frames = document.querySelectorAll('.frame');
+  function fit(){ frames.forEach(function(f){ var s = f.querySelector('.scene'); if (s) s.style.transform = 'scale(' + (f.clientWidth / 1320) + ')'; }); }
+  if (window.ResizeObserver) { new ResizeObserver(fit).observe(document.body); }
+  window.addEventListener('resize', fit); fit();
+
+  var btns = document.querySelectorAll('.mode button');
+  function viewerDark(){ var t = document.documentElement.getAttribute('data-theme'); if (t === 'dark') return true; if (t === 'light') return false; return window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches; }
+  function apply(m){ document.querySelectorAll('.scene').forEach(function(s){ s.setAttribute('data-mode', m); }); btns.forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode') === m); }); }
+  var saved = null; try { saved = localStorage.getItem('att-mode'); } catch (e) {}
+  apply(saved === 'dark' || saved === 'light' ? saved : (viewerDark() ? 'dark' : 'light'));
+  btns.forEach(function(b){ b.addEventListener('click', function(){ var m = b.getAttribute('data-mode'); apply(m); try { localStorage.setItem('att-mode', m); } catch (e) {} }); });
+
+  if (window.IntersectionObserver) {
+    var live = new IntersectionObserver(function(es){ es.forEach(function(e){ var s = e.target.querySelector('.scene'); if (s) s.classList.toggle('live', e.isIntersecting); }); }, { rootMargin: '10% 0px' });
+    frames.forEach(function(f){ live.observe(f); });
+  } else { document.querySelectorAll('.scene').forEach(function(s){ s.classList.add('live'); }); }
+  var links = Array.prototype.slice.call(document.querySelectorAll('.nav a'));
+  if (window.IntersectionObserver) {
+    var io = new IntersectionObserver(function(es){ es.forEach(function(e){ if (e.isIntersecting) { links.forEach(function(l){ l.classList.toggle('on', l.getAttribute('href') === '#' + e.target.id); }); } }); }, { rootMargin: '-35% 0px -55% 0px' });
+    document.querySelectorAll('.shot').forEach(function(s){ io.observe(s); });
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('.info') : null;
+    document.querySelectorAll('.info.open').forEach(function(i){ if (i !== b) i.classList.remove('open'); });
+    if (b) b.classList.toggle('open');
+  });
+})();
+</script>

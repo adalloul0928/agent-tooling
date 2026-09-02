@@ -1,0 +1,29 @@
+<!-- @screen id="newskill" title="New Skill" sidebar="library" layout="sheet" backdrop="library" -->
+<!-- @lede Codex drafts, you review. The sheet is the deepest frost in the app: the Library stays visible beneath it so creation never feels like leaving. Step three of four is the only place a numbered sequence appears, because the flow really is one. -->
+<!-- @note What changed|Two fields and a preview instead of a form wall. Trigger phrases are a field of their own, since triggers are what people get wrong. Gemini shows why it is disabled, in five words. -->
+<!-- @note Material|Sheet at 90% paper over blur 40, sitting on a dimmed window. Same capsule buttons as everywhere else. -->
+<!-- @note Interaction|Continue moves to the install plan; nothing is written until that plan is approved in Sync. The draft autosaves locally. -->
+<div class="sheet">
+  <div class="sheet-h"><span class="tile lg skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="grow"><h2>New Skill</h2><div class="s">Codex drafted this from your request — “turn my release-notes routine into a skill.”</div></div><div class="vs" style="align-items:flex-end;gap:6px"><span class="f11 t3">Step 3 of 4 · Review</span><span class="steps"><i class="done"></i><i class="done"></i><i class="done"></i><i></i></span></div></div>
+  <div class="sheet-b tight">
+    <div class="two eq" style="gap:12px">
+      <div><div class="lbl">Name</div><div class="fld mono" style="font-size:12px">release-notes</div></div>
+      <div><div class="lbl">Applies when someone says</div><div class="fld"><span class="tag">release notes</span><span class="tag">changelog</span><span class="tag">a new tag</span></div></div>
+    </div>
+    <div><div class="lbl">Description</div><div class="fld area">Draft release notes from merged pull requests and commits since the last tag, in the voice of the release runbook.</div></div>
+    <div><div class="hs" style="margin-bottom:5px"><span class="lbl" style="margin:0">SKILL.md</span><span class="sp" style="flex:1"></span><span class="f12 gA w500">Open in Editor</span></div>
+      <div class="mono-block"><span class="c">---</span>
+<span class="k">name:</span> release-notes
+<span class="k">description:</span> Draft release notes from merged PRs since the last tag.
+<span class="c">---</span>
+1. Collect merged pull requests since the previous release tag.
+2. Group changes: features, fixes, tooling; skip release-only commits.
+3. Match the voice and section order of the release runbook.
+4. Write to CHANGELOG.md and open the result for review.</div></div>
+    <div class="grp">
+      <div class="opt"><span class="t2" style="width:98px">Install to</span><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><svg class="mark"><use href="#b-claude"/></svg>Claude Code<span style="width:14px"></span><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><svg class="mark codex"><use href="#b-codex"/></svg>Codex<span style="width:14px"></span><span class="cb dis"></span><svg class="mark dim"><use href="#b-gemini"/></svg><span class="t3">Gemini CLI · no skill support</span></div>
+      <div class="opt"><span class="t2" style="width:98px">Scope</span><span class="pop sm">User<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span><span class="s">installs through Sync review</span></div>
+    </div>
+  </div>
+  <div class="sheet-f"><span class="f11 t3">Draft saved locally — nothing is installed yet.</span><span class="sp" style="flex:1"></span><span class="btn">Cancel</span><span class="btn">Back</span><span class="btn pri">Continue</span></div>
+</div>

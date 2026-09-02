@@ -1,0 +1,56 @@
+<!-- @screen id="mcp" title="MCP Servers" sidebar="mcp" -->
+<!-- @lede Configured is not the same as usable. The rail shows connection state as a dot; the detail separates the connection, where the server is declared per client, and what it can do. -->
+<!-- @note What changed|The banner is the one loud element and it names the exact fix. Transport, endpoint and tool names are demoted to a key-value group; the full URL is behind the ⓘ. -->
+<!-- @note Material|Rail and detail share the paper; the warning tint is the only colored surface on the screen. -->
+<!-- @note Interaction|Sign In… opens the provider's OAuth flow in the browser for the affected clients only. Add… on Gemini stages a declaration for Sync rather than writing anything now. -->
+<div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">MCP Servers</div><div class="sub">5 configured · 4 usable</div></div>
+  <span class="sp"></span>
+  <span class="btn"><svg class="ic"><use href="#s-pulse"/></svg>Test All</span>
+  <span class="btn pri"><svg class="ic"><use href="#s-plus"/></svg>Add Server…</span>
+</div>
+<div class="content pad0 split">
+  <div class="rail">
+    <div class="rh">Connections <span class="n">5</span><span class="sp" style="flex:1"></span><span class="seg" style="height:22px"><span class="on" style="line-height:18px;font-size:11.5px;padding:0 9px">All</span><span style="line-height:18px;font-size:11.5px;padding:0 9px">Issues</span></span></div>
+    <div class="rows">
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">supabase</div><div class="s">HTTP · project pumpd</div></div><span class="dot"></span></div>
+      <div class="row sel"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">sentry</div><div class="s">HTTP · user</div></div><svg class="ic" style="width:14px;height:14px;color:#fff"><use href="#s-warn"/></svg></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">heroui-pro</div><div class="s">HTTP · project pumpd</div></div><span class="dot"></span></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">ios-simulator</div><div class="s">stdio · runs locally</div></div><span class="dot"></span></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">expo</div><div class="s">stdio · user</div></div><svg class="ic t3" style="width:13px;height:13px"><use href="#s-empty-c"/></svg></div>
+    </div>
+    <div class="f11 t3" style="padding:10px 12px">An empty circle means the server has never connected.</div>
+  </div>
+  <div class="detail stack">
+    <div class="hero-row" style="padding-bottom:4px">
+      <span class="tile lg mcp"><svg class="ic"><use href="#s-mcp"/></svg></span>
+      <div class="grow"><h1>sentry</h1><div class="s">MCP server · Streamable HTTP · added from MCP Registry</div></div>
+      <span class="btn"><svg class="ic"><use href="#s-pulse"/></svg>Test Connection</span>
+    </div>
+    <div class="banner"><svg class="ic"><use href="#s-warn"/></svg><div class="grow"><div class="p">Sign-in required</div><div class="s">The saved OAuth token expired Thursday. Sentry tools are unavailable in Claude Code and Codex until you sign in again.</div></div><span class="btn pri sm"><svg class="ic"><use href="#s-key"/></svg>Sign In…</span></div>
+    <div class="stack">
+      <div>
+        <div class="gt">Connection</div>
+        <div class="grp">
+          <div class="row kv"><span class="k">Endpoint</span><span class="grow hs4">mcp.sentry.dev<button class="info" aria-label="Show full endpoint"><svg class="ic"><use href="#s-info-c"/></svg><span class="tip">Endpoint<span class="mono">https://mcp.sentry.dev/mcp</span></span></button></span></div>
+          <div class="row kv"><span class="k">Authentication</span><span class="grow">OAuth 2.1</span><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>Expired Thursday, 2:14 PM</span></div>
+          <div class="row kv"><span class="k">Last connection</span><span class="grow">Thursday, 2:07 PM <span class="t3">· 210 ms · 14 tools</span></span><span class="f12 gA w500">Open Log</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="gt">Declared in</div>
+        <div class="grp">
+          <div class="row"><span class="disc"><svg class="mark"><use href="#b-claude"/></svg></span><div class="rt"><div class="p">Claude Code</div><div class="s">User scope</div></div><span class="st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Matches desired</span></div>
+          <div class="row"><span class="disc"><svg class="mark codex"><use href="#b-codex"/></svg></span><div class="rt"><div class="p">Codex</div><div class="s">User scope · edited by hand</div></div><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>Held out of Sync</span></div>
+          <div class="row" style="opacity:.75"><span class="disc"><svg class="mark"><use href="#b-gemini"/></svg></span><div class="rt"><div class="p">Gemini CLI</div><div class="s">Not declared</div></div><span class="btn xs">Add…</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="gt">Tools <span class="n">14 from the last connection</span><span class="r">Show All</span></div>
+      <div class="grp"><div class="tags"><span class="tag mono">search_issues</span><span class="tag mono">get_event</span><span class="tag mono">resolve_issue_alert</span><span class="tag mono">list_projects</span><span class="tag mono">get_issue_details</span><span class="tag mono">list_releases</span><span class="tag">+ 8 more</span></div></div>
+    </div>
+    <div class="hs" style="margin-top:auto"><span class="f12 gE w500">Remove Server…</span><span class="sp" style="flex:1"></span><span class="f11 t3">Configuration lives in each client's own file; Agent Tooling edits it only through Sync.</span></div>
+  </div>
+</div>

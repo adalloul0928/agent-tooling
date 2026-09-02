@@ -1,0 +1,36 @@
+<!-- @screen id="sync" title="Sync Review" sidebar="sync" -->
+<!-- @lede The one screen that writes. Changes are grouped by client under its brand mark, each with a checkbox, a tile for what kind of thing changes, and one clause about why. A held-back item asks for a decision instead of failing silently. -->
+<!-- @note What changed|Revision hashes are gone from the rows; the diff is shown only where a file is actually rewritten. The footer names the backup that will exist before anything changes. -->
+<!-- @note Material|Checked rows stay white; the held-back group is the only tinted surface, and the diff block is an inset well rather than a terminal. -->
+<!-- @note Interaction|Unchecking a row removes it from the plan and from the button label. Apply 6 Changes… opens the receipt live as each client is written. -->
+<div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">Sync Review</div><div class="sub">Profile · Base workstation</div></div>
+  <span class="sp"></span>
+  <span class="f12 t2">Checked 2 minutes ago</span>
+  <span class="ico"><svg class="ic"><use href="#s-refresh"/></svg></span>
+</div>
+<div class="content compact vs" style="padding-top:10px">
+  <div style="margin:0 2px 4px"><div class="h14">Six changes bring Claude Code, Codex, and Gemini CLI up to the desired configuration.</div><div class="f12 t2" style="margin-top:2px">Nothing is applied until you approve. A backup is created first, and every change is written to a receipt.</div></div>
+  <div class="chead"><svg class="mark"><use href="#b-claude"/></svg>Claude Code <span class="n">2 changes</span></div>
+  <div class="grp">
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span><div class="rt"><div class="p">Update developer-workflows</div><div class="s">10 skills · last changed August 27</div></div><span class="f12 gA w500">Show diff</span></div>
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm library"><svg class="ic"><use href="#s-gear"/></svg></span><div class="rt"><div class="p">Restore project settings for pumpd</div><div class="s">1 key differs from desired</div></div><span class="f12 gA w500">Show diff</span></div>
+  </div>
+  <div class="chead"><svg class="mark codex"><use href="#b-codex"/></svg>Codex <span class="n">3 changes</span></div>
+  <div class="grp">
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span><div class="rt"><div class="p">Update developer-workflows</div><div class="s">Mirrors Claude Code</div></div></div>
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">Update mcp-preflight</div><div class="s">One file changed upstream</div></div></div>
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">Declare MCP server expo</div><div class="s">User scope · added from Discover · connects for the first time after apply</div></div></div>
+  </div>
+  <div class="chead"><svg class="mark"><use href="#b-gemini"/></svg>Gemini CLI <span class="n">1 change</span></div>
+  <div class="grp">
+    <div class="row"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><span class="tile sm mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">Rewrite the servers block in Gemini settings</div><div class="s">Adds the timeout key Gemini expects, so the file matches the desired declaration</div></div><span class="f12 gA w500">Hide diff</span></div>
+    <div class="xrow" style="padding-top:0"><div class="diff"><div>"mcpServers": {</div><div class="del">  "supabase": { "httpUrl": "https://mcp.supabase.com/mcp" }</div><div class="add">  "supabase": { "httpUrl": "https://mcp.supabase.com/mcp", "timeout": 30000 }</div><div>}</div></div></div>
+  </div>
+  <div class="chead" style="color:var(--warn)"><svg class="ic" style="width:15px;height:15px"><use href="#s-warn"/></svg>Held back <span class="n">needs a decision</span></div>
+  <div class="grp" style="background:var(--warn-bg);box-shadow:inset 0 0 0 .5px var(--warn-ring)">
+    <div class="row"><span class="tile sm mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">Update MCP server sentry in Codex</div><div class="s">Codex settings were edited by hand near this entry. Choose how to resolve before it can sync.</div></div><span class="hs6"><span class="btn xs">Open File</span><span class="btn xs">Keep Local</span><span class="btn xs">Use Desired…</span></span></div>
+  </div>
+  <div class="foot" style="margin-top:12px"><svg class="ic"><use href="#s-drive"/></svg><span class="f12 t2">Backup B-143 will be created before anything changes · receipts are kept for 90 days</span><span class="sp" style="flex:1"></span><span class="btn sm">Cancel</span><span class="btn pri sm">Apply 6 Changes…</span></div>
+</div>

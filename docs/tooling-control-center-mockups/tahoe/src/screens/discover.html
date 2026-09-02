@@ -1,0 +1,53 @@
+<!-- @screen id="discover" title="Discover" sidebar="discover" -->
+<!-- @lede Search across every source at once. Each result carries its kind tile and its source; the install pane explains what a server needs, where it will run, and that installing only stages changes for Sync. -->
+<!-- @note What changed|Results are one line each: tile, name, source. Trust is a chip (Signed publisher), not a paragraph; the launch command is behind the ⓘ. -->
+<!-- @note Material|The search field is the only focused control on the screen and carries the system focus ring. -->
+<!-- @note Interaction|Checking a client adds that many changes to Sync; the count in the footer updates live. Nothing downloads until the plan is applied. -->
+<div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">Discover</div><div class="sub">412 items from 4 sources</div></div>
+  <span class="sp"></span>
+  <span class="seg"><span class="on">All</span><span>Skills</span><span>MCP Servers</span><span>Plugins</span></span>
+  <span class="search focus"><svg class="ic"><use href="#s-search"/></svg><span class="q">docs</span><span class="cur"></span></span>
+</div>
+<div class="content pad0 split">
+  <div class="rail" style="width:340px">
+    <div class="rh">Results <span class="n">6 of 31 for “docs”</span></div>
+    <div class="rows">
+      <div class="row sel"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">context7</div><div class="s">MCP Registry · live library docs for any framework</div></div><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">webapp-testing</div><div class="s">anthropics/skills · drive and test local web apps</div></div><span class="btn xs">Get</span></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">pdf</div><div class="s">anthropics/skills · fill, split, and generate PDFs</div></div><span class="st"><svg class="ic gOK"><use href="#s-check"/></svg>Installed</span></div>
+      <div class="row"><span class="tile mcp"><svg class="ic"><use href="#s-mcp"/></svg></span><div class="rt"><div class="p">playwright</div><div class="s">MCP Registry · browser automation over MCP</div></div><span class="btn xs">Get</span></div>
+      <div class="row"><span class="tile skill"><svg class="ic"><use href="#s-doc"/></svg></span><div class="rt"><div class="p">doc-coauthoring</div><div class="s">anthropics/skills · structured docs, specs, proposals</div></div><span class="st"><svg class="ic gOK"><use href="#s-check"/></svg>Installed</span></div>
+      <div class="row"><span class="tile plugin"><svg class="ic"><use href="#s-puzzle"/></svg></span><div class="rt"><div class="p">mkdocs-toolkit</div><div class="s">community/awesome-agents · publish project docs</div></div><span class="btn xs">Get</span></div>
+    </div>
+    <div class="f11 t3" style="padding:10px 12px">Sources refreshed today at 8:05 AM · <span class="gA">Settings › Sources</span></div>
+  </div>
+  <div class="detail stack">
+    <div class="hero-row" style="padding-bottom:2px">
+      <span class="tile lg mcp"><svg class="ic"><use href="#s-mcp"/></svg></span>
+      <div class="grow"><h1>context7</h1><div class="s">MCP server · Upstash · MCP Registry</div></div>
+      <span class="chip ok"><svg class="ic"><use href="#s-shield"/></svg>Signed publisher</span>
+    </div>
+    <p class="para">Serves version-matched documentation for thousands of libraries directly into the agent's context, replacing ad-hoc web fetches with a fast local lookup.</p>
+    <div>
+      <div class="gt">Details</div>
+      <div class="grp">
+        <div class="row kv"><span class="k">Transport</span><span class="grow hs4">stdio · runs on this Mac<button class="info" aria-label="Show launch command"><svg class="ic"><use href="#s-info-c"/></svg><span class="tip">Launch command<span class="mono">npx -y @upstash/context7-mcp</span></span></button></span></div>
+        <div class="row kv"><span class="k">Requires</span><span class="grow">Node 18 or later</span><span class="st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Found v22.19 on this Mac</span></div>
+        <div class="row kv"><span class="k">Tools</span><span class="grow hs6">2 <span class="tag mono">resolve-library-id</span><span class="tag mono">query-docs</span></span></div>
+        <div class="row kv"><span class="k">Works with</span><span class="grow marks"><svg class="mark"><use href="#b-claude"/></svg><svg class="mark codex"><use href="#b-codex"/></svg><svg class="mark"><use href="#b-gemini"/></svg><span class="f12 t2" style="margin-left:4px">all three clients</span></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="gt">Install</div>
+      <div class="grp">
+        <div class="opt"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><svg class="mark"><use href="#b-claude"/></svg>Claude Code<span class="s">user scope</span></div>
+        <div class="opt"><span class="cb c"><svg class="ic"><use href="#s-check"/></svg></span><svg class="mark codex"><use href="#b-codex"/></svg>Codex<span class="s">user scope</span></div>
+        <div class="opt"><span class="cb"></span><svg class="mark"><use href="#b-gemini"/></svg>Gemini CLI<span class="s">not selected</span></div>
+        <div class="opt" style="border-top:.5px solid var(--sep)"><span class="t2" style="width:98px">Scope</span><span class="pop sm">User<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span></div>
+        <div class="opt" style="border-top:.5px solid var(--sep);background:var(--inset)"><span class="f12 t2">Adds <b class="w600" style="color:var(--t1)">2 changes</b> to Sync for review — nothing runs until you apply them.</span><span class="sp" style="flex:1"></span><span class="btn pri sm"><svg class="ic"><use href="#s-download"/></svg>Install…</span></div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -8,13 +8,15 @@ struct MarketplaceView: View {
     @State private var selectedPackageID: String?
     @State private var query = ""
     @State private var componentFilter: MarketplaceComponentFilter = .all
+    @State private var clientFilter: MarketplaceClientFilter = .all
+    @State private var selectedSourceID: UUID?
     @State private var displayLimit = Self.pageSize
 
     private static let pageSize = 12
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Marketplace") {
+            PageToolbar(title: "Marketplace", context: "\(model.marketplacePackages.count) packages from \(model.sources.count) sources") {
                 Button {
                     chooseSource()
                 } label: {
@@ -58,6 +60,8 @@ struct MarketplaceView: View {
         }
         .onChange(of: query) { _, _ in displayLimit = Self.pageSize }
         .onChange(of: componentFilter) { _, _ in displayLimit = Self.pageSize }
+        .onChange(of: clientFilter) { _, _ in displayLimit = Self.pageSize }
+        .onChange(of: selectedSourceID) { _, _ in displayLimit = Self.pageSize }
     }
 
     private func applyExternalNavigation() {
@@ -66,6 +70,8 @@ struct MarketplaceView: View {
         else { return }
         query = ""
         componentFilter = .all
+        clientFilter = .all
+        selectedSourceID = nil
         if let index = filteredPackages.firstIndex(where: { $0.id == requestedID }) {
             displayLimit = max(Self.pageSize, index + 1)
         }
@@ -80,7 +86,14 @@ struct MarketplaceView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(sortedSources) { source in
-                        MarketplaceSourceRow(source: source, symbol: symbol(for: source.kind))
+                        MarketplaceSourceRow(
+                            source: source,
+                            symbol: symbol(for: source.kind),
+                            contents: contentsSummary(for: source),
+                            selected: selectedSourceID == source.id
+                        ) {
+                            selectedSourceID = selectedSourceID == source.id ? nil : source.id
+                        }
                         if source.id != sortedSources.last?.id { Divider().opacity(0.30) }
                     }
                 }
@@ -100,42 +113,77 @@ struct MarketplaceView: View {
 
     private var packagePane: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
+            VStack(spacing: 9) {
                 TextField("Search packages", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Search marketplace packages")
-                Picker("Component", selection: $componentFilter) {
-                    ForEach(MarketplaceComponentFilter.allCases) { filter in
-                        Text(filter.rawValue).tag(filter)
+                HStack(spacing: 8) {
+                    Picker("Component", selection: $componentFilter) {
+                        ForEach(MarketplaceComponentFilter.allCases) { filter in
+                            Text(filter.rawValue).tag(filter)
+                        }
                     }
+                    .labelsHidden()
+                    .fixedSize()
+                    .accessibilityLabel("Package component")
+                    Picker("App", selection: $clientFilter) {
+                        ForEach(MarketplaceClientFilter.allCases) { filter in
+                            Text(filter.rawValue).tag(filter)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .accessibilityLabel("Filter by app")
+                    Spacer(minLength: 0)
+                    Text(packageCountLabel)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
                 }
-                .labelsHidden()
-                .frame(width: 112)
-                .accessibilityLabel("Package component")
-                Text(packageCountLabel)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                if let source = selectedSource {
+                    HStack(spacing: 6) {
+                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                            .foregroundStyle(AgentTheme.blue)
+                        Text(source.name).font(.caption.weight(.semibold)).lineLimit(1)
+                        Button {
+                            selectedSourceID = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill").imageScale(.small)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Show every source")
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 9)
+                    .frame(height: 26)
+                    .background(AgentTheme.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
             }
             .padding(12)
 
             if filteredPackages.isEmpty {
                 EmptyStateView(
-                    symbol: query.isEmpty ? "shippingbox" : "shippingbox.and.arrow.backward",
-                    title: query.isEmpty ? "No packages found" : "No matching packages",
-                    message: query.isEmpty
-                        ? "Refresh native catalogs or add a local folder, checked-out Git repository, or Agent Plugin package."
-                        : "Try a different package name, publisher, or component.",
-                    actionTitle: query.isEmpty ? "Add Source" : "Clear Search",
-                    isActionEnabled: !query.isEmpty || !model.isInteractionLocked
+                    symbol: hasActiveFilter ? "line.3.horizontal.decrease.circle" : "shippingbox",
+                    title: hasActiveFilter ? "No matching packages" : "No packages found",
+                    message: emptyPackageMessage,
+                    actionTitle: hasActiveFilter ? "Clear Filters" : "Add Source",
+                    isActionEnabled: hasActiveFilter || !model.isInteractionLocked
                 ) {
-                    if query.isEmpty { chooseSource() } else { query = "" }
+                    if hasActiveFilter {
+                        query = ""
+                        componentFilter = .all
+                        clientFilter = .all
+                        selectedSourceID = nil
+                    } else {
+                        chooseSource()
+                    }
                 }
             } else {
                 List(selection: $selectedPackageID) {
                     ForEach(visiblePackages) { package in
-                        MarketplacePackageRow(package: package)
+                        MarketplacePackageRow(package: package, selected: selectedPackageID == package.id)
                             .tag(package.id)
-                            .listRowBackground(selectedPackageID == package.id ? AgentTheme.blue.opacity(0.13) : Color.clear)
+                            .listRowBackground(SelectionRowBackground(selected: selectedPackageID == package.id))
                             .accessibilityLabel(package.name)
                             .accessibilityValue(selectedPackageID == package.id ? "Selected" : "")
                     }
@@ -162,9 +210,9 @@ struct MarketplaceView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top, spacing: 12) {
-                        SymbolTile(symbol: "shippingbox", size: 48)
+                        KindTile(kind: marketplaceKind(for: package), size: 40, ghost: !package.isInstalled)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(package.name).font(.title2.weight(.semibold))
+                            Text(package.name).font(.title3.weight(.semibold))
                             Text(package.publisher).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -248,7 +296,7 @@ struct MarketplaceView: View {
                             Divider()
                             LabeledValueRow("Source") {
                                 VStack(alignment: .trailing, spacing: 6) {
-                                    CompactPathText(path: package.location, lineLimit: 2)
+                                    LocationText(path: package.location)
                                     if canOpen(package.location) {
                                         Button("Open Source", systemImage: "arrow.up.right.square") {
                                             open(package.location)
@@ -300,6 +348,8 @@ struct MarketplaceView: View {
     private var filteredPackages: [MarketplacePackage] {
         model.marketplacePackages.filter { package in
             componentFilter.matches(package)
+                && clientFilter.matches(package)
+                && matchesSelectedSource(package)
                 && (query.isEmpty
                     || [package.name, package.publisher, package.summary, package.components.map(\.displayName).joined(separator: " ")]
                         .joined(separator: " ")
@@ -312,6 +362,73 @@ struct MarketplaceView: View {
     }
 
     private var selectedPackage: MarketplacePackage? { model.marketplacePackages.first { $0.id == selectedPackageID } }
+
+    private var hasActiveFilter: Bool {
+        !query.isEmpty || componentFilter != .all || clientFilter != .all || selectedSourceID != nil
+    }
+
+    private var emptyPackageMessage: String {
+        guard hasActiveFilter else {
+            return "Refresh native catalogs or add a local folder, checked-out Git repository, or Agent Plugin package."
+        }
+        if let source = selectedSource, componentFilter != .all {
+            return
+                "\(source.name) publishes no \(componentFilter.rawValue.lowercased()) packages. Native client catalogs list plugins; skills come from Agent Plugins folders and Git checkouts you add."
+        }
+        if let source = selectedSource {
+            return "\(source.name) has nothing matching the current filters."
+        }
+        if componentFilter == .skills {
+            return
+                "No catalog here publishes standalone skills. Add a local folder or Git checkout containing Agent Plugins packages to see skills."
+        }
+        return "Try a different package name, publisher, component, or app."
+    }
+
+    private var selectedSource: ToolingSource? {
+        guard let selectedSourceID else { return nil }
+        return model.sources.first { $0.id == selectedSourceID }
+    }
+
+    /// Native catalogs do not carry a source identifier, so each package is
+    /// matched back to the row that produced it by its catalog prefix.
+    private func matchesSelectedSource(_ package: MarketplacePackage) -> Bool {
+        guard let source = selectedSource else { return true }
+        switch source.kind {
+        case .localFolder, .gitRepository:
+            return package.sourceID == source.id
+        case .claudeMarketplace:
+            return package.id.hasPrefix("claude:")
+        case .openAIPluginDirectory:
+            return package.id.hasPrefix("codex:")
+        case .mcpRegistry:
+            return package.id.hasPrefix("mcp-registry:")
+        case .agentPlugins, .geminiExtensionGallery:
+            return false
+        }
+    }
+
+    /// A one-line inventory per source, so an empty component filter is
+    /// explained by the catalog rather than looking like a failure.
+    private func contentsSummary(for source: ToolingSource) -> String? {
+        let packages = model.marketplacePackages.filter { package in
+            switch source.kind {
+            case .localFolder, .gitRepository: package.sourceID == source.id
+            case .claudeMarketplace: package.id.hasPrefix("claude:")
+            case .openAIPluginDirectory: package.id.hasPrefix("codex:")
+            case .mcpRegistry: package.id.hasPrefix("mcp-registry:")
+            case .agentPlugins, .geminiExtensionGallery: false
+            }
+        }
+        guard !packages.isEmpty else { return nil }
+        let counts: [(String, Int)] = [
+            ("skill", packages.filter { $0.components.contains(.skill) }.count),
+            ("plugin", packages.filter { $0.components.contains(.plugin) }.count),
+            ("MCP server", packages.filter { $0.components.contains(.mcpServer) }.count),
+        ]
+        let parts = counts.filter { $0.1 > 0 }.map { "\($0.1) \($0.0)\($0.1 == 1 ? "" : "s")" }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 
     private var visiblePackages: [MarketplacePackage] {
         Array(filteredPackages.prefix(displayLimit))
@@ -396,6 +513,29 @@ struct MarketplaceView: View {
     }
 }
 
+private enum MarketplaceClientFilter: String, CaseIterable, Identifiable {
+    case all = "Any app"
+    case claude = "Claude Code"
+    case codex = "Codex"
+    case gemini = "Gemini CLI"
+
+    var id: String { rawValue }
+
+    var client: ClientKind? {
+        switch self {
+        case .all: nil
+        case .claude: .claude
+        case .codex: .codex
+        case .gemini: .gemini
+        }
+    }
+
+    func matches(_ package: MarketplacePackage) -> Bool {
+        guard let client else { return true }
+        return package.supportedClients.contains(client) || package.nativeInstalls.contains { $0.client == client }
+    }
+}
+
 private enum MarketplaceComponentFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case skills = "Skills"
@@ -418,6 +558,9 @@ private struct MarketplaceSourceRow: View {
     @Environment(AppModel.self) private var model
     let source: ToolingSource
     let symbol: String
+    var contents: String?
+    var selected = false
+    var onSelect: (() -> Void)?
     @State private var isConfirmingRemoval = false
 
     var body: some View {
@@ -425,7 +568,11 @@ private struct MarketplaceSourceRow: View {
             SymbolTile(symbol: symbol, size: 31)
             VStack(alignment: .leading, spacing: 3) {
                 Text(source.name).font(.callout.weight(.semibold)).lineLimit(1)
-                Text(source.kind.displayName).font(.caption).foregroundStyle(.secondary)
+                if let contents {
+                    Text(contents).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                } else {
+                    Text(source.kind.displayName).font(.caption).foregroundStyle(.secondary)
+                }
                 Text(source.trustSummary).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                 if source.isOptionalBackup {
                     Text("Optional Git source")
@@ -449,6 +596,14 @@ private struct MarketplaceSourceRow: View {
             .accessibilityLabel("Actions for \(source.name)")
         }
         .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(selected ? AgentTheme.blue.opacity(0.14) : .clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect?() }
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityHint(selected ? "Shows every source again" : "Shows only packages from this source")
         .confirmationDialog(
             "Remove \(source.name)?",
             isPresented: $isConfirmingRemoval,
@@ -495,29 +650,39 @@ private enum MarketplaceLocation {
 
 private struct MarketplacePackageRow: View {
     let package: MarketplacePackage
+    let selected: Bool
 
     var body: some View {
         HStack(spacing: 11) {
-            SymbolTile(symbol: package.hasExecutableContent ? "shippingbox.fill" : "shippingbox", size: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(package.name).font(.callout.weight(.semibold)).lineLimit(1)
-                Text(package.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(package.supportedClients.map(\.rawValue).sorted().joined(separator: ", ")).font(.caption2).foregroundStyle(.secondary)
+            KindTile(kind: marketplaceKind(for: package), size: 28, ghost: !package.isInstalled)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(package.name)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(selected ? Color.white : Color.primary)
                     .lineLimit(1)
-                Text(
-                    package.installedClients.isEmpty
-                        ? "\(package.components.count) component\(package.components.count == 1 ? "" : "s")"
-                        : "Installed in \(package.installedClients.map(\.rawValue).sorted().joined(separator: ", "))"
-                )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                Text(package.publisher.isEmpty ? package.summary : "\(package.publisher) · \(package.summary)")
+                    .font(.caption)
+                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 12)
+            if package.isInstalled {
+                ClientMarks(present: Set(package.installedClients), size: 13)
+            } else {
+                Text("\(package.components.count) component\(package.components.count == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
             }
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, 6)
     }
+}
+
+private func marketplaceKind(for package: MarketplacePackage) -> ToolingKind {
+    if package.components.contains(.plugin) { return .plugin }
+    if package.components.contains(.mcpServer) { return .mcpServer }
+    if package.components.contains(.skill) { return .skill }
+    return .source
 }
 
 private extension String {

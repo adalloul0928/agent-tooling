@@ -1,0 +1,48 @@
+<!-- @screen id="recs" title="Recommendations" sidebar="recs" -->
+<!-- @lede Suggestions with their evidence beside them. The rail is four sentences; the detail shows the sessions that produced the suggestion, so acting on it is a decision, not a leap of faith. -->
+<!-- @note What changed|The single-column list became a rail and an evidence pane, which is what the empty half of the screen was for. Every suggestion has exactly one primary action. -->
+<!-- @note Material|Evidence rows are the plainest surface in the app: mark, sentence, time. -->
+<!-- @note Interaction|Draft with Codex… opens the New Skill sheet pre-filled from these sessions. Dismiss hides the suggestion for 30 days and is undoable in Activity. -->
+<div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">Recommendations</div><div class="sub">4 suggestions · scanned today at 8:05 AM</div></div>
+  <span class="sp"></span>
+  <span class="btn"><svg class="ic"><use href="#s-refresh"/></svg>Scan Now</span>
+</div>
+<div class="content pad0 split">
+  <div class="rail" style="width:380px">
+    <div class="rows">
+      <div class="row sel"><svg class="ic ic16" style="color:#fff"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Turn your release-notes routine into a skill</div><div class="s">Same seven steps in five Codex sessions this week</div></div></div>
+      <div class="row"><svg class="ic ic16 gA"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Install context7 for live library docs</div><div class="s">Claude Code fetched web documentation in 14 sessions</div></div></div>
+      <div class="row"><svg class="ic ic16 gA"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Fix worktree-bootstrap</div><div class="s">Failed 3 of its last 9 runs at the install step</div></div></div>
+      <div class="row"><svg class="ic ic16 gA"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Archive the wet-in-seattle plugin</div><div class="s">No runs in 60 days</div></div></div>
+    </div>
+    <div class="f11 t3" style="padding:10px 12px;line-height:1.45">Drawn from 212 Claude Code and Codex sessions over the last 14 days. Analysis runs entirely on this Mac; transcripts never leave it.</div>
+  </div>
+  <div class="detail stack">
+    <div class="hero-row" style="padding-bottom:2px">
+      <span class="tile lg skill"><svg class="ic"><use href="#s-doc"/></svg></span>
+      <div class="grow"><h1>Turn your release-notes routine into a skill</h1><div class="s">You assembled release notes by hand five times this week, about 25 minutes per run. A draft is ready to review.</div></div>
+    </div>
+    <div class="hs"><span class="btn pri"><svg class="ic"><use href="#s-pencil"/></svg>Draft with Codex…</span><span class="btn">Show Sessions</span><span class="sp" style="flex:1"></span><span class="btn">Dismiss</span></div>
+    <div>
+      <div class="gt">Evidence <span class="n">5 sessions</span></div>
+      <div class="grp">
+        <div class="ev"><svg class="mark codex"><use href="#b-codex"/></svg><span class="t">Release notes for 1.8.3 · collected PRs, grouped by area, matched the runbook voice</span><span class="when">Mon 4:12 PM · 27 min</span></div>
+        <div class="ev"><svg class="mark codex"><use href="#b-codex"/></svg><span class="t">Release notes for 1.8.2 · same steps, plus a manual CHANGELOG edit</span><span class="when">Thu 11:30 AM · 24 min</span></div>
+        <div class="ev"><svg class="mark codex"><use href="#b-codex"/></svg><span class="t">Hotfix notes for 1.8.1 · skipped the grouping step</span><span class="when">Wed 6:02 PM · 19 min</span></div>
+        <div class="ev"><svg class="mark codex"><use href="#b-codex"/></svg><span class="t">Release notes for 1.8.0 · asked for the runbook twice</span><span class="when">Aug 26 · 31 min</span></div>
+        <div class="ev"><svg class="mark codex"><use href="#b-codex"/></svg><span class="t">Draft notes for the App Store listing · reused the 1.8.0 structure</span><span class="when">Aug 25 · 22 min</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="gt">What the draft will do</div>
+      <div class="grp">
+        <div class="row" style="min-height:40px"><svg class="ic ic16 t2"><use href="#s-check"/></svg><div class="rt"><div class="p">Collect merged pull requests since the previous tag</div></div></div>
+        <div class="row" style="min-height:40px"><svg class="ic ic16 t2"><use href="#s-check"/></svg><div class="rt"><div class="p">Group by features, fixes, and tooling · skip release-only commits</div></div></div>
+        <div class="row" style="min-height:40px"><svg class="ic ic16 t2"><use href="#s-check"/></svg><div class="rt"><div class="p">Write to CHANGELOG.md in the runbook's voice and open it for review</div></div></div>
+      </div>
+    </div>
+    <div class="f11 t3" style="margin-top:auto">Suggestions never change anything on their own · <span class="gA">Configure scanning</span></div>
+  </div>
+</div>

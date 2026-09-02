@@ -1,0 +1,61 @@
+<!-- @screen id="overview" title="Overview" sidebar="overview" -->
+<!-- @lede Answers “is everything okay?” with the sync path itself. The library flows through the active profile into three clients; pending changes ride the line and each terminal carries its own verdict. -->
+<!-- @note What changed|The last pass stacked four lists. This keeps two and turns the client list into the conduit, so state reads as a path before any label is parsed. The only large text is the place name. -->
+<!-- @note Material|Menu bar and sidebar are genuine glass over the desktop; the content pane is a 90% paper with a concentric 14px radius, so rows stay crisp. -->
+<!-- @note Interaction|The dashed segment moves only while changes are pending and stops under Reduce Motion. Terminals open the client page; the Sync button carries the count. -->
+<div class="tb">
+  <span class="ico"><svg class="ic"><use href="#s-sidebar"/></svg></span>
+  <div><div class="ttl">This Mac</div><div class="sub">Checked 9:41 AM · Tuesday, September 1</div></div>
+  <span class="sp"></span>
+  <span class="pop"><span class="tile sm profile"><svg class="ic"><use href="#s-sliders"/></svg></span>Base workstation<span class="ud"><svg class="ic"><use href="#s-updown"/></svg></span></span>
+  <span class="btn"><svg class="ic"><use href="#s-refresh"/></svg>Check Now</span>
+  <span class="btn pri"><svg class="ic"><use href="#s-sync"/></svg>Sync<span class="cnt">6</span></span>
+</div>
+<div class="content stack">
+  <div class="grp flow">
+    <div class="node"><span class="tile lg library"><svg class="ic"><use href="#s-books"/></svg></span><div><div class="nm">Library</div><div class="s">14 managed · 2 discovered</div></div></div>
+    <div class="conn"><svg viewBox="0 0 100 118" preserveAspectRatio="none"><path class="line" d="M0 59H100" pathLength="100" vector-effect="non-scaling-stroke"/></svg></div>
+    <div class="node"><span class="tile lg profile"><svg class="ic"><use href="#s-sliders"/></svg></span><div><div class="nm">Base workstation</div><div class="s">Profile · 20 items desired</div></div></div>
+    <div class="conn"><svg viewBox="0 0 100 118" preserveAspectRatio="none">
+      <path class="line hot" d="M0 59H34" pathLength="100" vector-effect="non-scaling-stroke"/>
+      <path class="line" d="M34 59C62 59 62 17 100 17" pathLength="100" vector-effect="non-scaling-stroke"/>
+      <path class="line warm" d="M34 59H100" pathLength="100" vector-effect="non-scaling-stroke"/>
+      <path class="line" d="M34 59C62 59 62 101 100 101" pathLength="100" vector-effect="non-scaling-stroke"/>
+    </svg><span class="lbl2">6 changes pending</span></div>
+    <div class="terms">
+      <div class="term"><span class="disc"><svg class="mark"><use href="#b-claude"/></svg></span><span class="nm">Claude Code</span><span class="st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Verified 9:41 AM</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+      <div class="term"><span class="disc"><svg class="mark codex"><use href="#b-codex"/></svg></span><span class="nm">Codex</span><span class="st"><svg class="ic gW"><use href="#s-warn"/></svg>1 item held back</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+      <div class="term"><span class="disc"><svg class="mark"><use href="#b-gemini"/></svg></span><span class="nm">Gemini CLI</span><span class="st"><svg class="ic gOK"><use href="#s-check-c"/></svg>Verified 9:41 AM</span><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+    </div>
+  </div>
+
+  <div class="two">
+    <div class="stack">
+      <div>
+        <div class="gt">Needs attention <span class="n">3</span></div>
+        <div class="grp">
+          <div class="row"><svg class="ic ic16 gW"><use href="#s-warn"/></svg><div class="rt"><div class="p">Sentry needs to be signed in again</div><div class="s">Sign-in expired Thursday · Claude Code and Codex</div></div><span class="btn sm">Sign In…</span></div>
+          <div class="row"><svg class="ic ic16 gW"><use href="#s-warn"/></svg><div class="rt"><div class="p">Codex settings were edited by hand</div><div class="s">Friday · one server entry is held out of Sync until you decide</div></div><span class="btn sm">Review…</span></div>
+          <div class="row"><svg class="ic ic16 gA"><use href="#s-arrow-up-c"/></svg><div class="rt"><div class="p">Update available for developer-workflows</div><div class="s">10 skills · from aren/agent-tooling</div></div><span class="btn sm">Update</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="gt">Recommendations <span class="n">4 new</span></div>
+        <div class="grp">
+          <div class="row"><svg class="ic ic16 gA"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Your release-notes routine could become a skill</div><div class="s">Seen in five Codex sessions this week</div></div><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+          <div class="row"><svg class="ic ic16 gA"><use href="#s-bulb"/></svg><div class="rt"><div class="p">Install context7 for live library docs</div><div class="s">Claude Code fetched web documentation in 14 sessions</div></div><svg class="ic chev"><use href="#s-chev-r"/></svg></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="gt">Recent activity <span class="r">Show All</span></div>
+      <div class="grp">
+        <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Verification completed</div><div class="s">34 items match their receipts</div></div><span class="when">9:41 AM</span></div>
+        <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Applied sync plan S-118 · 6 changes</div><div class="s">Backup B-142 created first · all checksums verified</div></div><span class="when">Yesterday</span></div>
+        <div class="row"><svg class="ic ic16 gW"><use href="#s-warn"/></svg><div class="rt"><div class="p">Applied 5 of 6 · one write failed</div><div class="s">Gemini settings: permission denied · retried as S-118</div></div><span class="when">Yesterday</span></div>
+        <div class="row"><svg class="ic ic16 t2"><use href="#s-uturn"/></svg><div class="rt"><div class="p">Rolled back simview to 3f9d2e1</div><div class="s">Backup B-139 restored · verification passed</div></div><span class="when">Friday</span></div>
+        <div class="row"><svg class="ic ic16 gOK"><use href="#s-check-c"/></svg><div class="rt"><div class="p">Post-sync canary passed in all three clients</div><div class="s">Each client answered a scripted prompt</div></div><span class="when">Friday</span></div>
+      </div>
+    </div>
+  </div>
+</div>
