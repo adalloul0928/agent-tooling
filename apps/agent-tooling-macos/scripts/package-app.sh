@@ -57,6 +57,7 @@ trap 'rm -rf "$assembly_root"' EXIT
 mkdir -p "$assembled_bundle/Contents/MacOS" "$assembled_bundle/Contents/Helpers" "$assembled_bundle/Contents/Resources"
 ditto "$binary_directory/AgentTooling" "$assembled_bundle/Contents/MacOS/AgentTooling"
 ditto "$binary_directory/agent-tooling" "$assembled_bundle/Contents/Helpers/agent-tooling"
+ditto "$binary_directory/agent-tooling-mcp" "$assembled_bundle/Contents/Helpers/agent-tooling-mcp"
 if [[ -d "$binary_directory/AgentTooling_AgentToolingApp.bundle" ]]; then
   ditto \
     "$binary_directory/AgentTooling_AgentToolingApp.bundle" \
@@ -74,12 +75,17 @@ fi
 
 chmod +x "$assembled_bundle/Contents/MacOS/AgentTooling"
 chmod +x "$assembled_bundle/Contents/Helpers/agent-tooling"
+chmod +x "$assembled_bundle/Contents/Helpers/agent-tooling-mcp"
 
 signing_arguments=(--force --sign "$signing_identity")
 if [[ "$signing_identity" != "-" ]]; then
   signing_arguments+=(--options runtime --timestamp)
 fi
 codesign "${signing_arguments[@]}" "$assembled_bundle/Contents/Helpers/agent-tooling"
+# The MCP server is signed as its own helper: a client launches it directly,
+# so it is executed outside the main app binary and needs a valid signature
+# of its own.
+codesign "${signing_arguments[@]}" "$assembled_bundle/Contents/Helpers/agent-tooling-mcp"
 codesign "${signing_arguments[@]}" "$assembled_bundle"
 codesign --verify --deep --strict "$assembled_bundle"
 
