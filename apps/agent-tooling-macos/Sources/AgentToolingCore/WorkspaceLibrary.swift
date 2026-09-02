@@ -69,8 +69,6 @@ public final class WorkspaceLibrary {
 
     /// Mirrors the operation engine's copy limits so an oversized batch fails
     /// while it is still only a plan instead of part-way through execution.
-    private static let maximumStagedLibraryItems = 10_000
-    private static let maximumStagedLibraryBytes = 384 * 1_024 * 1_024
     private static let maximumAdoptedSkillItems = 2_000
     private static let maximumAdoptedSkillBytes = 32 * 1_024 * 1_024
     private static let adoptionStagingPrefix = ".adoption-"
@@ -268,20 +266,24 @@ public final class WorkspaceLibrary {
             throw WorkspaceLibraryError.adoptionBatchTooLarge(Self.maximumAdoptionBatch)
         }
         let libraryRoot = try managedLibraryURL()
-        _ = try managedPackagesURL()
+        let packagesRoot = try managedPackagesURL()
         removeAbandonedAdoptionStaging(in: libraryRoot)
         let staging = libraryRoot.appending(path: "\(Self.adoptionStagingPrefix)\(UUID().uuidString)", directoryHint: .isDirectory)
         var isPrepared = false
         defer { if !isPrepared { removeTransientItemIfPresent(staging) } }
-        try stageCurrentLibrary(from: libraryRoot, to: staging)
+        try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
 
-        let stagedPackages = staging.appending(path: "packages", directoryHint: .isDirectory)
+        // Existing managed packages are never restaged. Each adopted skill is
+        // its own package and its own reviewable step, so nothing already in
+        // the library is rewritten to add one.
         var adopted: [Skill] = []
         var rejections: [SkillAdoptionRejection] = []
+        var claimed = reservedIdentifiers
         for candidate in candidates {
             do {
-                adopted.append(
-                    try stageAdoptedPackage(for: candidate, in: stagedPackages, reservedIdentifiers: reservedIdentifiers))
+                let skill = try stageAdoptedPackage(for: candidate, in: staging, reservedIdentifiers: claimed)
+                claimed.insert(skill.id)
+                adopted.append(skill)
             } catch {
                 rejections.append(
                     SkillAdoptionRejection(
@@ -294,29 +296,29 @@ public final class WorkspaceLibrary {
         guard !adopted.isEmpty else { throw WorkspaceLibraryError.noAdoptableSkills(Self.skippedSummary(rejections)) }
 
         try normalizePrivatePermissions(under: staging)
-        let fingerprint = try DirectoryFingerprint.sha256(
-            of: staging,
-            fileManager: fileManager,
-            maximumItems: Self.maximumStagedLibraryItems,
-            maximumBytes: Self.maximumStagedLibraryBytes
-        )
+        let steps = try adopted.map { skill in
+            let stagedPackage = staging.appending(path: skill.bundle, directoryHint: .isDirectory)
+            return OperationStep(
+                kind: .copyDirectory,
+                title: "Adopt \(skill.displayName)",
+                detail:
+                    "Copies the skill's reviewed source into the managed library as packages/\(skill.bundle). The copy this Mac already has stays exactly where it is.",
+                sourcePath: stagedPackage.path(percentEncoded: false),
+                sourceFingerprint: try DirectoryFingerprint.sha256(
+                    of: stagedPackage,
+                    fileManager: fileManager,
+                    maximumItems: Self.maximumAdoptedSkillItems,
+                    maximumBytes: Self.maximumAdoptedSkillBytes
+                ),
+                destinationPath: packagesRoot.appending(path: skill.bundle, directoryHint: .isDirectory).path(percentEncoded: false)
+            )
+        }
         let plan = OperationPlan(
             kind: .createSkill,
             title: adopted.count == 1 ? "Adopt \(adopted.first?.displayName ?? "")" : "Adopt \(adopted.count) skills",
             summary: Self.adoptionSummary(adopted: adopted, rejections: rejections),
             scope: .user,
-            steps: [
-                OperationStep(
-                    kind: .copyDirectory,
-                    title: "Add \(adopted.count) skill\(adopted.count == 1 ? "" : "s") to the managed library",
-                    detail:
-                        "Replaces the managed package library with the reviewed copy prepared here. It carries every existing managed package forward unchanged and adds \(Self.nameList(adopted.map(\.displayName))). The previous library is kept as a rollback copy.",
-                    sourcePath: staging.path(percentEncoded: false),
-                    sourceFingerprint: fingerprint,
-                    destinationPath: store.libraryURL.path(percentEncoded: false),
-                    stopsOnFailure: true
-                )
-            ],
+            steps: steps,
             requiresConfirmation: true
         )
         isPrepared = true
@@ -329,34 +331,6 @@ public final class WorkspaceLibrary {
         removeTransientItemIfPresent(adoption.stagedLibraryURL)
     }
 
-    /// Copies the library's current visible contents into the replacement.
-    /// Hidden entries are another operation's transient staging or rollback
-    /// copies, so they are left behind rather than promoted.
-    private func stageCurrentLibrary(from libraryRoot: URL, to staging: URL) throws {
-        try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
-        let contents =
-            (try? fileManager.contentsOfDirectory(
-                at: libraryRoot,
-                includingPropertiesForKeys: [.isSymbolicLinkKey],
-                options: [.skipsHiddenFiles]
-            )) ?? []
-        for item in contents.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
-            let values = try item.resourceValues(forKeys: [.isSymbolicLinkKey])
-            guard values.isSymbolicLink != true else {
-                throw WorkspaceLibraryError.unsafeManagedLibrary(item.path(percentEncoded: false))
-            }
-            try fileManager.copyItem(at: item, to: staging.appending(path: item.lastPathComponent))
-        }
-        try fileManager.createDirectory(
-            at: staging.appending(path: "packages", directoryHint: .isDirectory),
-            withIntermediateDirectories: true
-        )
-    }
-
-    /// Stages one discovered skill as a portable package inside the replacement
-    /// library. Anything the operation engine would later refuse — a symbolic
-    /// link, a missing source, a definition the managed-library checker rejects
-    /// — is refused here so the rest of the batch can continue.
     private func stageAdoptedPackage(
         for candidate: SkillAdoptionCandidate,
         in stagedPackages: URL,

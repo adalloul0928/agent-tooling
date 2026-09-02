@@ -31,7 +31,11 @@ struct SkillAdoptionTests {
 
         let plan = try #require(model.pendingPlan)
         #expect(plan.steps.filter { $0.kind == .copyDirectory }.count == 1)
-        #expect(plan.steps.first?.destinationPath == store.libraryURL.path(percentEncoded: false))
+        #expect(
+            plan.steps.first?.destinationPath
+                == store.libraryURL.appending(path: "packages/local-doc-review", directoryHint: .isDirectory)
+                .path(percentEncoded: false)
+        )
         #expect(model.skills.first { $0.id == "doc-review" }?.owned == false)
         let packageURL = store.libraryURL.appending(path: "packages/local-doc-review", directoryHint: .isDirectory)
         #expect(!FileManager.default.fileExists(atPath: packageURL.path(percentEncoded: false)))
@@ -126,7 +130,7 @@ struct SkillAdoptionTests {
         ])
 
         #expect(adoption.skills.map(\.id) == ["doc-review"])
-        #expect(adoption.rejections.first?.reason.contains("already contains a skill named doc-review") == true)
+        #expect(adoption.rejections.first?.reason.contains("already uses the portable name doc-review") == true)
         library.discardAdoption(adoption)
 
         #expect(throws: WorkspaceLibraryError.self) {
@@ -216,5 +220,53 @@ struct SkillAdoptionTests {
     private func write(_ contents: String, to url: URL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data(contents.utf8).write(to: url, options: .atomic)
+    }
+}
+
+extension SkillAdoptionTests {
+    /// A batch reviews as one step per skill. Adopting three skills must not
+    /// read as a single rewrite of the whole managed library, and it must not
+    /// restage packages the library already holds.
+    @Test func eachAdoptedSkillIsItsOwnReviewableStep() throws {
+        let root = try temporaryDirectory()
+        let store = try WorkspaceStore(rootURL: root.appending(path: "workspace", directoryHint: .isDirectory))
+        let library = WorkspaceLibrary(store: store)
+
+        var existing = SkillDraft()
+        existing.name = "already-managed"
+        existing.purpose = "A package the library already holds."
+        existing.triggers = ["one", "two", "three"]
+        existing.negativeTrigger = "Never for anything else."
+        existing.selectedTargets = [.claude]
+        let untouched = try library.createSkill(from: existing)
+        let untouchedFingerprint = try DirectoryFingerprint.sha256(of: untouched.packageURL)
+
+        var sources: [SkillAdoptionCandidate] = []
+        for name in ["alpha-review", "beta-review", "gamma-review"] {
+            let source = root.appending(path: "client/\(name)", directoryHint: .isDirectory)
+            try write(definition(name: name), to: source.appending(path: "SKILL.md"))
+            sources.append(candidate(id: name, sourcePath: source.path(percentEncoded: false)))
+        }
+
+        let adoption = try library.adoptionPlan(for: sources)
+        defer { library.discardAdoption(adoption) }
+
+        #expect(adoption.plan.steps.count == 3)
+        #expect(adoption.plan.steps.allSatisfy { $0.kind == .copyDirectory })
+        #expect(
+            Set(adoption.plan.steps.compactMap(\.destinationPath).map { $0.hasSuffix("/") ? String($0.dropLast()) : $0 })
+                == Set(
+                    ["alpha-review", "beta-review", "gamma-review"].map {
+                        store.libraryURL.appending(path: "packages/local-\($0)", directoryHint: .notDirectory)
+                            .path(percentEncoded: false)
+                    })
+        )
+        // Every step carries its own fingerprint, so the review names the exact
+        // bytes of each skill rather than one hash over everything.
+        #expect(Set(adoption.plan.steps.compactMap(\.sourceFingerprint)).count == 3)
+        // No step targets the library root, and the package already in the
+        // library is neither restaged nor rewritten.
+        #expect(!adoption.plan.steps.contains { $0.destinationPath == store.libraryURL.path(percentEncoded: false) })
+        #expect(try DirectoryFingerprint.sha256(of: untouched.packageURL) == untouchedFingerprint)
     }
 }

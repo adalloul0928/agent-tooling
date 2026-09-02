@@ -438,6 +438,24 @@ public actor OperationExecutor {
             return destination
         }
 
+        // One managed package is its own destination, so adopting three skills
+        // reviews as three steps a person can read rather than a single rewrite
+        // of the whole library. The package name is the only variable part and
+        // it is checked the same way a skill folder name is.
+        let managedPackages = store.libraryURL.appending(path: "packages", directoryHint: .isDirectory).standardizedFileURL
+        if Self.samePath(destination.deletingLastPathComponent(), managedPackages),
+            OperationCommandPolicy.isSafeMCPIdentifier(destination.lastPathComponent)
+        {
+            try validateContainedPath(destination, within: store.libraryURL)
+            if fileManager.fileExists(atPath: destination.path(percentEncoded: false)) {
+                let values = try destination.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                guard values.isDirectory == true, values.isSymbolicLink != true else {
+                    throw OperationEngineError.unsafeDestination(rawPath)
+                }
+            }
+            return destination
+        }
+
         var permittedSkillRoots: [(root: URL, anchor: URL)] = [
             (homeURL.appending(path: ".claude/skills", directoryHint: .isDirectory), homeURL),
             (homeURL.appending(path: ".agents/skills", directoryHint: .isDirectory), homeURL),
