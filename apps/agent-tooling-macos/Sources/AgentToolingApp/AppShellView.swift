@@ -63,9 +63,11 @@ struct AppShellView: View {
         case .insights: InsightsView()
         case .mcpServers: MCPServersView()
         case .plugins: PluginsView(navigate: { selection = $0 })
+        case .collections: CollectionsView()
         case .profiles: ProfilesView()
         case .syncCenter: SyncCenterView()
         case .activity: ActivityView()
+        case .projects: ProjectsView()
         case .accounts: AccountsView()
         case .settings: SettingsView()
         }
