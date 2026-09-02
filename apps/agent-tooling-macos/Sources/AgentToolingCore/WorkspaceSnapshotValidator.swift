@@ -27,6 +27,8 @@ enum WorkspaceSnapshotValidator {
         try requireUnique(snapshot.accountSurfaces.map(\.id), field: "account identifiers")
         try requireUnique(snapshot.connectors.map(\.id), field: "connection identifiers")
         try requireUnique(snapshot.managedPolicies.map(\.id), field: "policy identifiers")
+        try requireUnique(snapshot.collections.map(\.id), field: "collection identifiers")
+        try requireUnique(snapshot.tagAssignments.map(\.id), field: "tag assignments")
         try requireUnique(snapshot.targetObservations.map(\.surface), field: "target observations")
         try requireUnique(snapshot.activities.map(\.id), field: "activity identifiers")
         try requireUnique(snapshot.operationReceipts.map(\.id), field: "operation receipt identifiers")
@@ -40,6 +42,9 @@ enum WorkspaceSnapshotValidator {
         for account in snapshot.accountSurfaces { try validate(account) }
         for connector in snapshot.connectors { try validate(connector) }
         for policy in snapshot.managedPolicies { try validate(policy, mode: mode) }
+        for collection in snapshot.collections { try validate(collection) }
+        for assignment in snapshot.tagAssignments { try validate(assignment) }
+        try validateCollectionReferences(profiles: snapshot.profiles, collections: snapshot.collections)
         for observation in snapshot.targetObservations { try validate(observation) }
         for activity in snapshot.activities { try validate(activity) }
         for receipt in snapshot.operationReceipts { try validate(receipt) }
@@ -78,6 +83,8 @@ enum WorkspaceSnapshotValidator {
             snapshot.accountSurfaces.count,
             snapshot.connectors.count,
             snapshot.managedPolicies.count,
+            snapshot.collections.count,
+            snapshot.tagAssignments.count,
         ]
         guard desiredCounts.allSatisfy({ $0 <= Limit.recordsPerKind }),
             snapshot.plugins.count <= Limit.recordsPerKind,
@@ -206,11 +213,15 @@ enum WorkspaceSnapshotValidator {
             try requireRedacted(profile.summary, field: "configuration summary")
             guard profile.checks.count <= Limit.childRecords,
                 profile.enabledPlugins.count <= Limit.childRecords,
-                profile.requiredMCPs.count <= Limit.childRecords
+                profile.requiredMCPs.count <= Limit.childRecords,
+                profile.requiredSkills.count <= Limit.childRecords,
+                profile.includedCollections.count <= Limit.childRecords
             else { throw WorkspaceSnapshotValidationError.tooManyRecords }
             try requireUnique(profile.checks.map(\.id), field: "configuration checks")
             try requireUnique(profile.enabledPlugins, field: "enabled plugin identifiers")
             try requireUnique(profile.requiredMCPs, field: "required MCP identifiers")
+            try requireUnique(profile.requiredSkills, field: "required skill identifiers")
+            try requireUnique(profile.includedCollections, field: "included collection identifiers")
             for check in profile.checks {
                 try validateIdentifier(check.id, field: "check identifier", strictPortableName: true)
                 try validateText(check.name, field: "check name", maximum: Limit.shortTextCharacters, required: true)
@@ -225,6 +236,12 @@ enum WorkspaceSnapshotValidator {
             }
             for value in profile.requiredMCPs {
                 try validateText(value, field: "required MCP identifier", maximum: Limit.identifierCharacters, required: true)
+            }
+            for value in profile.requiredSkills {
+                try validateText(value, field: "required skill identifier", maximum: Limit.identifierCharacters, required: true)
+            }
+            for value in profile.includedCollections {
+                try validateIdentifier(value, field: "included collection identifier", strictPortableName: true)
             }
             try validateScopedRoot(profile.projectRoot, scopeName: profile.scope.displayName, field: "configuration project", mode: mode)
             byID[profile.id] = profile
@@ -504,6 +521,45 @@ enum WorkspaceSnapshotValidator {
         try validateProfiles(policy.profiles, mode: mode)
     }
 
+    private static func validate(_ collection: ToolingCollection) throws {
+        try validateIdentifier(collection.id, field: "collection identifier", strictPortableName: true)
+        try validateText(collection.name, field: "collection name", maximum: Limit.shortTextCharacters, required: true)
+        try validateText(collection.summary, field: "collection summary", maximum: Limit.longTextCharacters)
+        try requireRedacted(collection.summary, field: "collection summary")
+        try validateDate(collection.createdAt, field: "collection timestamp")
+        guard collection.items.count <= Limit.childRecords else { throw WorkspaceSnapshotValidationError.tooManyRecords }
+        // Collections overlap freely with each other, so the only uniqueness
+        // that matters is within a single collection's own membership list.
+        try requireUnique(collection.items.map(\.id), field: "collection members")
+        for item in collection.items {
+            try validateIdentifier(item.identifier, field: "collection member identifier")
+        }
+    }
+
+    private static func validate(_ assignment: TagAssignment) throws {
+        try validateIdentifier(assignment.item.identifier, field: "tagged item identifier")
+        guard assignment.tags.count <= ToolingTag.maximumTagsPerItem else { throw WorkspaceSnapshotValidationError.tooManyRecords }
+        try requireUnique(assignment.tags.map { $0.lowercased() }, field: "tags")
+        for tag in assignment.tags {
+            guard ToolingTag.normalized(tag) == tag else {
+                throw WorkspaceSnapshotValidationError.invalidField("tag")
+            }
+        }
+    }
+
+    /// A configuration may only include a collection that exists. Membership
+    /// itself is deliberately not checked against the inventory: a shelf is
+    /// allowed to name something that is not installed on this Mac yet.
+    private static func validateCollectionReferences(profiles: [ToolingProfile], collections: [ToolingCollection]) throws {
+        let available = Set(collections.map(\.id))
+        for profile in profiles {
+            for collectionID in profile.includedCollections where !available.contains(collectionID) {
+                throw WorkspaceSnapshotValidationError.inconsistent(
+                    "Configuration \(profile.id) includes missing collection \(collectionID).")
+            }
+        }
+    }
+
     private static func validateIdentifier(_ value: String, field: String, strictPortableName: Bool = false) throws {
         try validateText(value, field: field, maximum: Limit.identifierCharacters, required: true)
         guard !value.hasPrefix("-"), !value.contains("/") else {
@@ -664,6 +720,10 @@ extension WorkspaceSnapshot {
             }
             return copy
         }
+        // Collections and tags are portable by construction: they name items,
+        // never machine paths, and never a credential.
+        portable.collections = collections
+        portable.tagAssignments = tagAssignments
         portable.importedRepositoryPath = nil
         portable.backupConfiguration = .init()
         portable.encryptedSyncConfiguration = .init()

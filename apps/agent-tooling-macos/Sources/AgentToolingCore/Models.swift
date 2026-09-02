@@ -228,6 +228,13 @@ public struct ToolingProfile: Identifiable, Codable, Hashable, Sendable {
     public var checks: [ProfileCheck]
     public var enabledPlugins: [String]
     public var requiredMCPs: [String]
+    /// Skills this configuration expects. Older snapshots predate the field
+    /// and decode as empty.
+    public var requiredSkills: [String]
+    /// Collections this configuration builds on. A Collection is material,
+    /// not a contract: including one widens the required list below, and
+    /// changes desired state only until a plan is reviewed and synced.
+    public var includedCollections: [String]
 
     public init(
         id: String,
@@ -238,7 +245,9 @@ public struct ToolingProfile: Identifiable, Codable, Hashable, Sendable {
         projectRoot: String? = nil,
         checks: [ProfileCheck],
         enabledPlugins: [String],
-        requiredMCPs: [String]
+        requiredMCPs: [String],
+        requiredSkills: [String] = [],
+        includedCollections: [String] = []
     ) {
         self.id = id
         self.name = name
@@ -249,12 +258,15 @@ public struct ToolingProfile: Identifiable, Codable, Hashable, Sendable {
         self.checks = checks
         self.enabledPlugins = enabledPlugins
         self.requiredMCPs = requiredMCPs
+        self.requiredSkills = requiredSkills
+        self.includedCollections = includedCollections
     }
 
     public var passingChecks: Int { checks.filter { $0.state == .healthy }.count }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, summary, inheritedFrom, scope, projectRoot, checks, enabledPlugins, requiredMCPs
+        case id, name, summary, inheritedFrom, scope, projectRoot, checks, enabledPlugins, requiredMCPs, requiredSkills,
+            includedCollections
     }
 
     public init(from decoder: any Decoder) throws {
@@ -268,6 +280,8 @@ public struct ToolingProfile: Identifiable, Codable, Hashable, Sendable {
         checks = try container.decodeIfPresent([ProfileCheck].self, forKey: .checks) ?? []
         enabledPlugins = try container.decodeIfPresent([String].self, forKey: .enabledPlugins) ?? []
         requiredMCPs = try container.decodeIfPresent([String].self, forKey: .requiredMCPs) ?? []
+        requiredSkills = try container.decodeIfPresent([String].self, forKey: .requiredSkills) ?? []
+        includedCollections = try container.decodeIfPresent([String].self, forKey: .includedCollections) ?? []
     }
 }
 

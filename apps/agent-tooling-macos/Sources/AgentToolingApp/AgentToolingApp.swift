@@ -193,6 +193,9 @@ private struct MenuBarContent: View {
             NSApp.activate(ignoringOtherApps: true)
         }
         Divider()
+        CollectionsMenu()
+            .environment(model)
+        Divider()
         Button(model.isRunningDoctor ? "Checking setup…" : "Check Setup") {
             Task { await model.runDoctor() }
         }
@@ -205,5 +208,51 @@ private struct MenuBarContent: View {
         .disabled(model.isInteractionLocked)
         Divider()
         Button("Quit Agent Tooling") { NSApp.terminate(nil) }
+    }
+}
+
+/// Collections belong where the work is, not buried in Settings. Each one
+/// toggles against the current configuration and carries a checkmark, or a
+/// partial count when the configuration already requires part of the shelf
+/// without including the shelf itself.
+private struct CollectionsMenu: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Menu("Collections") {
+            if model.collections.isEmpty {
+                Text("No collections yet")
+            } else if let profile = model.activeProfile {
+                Text("Included in \(profile.name)")
+                ForEach(orderedCollections) { collection in
+                    Toggle(isOn: inclusionBinding(collection, profileID: profile.id)) {
+                        Text(title(for: collection, profileID: profile.id))
+                    }
+                    .disabled(model.isInteractionLocked || profile.scope == .managed)
+                }
+                Divider()
+                Text("Including a collection changes desired state only. Review a sync to apply it.")
+            } else {
+                Text("Select a configuration first")
+            }
+        }
+    }
+
+    private var orderedCollections: [ToolingCollection] {
+        model.collections.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    private func inclusionBinding(_ collection: ToolingCollection, profileID: String) -> Binding<Bool> {
+        Binding(
+            get: { model.isCollectionIncluded(collection.id, inProfile: profileID) },
+            set: { model.setCollectionInclusion($0, of: collection.id, inProfile: profileID) }
+        )
+    }
+
+    private func title(for collection: ToolingCollection, profileID: String) -> String {
+        guard !model.isCollectionIncluded(collection.id, inProfile: profileID) else { return collection.name }
+        let coverage = model.collectionCoverage(collection.id, inProfile: profileID)
+        guard coverage.covered > 0, coverage.total > 0 else { return collection.name }
+        return "\(collection.name) — \(coverage.covered) of \(coverage.total)"
     }
 }
