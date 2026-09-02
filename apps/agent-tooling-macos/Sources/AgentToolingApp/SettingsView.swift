@@ -107,6 +107,8 @@ struct SettingsView: View {
 
                     if category == .library {
                         SettingsGroup(title: "Encrypted folder sync", symbol: "lock.arrow.triangle.2.circlepath") {
+                            SyncScopePanel()
+                            Divider()
                             SettingsValueRow(
                                 title: "Encrypted archive", detail: model.encryptedSyncConfiguration.location ?? "Not configured"
                             ) {
@@ -531,6 +533,73 @@ private struct RecoveryKeyImportSheet: View {
         } catch {
             return error.localizedDescription
         }
+    }
+}
+
+/// The boundary of an encrypted archive, stated on the screen where somebody
+/// picks the folder rather than only in the handbook. Someone choosing a cloud
+/// folder is deciding what leaves this Mac, so the answer belongs in front of
+/// them before they choose, not after a restore surprises them.
+private struct SyncScopePanel: View {
+    private static let travels = [
+        "Managed skills and their package files",
+        "MCP server definitions you created",
+        "Configurations, including inheritance",
+        "Imported managed policies",
+        "Connection records, with verification reset",
+    ]
+
+    private static let stays = [
+        "The encryption key — Keychain only",
+        "Plugins and cached catalog listings",
+        "Skills and servers only discovered here",
+        "Activity and receipts",
+        "Project folders and local sources",
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("What an archive contains")
+                .font(.callout.weight(.medium))
+            HStack(alignment: .top, spacing: 22) {
+                column(
+                    title: "Travels to another Mac",
+                    symbol: "checkmark.circle.fill",
+                    tint: AgentTheme.ok,
+                    items: Self.travels
+                )
+                column(
+                    title: "Never leaves this Mac",
+                    symbol: "minus.circle.fill",
+                    tint: .secondary,
+                    items: Self.stays
+                )
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("What an encrypted archive contains")
+    }
+
+    private func column(title: String, symbol: String, tint: Color, items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ForEach(items, id: \.self) { item in
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: symbol)
+                        .font(.caption2)
+                        .foregroundStyle(tint)
+                    Text(item)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
