@@ -318,10 +318,36 @@ public enum MarketplaceProviderError: LocalizedError, Sendable {
 private struct RegistryResponse: Decodable {
     var servers: [RegistryEntry]
     var metadata: RegistryMetadata
+
+    private enum CodingKeys: String, CodingKey {
+        case servers, metadata
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // One malformed listing must not hide the rest of the registry. Entries
+        // that do not match the documented shape are skipped instead of failing
+        // the whole page.
+        servers = (try container.decodeIfPresent([FailableRegistryEntry].self, forKey: .servers) ?? [])
+            .compactMap(\.entry)
+        metadata = try container.decodeIfPresent(RegistryMetadata.self, forKey: .metadata) ?? RegistryMetadata()
+    }
+}
+
+private struct FailableRegistryEntry: Decodable {
+    var entry: RegistryEntry?
+
+    init(from decoder: any Decoder) throws {
+        entry = try? RegistryEntry(from: decoder)
+    }
 }
 
 private struct RegistryMetadata: Decodable {
     var nextCursor: String?
+
+    init(nextCursor: String? = nil) {
+        self.nextCursor = nextCursor
+    }
 }
 
 private struct RegistryEntry: Decodable {
@@ -353,6 +379,17 @@ private struct RegistryServer: Decodable {
 
 private struct RegistryRepository: Decodable {
     var url: String
+
+    private enum CodingKeys: String, CodingKey {
+        case url
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Published listings sometimes carry an empty repository object. The
+        // package stays reviewable; it simply has no source link.
+        url = try container.decodeIfPresent(String.self, forKey: .url) ?? ""
+    }
 }
 
 private struct RegistryPackage: Decodable {
