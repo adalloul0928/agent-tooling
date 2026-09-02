@@ -194,6 +194,16 @@ public enum OperationStepStatus: String, Codable, CaseIterable, Sendable {
     case failed
     case skipped
     case manual
+
+    public var displayName: String {
+        switch self {
+        case .pending: "Never started"
+        case .succeeded: "Succeeded"
+        case .failed: "Failed"
+        case .skipped: "Skipped"
+        case .manual: "Needs you"
+        }
+    }
 }
 
 public struct OperationStepResult: Identifiable, Codable, Hashable, Sendable {
@@ -214,6 +224,27 @@ public struct OperationStepResult: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+/// One named item from a batch, with the reason it ended the way it did.
+///
+/// A multi-step plan reports every item. Collapsing a batch into one verdict
+/// hides the steps that were skipped and why, which is exactly the information
+/// a person needs after a partial run.
+public struct OperationItemOutcome: Identifiable, Codable, Hashable, Sendable {
+    /// The identifier of the plan step this outcome belongs to.
+    public var id: UUID
+    public var title: String
+    public var status: OperationStepStatus
+    /// Why this item ended in this status, in the operator's words.
+    public var reason: String
+
+    public init(id: UUID, title: String, status: OperationStepStatus, reason: String) {
+        self.id = id
+        self.title = title
+        self.status = status
+        self.reason = reason
+    }
+}
+
 public struct OperationReceipt: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var planID: UUID
@@ -224,6 +255,9 @@ public struct OperationReceipt: Identifiable, Codable, Hashable, Sendable {
     public var results: [OperationStepResult]
     public var createdAt: Date
     public var verificationSummary: String
+    /// Per-item outcomes, named and explained. Receipts written before this
+    /// field existed decode with an empty list rather than failing to load.
+    public var itemOutcomes: [OperationItemOutcome]
 
     public init(
         id: UUID = UUID(),
@@ -234,7 +268,8 @@ public struct OperationReceipt: Identifiable, Codable, Hashable, Sendable {
         targetSurfaces: [TargetSurface],
         results: [OperationStepResult],
         createdAt: Date = .now,
-        verificationSummary: String
+        verificationSummary: String,
+        itemOutcomes: [OperationItemOutcome] = []
     ) {
         self.id = id
         self.planID = planID
@@ -245,5 +280,41 @@ public struct OperationReceipt: Identifiable, Codable, Hashable, Sendable {
         self.results = results
         self.createdAt = createdAt
         self.verificationSummary = verificationSummary
+        self.itemOutcomes = itemOutcomes
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, planID, kind, title, state, targetSurfaces, results, createdAt, verificationSummary, itemOutcomes
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        planID = try container.decode(UUID.self, forKey: .planID)
+        kind = try container.decode(OperationKind.self, forKey: .kind)
+        title = try container.decode(String.self, forKey: .title)
+        state = try container.decode(HealthState.self, forKey: .state)
+        targetSurfaces = try container.decode([TargetSurface].self, forKey: .targetSurfaces)
+        results = try container.decode([OperationStepResult].self, forKey: .results)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        verificationSummary = try container.decode(String.self, forKey: .verificationSummary)
+        itemOutcomes = try container.decodeIfPresent([OperationItemOutcome].self, forKey: .itemOutcomes) ?? []
+    }
+
+    public func itemCount(_ status: OperationStepStatus) -> Int {
+        results.count { $0.status == status }
+    }
+
+    /// "succeeded 2 · failed 1 · skipped 1", plus manual steps when there are
+    /// any. Never a single aggregate word.
+    public var outcomeTally: String {
+        var parts = [
+            "succeeded \(itemCount(.succeeded))",
+            "failed \(itemCount(.failed))",
+            "skipped \(itemCount(.skipped))",
+        ]
+        let manual = itemCount(.manual)
+        if manual > 0 { parts.append("manual \(manual)") }
+        return parts.joined(separator: " · ")
     }
 }
