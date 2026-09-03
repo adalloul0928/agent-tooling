@@ -941,8 +941,7 @@ public final class AppModel {
             return
         }
         var steps: [OperationStep] = []
-        let requestedScope = mcpScopeArgument(server.scope)
-        let operationScope = ToolingScope.allCases.first(where: { $0.displayName == server.scope }) ?? .user
+        let operationScope = MCPClientCommand.scope(fromDisplayName: server.scope)
         let workingDirectory: String?
         if operationScope == .user {
             workingDirectory = nil
@@ -966,7 +965,7 @@ public final class AppModel {
                     ))
                 continue
             }
-            if client == .codex, requestedScope != "user" {
+            guard MCPClientCommand.supportsScope(operationScope, client: client) else {
                 steps.append(
                     OperationStep(
                         kind: .manual, title: "Configure \(server.name) at \(server.scope) scope in Codex",
@@ -1520,8 +1519,7 @@ public final class AppModel {
             lastError = "The selected MCP server is no longer available."
             return
         }
-        let requestedScope = mcpScopeArgument(server.scope)
-        let operationScope = ToolingScope.allCases.first(where: { $0.displayName == server.scope }) ?? .user
+        let operationScope = MCPClientCommand.scope(fromDisplayName: server.scope)
         let workingDirectory: String?
         if operationScope == .user {
             workingDirectory = nil
@@ -1553,7 +1551,7 @@ public final class AppModel {
         let arguments = MCPClientCommand.removeArguments(
             serverID: server.id,
             client: client,
-            scope: MCPClientCommand.scope(fromDisplayName: server.scope)
+            scope: operationScope
         )
         pendingPlan = OperationPlan(
             kind: .configureMCP,
@@ -2224,10 +2222,6 @@ public final class AppModel {
     private func isCommandAvailable(for client: ClientKind) -> Bool {
         let observations = targetObservations.filter { $0.surface.client == client }
         return observations.contains(where: \.isCommandAvailable)
-    }
-
-    private func mcpScopeArgument(_ displayScope: String) -> String {
-        MCPClientCommand.scopeArgument(for: MCPClientCommand.scope(fromDisplayName: displayScope), client: .claude)
     }
 
     private func currentSnapshot() -> WorkspaceSnapshot {

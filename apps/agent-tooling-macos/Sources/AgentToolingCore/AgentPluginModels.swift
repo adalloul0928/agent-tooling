@@ -259,13 +259,13 @@ public struct PackageConflict: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-public enum AgentPluginValidationError: LocalizedError, Sendable {
+enum AgentPluginValidationError: LocalizedError, Sendable {
     case unsupportedSchema(String)
     case invalidName(String)
     case invalidField(String)
     case invalidExtensionNamespace(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsupportedSchema(let schema): "Unsupported Agent Plugins schema: \(schema)"
         case .invalidName(let name): "Invalid Agent Plugins package name: \(name)"

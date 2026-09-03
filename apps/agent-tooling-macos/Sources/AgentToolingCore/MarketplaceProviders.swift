@@ -48,9 +48,9 @@ public actor URLSessionHTTPDataLoader: HTTPDataLoading {
     }
 }
 
-public struct OfficialMCPRegistryProvider: MarketplaceProvider {
+struct OfficialMCPRegistryProvider: MarketplaceProvider {
     public let id = "mcp.official-registry"
-    public let displayName = "Official MCP Registry"
+    let displayName = "Official MCP Registry"
 
     private enum Limit {
         static let responseBytes = 4_194_304
@@ -65,7 +65,7 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
     private let baseURL: URL
     private let loader: any HTTPDataLoading
 
-    public init(
+    init(
         baseURL: URL? = nil,
         loader: any HTTPDataLoading = URLSessionHTTPDataLoader()
     ) throws {
@@ -82,7 +82,7 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
         self.loader = loader
     }
 
-    public func search(_ query: MarketplaceQuery) async throws -> MarketplacePage {
+    func search(_ query: MarketplaceQuery) async throws -> MarketplacePage {
         let endpoint = baseURL.appending(path: "v0.1/servers")
         guard let urlComponents = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else {
             throw MarketplaceProviderError.invalidRequest
@@ -424,7 +424,7 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
     }
 }
 
-public enum MarketplaceProviderError: LocalizedError, Sendable {
+enum MarketplaceProviderError: LocalizedError, Sendable {
     case insecureBaseURL
     case invalidRequest
     case invalidResponse
@@ -432,7 +432,7 @@ public enum MarketplaceProviderError: LocalizedError, Sendable {
     case responseTooLarge
     case invalidPayload
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .insecureBaseURL: "Marketplace providers require an HTTPS base URL."
         case .invalidRequest: "The marketplace request could not be created."

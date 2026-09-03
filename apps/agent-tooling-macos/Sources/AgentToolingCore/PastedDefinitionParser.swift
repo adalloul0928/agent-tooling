@@ -67,7 +67,7 @@ public enum PastedDefinition: Equatable, Sendable {
     case skill(PastedSkillImport)
 }
 
-public enum PasteImportError: LocalizedError, Equatable, Sendable {
+enum PasteImportError: LocalizedError, Equatable, Sendable {
     case empty
     case tooLong(Int)
     case unsupportedCharacters
@@ -84,7 +84,7 @@ public enum PasteImportError: LocalizedError, Equatable, Sendable {
     case noServersInJSON
     case invalidSkill(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .empty:
             "There was nothing to read. Paste an mcp add command, an MCP JSON block, a server URL, or a SKILL.md file."

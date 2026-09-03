@@ -297,7 +297,7 @@ public enum ProjectPath {
 /// lossy, so the original path is recovered by walking the real filesystem
 /// rather than by string substitution: a candidate is only ever accepted when
 /// the directory actually exists.
-public struct ProjectPathResolver {
+struct ProjectPathResolver {
     /// Stats per path component. A recorded working directory deeper or more
     /// hyphenated than this resolves through the listing fallback instead.
     private static let maximumComponentProbes = 64
@@ -305,11 +305,11 @@ public struct ProjectPathResolver {
     private let fileManager: FileManager
     private var listings: [String: [String]] = [:]
 
-    public init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
     }
 
-    public mutating func resolve(sessionIndexEntry encoded: String) -> URL? {
+    mutating func resolve(sessionIndexEntry encoded: String) -> URL? {
         guard encoded.hasPrefix("-"), encoded.count <= 1_024 else { return nil }
         var budget = 4_096
         return resolve(
@@ -421,10 +421,10 @@ public struct ProjectDiscoveryOptions: Hashable, Sendable {
     }
 }
 
-public enum ProjectDiscovery {
+enum ProjectDiscovery {
     /// Reads Claude Code's own session index. Regular files, dangling entries,
     /// and names that do not resolve to a directory on this Mac are ignored.
-    public static func sessionIndexRoots(
+    static func sessionIndexRoots(
         homeURL: URL,
         fileManager: FileManager = .default,
         options: ProjectDiscoveryOptions = ProjectDiscoveryOptions()
@@ -450,7 +450,7 @@ public enum ProjectDiscovery {
     }
 
     /// Immediate children of a folder such as `~/ws` that look like projects.
-    public static func scannedRoots(
+    static func scannedRoots(
         under root: URL,
         fileManager: FileManager = .default,
         options: ProjectDiscoveryOptions = ProjectDiscoveryOptions()
@@ -477,7 +477,7 @@ public enum ProjectDiscovery {
     /// The home folder is not a project. Its `.claude` and `.agents` folders
     /// are exactly the user-scope installation everything else inherits from,
     /// so listing it would make every project look overridden.
-    public static func isEligibleProjectRoot(_ url: URL, homeURL: URL) -> Bool {
+    static func isEligibleProjectRoot(_ url: URL, homeURL: URL) -> Bool {
         let candidate = ProjectPath.canonical(url)
         guard candidate != "/", !candidate.isEmpty else { return false }
         return !(ProjectPath.canonical(homeURL) + "/").hasPrefix(candidate + "/")
@@ -486,7 +486,7 @@ public enum ProjectDiscovery {
     /// A folder counts as a project when it is a Git working tree or already
     /// holds agent configuration. Any folder the user picks by hand is
     /// accepted regardless.
-    public static func isProjectDirectory(_ url: URL, fileManager: FileManager = .default) -> Bool {
+    static func isProjectDirectory(_ url: URL, fileManager: FileManager = .default) -> Bool {
         let root = url.standardizedFileURL
         if fileManager.fileExists(atPath: root.appending(path: ".git").path(percentEncoded: false)) { return true }
         return ProjectFileDescriptor.manifest.contains { descriptor in
@@ -496,7 +496,7 @@ public enum ProjectDiscovery {
 
     /// Builds the full record for one project. Every value is read from disk;
     /// nothing is written and no command is run.
-    public static func inspect(
+    static func inspect(
         root: URL,
         origins: Set<ProjectDiscoveryOrigin>,
         fileManager: FileManager = .default
@@ -958,13 +958,13 @@ public struct ProjectIgnorePlan: Hashable, Sendable {
     }
 }
 
-public enum ProjectIgnoreError: LocalizedError, Sendable {
+enum ProjectIgnoreError: LocalizedError, Sendable {
     case notADirectory(String)
     case symbolicLink(String)
     case tooLarge(String)
     case nothingToDo
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .notADirectory(let path): "The project folder is no longer available: \(path)."
         case .symbolicLink(let path): "Refusing to write through the symbolic link at \(path)."
@@ -974,17 +974,17 @@ public enum ProjectIgnoreError: LocalizedError, Sendable {
     }
 }
 
-public enum ProjectGitignore {
-    public static let header = "# Agent Tooling: machine-local agent settings"
+enum ProjectGitignore {
+    static let header = "# Agent Tooling: machine-local agent settings"
     private static let maximumBytes = 512 * 1_024
 
     /// The patterns a project's machine-local files need. Directories are not
     /// ignored wholesale, because the committed files live beside them.
-    public static func patterns(for project: DiscoveredProject) -> [String] {
+    static func patterns(for project: DiscoveredProject) -> [String] {
         patterns(for: project.files)
     }
 
-    public static func patterns(for files: [ProjectFilePresence]) -> [String] {
+    static func patterns(for files: [ProjectFilePresence]) -> [String] {
         files
             .filter { $0.descriptor.sharing == .machineLocal }
             .map { "/" + $0.descriptor.relativePath }
@@ -993,7 +993,7 @@ public enum ProjectGitignore {
 
     /// Reads the project's `.gitignore` once and reports which machine-local
     /// files it does not cover. Used while scanning, so it never throws.
-    public static func unlistedPatterns(
+    static func unlistedPatterns(
         for files: [ProjectFilePresence],
         root: URL,
         fileManager: FileManager = .default
@@ -1008,7 +1008,7 @@ public enum ProjectGitignore {
     /// True when `.gitignore` already contains a line that plainly covers the
     /// pattern. Deliberately literal: Agent Tooling does not run `git`, so it
     /// only claims a match it can point at.
-    public static func lists(_ pattern: String, in contents: String) -> Bool {
+    static func lists(_ pattern: String, in contents: String) -> Bool {
         let bare = pattern.hasPrefix("/") ? String(pattern.dropFirst()) : pattern
         let equivalents: Set<String> = [pattern, bare, "/" + bare, "**/" + bare]
         for rawLine in contents.split(whereSeparator: \.isNewline) {
@@ -1024,7 +1024,7 @@ public enum ProjectGitignore {
         return false
     }
 
-    public static func plan(
+    static func plan(
         for project: DiscoveredProject,
         fileManager: FileManager = .default
     ) throws -> ProjectIgnorePlan {
@@ -1056,7 +1056,7 @@ public enum ProjectGitignore {
     /// Appends the reviewed text. Re-running it is a no-op because the plan is
     /// recomputed from the file that is on disk right now.
     @discardableResult
-    public static func apply(_ plan: ProjectIgnorePlan, fileManager: FileManager = .default) throws -> Bool {
+    static func apply(_ plan: ProjectIgnorePlan, fileManager: FileManager = .default) throws -> Bool {
         guard !plan.missingPatterns.isEmpty, !plan.appendedText.isEmpty else { throw ProjectIgnoreError.nothingToDo }
         let gitignore = URL(fileURLWithPath: plan.gitignorePath, isDirectory: false).standardizedFileURL
         guard gitignore.lastPathComponent == ".gitignore",

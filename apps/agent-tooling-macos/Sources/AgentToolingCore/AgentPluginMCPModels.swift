@@ -75,10 +75,10 @@ public struct AgentPluginMCPLoadResult: Hashable, Sendable {
     }
 }
 
-public enum AgentPluginMCPConfigurationLoader {
-    public static let schemaIdentifier = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
+enum AgentPluginMCPConfigurationLoader {
+    static let schemaIdentifier = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
 
-    public static func load(_ data: Data) throws -> AgentPluginMCPLoadResult {
+    static func load(_ data: Data) throws -> AgentPluginMCPLoadResult {
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw AgentPluginMCPValidationError.invalidTopLevel("The file must contain one JSON object.")
         }
@@ -251,12 +251,12 @@ public enum AgentPluginMCPConfigurationLoader {
     }
 }
 
-public enum AgentPluginMCPValidationError: LocalizedError, Sendable {
+enum AgentPluginMCPValidationError: LocalizedError, Sendable {
     case unsupportedSchema
     case invalidTopLevel(String)
     case invalidServer(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsupportedSchema: "The MCP configuration targets an unsupported Agent Plugins schema."
         case .invalidTopLevel(let message): message

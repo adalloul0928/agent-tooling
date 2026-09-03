@@ -9,8 +9,8 @@ import Foundation
 /// and the registry's install routes — which meant a client changing its CLI
 /// needed three edits to stay consistent, and any one of them drifting would
 /// only surface when a plan was executed.
-public enum MCPClientCommand {
-    public static func executable(for client: ClientKind) -> String {
+enum MCPClientCommand {
+    static func executable(for client: ClientKind) -> String {
         switch client {
         case .claude: "claude"
         case .codex: "codex"
@@ -21,7 +21,7 @@ public enum MCPClientCommand {
     /// The scope word a client expects. Gemini has no separate local scope, so
     /// a local request is spelled as project there rather than silently
     /// widening to user.
-    public static func scopeArgument(for scope: ToolingScope, client: ClientKind) -> String {
+    static func scopeArgument(for scope: ToolingScope, client: ClientKind) -> String {
         let requested: String =
             switch scope {
             case .project, .workspace: "project"
@@ -35,11 +35,11 @@ public enum MCPClientCommand {
     /// Bridges a stored display name back to a scope. Records hold the display
     /// string rather than the enum, so this keeps that translation in one place
     /// too.
-    public static func scope(fromDisplayName displayName: String) -> ToolingScope {
+    static func scope(fromDisplayName displayName: String) -> ToolingScope {
         ToolingScope.allCases.first { $0.displayName == displayName } ?? .user
     }
 
-    public static func addArguments(
+    static func addArguments(
         serverID: String,
         transport: MCPTransport,
         destination: ValidatedMCPDestination,
@@ -66,7 +66,7 @@ public enum MCPClientCommand {
         }
     }
 
-    public static func removeArguments(serverID: String, client: ClientKind, scope: ToolingScope) -> [String] {
+    static func removeArguments(serverID: String, client: ClientKind, scope: ToolingScope) -> [String] {
         let scopeWord = scopeArgument(for: scope, client: client)
         switch client {
         case .claude: return ["mcp", "remove", "--scope", scopeWord, serverID]
@@ -77,7 +77,7 @@ public enum MCPClientCommand {
 
     /// True when the client can honour the requested scope. Codex is the only
     /// client without a scope selector today.
-    public static func supportsScope(_ scope: ToolingScope, client: ClientKind) -> Bool {
+    static func supportsScope(_ scope: ToolingScope, client: ClientKind) -> Bool {
         guard client == .codex else { return true }
         return scopeArgument(for: scope, client: client) == "user"
     }

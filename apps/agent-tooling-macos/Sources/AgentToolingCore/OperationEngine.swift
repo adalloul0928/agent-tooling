@@ -850,7 +850,7 @@ public actor OperationExecutor {
 
 public typealias OperationEngine = OperationExecutor
 
-public enum OperationEngineError: LocalizedError, Sendable {
+enum OperationEngineError: LocalizedError, Sendable {
     case malformedStep(String)
     case unsafeDestination(String)
     case unsafeSource(String)
@@ -865,7 +865,7 @@ public enum OperationEngineError: LocalizedError, Sendable {
     case sourceChangedAfterReview
     case unprovableDestination(String, String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .malformedStep(let title): "The operation step \"\(title)\" is incomplete."
         case .unsafeDestination(let path):

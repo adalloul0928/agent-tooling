@@ -1066,7 +1066,7 @@ public final class WorkspaceLibrary {
     }
 }
 
-public enum WorkspaceLibraryError: LocalizedError, Sendable {
+enum WorkspaceLibraryError: LocalizedError, Sendable {
     case invalidIdentifier(String)
     case alreadyExists(String)
     case missingSkillSource(String)
@@ -1099,7 +1099,7 @@ public enum WorkspaceLibraryError: LocalizedError, Sendable {
     case adoptionBatchTooLarge(Int)
     case noAdoptableSkills(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .invalidIdentifier(let value):
             "\"\(value)\" is not a valid skill identifier. Use lowercase letters, numbers, and single hyphens."

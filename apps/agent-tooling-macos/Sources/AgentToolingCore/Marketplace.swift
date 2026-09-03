@@ -2,7 +2,7 @@ import Foundation
 
 /// Federates packages from sources the user has explicitly added. The app never
 /// treats a catalog listing as a trusted or authenticated installation.
-public final class MarketplaceService {
+final class MarketplaceService {
     private enum Limit {
         static let catalogBytes = 2_097_152
         static let manifestBytes = 262_144
@@ -16,11 +16,11 @@ public final class MarketplaceService {
 
     private let fileManager: FileManager
 
-    public init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
     }
 
-    public func inspect(_ source: ToolingSource) throws -> [MarketplacePackage] {
+    func inspect(_ source: ToolingSource) throws -> [MarketplacePackage] {
         switch source.kind {
         case .localFolder, .gitRepository:
             return try inspectFolder(source)
@@ -31,7 +31,7 @@ public final class MarketplaceService {
         }
     }
 
-    public func defaultSources() -> [ToolingSource] {
+    func defaultSources() -> [ToolingSource] {
         [
             ToolingSource(
                 name: "Agent Plugins format", kind: .agentPlugins, location: "https://agent-plugins.org",
@@ -56,7 +56,7 @@ public final class MarketplaceService {
     /// as an installer. Gemini's gallery has no equivalent local JSON catalog,
     /// so it remains a source link while installed extensions are discovered by
     /// the target scanner.
-    public static func discoverNativeCatalogs(runner: any CommandRunning) async -> NativeCatalogDiscovery {
+    static func discoverNativeCatalogs(runner: any CommandRunning) async -> NativeCatalogDiscovery {
         let service = MarketplaceService()
         async let claude = runner.run(executable: "claude", arguments: ["plugin", "list", "--available", "--json"], currentDirectory: nil)
         async let codex = runner.run(executable: "codex", arguments: ["plugin", "list", "--available", "--json"], currentDirectory: nil)
@@ -769,7 +769,7 @@ private enum NativeCatalogError: LocalizedError {
     }
 }
 
-public enum MarketplaceError: LocalizedError, Sendable {
+enum MarketplaceError: LocalizedError, Sendable {
     case missingSource(String)
     case invalidSource(String)
     case invalidPackage(String)
@@ -781,7 +781,7 @@ public enum MarketplaceError: LocalizedError, Sendable {
     case invalidTextFile(String)
     case changedWhileReading(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .missingSource(let location): "The marketplace source at \(location) could not be found."
         case .invalidSource(let location): "The marketplace source at \(location) must resolve to a local directory."

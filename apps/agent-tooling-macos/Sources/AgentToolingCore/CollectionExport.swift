@@ -86,11 +86,11 @@ public struct CollectionExportDocument: Codable, Sendable, Equatable {
     }
 }
 
-public enum CollectionExportError: LocalizedError, Sendable {
+enum CollectionExportError: LocalizedError, Sendable {
     case unknownCollection
     case credentialMaterialPresent
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unknownCollection: "The selected collection is no longer available."
         case .credentialMaterialPresent:

@@ -33,18 +33,18 @@ public struct ManagedInstallRecord: Identifiable, Codable, Hashable, Sendable {
 /// Path comparison shared by every ownership and drift check. Symbolic links
 /// are compared as well as literal paths so `/var` and `/private/var` cannot be
 /// used to make a known destination look unknown.
-public enum ManagedInstallPath {
-    public static func normalized(_ path: String) -> String {
+enum ManagedInstallPath {
+    static func normalized(_ path: String) -> String {
         let value = URL(fileURLWithPath: path).standardizedFileURL.path(percentEncoded: false)
         guard value.count > 1, value.hasSuffix("/") else { return value }
         return String(value.dropLast())
     }
 
-    public static func resolved(_ path: String) -> String {
+    static func resolved(_ path: String) -> String {
         normalized(URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false))
     }
 
-    public static func sameLocation(_ lhs: String, _ rhs: String) -> Bool {
+    static func sameLocation(_ lhs: String, _ rhs: String) -> Bool {
         normalized(lhs) == normalized(rhs) || resolved(lhs) == resolved(rhs)
     }
 }
@@ -230,8 +230,8 @@ public struct InstalledPackageDrift: Identifiable, Codable, Hashable, Sendable {
 }
 
 /// Compares each proven install against its recorded review fingerprint.
-public enum InstalledPackageDriftInspector {
-    public static func inspect(
+enum InstalledPackageDriftInspector {
+    static func inspect(
         _ authority: ManagedInstallAuthority,
         fileManager: FileManager = .default,
         maximumRecords: Int = ManagedInstallLedger.maximumRecords
@@ -244,14 +244,14 @@ public enum InstalledPackageDriftInspector {
     /// Reads the recorded installs and re-hashes each installed tree away from
     /// the caller's actor. Comparing many packages is file-system work, and the
     /// setup check should not make the window wait on it.
-    public static func inspect(
+    static func inspect(
         store: WorkspaceStore,
         maximumRecords: Int = ManagedInstallLedger.maximumRecords
     ) async -> [InstalledPackageDrift] {
         await Task.detached { inspect(.fromStore(store), maximumRecords: maximumRecords) }.value
     }
 
-    public static func drift(for record: ManagedInstallRecord, fileManager: FileManager = .default) -> InstalledPackageDrift {
+    static func drift(for record: ManagedInstallRecord, fileManager: FileManager = .default) -> InstalledPackageDrift {
         let destination = URL(fileURLWithPath: record.destinationPath).standardizedFileURL
         guard fileManager.fileExists(atPath: destination.path(percentEncoded: false)) else {
             return InstalledPackageDrift(
@@ -282,7 +282,7 @@ public enum InstalledPackageDriftInspector {
     }
 
     /// One calm sentence for the setup check. Drift is reported as a fact.
-    public static func summary(for reports: [InstalledPackageDrift]) -> String? {
+    static func summary(for reports: [InstalledPackageDrift]) -> String? {
         let drifted = reports.filter(\.hasDrifted)
         let removed = reports.filter { $0.state == .removed }
         var parts: [String] = []

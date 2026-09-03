@@ -1,6 +1,6 @@
 import Foundation
 
-public enum StackedPlanError: LocalizedError, Equatable, Sendable {
+enum StackedPlanError: LocalizedError, Equatable, Sendable {
     case emptySelection
     case noTargets
     case mixedScopes([String])
@@ -8,7 +8,7 @@ public enum StackedPlanError: LocalizedError, Equatable, Sendable {
     case invalidDestination(String, String)
     case noRemovalRoute(String, ClientKind)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .emptySelection:
             "Select at least one item before building a plan."

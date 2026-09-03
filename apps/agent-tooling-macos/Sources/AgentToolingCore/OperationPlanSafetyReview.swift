@@ -83,8 +83,8 @@ public enum DestinationOwnership: Codable, Hashable, Sendable {
 }
 
 /// Establishes ownership of one specific destination.
-public enum DestinationOwnershipInspector {
-    public static func ownership(
+enum DestinationOwnershipInspector {
+    static func ownership(
         of destination: URL,
         managedRoots: [URL],
         authority: ManagedInstallAuthority,

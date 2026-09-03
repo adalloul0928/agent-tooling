@@ -1,11 +1,11 @@
 import Foundation
 
-public enum BoundedInputReaderError: LocalizedError, Sendable {
+enum BoundedInputReaderError: LocalizedError, Sendable {
     case invalidMaximum
     case inputTooLarge(Int)
     case invalidUTF8
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .invalidMaximum: "The maximum input size must be greater than zero."
         case .inputTooLarge(let maximum): "Standard input exceeded the \(maximum)-byte limit."

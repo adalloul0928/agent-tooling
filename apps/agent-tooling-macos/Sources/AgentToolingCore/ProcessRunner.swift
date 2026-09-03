@@ -372,12 +372,12 @@ private final class RunningProcessController: @unchecked Sendable {
     }
 }
 
-public enum ProcessCommandRunnerError: LocalizedError, Sendable {
+enum ProcessCommandRunnerError: LocalizedError, Sendable {
     case timedOut(String)
     case missingResult(String)
     case standardInputTooLarge(String, Int)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .timedOut(let command): "\(command) did not finish within the allowed time and was stopped."
         case .missingResult(let command): "\(command) ended without returning a result."

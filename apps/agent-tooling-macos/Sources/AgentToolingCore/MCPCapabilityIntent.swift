@@ -183,13 +183,13 @@ public struct MCPCapabilityIntentStore: Sendable {
     }
 }
 
-public enum MCPCapabilityIntentError: LocalizedError, Equatable, Sendable {
+enum MCPCapabilityIntentError: LocalizedError, Equatable, Sendable {
     case recordTooLarge
     case unreadable
     case unsupportedVersion(Int)
     case unsafePath(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .recordTooLarge: "The recorded MCP capability choices exceed the safe file size limit."
         case .unreadable: "The recorded MCP capability choices could not be read."

@@ -73,14 +73,14 @@ public enum ConnectorValidator {
     }
 }
 
-public enum ConnectorValidationError: LocalizedError, Sendable {
+enum ConnectorValidationError: LocalizedError, Sendable {
     case invalidName
     case invalidProvider
     case incompatibleScope
     case tooManySecretReferences
     case invalidSecretReference(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .invalidName:
             "Give the connection a name of at most 128 characters."

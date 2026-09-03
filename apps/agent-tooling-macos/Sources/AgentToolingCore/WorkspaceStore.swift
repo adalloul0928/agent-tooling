@@ -722,7 +722,7 @@ public enum WorkspaceEntityDomain: String, Codable, CaseIterable, Sendable {
     }
 }
 
-public enum WorkspaceStoreError: LocalizedError, Sendable {
+enum WorkspaceStoreError: LocalizedError, Sendable {
     case openDatabase(String)
     case closed
     case query(String)
@@ -731,7 +731,7 @@ public enum WorkspaceStoreError: LocalizedError, Sendable {
     case unsafePath(String)
     case migrationBackup(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .openDatabase(let path): "Unable to open Agent Tooling's local database at \(path)."
         case .closed: "The local workspace database is closed."

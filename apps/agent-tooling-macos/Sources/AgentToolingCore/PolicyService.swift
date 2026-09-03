@@ -2,8 +2,8 @@ import Foundation
 
 /// Reads a reviewed local policy manifest. A policy is data only: no scripts,
 /// shell commands, hooks, credentials, or unrecognized fields are accepted.
-public final class PolicyService {
-    public static let schema = "agent-tooling-policy/v1"
+final class PolicyService {
+    static let schema = "agent-tooling-policy/v1"
 
     private enum Limit {
         static let fileBytes = 1_048_576
@@ -18,11 +18,11 @@ public final class PolicyService {
 
     private let fileManager: FileManager
 
-    public init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
     }
 
-    public func load(at url: URL) throws -> ManagedPolicy {
+    func load(at url: URL) throws -> ManagedPolicy {
         let source = url.standardizedFileURL
         guard source.isFileURL else { throw PolicyError.invalidSource(url.absoluteString) }
         let values: URLResourceValues
@@ -303,7 +303,7 @@ private func rejectUnknownKeys(_ decoder: any Decoder, allowed: Set<String>) thr
     }
 }
 
-public enum PolicyError: LocalizedError, Sendable {
+enum PolicyError: LocalizedError, Sendable {
     case invalidSource(String)
     case fileTooLarge(Int)
     case invalidDocument(String)
@@ -323,7 +323,7 @@ public enum PolicyError: LocalizedError, Sendable {
     case conflictingPluginRule(String)
     case changedWhileReading(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .invalidSource(let path): "The managed-policy source must be a regular, non-symlinked local file: \(path)."
         case .fileTooLarge(let maximum): "The managed-policy file exceeds the \(maximum)-byte safety limit."

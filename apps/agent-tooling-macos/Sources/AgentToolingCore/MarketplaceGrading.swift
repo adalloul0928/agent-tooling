@@ -3,13 +3,13 @@ import Foundation
 /// Summaries Agent Tooling writes for itself when a catalog publishes none.
 /// Grading has to tell them apart from a real description, so both the code
 /// that writes them and the code that grades them read the same list.
-public enum MarketplaceCopy {
-    public static let missingRegistryDescription = "No description provided."
-    public static let installedClaudePlugin = "Installed Claude Code plugin discovered by the native catalog."
-    public static let availableClaudePlugin = "Available through the current Claude marketplace catalog."
-    public static let installedCodexPlugin = "Installed Codex plugin discovered by the native catalog."
-    public static let availableCodexPlugin = "Available through the current Codex plugin catalog."
-    public static let localPackagePrefix = "Local package with "
+enum MarketplaceCopy {
+    static let missingRegistryDescription = "No description provided."
+    static let installedClaudePlugin = "Installed Claude Code plugin discovered by the native catalog."
+    static let availableClaudePlugin = "Available through the current Claude marketplace catalog."
+    static let installedCodexPlugin = "Installed Codex plugin discovered by the native catalog."
+    static let availableCodexPlugin = "Available through the current Codex plugin catalog."
+    static let localPackagePrefix = "Local package with "
 
     private static let exactGeneratedSummaries: Set<String> = [
         missingRegistryDescription, installedClaudePlugin, availableClaudePlugin, installedCodexPlugin, availableCodexPlugin,
@@ -17,7 +17,7 @@ public enum MarketplaceCopy {
 
     /// True when the summary on screen was written by this app rather than by
     /// whoever published the package.
-    public static func isGeneratedSummary(_ summary: String) -> Bool {
+    static func isGeneratedSummary(_ summary: String) -> Bool {
         let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return true }
         if exactGeneratedSummaries.contains(trimmed) { return true }

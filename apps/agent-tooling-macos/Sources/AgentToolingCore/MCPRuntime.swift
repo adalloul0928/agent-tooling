@@ -65,18 +65,18 @@ public struct MCPRuntimeServer: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-public protocol MCPRuntimeProvider: Sendable {
+protocol MCPRuntimeProvider: Sendable {
     var id: String { get }
     func status() async -> MCPRuntimeStatus
     func servers() async throws -> [MCPRuntimeServer]
 }
 
-public struct DirectMCPRuntimeProvider: MCPRuntimeProvider {
-    public let id = "direct"
+struct DirectMCPRuntimeProvider: MCPRuntimeProvider {
+    let id = "direct"
 
-    public init() {}
+    init() {}
 
-    public func status() async -> MCPRuntimeStatus {
+    func status() async -> MCPRuntimeStatus {
         MCPRuntimeStatus(
             id: id,
             displayName: "Direct client configuration",
@@ -86,18 +86,18 @@ public struct DirectMCPRuntimeProvider: MCPRuntimeProvider {
         )
     }
 
-    public func servers() async throws -> [MCPRuntimeServer] { [] }
+    func servers() async throws -> [MCPRuntimeServer] { [] }
 }
 
-public struct ToolHiveMCPRuntimeProvider: MCPRuntimeProvider {
-    public let id = "toolhive"
+struct ToolHiveMCPRuntimeProvider: MCPRuntimeProvider {
+    let id = "toolhive"
     private let runner: any CommandRunning
 
-    public init(runner: any CommandRunning = ProcessCommandRunner(timeout: .seconds(15))) {
+    init(runner: any CommandRunning = ProcessCommandRunner(timeout: .seconds(15))) {
         self.runner = runner
     }
 
-    public func status() async -> MCPRuntimeStatus {
+    func status() async -> MCPRuntimeStatus {
         do {
             let result = try await runner.run(executable: "thv", arguments: ["version"], currentDirectory: nil)
             guard result.status == 0 else { return unavailableStatus(detail: result.standardError) }
@@ -115,7 +115,7 @@ public struct ToolHiveMCPRuntimeProvider: MCPRuntimeProvider {
         }
     }
 
-    public func servers() async throws -> [MCPRuntimeServer] {
+    func servers() async throws -> [MCPRuntimeServer] {
         let runtimeStatus = await status()
         guard runtimeStatus.isAvailable else { return [] }
         let result = try await runner.run(
@@ -164,11 +164,11 @@ public struct ToolHiveMCPRuntimeProvider: MCPRuntimeProvider {
     }
 }
 
-public enum MCPRuntimeError: LocalizedError, Sendable {
+enum MCPRuntimeError: LocalizedError, Sendable {
     case commandFailed(String)
     case invalidResponse
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .commandFailed(let detail): "ToolHive could not list managed servers. \(detail)"
         case .invalidResponse: "ToolHive returned an unsupported server list."

@@ -326,14 +326,14 @@ public struct EncryptedSyncImportPreview: Sendable {
     public var plan: OperationPlan
 }
 
-public struct EncryptedLibraryFile: Codable, Hashable, Sendable {
-    public var relativePath: String
-    public var data: Data
+struct EncryptedLibraryFile: Codable, Hashable, Sendable {
+    var relativePath: String
+    var data: Data
     /// Optional for archives created before execution metadata was retained.
     /// A missing value restores conservatively as a non-executable file.
-    public var isExecutable: Bool?
+    var isExecutable: Bool?
 
-    public init(relativePath: String, data: Data, isExecutable: Bool? = nil) {
+    init(relativePath: String, data: Data, isExecutable: Bool? = nil) {
         self.relativePath = relativePath
         self.data = data
         self.isExecutable = isExecutable
@@ -410,15 +410,15 @@ public final class KeychainSyncKeyProvider: SyncKeyProviding, @unchecked Sendabl
     }
 }
 
-public struct FixedSyncKeyProvider: SyncKeyProviding, Sendable {
-    public let key: Data
-    public init(key: Data = Data(repeating: 7, count: 32)) { self.key = key }
-    public func loadKey() throws -> Data { key }
-    public func loadOrCreateKey() throws -> Data { key }
-    public func replaceKey(_: Data) throws {}
+struct FixedSyncKeyProvider: SyncKeyProviding, Sendable {
+    let key: Data
+    init(key: Data = Data(repeating: 7, count: 32)) { self.key = key }
+    func loadKey() throws -> Data { key }
+    func loadOrCreateKey() throws -> Data { key }
+    func replaceKey(_: Data) throws {}
 }
 
-public enum EncryptedSyncError: LocalizedError, Sendable {
+enum EncryptedSyncError: LocalizedError, Sendable {
     case missingDestination(String)
     case invalidArchiveName(String)
     case invalidArchive
@@ -433,7 +433,7 @@ public enum EncryptedSyncError: LocalizedError, Sendable {
     case archiveChangedWhileReading
     case libraryChangedWhileReading(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .missingDestination(let path): "The selected encrypted sync folder is unavailable: \(path)"
         case .invalidArchiveName(let name): "Select \(EncryptedSyncService.archiveFileName), not \(name)."

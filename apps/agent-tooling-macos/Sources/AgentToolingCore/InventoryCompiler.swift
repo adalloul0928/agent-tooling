@@ -12,8 +12,8 @@ public struct ScannedInventory: Sendable {
     }
 }
 
-public enum InventoryCompiler {
-    public static func compile(observations: [TargetObservation], homeURL: URL, fileManager: FileManager = .default) -> ScannedInventory {
+enum InventoryCompiler {
+    static func compile(observations: [TargetObservation], homeURL: URL, fileManager: FileManager = .default) -> ScannedInventory {
         var byClient: [ClientKind: [TargetObservation]] = [:]
         for observation in observations {
             if let client = observation.surface.client { byClient[client, default: []].append(observation) }

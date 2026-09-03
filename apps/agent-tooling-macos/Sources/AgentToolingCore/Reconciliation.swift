@@ -107,8 +107,8 @@ public struct ReconciliationPlan: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-public enum ReconciliationPlanner {
-    public static func plan(desired: DesiredState, observed: ObservedState) -> ReconciliationPlan {
+enum ReconciliationPlanner {
+    static func plan(desired: DesiredState, observed: ObservedState) -> ReconciliationPlan {
         let desiredByID = indexedBindings(desired.bindings)
         let observedByID = indexedBindings(observed.bindings)
         var drift: [Drift] = []
