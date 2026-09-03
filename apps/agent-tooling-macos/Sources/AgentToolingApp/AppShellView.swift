@@ -38,11 +38,6 @@ struct AppShellView: View {
                     .transition(reduceMotion ? .identity : .opacity)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .paperPane()
-                    .background {
-                        // The atmosphere stays where the paper pane's margins
-                        // show it, rather than covering the whole window.
-                        if !reduceTransparency { AmbientBackdrop().opacity(0.92) }
-                    }
             }
             // The title bar is hidden, so its safe area would otherwise inset
             // the content pane at the top and nowhere else. The sidebar keeps

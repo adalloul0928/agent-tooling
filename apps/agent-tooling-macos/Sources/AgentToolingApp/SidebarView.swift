@@ -2,6 +2,7 @@ import AgentToolingCore
 import SwiftUI
 
 struct SidebarView: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("appearance") private var appearance = "System"
@@ -52,7 +53,13 @@ struct SidebarView: View {
         }
         .padding(.horizontal, isCollapsed ? 8 : 10)
         .frame(width: isCollapsed ? AgentTheme.collapsedSidebarWidth : AgentTheme.sidebarWidth)
-        .background(AgentTheme.sidebarGlass)
+        .background {
+            // Nothing is painted over the window material: the sidebar is the
+            // material, the way Finder's is, so it stays see-through and meets
+            // the window edge without a step. Only the accessibility fallback,
+            // which has no material to show, needs a surface of its own.
+            if reduceTransparency { AgentTheme.contentBackground }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Navigation sidebar")
     }

@@ -19,8 +19,6 @@ enum AgentTheme {
     static let contentBackground = dynamic(light: 0xF7F8FB, dark: 0x1A1C24)
     static let controlBackground = dynamic(light: 0xFFFFFF, dark: 0x24262F)
     static let separator = Color(nsColor: .separatorColor)
-    /// The scrim that turns the backdrop into a glass sidebar.
-    static let sidebarGlass = dynamic(light: 0xFFFFFF, dark: 0x161926, lightAlpha: 0.34, darkAlpha: 0.30)
 
     // Identity tiles. These say what a thing is and are never used for status.
     static let skill = dynamic(light: 0xFF8A1F, dark: 0xFF9D45)
