@@ -689,7 +689,7 @@ public actor CodexSkillDraftService {
     }
 }
 
-public enum CodexSkillDraftError: LocalizedError, Sendable {
+enum CodexSkillDraftError: LocalizedError, Sendable {
     case missingInstruction
     case instructionTooLarge
     case unsupportedControlCharacter(String)
@@ -712,7 +712,7 @@ public enum CodexSkillDraftError: LocalizedError, Sendable {
     case invalidSkillFrontmatter
     case unsafePackage(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .missingInstruction: "Describe what the skill should do."
         case .instructionTooLarge: "The skill instruction exceeds the supported size."

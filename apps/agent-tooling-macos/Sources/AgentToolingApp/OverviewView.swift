@@ -57,6 +57,9 @@ struct OverviewView: View {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(alignment: .leading, spacing: 16) {
                             attentionCard
+                            if !updateItems.isEmpty {
+                                updatesCard
+                            }
                             if !recommendations.isEmpty {
                                 recommendationsCard
                             }
@@ -130,6 +133,31 @@ struct OverviewView: View {
                     }
                     if item.id != attentionItems.last?.id { Divider().opacity(0.35) }
                 }
+            }
+        }
+    }
+
+    /// Only what an actual comparison produced. Items whose check did not
+    /// complete are named as such rather than counted as healthy.
+    private var updatesCard: some View {
+        TitledCard("Updates", count: updateSummary.sentence) {
+            Button("Check again") { Task { await model.refreshMarketplace() } }
+                .buttonStyle(.plain)
+                .foregroundStyle(AgentTheme.blue)
+                .disabled(model.isInteractionLocked)
+        } content: {
+            ForEach(updateItems, id: \.plugin.id) { item in
+                InfoRow(item.plugin.name, detail: item.availability.detail) {
+                    KindTile(kind: .plugin, size: 26)
+                } trailing: {
+                    HStack(spacing: 10) {
+                        UpdateStateBadge(availability: item.availability)
+                        Button("Review") { navigate(.plugins) }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                }
+                if item.plugin.id != updateItems.last?.plugin.id { Divider().opacity(0.35) }
             }
         }
     }
@@ -211,6 +239,21 @@ struct OverviewView: View {
             let verdict = model.clientVerdict(for: client)
             return ConduitTerminal(client: client, state: verdict.state, text: verdict.text)
         }
+    }
+
+    private var updateVerdicts: [(plugin: Plugin, availability: UpdateAvailability)] {
+        model.pluginUpdateAvailability()
+    }
+
+    private var updateSummary: UpdateAvailabilitySummary {
+        UpdateAvailabilityEvaluator.summary(updateVerdicts.map(\.availability))
+    }
+
+    /// Updates worth a row: news first, then the checks that did not complete.
+    private var updateItems: [(plugin: Plugin, availability: UpdateAvailability)] {
+        let available = updateVerdicts.filter { $0.availability.hasUpdate }
+        let unverified = updateVerdicts.filter { $0.availability.isUnverified }
+        return Array((available + unverified).prefix(3))
     }
 
     private var recommendations: [ToolRecommendation] {

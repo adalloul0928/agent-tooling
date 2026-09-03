@@ -6,6 +6,9 @@ public actor OperationExecutor {
     private let fileManager: FileManager
     private let homeURL: URL
     private let commandPolicy: OperationCommandPolicy
+    /// Proof of which destinations this app installed, refreshed once per plan
+    /// so every step in a batch is judged against the same recorded history.
+    private var installAuthority = ManagedInstallAuthority()
 
     public init(
         store: WorkspaceStore,
@@ -26,6 +29,7 @@ public actor OperationExecutor {
     /// Executes a plan built by an adapter. Steps intentionally continue after
     /// a failure so multi-agent installs retain useful partial success.
     public func execute(_ plan: OperationPlan) async -> OperationReceipt {
+        installAuthority = .fromStore(store)
         var results: [OperationStepResult] = []
         for (index, step) in plan.steps.enumerated() {
             let startedAt = Date.now
@@ -75,7 +79,7 @@ public actor OperationExecutor {
             result.status == .skipped && result.output.localizedCaseInsensitiveContains("cancel")
         }
         let hasCompletedAutomaticStep = results.contains { $0.status == .succeeded }
-        let verification =
+        let guidance =
             results.isEmpty
             ? "No operation steps were provided. Nothing changed."
             : wasCancelled
@@ -87,6 +91,7 @@ public actor OperationExecutor {
                             ? "The reviewed local changes completed. Finish the remaining manual checks, then check setup again."
                             : "No local changes were made. Follow the manual guidance, then check setup again."
                         : "All requested local steps completed. A fresh scan is recorded after the operation."
+        let outcomes = Self.itemOutcomes(for: plan, results: results)
         var receipt = OperationReceipt(
             planID: plan.id,
             kind: plan.kind,
@@ -94,8 +99,10 @@ public actor OperationExecutor {
             state: state,
             targetSurfaces: plan.targetSurfaces,
             results: results,
-            verificationSummary: verification
+            verificationSummary: guidance,
+            itemOutcomes: outcomes
         )
+        receipt.verificationSummary = Self.persistableOutput(Self.verificationSummary(for: receipt, guidance: guidance))
         do {
             try store.saveEntity(receipt, id: receipt.id.uuidString, domain: .receipts)
         } catch {
@@ -104,6 +111,81 @@ public actor OperationExecutor {
         }
         return receipt
     }
+
+    /// Names every item in the batch with the reason it ended as it did. A step
+    /// with no recorded result is reported explicitly rather than dropped, so
+    /// the itemization always accounts for the whole plan.
+    private static func itemOutcomes(for plan: OperationPlan, results: [OperationStepResult]) -> [OperationItemOutcome] {
+        let byStep = Dictionary(results.map { ($0.stepID, $0) }, uniquingKeysWith: { first, _ in first })
+        return plan.steps.map { step in
+            guard let result = byStep[step.id] else {
+                return OperationItemOutcome(
+                    id: step.id,
+                    title: step.title,
+                    status: .pending,
+                    reason: "This step never started."
+                )
+            }
+            // The itemization is a summary. `results` still holds each step's
+            // complete output, so the reason is bounded to keep a long batch
+            // from doubling the size of the stored receipt.
+            let reason = Self.condensed(result.output, limit: maximumReasonCharacters)
+            return OperationItemOutcome(
+                id: step.id,
+                title: step.title,
+                status: result.status,
+                reason: reason.isEmpty ? Self.defaultReason(for: result.status) : reason
+            )
+        }
+    }
+
+    private static func defaultReason(for status: OperationStepStatus) -> String {
+        switch status {
+        case .succeeded: "Completed."
+        case .failed: "Failed without a recorded reason."
+        case .skipped: "Skipped."
+        case .manual: "Waiting for you to complete it."
+        case .pending: "This step never started."
+        }
+    }
+
+    /// Builds the itemized batch summary: a per-status tally followed by the
+    /// name and reason for every item that did not simply succeed.
+    private static func verificationSummary(for receipt: OperationReceipt, guidance: String) -> String {
+        guard !receipt.itemOutcomes.isEmpty else { return guidance }
+        var lines = ["\(receipt.outcomeTally)."]
+        for status in [OperationStepStatus.failed, .skipped, .manual, .pending] {
+            let items = receipt.itemOutcomes.filter { $0.status == status }
+            guard !items.isEmpty else { continue }
+            let label = status.displayName
+            let named = items.prefix(maximumNamedItems).map { item in
+                "\(item.title) — \(Self.condensed(item.reason))"
+            }
+            var line = "\(label): \(named.joined(separator: "; "))"
+            if items.count > named.count { line += "; and \(items.count - named.count) more" }
+            lines.append(Self.sentence(line))
+        }
+        lines.append(guidance)
+        return lines.joined(separator: " ")
+    }
+
+    private static func condensed(_ reason: String, limit: Int = 180) -> String {
+        let flattened = reason.split(whereSeparator: \.isNewline).joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard flattened.count > limit else { return flattened }
+        return String(flattened.prefix(limit)) + "…"
+    }
+
+    /// Ends a line with exactly one terminator. Step reasons usually end in a
+    /// full stop already, and a doubled one reads like a formatting bug.
+    private static func sentence(_ line: String) -> String {
+        let terminators: Set<Character> = [".", "!", "?", "…", ":"]
+        guard let last = line.last, terminators.contains(last) else { return line + "." }
+        return line
+    }
+
+    private static let maximumNamedItems = 12
+    private static let maximumReasonCharacters = 2_000
 
     private func appendSkippedSteps(
         _ steps: ArraySlice<OperationStep>,
@@ -180,6 +262,8 @@ public actor OperationExecutor {
             let source = URL(fileURLWithPath: sourcePath)
             try validateSource(source)
             let destination = try copyDestination(destinationPath, projectRootPath: step.projectRootPath)
+            try requireProvenOwnership(of: destination)
+            let removals = removedEntryCount(replacing: destination, with: source)
             try replaceDirectory(
                 at: destination,
                 withCopyOf: source,
@@ -187,7 +271,17 @@ public actor OperationExecutor {
                 projectRootPath: step.projectRootPath,
                 planStepID: step.id
             )
-            return (.succeeded, "Installed local package at \(destination.path(percentEncoded: false)).")
+            let ledgerNote = recordManagedInstall(
+                destination: destination,
+                source: source,
+                reviewedFingerprint: sourceFingerprint,
+                planStepID: step.id
+            )
+            let removalNote =
+                removals > 0
+                ? " \(removals) item\(removals == 1 ? "" : "s") that were here before are not part of this package."
+                : ""
+            return (.succeeded, "Installed local package at \(destination.path(percentEncoded: false)).\(removalNote)\(ledgerNote)")
 
         case .replaceManagedLibrary:
             guard let destinationPath = step.destinationPath, let contents = step.contents else {
@@ -223,6 +317,75 @@ public actor OperationExecutor {
         case .manual:
             return (.manual, step.detail)
         }
+    }
+
+    // MARK: - Destination ownership
+
+    /// Refuses to replace anything Agent Tooling cannot prove is empty, its own
+    /// prior install, or an install recorded by a stored plan and receipt.
+    ///
+    /// Confining writes to known folders keeps a plan from writing somewhere
+    /// unexpected. It does not keep a plan from overwriting somebody else's
+    /// files inside an expected folder — a hand-written skill in
+    /// `~/.claude/skills/<name>`, for example. This is that missing half, and
+    /// it is checked again immediately before the swap so the answer cannot go
+    /// stale between the check and the write.
+    private func requireProvenOwnership(of destination: URL) throws {
+        let ownership = DestinationOwnershipInspector.ownership(
+            of: destination,
+            managedRoots: managedRoots,
+            authority: installAuthority,
+            fileManager: fileManager
+        )
+        guard ownership.isProven else {
+            throw OperationEngineError.unprovableDestination(destination.path(percentEncoded: false), ownership.summary)
+        }
+    }
+
+    private var managedRoots: [URL] {
+        [store.libraryURL.standardizedFileURL, gitBackupRoot.appending(path: "library", directoryHint: .isDirectory).standardizedFileURL]
+    }
+
+    /// Persists the reviewed fingerprint against the destination so a later
+    /// setup check can tell whether the installed copy still matches the tree
+    /// the operator approved.
+    private func recordManagedInstall(
+        destination: URL,
+        source: URL,
+        reviewedFingerprint: String,
+        planStepID: UUID
+    ) -> String {
+        var ledger = ManagedInstallLedger.load(from: store)
+        ledger.upsert(
+            ManagedInstallRecord(
+                destinationPath: destination.path(percentEncoded: false),
+                sourcePath: source.standardizedFileURL.path(percentEncoded: false),
+                reviewedFingerprint: reviewedFingerprint,
+                reviewedAt: .now,
+                planStepID: planStepID
+            ))
+        do {
+            try ledger.save(to: store)
+            installAuthority = ManagedInstallAuthority(ledger: ledger, receiptRecords: installAuthority.receiptRecords)
+            return ""
+        } catch {
+            // The files are already in place. Say so plainly instead of
+            // reporting a completed install as a failure.
+            return
+                " The install completed, but the reviewed fingerprint could not be recorded, so later checks cannot detect changes to it."
+        }
+    }
+
+    /// Counts destination entries the incoming package does not contain. Used
+    /// only to describe the completed replacement in the receipt; the plan
+    /// review lists them by name before approval.
+    private func removedEntryCount(replacing destination: URL, with source: URL) -> Int {
+        let reviewer = OperationPlanSafetyReviewer(
+            authority: installAuthority,
+            managedRoots: managedRoots,
+            fileManager: fileManager
+        )
+        return reviewer.replacementRemovalCount(replacing: destination, with: source)
     }
 
     private func backupRootDestination(_ rawPath: String) throws -> URL {
@@ -266,6 +429,24 @@ public actor OperationExecutor {
         ].map(\.standardizedFileURL)
         if exactDestinations.contains(destination) {
             try validateContainedPath(destination, within: store.rootURL)
+            if fileManager.fileExists(atPath: destination.path(percentEncoded: false)) {
+                let values = try destination.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                guard values.isDirectory == true, values.isSymbolicLink != true else {
+                    throw OperationEngineError.unsafeDestination(rawPath)
+                }
+            }
+            return destination
+        }
+
+        // One managed package is its own destination, so adopting three skills
+        // reviews as three steps a person can read rather than a single rewrite
+        // of the whole library. The package name is the only variable part and
+        // it is checked the same way a skill folder name is.
+        let managedPackages = store.libraryURL.appending(path: "packages", directoryHint: .isDirectory).standardizedFileURL
+        if Self.samePath(destination.deletingLastPathComponent(), managedPackages),
+            OperationCommandPolicy.isSafeMCPIdentifier(destination.lastPathComponent)
+        {
+            try validateContainedPath(destination, within: store.libraryURL)
             if fileManager.fileExists(atPath: destination.path(percentEncoded: false)) {
                 let values = try destination.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
                 guard values.isDirectory == true, values.isSymbolicLink != true else {
@@ -420,6 +601,9 @@ public actor OperationExecutor {
         guard actualFingerprint == expectedFingerprint else { throw OperationEngineError.sourceChangedAfterReview }
         try commitPreparedItem(staged, to: destination, planStepID: planStepID) {
             _ = try self.copyDestination(destination.path(percentEncoded: false), projectRootPath: projectRootPath)
+            // Re-proved immediately before the swap so a destination that
+            // gained unowned content while the copy was staged is still caught.
+            try self.requireProvenOwnership(of: destination)
         }
     }
 
@@ -666,7 +850,7 @@ public actor OperationExecutor {
 
 public typealias OperationEngine = OperationExecutor
 
-public enum OperationEngineError: LocalizedError, Sendable {
+enum OperationEngineError: LocalizedError, Sendable {
     case malformedStep(String)
     case unsafeDestination(String)
     case unsafeSource(String)
@@ -679,8 +863,9 @@ public enum OperationEngineError: LocalizedError, Sendable {
     case invalidArchive
     case unsafeWorkingDirectory(String)
     case sourceChangedAfterReview
+    case unprovableDestination(String, String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .malformedStep(let title): "The operation step \"\(title)\" is incomplete."
         case .unsafeDestination(let path):
@@ -700,6 +885,8 @@ public enum OperationEngineError: LocalizedError, Sendable {
             "Agent Tooling refused to run a command from an unreviewed or unavailable project folder: \(path)"
         case .sourceChangedAfterReview:
             "The source changed after it was reviewed. Refresh the plan and inspect the new contents before trying again."
+        case .unprovableDestination(let path, let reason):
+            "Agent Tooling stopped rather than overwrite \(path), which it cannot prove it installed. \(reason)"
         }
     }
 }

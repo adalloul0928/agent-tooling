@@ -36,7 +36,7 @@ public struct AgentPluginHTTPServer: Codable, Hashable, Sendable {
     }
 }
 
-public enum AgentPluginMCPServer: Hashable, Sendable {
+enum AgentPluginMCPServer: Hashable, Sendable {
     case stdio(AgentPluginStdioServer)
     case streamableHTTP(AgentPluginHTTPServer)
     case sse(AgentPluginHTTPServer)
@@ -50,35 +50,28 @@ public enum AgentPluginMCPServer: Hashable, Sendable {
     }
 }
 
-public struct AgentPluginMCPValidationIssue: Identifiable, Codable, Hashable, Sendable {
-    public var serverName: String
-    public var message: String
+struct AgentPluginMCPValidationIssue: Identifiable, Codable, Hashable, Sendable {
+    var serverName: String
+    var message: String
 
-    public init(serverName: String, message: String) {
+    init(serverName: String, message: String) {
         self.serverName = serverName
         self.message = message
     }
 
-    public var id: String { "\(serverName):\(message)" }
+    var id: String { "\(serverName):\(message)" }
 }
 
-public struct AgentPluginMCPLoadResult: Hashable, Sendable {
-    public var servers: [String: AgentPluginMCPServer]
-    public var issues: [AgentPluginMCPValidationIssue]
+struct AgentPluginMCPLoadResult: Hashable, Sendable {
+    var servers: [String: AgentPluginMCPServer]
+    var issues: [AgentPluginMCPValidationIssue]
 
-    public init(
-        servers: [String: AgentPluginMCPServer],
-        issues: [AgentPluginMCPValidationIssue]
-    ) {
-        self.servers = servers
-        self.issues = issues
-    }
 }
 
-public enum AgentPluginMCPConfigurationLoader {
-    public static let schemaIdentifier = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
+enum AgentPluginMCPConfigurationLoader {
+    static let schemaIdentifier = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
 
-    public static func load(_ data: Data) throws -> AgentPluginMCPLoadResult {
+    static func load(_ data: Data) throws -> AgentPluginMCPLoadResult {
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw AgentPluginMCPValidationError.invalidTopLevel("The file must contain one JSON object.")
         }
@@ -251,12 +244,12 @@ public enum AgentPluginMCPConfigurationLoader {
     }
 }
 
-public enum AgentPluginMCPValidationError: LocalizedError, Sendable {
+enum AgentPluginMCPValidationError: LocalizedError, Sendable {
     case unsupportedSchema
     case invalidTopLevel(String)
     case invalidServer(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsupportedSchema: "The MCP configuration targets an unsupported Agent Plugins schema."
         case .invalidTopLevel(let message): message

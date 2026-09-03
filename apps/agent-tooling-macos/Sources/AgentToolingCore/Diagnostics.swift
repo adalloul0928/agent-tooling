@@ -202,10 +202,10 @@ public struct DiagnosticBundleExporter: Sendable {
     }
 }
 
-public enum DiagnosticBundleError: LocalizedError, Sendable {
+enum DiagnosticBundleError: LocalizedError, Sendable {
     case unsafeDestination
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsafeDestination: "Choose a regular file in an existing local folder for the support bundle."
         }

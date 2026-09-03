@@ -143,7 +143,7 @@ public enum MCPDefinitionValidator {
     }
 }
 
-public enum MCPDefinitionValidationError: LocalizedError, Sendable {
+enum MCPDefinitionValidationError: LocalizedError, Sendable {
     case emptyCommand
     case invalidHTTPURL
     case sensitiveHTTPURL
@@ -151,7 +151,7 @@ public enum MCPDefinitionValidationError: LocalizedError, Sendable {
     case destinationTooLong
     case unterminatedQuote
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .emptyCommand: "Enter the executable and any arguments for the stdio server."
         case .invalidHTTPURL: "Enter a complete http or https URL for the MCP server."

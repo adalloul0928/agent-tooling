@@ -9,14 +9,15 @@ struct SkillsView: View {
     @State private var query = ""
     @State private var scope: SkillScope = .all
     @State private var clientFilter: SkillClientFilter = .all
+    @State private var tagFilter: Set<String> = []
+    @State private var untaggedOnly = false
     @State private var selectedID = ""
     @State private var skillBeingEdited: Skill?
     @State private var codexCreatorPresented = false
     @State private var pendingCodexRequestID: UUID?
     @State private var installAfterCreator: CodexSkillInstallHandoff?
-    @State private var displayLimit = Self.pageSize
-
-    private static let pageSize = 12
+    @State private var isSelecting = false
+    @State private var selection: Set<String> = []
 
     init(navigate: ((AppSection) -> Void)? = nil) {
         self.navigate = navigate
@@ -25,6 +26,19 @@ struct SkillsView: View {
     var body: some View {
         VStack(spacing: 0) {
             PageToolbar(title: "Skills", context: toolbarContext) {
+                if isSelecting {
+                    Button("Select All") { selection = adoptableIDs.intersection(filteredSkills.map(\.id)) }
+                        .buttonStyle(.bordered)
+                        .accessibilityHint("Selects every discovered skill currently listed")
+                }
+                Button {
+                    setSelecting(!isSelecting)
+                } label: {
+                    Label(isSelecting ? "Done" : "Select", systemImage: isSelecting ? "checkmark.circle.fill" : "checkmark.circle")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!isSelecting && (model.isInteractionLocked || adoptableIDs.isEmpty))
+                .accessibilityHint("Chooses several discovered skills to adopt into the managed library")
                 Button {
                     navigate?(.insights)
                 } label: {
@@ -96,15 +110,20 @@ struct SkillsView: View {
             applyExternalNavigation()
         }
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
-        .onChange(of: model.skills) { _, _ in selectFirstVisibleSkillIfNeeded() }
-        .onChange(of: visibleSkills.map(\.id)) { _, _ in selectFirstVisibleSkillIfNeeded() }
-        .onChange(of: query) { _, _ in displayLimit = Self.pageSize }
-        .onChange(of: scope) { _, _ in displayLimit = Self.pageSize }
-        .onChange(of: clientFilter) { _, _ in displayLimit = Self.pageSize }
+        .onChange(of: model.skills) { _, _ in
+            selectFirstVisibleSkillIfNeeded()
+            // A scan or a completed adoption can take a row out of the batch.
+            // The bar must never offer a count the plan would not honour.
+            if isSelecting { selection.formIntersection(adoptableIDs) }
+        }
+        .onChange(of: filteredSkills.map(\.id)) { _, _ in selectFirstVisibleSkillIfNeeded() }
     }
 
+    /// Resolved once per layout pass. Asking the model per row would make the
+    /// cost of drawing the list grow with the square of a 250-skill inventory.
     private var collectionPane: some View {
-        VStack(spacing: 0) {
+        let adoptable = adoptableIDs
+        return VStack(spacing: 0) {
             VStack(spacing: 9) {
                 TextField("Search skills", text: $query)
                     .textFieldStyle(.roundedBorder)
@@ -127,6 +146,14 @@ struct SkillsView: View {
                     .accessibilityLabel("Filter by app")
                     .fixedSize()
                 }
+                if !skillTags.isEmpty {
+                    TagFilterBar(
+                        tags: skillTags,
+                        untaggedCount: untaggedSkillCount,
+                        selection: $tagFilter,
+                        untaggedOnly: $untaggedOnly
+                    )
+                }
             }
             .padding(12)
 
@@ -136,7 +163,7 @@ struct SkillsView: View {
                     title: emptyStateTitle,
                     message: emptyStateMessage,
                     actionTitle: emptyStateActionTitle,
-                    isActionEnabled: !model.skills.isEmpty || !model.isInteractionLocked
+                    isActionEnabled: isEmptyStateActionEnabled
                 ) {
                     performEmptyStateAction()
                 }
@@ -147,13 +174,20 @@ struct SkillsView: View {
                             Section {
                                 ForEach(skills) { skill in
                                     Button {
-                                        selectedID = skill.id
+                                        activate(skill, isAdoptable: adoptable.contains(skill.id))
                                     } label: {
-                                        SkillCollectionRow(skill: skill, selected: skill.id == selectedID)
+                                        SkillCollectionRow(
+                                            skill: skill,
+                                            selected: isSelecting ? selection.contains(skill.id) : skill.id == selectedID,
+                                            selecting: isSelecting,
+                                            isAdoptable: adoptable.contains(skill.id),
+                                            tags: model.tags(for: reference(for: skill)),
+                                            collections: model.collections(containing: reference(for: skill)).map(\.name)
+                                        )
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel(skill.displayName)
-                                    .accessibilityValue(skill.id == selectedID ? "Selected" : "")
+                                    .accessibilityValue(accessibilityValue(for: skill, isAdoptable: adoptable.contains(skill.id)))
                                 }
                             } header: {
                                 HStack {
@@ -168,26 +202,36 @@ struct SkillsView: View {
                                 .background(AgentTheme.controlBackground.opacity(0.45))
                             }
                         }
-                        if visibleSkills.count < filteredSkills.count {
-                            Button(showMoreLabel) {
-                                displayLimit += Self.pageSize
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(AgentTheme.blue)
-                            .frame(maxWidth: .infinity, minHeight: 42)
-                            .accessibilityHint("Loads the next skills")
-                        }
                     }
+                    .padding(.bottom, isSelecting && !selection.isEmpty ? 72 : 0)
                 }
             }
         }
+        .overlay(alignment: .bottom) {
+            if isSelecting, !selection.isEmpty {
+                SelectionActionBar(
+                    count: selection.count,
+                    actionTitle: "Adopt \(selection.count) skill\(selection.count == 1 ? "" : "s")…",
+                    isActionEnabled: !model.isInteractionLocked,
+                    action: adoptSelection,
+                    clear: { selection = [] }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: selection.isEmpty)
         .paneMaterial()
     }
 
     @ViewBuilder
     private var detailPane: some View {
         if let skill = selectedSkill {
-            SkillDetailView(skill: skill, onEdit: { skillBeingEdited = skill }, onInstall: { model.planInstall(skillID: skill.id) })
+            SkillDetailView(
+                skill: skill,
+                onEdit: { skillBeingEdited = skill },
+                onInstall: { model.planInstall(skillID: skill.id) },
+                onAdopt: { model.planSkillAdoption(skillIDs: [skill.id]) }
+            )
         } else {
             EmptyStateView(
                 symbol: "doc.text", title: "Select a skill",
@@ -195,9 +239,31 @@ struct SkillsView: View {
         }
     }
 
+    /// Tagging is filtering only — it never changes what is installed.
+    private func reference(for skill: Skill) -> ToolingItemReference {
+        ToolingItemReference(kind: .skill, identifier: skill.id)
+    }
+
+    private var skillTags: [String] {
+        let used = Set(model.skills.flatMap { model.tags(for: reference(for: $0)) })
+        return used.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    private var untaggedSkillCount: Int {
+        model.skills.filter { model.tags(for: reference(for: $0)).isEmpty }.count
+    }
+
+    private func matchesTagFilter(_ skill: Skill) -> Bool {
+        let assigned = model.tags(for: reference(for: skill))
+        if untaggedOnly { return assigned.isEmpty }
+        guard !tagFilter.isEmpty else { return true }
+        return !tagFilter.isDisjoint(with: Set(assigned))
+    }
+
     private var filteredSkills: [Skill] {
         model.skills.filter { skill in
             (scope == .all || skill.owned)
+                && matchesTagFilter(skill)
                 && clientFilter.matches(skill)
                 && (query.isEmpty
                     || [skill.name, skill.displayName, skill.summary, skill.bundle].joined(separator: " ").localizedCaseInsensitiveContains(
@@ -216,7 +282,7 @@ struct SkillsView: View {
 
     private var groupedSkills: [(String, [Skill])] {
         var groups: [String: [Skill]] = [:]
-        for skill in visibleSkills {
+        for skill in filteredSkills {
             groups[groupName(for: skill), default: []].append(skill)
         }
         return groups.map { group, skills in
@@ -227,13 +293,42 @@ struct SkillsView: View {
 
     private var selectedSkill: Skill? { model.skills.first { $0.id == selectedID } }
 
-    private var visibleSkills: [Skill] {
-        Array(filteredSkills.prefix(displayLimit))
+    /// Only a discovered skill the last setup check could place can be adopted,
+    /// so selection mode never offers a row the plan would have to skip.
+    private var adoptableIDs: Set<String> { Set(model.adoptableSkillIDs) }
+
+    private func setSelecting(_ value: Bool) {
+        isSelecting = value
+        if !value { selection = [] }
     }
 
-    private var showMoreLabel: String {
-        let remaining = filteredSkills.count - visibleSkills.count
-        return "Show \(min(Self.pageSize, remaining)) more"
+    private func activate(_ skill: Skill, isAdoptable: Bool) {
+        guard isSelecting else {
+            selectedID = skill.id
+            return
+        }
+        guard isAdoptable else { return }
+        if selection.contains(skill.id) {
+            selection.remove(skill.id)
+        } else {
+            selection.insert(skill.id)
+        }
+    }
+
+    /// Selection survives a failed plan so the choice does not have to be made
+    /// again; a prepared plan clears it because the review now owns the batch.
+    private func adoptSelection() {
+        let requested = selection.intersection(adoptableIDs)
+        guard !requested.isEmpty else { return }
+        model.planSkillAdoption(skillIDs: requested)
+        guard model.pendingPlan != nil else { return }
+        setSelecting(false)
+    }
+
+    private func accessibilityValue(for skill: Skill, isAdoptable: Bool) -> String {
+        guard isSelecting else { return skill.id == selectedID ? "Selected" : "" }
+        if !isAdoptable { return "Cannot be adopted" }
+        return selection.contains(skill.id) ? "Selected for adoption" : "Not selected"
     }
 
     private var toolbarContext: String {
@@ -243,7 +338,7 @@ struct SkillsView: View {
     }
 
     private func selectFirstVisibleSkillIfNeeded() {
-        guard !visibleSkills.contains(where: { $0.id == selectedID }) else { return }
+        guard !filteredSkills.contains(where: { $0.id == selectedID }) else { return }
         selectedID = groupedSkills.first?.1.first?.id ?? ""
     }
 
@@ -266,10 +361,21 @@ struct SkillsView: View {
         return model.skills.isEmpty ? "No skills yet" : "No managed skills"
     }
 
+    /// An empty managed library is the app's first real question, so the empty
+    /// state offers adoption rather than only pointing at the All list.
+    private var canOfferAdoption: Bool {
+        query.isEmpty && clientFilter == .all && !adoptableIDs.isEmpty
+    }
+
     private var emptyStateMessage: String {
         if !query.isEmpty { return "Try a different search term." }
         if clientFilter != .all {
             return "No \(scope == .owned ? "managed" : "installed") skill reports \(clientFilter.rawValue) as an app it is present in."
+        }
+        if canOfferAdoption {
+            let count = adoptableIDs.count
+            return
+                "\(count) skill\(count == 1 ? " was" : "s were") found on this Mac. Adopt them to edit, install, and back them up from here. Each app keeps its own copy."
         }
         return model.skills.isEmpty
             ? "Create a reusable workflow or check setup again to discover installed skills."
@@ -279,7 +385,14 @@ struct SkillsView: View {
     private var emptyStateActionTitle: String {
         if !query.isEmpty { return "Clear Search" }
         if clientFilter != .all { return "Show Any App" }
+        if canOfferAdoption { return "Adopt Skills…" }
         return model.skills.isEmpty ? "Create Skill" : "Show All"
+    }
+
+    /// Clearing a filter is always available; anything that reaches the model
+    /// waits for the operation or review already in progress.
+    private var isEmptyStateActionEnabled: Bool {
+        !query.isEmpty || clientFilter != .all || !model.isInteractionLocked
     }
 
     private func performEmptyStateAction() {
@@ -287,6 +400,10 @@ struct SkillsView: View {
             query = ""
         } else if clientFilter != .all {
             clientFilter = .all
+        } else if canOfferAdoption {
+            scope = .all
+            isSelecting = true
+            selection = adoptableIDs
         } else if model.skills.isEmpty {
             openCodexCreator()
         } else {
@@ -306,7 +423,6 @@ struct SkillsView: View {
         {
             scope = .all
             query = ""
-            displayLimit = max(Self.pageSize, model.skills.firstIndex(where: { $0.id == skillID }).map { $0 + 1 } ?? Self.pageSize)
             selectedID = skillID
         }
         if !codexCreatorPresented, let requestID = navigation.requestedSkillCreationID {
@@ -353,9 +469,19 @@ private enum SkillClientFilter: String, CaseIterable, Identifiable {
 private struct SkillCollectionRow: View {
     let skill: Skill
     let selected: Bool
+    var selecting = false
+    /// A managed skill, or a discovered one the last scan could not place, has
+    /// nothing to adopt. Its checkbox stays dim rather than disappearing, so
+    /// the rows keep one shape.
+    var isAdoptable = false
+    var tags: [String] = []
+    var collections: [String] = []
 
     var body: some View {
         HStack(spacing: 11) {
+            if selecting {
+                SelectionCheckbox(selected: selected, enabled: isAdoptable)
+            }
             KindTile(kind: .skill, size: 28, ghost: !skill.owned)
             VStack(alignment: .leading, spacing: 2) {
                 Text(skill.displayName)
@@ -366,12 +492,19 @@ private struct SkillCollectionRow: View {
                     .font(.caption)
                     .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
                     .lineLimit(1)
+                // Membership is visible without opening every Collection.
+                if !tags.isEmpty || !collections.isEmpty {
+                    HStack(spacing: 6) {
+                        CollectionPills(names: collections, selected: selected)
+                        TagPills(tags: tags, selected: selected)
+                    }
+                }
             }
             Spacer(minLength: 12)
             ClientMarks(present: Set(skill.clients.filter(\.reportsLocalPresence).map(\.client)))
         }
         .padding(.horizontal, 13)
-        .frame(height: 52)
+        .frame(height: tags.isEmpty && collections.isEmpty ? 52 : 64)
         .rowSelection(selected)
         .contentShape(Rectangle())
     }
@@ -382,6 +515,7 @@ private struct SkillDetailView: View {
     let skill: Skill
     let onEdit: () -> Void
     let onInstall: () -> Void
+    let onAdopt: () -> Void
 
     var body: some View {
         ScrollView {
@@ -402,6 +536,11 @@ private struct SkillDetailView: View {
                         Button("Review Install…", systemImage: "arrow.down.circle") { onInstall() }
                             .buttonStyle(.borderedProminent)
                             .disabled(model.isInteractionLocked)
+                    } else if model.canAdoptSkill(id: skill.id) {
+                        Button("Adopt…", systemImage: "tray.and.arrow.down") { onAdopt() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.isInteractionLocked)
+                            .accessibilityHint("Copies this skill into the managed library after you review the plan")
                     }
                 }
 

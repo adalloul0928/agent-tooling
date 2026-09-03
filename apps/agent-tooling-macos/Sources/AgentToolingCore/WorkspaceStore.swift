@@ -328,7 +328,9 @@ public final class WorkspaceStore: @unchecked Sendable {
             backupConfiguration: metadata.backupConfiguration,
             encryptedSyncConfiguration: metadata.encryptedSyncConfiguration,
             preferences: metadata.preferences,
-            managedPolicies: metadata.managedPolicies
+            managedPolicies: metadata.managedPolicies,
+            collections: metadata.collections,
+            tagAssignments: metadata.tagAssignments
         )
     }
 
@@ -612,6 +614,8 @@ private struct WorkspaceMetadata: Codable {
     var encryptedSyncConfiguration: EncryptedSyncConfiguration
     var preferences: WorkspacePreferences
     var managedPolicies: [ManagedPolicy]
+    var collections: [ToolingCollection]
+    var tagAssignments: [TagAssignment]
 
     init(snapshot: WorkspaceSnapshot) {
         activities = snapshot.activities
@@ -621,6 +625,30 @@ private struct WorkspaceMetadata: Codable {
         encryptedSyncConfiguration = snapshot.encryptedSyncConfiguration
         preferences = snapshot.preferences
         managedPolicies = snapshot.managedPolicies
+        collections = snapshot.collections
+        tagAssignments = snapshot.tagAssignments
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case activities, activeProfileID, importedRepositoryPath, backupConfiguration, encryptedSyncConfiguration, preferences,
+            managedPolicies, collections, tagAssignments
+    }
+
+    /// Metadata written before collections shipped has neither key. Decoding
+    /// them as absent keeps an existing workspace openable instead of failing
+    /// the whole snapshot load.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        activities = try container.decodeIfPresent([ActivityReceipt].self, forKey: .activities) ?? []
+        activeProfileID = try container.decodeIfPresent(String.self, forKey: .activeProfileID) ?? "local-library"
+        importedRepositoryPath = try container.decodeIfPresent(String.self, forKey: .importedRepositoryPath)
+        backupConfiguration = try container.decodeIfPresent(BackupConfiguration.self, forKey: .backupConfiguration) ?? .init()
+        encryptedSyncConfiguration =
+            try container.decodeIfPresent(EncryptedSyncConfiguration.self, forKey: .encryptedSyncConfiguration) ?? .init()
+        preferences = try container.decodeIfPresent(WorkspacePreferences.self, forKey: .preferences) ?? .init()
+        managedPolicies = try container.decodeIfPresent([ManagedPolicy].self, forKey: .managedPolicies) ?? []
+        collections = try container.decodeIfPresent([ToolingCollection].self, forKey: .collections) ?? []
+        tagAssignments = try container.decodeIfPresent([TagAssignment].self, forKey: .tagAssignments) ?? []
     }
 }
 
@@ -694,7 +722,7 @@ public enum WorkspaceEntityDomain: String, Codable, CaseIterable, Sendable {
     }
 }
 
-public enum WorkspaceStoreError: LocalizedError, Sendable {
+enum WorkspaceStoreError: LocalizedError, Sendable {
     case openDatabase(String)
     case closed
     case query(String)
@@ -703,7 +731,7 @@ public enum WorkspaceStoreError: LocalizedError, Sendable {
     case unsafePath(String)
     case migrationBackup(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .openDatabase(let path): "Unable to open Agent Tooling's local database at \(path)."
         case .closed: "The local workspace database is closed."

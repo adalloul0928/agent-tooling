@@ -8,26 +8,12 @@ public protocol ClientAdapter: Sendable {
     func skillDestination(skillID: String, homeURL: URL) -> URL
 }
 
-public extension ClientAdapter {
-    func discover(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
-        await scan(homeURL: homeURL, runner: runner)
-    }
-
-    func plan(desired: DesiredState, observed: ObservedState) -> ReconciliationPlan {
-        ReconciliationPlanner.plan(desired: desired, observed: observed)
-    }
-
-    func verify(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
-        await scan(homeURL: homeURL, runner: runner)
-    }
-}
-
 public typealias TargetAdapter = ClientAdapter
 
-public struct ClaudeCodeAdapter: TargetAdapter {
+struct ClaudeCodeAdapter: TargetAdapter {
     public let client: ClientKind = .claude
-    public let surface: TargetSurface = .claudeCode
-    public let capabilities = TargetCapabilities(
+    let surface: TargetSurface = .claudeCode
+    let capabilities = TargetCapabilities(
         supportsPluginInstall: true,
         supportsProjectScope: true,
         supportsLocalMarketplace: true,
@@ -38,13 +24,12 @@ public struct ClaudeCodeAdapter: TargetAdapter {
         supportsMachineReadableOutput: true
     )
 
-    public init() {}
+    init() {}
 
-    public func scan(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
+    func scan(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
         await LocalTargetScan.perform(
             surface: surface,
             executable: "claude",
-            homeURL: homeURL,
             configurationURLs: [
                 homeURL.appending(path: ".claude/settings.json"),
                 homeURL.appending(path: ".claude.json"),
@@ -61,10 +46,10 @@ public struct ClaudeCodeAdapter: TargetAdapter {
     }
 }
 
-public struct CodexAdapter: TargetAdapter {
+struct CodexAdapter: TargetAdapter {
     public let client: ClientKind = .codex
-    public let surface: TargetSurface = .codexCLI
-    public let capabilities = TargetCapabilities(
+    let surface: TargetSurface = .codexCLI
+    let capabilities = TargetCapabilities(
         supportsPluginInstall: true,
         supportsProjectScope: true,
         supportsLocalMarketplace: true,
@@ -75,13 +60,12 @@ public struct CodexAdapter: TargetAdapter {
         supportsMachineReadableOutput: true
     )
 
-    public init() {}
+    init() {}
 
-    public func scan(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
+    func scan(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
         await LocalTargetScan.perform(
             surface: surface,
             executable: "codex",
-            homeURL: homeURL,
             configurationURLs: [homeURL.appending(path: ".codex/config.toml")],
             skillRoots: [
                 homeURL.appending(path: ".agents/skills", directoryHint: .isDirectory),
@@ -101,10 +85,10 @@ public struct CodexAdapter: TargetAdapter {
     }
 }
 
-public struct GeminiCLIAdapter: TargetAdapter {
+struct GeminiCLIAdapter: TargetAdapter {
     public let client: ClientKind = .gemini
-    public let surface: TargetSurface = .geminiCLI
-    public let capabilities = TargetCapabilities(
+    let surface: TargetSurface = .geminiCLI
+    let capabilities = TargetCapabilities(
         supportsPluginInstall: true,
         supportsProjectScope: true,
         supportsLocalMarketplace: true,
@@ -115,13 +99,12 @@ public struct GeminiCLIAdapter: TargetAdapter {
         supportsMachineReadableOutput: true
     )
 
-    public init() {}
+    init() {}
 
-    public func scan(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
+    func scan(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
         await LocalTargetScan.perform(
             surface: surface,
             executable: "gemini",
-            homeURL: homeURL,
             configurationURLs: [
                 homeURL.appending(path: ".gemini/settings.json"),
                 homeURL.appending(path: ".gemini/settings.toml"),
@@ -145,7 +128,12 @@ public struct GeminiCLIAdapter: TargetAdapter {
 public struct ClientAdapterRegistry: Sendable {
     public let adapters: [any TargetAdapter]
 
-    public init(adapters: [any TargetAdapter] = [ClaudeCodeAdapter(), CodexAdapter(), GeminiCLIAdapter()]) {
+    /// The three adapters this app ships. Named here rather than inline in the
+    /// initializer so the adapter types themselves stay internal: only the
+    /// protocol they satisfy needs to cross the module boundary.
+    public static let bundledAdapters: [any TargetAdapter] = [ClaudeCodeAdapter(), CodexAdapter(), GeminiCLIAdapter()]
+
+    public init(adapters: [any TargetAdapter] = ClientAdapterRegistry.bundledAdapters) {
         self.adapters = adapters
     }
 

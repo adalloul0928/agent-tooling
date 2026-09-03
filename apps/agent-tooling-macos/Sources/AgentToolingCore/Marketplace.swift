@@ -2,7 +2,7 @@ import Foundation
 
 /// Federates packages from sources the user has explicitly added. The app never
 /// treats a catalog listing as a trusted or authenticated installation.
-public final class MarketplaceService {
+final class MarketplaceService {
     private enum Limit {
         static let catalogBytes = 2_097_152
         static let manifestBytes = 262_144
@@ -16,11 +16,11 @@ public final class MarketplaceService {
 
     private let fileManager: FileManager
 
-    public init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
     }
 
-    public func inspect(_ source: ToolingSource) throws -> [MarketplacePackage] {
+    func inspect(_ source: ToolingSource) throws -> [MarketplacePackage] {
         switch source.kind {
         case .localFolder, .gitRepository:
             return try inspectFolder(source)
@@ -31,7 +31,7 @@ public final class MarketplaceService {
         }
     }
 
-    public func defaultSources() -> [ToolingSource] {
+    func defaultSources() -> [ToolingSource] {
         [
             ToolingSource(
                 name: "Agent Plugins format", kind: .agentPlugins, location: "https://agent-plugins.org",
@@ -56,7 +56,7 @@ public final class MarketplaceService {
     /// as an installer. Gemini's gallery has no equivalent local JSON catalog,
     /// so it remains a source link while installed extensions are discovered by
     /// the target scanner.
-    public static func discoverNativeCatalogs(runner: any CommandRunning) async -> NativeCatalogDiscovery {
+    static func discoverNativeCatalogs(runner: any CommandRunning) async -> NativeCatalogDiscovery {
         let service = MarketplaceService()
         async let claude = runner.run(executable: "claude", arguments: ["plugin", "list", "--available", "--json"], currentDirectory: nil)
         async let codex = runner.run(executable: "codex", arguments: ["plugin", "list", "--available", "--json"], currentDirectory: nil)
@@ -111,9 +111,7 @@ public final class MarketplaceService {
                     id: "codex:\(pluginID)",
                     name: name,
                     publisher: marketplace,
-                    summary: installed
-                        ? "Installed Codex plugin discovered by the native catalog."
-                        : "Available through the current Codex plugin catalog.",
+                    summary: installed ? MarketplaceCopy.installedCodexPlugin : MarketplaceCopy.availableCodexPlugin,
                     sourceName: marketplace,
                     revision: revision,
                     components: [.plugin],
@@ -153,9 +151,7 @@ public final class MarketplaceService {
                 name: name.split(separator: "@").first.map(String.init) ?? name,
                 publisher: marketplace.flatMap { boundedCatalogName($0) } ?? "Claude marketplace",
                 summary: string("description", in: entry, maximumCharacters: Limit.summaryCharacters, allowLineBreaks: true)
-                    ?? (installed
-                        ? "Installed Claude Code plugin discovered by the native catalog."
-                        : "Available through the current Claude marketplace catalog."),
+                    ?? (installed ? MarketplaceCopy.installedClaudePlugin : MarketplaceCopy.availableClaudePlugin),
                 sourceName: marketplace ?? "Claude marketplace",
                 revision: string("version", in: entry, maximumCharacters: 256),
                 components: [.plugin],
@@ -167,7 +163,8 @@ public final class MarketplaceService {
                     NativeInstall(
                         client: .claude, executable: "claude", arguments: ["plugin", "install", pluginID, "--scope", "user"],
                         removalArguments: ["plugin", "uninstall", pluginID, "--scope", "user"],
-                        detail: "Install this exact plugin identifier through Claude Code's configured marketplace at user scope.",
+                        detail:
+                            "Install this exact plugin identifier through Claude Code's configured marketplace at the \(ToolingScope.user.marketplaceInstallTitle) scope.",
                         isInstalled: installed)
                 ]
             )
@@ -305,6 +302,10 @@ public final class MarketplaceService {
         merged.trustSummary = preferred.trustSummary
         merged.location = preferred.location
         merged.isInstalled = current.isInstalled || candidate.isInstalled
+        // Two catalogs can describe the same package. Keep the newer update
+        // record and the tool list that actually exists, never an empty one.
+        merged.lastUpdate = [current.lastUpdate, candidate.lastUpdate].compactMap { $0 }.max { $0.date < $1.date }
+        merged.tools = preferred.tools ?? current.tools ?? candidate.tools
 
         var routesByID = Dictionary(uniqueKeysWithValues: current.nativeInstalls.map { ($0.id, $0) })
         for route in candidate.nativeInstalls {
@@ -400,7 +401,7 @@ public final class MarketplaceService {
         let manifestDescriptionValue = manifest?["description"] as? String
         let manifestDescription = boundedSummary(manifestDescriptionValue)
         let skillCount = skillNames.count + (rootIsSkill ? 1 : 0)
-        let fallbackDescription = "Local package with \(skillCount) skill\(skillCount == 1 ? "" : "s")."
+        let fallbackDescription = "\(MarketplaceCopy.localPackagePrefix)\(skillCount) skill\(skillCount == 1 ? "" : "s")."
         let description = manifestDescription ?? rootSkillDescription ?? fallbackDescription
         var components: Set<ComponentKind> = []
         if !skillNames.isEmpty || rootIsSkill { components.insert(.skill) }
@@ -437,6 +438,10 @@ public final class MarketplaceService {
         let portableMCPConflicts = portableMCP?.issues.map {
             PackageConflict(id: "mcp:\($0.serverName)", summary: "\($0.serverName): \($0.message)")
         }
+        let lastUpdate = localUpdateRecord(
+            root: packageRoot,
+            files: [manifestURL, rootSkillURL, portableMCPURL] + skillDirectories.map { $0.appending(path: "SKILL.md") }
+        )
         return MarketplacePackage(
             id: "\(source.id.uuidString):\(rawName)",
             name: rawName,
@@ -455,8 +460,21 @@ public final class MarketplaceService {
                 : executable
                     ? "Review scripts, hooks, and permissions before installing" : "Review manifest and license before installing",
             location: packageRoot.path(percentEncoded: false),
-            conflicts: portableMCPConflicts?.isEmpty == true ? nil : portableMCPConflicts
+            conflicts: portableMCPConflicts?.isEmpty == true ? nil : portableMCPConflicts,
+            lastUpdate: lastUpdate
         )
+    }
+
+    /// The newest modification time among the files this inspection actually
+    /// read. It is a fact about this Mac — not a claim about a release — so it
+    /// travels with its origin and is labeled that way wherever it is shown.
+    private func localUpdateRecord(root: URL, files: [URL?]) -> PackageUpdateRecord? {
+        let candidates = [root] + files.compactMap { $0 }
+        let dates = candidates.compactMap { url -> Date? in
+            try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        }
+        guard let newest = dates.max() else { return nil }
+        return PackageUpdateRecord(date: newest, origin: .localFiles)
     }
 
     private func supportedClients(at root: URL, hasPortableManifest: Bool, hasPortableSkill: Bool) throws -> Set<ClientKind> {
@@ -729,14 +747,10 @@ public final class MarketplaceService {
     }
 }
 
-public struct NativeCatalogDiscovery: Sendable {
-    public var packages: [MarketplacePackage]
-    public var notes: [ClientKind: String]
+struct NativeCatalogDiscovery: Sendable {
+    var packages: [MarketplacePackage]
+    var notes: [ClientKind: String]
 
-    public init(packages: [MarketplacePackage], notes: [ClientKind: String]) {
-        self.packages = packages
-        self.notes = notes
-    }
 }
 
 private enum NativeCatalogError: LocalizedError {
@@ -751,7 +765,7 @@ private enum NativeCatalogError: LocalizedError {
     }
 }
 
-public enum MarketplaceError: LocalizedError, Sendable {
+enum MarketplaceError: LocalizedError, Sendable {
     case missingSource(String)
     case invalidSource(String)
     case invalidPackage(String)
@@ -763,7 +777,7 @@ public enum MarketplaceError: LocalizedError, Sendable {
     case invalidTextFile(String)
     case changedWhileReading(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .missingSource(let location): "The marketplace source at \(location) could not be found."
         case .invalidSource(let location): "The marketplace source at \(location) must resolve to a local directory."

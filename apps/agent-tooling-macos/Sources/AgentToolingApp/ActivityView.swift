@@ -19,6 +19,12 @@ struct ActivityView: View {
                 .disabled(displayedActivities.isEmpty)
             }
 
+            if !driftReports.isEmpty {
+                InstallDriftNotice(reports: driftReports)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 10)
+            }
+
             GeometryReader { proxy in
                 HSplitView {
                     activityList.frame(
@@ -84,10 +90,19 @@ struct ActivityView: View {
         .paneMaterial()
     }
 
+    /// Installed copies that no longer match what was reviewed, plus any that
+    /// vanished. Both are facts worth stating; neither is an alarm.
+    private var driftReports: [InstalledPackageDrift] {
+        model.installDrift.filter { $0.state == .modifiedSinceReview || $0.state == .removed }
+    }
+
     @ViewBuilder
     private var activityDetail: some View {
         if let receipt = selectedReceipt {
-            ActivityReceiptDetail(receipt: receipt)
+            ActivityReceiptDetail(
+                receipt: receipt,
+                operationReceipt: model.operationReceipts.first { $0.id == receipt.operationReceiptID }
+            )
         } else {
             EmptyStateView(
                 symbol: "doc.text", title: "Select a receipt", message: "Review the command, result, duration, and affected local paths.")
@@ -186,8 +201,54 @@ private struct ActivityCollectionRow: View {
     }
 }
 
+/// Drift is information, not an accusation. Editing an installed skill in place
+/// is a normal thing to do, so this states what changed and stops there.
+private struct InstallDriftNotice: View {
+    let reports: [InstalledPackageDrift]
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "square.and.pencil")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.callout.weight(.medium))
+                ForEach(reports.prefix(6)) { report in
+                    HStack(spacing: 6) {
+                        Text(report.packageName)
+                            .font(.caption.weight(.medium))
+                        Text(report.headline)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        PathInfoButton(path: report.destinationPath)
+                    }
+                }
+                if reports.count > 6 {
+                    Text("and \(reports.count - 6) more").font(.caption2).foregroundStyle(.tertiary)
+                }
+                Text(
+                    "Re-install from the library whenever you want Agent Tooling's record to match the files again. Nothing was changed."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .standardPanel(cornerRadius: 12)
+    }
+
+    private var title: String {
+        let count = reports.count
+        return "\(count) installed package\(count == 1 ? "" : "s") differ\(count == 1 ? "s" : "") from what you reviewed"
+    }
+}
+
 private struct ActivityReceiptDetail: View {
     let receipt: ActivityReceipt
+    var operationReceipt: OperationReceipt?
 
     var body: some View {
         ScrollView {
@@ -214,6 +275,22 @@ private struct ActivityReceiptDetail: View {
                         Divider()
                         LabeledValueRow("Receipt ID") {
                             Text(receipt.id.uuidString.lowercased()).font(.system(.caption, design: .monospaced))
+                        }
+                    }
+                }
+
+                if let operationReceipt, !operationReceipt.itemOutcomes.isEmpty {
+                    GroupBox("Each item in this batch") {
+                        VStack(spacing: 0) {
+                            Text(operationReceipt.outcomeTally)
+                                .font(.callout.weight(.medium).monospacedDigit())
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(14)
+                            Divider()
+                            ForEach(Array(operationReceipt.itemOutcomes.enumerated()), id: \.element.id) { index, outcome in
+                                ItemOutcomeRow(outcome: outcome)
+                                if index < operationReceipt.itemOutcomes.count - 1 { Divider() }
+                            }
                         }
                     }
                 }
@@ -262,6 +339,44 @@ private struct ActivityReceiptDetail: View {
         case .attention: "Needs attention"
         case .pending: "Pending"
         case .unavailable: "Unavailable"
+        }
+    }
+}
+
+/// One named item and the reason it ended that way. A batch never collapses
+/// into a single verdict here: a skipped step and the reason it was skipped are
+/// exactly what a person needs after a partial run.
+private struct ItemOutcomeRow: View {
+    let outcome: OperationItemOutcome
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            StatusGlyph(state: state, size: 14)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 7) {
+                    Text(outcome.title).font(.callout.weight(.medium))
+                    Text(outcome.status.displayName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text(outcome.reason)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+    }
+
+    private var state: HealthState {
+        switch outcome.status {
+        case .succeeded: .healthy
+        case .failed: .attention
+        case .skipped, .pending: .unavailable
+        case .manual: .pending
         }
     }
 }

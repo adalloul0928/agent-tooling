@@ -35,12 +35,12 @@ public enum OperationPlanApproval {
     }
 }
 
-public enum OperationPlanApprovalError: LocalizedError, Sendable {
+enum OperationPlanApprovalError: LocalizedError, Sendable {
     case emptyPlan
     case planIDMismatch
     case digestMismatch
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .emptyPlan: "The operation plan has no steps to review."
         case .planIDMismatch: "The confirmed plan identifier does not match the reviewed plan."

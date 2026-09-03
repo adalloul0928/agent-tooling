@@ -48,8 +48,7 @@ public struct LocalConversationScanner: Sendable {
                     scanClaudeSQLite(
                         homeURL: homeURL,
                         windowStart: windowStart,
-                        options: options,
-                        skillLookup: lookup
+                        options: options
                     )
                 )
             }
@@ -211,8 +210,7 @@ public struct LocalConversationScanner: Sendable {
     private func scanClaudeSQLite(
         homeURL: URL,
         windowStart: Date,
-        options: InsightScanOptions,
-        skillLookup: SkillNameLookup
+        options: InsightScanOptions
     ) -> ConversationScanArtifact {
         var artifact = ConversationScanArtifact(windowStart: windowStart)
         let databaseURL = homeURL.appending(path: ".claude/__store.db")

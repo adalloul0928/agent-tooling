@@ -185,20 +185,6 @@ public struct PackageIdentity: Codable, Hashable, Sendable {
     public var lockedDescription: String { version.map { "\(name)@\($0)" } ?? name }
 }
 
-public struct ComponentDescriptor: Identifiable, Codable, Hashable, Sendable {
-    public var id: String
-    public var kind: ComponentKind
-    public var relativePath: String
-    public var portable: Bool
-
-    public init(id: String, kind: ComponentKind, relativePath: String, portable: Bool) {
-        self.id = id
-        self.kind = kind
-        self.relativePath = relativePath
-        self.portable = portable
-    }
-}
-
 public struct PackageSource: Codable, Hashable, Sendable {
     public var kind: SourceKind
     public var location: String
@@ -273,34 +259,13 @@ public struct PackageConflict: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-public struct AgentPluginPackage: Codable, Hashable, Sendable {
-    public var identity: PackageIdentity
-    public var manifest: AgentPluginManifest
-    public var rootPath: String
-    public var components: [ComponentDescriptor]
-    public var provenance: PackageProvenance?
-
-    public init(
-        manifest: AgentPluginManifest,
-        rootPath: String,
-        components: [ComponentDescriptor],
-        provenance: PackageProvenance? = nil
-    ) {
-        self.identity = PackageIdentity(name: manifest.name, version: manifest.version)
-        self.manifest = manifest
-        self.rootPath = rootPath
-        self.components = components
-        self.provenance = provenance
-    }
-}
-
-public enum AgentPluginValidationError: LocalizedError, Sendable {
+enum AgentPluginValidationError: LocalizedError, Sendable {
     case unsupportedSchema(String)
     case invalidName(String)
     case invalidField(String)
     case invalidExtensionNamespace(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsupportedSchema(let schema): "Unsupported Agent Plugins schema: \(schema)"
         case .invalidName(let name): "Invalid Agent Plugins package name: \(name)"

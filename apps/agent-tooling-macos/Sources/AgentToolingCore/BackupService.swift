@@ -2,22 +2,22 @@ import Foundation
 
 /// Git is a reviewed export target, not the operational database. Exports live
 /// under Application Support until the user explicitly connects a remote.
-public final class BackupService {
+final class BackupService {
     private static let maximumSnapshotBytes = 32 * 1_024 * 1_024
     private static let maximumLockBytes = 4 * 1_024 * 1_024
     private let store: WorkspaceStore
     private let fileManager: FileManager
 
-    public init(store: WorkspaceStore, fileManager: FileManager = .default) {
+    init(store: WorkspaceStore, fileManager: FileManager = .default) {
         self.store = store
         self.fileManager = fileManager
     }
 
-    public var exportURL: URL {
+    var exportURL: URL {
         store.rootURL.appending(path: "exports/git-backup", directoryHint: .isDirectory)
     }
 
-    public func exportPlan(snapshot: WorkspaceSnapshot) throws -> OperationPlan {
+    func exportPlan(snapshot: WorkspaceSnapshot) throws -> OperationPlan {
         let portableSnapshot = snapshot.portableDesiredState()
         try WorkspaceSnapshotValidator.validate(portableSnapshot, mode: .portableImport)
         let profileData = try JSONEncoder.pretty().encode(portableSnapshot)
@@ -95,17 +95,10 @@ public final class BackupService {
         )
     }
 
-    public func conflictSummary(at path: URL) -> String {
-        guard fileManager.fileExists(atPath: path.appending(path: ".git").path(percentEncoded: false)) else {
-            return "Not a Git backup yet"
-        }
-        return "Existing Git backup. Agent Tooling checks that it is clean before replacing exported files."
-    }
-
     /// Reads a backup without modifying either the selected repository or the
     /// current workspace. Conflicts are returned to the UI before a restore plan
     /// can be executed.
-    public func importPreview(at backupURL: URL, current: WorkspaceSnapshot) throws -> BackupImportPreview {
+    func importPreview(at backupURL: URL, current: WorkspaceSnapshot) throws -> BackupImportPreview {
         let root = backupURL.standardizedFileURL
         let snapshotURL = root.appending(path: "workspace.json", directoryHint: .notDirectory)
         let lockURL = root.appending(path: "agent-tooling.lock.json", directoryHint: .notDirectory)
@@ -303,7 +296,7 @@ public final class BackupService {
 
 }
 
-public enum BackupError: LocalizedError, Sendable {
+enum BackupError: LocalizedError, Sendable {
     case incompleteBackup(String)
     case unsupportedFormat(Int)
     case invalidLock
@@ -313,7 +306,7 @@ public enum BackupError: LocalizedError, Sendable {
     case fileTooLarge(String)
     case changedWhileReading(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .incompleteBackup(let path): "The selected folder is not a complete Agent Tooling backup: \(path)"
         case .unsupportedFormat(let version): "This backup uses unsupported format version \(version)."

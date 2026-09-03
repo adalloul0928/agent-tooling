@@ -109,7 +109,7 @@ public enum ConfigurationValidator {
     }
 }
 
-public enum ConfigurationValidationError: LocalizedError, Sendable {
+enum ConfigurationValidationError: LocalizedError, Sendable {
     case unsupportedScope
     case invalidName
     case invalidSummary
@@ -118,7 +118,7 @@ public enum ConfigurationValidationError: LocalizedError, Sendable {
     case tooManyItems(String)
     case invalidItem(String, String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsupportedScope: "Choose This Mac, Project, This project only, or Workspace scope."
         case .invalidName:

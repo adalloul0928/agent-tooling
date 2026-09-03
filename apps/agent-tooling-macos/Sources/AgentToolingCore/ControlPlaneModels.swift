@@ -23,8 +23,6 @@ public enum ToolingScope: String, Codable, CaseIterable, Identifiable, Sendable 
     }
 }
 
-public typealias ClientScope = ToolingScope
-
 public enum TargetSurface: String, Codable, CaseIterable, Identifiable, Sendable {
     case claudeCode
     case claudeDesktop
@@ -66,8 +64,6 @@ public enum TargetSurface: String, Codable, CaseIterable, Identifiable, Sendable
         }
     }
 }
-
-public typealias ClientTarget = TargetSurface
 
 public enum ComponentKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case skill
@@ -281,6 +277,12 @@ public struct WorkspaceSnapshot: Codable, Sendable {
     public var encryptedSyncConfiguration: EncryptedSyncConfiguration
     public var preferences: WorkspacePreferences
     public var managedPolicies: [ManagedPolicy]
+    /// Reusable shelves a configuration can be built from. Added after the
+    /// first shipping snapshot format, so it decodes as empty for older state.
+    public var collections: [ToolingCollection]
+    /// Tags live beside the inventory, not inside it, because observed
+    /// records are rebuilt on every setup check.
+    public var tagAssignments: [TagAssignment]
 
     public init(
         skills: [Skill] = [],
@@ -299,7 +301,9 @@ public struct WorkspaceSnapshot: Codable, Sendable {
         backupConfiguration: BackupConfiguration = .init(),
         encryptedSyncConfiguration: EncryptedSyncConfiguration = .init(),
         preferences: WorkspacePreferences = .init(),
-        managedPolicies: [ManagedPolicy] = []
+        managedPolicies: [ManagedPolicy] = [],
+        collections: [ToolingCollection] = [],
+        tagAssignments: [TagAssignment] = []
     ) {
         self.skills = skills
         self.mcpServers = mcpServers
@@ -318,12 +322,14 @@ public struct WorkspaceSnapshot: Codable, Sendable {
         self.encryptedSyncConfiguration = encryptedSyncConfiguration
         self.preferences = preferences
         self.managedPolicies = managedPolicies
+        self.collections = collections
+        self.tagAssignments = tagAssignments
     }
 
     private enum CodingKeys: String, CodingKey {
         case skills, mcpServers, plugins, profiles, activities, operationReceipts, targetObservations, sources, marketplacePackages,
             accountSurfaces, connectors, activeProfileID, importedRepositoryPath, backupConfiguration, encryptedSyncConfiguration,
-            preferences, managedPolicies
+            preferences, managedPolicies, collections, tagAssignments
     }
 
     public init(from decoder: any Decoder) throws {
@@ -346,5 +352,7 @@ public struct WorkspaceSnapshot: Codable, Sendable {
             try container.decodeIfPresent(EncryptedSyncConfiguration.self, forKey: .encryptedSyncConfiguration) ?? .init()
         preferences = try container.decodeIfPresent(WorkspacePreferences.self, forKey: .preferences) ?? .init()
         managedPolicies = try container.decodeIfPresent([ManagedPolicy].self, forKey: .managedPolicies) ?? []
+        collections = try container.decodeIfPresent([ToolingCollection].self, forKey: .collections) ?? []
+        tagAssignments = try container.decodeIfPresent([TagAssignment].self, forKey: .tagAssignments) ?? []
     }
 }
