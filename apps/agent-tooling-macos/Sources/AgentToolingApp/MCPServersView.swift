@@ -11,6 +11,10 @@ struct MCPServersView: View {
     @State private var activeSheet: MCPSheet?
     @State private var stackTargets: Set<ClientKind> = []
     @State private var stackError: String?
+    // BEGIN live-test-console: recorded per-tool intent, shared by the row badge
+    // and the detail pane's capability switches.
+    @State private var capabilities = MCPCapabilityModel()
+    // END live-test-console
 
     init(request: Binding<ScreenRequest?> = .constant(nil)) {
         _request = request
@@ -71,6 +75,10 @@ struct MCPServersView: View {
         .onChange(of: model.mcpServers) { _, _ in pruneSelection() }
         .onChange(of: filteredServers.map(\.id)) { _, _ in pruneSelection() }
         .onChange(of: request) { _, _ in consumeRequest() }
+        // BEGIN live-test-console
+        .environment(capabilities)
+        .task { capabilities.activate(workspaceRoot: URL(fileURLWithPath: model.workspacePath, isDirectory: true)) }
+        // END live-test-console
     }
 
     private func adopt(_ draft: MCPDraft) -> Bool {
@@ -364,6 +372,9 @@ private struct MCPCollectionRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 12)
+            // BEGIN live-test-console
+            MCPCapabilityBadge(serverID: server.id, selected: selected)
+            // END live-test-console
             ClientMarks(present: Set(server.clients.filter(\.reportsLocalPresence).map(\.client)), size: 13)
             StatusGlyph(state: server.aggregateState, size: 13, tint: selected ? Color.white : nil)
         }
@@ -447,6 +458,10 @@ private struct MCPDetailView: View {
                         }
                     }
                 }
+
+                // BEGIN live-test-console
+                MCPServerCapabilitiesPane(server: server)
+                // END live-test-console
 
                 if !server.secretNames.isEmpty {
                     GroupBox("Secret references") {
