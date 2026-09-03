@@ -142,6 +142,65 @@ class DoctorTests(unittest.TestCase):
         report = json.loads(result.stdout)
         self.assertEqual(report["summary"]["pass"], 2)
 
+    def test_checks_ios_session_runtime_with_read_only_installer_status(self) -> None:
+        checker = self.root / "install-runtime.mjs"
+        runtime_root = (
+            self.home / "Library/Application Support/agent-tooling/ios-session-lanes/runtime"
+        ).resolve()
+        bin_dir = (self.home / ".local/bin").resolve()
+        expected_args = [
+            "--check",
+            "--runtime-root",
+            str(runtime_root),
+            "--bin-dir",
+            str(bin_dir),
+        ]
+        checker.write_text(
+            "const expected = "
+            + json.dumps(expected_args)
+            + ";\n"
+            + "if (JSON.stringify(process.argv.slice(2)) !== JSON.stringify(expected)) {\n"
+            + "  process.stderr.write(JSON.stringify({status:'error',code:'wrong-args',message:'unexpected arguments'}) + '\\n');\n"
+            + "  process.exitCode = 1;\n"
+            + "} else {\n"
+            + "  process.stdout.write(JSON.stringify({status:'ok',integrityVersion:3,wrappers:3}) + '\\n');\n"
+            + "}\n",
+            encoding="utf-8",
+        )
+        self.write_json(
+            self.profiles / "runtime.json",
+            {
+                "schema_version": 1,
+                "name": "runtime",
+                "checks": [
+                    {
+                        "id": "ios-runtime",
+                        "kind": "ios_session_runtime",
+                        "installer": str(checker),
+                    }
+                ],
+            },
+        )
+
+        current = self.run_doctor("runtime")
+
+        self.assertEqual(current.returncode, 0, current.stderr or current.stdout)
+        current_report = json.loads(current.stdout)
+        self.assertEqual(current_report["summary"]["pass"], 1)
+        self.assertIn("integrity v3, 3 wrappers", current_report["results"][0]["message"])
+
+        checker.write_text(
+            "process.stderr.write(JSON.stringify({status:'drift',code:'source-revision-drift',message:'stale runtime'}) + '\\n');\n"
+            "process.exitCode = 1;\n",
+            encoding="utf-8",
+        )
+        drift = self.run_doctor("runtime")
+
+        self.assertEqual(drift.returncode, 1)
+        drift_report = json.loads(drift.stdout)
+        self.assertEqual(drift_report["summary"]["fail"], 1)
+        self.assertIn("source-revision-drift", drift_report["results"][0]["message"])
+
     def test_project_root_override_checks_active_project_state(self) -> None:
         stale_root = self.root / "stale-project"
         active_root = self.root / "active-project"

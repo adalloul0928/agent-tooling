@@ -8,10 +8,12 @@
   "extensions": {
     "com.agenttooling.adapters": {
       "claude": {
-        "mcpServers": "./.mcp.json"
+        "mcpServers": "./.mcp.json",
+        "hooks": "./hooks/claude-hooks.json"
       },
       "codex": {
         "mcpServers": "./.mcp.json",
+        "hooks": "./hooks/codex-hooks.json",
         "interface": {
           "displayName": "Mobile Development",
           "shortDescription": "Run isolated iOS lanes and mobile tooling",
@@ -19,7 +21,7 @@
           "developerName": "Arend Alloul",
           "category": "Developer Tools",
           "capabilities": ["Read", "Write"],
-          "defaultPrompt": ["Use the matching mobile development MCP tools for this task."]
+          "defaultPrompt": ["For PUMPD iOS or Metro work, use the ios-session-lanes skill and its owned lane commands. Treat raw Simulator MCP tools as observation-only. Use the matching HeroUI tools for component documentation tasks."]
         }
       }
     }

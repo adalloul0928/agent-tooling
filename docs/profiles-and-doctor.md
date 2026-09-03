@@ -5,7 +5,9 @@ two. They contain identifiers, expected revisions, file paths, and manual
 verification reminders. They never contain credentials or OAuth state.
 
 `scripts/doctor` is deliberately read-only. It reads native Claude and Codex
-configuration plus committed project files, then reports:
+configuration plus committed project files. A profile may also invoke an
+explicitly read-only local-runtime checker, such as the iOS session-lane
+installer's `--check` mode. It then reports:
 
 - `PASS`: observed state matches the profile;
 - `WARN`: advisory drift should be reviewed;
@@ -31,9 +33,15 @@ pumpd-workstation
 ```
 
 `base-workstation.json` includes `personal`, the reusable `developer-workflows`
-skill bundle, and the reusable `mobile-development` MCP bundle. These are
+skill bundle, and the reusable `mobile-development` iOS-lane/MCP bundle. These are
 local-workstation tools; they are not part of the committed PUMPD cloud
 contract.
+
+The `mobile-development` plugin supplies the skill and client-native hooks, but
+the stable `ios-session-*` command runtime is installed separately. The base
+profile verifies that runtime against the current `agent-tooling` revision and
+offers the matching installer as its repair recipe. This prevents a machine
+from passing doctor with hooks that point at missing or stale commands.
 
 `wet-in-seattle-workstation.json` extends `base-workstation.json`, adds the
 `wet-in-seattle` plugin, which supplies `analytics-mcp` to both Claude and
@@ -122,6 +130,9 @@ Rules:
   need credentials fetch them at runtime (Doppler) or stay in `manual_checks`.
 - Vendor skills installed via `npx skills add` are tracked as `path` checks on
   the installed `SKILL.md` with the add command as their recipe.
+- The `ios_session_runtime` check executes only the installer's read-only
+  `--check` path. Its repair recipe installs from the same `agent-tooling`
+  revision; legacy migration remains an explicit one-time operator action.
 - **Recipes must pin scope explicitly.** Both installers this repo relies on
   default to the *current directory*, not the user: `claude mcp add` needs
   `--scope user` and `skills add` needs `-g`. A recipe that omits them appears to

@@ -31,6 +31,30 @@ export function projectContext(cwd = process.cwd()) {
 	};
 }
 
+export function normalizeGitHubOrigin(value) {
+	const input = String(value ?? "").trim();
+	if (!input) return "";
+	let parsed;
+	try {
+		const scpMatch = input.match(/^git@github\.com:([^/?#]+)\/([^/?#]+?)(?:\.git)?\/?$/i);
+		parsed = scpMatch
+			? { hostname: "github.com", pathname: `/${scpMatch[1]}/${scpMatch[2]}` }
+			: new URL(input);
+	} catch {
+		return "";
+	}
+	if (String(parsed.hostname).toLowerCase() !== "github.com") return "";
+	const parts = String(parsed.pathname)
+		.replace(/\/+$/, "")
+		.replace(/\.git$/i, "")
+		.split("/")
+		.filter(Boolean);
+	if (parts.length !== 2 || parts.some((part) => !/^[A-Za-z0-9_.-]+$/.test(part))) {
+		return "";
+	}
+	return `github.com/${parts[0].toLowerCase()}/${parts[1].toLowerCase()}`;
+}
+
 export function projectMatch(cwd = process.cwd()) {
 	const context = projectContext(cwd);
 	const missingPaths = context.profile.match.requiredPaths.filter(
@@ -41,13 +65,14 @@ export function projectMatch(cwd = process.cwd()) {
 		encoding: "utf8",
 	});
 	const originUrl = origin.status === 0 ? origin.stdout.trim() : "";
-	const originMatches = context.profile.match.originContains.some((needle) =>
-		originUrl.toLowerCase().includes(needle.toLowerCase()),
-	);
+	const normalizedOrigin = normalizeGitHubOrigin(originUrl);
+	const originMatches =
+		normalizedOrigin === context.profile.match.canonicalGitHubOrigin.toLowerCase();
 	return {
 		...context,
 		missingPaths,
 		ok: missingPaths.length === 0 && originMatches,
+		normalizedOrigin,
 		originUrl,
 	};
 }

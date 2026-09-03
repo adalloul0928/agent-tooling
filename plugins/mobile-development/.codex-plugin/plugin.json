@@ -5,6 +5,7 @@
     "name": "Arend Alloul"
   },
   "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/codex-hooks.json",
   "interface": {
     "displayName": "Mobile Development",
     "shortDescription": "Run isolated iOS lanes and mobile tooling",
@@ -16,7 +17,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Use the matching mobile development MCP tools for this task."
+      "For PUMPD iOS or Metro work, use the ios-session-lanes skill and its owned lane commands. Treat raw Simulator MCP tools as observation-only. Use the matching HeroUI tools for component documentation tasks."
     ]
   }
 }

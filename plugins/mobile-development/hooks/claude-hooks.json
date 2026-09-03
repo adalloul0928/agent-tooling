@@ -1,0 +1,53 @@
+{
+  "description": "Check PUMPD worktree bootstrap and enforce one owned iOS lane per Claude session.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/skills/ios-session-lanes/scripts/ios-session-hook.mjs\" start --client claude",
+            "timeout": 1800,
+            "statusMessage": "Checking worktree bootstrap and loading iOS lane context"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/skills/ios-session-lanes/scripts/ios-session-hook.mjs\" heartbeat --client claude",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Shell|exec_command|run_command|mcp__.*(?:[Ss]imview|[Ii]os[_-]?[Ss]imulator|[Aa]gent[_-]?[Dd]evice|[Mm]aestro|[Aa]rgent|[Xx]codebuild).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/skills/ios-session-lanes/scripts/ios-session-hook.mjs\" pretool --client claude",
+            "timeout": 15,
+            "statusMessage": "Checking iOS lane ownership"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/skills/ios-session-lanes/scripts/ios-session-hook.mjs\" end --client claude",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

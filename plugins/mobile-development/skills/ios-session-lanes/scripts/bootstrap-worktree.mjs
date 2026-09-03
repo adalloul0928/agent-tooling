@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
 	chmodSync,
 	existsSync,
 	mkdirSync,
 	readFileSync,
+	realpathSync,
+	renameSync,
+	rmSync,
 	statSync,
 	writeFileSync,
 } from "node:fs";
@@ -17,9 +20,16 @@ import {
 	isMainModule,
 	projectContext,
 } from "./project-context.mjs";
+import {
+	assertLocalDopplerReferencesAvailable,
+	parseLocalDopplerReferences,
+} from "./lane-backend-secrets.mjs";
+import { withFileLock } from "./lane-lock.mjs";
 
-const receiptVersion = 2;
+const receiptVersion = 5;
+const attestationVersion = 1;
 const commandTimeoutMs = 30 * 60 * 1000;
+const remoteRefreshMs = 24 * 60 * 60 * 1000;
 
 export function parseBootstrapOptions(args) {
 	const options = {
@@ -109,6 +119,13 @@ function hashFile(filePath) {
 	return hashText(readFileSync(filePath));
 }
 
+function assertExactSemver(value, source) {
+	if (!/^\d+\.\d+\.\d+$/.test(String(value ?? ""))) {
+		throw new Error(`${source} must be an exact semantic version.`);
+	}
+	return String(value);
+}
+
 export function envNames(filePath) {
 	return readFileSync(filePath, "utf8")
 		.split(/\r?\n/)
@@ -118,8 +135,7 @@ export function envNames(filePath) {
 }
 
 export function envReferences(filePath) {
-	const matches = readFileSync(filePath, "utf8").matchAll(/env\(([A-Z0-9_]+)\)/g);
-	return [...new Set([...matches].map((match) => match[1]))].sort();
+	return parseLocalDopplerReferences(readFileSync(filePath, "utf8")).all;
 }
 
 function assertNames(source, names, required) {
@@ -128,6 +144,18 @@ function assertNames(source, names, required) {
 	if (missing.length > 0) {
 		throw new Error(`${source} is missing required names: ${missing.join(", ")}.`);
 	}
+}
+
+export function validateBootstrapDopplerNames(
+	configText,
+	dopplerNames,
+	requiredNames,
+	source = "Doppler",
+) {
+	assertNames(source, dopplerNames, requiredNames);
+	return assertLocalDopplerReferencesAvailable(configText, dopplerNames, {
+		source,
+	});
 }
 
 function readDopplerNames(context) {
@@ -162,6 +190,61 @@ export function receiptPathFor(options = {}) {
 	return path.join(gitDirectory, "agent-tooling-bootstrap-receipt.json");
 }
 
+export function managedAttestationPathFor(options = {}) {
+	const context = contextFor(options);
+	const gitDirectory = gitValue(context, ["rev-parse", "--absolute-git-dir"]);
+	return path.join(gitDirectory, "agent-tooling-managed-worktree.json");
+}
+
+export function writeManagedWorktreeAttestation(options = {}, details = {}) {
+	const context = assertSupportedProject(options.projectRoot || process.cwd());
+	const attestationPath = managedAttestationPathFor({ projectRoot: context.root });
+	const gitDirectory = gitValue(context, ["rev-parse", "--absolute-git-dir"]);
+	const attestation = {
+		client: String(details.client ?? "managed"),
+		createdAt: new Date().toISOString(),
+		createdBy: "ios-session-worktree",
+		gitDirectory,
+		origin: context.profile.match.canonicalGitHubOrigin,
+		root: realpathSync(context.root),
+		version: attestationVersion,
+	};
+	mkdirSync(path.dirname(attestationPath), { recursive: true, mode: 0o700 });
+	const temporary = `${attestationPath}.${process.pid}-${randomBytes(6).toString("hex")}.tmp`;
+	writeFileSync(temporary, `${JSON.stringify(attestation, null, 2)}\n`, { mode: 0o600 });
+	renameSync(temporary, attestationPath);
+	chmodSync(attestationPath, 0o600);
+	return { attestation, attestationPath };
+}
+
+export function managedWorktreeAttestationStatus(options = {}) {
+	const context = contextFor(options);
+	const attestationPath = managedAttestationPathFor({ projectRoot: context.root });
+	if (!existsSync(attestationPath)) {
+		return { attestation: null, attestationPath, ok: false, reason: "managed worktree attestation absent" };
+	}
+	let attestation;
+	try {
+		attestation = JSON.parse(readFileSync(attestationPath, "utf8"));
+	} catch {
+		return { attestation: null, attestationPath, ok: false, reason: "managed worktree attestation invalid" };
+	}
+	const expectedGitDirectory = gitValue(context, ["rev-parse", "--absolute-git-dir"]);
+	const valid =
+		attestation.version === attestationVersion &&
+		attestation.createdBy === "ios-session-worktree" &&
+		attestation.root === realpathSync(context.root) &&
+		attestation.gitDirectory === expectedGitDirectory &&
+		attestation.origin === context.profile.match.canonicalGitHubOrigin &&
+		(statSync(attestationPath).mode & 0o077) === 0;
+	return {
+		attestation,
+		attestationPath,
+		ok: valid,
+		reason: valid ? "" : "managed worktree attestation does not match this worktree",
+	};
+}
+
 function readReceipt(context) {
 	const receiptPath = receiptPathFor({ projectRoot: context.root });
 	if (!existsSync(receiptPath)) return null;
@@ -179,26 +262,60 @@ function readProjectInputs(context) {
 	const rootPackage = JSON.parse(
 		readFileSync(path.join(context.root, "package.json"), "utf8"),
 	);
-	const easVersion = easConfig.cli?.version;
-	if (!easVersion) throw new Error("The mobile eas.json must pin cli.version.");
+	const pnpmVersion = assertExactSemver(
+		context.profile.toolchain?.pnpmVersion,
+		"The trusted profile pnpmVersion",
+	);
+	const easVersion = assertExactSemver(
+		context.profile.toolchain?.easCliVersion,
+		"The trusted profile easCliVersion",
+	);
+	const expectedPackageManager = `pnpm@${pnpmVersion}`;
+	if (rootPackage.packageManager !== expectedPackageManager) {
+		throw new Error(
+			`package.json must declare the trusted packageManager ${expectedPackageManager}.`,
+		);
+	}
+	if (easConfig.cli?.version !== easVersion) {
+		throw new Error(`apps/mobile/eas.json must declare the trusted EAS CLI ${easVersion}.`);
+	}
 	return {
+		backendConfigHash: hashFile(context.backendConfigPath),
 		dopplerConfig: context.dopplerConfig,
 		easEnvironment: context.easEnvironment,
 		easVersion,
 		lockfileHash: hashFile(path.join(context.root, "pnpm-lock.yaml")),
-		packageManager: rootPackage.packageManager,
+		packageManager: expectedPackageManager,
+		pnpmVersion,
 	};
 }
 
 function receiptMatchesInputs(receipt, inputs) {
 	return (
 		receipt?.version === receiptVersion &&
+		receipt.inputs?.backendConfigHash === inputs.backendConfigHash &&
 		receipt.inputs?.dopplerConfig === inputs.dopplerConfig &&
 		receipt.inputs?.easEnvironment === inputs.easEnvironment &&
 		receipt.inputs?.easVersion === inputs.easVersion &&
 		receipt.inputs?.lockfileHash === inputs.lockfileHash &&
-		receipt.inputs?.packageManager === inputs.packageManager
+		receipt.inputs?.packageManager === inputs.packageManager &&
+		receipt.inputs?.pnpmVersion === inputs.pnpmVersion
 	);
+}
+
+function receiptIsFresh(receipt) {
+	const completed = Date.parse(receipt?.completedAt ?? "");
+	return Number.isFinite(completed) && Date.now() - completed < remoteRefreshMs;
+}
+
+function lfsStatus(context) {
+	const output = run("git", ["lfs", "ls-files"], context.root, { capture: true });
+	const missing = output
+		.split(/\r?\n/)
+		.map((line) => line.match(/^[0-9a-f]+\s+([-*])\s+(.+)$/i))
+		.filter((match) => match?.[1] === "-")
+		.map((match) => match[2]);
+	return { fileCount: output ? output.split(/\r?\n/).filter(Boolean).length : 0, missing };
 }
 
 export function localBootstrapStatus(options = {}) {
@@ -208,6 +325,10 @@ export function localBootstrapStatus(options = {}) {
 	const reasons = [];
 	if (!receipt) reasons.push("receipt absent");
 	else if (!receiptMatchesInputs(receipt, inputs)) reasons.push("receipt inputs stale");
+	else if (!receiptIsFresh(receipt)) reasons.push("remote environment refresh due");
+	if (!existsSync(path.join(context.root, "node_modules"))) reasons.push("node_modules absent");
+	const lfs = lfsStatus(context);
+	if (lfs.missing.length > 0) reasons.push(`Git LFS objects missing: ${lfs.missing.length}`);
 	if (!existsSync(context.mobileEnvPath)) {
 		reasons.push(`${context.profile.mobile.root}/${context.profile.mobile.environmentFile} absent`);
 	} else {
@@ -221,12 +342,13 @@ export function localBootstrapStatus(options = {}) {
 		if ((statSync(context.mobileEnvPath).mode & 0o077) !== 0) {
 			reasons.push("mobile environment permissions are not 0600");
 		}
-		if (receipt?.mobile?.namesHash !== hashText(names.join("\n"))) {
+		if (receipt?.mobile?.contentHash !== hashFile(context.mobileEnvPath)) {
 			reasons.push("mobile environment differs from receipt");
 		}
 	}
 	return {
 		inputs,
+		lfs,
 		ok: reasons.length === 0,
 		reasons,
 		receipt,
@@ -239,10 +361,29 @@ function installDependencies(context, options, receipt, inputs) {
 	if (!options.force && hasModules && receiptMatchesInputs(receipt, inputs)) {
 		return false;
 	}
-	run("corepack", ["pnpm", "install", "--frozen-lockfile"], context.root, {
+	run("corepack", [`pnpm@${inputs.pnpmVersion}`, "install", "--frozen-lockfile"], context.root, {
 		environment: { ...process.env, HUSKY: "0" },
 		quiet: options.quiet,
 	});
+	return true;
+}
+
+function materializeGitLfs(context, options, receipt, inputs) {
+	const before = lfsStatus(context);
+	if (
+		!options.force &&
+		before.missing.length === 0 &&
+		receiptMatchesInputs(receipt, inputs)
+	) {
+		return false;
+	}
+	run("git", ["lfs", "install", "--local"], context.root, { quiet: options.quiet });
+	run("git", ["lfs", "pull"], context.root, { quiet: options.quiet });
+	run("git", ["lfs", "checkout"], context.root, { quiet: options.quiet });
+	const after = lfsStatus(context);
+	if (after.missing.length > 0) {
+		throw new Error(`Git LFS still has ${after.missing.length} unmaterialized object(s).`);
+	}
 	return true;
 }
 
@@ -250,28 +391,54 @@ function pullMobileEnvironment(context, options, receipt, inputs) {
 	if (
 		!options.force &&
 		existsSync(context.mobileEnvPath) &&
-		receiptMatchesInputs(receipt, inputs)
+		receiptMatchesInputs(receipt, inputs) &&
+		receiptIsFresh(receipt) &&
+		receipt.mobile?.contentHash === hashFile(context.mobileEnvPath)
 	) {
 		chmodSync(context.mobileEnvPath, 0o600);
 		return false;
 	}
-	run(
-		"corepack",
-		[
-			"pnpm",
-			"dlx",
-			`eas-cli@${inputs.easVersion}`,
-			"env:pull",
-			"--environment",
-			context.easEnvironment,
-			"--path",
-			context.profile.mobile.environmentFile,
-			"--non-interactive",
-		],
-		context.mobileRoot,
-		{ quiet: options.quiet },
-	);
-	chmodSync(context.mobileEnvPath, 0o600);
+	const finalRelative = context.profile.mobile.environmentFile;
+	const temporaryRelative = `.env.${process.pid}-${randomBytes(6).toString("hex")}.local`;
+	const temporaryPath = path.join(context.mobileRoot, temporaryRelative);
+	for (const candidate of [finalRelative, temporaryRelative]) {
+		const ignored = spawnSync("git", ["check-ignore", "--quiet", "--", path.join(context.profile.mobile.root, candidate)], {
+			cwd: context.root,
+		});
+		if (ignored.status !== 0) {
+			throw new Error(`Refusing to write ${candidate}; it is not gitignored.`);
+		}
+	}
+	writeFileSync(temporaryPath, "", { mode: 0o600 });
+	try {
+		run(
+			"corepack",
+			[
+				`pnpm@${inputs.pnpmVersion}`,
+				"dlx",
+				`eas-cli@${inputs.easVersion}`,
+				"env:pull",
+				"--environment",
+				context.easEnvironment,
+				"--path",
+				temporaryRelative,
+				"--non-interactive",
+			],
+			context.mobileRoot,
+			{ quiet: options.quiet },
+		);
+		chmodSync(temporaryPath, 0o600);
+		assertNames(
+			`EAS ${context.easEnvironment} environment`,
+			envNames(temporaryPath),
+			context.profile.mobile.requiredEnvironmentNames,
+		);
+		renameSync(temporaryPath, context.mobileEnvPath);
+		chmodSync(context.mobileEnvPath, 0o600);
+	} catch (error) {
+		rmSync(temporaryPath, { force: true });
+		throw error;
+	}
 	return true;
 }
 
@@ -282,23 +449,19 @@ function createReceipt(context, inputs, dopplerNames) {
 		mobileNames,
 		context.profile.mobile.requiredEnvironmentNames,
 	);
-	assertNames(
-		`Doppler ${context.profile.backend.dopplerProject}/${context.dopplerConfig}`,
+	const configText = readFileSync(context.backendConfigPath, "utf8");
+	const configReferences = validateBootstrapDopplerNames(
+		configText,
 		dopplerNames,
 		context.profile.backend.requiredDopplerNames,
-	);
-	const configReferences = envReferences(context.backendConfigPath);
-	const available = new Set(dopplerNames);
-	const unavailableConfigReferences = configReferences.filter(
-		(name) => !available.has(name),
+		`Doppler ${context.profile.backend.dopplerProject}/${context.dopplerConfig}`,
 	);
 	return {
 		completedAt: new Date().toISOString(),
 		doppler: {
-			availableConfigReferenceCount:
-				configReferences.length - unavailableConfigReferences.length,
 			config: context.dopplerConfig,
-			missingOptionalConfigReferences: unavailableConfigReferences,
+			localConfigReferenceCount: configReferences.all.length,
+			localConfigReferencesHash: hashText(configReferences.all.join("\n")),
 			namesCount: dopplerNames.length,
 			namesHash: hashText(dopplerNames.join("\n")),
 			project: context.profile.backend.dopplerProject,
@@ -309,7 +472,9 @@ function createReceipt(context, inputs, dopplerNames) {
 			commonDirectory: gitValue(context, ["rev-parse", "--git-common-dir"]),
 		},
 		inputs,
+		lfs: lfsStatus(context),
 		mobile: {
+			contentHash: hashFile(context.mobileEnvPath),
 			environment: context.easEnvironment,
 			namesCount: mobileNames.length,
 			namesHash: hashText(mobileNames.join("\n")),
@@ -318,7 +483,7 @@ function createReceipt(context, inputs, dopplerNames) {
 		runtime: {
 			node: process.version,
 			platform: `${process.platform}-${process.arch}`,
-			pnpm: run("corepack", ["pnpm", "--version"], context.root, {
+			pnpm: run("corepack", [`pnpm@${inputs.pnpmVersion}`, "--version"], context.root, {
 				capture: true,
 			}),
 		},
@@ -327,9 +492,14 @@ function createReceipt(context, inputs, dopplerNames) {
 	};
 }
 
-export function bootstrap(options = parseBootstrapOptions([])) {
+export async function bootstrap(options = parseBootstrapOptions([])) {
 	const context = contextFor(options);
 	assertSupportedProject(context.root);
+	const lockPath = `${receiptPathFor({ projectRoot: context.root })}.lock`;
+	return withFileLock(lockPath, commandTimeoutMs, () => bootstrapLocked(context, options));
+}
+
+function bootstrapLocked(context, options) {
 	const inputs = readProjectInputs(context);
 	const priorReceipt = readReceipt(context);
 	if (options.check) {
@@ -347,6 +517,7 @@ export function bootstrap(options = parseBootstrapOptions([])) {
 
 	if (!options.quiet) console.log(`Bootstrapping ${context.root}`);
 	const installed = installDependencies(context, options, priorReceipt, inputs);
+	const materializedLfs = materializeGitLfs(context, options, priorReceipt, inputs);
 	const pulledMobileEnvironment = pullMobileEnvironment(
 		context,
 		options,
@@ -357,9 +528,12 @@ export function bootstrap(options = parseBootstrapOptions([])) {
 	const receipt = createReceipt(context, inputs, dopplerNames);
 	const receiptPath = receiptPathFor({ projectRoot: context.root });
 	mkdirSync(path.dirname(receiptPath), { recursive: true, mode: 0o700 });
-	writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, {
+	const temporaryReceipt = `${receiptPath}.${process.pid}.tmp`;
+	writeFileSync(temporaryReceipt, `${JSON.stringify(receipt, null, 2)}\n`, {
 		mode: 0o600,
 	});
+	renameSync(temporaryReceipt, receiptPath);
+	chmodSync(receiptPath, 0o600);
 	if (!options.quiet) {
 		console.log(
 			`Mobile EAS ${context.easEnvironment} ready (${receipt.mobile.namesCount} names; values hidden).`,
@@ -367,23 +541,18 @@ export function bootstrap(options = parseBootstrapOptions([])) {
 		console.log(
 			`Doppler ${context.profile.backend.dopplerProject}/${context.dopplerConfig} ready (${receipt.doppler.namesCount} names; values hidden).`,
 		);
-		if (receipt.doppler.missingOptionalConfigReferences.length > 0) {
-			console.warn(
-				`Optional config references absent from Doppler: ${receipt.doppler.missingOptionalConfigReferences.join(", ")}.`,
-			);
-		}
 		console.log(`Bootstrap receipt: ${receiptPath}`);
 	}
 	return {
-		changed: installed || pulledMobileEnvironment,
+		changed: installed || materializedLfs || pulledMobileEnvironment,
 		receipt,
 		receiptPath,
 	};
 }
 
-function main() {
+async function main() {
 	const options = parseBootstrapOptions(process.argv.slice(2));
-	const result = bootstrap(options);
+	const result = await bootstrap(options);
 	if (options.json) {
 		process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 	} else if (options.check && !options.quiet) {
@@ -393,7 +562,7 @@ function main() {
 
 if (isMainModule(import.meta.url)) {
 	try {
-		main();
+		await main();
 	} catch (error) {
 		console.error(`[bootstrap] ${error.message}`);
 		process.exitCode = 1;

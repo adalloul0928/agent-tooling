@@ -60,6 +60,7 @@
           "enum": [
             "path",
             "same_file",
+            "ios_session_runtime",
             "claude_plugin",
             "claude_marketplace",
             "claude_mcp",

@@ -3,13 +3,17 @@
   "id": "pumpd-mobile-app",
   "displayName": "PUMPD",
   "match": {
-    "originContains": ["PUMPD-MOBILE-APP/pumpd-mobile-app", "pumpd-mobile-app"],
+    "canonicalGitHubOrigin": "github.com/avad-technologies/pumpd-mobile-app",
     "requiredPaths": [
       "apps/mobile/app.config.ts",
       "apps/mobile/eas.json",
       "apps/backend/supabase/config.toml",
       "pnpm-lock.yaml"
     ]
+  },
+  "toolchain": {
+    "pnpmVersion": "10.34.5",
+    "easCliVersion": "21.0.2"
   },
   "mobile": {
     "root": "apps/mobile",
@@ -46,8 +50,11 @@
     ],
     "contractPaths": [
       "apps/backend/supabase/config.toml",
+      "apps/backend/supabase/functions",
       "apps/backend/supabase/migrations",
       "apps/backend/supabase/schemas",
+      "apps/backend/supabase/seed.sql",
+      "apps/backend/supabase/templates",
       "packages/types/database.generated.ts",
       "packages/types/ai-coach.ts"
     ]
@@ -102,7 +109,7 @@
   },
   "physicalDevices": {
     "arens-iphone-pro": {
-      "displayNames": ["Aren's iPhone Pro", "Arens iPhone Pro", "Aren’s iPhone Pro"],
+      "displayNames": ["Aren's iPhone Pro", "Arens iPhone Pro", "Arens Iphone Pro", "Aren’s iPhone Pro"],
       "jointTestRequired": true
     }
   },

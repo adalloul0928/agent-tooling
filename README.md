@@ -31,8 +31,12 @@ and native MCP adapters:
 - `pumpd-automations`: scheduled PUMPD scans that report and file Linear
   Triage suggestions;
 - `wet-in-seattle`: IAWIS workflows with a Doppler-backed Analytics MCP.
-- `mobile-development`: reusable iOS Simulator and HeroUI Native MCPs, with
-  HeroUI Native Pro authentication injected by Doppler.
+- `mobile-development`: isolated PUMPD iOS session lanes, reusable iOS
+  Simulator tooling, and HeroUI Native MCPs, with HeroUI Native Pro
+  authentication injected by Doppler.
+
+The iOS lane architecture, safety boundary, verification, and rollout are
+summarized in [docs/ios-session-lanes-hardening.md](docs/ios-session-lanes-hardening.md).
 
 These plugins and their bundled skills are first-party creations. Vendor
 plugins, MCP servers, and CLIs remain with their publishers and are referenced

@@ -97,8 +97,26 @@ Dry-run first; it prints exactly what it would execute and changes nothing.
 ./scripts/setup base-workstation --apply     # execute
 ```
 
-This installs the hosted MCPs (`sentry`, `expo`, `supabase`) and every vendor
-skill, each from a recipe committed in `profiles/base-workstation.json`.
+This installs the hosted MCPs (`sentry`, `expo`, `supabase`), every vendor
+skill, and the stable `ios-session-*` runtime, each from a recipe committed in
+`profiles/base-workstation.json`. The `mobile-development` plugin carries the
+skill and hooks; the command runtime is deliberately separate from the
+versioned client plugin cache.
+
+Verify that the runtime exactly matches this checkout and that its three
+wrappers are on disk:
+
+```bash
+node plugins/mobile-development/skills/ios-session-lanes/scripts/install-runtime.mjs --check
+command -v ios-session-worktree ios-session-bootstrap ios-session-lane
+```
+
+The check is read-only and fails on missing, stale, tampered, or wrong-mode
+files. A normal refresh retains and reports the prior installation as recovery
+backups; keep those paths until the refreshed runtime has passed a canary. If
+upgrading the original unmarked v1 runtime, run the installer once with
+`--migrate-legacy-runtime` yourself, review its reported backups, then return to
+the normal command. Never automate the migration switch.
 
 For a PUMPD machine, run `pumpd-workstation` **after** cloning the PUMPD repo,
 since its project checks read a checkout:
@@ -219,10 +237,20 @@ codex --version                              # expect codex-cli 0.145.x
 Then add the marketplace and install the owned plugins, mirroring Step 2:
 
 ```bash
-codex plugin marketplace add adalloul0928/agent-tooling   # confirm syntax with `codex plugin --help`
+codex plugin marketplace add adalloul0928/agent-tooling
+codex plugin add personal@agent-tooling
+codex plugin add developer-workflows@agent-tooling
+codex plugin add mobile-development@agent-tooling
+codex plugin add pumpd-workflows@agent-tooling
+codex plugin add cyrus-workflows@agent-tooling
+codex plugin add pumpd-automations@agent-tooling
 codex plugin list                                          # verify what is enabled
 codex mcp list                                             # Status + Auth per server
 ```
+
+Re-run the runtime `--check` after either client refreshes
+`mobile-development`; the plugin hooks and separate command runtime must come
+from the same `agent-tooling` revision.
 
 **Codex takes hosted vendor MCPs from the curated catalog, not as raw MCPs.**
 `sentry`, `expo`, `linear`, `supabase`, and `github` come from `@openai-curated`

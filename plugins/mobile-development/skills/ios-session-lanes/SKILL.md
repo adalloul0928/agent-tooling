@@ -64,12 +64,14 @@ Keep two secondary defaults automatic unless the task makes them relevant:
    input. Use SimView only for observation. Acquire the Maestro controller lease
    for deterministic flows and proof.
 5. Run `ios-session-lane doctor ...` before claiming lane validation.
-6. Release with `ios-session-lane down ...`; abandoned lanes are handled by
-   `ios-session-lane reap`.
+6. Release with `ios-session-lane down ...`; `ios-session-lane reap` removes
+   only stale metadata after its owned runtime is already dead.
 
-The lane computes Expo's iOS native fingerprint. A matching installed or cached
-`.app` is reused for JavaScript-only changes. A fingerprint miss triggers a
-local Xcode simulator build. It never submits an EAS development build.
+The lane combines Expo's iOS native fingerprint with the Xcode version and host
+architecture. A matching installed or cached generic-simulator `.app` is reused
+for JavaScript-only changes and installed into the assigned UDID. A cache-key
+miss triggers one serialized local Xcode build. It never submits an EAS
+development build.
 
 Local Supabase is one shared backend with one lifecycle owner. Ordinary lanes
 only consume a compatible running stack. `backend-up` and `backend-down` are

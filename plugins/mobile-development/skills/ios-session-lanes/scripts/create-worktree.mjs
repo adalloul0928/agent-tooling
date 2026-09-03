@@ -5,7 +5,11 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { bootstrap, parseBootstrapOptions } from "./bootstrap-worktree.mjs";
+import {
+	bootstrap,
+	parseBootstrapOptions,
+	writeManagedWorktreeAttestation,
+} from "./bootstrap-worktree.mjs";
 import {
 	assertSupportedProject,
 	isMainModule,
@@ -26,6 +30,7 @@ export function safeWorktreeName(value) {
 export function parseWorktreeOptions(args) {
 	const profile = projectContext().profile;
 	const options = {
+		allowStaleBase: false,
 		base: profile.worktrees.defaultBase,
 		client: "manual",
 		destinationRoot: "",
@@ -37,6 +42,7 @@ export function parseWorktreeOptions(args) {
 		const arg = args[index];
 		if (arg === "--") continue;
 		if (arg === "--hook") options.hook = true;
+		else if (arg === "--allow-stale-base") options.allowStaleBase = true;
 		else if (arg === "--base") options.base = requireValue(args, ++index, arg);
 		else if (arg === "--client") options.client = safeWorktreeName(requireValue(args, ++index, arg));
 		else if (arg === "--name") options.name = safeWorktreeName(requireValue(args, ++index, arg));
@@ -98,16 +104,21 @@ function mainCheckout(root) {
 
 function uniqueBranch(root, client, name, discriminator) {
 	const initial = branchName(client, name);
-	const exists = run("git", ["show-ref", "--verify", "--quiet", `refs/heads/${initial}`], root, {
-		allowFailure: true,
-		quiet: true,
-	}).status === 0;
-	if (!exists) return initial;
-	const hash = createHash("sha256")
-		.update(discriminator || `${name}-${Date.now()}`)
-		.digest("hex")
-		.slice(0, 8);
-	return branchName(client, name, hash);
+	for (let attempt = 0; attempt < 100; attempt += 1) {
+		const hash = createHash("sha256")
+			.update(`${discriminator || name}-${attempt}`)
+			.digest("hex")
+			.slice(0, 8);
+		const candidate = attempt === 0 ? initial : branchName(client, name, hash);
+		const exists = run(
+			"git",
+			["show-ref", "--verify", "--quiet", `refs/heads/${candidate}`],
+			root,
+			{ allowFailure: true, quiet: true },
+		).status === 0;
+		if (!exists) return candidate;
+	}
+	throw new Error(`Could not allocate a unique branch for ${client}/${name}.`);
 }
 
 function defaultDestinationRoot(root, profile) {
@@ -118,14 +129,18 @@ function defaultDestinationRoot(root, profile) {
 	return path.join(parent, profile.worktrees.directoryName);
 }
 
-function resolveWorktreePath(root, profile, options) {
+function resolveWorktreePath(root, profile, options, discriminator) {
 	const worktreesRoot = path.resolve(
 		options.destinationRoot ||
 			process.env.IOS_SESSION_LANES_WORKTREE_ROOT ||
 			defaultDestinationRoot(root, profile),
 	);
 	mkdirSync(worktreesRoot, { recursive: true });
-	const destination = path.resolve(worktreesRoot, safeWorktreeName(options.name));
+	const sessionSuffix = discriminator
+		? `-${createHash("sha256").update(discriminator).digest("hex").slice(0, 8)}`
+		: "";
+	const directoryName = safeWorktreeName(`${options.name}-${options.client}${sessionSuffix}`);
+	const destination = path.resolve(worktreesRoot, directoryName);
 	if (path.dirname(destination) !== worktreesRoot) {
 		throw new Error("Resolved worktree path escaped its managed directory.");
 	}
@@ -133,7 +148,7 @@ function resolveWorktreePath(root, profile, options) {
 	return destination;
 }
 
-function refreshBase(root, base) {
+function refreshBase(root, base, allowStaleBase) {
 	if (!base.startsWith("origin/")) return;
 	const branch = base.slice("origin/".length);
 	const result = run("git", ["fetch", "origin", branch], root, {
@@ -141,20 +156,29 @@ function refreshBase(root, base) {
 		quiet: true,
 	});
 	if (result.status !== 0) {
-		process.stderr.write(`[worktree] Could not refresh ${base}; using the existing local ref.\n`);
+		if (!allowStaleBase) {
+			throw new Error(
+				`Could not refresh ${base}. Retry with network access or pass --allow-stale-base explicitly.`,
+			);
+		}
+		process.stderr.write(`[worktree] Could not refresh ${base}; explicitly using the existing local ref.\n`);
 	}
 }
 
-export function createWorktree(options, discriminator = "") {
+export async function createWorktree(options, discriminator = "") {
 	const context = assertSupportedProject(options.projectRoot || process.cwd());
 	const root = context.root;
 	const name = safeWorktreeName(options.name);
-	refreshBase(root, options.base);
-	const destination = resolveWorktreePath(root, context.profile, options);
+	refreshBase(root, options.base, options.allowStaleBase);
+	const destination = resolveWorktreePath(root, context.profile, options, discriminator);
 	const branch = uniqueBranch(root, options.client, name, discriminator);
 	run("git", ["worktree", "add", "--no-track", "-b", branch, destination, options.base], root);
 	try {
-		bootstrap({ ...parseBootstrapOptions(["--quiet"]), projectRoot: destination });
+		writeManagedWorktreeAttestation(
+			{ projectRoot: destination },
+			{ client: options.client },
+		);
+		await bootstrap({ ...parseBootstrapOptions(["--quiet"]), projectRoot: destination });
 	} catch (error) {
 		throw new Error(
 			`Created and preserved ${destination} on ${branch}, but bootstrap failed: ${error.message}. ` +
@@ -175,7 +199,7 @@ async function main() {
 		discriminator = String(input.session_id ?? "");
 	}
 	if (!options.name) throw new Error("--name is required outside hook mode.");
-	const result = createWorktree(options, discriminator);
+	const result = await createWorktree(options, discriminator);
 	process.stdout.write(`${result.destination}\n`);
 }
 

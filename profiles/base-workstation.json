@@ -4,6 +4,7 @@
   "name": "base-workstation",
   "description": "Cross-client tooling expected on Aren's primary development workstation.",
   "variables": {
+    "agent_tooling_root": "~/ws/agent-tooling",
     "agent_tooling_ref": "main"
   },
   "checks": [
@@ -53,7 +54,23 @@
       "id": "codex.mobile-development-plugin",
       "kind": "codex_plugin",
       "plugin": "mobile-development@agent-tooling",
-      "expected": "enabled"
+      "expected": "enabled",
+      "install": {
+        "run": ["codex", "plugin", "add", "mobile-development@agent-tooling"],
+        "note": "Installs the skill and client-native hooks. The separate local.ios-session-lane-runtime check installs the matching stable command runtime."
+      }
+    },
+    {
+      "id": "local.ios-session-lane-runtime",
+      "kind": "ios_session_runtime",
+      "installer": "${agent_tooling_root}/plugins/mobile-development/skills/ios-session-lanes/scripts/install-runtime.mjs",
+      "runtime_root": "~/Library/Application Support/agent-tooling/ios-session-lanes/runtime",
+      "bin_dir": "~/.local/bin",
+      "expected": "current",
+      "install": {
+        "run": ["node", "${agent_tooling_root}/plugins/mobile-development/skills/ios-session-lanes/scripts/install-runtime.mjs", "--runtime-root", "~/Library/Application Support/agent-tooling/ios-session-lanes/runtime", "--bin-dir", "~/.local/bin"],
+        "note": "Install the runtime from the same agent-tooling revision as the mobile-development plugin. The original unmarked v1 runtime requires a one-time explicit --migrate-legacy-runtime run; never add that migration switch to automated setup. Keep reported recovery backups until the refreshed runtime passes its canary."
+      }
     },
     {
       "id": "claude.orphaned-supabase-marketplace",

@@ -5,7 +5,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLAUDE_CATALOG="$REPO_ROOT/.claude-plugin/marketplace.json"
 CODEX_CATALOG="$REPO_ROOT/.agents/plugins/marketplace.json"
 
-for command in jq python3 rg agentskills; do
+for command in jq node python3 rg agentskills; do
   if ! command -v "$command" >/dev/null 2>&1; then
     printf 'missing required command: %s\n' "$command" >&2
     exit 69
@@ -166,6 +166,12 @@ done < <(find "$REPO_ROOT/plugins" -type f -path '*/scripts/*.sh' -print | sort)
 while IFS= read -r script; do
   bash -n "$script"
 done < <(rg -l '^#!/usr/bin/env bash$' "$REPO_ROOT/scripts" | sort)
+while IFS= read -r script; do
+  node --check "$script"
+done < <(find "$REPO_ROOT/plugins" -type f -path '*/scripts/*.mjs' -print | sort)
+while IFS= read -r test_file; do
+  node --test "$test_file"
+done < <(find "$REPO_ROOT/plugins" -type f -path '*/tests/*.test.mjs' -print | sort)
 while IFS= read -r script; do
   PYTHONPYCACHEPREFIX="${TMPDIR:-/tmp}/agent-tooling-pycache" python3 -m py_compile "$script"
 done < <(rg -l '^#!/usr/bin/env python3$' "$REPO_ROOT/scripts" | sort)

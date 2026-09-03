@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import tomllib
 from collections import OrderedDict
@@ -21,6 +22,7 @@ VARIABLE_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 CHECK_FIELDS = {
     "path": {"path"},
     "same_file": {"paths"},
+    "ios_session_runtime": {"installer"},
     "claude_plugin": {"plugin"},
     "claude_marketplace": {"name"},
     "claude_mcp": {"server"},
@@ -166,7 +168,7 @@ def validate_definition(profile: dict[str, Any]) -> None:
             note = install.get("note")
             if note is not None and not isinstance(note, str):
                 raise ProfileError(f"{check['id']} install.note must be a string")
-        for key in ("path", "ref"):
+        for key in ("path", "ref", "installer", "runtime_root", "bin_dir"):
             value = check.get(key)
             if isinstance(value, str):
                 context.expand(value)
@@ -233,6 +235,58 @@ def evaluate(check: dict[str, Any], context: Context) -> dict[str, Any]:
             return outcome(check, False, f"missing comparison files: {', '.join(missing)}")
         hashes = {sha256(path) for path in paths}
         return outcome(check, len(hashes) == 1, f"compared {len(paths)} files; unique hashes: {len(hashes)}")
+
+    if kind == "ios_session_runtime":
+        installer = context.path(check["installer"])
+        runtime_root = context.path(
+            check.get(
+                "runtime_root",
+                "~/Library/Application Support/agent-tooling/ios-session-lanes/runtime",
+            )
+        )
+        bin_dir = context.path(check.get("bin_dir", "~/.local/bin"))
+        if not installer.is_file() or installer.is_symlink():
+            return outcome(check, False, f"iOS session runtime checker is missing or unsafe: {installer}")
+        command = [
+            "node",
+            str(installer),
+            "--check",
+            "--runtime-root",
+            str(runtime_root),
+            "--bin-dir",
+            str(bin_dir),
+        ]
+        try:
+            completed = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return outcome(check, False, f"iOS session runtime check could not run: {exc}")
+
+        stream = completed.stdout if completed.returncode == 0 else completed.stderr
+        try:
+            report = json.loads(stream)
+        except json.JSONDecodeError:
+            detail = " ".join(stream.strip().split())[:300] or "no JSON status"
+            return outcome(
+                check,
+                False,
+                f"iOS session runtime check returned invalid output (exit {completed.returncode}): {detail}",
+            )
+        if completed.returncode == 0 and report.get("status") == "ok":
+            return outcome(
+                check,
+                True,
+                "iOS session runtime matches this plugin revision "
+                f"(integrity v{report.get('integrityVersion')}, {report.get('wrappers')} wrappers)",
+            )
+        code = str(report.get("code", "unknown-drift"))[:80]
+        detail = " ".join(str(report.get("message", "runtime does not match")).split())[:300]
+        return outcome(check, False, f"iOS session runtime drift [{code}]: {detail}")
 
     if kind == "claude_plugin":
         settings_path = context.path(check["path"]) if check.get("path") else home / ".claude/settings.json"

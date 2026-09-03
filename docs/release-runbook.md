@@ -39,13 +39,21 @@ refresh does not install a newly published plugin automatically.
 
 1. Create temporary Claude and Codex homes.
 2. Add the GitHub marketplace, not the local path.
-3. Install all six owned plugins in both clients.
-4. Confirm that each plugin exposes its expected skills.
-5. Run the cases in `docs/obsidian-canary.md` for the `personal` bundle,
-   explicit/implicit/non-trigger cases for skill bundles, and an MCP startup
-   check for MCP-only bundles.
-6. Publish a harmless update and prove both native refresh paths receive it.
-7. Record the tested commit and client versions in the PR.
+3. Install every owned plugin listed in both repository catalogs.
+4. Install the `mobile-development` iOS lane runtime from the same tested
+   revision, then require `install-runtime.mjs --check` to report `status=ok`.
+5. Confirm that each plugin exposes its expected skills.
+6. Run the cases in `docs/obsidian-canary.md` for the `personal` bundle,
+   explicit/implicit/non-trigger cases for skill bundles, hook registration for
+   hook-bearing bundles, and an MCP startup check for bundles that include MCPs.
+   For `mobile-development`, prove SessionStart context, UserPromptSubmit
+   heartbeat, PreToolUse denial, and exact SessionEnd cleanup without touching
+   a live device.
+7. Publish a harmless update and prove both native refresh paths receive it.
+8. Refresh the separate iOS lane runtime from that same revision, re-run its
+   read-only check, and retain every reported recovery backup until the canary
+   passes.
+9. Record the tested commit and client versions in the PR.
 
 Installation and authentication are different gates. Authenticate any new MCP
 through the local client that will use it, configure non-OAuth secrets outside

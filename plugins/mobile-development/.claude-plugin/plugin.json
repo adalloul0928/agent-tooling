@@ -4,5 +4,6 @@
   "author": {
     "name": "Arend Alloul"
   },
-  "mcpServers": "./.mcp.json"
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/claude-hooks.json"
 }

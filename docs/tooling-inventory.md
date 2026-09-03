@@ -98,8 +98,14 @@ skill installation is not required.
 | `cyrus-workflows` | `cyrus-setup`, `pumpd-research`, `pumpd-plan`, `pumpd-review`, `pumpd-decompose`, `log-learning`, `pumpd-retro` | PUMPD target; Claude project scope, Codex user install | First-party |
 | `pumpd-workflows` | `pumpd-local-cleanup` | PUMPD target; Claude project scope, Codex user install | First-party |
 | `wet-in-seattle` | `iawis-weekly-report` | Wet In Seattle target; Claude project scope, Codex user install | First-party |
-| `mobile-development` | None; MCP-only | User/workstation; reusable local mobile tooling | First-party wrapper around third-party MCPs |
+| `mobile-development` | `ios-session-lanes`; bundled lifecycle/guard hooks and third-party MCPs; separately installed verified command runtime | User/workstation; isolated PUMPD iOS lanes and reusable local mobile tooling | First-party lane runtime plus wrappers around third-party MCPs |
 | `pumpd-automations` | `pumpd-sentry-miner`, `pumpd-product-miner`, `pumpd-tool-radar`, `pumpd-ai-tooling-radar`, `pumpd-agent-retro`, `pumpd-appstore-readiness`, `pumpd-docs-freshness`, `pumpd-security-scan`, `pumpd-setup-scout`, `pumpd-haiku-window-starter` | PUMPD target; **user scope** in both clients | First-party |
+
+Installing `mobile-development` registers its skill, hooks, and MCPs. The
+`ios-session-*` wrappers are a separate authenticated workstation runtime so
+Claude and Codex share stable commands outside a versioned plugin cache. The
+base profile installs that runtime and verifies its complete v3 tree and three
+wrappers against the current checkout without modifying them.
 
 `pumpd-automations` is user-scoped rather than project-scoped like
 `cyrus-workflows` and `pumpd-workflows`: its skills fire unattended from the
