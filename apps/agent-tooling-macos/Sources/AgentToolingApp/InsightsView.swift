@@ -13,9 +13,6 @@ struct InsightsView: View {
     @State private var scanError: String?
     @State private var isPresentingClearConfirmation = false
     @State private var scanTask: Task<Void, Never>?
-    @State private var recommendationDisplayLimit = 8
-    @State private var findingDisplayLimit = 20
-    @State private var usageDisplayLimit = 30
 
     var body: some View {
         VStack(spacing: 0) {
@@ -319,27 +316,14 @@ struct InsightsView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 190)
             } else {
-                let visibleRecommendations = Array(recommendations.prefix(recommendationDisplayLimit))
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(visibleRecommendations.enumerated()), id: \.element.id) { index, recommendation in
+                    ForEach(Array(recommendations.enumerated()), id: \.element.id) { index, recommendation in
                         RecommendationRow(recommendation: recommendation) {
                             open(recommendation)
                         }
-                        if index < visibleRecommendations.count - 1 {
+                        if index < recommendations.count - 1 {
                             Divider().padding(.leading, 49)
                         }
-                    }
-                    if visibleRecommendations.count < recommendations.count {
-                        Divider()
-                        Button(
-                            "Show \(min(8, recommendations.count - visibleRecommendations.count)) more opportunities"
-                        ) {
-                            recommendationDisplayLimit += 8
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(AgentTheme.blue)
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                        .accessibilityHint("Shows the next tool recommendations")
                     }
                 }
             }
@@ -380,25 +364,14 @@ struct InsightsView: View {
                     .frame(maxWidth: .infinity, minHeight: 170)
                 } else {
                     let findings = sortedFindings(report.qualityFindings)
-                    let visibleFindings = Array(findings.prefix(findingDisplayLimit))
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(visibleFindings.enumerated()), id: \.element.id) { index, finding in
+                        ForEach(Array(findings.enumerated()), id: \.element.id) { index, finding in
                             QualityFindingRow(finding: finding) {
                                 navigation.open(.skill(finding.skillID))
                             }
-                            if index < visibleFindings.count - 1 {
+                            if index < findings.count - 1 {
                                 Divider().padding(.leading, 49)
                             }
-                        }
-                        if visibleFindings.count < findings.count {
-                            Divider()
-                            Button("Show \(min(20, findings.count - visibleFindings.count)) more improvements") {
-                                findingDisplayLimit += 20
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(AgentTheme.blue)
-                            .frame(maxWidth: .infinity, minHeight: 40)
-                            .accessibilityHint("Shows the next skill improvement findings")
                         }
                     }
                 }
@@ -422,26 +395,15 @@ struct InsightsView: View {
                             .padding(15)
                     } else {
                         let usage = sortedUsage(report.skillUsage)
-                        let visibleUsage = Array(usage.prefix(usageDisplayLimit))
                         Divider()
                         LazyVStack(spacing: 0) {
-                            ForEach(Array(visibleUsage.enumerated()), id: \.element.id) { index, metric in
+                            ForEach(Array(usage.enumerated()), id: \.element.id) { index, metric in
                                 SkillUsageRow(metric: metric) {
                                     navigation.open(.skill(metric.skillID))
                                 }
-                                if index < visibleUsage.count - 1 {
+                                if index < usage.count - 1 {
                                     Divider().padding(.leading, 49)
                                 }
-                            }
-                            if visibleUsage.count < usage.count {
-                                Divider()
-                                Button("Show \(min(30, usage.count - visibleUsage.count)) more skills") {
-                                    usageDisplayLimit += 30
-                                }
-                                .buttonStyle(.plain)
-                                .foregroundStyle(AgentTheme.blue)
-                                .frame(maxWidth: .infinity, minHeight: 40)
-                                .accessibilityHint("Shows the next skill usage records")
                             }
                         }
                     }
@@ -507,9 +469,6 @@ struct InsightsView: View {
         )
         await model.runInsightsScan(options: options)
         if model.insightsReport?.id != previousReportID {
-            recommendationDisplayLimit = 8
-            findingDisplayLimit = 20
-            usageDisplayLimit = 30
         }
         if model.insightsReport?.id == previousReportID, let error = model.lastError {
             scanError = error

@@ -12,9 +12,6 @@ struct MarketplaceView: View {
     @State private var classificationFilter: MarketplaceClassificationFilter = .all
     @State private var sortOrder: MarketplaceSortOrder = .relevance
     @State private var selectedSourceID: UUID?
-    @State private var displayLimit = Self.pageSize
-
-    private static let pageSize = 12
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,16 +53,10 @@ struct MarketplaceView: View {
             selectFirstPackageAfterListUpdate(ifNeeded: selectedPackageID == nil)
         }
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
-        .onChange(of: visiblePackages.map(\.id)) { _, ids in
+        .onChange(of: filteredPackages.map(\.id)) { _, ids in
             let selectionIsInvalid = selectedPackageID == nil || !ids.contains(selectedPackageID ?? "")
             selectFirstPackageAfterListUpdate(ifNeeded: selectionIsInvalid)
         }
-        .onChange(of: query) { _, _ in displayLimit = Self.pageSize }
-        .onChange(of: componentFilter) { _, _ in displayLimit = Self.pageSize }
-        .onChange(of: clientFilter) { _, _ in displayLimit = Self.pageSize }
-        .onChange(of: classificationFilter) { _, _ in displayLimit = Self.pageSize }
-        .onChange(of: sortOrder) { _, _ in displayLimit = Self.pageSize }
-        .onChange(of: selectedSourceID) { _, _ in displayLimit = Self.pageSize }
     }
 
     private func applyExternalNavigation() {
@@ -77,9 +68,6 @@ struct MarketplaceView: View {
         clientFilter = .all
         classificationFilter = .all
         selectedSourceID = nil
-        if let index = filteredPackages.firstIndex(where: { $0.id == requestedID }) {
-            displayLimit = max(Self.pageSize, index + 1)
-        }
         selectedPackageID = requestedID
     }
 
@@ -205,7 +193,7 @@ struct MarketplaceView: View {
                 }
             } else {
                 List(selection: $selectedPackageID) {
-                    ForEach(visiblePackages) { package in
+                    ForEach(filteredPackages) { package in
                         MarketplacePackageRow(
                             package: package,
                             selected: selectedPackageID == package.id,
@@ -216,15 +204,6 @@ struct MarketplaceView: View {
                         .listRowBackground(SelectionRowBackground(selected: selectedPackageID == package.id))
                         .accessibilityLabel(package.name)
                         .accessibilityValue(selectedPackageID == package.id ? "Selected" : "")
-                    }
-                    if visiblePackages.count < filteredPackages.count {
-                        Button(showMoreLabel) {
-                            displayLimit += Self.pageSize
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(AgentTheme.blue)
-                        .frame(maxWidth: .infinity, minHeight: 38)
-                        .accessibilityHint("Loads the next marketplace results")
                     }
                 }
                 .listStyle(.inset)
@@ -541,19 +520,8 @@ struct MarketplaceView: View {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    private var visiblePackages: [MarketplacePackage] {
-        Array(filteredPackages.prefix(displayLimit))
-    }
-
     private var packageCountLabel: String {
-        visiblePackages.count == filteredPackages.count
-            ? "\(filteredPackages.count)"
-            : "\(visiblePackages.count) of \(filteredPackages.count)"
-    }
-
-    private var showMoreLabel: String {
-        let remaining = filteredPackages.count - visiblePackages.count
-        return "Show \(min(Self.pageSize, remaining)) more"
+        "\(filteredPackages.count)"
     }
 
     private var sortedSources: [ToolingSource] {
@@ -568,7 +536,7 @@ struct MarketplaceView: View {
     /// table delegate callback when filters or catalog results change.
     private func selectFirstPackageAfterListUpdate(ifNeeded: Bool) {
         guard ifNeeded else { return }
-        let firstID = visiblePackages.first?.id
+        let firstID = filteredPackages.first?.id
         Task { @MainActor in
             await Task.yield()
             selectedPackageID = firstID

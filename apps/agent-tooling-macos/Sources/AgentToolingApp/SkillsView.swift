@@ -16,11 +16,8 @@ struct SkillsView: View {
     @State private var codexCreatorPresented = false
     @State private var pendingCodexRequestID: UUID?
     @State private var installAfterCreator: CodexSkillInstallHandoff?
-    @State private var displayLimit = Self.pageSize
     @State private var isSelecting = false
     @State private var selection: Set<String> = []
-
-    private static let pageSize = 12
 
     init(navigate: ((AppSection) -> Void)? = nil) {
         self.navigate = navigate
@@ -119,12 +116,7 @@ struct SkillsView: View {
             // The bar must never offer a count the plan would not honour.
             if isSelecting { selection.formIntersection(adoptableIDs) }
         }
-        .onChange(of: visibleSkills.map(\.id)) { _, _ in selectFirstVisibleSkillIfNeeded() }
-        .onChange(of: query) { _, _ in displayLimit = Self.pageSize }
-        .onChange(of: scope) { _, _ in displayLimit = Self.pageSize }
-        .onChange(of: clientFilter) { _, _ in displayLimit = Self.pageSize }
-        .onChange(of: tagFilter) { _, _ in displayLimit = Self.pageSize }
-        .onChange(of: untaggedOnly) { _, _ in displayLimit = Self.pageSize }
+        .onChange(of: filteredSkills.map(\.id)) { _, _ in selectFirstVisibleSkillIfNeeded() }
     }
 
     /// Resolved once per layout pass. Asking the model per row would make the
@@ -210,15 +202,6 @@ struct SkillsView: View {
                                 .background(AgentTheme.controlBackground.opacity(0.45))
                             }
                         }
-                        if visibleSkills.count < filteredSkills.count {
-                            Button(showMoreLabel) {
-                                displayLimit += Self.pageSize
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(AgentTheme.blue)
-                            .frame(maxWidth: .infinity, minHeight: 42)
-                            .accessibilityHint("Loads the next skills")
-                        }
                     }
                     .padding(.bottom, isSelecting && !selection.isEmpty ? 72 : 0)
                 }
@@ -299,7 +282,7 @@ struct SkillsView: View {
 
     private var groupedSkills: [(String, [Skill])] {
         var groups: [String: [Skill]] = [:]
-        for skill in visibleSkills {
+        for skill in filteredSkills {
             groups[groupName(for: skill), default: []].append(skill)
         }
         return groups.map { group, skills in
@@ -348,15 +331,6 @@ struct SkillsView: View {
         return selection.contains(skill.id) ? "Selected for adoption" : "Not selected"
     }
 
-    private var visibleSkills: [Skill] {
-        Array(filteredSkills.prefix(displayLimit))
-    }
-
-    private var showMoreLabel: String {
-        let remaining = filteredSkills.count - visibleSkills.count
-        return "Show \(min(Self.pageSize, remaining)) more"
-    }
-
     private var toolbarContext: String {
         let managed = model.skills.filter(\.owned).count
         let discovered = model.skills.count - managed
@@ -364,7 +338,7 @@ struct SkillsView: View {
     }
 
     private func selectFirstVisibleSkillIfNeeded() {
-        guard !visibleSkills.contains(where: { $0.id == selectedID }) else { return }
+        guard !filteredSkills.contains(where: { $0.id == selectedID }) else { return }
         selectedID = groupedSkills.first?.1.first?.id ?? ""
     }
 
@@ -449,7 +423,6 @@ struct SkillsView: View {
         {
             scope = .all
             query = ""
-            displayLimit = max(Self.pageSize, model.skills.firstIndex(where: { $0.id == skillID }).map { $0 + 1 } ?? Self.pageSize)
             selectedID = skillID
         }
         if !codexCreatorPresented, let requestID = navigation.requestedSkillCreationID {
