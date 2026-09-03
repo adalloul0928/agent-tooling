@@ -456,15 +456,6 @@ public final class WorkspaceLibrary {
         return "Skipped \(rejections.count) skill\(rejections.count == 1 ? "" : "s"): \(listed)\(suffix)"
     }
 
-    private static func nameList(_ names: [String]) -> String {
-        switch names.count {
-        case 0: ""
-        case 1: names.first ?? ""
-        case 2: names.joined(separator: " and ")
-        default: "\(names.prefix(2).joined(separator: ", ")), and \(names.count - 2) more"
-        }
-    }
-
     public func updateSkill(_ existing: Skill, from draft: SkillDraft) throws -> CreatedSkill {
         guard existing.owned else { throw WorkspaceLibraryError.notManaged(existing.id) }
         guard existing.authoringOrigin != .codexGenerated else {

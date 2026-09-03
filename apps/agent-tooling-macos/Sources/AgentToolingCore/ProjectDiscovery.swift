@@ -405,12 +405,12 @@ private extension String {
 
 // MARK: - Discovery
 
-public struct ProjectDiscoveryOptions: Hashable, Sendable {
-    public var maximumSessionIndexEntries: Int
-    public var maximumScannedChildren: Int
-    public var maximumProjects: Int
+struct ProjectDiscoveryOptions: Hashable, Sendable {
+    var maximumSessionIndexEntries: Int
+    var maximumScannedChildren: Int
+    var maximumProjects: Int
 
-    public init(
+    init(
         maximumSessionIndexEntries: Int = 400,
         maximumScannedChildren: Int = 400,
         maximumProjects: Int = 500

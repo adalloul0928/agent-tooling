@@ -92,7 +92,6 @@ public struct PackageGradeVerdict: Identifiable, Codable, Hashable, Sendable {
     }
 
     public var letter: String { grade?.letter ?? Self.notGradedLetter }
-    public var isGraded: Bool { grade != nil }
     public var measurement: String { kind.measurement }
 }
 

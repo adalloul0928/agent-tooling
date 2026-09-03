@@ -590,7 +590,7 @@ private struct ProjectDetailView: View {
             }
         }
 
-        TitledCard("Shared with the repository", count: "\(committed.count)") {
+        TitledCard(ProjectFileSharing.committed.displayName, count: "\(committed.count)") {
             if committed.isEmpty {
                 EmptyCardRow(text: "No committed agent configuration was found in this folder.")
             } else {
@@ -598,7 +598,7 @@ private struct ProjectDetailView: View {
             }
         }
 
-        TitledCard("This Mac only", count: "\(machineLocal.count)") {
+        TitledCard(ProjectFileSharing.machineLocal.displayName, count: "\(machineLocal.count)") {
             if machineLocal.isEmpty {
                 EmptyCardRow(text: "No machine-local agent settings were found in this folder.")
             } else {

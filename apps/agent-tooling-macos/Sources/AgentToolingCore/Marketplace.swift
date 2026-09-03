@@ -747,14 +747,10 @@ final class MarketplaceService {
     }
 }
 
-public struct NativeCatalogDiscovery: Sendable {
-    public var packages: [MarketplacePackage]
-    public var notes: [ClientKind: String]
+struct NativeCatalogDiscovery: Sendable {
+    var packages: [MarketplacePackage]
+    var notes: [ClientKind: String]
 
-    public init(packages: [MarketplacePackage], notes: [ClientKind: String]) {
-        self.packages = packages
-        self.notes = notes
-    }
 }
 
 private enum NativeCatalogError: LocalizedError {

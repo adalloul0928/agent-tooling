@@ -95,13 +95,6 @@ final class BackupService {
         )
     }
 
-    public func conflictSummary(at path: URL) -> String {
-        guard fileManager.fileExists(atPath: path.appending(path: ".git").path(percentEncoded: false)) else {
-            return "Not a Git backup yet"
-        }
-        return "Existing Git backup. Agent Tooling checks that it is clean before replacing exported files."
-    }
-
     /// Reads a backup without modifying either the selected repository or the
     /// current workspace. Conflicts are returned to the UI before a restore plan
     /// can be executed.

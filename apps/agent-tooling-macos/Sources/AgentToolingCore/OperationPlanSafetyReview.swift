@@ -145,9 +145,6 @@ public struct OperationStepSafetyReview: Identifiable, Codable, Hashable, Sendab
 
     public var blockReason: String? { isBlocked ? ownership.summary : nil }
 
-    public var needsAttention: Bool {
-        isBlocked || replacement?.removesContent == true || contentRisk?.isClean == false
-    }
 }
 
 /// The plan-time answer to "what will this actually do to my Mac?".
@@ -171,8 +168,6 @@ public struct OperationPlanSafetyReview: Codable, Hashable, Sendable {
     public var contentFindings: [ContentRiskFinding] { steps.flatMap { $0.contentRisk?.findings ?? [] } }
 
     public var hasBlockedSteps: Bool { !blockedSteps.isEmpty }
-
-    public var needsAttention: Bool { steps.contains(where: \.needsAttention) }
 
     /// A single honest line for the top of the review sheet. It states facts
     /// and never tells the operator what to decide.

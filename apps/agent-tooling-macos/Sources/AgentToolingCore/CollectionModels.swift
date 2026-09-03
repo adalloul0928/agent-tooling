@@ -73,10 +73,6 @@ public struct ToolingCollection: Identifiable, Codable, Hashable, Sendable {
         items.contains(item)
     }
 
-    public func identifiers(of kind: ToolingItemKind) -> [String] {
-        items.filter { $0.kind == kind }.map(\.identifier)
-    }
-
     public var itemCount: Int { items.count }
 
     private enum CodingKeys: String, CodingKey {

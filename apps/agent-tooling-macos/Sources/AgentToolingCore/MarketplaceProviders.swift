@@ -28,18 +28,18 @@ public protocol MarketplaceProvider: Sendable {
     func search(_ query: MarketplaceQuery) async throws -> MarketplacePage
 }
 
-public protocol HTTPDataLoading: Sendable {
+protocol HTTPDataLoading: Sendable {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
 }
 
-public actor URLSessionHTTPDataLoader: HTTPDataLoading {
+actor URLSessionHTTPDataLoader: HTTPDataLoading {
     private let session: URLSession
 
-    public init(session: URLSession = .shared) {
+    init(session: URLSession = .shared) {
         self.session = session
     }
 
-    public func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw MarketplaceProviderError.invalidResponse

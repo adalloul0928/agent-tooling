@@ -33,20 +33,14 @@ public struct ComponentBinding: Identifiable, Codable, Hashable, Sendable {
     public var id: String { "\(package.name):\(kind.rawValue):\(componentID):\(target.rawValue):\(scope.rawValue)" }
 }
 
-public struct DesiredState: Codable, Hashable, Sendable {
-    public var bindings: [ComponentBinding]
+struct DesiredState: Codable, Hashable, Sendable {
+    var bindings: [ComponentBinding]
 
-    public init(bindings: [ComponentBinding]) {
-        self.bindings = bindings
-    }
 }
 
-public struct ObservedState: Codable, Hashable, Sendable {
-    public var bindings: [ComponentBinding]
+struct ObservedState: Codable, Hashable, Sendable {
+    var bindings: [ComponentBinding]
 
-    public init(bindings: [ComponentBinding]) {
-        self.bindings = bindings
-    }
 }
 
 public enum DriftKind: String, Codable, CaseIterable, Sendable {
@@ -93,13 +87,13 @@ public struct PlannedOperation: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-public struct ReconciliationPlan: Identifiable, Codable, Hashable, Sendable {
-    public var id: UUID
-    public var createdAt: Date
-    public var drift: [Drift]
-    public var operations: [PlannedOperation]
+struct ReconciliationPlan: Identifiable, Codable, Hashable, Sendable {
+    var id: UUID
+    var createdAt: Date
+    var drift: [Drift]
+    var operations: [PlannedOperation]
 
-    public init(id: UUID = UUID(), createdAt: Date = .now, drift: [Drift], operations: [PlannedOperation]) {
+    init(id: UUID = UUID(), createdAt: Date = .now, drift: [Drift], operations: [PlannedOperation]) {
         self.id = id
         self.createdAt = createdAt
         self.drift = drift

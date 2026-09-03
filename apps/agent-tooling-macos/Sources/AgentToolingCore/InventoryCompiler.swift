@@ -1,15 +1,10 @@
 import Foundation
 
-public struct ScannedInventory: Sendable {
-    public var skills: [Skill]
-    public var mcpServers: [MCPServer]
-    public var plugins: [Plugin]
+struct ScannedInventory: Sendable {
+    var skills: [Skill]
+    var mcpServers: [MCPServer]
+    var plugins: [Plugin]
 
-    public init(skills: [Skill], mcpServers: [MCPServer], plugins: [Plugin]) {
-        self.skills = skills
-        self.mcpServers = mcpServers
-        self.plugins = plugins
-    }
 }
 
 enum InventoryCompiler {
@@ -270,7 +265,6 @@ enum LocalTargetScan {
     static func perform(
         surface: TargetSurface,
         executable: String,
-        homeURL: URL,
         configurationURLs: [URL],
         skillRoots: [URL],
         pluginRoots: [URL],

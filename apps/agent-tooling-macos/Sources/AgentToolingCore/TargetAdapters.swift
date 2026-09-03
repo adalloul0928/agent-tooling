@@ -30,7 +30,6 @@ struct ClaudeCodeAdapter: TargetAdapter {
         await LocalTargetScan.perform(
             surface: surface,
             executable: "claude",
-            homeURL: homeURL,
             configurationURLs: [
                 homeURL.appending(path: ".claude/settings.json"),
                 homeURL.appending(path: ".claude.json"),
@@ -67,7 +66,6 @@ struct CodexAdapter: TargetAdapter {
         await LocalTargetScan.perform(
             surface: surface,
             executable: "codex",
-            homeURL: homeURL,
             configurationURLs: [homeURL.appending(path: ".codex/config.toml")],
             skillRoots: [
                 homeURL.appending(path: ".agents/skills", directoryHint: .isDirectory),
@@ -107,7 +105,6 @@ struct GeminiCLIAdapter: TargetAdapter {
         await LocalTargetScan.perform(
             surface: surface,
             executable: "gemini",
-            homeURL: homeURL,
             configurationURLs: [
                 homeURL.appending(path: ".gemini/settings.json"),
                 homeURL.appending(path: ".gemini/settings.toml"),

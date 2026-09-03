@@ -62,17 +62,10 @@ public struct AgentPluginMCPValidationIssue: Identifiable, Codable, Hashable, Se
     public var id: String { "\(serverName):\(message)" }
 }
 
-public struct AgentPluginMCPLoadResult: Hashable, Sendable {
-    public var servers: [String: AgentPluginMCPServer]
-    public var issues: [AgentPluginMCPValidationIssue]
+struct AgentPluginMCPLoadResult: Hashable, Sendable {
+    var servers: [String: AgentPluginMCPServer]
+    var issues: [AgentPluginMCPValidationIssue]
 
-    public init(
-        servers: [String: AgentPluginMCPServer],
-        issues: [AgentPluginMCPValidationIssue]
-    ) {
-        self.servers = servers
-        self.issues = issues
-    }
 }
 
 enum AgentPluginMCPConfigurationLoader {
