@@ -91,9 +91,11 @@ struct ActivityView: View {
     }
 
     /// Installed copies that no longer match what was reviewed, plus any that
-    /// vanished. Both are facts worth stating; neither is an alarm.
+    /// vanished or the app could not read. All three are facts worth stating;
+    /// none is an alarm. Hiding the unreadable ones would turn a folder the app
+    /// cannot check into a folder that looks unchanged.
     private var driftReports: [InstalledPackageDrift] {
-        model.installDrift.filter { $0.state == .modifiedSinceReview || $0.state == .removed }
+        model.installDrift.filter { $0.state != .matchesReview }
     }
 
     @ViewBuilder

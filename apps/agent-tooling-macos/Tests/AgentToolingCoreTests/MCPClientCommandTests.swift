@@ -18,7 +18,7 @@ struct MCPClientCommandTests {
         let stdio = ValidatedMCPDestination(endpoint: "", command: ["npx", "-y", "@example/server@1.2.3"])
 
         for client in ClientKind.allCases {
-            for scope in [ToolingScope.user, .project, .localProject, .workspace] {
+            for scope in ToolingScope.allCases {
                 guard MCPClientCommand.supportsScope(scope, client: client) else { continue }
                 for (transport, destination) in [(MCPTransport.http, http), (MCPTransport.stdio, stdio)] {
                     let arguments = MCPClientCommand.addArguments(
@@ -38,7 +38,7 @@ struct MCPClientCommandTests {
 
     @Test func everyRemoveCommandTheBuilderCanEmitPassesTheCommandPolicy() throws {
         for client in ClientKind.allCases {
-            for scope in [ToolingScope.user, .project, .localProject, .workspace] {
+            for scope in ToolingScope.allCases {
                 guard MCPClientCommand.supportsScope(scope, client: client) else { continue }
                 let arguments = MCPClientCommand.removeArguments(serverID: "example-server", client: client, scope: scope)
                 #expect(throws: Never.self) {

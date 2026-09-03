@@ -838,8 +838,8 @@ public final class AppModel {
         return result
     }
 
-    /// Every item a configuration reaches through its included collections,
-    /// de-duplicated across overlapping shelves.
+    /// Every item the named collections hold, de-duplicated across overlapping
+    /// shelves so an item in two collections is still listed once.
     private func resolvedItems(ofCollections identifiers: Set<String>) -> [ToolingItemReference] {
         var seen: Set<String> = []
         var result: [ToolingItemReference] = []
@@ -909,7 +909,9 @@ public final class AppModel {
             }
             workingDirectory = projectRoot
         }
-        if client == .codex, operationScope != .user {
+        // Asked the same way the configure path asks, so the app cannot add a
+        // server through a route it will then refuse to remove it through.
+        if !MCPClientCommand.supportsScope(operationScope, client: client) {
             pendingPlan = OperationPlan(
                 kind: .configureMCP,
                 title: "Remove \(server.name) from Codex",

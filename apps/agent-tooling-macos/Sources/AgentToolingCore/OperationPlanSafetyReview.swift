@@ -266,11 +266,17 @@ public struct OperationPlanSafetyReviewer {
         )
     }
 
-    /// How many existing entries a replacement would take away. Used for the
-    /// short after-the-fact note in a receipt; the plan review lists them by
-    /// name before anything is approved.
-    public func replacementRemovalCount(replacing destination: URL, with source: URL) -> Int {
-        replacementDiff(replacing: destination, with: source)?.removedPaths.count ?? 0
+    /// How many existing entries a replacement would take away, and whether the
+    /// comparison was cut short at `maximumComparedItems`. Used for the short
+    /// after-the-fact note in a receipt; the plan review lists them by name
+    /// before anything is approved.
+    ///
+    /// The second half matters: a truncated comparison under-counts, so a
+    /// receipt that printed the bare number would understate what it removed
+    /// exactly when the folder was too big to check.
+    public func replacementRemovalCount(replacing destination: URL, with source: URL) -> (count: Int, isTruncated: Bool) {
+        guard let diff = replacementDiff(replacing: destination, with: source) else { return (0, false) }
+        return (diff.removedPaths.count, diff.isTruncated)
     }
 
     /// Diffs the folder that is about to be replaced against the folder that

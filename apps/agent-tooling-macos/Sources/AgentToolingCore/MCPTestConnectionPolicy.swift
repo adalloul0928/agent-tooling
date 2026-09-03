@@ -76,6 +76,10 @@ public enum MCPTestConnectionPolicy {
     /// The same wall in whole seconds, for interface copy and countdowns.
     public static var sessionLifetimeSeconds: Int { Int(sessionLifetime.components.seconds) }
     public static let maximumMessageBytes = 1_048_576
+    /// How much complete, unread output the console will hold. Bounds a server
+    /// that writes valid lines faster than the console reads them, which the
+    /// per-message cap does not catch.
+    public static let maximumBufferedBytes = 8 * 1_048_576
     public static let maximumToolCount = 500
     public static let maximumListPages = 10
     public static let maximumDiagnosticCharacters = 2_048

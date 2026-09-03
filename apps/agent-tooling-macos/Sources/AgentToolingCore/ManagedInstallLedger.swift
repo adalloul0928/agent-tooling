@@ -134,16 +134,26 @@ public struct ManagedInstallAuthority: Sendable {
         return result
     }
 
+    /// Identifies a step by the plan it belongs to as well as by itself. Step
+    /// identifiers are decoded from plan files, so they are attacker-chosen;
+    /// pairing on the identifier alone would let a receipt for one plan vouch
+    /// for a step in another that simply reused it.
+    private struct PlanStepIdentity: Hashable {
+        var planID: UUID
+        var stepID: UUID
+    }
+
     /// Rebuilds install records from approved plans whose matching receipt says
     /// the copy step actually succeeded. A plan alone proves nothing, and a
-    /// receipt alone does not name a destination, so both halves are required.
+    /// receipt alone does not name a destination, so both halves are required —
+    /// and they have to be halves of the same operation.
     static func recordedInstalls(in store: WorkspaceStore) -> [ManagedInstallRecord] {
         let plans = (try? store.listEntities(domain: .plans, as: OperationPlan.self)) ?? []
         let receipts = (try? store.listEntities(domain: .receipts, as: OperationReceipt.self)) ?? []
-        var succeededAt: [UUID: Date] = [:]
+        var succeededAt: [PlanStepIdentity: Date] = [:]
         for receipt in receipts {
             for result in receipt.results where result.status == .succeeded {
-                succeededAt[result.stepID] = result.finishedAt
+                succeededAt[PlanStepIdentity(planID: receipt.planID, stepID: result.stepID)] = result.finishedAt
             }
         }
         var records: [ManagedInstallRecord] = []
@@ -152,7 +162,7 @@ public struct ManagedInstallAuthority: Sendable {
                 guard let destinationPath = step.destinationPath,
                     let sourcePath = step.sourcePath,
                     let fingerprint = step.sourceFingerprint,
-                    let finishedAt = succeededAt[step.id]
+                    let finishedAt = succeededAt[PlanStepIdentity(planID: plan.id, stepID: step.id)]
                 else { continue }
                 records.append(
                     ManagedInstallRecord(
@@ -282,9 +292,15 @@ enum InstalledPackageDriftInspector {
     }
 
     /// One calm sentence for the setup check. Drift is reported as a fact.
+    ///
+    /// A package the app cannot read is reported too. Staying silent about it
+    /// would be the most useful outcome for anyone tampering with an installed
+    /// copy: a single symlink inside the folder makes the fingerprint
+    /// unreadable, and "no news" would then read as "unchanged".
     static func summary(for reports: [InstalledPackageDrift]) -> String? {
         let drifted = reports.filter(\.hasDrifted)
         let removed = reports.filter { $0.state == .removed }
+        let unreadable = reports.filter { $0.state == .unreadable }
         var parts: [String] = []
         if !drifted.isEmpty {
             let names = drifted.map(\.packageName).sorted().joined(separator: ", ")
@@ -296,6 +312,12 @@ enum InstalledPackageDriftInspector {
             let names = removed.map(\.packageName).sorted().joined(separator: ", ")
             parts.append(
                 "\(removed.count) previously installed package\(removed.count == 1 ? " is" : "s are") no longer present: \(names).")
+        }
+        if !unreadable.isEmpty {
+            let names = unreadable.map(\.packageName).sorted().joined(separator: ", ")
+            parts.append(
+                "\(unreadable.count) installed package\(unreadable.count == 1 ? "" : "s") could not be read to compare against \(unreadable.count == 1 ? "its" : "their") review: \(names)."
+            )
         }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }

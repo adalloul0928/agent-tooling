@@ -385,14 +385,33 @@ enum ToolCatalog {
         tools.first { $0.name == name }
     }
 
-    /// The property names declared across the whole catalog, used by the test
+    /// Every property name declared anywhere in the catalog, used by the test
     /// suite to prove no tool ever grows a `home` or `workspace` parameter.
+    ///
+    /// This walks nested objects and array items rather than reading only the
+    /// top level. A schema is a tree, so a check that stopped at the root would
+    /// pass while a tool quietly declared the parameter one level down — the
+    /// assertion has to cover everywhere the parameter could actually appear.
     static func declaredParameterNames() -> [String] {
-        tools.flatMap { tool -> [String] in
-            guard case .object(let schema) = tool.inputSchema,
-                case .object(let properties)? = schema["properties"]
-            else { return [] }
-            return Array(properties.keys)
+        tools.flatMap { declaredParameterNames(in: $0.inputSchema) }
+    }
+
+    private static func declaredParameterNames(in schema: JSONValue, depth: Int = 0) -> [String] {
+        guard depth < 16, case .object(let fields) = schema else { return [] }
+        var names: [String] = []
+        if case .object(let properties)? = fields["properties"] {
+            names.append(contentsOf: properties.keys)
+            for nested in properties.values {
+                names.append(contentsOf: declaredParameterNames(in: nested, depth: depth + 1))
+            }
         }
+        if let items = fields["items"] {
+            names.append(contentsOf: declaredParameterNames(in: items, depth: depth + 1))
+            // `items` is a list of schemas in the tuple form of the spec.
+            if case .array(let variants) = items {
+                names.append(contentsOf: variants.flatMap { declaredParameterNames(in: $0, depth: depth + 1) })
+            }
+        }
+        return names
     }
 }

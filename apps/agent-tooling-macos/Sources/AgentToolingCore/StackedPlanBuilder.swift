@@ -45,7 +45,7 @@ public enum StackedPlanBuilder {
         guard scopes.count == 1, let scopeName = scopes.first else {
             throw StackedPlanError.mixedScopes(scopes.sorted())
         }
-        let scope = ToolingScope.allCases.first { $0.displayName == scopeName } ?? .user
+        let scope = MCPClientCommand.scope(fromDisplayName: scopeName)
 
         var steps: [OperationStep] = []
         for server in selection.sorted(by: { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) {

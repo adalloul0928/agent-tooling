@@ -160,6 +160,49 @@ struct InstallSafetyTests {
         #expect(review.steps.first?.isBlocked == true)
     }
 
+    /// A receipt proves the step in *its own* plan succeeded. Step identifiers
+    /// are decoded from plan files, so a second plan can reuse one; if that
+    /// were enough to claim ownership, an unreviewed folder could be dressed up
+    /// as something this app installed and then replaced without a warning.
+    @Test func aReceiptFromOnePlanDoesNotProveAStepInAnother() throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        try fixture.writeSource(["SKILL.md": "reviewed"])
+        try fixture.writeDestination(["SKILL.md": "hand-written, never installed by this app"])
+
+        let sharedStepID = UUID()
+        let scratch = fixture.home.appending(path: ".claude/skills/scratch", directoryHint: .isDirectory)
+        var provenStep = try fixture.copyStep(title: "Install example at scratch", destination: scratch)
+        provenStep.id = sharedStepID
+        let provenPlan = OperationPlan(
+            kind: .installSkill, title: "Install example", summary: "Install the reviewed package.", steps: [provenStep])
+        try fixture.store.saveEntity(provenPlan, id: provenPlan.id.uuidString, domain: .plans)
+        let receipt = OperationReceipt(
+            planID: provenPlan.id,
+            kind: .installSkill,
+            title: "Install example",
+            state: .healthy,
+            targetSurfaces: [],
+            results: [
+                OperationStepResult(stepID: sharedStepID, status: .succeeded, output: "Installed", startedAt: .now, finishedAt: .now)
+            ],
+            verificationSummary: "Installed"
+        )
+        try fixture.store.saveEntity(receipt, id: receipt.id.uuidString, domain: .receipts)
+
+        var borrowedStep = try fixture.copyStep(title: "Replace a hand-written skill", destination: fixture.destination)
+        borrowedStep.id = sharedStepID
+        let forgedPlan = OperationPlan(
+            kind: .installSkill, title: "Replace example", summary: "Replace the package.", steps: [borrowedStep])
+        try fixture.store.saveEntity(forgedPlan, id: forgedPlan.id.uuidString, domain: .plans)
+
+        // `id` is the normalised destination; `destinationPath` is the raw one.
+        let proven = ManagedInstallAuthority.fromStore(fixture.store).provenInstalls.map(\.id)
+
+        #expect(proven.contains(ManagedInstallPath.normalized(scratch.path(percentEncoded: false))))
+        #expect(proven.contains(ManagedInstallPath.normalized(fixture.destination.path(percentEncoded: false))) == false)
+    }
+
     // MARK: - Drift detection
 
     @Test func aModifiedInstallIsReportedAsDriftedAndAnUntouchedOneIsNot() async throws {
@@ -283,6 +326,24 @@ struct InstallSafetyTests {
     }
 
     // MARK: - Fixture
+
+    /// An installed copy the app cannot read is reported rather than skipped.
+    /// A single symlink inside the folder makes the fingerprint unreadable, so
+    /// staying quiet would be the cheapest way to hide a modified install.
+    @Test func aPackageThatCannotBeReadIsNamedInTheSummary() {
+        let summary = InstalledPackageDriftInspector.summary(for: [
+            InstalledPackageDrift(
+                destinationPath: "/tmp/example/.claude/skills/opaque",
+                packageName: "opaque",
+                state: .unreadable,
+                reviewedFingerprint: "recorded-at-install-time",
+                reviewedAt: .now
+            )
+        ])
+
+        #expect(summary?.contains("could not be read") == true)
+        #expect(summary?.contains("opaque") == true)
+    }
 
     private struct Fixture {
         let root: URL
