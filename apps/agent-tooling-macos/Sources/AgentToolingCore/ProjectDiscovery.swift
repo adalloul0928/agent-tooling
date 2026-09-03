@@ -298,6 +298,10 @@ public enum ProjectPath {
 /// rather than by string substitution: a candidate is only ever accepted when
 /// the directory actually exists.
 public struct ProjectPathResolver {
+    /// Stats per path component. A recorded working directory deeper or more
+    /// hyphenated than this resolves through the listing fallback instead.
+    private static let maximumComponentProbes = 64
+
     private let fileManager: FileManager
     private var listings: [String: [String]] = [:]
 
@@ -319,22 +323,51 @@ public struct ProjectPathResolver {
         guard budget > 0 else { return nil }
         budget -= 1
         guard !remaining.isEmpty else { return directory }
-        // Names are matched first and only then checked on disk, so a folder
-        // with thousands of entries costs one listing rather than one stat per
-        // entry. The longest match wins, and a dead end further down makes the
-        // walk try the next candidate.
+
+        // A hyphen in the encoded name is either a separator or a character the
+        // folder really contains, so each boundary is probed directly, longest
+        // first. This costs a bounded number of stats and — unlike listing the
+        // parent — cannot be defeated by a directory holding more entries than
+        // a single listing returns, which would otherwise drop the project
+        // silently.
+        for length in Self.componentLengths(in: remaining) {
+            let name = String(remaining.prefix(length))
+            let child = directory.appending(path: name, directoryHint: .isDirectory)
+            guard isReachableDirectory(child) else { continue }
+            var rest = remaining.dropFirst(length)
+            if rest.hasPrefix("-") { rest = rest.dropFirst() }
+            if let resolved = resolve(remaining: rest, at: child, budget: &budget) { return resolved }
+        }
+
+        // Only a folder whose real name contains a dot needs the parent's
+        // listing, because the encoding flattened that dot to a hyphen and no
+        // probe above could have guessed it back.
         let candidates =
             childNames(of: directory)
-            .filter { Self.encodedComponent($0).isPrefixComponent(of: remaining) }
+            .filter { $0.contains(".") && Self.encodedComponent($0).isPrefixComponent(of: remaining) }
             .sorted { ($0.count, $1) > ($1.count, $0) }
         for name in candidates.prefix(8) {
             let child = directory.appending(path: name, directoryHint: .isDirectory)
             guard isReachableDirectory(child) else { continue }
-            var rest = remaining.dropFirst(name.count)
+            var rest = remaining.dropFirst(Self.encodedComponent(name).count)
             if rest.hasPrefix("-") { rest = rest.dropFirst() }
             if let resolved = resolve(remaining: rest, at: child, budget: &budget) { return resolved }
         }
         return nil
+    }
+
+    /// Candidate component lengths, longest first: the whole remainder, then
+    /// each position where the encoding could have placed a separator.
+    private static func componentLengths(in remaining: Substring) -> [Int] {
+        var lengths: [Int] = [remaining.count]
+        var index = remaining.index(before: remaining.endIndex)
+        while index > remaining.startIndex {
+            if remaining[index] == "-" {
+                lengths.append(remaining.distance(from: remaining.startIndex, to: index))
+            }
+            index = remaining.index(before: index)
+        }
+        return Array(lengths.prefix(maximumComponentProbes))
     }
 
     private mutating func childNames(of directory: URL) -> [String] {

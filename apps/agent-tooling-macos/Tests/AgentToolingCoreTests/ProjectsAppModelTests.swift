@@ -148,3 +148,48 @@ struct ProjectsAppModelTests {
         }
     }
 }
+
+extension ProjectsAppModelTests {
+    /// A directory holding more entries than one listing returns must not make
+    /// a project disappear. Resolution probes each candidate boundary directly,
+    /// so it never depends on the parent's listing being complete.
+    @Test func aProjectResolvesFromADirectoryTooLargeToListInOneCall() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "agent-tooling-crowded-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let crowd = root.appending(path: "crowd", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: crowd, withIntermediateDirectories: true)
+
+        let project = crowd.appending(path: "needle", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        // Enough siblings that a truncated listing is a real possibility, and
+        // the needle is created first so truncation would tend to drop it.
+        for index in 0..<600 {
+            try FileManager.default.createDirectory(
+                at: crowd.appending(path: "filler-\(index)", directoryHint: .isDirectory),
+                withIntermediateDirectories: true)
+        }
+
+        let encoded = ProjectPath.canonical(project)
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ".", with: "-")
+        var resolver = ProjectPathResolver()
+        #expect(resolver.resolve(sessionIndexEntry: encoded) == URL(fileURLWithPath: ProjectPath.canonical(project)))
+    }
+
+    /// A folder whose real name contains a dot still resolves: the encoding
+    /// flattened it to a hyphen, so only the parent's listing can recover it.
+    @Test func aDottedFolderNameStillResolves() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "agent-tooling-dotted-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let project = root.appending(path: "my.project/inner", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+
+        let encoded = ProjectPath.canonical(project)
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ".", with: "-")
+        var resolver = ProjectPathResolver()
+        #expect(resolver.resolve(sessionIndexEntry: encoded) == URL(fileURLWithPath: ProjectPath.canonical(project)))
+    }
+}
