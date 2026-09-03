@@ -50,13 +50,13 @@ public enum DriftKind: String, Codable, CaseIterable, Sendable {
     case enablementMismatch
 }
 
-public struct Drift: Identifiable, Codable, Hashable, Sendable {
-    public var id: String
-    public var kind: DriftKind
-    public var desired: ComponentBinding?
-    public var observed: ComponentBinding?
+struct Drift: Identifiable, Codable, Hashable, Sendable {
+    var id: String
+    var kind: DriftKind
+    var desired: ComponentBinding?
+    var observed: ComponentBinding?
 
-    public init(kind: DriftKind, desired: ComponentBinding? = nil, observed: ComponentBinding? = nil) {
+    init(kind: DriftKind, desired: ComponentBinding? = nil, observed: ComponentBinding? = nil) {
         self.kind = kind
         self.desired = desired
         self.observed = observed
@@ -73,13 +73,13 @@ public enum PlannedOperationAction: String, Codable, CaseIterable, Sendable {
     case reviewUnmanaged
 }
 
-public struct PlannedOperation: Identifiable, Codable, Hashable, Sendable {
-    public var id: String
-    public var action: PlannedOperationAction
-    public var binding: ComponentBinding
-    public var reason: String
+struct PlannedOperation: Identifiable, Codable, Hashable, Sendable {
+    var id: String
+    var action: PlannedOperationAction
+    var binding: ComponentBinding
+    var reason: String
 
-    public init(action: PlannedOperationAction, binding: ComponentBinding, reason: String) {
+    init(action: PlannedOperationAction, binding: ComponentBinding, reason: String) {
         self.id = "\(action.rawValue):\(binding.id)"
         self.action = action
         self.binding = binding

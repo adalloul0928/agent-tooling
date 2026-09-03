@@ -36,7 +36,7 @@ public struct AgentPluginHTTPServer: Codable, Hashable, Sendable {
     }
 }
 
-public enum AgentPluginMCPServer: Hashable, Sendable {
+enum AgentPluginMCPServer: Hashable, Sendable {
     case stdio(AgentPluginStdioServer)
     case streamableHTTP(AgentPluginHTTPServer)
     case sse(AgentPluginHTTPServer)
@@ -50,16 +50,16 @@ public enum AgentPluginMCPServer: Hashable, Sendable {
     }
 }
 
-public struct AgentPluginMCPValidationIssue: Identifiable, Codable, Hashable, Sendable {
-    public var serverName: String
-    public var message: String
+struct AgentPluginMCPValidationIssue: Identifiable, Codable, Hashable, Sendable {
+    var serverName: String
+    var message: String
 
-    public init(serverName: String, message: String) {
+    init(serverName: String, message: String) {
         self.serverName = serverName
         self.message = message
     }
 
-    public var id: String { "\(serverName):\(message)" }
+    var id: String { "\(serverName):\(message)" }
 }
 
 struct AgentPluginMCPLoadResult: Hashable, Sendable {
