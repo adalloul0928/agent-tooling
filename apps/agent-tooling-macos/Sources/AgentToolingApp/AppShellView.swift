@@ -8,6 +8,8 @@ struct AppShellView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
     @State private var selection: AppSection
+    @State private var paletteVisible = false
+    @State private var screenRequest: ScreenRequest?
 
     init(initialSelection: AppSection = .overview) {
         _selection = State(initialValue: initialSelection)
@@ -23,13 +25,27 @@ struct AppShellView: View {
             }
 
             HStack(spacing: 0) {
-                SidebarView(selection: $selection, isCollapsed: $sidebarCollapsed)
+                SidebarView(
+                    selection: $selection,
+                    isCollapsed: $sidebarCollapsed,
+                    openPalette: { paletteVisible = true }
+                )
 
                 destination
                     .id(selection)
                     .transition(reduceMotion ? .identity : .opacity)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .paperPane()
+            }
+            .sheet(isPresented: $paletteVisible) {
+                CommandPaletteView(
+                    onActivate: { outcome in
+                        paletteVisible = false
+                        DispatchQueue.main.async { activate(outcome) }
+                    },
+                    onClose: { paletteVisible = false }
+                )
+                .environment(model)
             }
         }
         .foregroundStyle(.primary)
@@ -61,8 +77,8 @@ struct AppShellView: View {
         case .marketplace: MarketplaceView()
         case .skills: SkillsView(navigate: { selection = $0 })
         case .insights: InsightsView()
-        case .mcpServers: MCPServersView()
-        case .plugins: PluginsView(navigate: { selection = $0 })
+        case .mcpServers: MCPServersView(request: $screenRequest)
+        case .plugins: PluginsView(navigate: { selection = $0 }, request: $screenRequest)
         case .profiles: ProfilesView()
         case .syncCenter: SyncCenterView()
         case .activity: ActivityView()
@@ -88,6 +104,28 @@ struct AppShellView: View {
     private func applyExternalNavigation() {
         if let requestedSection = navigation.requestedSection {
             selection = requestedSection
+        }
+    }
+
+    /// A palette result runs the screen's own action. Anything that touches a
+    /// client still arrives as a plan in the review sheet.
+    private func activate(_ outcome: CommandPaletteOutcome) {
+        switch outcome {
+        case .navigate(let section):
+            selection = section
+        case .screenRequest(let request):
+            selection = request.section
+            screenRequest = request
+        case .openSkill(let id):
+            navigation.open(.skill(id))
+        case .openMarketplacePackage(let id):
+            navigation.openMarketplacePackage(id)
+        case .runDoctor:
+            Task { await model.runDoctor() }
+        case .runSync:
+            Task { await model.runSync() }
+        case .refreshMarketplace:
+            Task { await model.refreshMarketplace() }
         }
     }
 }
