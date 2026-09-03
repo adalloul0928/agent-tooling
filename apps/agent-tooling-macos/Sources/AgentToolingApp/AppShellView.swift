@@ -17,11 +17,13 @@ struct AppShellView: View {
 
     var body: some View {
         ZStack {
+            // The window's own material, and nothing painted over it behind the
+            // sidebar: like the Dock, the sidebar is a blurred view of whatever
+            // is actually behind the window.
             if reduceTransparency {
                 AgentTheme.contentBackground.ignoresSafeArea()
             } else {
                 DesktopGlassBackground().ignoresSafeArea()
-                AmbientBackdrop().opacity(0.92)
             }
 
             HStack(spacing: 0) {
@@ -36,7 +38,16 @@ struct AppShellView: View {
                     .transition(reduceMotion ? .identity : .opacity)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .paperPane()
+                    .background {
+                        // The atmosphere stays where the paper pane's margins
+                        // show it, rather than covering the whole window.
+                        if !reduceTransparency { AmbientBackdrop().opacity(0.92) }
+                    }
             }
+            // The title bar is hidden, so its safe area would otherwise inset
+            // the content pane at the top and nowhere else. The sidebar keeps
+            // its own inset for the traffic lights.
+            .ignoresSafeArea(edges: .top)
             .sheet(isPresented: $paletteVisible) {
                 CommandPaletteView(
                     onActivate: { outcome in
