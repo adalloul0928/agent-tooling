@@ -975,29 +975,13 @@ public final class AppModel {
                         requiresUserAction: true))
                 continue
             }
-            let arguments: [String]
-            switch (client, server.transport) {
-            case (.claude, .http):
-                arguments = ["mcp", "add", "--transport", "http", "--scope", requestedScope, server.id, destination.endpoint]
-            case (.claude, .stdio):
-                arguments = ["mcp", "add", "--transport", "stdio", "--scope", requestedScope, server.id, "--"] + destination.command
-            case (.codex, .http):
-                arguments = ["mcp", "add", server.id, "--url", destination.endpoint]
-            case (.codex, .stdio):
-                arguments = ["mcp", "add", server.id, "--"] + destination.command
-            case (.gemini, .http):
-                arguments = [
-                    "mcp", "add", "--scope", requestedScope == "local" ? "project" : requestedScope, "--transport", "http", server.id,
-                    destination.endpoint,
-                ]
-            case (.gemini, .stdio):
-                arguments =
-                    [
-                        "mcp", "add", "--scope", requestedScope == "local" ? "project" : requestedScope, "--transport", "stdio", server.id,
-                        "--",
-                    ]
-                    + destination.command
-            }
+            let arguments = MCPClientCommand.addArguments(
+                serverID: server.id,
+                transport: server.transport,
+                destination: destination,
+                client: client,
+                scope: operationScope
+            )
             steps.append(
                 OperationStep(
                     kind: .command, title: "Configure \(server.name) for \(client.rawValue)",
@@ -1566,12 +1550,11 @@ public final class AppModel {
             )
             return
         }
-        let arguments: [String]
-        switch client {
-        case .claude: arguments = ["mcp", "remove", "--scope", requestedScope, server.id]
-        case .codex: arguments = ["mcp", "remove", server.id]
-        case .gemini: arguments = ["mcp", "remove", "--scope", requestedScope == "local" ? "project" : requestedScope, server.id]
-        }
+        let arguments = MCPClientCommand.removeArguments(
+            serverID: server.id,
+            client: client,
+            scope: MCPClientCommand.scope(fromDisplayName: server.scope)
+        )
         pendingPlan = OperationPlan(
             kind: .configureMCP,
             title: "Remove \(server.name) from \(client.rawValue)",
@@ -2235,11 +2218,7 @@ public final class AppModel {
     }
 
     private func executable(for client: ClientKind) -> String {
-        switch client {
-        case .claude: "claude"
-        case .codex: "codex"
-        case .gemini: "gemini"
-        }
+        MCPClientCommand.executable(for: client)
     }
 
     private func isCommandAvailable(for client: ClientKind) -> Bool {
@@ -2248,11 +2227,7 @@ public final class AppModel {
     }
 
     private func mcpScopeArgument(_ displayScope: String) -> String {
-        switch displayScope {
-        case ToolingScope.project.displayName, ToolingScope.workspace.displayName: "project"
-        case ToolingScope.localProject.displayName: "local"
-        default: "user"
-        }
+        MCPClientCommand.scopeArgument(for: MCPClientCommand.scope(fromDisplayName: displayScope), client: .claude)
     }
 
     private func currentSnapshot() -> WorkspaceSnapshot {

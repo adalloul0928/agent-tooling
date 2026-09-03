@@ -152,7 +152,6 @@ public enum StackedPlanBuilder {
         workingDirectory: String?,
         isClientAvailable: Bool
     ) -> OperationStep {
-        let requestedScope = scopeArgument(for: scope)
         guard isClientAvailable else {
             return OperationStep(
                 kind: .manual,
@@ -162,7 +161,7 @@ public enum StackedPlanBuilder {
                 requiresUserAction: true
             )
         }
-        guard client != .codex || requestedScope == "user" else {
+        guard MCPClientCommand.supportsScope(scope, client: client) else {
             return OperationStep(
                 kind: .manual,
                 title: "Configure \(server.name) at \(server.scope) scope in Codex",
@@ -177,41 +176,16 @@ public enum StackedPlanBuilder {
             detail:
                 "Uses \(client.rawValue)'s native MCP command at \(server.scope.lowercased()) scope. Authentication and tool approval remain separate.",
             executable: executable(for: client),
-            arguments: arguments(server: server, client: client, destination: destination, requestedScope: requestedScope),
+            arguments: MCPClientCommand.addArguments(
+                serverID: server.id,
+                transport: server.transport,
+                destination: destination,
+                client: client,
+                scope: scope
+            ),
             currentDirectoryPath: workingDirectory,
             projectRootPath: workingDirectory
         )
-    }
-
-    private static func arguments(
-        server: MCPServer,
-        client: ClientKind,
-        destination: ValidatedMCPDestination,
-        requestedScope: String
-    ) -> [String] {
-        let geminiScope = requestedScope == "local" ? "project" : requestedScope
-        switch (client, server.transport) {
-        case (.claude, .http):
-            return ["mcp", "add", "--transport", "http", "--scope", requestedScope, server.id, destination.endpoint]
-        case (.claude, .stdio):
-            return ["mcp", "add", "--transport", "stdio", "--scope", requestedScope, server.id, "--"] + destination.command
-        case (.codex, .http):
-            return ["mcp", "add", server.id, "--url", destination.endpoint]
-        case (.codex, .stdio):
-            return ["mcp", "add", server.id, "--"] + destination.command
-        case (.gemini, .http):
-            return ["mcp", "add", "--scope", geminiScope, "--transport", "http", server.id, destination.endpoint]
-        case (.gemini, .stdio):
-            return ["mcp", "add", "--scope", geminiScope, "--transport", "stdio", server.id, "--"] + destination.command
-        }
-    }
-
-    private static func scopeArgument(for scope: ToolingScope) -> String {
-        switch scope {
-        case .project, .workspace: "project"
-        case .localProject: "local"
-        default: "user"
-        }
     }
 
     private static func catalogPrefix(for client: ClientKind) -> String {
@@ -223,11 +197,7 @@ public enum StackedPlanBuilder {
     }
 
     private static func executable(for client: ClientKind) -> String {
-        switch client {
-        case .claude: "claude"
-        case .codex: "codex"
-        case .gemini: "gemini"
-        }
+        MCPClientCommand.executable(for: client)
     }
 
     private static func surface(for client: ClientKind) -> TargetSurface {

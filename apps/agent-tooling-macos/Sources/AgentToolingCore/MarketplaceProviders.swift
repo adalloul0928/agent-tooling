@@ -317,7 +317,7 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
         let route: (ClientKind, [String], [String], String) -> NativeInstall = { client, arguments, removal, detail in
             NativeInstall(
                 client: client,
-                executable: client == .claude ? "claude" : client == .codex ? "codex" : "gemini",
+                executable: MCPClientCommand.executable(for: client),
                 arguments: arguments,
                 removalArguments: removal,
                 scope: .user,
@@ -327,44 +327,52 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
         }
         switch transport {
         case .http(let url):
+            let httpDestination = ValidatedMCPDestination(endpoint: url, command: [])
             return [
                 route(
                     .claude,
-                    ["mcp", "add", "--transport", "http", "--scope", "user", name, url],
-                    ["mcp", "remove", "--scope", "user", name],
+                    MCPClientCommand.addArguments(
+                        serverID: name, transport: .http, destination: httpDestination, client: .claude, scope: .user),
+                    MCPClientCommand.removeArguments(serverID: name, client: .claude, scope: .user),
                     "Add the reviewed HTTPS endpoint with Claude Code's native MCP command."
                 ),
                 route(
                     .codex,
-                    ["mcp", "add", name, "--url", url],
-                    ["mcp", "remove", name],
+                    MCPClientCommand.addArguments(
+                        serverID: name, transport: .http, destination: httpDestination, client: .codex, scope: .user),
+                    MCPClientCommand.removeArguments(serverID: name, client: .codex, scope: .user),
                     "Add the reviewed HTTPS endpoint with Codex's native MCP command."
                 ),
                 route(
                     .gemini,
-                    ["mcp", "add", "--scope", "user", "--transport", "http", name, url],
-                    ["mcp", "remove", "--scope", "user", name],
+                    MCPClientCommand.addArguments(
+                        serverID: name, transport: .http, destination: httpDestination, client: .gemini, scope: .user),
+                    MCPClientCommand.removeArguments(serverID: name, client: .gemini, scope: .user),
                     "Add the reviewed HTTPS endpoint with Gemini CLI's native MCP command."
                 ),
             ]
         case .stdio(let command):
+            let stdioDestination = ValidatedMCPDestination(endpoint: "", command: command)
             return [
                 route(
                     .claude,
-                    ["mcp", "add", "--transport", "stdio", "--scope", "user", name, "--"] + command,
-                    ["mcp", "remove", "--scope", "user", name],
+                    MCPClientCommand.addArguments(
+                        serverID: name, transport: .stdio, destination: stdioDestination, client: .claude, scope: .user),
+                    MCPClientCommand.removeArguments(serverID: name, client: .claude, scope: .user),
                     "Run the exact pinned npm package through Claude Code's native MCP command."
                 ),
                 route(
                     .codex,
-                    ["mcp", "add", name, "--"] + command,
-                    ["mcp", "remove", name],
+                    MCPClientCommand.addArguments(
+                        serverID: name, transport: .stdio, destination: stdioDestination, client: .codex, scope: .user),
+                    MCPClientCommand.removeArguments(serverID: name, client: .codex, scope: .user),
                     "Run the exact pinned npm package through Codex's native MCP command."
                 ),
                 route(
                     .gemini,
-                    ["mcp", "add", "--scope", "user", "--transport", "stdio", name, "--"] + command,
-                    ["mcp", "remove", "--scope", "user", name],
+                    MCPClientCommand.addArguments(
+                        serverID: name, transport: .stdio, destination: stdioDestination, client: .gemini, scope: .user),
+                    MCPClientCommand.removeArguments(serverID: name, client: .gemini, scope: .user),
                     "Run the exact pinned npm package through Gemini CLI's native MCP command."
                 ),
             ]
