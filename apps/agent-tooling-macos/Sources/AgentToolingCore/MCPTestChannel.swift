@@ -203,9 +203,16 @@ final class MCPStdioProcess: @unchecked Sendable {
     private func signal(_ code: Int32, group: pid_t?) {
         if let group {
             _ = Darwin.kill(-group, code)
-        } else {
-            _ = Darwin.kill(process.processIdentifier, code)
+            return
         }
+        // No group means `setpgid` lost its race against the child's own
+        // `exec`, which is the ordinary outcome rather than the exception.
+        // Signalling only the direct child would then leave a wrapper's node
+        // process alive, still holding the pipes, after the console is closed.
+        for descendant in ProcessTree.descendantIdentifiers(of: process.processIdentifier).reversed() {
+            _ = Darwin.kill(descendant, code)
+        }
+        _ = Darwin.kill(process.processIdentifier, code)
     }
 
     deinit {
@@ -214,19 +221,28 @@ final class MCPStdioProcess: @unchecked Sendable {
     }
 }
 
-/// Newline framing with a hard cap, so a server that never emits a newline
-/// cannot grow the app's memory while the console waits.
+/// Newline framing with two hard caps, so a server under test cannot grow the
+/// app's memory while the console waits.
+///
+/// The caps cover the two shapes that abuse takes. One message that never ends
+/// is bounded by `maximumMessageBytes`. Endless *complete* lines are bounded by
+/// `maximumBufferedBytes`: the pipe's readability handler runs whether or not
+/// anyone is calling `next()`, and a session stays open for minutes, so an
+/// unbounded queue would grow at pipe throughput the whole time.
 final class MCPLineReader: @unchecked Sendable {
     private let lock = NSLock()
     private let maximumMessageBytes: Int
+    private let maximumBufferedBytes: Int
     private var buffer = Data()
     private var pending: [Data] = []
+    private var pendingBytes = 0
     private var isFinished = false
     private var failure: MCPLiveTestError?
     private var waiter: CheckedContinuation<Data?, any Error>?
 
-    init(maximumMessageBytes: Int) {
+    init(maximumMessageBytes: Int, maximumBufferedBytes: Int = MCPTestConnectionPolicy.maximumBufferedBytes) {
         self.maximumMessageBytes = maximumMessageBytes
+        self.maximumBufferedBytes = maximumBufferedBytes
     }
 
     func append(_ chunk: Data) {
@@ -248,6 +264,13 @@ final class MCPLineReader: @unchecked Sendable {
             failure = .responseTooLarge
         }
         pending.append(contentsOf: ready)
+        pendingBytes += ready.reduce(0) { $0 + $1.count }
+        if pendingBytes > maximumBufferedBytes {
+            buffer.removeAll(keepingCapacity: false)
+            pending.removeAll(keepingCapacity: false)
+            pendingBytes = 0
+            failure = .responseTooLarge
+        }
         let delivery = takeDeliveryLocked()
         lock.unlock()
         deliver(delivery)
@@ -303,7 +326,11 @@ final class MCPLineReader: @unchecked Sendable {
 
     private func nextOutcomeLocked() -> Outcome? {
         if let failure { return .failed(failure) }
-        if !pending.isEmpty { return .line(pending.removeFirst()) }
+        if !pending.isEmpty {
+            let line = pending.removeFirst()
+            pendingBytes = max(0, pendingBytes - line.count)
+            return .line(line)
+        }
         if isFinished { return .end }
         return nil
     }

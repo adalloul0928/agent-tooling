@@ -343,18 +343,27 @@ private final class RunningProcessController: @unchecked Sendable {
         if let groupIdentifier {
             _ = Darwin.kill(-groupIdentifier, signal)
         } else {
-            for descendant in descendantProcessIdentifiers(of: process.processIdentifier).reversed() {
+            for descendant in ProcessTree.descendantIdentifiers(of: process.processIdentifier).reversed() {
                 _ = Darwin.kill(descendant, signal)
             }
             _ = Darwin.kill(process.processIdentifier, signal)
         }
     }
+}
 
-    private func descendantProcessIdentifiers(of parent: pid_t) -> [pid_t] {
+/// Finds a process's descendants so they can be signalled individually.
+///
+/// Putting a child in its own process group is the clean way to stop a whole
+/// tree, but `setpgid` from the parent races the child's own `exec` and loses
+/// once the child has run. Every place that spawns a wrapper — `npx` and
+/// friends start children of their own — needs this fallback, so it lives in
+/// one place rather than being written out again at each spawn site.
+enum ProcessTree {
+    static func descendantIdentifiers(of parent: pid_t, limit: Int = 1_024) -> [pid_t] {
         var result: [pid_t] = []
         var pending = [parent]
         var visited = Set([parent])
-        while let current = pending.popLast(), result.count < 1_024 {
+        while let current = pending.popLast(), result.count < limit {
             let requiredBytes = Darwin.proc_listchildpids(current, nil, 0)
             guard requiredBytes > 0 else { continue }
             var children = [pid_t](repeating: 0, count: Int(requiredBytes) / MemoryLayout<pid_t>.stride)
