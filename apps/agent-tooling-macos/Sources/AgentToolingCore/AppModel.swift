@@ -4,67 +4,81 @@ import Observation
 @MainActor
 @Observable
 public final class AppModel {
-    public private(set) var skills: [Skill]
-    public private(set) var mcpServers: [MCPServer]
-    public private(set) var plugins: [Plugin]
-    public private(set) var profiles: [ToolingProfile]
+    public internal(set) var skills: [Skill]
+    public internal(set) var mcpServers: [MCPServer]
+    public internal(set) var plugins: [Plugin]
+    public internal(set) var profiles: [ToolingProfile]
     /// Reusable shelves. There is deliberately no "current" collection: being
     /// active belongs to a configuration, not to the material it is built from.
-    public private(set) var collections: [ToolingCollection]
+    public internal(set) var collections: [ToolingCollection]
     /// Tags filter. They never change what is installed.
-    public private(set) var tagAssignments: [TagAssignment]
-    public private(set) var activities: [ActivityReceipt]
-    public private(set) var syncStages: [SyncStage]
-    public private(set) var targetObservations: [TargetObservation]
-    public private(set) var sources: [ToolingSource]
-    public private(set) var marketplacePackages: [MarketplacePackage]
-    public private(set) var accountSurfaces: [AccountSurface]
-    public private(set) var connectors: [ConnectorRecord]
-    public private(set) var operationReceipts: [OperationReceipt]
+    public internal(set) var tagAssignments: [TagAssignment]
+    public internal(set) var activities: [ActivityReceipt]
+    public internal(set) var syncStages: [SyncStage]
+    public internal(set) var targetObservations: [TargetObservation]
+    public internal(set) var sources: [ToolingSource]
+    public internal(set) var marketplacePackages: [MarketplacePackage]
+    public internal(set) var accountSurfaces: [AccountSurface]
+    public internal(set) var connectors: [ConnectorRecord]
+    public internal(set) var operationReceipts: [OperationReceipt]
     /// Installed copies compared against the fingerprint recorded when they
     /// were reviewed. Refreshed by `runDoctor()`.
-    public private(set) var installDrift: [InstalledPackageDrift] = []
-    public private(set) var mcpRuntimeStatuses: [MCPRuntimeStatus] = []
-    public private(set) var mcpRuntimeServers: [MCPRuntimeServer] = []
-    public private(set) var pendingPlan: OperationPlan?
-    public private(set) var backupImportPreview: BackupImportPreview?
-    public private(set) var insightsReport: InsightsReport?
+    public internal(set) var installDrift: [InstalledPackageDrift] = []
+    public internal(set) var mcpRuntimeStatuses: [MCPRuntimeStatus] = []
+    public internal(set) var mcpRuntimeServers: [MCPRuntimeServer] = []
+    public internal(set) var pendingPlan: OperationPlan?
+    public internal(set) var backupImportPreview: BackupImportPreview?
+    public internal(set) var insightsReport: InsightsReport?
 
-    public private(set) var activeProfileID: String
+    public internal(set) var activeProfileID: String
     /// A Git repository can be imported as a source or backup. It is not the
     /// database or a prerequisite for using the app.
-    public private(set) var repositoryPath: String
-    public private(set) var automaticallyCheckHealth = true
-    public private(set) var isSyncing = false
-    public private(set) var isRunningDoctor = false
-    public private(set) var isExecutingPlan = false
-    public private(set) var isRefreshingMarketplace = false
-    public private(set) var isGeneratingSkill = false
-    public private(set) var isScanningInsights = false
-    public private(set) var lastError: String?
-    public private(set) var workspacePath: String
-    public private(set) var backupConfiguration: BackupConfiguration
-    public private(set) var encryptedSyncConfiguration: EncryptedSyncConfiguration
-    public private(set) var managedPolicies: [ManagedPolicy]
+    public internal(set) var repositoryPath: String
+    public internal(set) var automaticallyCheckHealth = true
+    public internal(set) var isSyncing = false
+    public internal(set) var isRunningDoctor = false
+    public internal(set) var isExecutingPlan = false
+    public internal(set) var isRefreshingMarketplace = false
+    public internal(set) var isGeneratingSkill = false
+    public internal(set) var isScanningInsights = false
+    public internal(set) var lastError: String?
+    public internal(set) var workspacePath: String
+    public internal(set) var backupConfiguration: BackupConfiguration
+    public internal(set) var encryptedSyncConfiguration: EncryptedSyncConfiguration
+    public internal(set) var managedPolicies: [ManagedPolicy]
 
-    private let store: WorkspaceStore
-    private let library: WorkspaceLibrary
-    private let engine: OperationEngine
-    private let adapters: ClientAdapterRegistry
-    private let runner: any CommandRunning
-    private let homeURL: URL
-    private let marketplace: MarketplaceService
-    private let marketplaceProviders: [any MarketplaceProvider]
-    private let backupService: BackupService
-    private let encryptedSyncService: EncryptedSyncService
-    private let policyService: PolicyService
-    private let codexSkillDraftService: CodexSkillDraftService
-    private let toolingInsightsService: ToolingInsightsService
-    private var pendingRestoreSnapshot: WorkspaceSnapshot?
-    private var pendingEncryptedSyncSnapshot: WorkspaceSnapshot?
-    private var pendingSkillAdoption: SkillAdoption?
-    public private(set) var encryptedSyncImportPreview: EncryptedSyncImportPreview?
-    private var hasBootstrapped = false
+    // Collaborators and persistence helpers are module-internal rather than
+    // private so the per-feature extensions in the AppModel+*.swift files can
+    // reach them. The module boundary, which is what public would widen, is
+    // unchanged.
+    let store: WorkspaceStore
+    let library: WorkspaceLibrary
+    let engine: OperationEngine
+    let adapters: ClientAdapterRegistry
+    let runner: any CommandRunning
+    let homeURL: URL
+    let marketplace: MarketplaceService
+    let marketplaceProviders: [any MarketplaceProvider]
+    let backupService: BackupService
+    let encryptedSyncService: EncryptedSyncService
+    let policyService: PolicyService
+    let codexSkillDraftService: CodexSkillDraftService
+    let toolingInsightsService: ToolingInsightsService
+    var pendingRestoreSnapshot: WorkspaceSnapshot?
+    var pendingEncryptedSyncSnapshot: WorkspaceSnapshot?
+    var pendingSkillAdoption: SkillAdoption?
+    public internal(set) var encryptedSyncImportPreview: EncryptedSyncImportPreview?
+    var hasBootstrapped = false
+
+    // Projects section state. Stored properties cannot live in an extension,
+    // so the section's behaviour is in AppModel+Projects.swift and its state
+    // stays here with the rest of the model's state.
+    public internal(set) var projects: [DiscoveredProject] = []
+    public internal(set) var projectScanRoots: [String] = []
+    public internal(set) var isDiscoveringProjects = false
+    public internal(set) var hasDiscoveredProjects = false
+    var pinnedProjectPaths: [String] = []
+    var hasLoadedProjectPreferences = false
 
     public init(
         store: WorkspaceStore,
@@ -126,11 +140,6 @@ public final class AppModel {
             homeURL: homeURL,
             marketplaceProviders: builtInMarketplaceProviders()
         )
-    }
-
-    public static func builtInMarketplaceProviders() -> [any MarketplaceProvider] {
-        guard let provider = try? OfficialMCPRegistryProvider() else { return [] }
-        return [provider]
     }
 
     public var activeProfile: ToolingProfile? {
@@ -250,54 +259,6 @@ public final class AppModel {
             insightsReport = nil
         } catch {
             presentError("The insights report could not be removed: \(error.localizedDescription)")
-        }
-    }
-
-    /// Retains the exact catalog record attached to an insights recommendation
-    /// so Marketplace can review it without repeating the search. This only
-    /// updates local catalog metadata; it never prepares or executes an install.
-    @discardableResult
-    public func retainMarketplaceRecommendation(
-        _ package: MarketplacePackage,
-        expectedPackageID: String
-    ) -> Bool {
-        guard ensureReadyForChange() else { return false }
-        guard package.id == expectedPackageID else {
-            presentError("The marketplace recommendation no longer matches its catalog package.")
-            return false
-        }
-
-        // Installation state is observed from client scans and native catalogs,
-        // never trusted from a persisted recommendation report.
-        var retained = package
-        retained.isInstalled = false
-        retained.nativeInstalls = retained.nativeInstalls.map { route in
-            var route = route
-            route.isInstalled = false
-            return route
-        }
-
-        var candidate = currentSnapshot()
-        candidate.marketplacePackages = marketplace.deduplicatedPackages(
-            candidate.marketplacePackages + [retained]
-        )
-        return commit(candidate)
-    }
-
-    @discardableResult
-    public func exportDiagnostics(to destination: URL, appVersion: String) -> Bool {
-        do {
-            let exporter = DiagnosticBundleExporter(homeURL: homeURL)
-            let manifest = exporter.manifest(
-                snapshot: currentSnapshot(),
-                appVersion: appVersion,
-                errors: lastError.map { [$0] } ?? []
-            )
-            try exporter.export(manifest, to: destination)
-            return true
-        } catch {
-            presentError("The support bundle could not be exported: \(error.localizedDescription)")
-            return false
         }
     }
 
@@ -511,264 +472,11 @@ public final class AppModel {
         lastError = nil
     }
 
-    @discardableResult
-    public func createSkill(from draft: SkillDraft) -> Skill? {
-        guard ensureReadyForChange() else { return nil }
-        let previousSnapshot = currentSnapshot()
-        var createdResult: CreatedSkill?
-        do {
-            let created = try library.createSkill(from: draft)
-            createdResult = created
-            var skill = created.skill
-            skill.validationCount = try library.validateSkill(skill)
-            skills.removeAll { $0.id == skill.id }
-            skills.insert(skill, at: 0)
-            activities.insert(
-                ActivityReceipt(
-                    kind: .configuration,
-                    title: "\(skill.displayName) created locally",
-                    detail: "Portable package saved in Agent Tooling's managed library. Review installation before changing any client.",
-                    date: .now,
-                    state: .healthy,
-                    affectedPaths: [
-                        created.skillURL.path(percentEncoded: false),
-                        created.packageURL.appending(path: "plugin.json").path(percentEncoded: false),
-                    ]
-                ),
-                at: 0
-            )
-            prepareInstallPlanAfterSaving(skill: skill, draft: draft)
-            try persistOrThrow()
-            return skill
-        } catch {
-            let persistenceError = error
-            pendingPlan = nil
-            applyPersisted(previousSnapshot)
-            if let createdResult {
-                do {
-                    try library.rollbackCreation(createdResult)
-                    lastError = persistenceError.localizedDescription
-                } catch {
-                    lastError = "Saving the new skill failed, and its package could not be removed safely: \(error.localizedDescription)"
-                }
-            } else {
-                lastError = persistenceError.localizedDescription
-            }
-            return nil
-        }
-    }
-
-    @discardableResult
-    public func saveCodexSkillDraftRequest(_ request: CodexSkillDraftRequest) -> Bool {
-        do {
-            try store.saveCodexSkillDraftRequest(request)
-            return true
-        } catch {
-            presentError("The Codex skill request could not be saved: \(error.localizedDescription)")
-            return false
-        }
-    }
-
-    public func loadCodexSkillDraftRequest(id: UUID) -> CodexSkillDraftRequest? {
-        do {
-            guard let request = try store.loadCodexSkillDraftRequest(id: id) else {
-                presentError("The requested Codex skill draft is no longer available.")
-                return nil
-            }
-            return request
-        } catch {
-            presentError("The Codex skill request could not be opened: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    public func generateCodexSkillDraft(_ request: CodexSkillDraftRequest) async -> CodexSkillDraftResult? {
-        guard ensureReadyForChange() else { return nil }
-        guard saveCodexSkillDraftRequest(request) else { return nil }
-        isGeneratingSkill = true
-        defer { isGeneratingSkill = false }
-        do {
-            return try await codexSkillDraftService.createDraft(request)
-        } catch is CancellationError {
-            return nil
-        } catch {
-            presentError(error.localizedDescription)
-            return nil
-        }
-    }
-
-    @discardableResult
-    public func adoptCodexSkillDraft(_ result: CodexSkillDraftResult) async -> Skill? {
-        guard ensureReadyForChange() else { return nil }
-        let previousSnapshot = currentSnapshot()
-        var createdResult: CreatedSkill?
-        do {
-            let created = try library.adoptCodexDraft(result)
-            createdResult = created
-            var skill = created.skill
-            skill.validationCount = try library.validateSkill(skill)
-            skills.removeAll { $0.id == skill.id }
-            skills.insert(skill, at: 0)
-            activities.insert(
-                ActivityReceipt(
-                    kind: .configuration,
-                    title: "\(skill.displayName) generated with Codex",
-                    detail: "The reviewed portable package was saved locally. Client installation still requires plan approval.",
-                    date: .now,
-                    state: .healthy,
-                    affectedPaths: [created.skillURL.path(percentEncoded: false)]
-                ),
-                at: 0
-            )
-            try persistOrThrow()
-            try? store.deleteCodexSkillDraftRequest(id: result.request.id)
-            try? await codexSkillDraftService.discardDraft(result)
-            return skill
-        } catch {
-            let persistenceError = error
-            pendingPlan = nil
-            applyPersisted(previousSnapshot)
-            if let createdResult {
-                do {
-                    try library.rollbackCreation(createdResult)
-                    lastError = persistenceError.localizedDescription
-                } catch {
-                    lastError =
-                        "Saving the generated skill failed, and its package could not be removed safely: \(error.localizedDescription)"
-                }
-            } else {
-                lastError = persistenceError.localizedDescription
-            }
-            return nil
-        }
-    }
-
-    public func discardCodexSkillDraft(_ result: CodexSkillDraftResult) async {
-        do {
-            try await codexSkillDraftService.discardDraft(result)
-            try store.deleteCodexSkillDraftRequest(id: result.request.id)
-        } catch {
-            presentError("The generated draft could not be discarded safely: \(error.localizedDescription)")
-        }
-    }
-
-    public func discardCodexSkillDraftRequest(id: UUID) async {
-        var cleanupError: Error?
-        do {
-            try await codexSkillDraftService.discardRequest(id: id)
-        } catch {
-            cleanupError = error
-        }
-        do {
-            try store.deleteCodexSkillDraftRequest(id: id)
-        } catch {
-            cleanupError = cleanupError ?? error
-        }
-        if let cleanupError {
-            presentError("The pending Codex skill request could not be removed: \(cleanupError.localizedDescription)")
-        }
-    }
-
-    /// A discovered skill can be adopted once a scan has recorded where its
-    /// files are. Without that path the app would have to guess a location, so
-    /// the row is not offered for adoption until the next setup check.
-    public func canAdoptSkill(id: String) -> Bool {
-        guard let skill = skills.first(where: { $0.id == id }), !skill.owned else { return false }
-        return observedSkillSourcePath(for: id) != nil
-    }
-
     /// Indexed in one pass. The Skills list asks for this on every layout pass
     /// with a few hundred rows on screen, so it must not be quadratic.
     public var adoptableSkillIDs: [String] {
         let sources = observedSkillSourcePaths()
         return skills.filter { !$0.owned && sources[$0.id] != nil }.map(\.id)
-    }
-
-    /// Builds one reviewable plan that copies the selected discovered skills
-    /// into the managed library. Nothing is written until the plan is approved,
-    /// and the clients keep their own copies either way.
-    public func planSkillAdoption(skillIDs: Set<String>) {
-        guard ensureReadyForChange() else { return }
-        let sources = observedSkillSourcePaths()
-        let candidates =
-            skills
-            .filter { skillIDs.contains($0.id) }
-            .map { SkillAdoptionCandidate(skill: $0, sourcePath: sources[$0.id]) }
-        guard !candidates.isEmpty else {
-            lastError = "The selected skills are no longer available. Check setup again, then try adopting them."
-            return
-        }
-        do {
-            let adoption = try library.adoptionPlan(
-                for: candidates,
-                reservedIdentifiers: Set(skills.map(\.id)).subtracting(skillIDs)
-            )
-            pendingSkillAdoption = adoption
-            pendingPlan = adoption.plan
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    /// Uses only what the last setup check actually observed. Client folder
-    /// layouts differ per plugin, so a guessed path could copy the wrong tree.
-    /// Surfaces are read in a stable order so the same skill observed by two
-    /// clients always adopts the same copy.
-    private func observedSkillSourcePaths() -> [String: String] {
-        var paths: [String: String] = [:]
-        for observation in targetObservations.sorted(by: { $0.surface.displayName < $1.surface.displayName }) {
-            for (id, metadata) in observation.skillMetadata where paths[id] == nil {
-                paths[id] = metadata.path
-            }
-        }
-        return paths
-    }
-
-    private func observedSkillSourcePath(for skillID: String) -> String? {
-        observedSkillSourcePaths()[skillID]
-    }
-
-    /// Records the adopted packages after the approved plan wrote them. The
-    /// managed-library checker runs against the committed copy so a skill only
-    /// reports validation it actually passed.
-    private func applyAdoptedSkills(_ adoption: SkillAdoption) {
-        var adopted: [Skill] = []
-        var unchecked: [String] = []
-        for var skill in adoption.skills {
-            do {
-                skill.validationCount = try library.validateSkill(skill)
-            } catch {
-                skill.validationCount = 0
-                unchecked.append(skill.displayName)
-            }
-            adopted.append(skill)
-        }
-        let adoptedIDs = Set(adopted.map(\.id))
-        skills.removeAll { adoptedIDs.contains($0.id) }
-        skills.insert(contentsOf: adopted, at: 0)
-
-        var detail =
-            "The managed library now owns \(adopted.count) portable package\(adopted.count == 1 ? "" : "s"). Each client keeps its own copy; installing from Agent Tooling replaces it with the managed source."
-        if !unchecked.isEmpty {
-            detail +=
-                " Not validated by the managed-library checker: \(unchecked.prefix(5).joined(separator: ", "))."
-        }
-        if !adoption.rejections.isEmpty {
-            detail += " Skipped: \(adoption.rejections.prefix(5).map { "\($0.displayName) — \($0.reason)" }.joined(separator: " "))"
-        }
-        activities.insert(
-            ActivityReceipt(
-                kind: .configuration,
-                title: adopted.count == 1
-                    ? "\(adopted.first?.displayName ?? "Skill") adopted into the managed library"
-                    : "\(adopted.count) skills adopted into the managed library",
-                detail: boundedActivityDetail(detail),
-                date: .now,
-                state: unchecked.isEmpty && adoption.rejections.isEmpty ? .healthy : .pending,
-                affectedPaths: adopted.prefix(20).map { library.skillURL(for: $0).path(percentEncoded: false) }
-            ),
-            at: 0
-        )
     }
 
     public func planInstall(
@@ -790,55 +498,6 @@ public final class AppModel {
             )
         } catch {
             lastError = error.localizedDescription
-        }
-    }
-
-    @discardableResult
-    public func updateSkill(id: String, from draft: SkillDraft) -> Skill? {
-        guard ensureReadyForChange() else { return nil }
-        guard let existing = skills.first(where: { $0.id == id }) else {
-            lastError = "The selected skill is no longer available."
-            return nil
-        }
-        let previousSnapshot = currentSnapshot()
-        var updateResult: CreatedSkill?
-        do {
-            let result = try library.updateSkill(existing, from: draft)
-            updateResult = result
-            var updated = result.skill
-            updated.validationCount = try library.validateSkill(updated)
-            skills.removeAll { $0.id == id }
-            skills.insert(updated, at: 0)
-            activities.insert(
-                ActivityReceipt(
-                    kind: .configuration, title: "\(updated.displayName) updated",
-                    detail: "The managed source changed locally. Review the install plan before updating any client.", date: .now,
-                    state: .healthy, affectedPaths: [result.skillURL.path(percentEncoded: false)]), at: 0)
-            prepareInstallPlanAfterSaving(skill: updated, draft: draft)
-            try persistOrThrow()
-            if let warning = library.commitUpdate(result) {
-                lastError = warning
-            }
-            return updated
-        } catch {
-            let persistenceError = error
-            pendingPlan = nil
-            applyPersisted(previousSnapshot)
-            if let updateResult {
-                do {
-                    if let warning = try library.rollbackUpdate(updateResult) {
-                        lastError = "\(persistenceError.localizedDescription) \(warning)"
-                    } else {
-                        lastError = persistenceError.localizedDescription
-                    }
-                } catch {
-                    lastError =
-                        "Saving the skill update failed, and restoring its previous package also failed: \(error.localizedDescription)"
-                }
-            } else {
-                lastError = persistenceError.localizedDescription
-            }
-            return nil
         }
     }
 
@@ -1194,184 +853,6 @@ public final class AppModel {
 
     // MARK: - Collections
 
-    public func collection(id: String) -> ToolingCollection? {
-        collections.first { $0.id == id }
-    }
-
-    /// Collections are shelves, so one item sitting on three of them is
-    /// ordinary. Nothing here enforces a single owner.
-    public func collections(containing item: ToolingItemReference) -> [ToolingCollection] {
-        collections.filter { $0.contains(item) }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
-
-    public func createCollection(name: String, summary: String = "") -> ToolingCollection? {
-        guard ensureReadyForChange() else { return nil }
-        let fields: ValidatedConfigurationFields
-        let id: String
-        do {
-            fields = try ConfigurationValidator.validateProfile(name: name, summary: summary, scope: .user, projectRoot: nil)
-            id = try WorkspaceLibrary.normalizedIdentifier(fields.name)
-        } catch {
-            lastError = error.localizedDescription
-            return nil
-        }
-        guard !collections.contains(where: { $0.id == id }) else {
-            lastError = "A collection with this identifier already exists. Choose a distinct name."
-            return nil
-        }
-        let collection = ToolingCollection(id: id, name: fields.name, summary: fields.summary)
-        var candidate = currentSnapshot()
-        candidate.collections.append(collection)
-        candidate.activities.insert(
-            ActivityReceipt(
-                kind: .configuration, title: "\(collection.name) collection created",
-                detail: "A collection is reusable material. Nothing is applied until a configuration includes it and you sync.",
-                date: .now, state: .healthy), at: 0)
-        return commit(candidate) ? collection : nil
-    }
-
-    @discardableResult
-    public func updateCollection(id: String, name: String, summary: String) -> Bool {
-        guard ensureReadyForChange() else { return false }
-        guard let index = collections.firstIndex(where: { $0.id == id }) else {
-            lastError = "The selected collection is no longer available."
-            return false
-        }
-        let fields: ValidatedConfigurationFields
-        do {
-            fields = try ConfigurationValidator.validateProfile(name: name, summary: summary, scope: .user, projectRoot: nil)
-        } catch {
-            lastError = error.localizedDescription
-            return false
-        }
-        guard
-            !collections.contains(where: { candidate in
-                candidate.id != id && candidate.name.localizedCaseInsensitiveCompare(fields.name) == .orderedSame
-            })
-        else {
-            lastError = "Another collection already uses that name. Choose a distinct name."
-            return false
-        }
-        var candidate = currentSnapshot()
-        candidate.collections[index].name = fields.name
-        candidate.collections[index].summary = fields.summary
-        return commit(candidate)
-    }
-
-    /// Removing a shelf also removes it from every configuration that included
-    /// it, so no configuration is left pointing at something that is gone.
-    @discardableResult
-    public func deleteCollection(id: String) -> Bool {
-        guard ensureReadyForChange() else { return false }
-        guard let collection = collections.first(where: { $0.id == id }) else {
-            lastError = "The selected collection is no longer available."
-            return false
-        }
-        var candidate = currentSnapshot()
-        candidate.collections.removeAll { $0.id == id }
-        for index in candidate.profiles.indices {
-            candidate.profiles[index].includedCollections.removeAll { $0 == id }
-        }
-        candidate.activities.insert(
-            ActivityReceipt(
-                kind: .configuration, title: "\(collection.name) collection removed",
-                detail: "Desired state only. No skill, plugin, or MCP server was uninstalled.", date: .now, state: .healthy), at: 0)
-        return commit(candidate)
-    }
-
-    @discardableResult
-    public func setCollectionMembership(id: String, items: [ToolingItemReference]) -> Bool {
-        guard ensureReadyForChange() else { return false }
-        guard let index = collections.firstIndex(where: { $0.id == id }) else {
-            lastError = "The selected collection is no longer available."
-            return false
-        }
-        guard items.count <= ConfigurationValidator.maximumDesiredStateItems else {
-            lastError = "A collection can hold at most \(ConfigurationValidator.maximumDesiredStateItems) items."
-            return false
-        }
-        var seen: Set<String> = []
-        let deduplicated = items.filter { seen.insert($0.id).inserted }
-        var candidate = currentSnapshot()
-        candidate.collections[index].items = deduplicated.sorted { $0.id < $1.id }
-        return commit(candidate)
-    }
-
-    @discardableResult
-    public func setCollectionMembership(_ isMember: Bool, of id: String, for item: ToolingItemReference) -> Bool {
-        guard let collection = collections.first(where: { $0.id == id }) else {
-            lastError = "The selected collection is no longer available."
-            return false
-        }
-        var items = collection.items
-        if isMember {
-            guard !items.contains(item) else { return true }
-            items.append(item)
-        } else {
-            items.removeAll { $0 == item }
-        }
-        return setCollectionMembership(id: id, items: items)
-    }
-
-    /// Attaching and detaching is the whole interaction. It edits desired
-    /// state; client files change only after a reviewed sync.
-    @discardableResult
-    public func setCollectionInclusion(_ isIncluded: Bool, of collectionID: String, inProfile profileID: String) -> Bool {
-        guard ensureReadyForChange() else { return false }
-        guard let index = profiles.firstIndex(where: { $0.id == profileID }) else {
-            lastError = "The selected configuration is no longer available."
-            return false
-        }
-        guard profiles[index].scope != .managed else {
-            lastError = "Managed configurations are read-only. Update the policy source and import it again."
-            return false
-        }
-        guard let collection = collections.first(where: { $0.id == collectionID }) else {
-            lastError = "The selected collection is no longer available."
-            return false
-        }
-        var included = Set(profiles[index].includedCollections)
-        if isIncluded { included.insert(collectionID) } else { included.remove(collectionID) }
-        guard included != Set(profiles[index].includedCollections) else { return true }
-        let profileName = profiles[index].name
-        var candidate = currentSnapshot()
-        candidate.profiles[index].includedCollections = included.sorted()
-        candidate.activities.insert(
-            ActivityReceipt(
-                kind: .configuration,
-                title: isIncluded
-                    ? "\(collection.name) included in \(profileName)" : "\(collection.name) removed from \(profileName)",
-                detail: "Desired state changed. Review and sync to apply it to Claude Code, Codex, or Gemini CLI.", date: .now,
-                state: .healthy), at: 0)
-        return commit(candidate)
-    }
-
-    public func isCollectionIncluded(_ collectionID: String, inProfile profileID: String) -> Bool {
-        effectiveProfile(for: profileID)?.includedCollections.contains(collectionID) ?? false
-    }
-
-    /// How much of a shelf a configuration already covers directly. This is
-    /// what lets the menu show a partial count instead of a checkmark when a
-    /// configuration happens to require part of a collection without
-    /// including the collection itself.
-    public func collectionCoverage(_ collectionID: String, inProfile profileID: String) -> (covered: Int, total: Int) {
-        guard let collection = collections.first(where: { $0.id == collectionID }),
-            let profile = effectiveProfile(for: profileID)
-        else { return (0, 0) }
-        let plugins = Set(profile.enabledPlugins)
-        let mcps = Set(profile.requiredMCPs)
-        let skills = Set(profile.requiredSkills)
-        let covered = collection.items.count { item in
-            switch item.kind {
-            case .skill: skills.contains(item.identifier)
-            case .plugin: plugins.contains(item.identifier)
-            case .mcpServer: mcps.contains(item.identifier)
-            }
-        }
-        return (covered, collection.items.count)
-    }
-
     // MARK: - Tags
 
     public func tags(for item: ToolingItemReference) -> [String] {
@@ -1382,108 +863,6 @@ public final class AppModel {
     /// never changes what is installed.
     public var allTags: [String] {
         ToolingTag.normalizedList(tagAssignments.flatMap(\.tags))
-    }
-
-    public func itemsTagged(_ tag: String) -> [ToolingItemReference] {
-        tagAssignments.filter { assignment in assignment.tags.contains { ToolingTag.matches($0, tag) } }.map(\.item)
-    }
-
-    /// Replaces the tag list on a selection. Tags are multi-valued and
-    /// normalized on the way in, so one word typed three ways stays one tag.
-    @discardableResult
-    public func setTags(_ tags: [String], for items: [ToolingItemReference]) -> Bool {
-        guard ensureReadyForChange() else { return false }
-        guard !items.isEmpty else { return true }
-        let normalized = ToolingTag.normalizedList(tags)
-        guard normalized.count <= ToolingTag.maximumTagsPerItem else {
-            lastError = "An item can carry at most \(ToolingTag.maximumTagsPerItem) tags."
-            return false
-        }
-        var candidate = currentSnapshot()
-        for item in items {
-            candidate.tagAssignments.removeAll { $0.item == item }
-            if !normalized.isEmpty {
-                candidate.tagAssignments.append(TagAssignment(item: item, tags: normalized))
-            }
-        }
-        candidate.tagAssignments.sort { $0.id < $1.id }
-        return commit(candidate)
-    }
-
-    /// Adds and removes tags across a selection without disturbing tags an
-    /// item already carries that were not part of the edit.
-    @discardableResult
-    public func applyTagEdits(adding added: [String], removing removed: [String], to items: [ToolingItemReference]) -> Bool {
-        guard ensureReadyForChange() else { return false }
-        guard !items.isEmpty, !(added.isEmpty && removed.isEmpty) else { return true }
-        let toAdd = ToolingTag.normalizedList(added)
-        let toRemove = ToolingTag.normalizedList(removed)
-        var candidate = currentSnapshot()
-        for item in items {
-            let existing = candidate.tagAssignments.first { $0.item == item }?.tags ?? []
-            let kept = existing.filter { tag in !toRemove.contains { ToolingTag.matches($0, tag) } }
-            let merged = ToolingTag.normalizedList(kept + toAdd)
-            guard merged.count <= ToolingTag.maximumTagsPerItem else {
-                lastError = "An item can carry at most \(ToolingTag.maximumTagsPerItem) tags."
-                return false
-            }
-            candidate.tagAssignments.removeAll { $0.item == item }
-            if !merged.isEmpty {
-                candidate.tagAssignments.append(TagAssignment(item: item, tags: merged))
-            }
-        }
-        candidate.tagAssignments.sort { $0.id < $1.id }
-        return commit(candidate)
-    }
-
-    @discardableResult
-
-    // MARK: - Collection export
-
-    /// Builds the shareable document. Redaction happens here rather than at the
-    /// file boundary, so a Share Sheet payload carries the same guarantee.
-    public func collectionExportDocument(id: String) throws -> CollectionExportDocument {
-        guard let collection = collections.first(where: { $0.id == id }) else {
-            throw CollectionExportError.unknownCollection
-        }
-        var tags: [ToolingItemReference: [String]] = [:]
-        for assignment in tagAssignments { tags[assignment.item] = assignment.tags }
-        return CollectionExporter.document(
-            for: collection,
-            skills: skills,
-            plugins: plugins,
-            mcpServers: mcpServers,
-            tags: tags
-        )
-    }
-
-    public func collectionExportData(id: String) throws -> Data {
-        try CollectionExporter.encode(collectionExportDocument(id: id))
-    }
-
-    /// Writes the document and records a receipt naming the file, so an export
-    /// is visible in Activity like every other side effect.
-    @discardableResult
-    public func exportCollection(id: String, to url: URL) -> Bool {
-        guard ensureReadyForChange() else { return false }
-        guard let collection = collections.first(where: { $0.id == id }) else {
-            lastError = CollectionExportError.unknownCollection.localizedDescription
-            return false
-        }
-        do {
-            let data = try collectionExportData(id: id)
-            try data.write(to: url, options: [.atomic])
-            var candidate = currentSnapshot()
-            candidate.activities.insert(
-                ActivityReceipt(
-                    kind: .publication, title: "\(collection.name) collection exported",
-                    detail: CollectionExportDocument.securityNote, date: .now, state: .healthy,
-                    affectedPaths: [url.path(percentEncoded: false)]), at: 0)
-            return commit(candidate)
-        } catch {
-            lastError = error.localizedDescription
-            return false
-        }
     }
 
     public func authenticate(serverID: String, client: ClientKind) {
@@ -1612,336 +991,6 @@ public final class AppModel {
         }
     }
 
-    public func addMarketplaceSource(at url: URL) {
-        guard ensureReadyForChange() else { return }
-        do {
-            let source = try library.importRepositorySource(at: url)
-            var candidate = currentSnapshot()
-            candidate.sources.removeAll { $0.location == source.location }
-            candidate.sources.append(source)
-            guard commit(candidate) else { return }
-            Task { await refreshMarketplace() }
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    public func removeMarketplaceSource(id: UUID) {
-        guard ensureReadyForChange() else { return }
-        guard let source = sources.first(where: { $0.id == id }) else {
-            lastError = "The selected marketplace source is no longer available."
-            return
-        }
-        guard [.localFolder, .gitRepository].contains(source.kind) else {
-            lastError = "Built-in catalog references cannot be removed."
-            return
-        }
-        var candidate = currentSnapshot()
-        candidate.sources.removeAll { $0.id == id }
-        candidate.marketplacePackages.removeAll { $0.sourceID == id }
-        candidate.activities.insert(
-            ActivityReceipt(
-                kind: .configuration,
-                title: "\(source.name) source removed",
-                detail: "The source reference and its cached listings were removed. No files were deleted.",
-                date: .now,
-                state: .healthy,
-                affectedPaths: [source.location]
-            ),
-            at: 0
-        )
-        _ = commit(candidate)
-    }
-
-    /// Refreshes imported portable packages, reviewed remote providers, and the
-    /// machine-readable catalogs exposed by installed Claude Code and Codex
-    /// CLIs. Hosted HTML listings are never scraped; Gemini's gallery stays a
-    /// native source link until it exposes a documented API.
-    public func refreshMarketplace() async {
-        guard ensureReadyForChange() else { return }
-        isRefreshingMarketplace = true
-        defer { isRefreshingMarketplace = false }
-        var candidate = currentSnapshot()
-        var packages: [MarketplacePackage] = []
-        var failures: [String] = []
-        for index in candidate.sources.indices {
-            guard [.localFolder, .gitRepository].contains(candidate.sources[index].kind) else { continue }
-            do {
-                let inspected = try marketplace.inspect(candidate.sources[index])
-                packages.append(contentsOf: inspected)
-                candidate.sources[index].lastRefreshedAt = .now
-                candidate.sources[index].trustSummary =
-                    inspected.isEmpty
-                    ? "No portable packages found"
-                    : "\(inspected.count) package\(inspected.count == 1 ? "" : "s") discovered; review before installing"
-            } catch {
-                let diagnostic = SensitiveValueRedactor.redact(error.localizedDescription)
-                candidate.sources[index].trustSummary = diagnostic
-                failures.append("\(candidate.sources[index].name): \(diagnostic)")
-            }
-        }
-        for provider in marketplaceProviders {
-            do {
-                let page = try await provider.search(MarketplaceQuery(limit: 100))
-                packages.append(contentsOf: page.packages)
-                updateNativeSource(
-                    .mcpRegistry,
-                    detail:
-                        "\(page.packages.count) server\(page.packages.count == 1 ? "" : "s") loaded from \(provider.displayName); package execution still requires review",
-                    in: &candidate.sources
-                )
-            } catch {
-                let diagnostic = SensitiveValueRedactor.redact(error.localizedDescription)
-                updateNativeSource(.mcpRegistry, detail: "Unavailable: \(diagnostic)", in: &candidate.sources)
-                failures.append("\(provider.displayName): \(diagnostic)")
-            }
-        }
-        let native = await MarketplaceService.discoverNativeCatalogs(runner: runner)
-        packages.append(contentsOf: native.packages)
-        updateNativeSource(.claudeMarketplace, detail: native.notes[.claude], in: &candidate.sources)
-        updateNativeSource(.openAIPluginDirectory, detail: native.notes[.codex], in: &candidate.sources)
-        failures.append(
-            contentsOf: native.notes.compactMap { client, note in
-                note.localizedCaseInsensitiveContains("unavailable") ? "\(client.rawValue): \(note)" : nil
-            })
-        if let index = candidate.sources.firstIndex(where: { $0.kind == .geminiExtensionGallery }) {
-            candidate.sources[index].lastRefreshedAt = .now
-            candidate.sources[index].trustSummary =
-                "Browse Gemini's native gallery or install a reviewed Git/local extension; installed extensions are observed by the scanner."
-        }
-        candidate.marketplacePackages = marketplace.deduplicatedPackages(packages)
-        let detail =
-            candidate.marketplacePackages.isEmpty
-            ? "No portable or native catalog packages were found. Add a local folder or check the installed client CLIs."
-            : "Found \(candidate.marketplacePackages.count) reviewable package\(candidate.marketplacePackages.count == 1 ? "" : "s"). \(native.notes.values.sorted().joined(separator: " · "))"
-        let failureDetail = boundedActivityDetail(failures.isEmpty ? detail : "\(detail) Issues: \(failures.joined(separator: " · "))")
-        candidate.activities.insert(
-            ActivityReceipt(
-                kind: .validation, title: "Marketplace sources refreshed", detail: failureDetail, date: .now,
-                state: failures.isEmpty ? .healthy : .attention), at: 0)
-        candidate.activities = Array(candidate.activities.prefix(200))
-        _ = commit(candidate)
-    }
-
-    public func prepareBackup() {
-        guard ensureReadyForChange() else { return }
-        do {
-            pendingPlan = try backupService.exportPlan(snapshot: currentSnapshot())
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    public func inspectBackup(at url: URL) {
-        guard ensureReadyForChange() else { return }
-        do {
-            let preview = try backupService.importPreview(at: url, current: currentSnapshot().portableDesiredState())
-            backupImportPreview = preview
-            if preview.conflicts.isEmpty {
-                pendingRestoreSnapshot = preview.snapshot
-                pendingPlan = preview.plan
-            } else {
-                var candidate = currentSnapshot()
-                candidate.activities.insert(
-                    ActivityReceipt(
-                        kind: .validation, title: "Backup conflicts need review",
-                        detail:
-                            "\(preview.conflicts.count) desired-state conflict\(preview.conflicts.count == 1 ? "" : "s") found. Review them before accepting this backup.",
-                        date: .now, state: .attention, affectedPaths: [url.path(percentEncoded: false)]), at: 0)
-                _ = commit(candidate)
-            }
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    public func acceptInspectedBackup() {
-        guard ensureReadyForChange() else { return }
-        guard let preview = backupImportPreview else {
-            lastError = "Choose and inspect a backup before accepting it."
-            return
-        }
-        pendingRestoreSnapshot = preview.snapshot
-        var plan = preview.plan
-        if !preview.conflicts.isEmpty {
-            plan.summary +=
-                " This restore accepts \(preview.conflicts.count) reviewed desired-state conflict\(preview.conflicts.count == 1 ? "" : "s")."
-        }
-        pendingPlan = plan
-    }
-
-    public func prepareEncryptedSync(to folder: URL) {
-        guard ensureReadyForChange() else { return }
-        do {
-            pendingPlan = try encryptedSyncService.exportPlan(snapshot: currentSnapshot(), destinationFolder: folder)
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    public func inspectEncryptedSync(at archive: URL) {
-        guard ensureReadyForChange() else { return }
-        do {
-            let preview = try encryptedSyncService.importPreview(at: archive)
-            encryptedSyncImportPreview = preview
-            pendingEncryptedSyncSnapshot = preview.snapshot
-            pendingPlan = preview.plan
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    public func reviewInspectedEncryptedSyncRestore() {
-        guard ensureReadyForChange() else { return }
-        guard let preview = encryptedSyncImportPreview else {
-            lastError = "Choose and inspect an encrypted archive before restoring it."
-            return
-        }
-        pendingEncryptedSyncSnapshot = preview.snapshot
-        pendingPlan = preview.plan
-    }
-
-    public func encryptedSyncRecoveryKey() -> String? {
-        do { return try encryptedSyncService.recoveryKey() } catch {
-            lastError = error.localizedDescription
-            return nil
-        }
-    }
-
-    @discardableResult
-    public func importEncryptedSyncRecoveryKey(_ value: String) -> Bool {
-        guard ensureReadyForChange() else { return false }
-        do {
-            try encryptedSyncService.importRecoveryKey(value.trimmingCharacters(in: .whitespacesAndNewlines))
-            return true
-        } catch {
-            lastError = error.localizedDescription
-            return false
-        }
-    }
-
-    public func importManagedPolicy(at url: URL) {
-        guard ensureReadyForChange() else { return }
-        do {
-            let policy = try policyService.load(at: url)
-            let prefix = "policy-\(policy.id)-"
-            let remapped = try policy.profiles.map { profile in
-                let remappedID = prefix + profile.id
-                guard (try? WorkspaceLibrary.normalizedIdentifier(remappedID)) == remappedID else {
-                    throw WorkspaceSnapshotValidationError.inconsistent(
-                        "Managed policy \(policy.id) produces a configuration identifier longer than the supported portable limit."
-                    )
-                }
-                return ToolingProfile(
-                    id: remappedID,
-                    name: "\(policy.name) · \(profile.name)",
-                    summary: profile.summary,
-                    inheritedFrom: profile.inheritedFrom.map { prefix + $0 },
-                    scope: .managed,
-                    projectRoot: profile.projectRoot,
-                    checks: profile.checks,
-                    enabledPlugins: profile.enabledPlugins,
-                    requiredMCPs: profile.requiredMCPs
-                )
-            }
-            var candidate = currentSnapshot()
-            candidate.managedPolicies.removeAll { $0.id == policy.id }
-            candidate.managedPolicies.append(policy)
-            candidate.profiles.removeAll { $0.id.hasPrefix(prefix) }
-            candidate.profiles.append(contentsOf: remapped)
-            candidate.activities.insert(
-                ActivityReceipt(
-                    kind: .configuration, title: "\(policy.name) policy imported",
-                    detail:
-                        "\(remapped.count) managed profile\(remapped.count == 1 ? "" : "s") and \(policy.blockedPluginIDs.count) blocked plugin rule\(policy.blockedPluginIDs.count == 1 ? "" : "s") are active locally. The manifest source was explicitly selected.",
-                    date: .now, state: .healthy, affectedPaths: [policy.sourcePath]), at: 0)
-            try WorkspaceSnapshotValidator.validate(candidate, mode: .localState)
-            try store.saveWorkspaceSnapshot(candidate)
-            applyPersisted(candidate)
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    public func reviewMarketplacePackage(_ id: String) {
-        guard ensureReadyForChange() else { return }
-        guard let package = marketplacePackages.first(where: { $0.id == id }) else {
-            lastError = "The selected marketplace package is no longer available."
-            return
-        }
-        let componentText = package.components.map(\.displayName).sorted().joined(separator: ", ")
-        pendingPlan = OperationPlan(
-            kind: .importSource,
-            title: "Review \(package.name)",
-            summary:
-                "\(package.trustSummary). This package contains: \(componentText.isEmpty ? "no recognized portable components" : componentText).",
-            targetSurfaces: package.supportedClients.compactMap { client in surface(for: client) },
-            steps: [
-                OperationStep(
-                    kind: .manual, title: "Inspect package source",
-                    detail:
-                        "Review \(package.location), its license (\(package.license ?? "not declared")), scripts, hooks, and target compatibility before installation.",
-                    requiresUserAction: true),
-                OperationStep(
-                    kind: .manual, title: "Choose an installation route",
-                    detail: package.nativeInstalls.isEmpty
-                        ? "This local package has no verified automatic installer yet. Keep it as a reviewed source; do not copy it into a client manually without checking its target-specific instructions."
-                        : "Choose one of the verified target-specific install buttons after reviewing the source.", requiresUserAction: true
-                ),
-            ],
-            requiresConfirmation: false
-        )
-    }
-
-    public func planMarketplaceInstall(packageID: String, client: ClientKind, remove: Bool = false) {
-        guard ensureReadyForChange() else { return }
-        guard let package = marketplacePackages.first(where: { $0.id == packageID }),
-            let route = package.nativeInstalls.first(where: { $0.client == client })
-        else {
-            lastError = "This package does not expose a verified native installer for \(client.rawValue)."
-            return
-        }
-        if !remove,
-            managedPolicies.contains(where: { $0.blockedPluginIDs.contains(package.name) || $0.blockedPluginIDs.contains(package.id) })
-        {
-            lastError = "A managed policy blocks installation of \(package.name). Review the policy source in Settings."
-            return
-        }
-        let arguments: [String]
-        if remove {
-            guard let removal = route.removalArguments else {
-                lastError = "This package does not expose a verified native removal command."
-                return
-            }
-            arguments = removal
-        } else {
-            arguments = route.arguments
-        }
-        let action = remove ? "Remove" : "Install"
-        let routeDetail =
-            remove
-            ? "Remove this exact plugin identifier through \(client.rawValue)'s native plugin manager."
-            : route.detail
-        let operationKind: OperationKind =
-            package.components == [.mcpServer] ? .configureMCP : .installPlugin
-        pendingPlan = OperationPlan(
-            kind: operationKind,
-            title: "\(action) \(package.name) in \(client.rawValue)",
-            summary: "\(routeDetail) Authentication, connector consent, and target reloads remain under \(client.rawValue).",
-            targetSurfaces: [surface(for: client)],
-            scope: route.scope,
-            steps: [
-                OperationStep(
-                    kind: .command, title: "\(action) through \(client.rawValue)", detail: routeDetail, executable: route.executable,
-                    arguments: arguments),
-                OperationStep(
-                    kind: .scan, title: "Re-scan \(client.rawValue)",
-                    detail: "Confirm local installation state. This does not prove remote authentication or a live connector.",
-                    isReversible: false),
-            ]
-        )
-    }
-
     public func markAccountSurfaceVerified(_ id: UUID) {
         guard ensureReadyForChange() else { return }
         guard let index = accountSurfaces.firstIndex(where: { $0.id == id }) else {
@@ -2044,7 +1093,7 @@ public final class AppModel {
     /// Saving the canonical local definition and preparing target writes are
     /// separate outcomes. A target-path problem must not make a successful
     /// local authoring operation appear to have been rolled back.
-    private func prepareInstallPlanAfterSaving(skill: Skill, draft: SkillDraft) {
+    func prepareInstallPlanAfterSaving(skill: Skill, draft: SkillDraft) {
         guard draft.syncClients else {
             pendingPlan = nil
             return
@@ -2062,7 +1111,7 @@ public final class AppModel {
         }
     }
 
-    private func ensureReadyForChange() -> Bool {
+    func ensureReadyForChange() -> Bool {
         guard !isBusy else {
             lastError = "Wait for the current operation to finish before starting another action."
             return false
@@ -2103,7 +1152,7 @@ public final class AppModel {
                 affectedPaths: restoredPath.map { [$0] } ?? []), at: 0)
     }
 
-    private func applyPersisted(_ snapshot: WorkspaceSnapshot) {
+    func applyPersisted(_ snapshot: WorkspaceSnapshot) {
         skills = snapshot.skills
         mcpServers = snapshot.mcpServers
         plugins = snapshot.plugins
@@ -2126,24 +1175,6 @@ public final class AppModel {
         syncStages = Self.syncStages(from: snapshot.targetObservations)
     }
 
-    private func mergeSkills(existing: [Skill], observed: [Skill]) -> [Skill] {
-        // Preserve only skills authored in the managed library. Vendor and
-        // standalone discoveries are rebuilt on every scan so removals and
-        // scope changes are reflected immediately.
-        var values: [String: Skill] = [:]
-        for skill in existing where skill.owned { values[skill.id] = skill }
-        for item in observed {
-            guard var local = values[item.id], local.owned else {
-                values[item.id] = item
-                continue
-            }
-            local.clients = item.clients
-            local.files = item.files.isEmpty ? local.files : item.files
-            values[item.id] = local
-        }
-        return values.values.sorted { $0.id < $1.id }
-    }
-
     private func mergeMCPServers(existing: [MCPServer], observed: [MCPServer]) -> [MCPServer] {
         // Desired MCP definitions remain portable; purely observed definitions
         // are replaced by the current client inventories.
@@ -2158,12 +1189,6 @@ public final class AppModel {
             values[item.id] = desired
         }
         return values.values.sorted { $0.id < $1.id }
-    }
-
-    private func updateNativeSource(_ kind: SourceKind, detail: String?, in sources: inout [ToolingSource]) {
-        guard let index = sources.firstIndex(where: { $0.kind == kind }) else { return }
-        sources[index].lastRefreshedAt = .now
-        if let detail { sources[index].trustSummary = detail }
     }
 
     private func activity(from receipt: OperationReceipt, plan: OperationPlan) -> ActivityReceipt {
@@ -2207,7 +1232,7 @@ public final class AppModel {
         }
     }
 
-    private func surface(for client: ClientKind) -> TargetSurface {
+    func surface(for client: ClientKind) -> TargetSurface {
         switch client {
         case .claude: .claudeCode
         case .codex: .codexCLI
@@ -2224,7 +1249,7 @@ public final class AppModel {
         return observations.contains(where: \.isCommandAvailable)
     }
 
-    private func currentSnapshot() -> WorkspaceSnapshot {
+    func currentSnapshot() -> WorkspaceSnapshot {
         WorkspaceSnapshot(
             skills: skills,
             mcpServers: mcpServers,
@@ -2258,14 +1283,14 @@ public final class AppModel {
         }
     }
 
-    private func persistOrThrow() throws {
+    func persistOrThrow() throws {
         let snapshot = currentSnapshot()
         try WorkspaceSnapshotValidator.validate(snapshot, mode: .localState)
         try store.saveWorkspaceSnapshot(snapshot)
     }
 
     @discardableResult
-    private func commit(_ candidate: WorkspaceSnapshot) -> Bool {
+    func commit(_ candidate: WorkspaceSnapshot) -> Bool {
         do {
             try WorkspaceSnapshotValidator.validate(candidate, mode: .localState)
             try store.saveWorkspaceSnapshot(candidate)
@@ -2284,7 +1309,7 @@ public final class AppModel {
         if operationReceipts.count > 200 { operationReceipts = Array(operationReceipts.prefix(200)) }
     }
 
-    private func boundedActivityDetail(_ value: String) -> String {
+    func boundedActivityDetail(_ value: String) -> String {
         let redacted = SensitiveValueRedactor.redact(value)
         guard redacted.count > 32_000 else { return redacted }
         return String(redacted.prefix(31_997)) + "…"
@@ -2357,232 +1382,6 @@ public final class AppModel {
         return observations.contains(where: \.isCommandAvailable) ? .complete : .attention
     }
 
-    // MARK: - Projects section (additive block — begin)
-    //
-    // Everything the Projects section needs lives between this marker and the
-    // matching end marker so it can be merged as one unit. Pins and scan roots
-    // are held in the workspace key-value store rather than in
-    // `WorkspaceSnapshot`, so no shared model type changes shape.
-
-    public private(set) var projects: [DiscoveredProject] = []
-    public private(set) var projectScanRoots: [String] = []
-    public private(set) var isDiscoveringProjects = false
-    public private(set) var hasDiscoveredProjects = false
-    private var pinnedProjectPaths: [String] = []
-    private var hasLoadedProjectPreferences = false
-
-    private static let pinnedProjectsKey = "projects.pinned"
-    private static let projectScanRootsKey = "projects.scan-roots"
-    nonisolated private static let maximumPinnedProjects = 128
-    nonisolated private static let maximumProjectScanRoots = 12
-
-    /// Projects are derived, not registered: Claude Code's own session index,
-    /// any folder the user asked to scan, and any folder pinned by hand.
-    public func discoverProjects(force: Bool = false) async {
-        guard !isDiscoveringProjects else { return }
-        guard force || !hasDiscoveredProjects else { return }
-        loadProjectPreferencesIfNeeded()
-        isDiscoveringProjects = true
-        let home = homeURL
-        let pinned = pinnedProjectPaths
-        let roots = projectScanRoots
-        let discovered = await Task.detached {
-            Self.inspectProjects(homeURL: home, pinnedPaths: pinned, scanRoots: roots)
-        }.value
-        projects = discovered
-        isDiscoveringProjects = false
-        hasDiscoveredProjects = true
-    }
-
-    /// Adds a folder the user chose. Choosing it pins it, because a folder
-    /// Claude Code has never run in has nothing else to keep it on the list.
-    public func addProject(at url: URL) async {
-        loadProjectPreferencesIfNeeded()
-        let path = ProjectPath.canonical(url)
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            presentError("That folder is no longer available.")
-            return
-        }
-        guard ProjectDiscovery.isEligibleProjectRoot(url, homeURL: homeURL) else {
-            presentError(
-                "Your home folder is where this Mac's own skills, MCP servers, and plugins live. Choose a project folder inside it.")
-            return
-        }
-        guard !pinnedProjectPaths.contains(path) else { return }
-        guard pinnedProjectPaths.count < Self.maximumPinnedProjects else {
-            presentError("Agent Tooling keeps at most \(Self.maximumPinnedProjects) pinned projects. Unpin one first.")
-            return
-        }
-        guard persistProjectPreferences(pinned: (pinnedProjectPaths + [path]).sorted(), scanRoots: projectScanRoots) else { return }
-        await discoverProjects(force: true)
-    }
-
-    public func setProjectPinned(_ path: String, pinned: Bool) {
-        loadProjectPreferencesIfNeeded()
-        let normalized = ProjectPath.canonical(path)
-        var values = pinnedProjectPaths.filter { $0 != normalized }
-        if pinned {
-            guard values.count < Self.maximumPinnedProjects else {
-                presentError("Agent Tooling keeps at most \(Self.maximumPinnedProjects) pinned projects. Unpin one first.")
-                return
-            }
-            values.append(normalized)
-        }
-        guard persistProjectPreferences(pinned: values.sorted(), scanRoots: projectScanRoots) else { return }
-        guard let index = projects.firstIndex(where: { $0.path == normalized }) else { return }
-        if pinned {
-            projects[index].origins.insert(.pinned)
-        } else {
-            projects[index].origins.remove(.pinned)
-            if projects[index].origins.isEmpty { projects.remove(at: index) }
-        }
-        projects.sort(by: Self.projectOrder)
-    }
-
-    /// Unpins a project. One that is only on the list because it was pinned
-    /// disappears; one Claude Code has run in stays, without the pin.
-    public func forgetProject(_ path: String) {
-        setProjectPinned(path, pinned: false)
-    }
-
-    public func addProjectScanRoot(at url: URL) async {
-        loadProjectPreferencesIfNeeded()
-        let path = ProjectPath.canonical(url)
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            presentError("That folder is no longer available.")
-            return
-        }
-        guard !projectScanRoots.contains(path) else { return }
-        guard projectScanRoots.count < Self.maximumProjectScanRoots else {
-            presentError("Agent Tooling scans at most \(Self.maximumProjectScanRoots) folders. Remove one first.")
-            return
-        }
-        guard persistProjectPreferences(pinned: pinnedProjectPaths, scanRoots: (projectScanRoots + [path]).sorted()) else { return }
-        await discoverProjects(force: true)
-    }
-
-    public func removeProjectScanRoot(_ path: String) async {
-        loadProjectPreferencesIfNeeded()
-        guard projectScanRoots.contains(path) else { return }
-        guard persistProjectPreferences(pinned: pinnedProjectPaths, scanRoots: projectScanRoots.filter { $0 != path }) else { return }
-        await discoverProjects(force: true)
-    }
-
-    /// A read-only preview of the `.gitignore` edit, safe to call while
-    /// drawing. It never reports an error; the write does.
-    public func projectIgnorePlan(for project: DiscoveredProject) -> ProjectIgnorePlan? {
-        try? ProjectGitignore.plan(for: project)
-    }
-
-    /// Appends reviewed lines to a project's `.gitignore`. The plan shown in
-    /// the sheet carries the exact text, and applying it twice changes
-    /// nothing.
-    @discardableResult
-    public func applyProjectIgnorePlan(_ plan: ProjectIgnorePlan) -> Bool {
-        do {
-            let changed = try ProjectGitignore.apply(plan)
-            guard changed else { return false }
-            var candidate = currentSnapshot()
-            candidate.activities.insert(
-                ActivityReceipt(
-                    kind: .configuration,
-                    title: "Machine-local settings added to .gitignore",
-                    detail:
-                        "Appended \(plan.missingPatterns.count) line\(plan.missingPatterns.count == 1 ? "" : "s") so local agent settings are not shared with the repository.",
-                    date: .now,
-                    state: .healthy,
-                    affectedPaths: [plan.gitignorePath]
-                ), at: 0)
-            _ = commit(candidate)
-            refreshProject(at: plan.projectPath)
-            return true
-        } catch {
-            presentError(error.localizedDescription)
-            return false
-        }
-    }
-
-    /// Re-reads one project after a change, without rescanning everything.
-    public func refreshProject(at path: String) {
-        let normalized = ProjectPath.canonical(path)
-        guard let index = projects.firstIndex(where: { $0.path == normalized }) else { return }
-        let origins = projects[index].origins
-        guard let refreshed = ProjectDiscovery.inspect(root: URL(fileURLWithPath: normalized, isDirectory: true), origins: origins)
-        else {
-            projects.remove(at: index)
-            return
-        }
-        projects[index] = refreshed
-    }
-
-    private func loadProjectPreferencesIfNeeded() {
-        guard !hasLoadedProjectPreferences else { return }
-        hasLoadedProjectPreferences = true
-        pinnedProjectPaths = (try? store.load(Self.pinnedProjectsKey, as: [String].self)) ?? []
-        projectScanRoots = (try? store.load(Self.projectScanRootsKey, as: [String].self)) ?? []
-    }
-
-    private func persistProjectPreferences(pinned: [String], scanRoots: [String]) -> Bool {
-        do {
-            try store.save(pinned, for: Self.pinnedProjectsKey)
-            try store.save(scanRoots, for: Self.projectScanRootsKey)
-            pinnedProjectPaths = pinned
-            projectScanRoots = scanRoots
-            return true
-        } catch {
-            presentError("The project list could not be saved: \(error.localizedDescription)")
-            return false
-        }
-    }
-
-    nonisolated private static func inspectProjects(
-        homeURL: URL,
-        pinnedPaths: [String],
-        scanRoots: [String]
-    ) -> [DiscoveredProject] {
-        var origins: [String: Set<ProjectDiscoveryOrigin>] = [:]
-        var order: [String] = []
-
-        func add(_ url: URL, _ origin: ProjectDiscoveryOrigin) {
-            guard ProjectDiscovery.isEligibleProjectRoot(url, homeURL: homeURL) else { return }
-            let key = ProjectPath.canonical(url)
-            if origins[key] == nil { order.append(key) }
-            origins[key, default: []].insert(origin)
-        }
-
-        for path in pinnedPaths.prefix(maximumPinnedProjects) {
-            add(URL(fileURLWithPath: path, isDirectory: true), .pinned)
-        }
-        for root in scanRoots.prefix(maximumProjectScanRoots) {
-            for url in ProjectDiscovery.scannedRoots(under: URL(fileURLWithPath: root, isDirectory: true)) {
-                add(url, .scannedRoot)
-            }
-        }
-        for url in ProjectDiscovery.sessionIndexRoots(homeURL: homeURL) {
-            add(url, .sessionIndex)
-        }
-
-        return
-            order
-            .compactMap { path in
-                ProjectDiscovery.inspect(root: URL(fileURLWithPath: path, isDirectory: true), origins: origins[path] ?? [])
-            }
-            .sorted(by: projectOrder)
-    }
-
-    /// Pinned first, then projects that carry configuration of their own, then
-    /// the plain ones. Ordering is a configuration fact, never recency.
-    nonisolated private static func projectOrder(_ left: DiscoveredProject, _ right: DiscoveredProject) -> Bool {
-        if left.isPinned != right.isPinned { return left.isPinned }
-        if left.isPlain != right.isPlain { return right.isPlain }
-        let comparison = left.name.localizedCaseInsensitiveCompare(right.name)
-        if comparison != .orderedSame { return comparison == .orderedAscending }
-        return left.path < right.path
-    }
-
-    // MARK: - Projects section (additive block — end)
 }
 
 private extension String {
