@@ -31,7 +31,7 @@ struct CollectionsView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 190)
+                .fixedSize()
                 .accessibilityLabel("Collections or tags")
 
                 if mode == .collections {

@@ -77,17 +77,22 @@ struct ProjectsView: View {
 
     private var collectionPane: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
+            VStack(spacing: 9) {
                 TextField("Search projects", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Search projects")
-                Picker("Show", selection: $filter) {
-                    ForEach(ProjectFilter.allCases) { item in Text(item.rawValue).tag(item) }
+                HStack(spacing: 8) {
+                    // A fixed width clipped the segmented control, so selecting
+                    // a segment resized it over the search field beside it.
+                    Picker("Show", selection: $filter) {
+                        ForEach(ProjectFilter.allCases) { item in Text(item.rawValue).tag(item) }
+                    }
+                    .labelsHidden()
+                    .accessibilityLabel("Project filter")
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    Spacer(minLength: 0)
                 }
-                .labelsHidden()
-                .accessibilityLabel("Project filter")
-                .pickerStyle(.segmented)
-                .frame(width: 196)
             }
             .padding(12)
 
@@ -620,7 +625,11 @@ private struct ComponentRows: View {
     let project: DiscoveredProject
 
     var body: some View {
-        VStack(spacing: 0) {
+        // A project inherits everything installed on this Mac, so this list is
+        // routinely hundreds of rows. Building them lazily keeps scrolling
+        // smooth; a plain stack instantiated every row, and every row's tile,
+        // client marks and path popover, before the first one appeared.
+        LazyVStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 InfoRow(row.name, detail: row.detail) {
                     KindTile(kind: tile(for: row.kind), size: 26, ghost: row.origin == .inherited)

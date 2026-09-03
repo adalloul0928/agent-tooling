@@ -108,15 +108,24 @@ struct MCPServersView: View {
                 TextField("Search servers", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Search MCP servers")
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            HStack(spacing: 8) {
+                // Sized to its content: a fixed width clipped the control, so
+                // selecting a segment resized it over the search field.
                 Picker("Status", selection: $filter) {
                     ForEach(MCPFilter.allCases) { item in Text(item.rawValue).tag(item) }
                 }
                 .labelsHidden()
                 .accessibilityLabel("MCP server status")
                 .pickerStyle(.segmented)
-                .frame(width: 172)
+                .fixedSize()
+                Spacer(minLength: 0)
             }
-            .padding(12)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+            .padding(.top, 9)
 
             if filteredServers.isEmpty {
                 EmptyStateView(
