@@ -8,6 +8,10 @@ struct MCPServersView: View {
     @State private var filter: MCPFilter = .all
     @State private var selectedID = ""
     @State private var showingAddServer = false
+    // BEGIN live-test-console: recorded per-tool intent, shared by the row badge
+    // and the detail pane's capability switches.
+    @State private var capabilities = MCPCapabilityModel()
+    // END live-test-console
 
     var body: some View {
         VStack(spacing: 0) {
@@ -48,6 +52,10 @@ struct MCPServersView: View {
         .onAppear { selectFirstVisibleServerIfNeeded() }
         .onChange(of: model.mcpServers) { _, _ in selectFirstVisibleServerIfNeeded() }
         .onChange(of: filteredServers.map(\.id)) { _, _ in selectFirstVisibleServerIfNeeded() }
+        // BEGIN live-test-console
+        .environment(capabilities)
+        .task { capabilities.activate(workspaceRoot: URL(fileURLWithPath: model.workspacePath, isDirectory: true)) }
+        // END live-test-console
     }
 
     private var collectionPane: some View {
@@ -173,6 +181,9 @@ private struct MCPCollectionRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 12)
+            // BEGIN live-test-console
+            MCPCapabilityBadge(serverID: server.id, selected: selected)
+            // END live-test-console
             ClientMarks(present: Set(server.clients.filter(\.reportsLocalPresence).map(\.client)), size: 13)
             StatusGlyph(state: server.aggregateState, size: 13, tint: selected ? Color.white : nil)
         }
@@ -256,6 +267,10 @@ private struct MCPDetailView: View {
                         }
                     }
                 }
+
+                // BEGIN live-test-console
+                MCPServerCapabilitiesPane(server: server)
+                // END live-test-console
 
                 if !server.secretNames.isEmpty {
                     GroupBox("Secret references") {
