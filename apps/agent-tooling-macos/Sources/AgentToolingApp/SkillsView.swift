@@ -9,6 +9,8 @@ struct SkillsView: View {
     @State private var query = ""
     @State private var scope: SkillScope = .all
     @State private var clientFilter: SkillClientFilter = .all
+    @State private var tagFilter: Set<String> = []
+    @State private var untaggedOnly = false
     @State private var selectedID = ""
     @State private var skillBeingEdited: Skill?
     @State private var codexCreatorPresented = false
@@ -121,6 +123,8 @@ struct SkillsView: View {
         .onChange(of: query) { _, _ in displayLimit = Self.pageSize }
         .onChange(of: scope) { _, _ in displayLimit = Self.pageSize }
         .onChange(of: clientFilter) { _, _ in displayLimit = Self.pageSize }
+        .onChange(of: tagFilter) { _, _ in displayLimit = Self.pageSize }
+        .onChange(of: untaggedOnly) { _, _ in displayLimit = Self.pageSize }
     }
 
     /// Resolved once per layout pass. Asking the model per row would make the
@@ -150,6 +154,14 @@ struct SkillsView: View {
                     .accessibilityLabel("Filter by app")
                     .fixedSize()
                 }
+                if !skillTags.isEmpty {
+                    TagFilterBar(
+                        tags: skillTags,
+                        untaggedCount: untaggedSkillCount,
+                        selection: $tagFilter,
+                        untaggedOnly: $untaggedOnly
+                    )
+                }
             }
             .padding(12)
 
@@ -176,7 +188,9 @@ struct SkillsView: View {
                                             skill: skill,
                                             selected: isSelecting ? selection.contains(skill.id) : skill.id == selectedID,
                                             selecting: isSelecting,
-                                            isAdoptable: adoptable.contains(skill.id)
+                                            isAdoptable: adoptable.contains(skill.id),
+                                            tags: model.tags(for: reference(for: skill)),
+                                            collections: model.collections(containing: reference(for: skill)).map(\.name)
                                         )
                                     }
                                     .buttonStyle(.plain)
@@ -242,9 +256,31 @@ struct SkillsView: View {
         }
     }
 
+    /// Tagging is filtering only — it never changes what is installed.
+    private func reference(for skill: Skill) -> ToolingItemReference {
+        ToolingItemReference(kind: .skill, identifier: skill.id)
+    }
+
+    private var skillTags: [String] {
+        let used = Set(model.skills.flatMap { model.tags(for: reference(for: $0)) })
+        return used.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    private var untaggedSkillCount: Int {
+        model.skills.filter { model.tags(for: reference(for: $0)).isEmpty }.count
+    }
+
+    private func matchesTagFilter(_ skill: Skill) -> Bool {
+        let assigned = model.tags(for: reference(for: skill))
+        if untaggedOnly { return assigned.isEmpty }
+        guard !tagFilter.isEmpty else { return true }
+        return !tagFilter.isDisjoint(with: Set(assigned))
+    }
+
     private var filteredSkills: [Skill] {
         model.skills.filter { skill in
             (scope == .all || skill.owned)
+                && matchesTagFilter(skill)
                 && clientFilter.matches(skill)
                 && (query.isEmpty
                     || [skill.name, skill.displayName, skill.summary, skill.bundle].joined(separator: " ").localizedCaseInsensitiveContains(
@@ -465,6 +501,8 @@ private struct SkillCollectionRow: View {
     /// nothing to adopt. Its checkbox stays dim rather than disappearing, so
     /// the rows keep one shape.
     var isAdoptable = false
+    var tags: [String] = []
+    var collections: [String] = []
 
     var body: some View {
         HStack(spacing: 11) {
@@ -481,12 +519,19 @@ private struct SkillCollectionRow: View {
                     .font(.caption)
                     .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
                     .lineLimit(1)
+                // Membership is visible without opening every Collection.
+                if !tags.isEmpty || !collections.isEmpty {
+                    HStack(spacing: 6) {
+                        CollectionPills(names: collections, selected: selected)
+                        TagPills(tags: tags, selected: selected)
+                    }
+                }
             }
             Spacer(minLength: 12)
             ClientMarks(present: Set(skill.clients.filter(\.reportsLocalPresence).map(\.client)))
         }
         .padding(.horizontal, 13)
-        .frame(height: 52)
+        .frame(height: tags.isEmpty && collections.isEmpty ? 52 : 64)
         .rowSelection(selected)
         .contentShape(Rectangle())
     }
