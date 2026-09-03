@@ -91,7 +91,25 @@ struct ProjectsView: View {
             }
             .padding(12)
 
-            if filteredProjects.isEmpty {
+            if model.isDiscoveringProjects && filteredProjects.isEmpty {
+                // Scanning a machine's worth of recorded folders takes a
+                // noticeable moment. Saying "no projects yet" while the answer
+                // is still being worked out states something untrue.
+                VStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Looking for projects on this Mac…")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Text("Reading the folders Claude Code has run in, then checking each one for its own configuration.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 300)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .combine)
+            } else if filteredProjects.isEmpty {
                 EmptyStateView(
                     symbol: "folder.badge.gearshape",
                     title: emptyStateTitle,
