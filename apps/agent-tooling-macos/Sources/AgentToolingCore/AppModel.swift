@@ -491,6 +491,21 @@ public final class AppModel {
         }
     }
 
+    /// Presents a plan composed outside the model — a stack of picks reviewed
+    /// together — through the same review sheet. Composition grants no new
+    /// authority: the engine still checks every command against its fixed
+    /// allowlist before anything runs.
+    @discardableResult
+    public func reviewComposedPlan(_ plan: OperationPlan) -> Bool {
+        guard ensureReadyForChange() else { return false }
+        guard !plan.steps.isEmpty else {
+            lastError = "There is nothing to review in this plan."
+            return false
+        }
+        pendingPlan = plan
+        return true
+    }
+
     public func presentError(_ message: String) {
         let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines)
         lastError = normalized.isEmpty ? "An unknown error occurred." : normalized

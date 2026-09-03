@@ -4,12 +4,29 @@ import SwiftUI
 struct PluginsView: View {
     @Environment(AppModel.self) private var model
     let navigate: (AppSection) -> Void
+    @Binding var request: ScreenRequest?
     @State private var query = ""
-    @State private var selectedID = ""
+    @State private var selection: Set<String> = []
+    @State private var stackClient: ClientKind = .claude
+    @State private var stackError: String?
+
+    init(navigate: @escaping (AppSection) -> Void, request: Binding<ScreenRequest?> = .constant(nil)) {
+        self.navigate = navigate
+        _request = request
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Plugins", context: "\(model.plugins.count) installed") {
+            PageToolbar(title: "Plugins", context: toolbarContext) {
+                Button {
+                    Task { await model.refreshMarketplace() }
+                } label: {
+                    Label(model.isRefreshingMarketplace ? "Checking…" : "Check for updates", systemImage: "arrow.down.circle")
+                }
+                .buttonStyle(.bordered)
+                .help("Re-reads every reviewed catalog and source, then compares revisions")
+                .disabled(model.isInteractionLocked)
+
                 Button {
                     Task { await model.runDoctor() }
                 } label: {
@@ -32,9 +49,22 @@ struct PluginsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear { selectFirstVisiblePluginIfNeeded() }
-        .onChange(of: model.plugins) { _, _ in selectFirstVisiblePluginIfNeeded() }
-        .onChange(of: filteredPlugins.map(\.id)) { _, _ in selectFirstVisiblePluginIfNeeded() }
+        .onAppear {
+            pruneSelection()
+            consumeRequest()
+        }
+        .onChange(of: model.plugins) { _, _ in pruneSelection() }
+        .onChange(of: filteredPlugins.map(\.id)) { _, _ in pruneSelection() }
+        .onChange(of: request) { _, _ in consumeRequest() }
+    }
+
+    private func consumeRequest() {
+        guard let request else { return }
+        if case .selectPlugin(let id) = request, model.plugins.contains(where: { $0.id == id }) {
+            query = ""
+            selection = [id]
+        }
+        self.request = nil
     }
 
     private var collectionPane: some View {
@@ -58,12 +88,16 @@ struct PluginsView: View {
                     if query.isEmpty { navigate(.marketplace) } else { query = "" }
                 }
             } else {
-                List(filteredPlugins, selection: $selectedID) { plugin in
-                    PluginCollectionRow(plugin: plugin, selected: selectedID == plugin.id)
-                        .tag(plugin.id)
-                        .listRowBackground(SelectionRowBackground(selected: selectedID == plugin.id))
-                        .accessibilityLabel(plugin.name)
-                        .accessibilityValue(plugin.id == selectedID ? "Selected" : "")
+                List(filteredPlugins, selection: $selection) { plugin in
+                    PluginCollectionRow(
+                        plugin: plugin,
+                        availability: availability(for: plugin),
+                        selected: selection.contains(plugin.id)
+                    )
+                    .tag(plugin.id)
+                    .listRowBackground(SelectionRowBackground(selected: selection.contains(plugin.id)))
+                    .accessibilityLabel(plugin.name)
+                    .accessibilityValue(selection.contains(plugin.id) ? "Selected" : "")
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
@@ -74,12 +108,52 @@ struct PluginsView: View {
 
     @ViewBuilder
     private var detailPane: some View {
-        if let plugin = selectedPlugin {
-            PluginDetailView(plugin: plugin).environment(model)
+        if stackedPlugins.count > 1 {
+            PluginStackPane(
+                plugins: stackedPlugins,
+                client: $stackClient,
+                error: stackError,
+                onReview: reviewStack,
+                onClear: { selection = Set(stackedPlugins.prefix(1).map(\.id)) }
+            )
+        } else if let plugin = selectedPlugin {
+            PluginDetailView(plugin: plugin, availability: availability(for: plugin)).environment(model)
         } else {
             EmptyStateView(
                 symbol: "puzzlepiece.extension", title: "Select a plugin",
                 message: "Inspect its contents, app parity, source revision, and configuration assignments.")
+        }
+    }
+
+    private func availability(for plugin: Plugin) -> UpdateAvailability {
+        UpdateAvailabilityEvaluator.evaluate(plugin: plugin, sources: model.sources, packages: model.marketplacePackages)
+    }
+
+    private var toolbarContext: String {
+        let summary = UpdateAvailabilityEvaluator.summary(model.pluginUpdateAvailability().map(\.availability))
+        let installed = "\(model.plugins.count) installed"
+        guard !model.plugins.isEmpty else { return installed }
+        return "\(installed) · \(summary.sentence)"
+    }
+
+    /// Several picks, one plan. Removing plugins one at a time means one review
+    /// each; the stack makes it a single reviewed operation.
+    private var stackedPlugins: [Plugin] {
+        model.plugins
+            .filter { selection.contains($0.id) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    private func reviewStack() {
+        do {
+            let plan = try StackedPlanBuilder.pluginRemovalPlan(
+                plugins: stackedPlugins,
+                client: stackClient,
+                packages: model.marketplacePackages
+            )
+            stackError = model.reviewComposedPlan(plan) ? nil : model.lastError
+        } catch {
+            stackError = error.localizedDescription
         }
     }
 
@@ -93,16 +167,26 @@ struct PluginsView: View {
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    private var selectedPlugin: Plugin? { model.plugins.first { $0.id == selectedID } }
+    private var selectedPlugin: Plugin? {
+        guard let id = selection.first, selection.count == 1 else { return nil }
+        return model.plugins.first { $0.id == id }
+    }
 
-    private func selectFirstVisiblePluginIfNeeded() {
-        guard !filteredPlugins.contains(where: { $0.id == selectedID }) else { return }
-        selectedID = filteredPlugins.first?.id ?? ""
+    private func pruneSelection() {
+        let visible = filteredPlugins.map(\.id)
+        let kept = selection.intersection(visible)
+        if kept.isEmpty {
+            selection = Set(visible.prefix(1))
+        } else if kept != selection {
+            selection = kept
+        }
+        stackError = nil
     }
 }
 
 private struct PluginCollectionRow: View {
     let plugin: Plugin
+    let availability: UpdateAvailability
     let selected: Bool
 
     var body: some View {
@@ -119,15 +203,81 @@ private struct PluginCollectionRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 12)
+            UpdateStateBadge(availability: availability)
             ClientMarks(present: Set(plugin.clients.filter(\.reportsLocalPresence).map(\.client)))
         }
         .padding(.vertical, 6)
     }
 }
 
+/// Removing several plugins is one reviewed operation, or none: a selection
+/// without a verified removal route for the chosen app is refused with the
+/// reason, never partially planned.
+private struct PluginStackPane: View {
+    @Environment(AppModel.self) private var model
+    let plugins: [Plugin]
+    @Binding var client: ClientKind
+    let error: String?
+    let onReview: () -> Void
+    let onClear: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 14) {
+                    KindTile(kind: .plugin, size: 40)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(plugins.count) plugins selected").font(.title3.weight(.semibold))
+                        Text("Remove them through one reviewed plan.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Review removal plan", action: onReview)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.isInteractionLocked)
+                }
+
+                if let error {
+                    AttentionBanner(title: "This stack cannot be planned yet", message: error) {
+                        Button("Keep one", action: onClear)
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                }
+
+                GroupBox("Remove from") {
+                    Picker("App", selection: $client) {
+                        ForEach(ClientKind.allCases) { candidate in Text(candidate.rawValue).tag(candidate) }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .padding(13)
+                    .accessibilityLabel("App to remove from")
+                }
+
+                GroupBox("In this stack") {
+                    VStack(spacing: 0) {
+                        ForEach(plugins) { plugin in
+                            InfoRow(plugin.name, detail: "\(plugin.skills.count) skills · \(plugin.scope)") {
+                                KindTile(kind: .plugin, size: 26)
+                            } trailing: {
+                                ClientMarks(present: Set(plugin.clients.filter(\.reportsLocalPresence).map(\.client)), size: 13)
+                            }
+                            if plugin.id != plugins.last?.id { Divider().opacity(0.35) }
+                        }
+                    }
+                }
+            }
+            .padding(22)
+        }
+    }
+}
+
 private struct PluginDetailView: View {
     @Environment(AppModel.self) private var model
     let plugin: Plugin
+    let availability: UpdateAvailability
 
     var body: some View {
         ScrollView {
@@ -139,6 +289,32 @@ private struct PluginDetailView: View {
                         Text(plugin.summary).font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
+                    UpdateStateBadge(availability: availability, showsWhenCurrent: true)
+                }
+
+                GroupBox("Updates") {
+                    VStack(spacing: 0) {
+                        LabeledValueRow(availability.title) {
+                            HStack(spacing: 8) {
+                                StatusGlyph(state: availability.health, size: 14)
+                                Text(availability.detail)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Divider()
+                        LabeledValueRow("Last checked") {
+                            HStack(spacing: 10) {
+                                Text(lastCheckedText).foregroundStyle(.secondary)
+                                Button(model.isRefreshingMarketplace ? "Checking…" : "Check again") {
+                                    Task { await model.refreshMarketplace() }
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .disabled(model.isInteractionLocked)
+                            }
+                        }
+                    }
                 }
 
                 GroupBox("Installed in") {
@@ -232,4 +408,14 @@ private struct PluginDetailView: View {
         plugin.skills.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
+    /// Says when the comparison happened, so "up to date" is always dated.
+    private var lastCheckedText: String {
+        let candidates = [
+            UpdateAvailabilityEvaluator.trackedSource(for: plugin, in: model.sources)?.lastRefreshedAt,
+            UpdateAvailabilityEvaluator.catalogPackage(for: plugin, in: model.marketplacePackages)
+                .flatMap { package in model.sources.first { $0.id == package.sourceID }?.lastRefreshedAt },
+        ]
+        guard let date = candidates.compactMap({ $0 }).max() else { return "Not checked yet" }
+        return date.formatted(.relative(presentation: .named))
+    }
 }
