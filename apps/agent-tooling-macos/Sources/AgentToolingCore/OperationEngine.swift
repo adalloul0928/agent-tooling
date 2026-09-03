@@ -277,10 +277,21 @@ public actor OperationExecutor {
                 reviewedFingerprint: sourceFingerprint,
                 planStepID: step.id
             )
-            let removalNote =
-                removals > 0
-                ? " \(removals) item\(removals == 1 ? "" : "s") that were here before are not part of this package."
-                : ""
+            let removalNote: String
+            switch (removals.count, removals.isTruncated) {
+            case (0, false):
+                removalNote = ""
+            case (0, true):
+                removalNote = " This folder was too large to compare completely, so items it replaced may not be counted."
+            case (let count, let isTruncated):
+                let items = "\(count) item\(count == 1 ? "" : "s")"
+                let wasWere = count == 1 ? "was" : "were"
+                let isAre = count == 1 ? "is" : "are"
+                removalNote =
+                    isTruncated
+                    ? " At least \(items) that \(wasWere) here before \(isAre) not part of this package; it was too large to compare completely."
+                    : " \(items) that \(wasWere) here before \(isAre) not part of this package."
+            }
             return (.succeeded, "Installed local package at \(destination.path(percentEncoded: false)).\(removalNote)\(ledgerNote)")
 
         case .replaceManagedLibrary:
@@ -376,10 +387,11 @@ public actor OperationExecutor {
         }
     }
 
-    /// Counts destination entries the incoming package does not contain. Used
-    /// only to describe the completed replacement in the receipt; the plan
-    /// review lists them by name before approval.
-    private func removedEntryCount(replacing destination: URL, with source: URL) -> Int {
+    /// Counts destination entries the incoming package does not contain, and
+    /// says whether the comparison was complete. Used only to describe the
+    /// completed replacement in the receipt; the plan review lists them by name
+    /// before approval.
+    private func removedEntryCount(replacing destination: URL, with source: URL) -> (count: Int, isTruncated: Bool) {
         let reviewer = OperationPlanSafetyReviewer(
             authority: installAuthority,
             managedRoots: managedRoots,
