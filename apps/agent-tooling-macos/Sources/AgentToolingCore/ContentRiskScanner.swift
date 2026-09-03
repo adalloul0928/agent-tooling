@@ -121,7 +121,7 @@ public struct ContentRiskReport: Codable, Hashable, Sendable {
         guard !findings.isEmpty else {
             let scanned = "\(filesScanned) file\(filesScanned == 1 ? "" : "s")"
             return reachedScanLimit
-                ? "No content risks in the \(scanned) that could be scanned. The package was too large to read completely."
+                ? "No content risks in the \(scanned) that could be read. Some of this package was too large, too long, or not readable as text, so this is a partial answer rather than a clean bill."
                 : "No content risks found in \(scanned)."
         }
         var parts: [String] = []
@@ -224,8 +224,16 @@ public enum ContentRiskScanner {
                 reachedLimit = true
                 continue
             }
-            guard let data = try? Data(contentsOf: item), let text = String(data: data, encoding: .utf8) else { continue }
-            findings.append(contentsOf: Self.findings(inText: text, relativePath: relativePath, limits: limits))
+            // A file the scanner cannot decode has not been checked. Counting it
+            // as scanned and saying nothing would let one invalid byte in a
+            // SKILL.md buy a "no content risks found" verdict.
+            guard let data = try? Data(contentsOf: item), let text = String(data: data, encoding: .utf8) else {
+                reachedLimit = true
+                continue
+            }
+            let inspection = Self.inspect(text: text, relativePath: relativePath, limits: limits)
+            findings.append(contentsOf: inspection.findings)
+            if inspection.wasTruncated { reachedLimit = true }
         }
 
         let bounded = Array(findings.prefix(limits.maximumFindings))
@@ -243,13 +251,29 @@ public enum ContentRiskScanner {
         relativePath: String,
         limits: Limits = Limits()
     ) -> [ContentRiskFinding] {
+        inspect(text: text, relativePath: relativePath, limits: limits).findings
+    }
+
+    /// One text's findings, plus whether a bound stopped the scan short of the
+    /// whole text. `scan` needs that second half: pattern rules see only the
+    /// first `maximumScannedLineCharacters` of a line and the first
+    /// `maximumLines` lines, so padding is enough to push an instruction out of
+    /// range. A report that then says "no content risks found" is wrong, not
+    /// merely incomplete.
+    static func inspect(
+        text: String,
+        relativePath: String,
+        limits: Limits = Limits()
+    ) -> (findings: [ContentRiskFinding], wasTruncated: Bool) {
         var findings: [ContentRiskFinding] = []
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        var wasTruncated = lines.count > limits.maximumLines
         for (index, rawLine) in lines.prefix(limits.maximumLines).enumerated() {
             let number = index + 1
             let line = String(rawLine)
             // A byte-order mark at the very start of a file is ordinary.
             let inspected = number == 1 ? Self.strippingLeadingByteOrderMark(line) : line
+            if inspected.count > Self.maximumScannedLineCharacters { wasTruncated = true }
             findings.append(contentsOf: hiddenCharacterFindings(in: inspected, relativePath: relativePath, line: number))
             findings.append(contentsOf: patternFindings(in: inspected, relativePath: relativePath, line: number))
             if number == 1, inspected.hasPrefix("#!") {
@@ -266,7 +290,7 @@ public enum ContentRiskScanner {
             }
             guard findings.count < limits.maximumFindings else { break }
         }
-        return Array(findings.prefix(limits.maximumFindings))
+        return (Array(findings.prefix(limits.maximumFindings)), wasTruncated)
     }
 
     // MARK: - Hidden Unicode
@@ -274,8 +298,8 @@ public enum ContentRiskScanner {
     /// Characters that occupy no visual space. Text a reviewer reads and text
     /// an agent receives stop matching, which is the whole attack.
     private static let zeroWidthScalars: Set<Unicode.Scalar> = [
-        "\u{00AD}", "\u{061C}", "\u{180E}", "\u{200B}", "\u{200C}", "\u{200D}", "\u{2060}", "\u{2061}", "\u{2062}", "\u{2063}",
-        "\u{2064}", "\u{FEFF}",
+        "\u{00AD}", "\u{034F}", "\u{061C}", "\u{115F}", "\u{1160}", "\u{180E}", "\u{200B}", "\u{200C}", "\u{200D}", "\u{2060}",
+        "\u{2061}", "\u{2062}", "\u{2063}", "\u{2064}", "\u{2800}", "\u{3164}", "\u{FEFF}", "\u{FFA0}",
     ]
 
     /// Bidirectional overrides reorder rendered text without changing bytes,
@@ -286,11 +310,34 @@ public enum ContentRiskScanner {
 
     private static let tagBlockRange: ClosedRange<UInt32> = 0xE0000...0xE007F
 
+    /// Variation Selectors Supplement. 240 invisible code points with no use in
+    /// a skill or plugin, which is exactly what makes them the other standard
+    /// carrier for smuggled text alongside the Tags block.
+    private static let variationSelectorSupplementRange: ClosedRange<UInt32> = 0xE0100...0xE01EF
+
+    /// The original variation selectors. Unlike the supplement these are
+    /// everyday characters — U+FE0F is what makes an emoji render in colour —
+    /// so a single one proves nothing and only a run is worth reporting.
+    private static let variationSelectorRange: ClosedRange<UInt32> = 0xFE00...0xFE0F
+
+    /// A run this long is a payload rather than text presentation.
+    private static let variationSelectorRunThreshold = 4
+
     private static func hiddenCharacterFindings(in line: String, relativePath: String, line number: Int) -> [ContentRiskFinding] {
         var zeroWidth: [Unicode.Scalar] = []
         var bidirectional: [Unicode.Scalar] = []
         var tagScalars: [Unicode.Scalar] = []
+        var variationSelectors: [Unicode.Scalar] = []
+        var currentRun = 0
+        var longestVariationSelectorRun = 0
         for scalar in line.unicodeScalars {
+            if variationSelectorRange.contains(scalar.value) || variationSelectorSupplementRange.contains(scalar.value) {
+                currentRun += 1
+                longestVariationSelectorRun = max(longestVariationSelectorRun, currentRun)
+                if variationSelectorSupplementRange.contains(scalar.value) { variationSelectors.append(scalar) }
+                continue
+            }
+            currentRun = 0
             if tagBlockRange.contains(scalar.value) {
                 tagScalars.append(scalar)
             } else if bidirectionalScalars.contains(scalar) {
@@ -299,9 +346,27 @@ public enum ContentRiskScanner {
                 zeroWidth.append(scalar)
             }
         }
-        guard !zeroWidth.isEmpty || !bidirectional.isEmpty || !tagScalars.isEmpty else { return [] }
+        let smuggledVariationSelectors =
+            !variationSelectors.isEmpty || longestVariationSelectorRun >= variationSelectorRunThreshold
+        guard !zeroWidth.isEmpty || !bidirectional.isEmpty || !tagScalars.isEmpty || smuggledVariationSelectors else {
+            return []
+        }
 
         var findings: [ContentRiskFinding] = []
+        if smuggledVariationSelectors {
+            let count = max(variationSelectors.count, longestVariationSelectorRun)
+            findings.append(
+                ContentRiskFinding(
+                    category: .hiddenUnicode,
+                    severity: .malicious,
+                    relativePath: relativePath,
+                    line: number,
+                    headline: "\(count) invisible variation selector\(count == 1 ? "" : "s") carry hidden text",
+                    evidence: Self.visibleExcerpt(line),
+                    guidance:
+                        "Variation selectors take no space on screen but encode a byte each. An agent reads them; you did not."
+                ))
+        }
         if !tagScalars.isEmpty {
             let decoded = Self.decodedTagText(tagScalars)
             findings.append(
@@ -490,8 +555,15 @@ public enum ContentRiskScanner {
         ),
     ]
 
+    /// How much of a single line the pattern rules read. Regex cost grows with
+    /// line length, so a bound is necessary — but `inspect` reports when one is
+    /// hit, because everything past it is unexamined rather than clean.
+    static let maximumScannedLineCharacters = 8_000
+
     private static func patternFindings(in line: String, relativePath: String, line number: Int) -> [ContentRiskFinding] {
-        let bounded = line.count > 8_000 ? String(line.prefix(8_000)) : line
+        let bounded =
+            line.count > Self.maximumScannedLineCharacters
+            ? String(line.prefix(Self.maximumScannedLineCharacters)) : line
         guard !bounded.isEmpty else { return [] }
         var findings: [ContentRiskFinding] = []
         for rule in patternRules {
@@ -562,7 +634,10 @@ public enum ContentRiskScanner {
     private static func visibleExcerpt(_ text: String, limit: Int = 160) -> String {
         var rendered = ""
         for scalar in text.unicodeScalars {
-            if tagBlockRange.contains(scalar.value) || bidirectionalScalars.contains(scalar) || zeroWidthScalars.contains(scalar) {
+            if tagBlockRange.contains(scalar.value) || variationSelectorSupplementRange.contains(scalar.value)
+                || variationSelectorRange.contains(scalar.value) || bidirectionalScalars.contains(scalar)
+                || zeroWidthScalars.contains(scalar)
+            {
                 rendered += String(format: "<U+%04X>", scalar.value)
             } else {
                 rendered.unicodeScalars.append(scalar)
