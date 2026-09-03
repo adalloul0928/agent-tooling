@@ -12,8 +12,19 @@ extension AppModel {
         case .mcpServers: mcpHealth
         case .profiles: configurationsHealth
         case .accounts: accountsHealth
-        case .overview, .marketplace, .insights, .syncCenter, .activity, .settings: nil
+        case .projects: projectsHealth
+        case .overview, .marketplace, .insights, .collections, .syncCenter, .activity, .settings: nil
         }
+    }
+
+    /// Only what discovery has actually inspected. Before a scan there is no
+    /// verdict to give, and a project carrying no local configuration reports
+    /// nothing rather than a reassuring tick it has not earned.
+    private var projectsHealth: HealthState? {
+        let inspected = projects.compactMap(\.configurationHealth)
+        if inspected.contains(.attention) { return .attention }
+        if inspected.contains(.pending) { return .pending }
+        return nil
     }
 
     /// The plugin verdicts this app is prepared to stand behind, in list order.
