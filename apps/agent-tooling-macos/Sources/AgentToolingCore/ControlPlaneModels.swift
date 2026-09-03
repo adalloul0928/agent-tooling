@@ -23,8 +23,6 @@ public enum ToolingScope: String, Codable, CaseIterable, Identifiable, Sendable 
     }
 }
 
-public typealias ClientScope = ToolingScope
-
 public enum TargetSurface: String, Codable, CaseIterable, Identifiable, Sendable {
     case claudeCode
     case claudeDesktop
@@ -66,8 +64,6 @@ public enum TargetSurface: String, Codable, CaseIterable, Identifiable, Sendable
         }
     }
 }
-
-public typealias ClientTarget = TargetSurface
 
 public enum ComponentKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case skill

@@ -52,12 +52,6 @@ extension NSColor {
     }
 }
 
-extension Color {
-    init(hex: UInt32, alpha: Double = 1) {
-        self.init(nsColor: NSColor(hex: hex, alpha: alpha))
-    }
-}
-
 /// The window itself is the one translucent surface. Everything operational
 /// sits on the paper pane above it, so the desktop never competes with rows.
 struct DesktopGlassBackground: NSViewRepresentable {

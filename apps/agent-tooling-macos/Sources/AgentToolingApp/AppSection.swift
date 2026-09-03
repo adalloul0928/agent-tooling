@@ -34,14 +34,6 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .settings: "gearshape"
         }
     }
-
-    var navigationGroup: NavigationGroup {
-        switch self {
-        case .overview, .insights, .marketplace: .home
-        case .skills, .plugins, .mcpServers, .collections, .profiles: .manage
-        case .projects, .syncCenter, .activity, .accounts, .settings: .operations
-        }
-    }
 }
 
 /// Sidebar groups, in display order. The first group has no title.

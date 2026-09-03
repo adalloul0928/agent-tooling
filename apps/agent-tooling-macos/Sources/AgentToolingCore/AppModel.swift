@@ -149,10 +149,6 @@ public final class AppModel {
         isBusy || pendingPlan != nil
     }
 
-    public var usableMCPCount: Int {
-        mcpServers.filter { $0.aggregateState == .healthy }.count
-    }
-
     public var attentionCount: Int {
         let mcpAttention = mcpServers.filter { $0.aggregateState == .attention || $0.aggregateState == .unavailable }.count
         let profileAttention = activeProfile?.checks.filter { $0.state == .attention || $0.state == .unavailable }.count ?? 0
@@ -1202,11 +1198,6 @@ public final class AppModel {
 
     /// Every item a configuration reaches through its included collections,
     /// de-duplicated across overlapping shelves.
-    public func effectiveCollectionItems(for profileID: String) -> [ToolingItemReference] {
-        guard let profile = effectiveProfile(for: profileID) else { return [] }
-        return resolvedItems(ofCollections: Set(profile.includedCollections)).sorted { $0.id < $1.id }
-    }
-
     private func resolvedItems(ofCollections identifiers: Set<String>) -> [ToolingItemReference] {
         var seen: Set<String> = []
         var result: [ToolingItemReference] = []
@@ -1463,21 +1454,6 @@ public final class AppModel {
     }
 
     @discardableResult
-    public func renameTag(_ tag: String, to newName: String) -> Bool {
-        guard ensureReadyForChange() else { return false }
-        guard let replacement = ToolingTag.normalized(newName) else {
-            lastError = "Give the tag a name of at most \(ToolingTag.maximumLength) characters."
-            return false
-        }
-        var candidate = currentSnapshot()
-        for index in candidate.tagAssignments.indices {
-            let tags = candidate.tagAssignments[index].tags
-            guard tags.contains(where: { ToolingTag.matches($0, tag) }) else { continue }
-            candidate.tagAssignments[index].tags = ToolingTag.normalizedList(
-                tags.map { ToolingTag.matches($0, tag) ? replacement : $0 })
-        }
-        return commit(candidate)
-    }
 
     // MARK: - Collection export
 
@@ -1613,26 +1589,6 @@ public final class AppModel {
                     detail: "Re-scan local configuration and preserve any independently configured copies in other clients.",
                     isReversible: false),
             ]
-        )
-    }
-
-    public func activateClaude() {
-        guard ensureReadyForChange() else { return }
-        pendingPlan = OperationPlan(
-            kind: .guidedAccountCheck,
-            title: "Refresh Claude Code",
-            summary:
-                "Claude Code loads some plugin changes in a fresh session. This app does not claim activation until a scanner or canary observes it.",
-            targetSurfaces: [.claudeCode],
-            steps: [
-                OperationStep(
-                    kind: .manual, title: "Start a fresh Claude Code session",
-                    detail: "Use Claude Code's native reload or start a new session to pick up installed plugin metadata.",
-                    requiresUserAction: true),
-                OperationStep(
-                    kind: .scan, title: "Re-scan Claude configuration", detail: "Record the observed local plugin and skill state."),
-            ],
-            requiresConfirmation: false
         )
     }
 

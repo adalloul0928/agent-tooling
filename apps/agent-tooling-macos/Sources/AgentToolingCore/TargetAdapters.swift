@@ -8,20 +8,6 @@ public protocol ClientAdapter: Sendable {
     func skillDestination(skillID: String, homeURL: URL) -> URL
 }
 
-public extension ClientAdapter {
-    func discover(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
-        await scan(homeURL: homeURL, runner: runner)
-    }
-
-    func plan(desired: DesiredState, observed: ObservedState) -> ReconciliationPlan {
-        ReconciliationPlanner.plan(desired: desired, observed: observed)
-    }
-
-    func verify(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
-        await scan(homeURL: homeURL, runner: runner)
-    }
-}
-
 public typealias TargetAdapter = ClientAdapter
 
 public struct ClaudeCodeAdapter: TargetAdapter {

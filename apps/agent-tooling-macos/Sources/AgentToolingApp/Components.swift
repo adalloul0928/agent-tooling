@@ -196,15 +196,6 @@ struct StatusGlyph: View {
     }
 }
 
-struct StatusDot: View {
-    let state: HealthState
-    var size: CGFloat = 8
-
-    var body: some View {
-        StatusGlyph(state: state, size: max(size + 4, 12))
-    }
-}
-
 struct StatusBadge: View {
     let state: HealthState
     let text: String
