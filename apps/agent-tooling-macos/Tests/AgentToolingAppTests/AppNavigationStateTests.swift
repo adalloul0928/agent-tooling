@@ -7,6 +7,39 @@ import Testing
 
 @Suite("External navigation request queue")
 struct AppNavigationStateTests {
+    @Test("Client navigation keeps an exact scope until All Clients is chosen")
+    @MainActor
+    func clientScopeIsDurableAndExplicitlyCleared() {
+        let navigation = AppNavigationState()
+
+        navigation.openClient(.codex)
+
+        #expect(navigation.requestedSection == .syncCenter)
+        #expect(navigation.selectedClient == .codex)
+        navigation.consumeRequestedSection(.overview)
+        #expect(navigation.requestedSection == .syncCenter)
+        navigation.consumeRequestedSection(.syncCenter)
+        #expect(navigation.requestedSection == nil)
+        #expect(navigation.selectedClient == .codex)
+
+        navigation.showAllClients()
+
+        #expect(navigation.requestedSection == .syncCenter)
+        #expect(navigation.selectedClient == nil)
+    }
+
+    @Test("A general Sync route means All Clients")
+    @MainActor
+    func generalSyncRouteClearsClientScope() {
+        let navigation = AppNavigationState()
+        navigation.openClient(.gemini)
+
+        navigation.open(.section(.sync))
+
+        #expect(navigation.requestedSection == .syncCenter)
+        #expect(navigation.selectedClient == nil)
+    }
+
     @Test("Brand icons are available as a compiled catalog or source assets")
     func brandIconsAreAvailableAcrossSwiftToolchains() {
         if ClientBrandAssets.hasCompiledCatalog {
@@ -26,9 +59,9 @@ struct AppNavigationStateTests {
         let first = UUID()
         let second = UUID()
 
-        navigation.open(.skillCreationRequest(first))
-        navigation.open(.skillCreationRequest(second))
-        navigation.open(.skillCreationRequest(first))
+        navigation.openSkillCreationRequest(first)
+        navigation.openSkillCreationRequest(second)
+        navigation.openSkillCreationRequest(first)
 
         #expect(navigation.requestedSection == .skills)
         #expect(navigation.requestedSkillCreationID == first)
@@ -43,16 +76,37 @@ struct AppNavigationStateTests {
         #expect(navigation.requestedSkillCreationID == nil)
     }
 
+    @Test("Queues external review requests independently in FIFO order")
+    @MainActor
+    func queuesPendingRequestsInFIFOOrder() {
+        let navigation = AppNavigationState()
+        let first = UUID()
+        let second = UUID()
+
+        navigation.open(.pendingRequest(first))
+        navigation.open(.pendingRequest(second))
+        navigation.open(.pendingRequest(first))
+
+        #expect(navigation.requestedPendingRequestID == first)
+        navigation.consumePendingRequest(second)
+        #expect(navigation.requestedPendingRequestID == first)
+        navigation.consumePendingRequest(first)
+        #expect(navigation.requestedPendingRequestID == second)
+        navigation.consumePendingRequest(second)
+        #expect(navigation.requestedPendingRequestID == nil)
+    }
+
     @Test("An explicit navigation route clears pending creation requests")
     @MainActor
     func explicitNavigationClearsPendingRequests() {
         let navigation = AppNavigationState()
-        navigation.open(.skillCreationRequest(UUID()))
+        navigation.open(.pendingRequest(UUID()))
 
         navigation.open(.section(.activity))
 
         #expect(navigation.requestedSection == .activity)
         #expect(navigation.requestedSkillCreationID == nil)
+        #expect(navigation.requestedPendingRequestID == nil)
     }
 
     @Test("Marketplace recommendations select a package without approving an install")
@@ -64,6 +118,11 @@ struct AppNavigationStateTests {
         #expect(navigation.requestedSection == .marketplace)
         #expect(navigation.requestedMarketplacePackageID == "mcp-registry:example@1.0.0")
         #expect(navigation.requestedSkillCreationID == nil)
+
+        navigation.consumeMarketplacePackage("stale")
+        #expect(navigation.requestedMarketplacePackageID == "mcp-registry:example@1.0.0")
+        navigation.consumeMarketplacePackage("mcp-registry:example@1.0.0")
+        #expect(navigation.requestedMarketplacePackageID == nil)
     }
 
     @Test("Search-only marketplace metadata is retained before deep-linking")

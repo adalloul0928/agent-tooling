@@ -288,6 +288,73 @@ extension AppModel {
         }
     }
 
+    public func skillSource(id: String) -> String? {
+        guard let skill = skills.first(where: { $0.id == id }) else {
+            presentError("The selected skill is no longer available.")
+            return nil
+        }
+        do {
+            return try library.skillSource(for: skill)
+        } catch {
+            presentError("The managed skill source could not be opened: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Saves a complete SKILL.md while preserving every auxiliary file in the
+    /// package. This is the safe editor for generated, adopted, and legacy
+    /// packages that cannot be represented by the template form.
+    @discardableResult
+    public func updateSkillSource(id: String, markdown: String) -> Skill? {
+        guard ensureReadyForChange() else { return nil }
+        guard let existing = skills.first(where: { $0.id == id }) else {
+            presentError("The selected skill is no longer available.")
+            return nil
+        }
+        let previousSnapshot = currentSnapshot()
+        var updateResult: CreatedSkill?
+        do {
+            let result = try library.updateSkillSource(existing, markdown: markdown)
+            updateResult = result
+            var updated = result.skill
+            updated.validationCount = try library.validateSkill(updated)
+            skills.removeAll { $0.id == id }
+            skills.insert(updated, at: 0)
+            activities.insert(
+                ActivityReceipt(
+                    kind: .configuration,
+                    title: "\(updated.displayName) source updated",
+                    detail: "Only the canonical SKILL.md changed. Scripts, references, assets, and package metadata were preserved.",
+                    date: .now,
+                    state: .healthy,
+                    affectedPaths: [result.skillURL.appending(path: "SKILL.md").path(percentEncoded: false)]
+                ),
+                at: 0
+            )
+            try persistOrThrow()
+            if let warning = library.commitUpdate(result) { lastError = warning }
+            return updated
+        } catch {
+            let persistenceError = error
+            applyPersisted(previousSnapshot)
+            if let updateResult {
+                do {
+                    if let warning = try library.rollbackUpdate(updateResult) {
+                        lastError = "\(persistenceError.localizedDescription) \(warning)"
+                    } else {
+                        lastError = persistenceError.localizedDescription
+                    }
+                } catch {
+                    lastError =
+                        "Saving the source update failed, and restoring its previous package also failed: \(error.localizedDescription)"
+                }
+            } else {
+                lastError = persistenceError.localizedDescription
+            }
+            return nil
+        }
+    }
+
     func mergeSkills(existing: [Skill], observed: [Skill]) -> [Skill] {
         // Preserve only skills authored in the managed library. Vendor and
         // standalone discoveries are rebuilt on every scan so removals and

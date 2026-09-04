@@ -14,6 +14,9 @@ final class ToolingMCPService {
     /// these gets it back; anything else gets the newest and may disconnect.
     static let supportedProtocolVersions = ["2025-06-18", "2025-03-26", "2024-11-05"]
     static var preferredProtocolVersion: String { supportedProtocolVersions[0] }
+    /// One stdio server instance is one MCP session. This cap is intentionally
+    /// independent of self-reported clientInfo, which is display text only.
+    static let maximumReviewRequestsPerSession = 8
 
     private let store: WorkspaceStore
     private let clock: () -> Date
@@ -21,6 +24,7 @@ final class ToolingMCPService {
     /// Self-reported by the caller, unverified, display only.
     private(set) var client: UntrustedClientIdentity = .unknown
     private(set) var isInitialized = false
+    private var acceptedReviewRequests = 0
 
     init(
         store: WorkspaceStore,
@@ -164,11 +168,26 @@ final class ToolingMCPService {
                 now: clock(),
                 identifierFactory: identifierFactory
             )
-            let outcome =
-                switch tool.tier {
-                case .readOnly: try ReadOnlyTools.handle(tool.name, context: context)
-                case .queuesReview: try RequestTools.handle(tool.name, context: context)
+            let outcome: ToolOutcome
+            switch tool.tier {
+            case .readOnly:
+                outcome = try ReadOnlyTools.handle(tool.name, context: context)
+            case .queuesReview:
+                guard acceptedReviewRequests < Self.maximumReviewRequestsPerSession else {
+                    let message =
+                        "This MCP session has already queued \(Self.maximumReviewRequestsPerSession) review requests. "
+                        + "Resolve them in Agent Tooling before starting another MCP session."
+                    outcome = ToolOutcome(
+                        payload: .object(["error": .string(message)]),
+                        summary: message,
+                        isError: true
+                    )
+                    record(tool: tool, outcome: .attention, detail: outcome.summary)
+                    return .success(result(for: outcome))
                 }
+                outcome = try RequestTools.handle(tool.name, context: context)
+                if !outcome.isError { acceptedReviewRequests += 1 }
+            }
             record(tool: tool, outcome: outcome.isError ? .attention : .healthy, detail: outcome.summary)
             return .success(result(for: outcome))
         } catch let error as ToolInputError {

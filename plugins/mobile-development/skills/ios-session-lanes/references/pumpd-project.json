@@ -1,9 +1,14 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "pumpd-mobile-app",
   "displayName": "PUMPD",
   "match": {
-    "originContains": ["PUMPD-MOBILE-APP/pumpd-mobile-app", "pumpd-mobile-app"],
+    "repository": {
+      "remote": "origin",
+      "host": "github.com",
+      "owner": "avad-technologies",
+      "repo": "pumpd-mobile-app"
+    },
     "requiredPaths": [
       "apps/mobile/app.config.ts",
       "apps/mobile/eas.json",

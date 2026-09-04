@@ -59,4 +59,37 @@ struct SkillAuthoringOriginTests {
             #expect(identifier == skill.id)
         }
     }
+
+    @Test func completeSourceEditorPreservesAuxiliaryFiles() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "SkillSourcePreservationTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try WorkspaceStore(rootURL: root)
+        let library = WorkspaceLibrary(store: store)
+        var draft = SkillDraft()
+        draft.name = "source-preservation"
+        draft.purpose = "Preserve rich package source while editing its definition."
+        draft.triggers = ["Edit this complete source", "", ""]
+        draft.negativeTrigger = "Editing an unrelated file"
+        draft.includeReference = true
+        draft.selectedTargets = [.claude]
+        let created = try library.createSkill(from: draft)
+        var richSkill = created.skill
+        richSkill.authoringOrigin = .externalAdopted
+        let reference = created.skillURL.appending(path: "references/reference.md")
+        let originalReference = try Data(contentsOf: reference)
+        let originalSource = try library.skillSource(for: richSkill)
+        let editedSource = originalSource.replacingOccurrences(
+            of: "Preserve rich package source while editing its definition.",
+            with: "Preserve every rich package file while editing the complete definition."
+        )
+
+        let updated = try library.updateSkillSource(richSkill, markdown: editedSource)
+        defer { _ = library.commitUpdate(updated) }
+
+        #expect(try library.skillSource(for: updated.skill) == editedSource)
+        #expect(try Data(contentsOf: reference) == originalReference)
+        #expect(updated.skill.files.contains("references/reference.md"))
+        #expect(updated.skill.authoringOrigin == .externalAdopted)
+    }
 }

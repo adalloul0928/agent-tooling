@@ -158,6 +158,44 @@ public final class WorkspaceStore: @unchecked Sendable {
         }
     }
 
+    /// Cross-process compare-and-save for the review queue. The app, CLI, and
+    /// MCP helper can all touch this row, so separate load and save calls would
+    /// lose requests or decisions when two processes interleave.
+    func updatePendingAgentRequestQueue<Result>(
+        _ update: (inout PendingAgentRequestQueue) throws -> Result
+    ) throws -> Result {
+        let key = "agent-mcp.request-queue.v1"
+        return try queue.sync {
+            guard let database else { throw WorkspaceStoreError.closed }
+            try execute("BEGIN IMMEDIATE", database: database)
+            do {
+                var requestQueue = PendingAgentRequestQueue()
+                var statement: OpaquePointer?
+                defer { sqlite3_finalize(statement) }
+                try prepare("SELECT payload FROM state_records WHERE key = ? LIMIT 1", database: database, statement: &statement)
+                try bindText(key, at: 1, to: statement, database: database)
+                let queryResult = sqlite3_step(statement)
+                if queryResult == SQLITE_ROW {
+                    requestQueue = try decodeColumn(statement: statement, key: key, as: PendingAgentRequestQueue.self)
+                } else if queryResult != SQLITE_DONE {
+                    throw WorkspaceStoreError.query(message(database))
+                }
+                sqlite3_finalize(statement)
+                statement = nil
+
+                let result = try update(&requestQueue)
+                let data = try JSONEncoder.agentTooling().encode(requestQueue)
+                guard data.count <= Self.maximumRecordBytes else { throw WorkspaceStoreError.recordTooLarge(key) }
+                try upsertStateRecord(key: key, data: data, database: database)
+                try execute("COMMIT", database: database)
+                return result
+            } catch {
+                try? execute("ROLLBACK", database: database)
+                throw error
+            }
+        }
+    }
+
     public func loadEntity<Value: Decodable>(
         _ id: String,
         domain: WorkspaceEntityDomain,
@@ -247,6 +285,36 @@ public final class WorkspaceStore: @unchecked Sendable {
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw WorkspaceStoreError.query(message(database))
             }
+        }
+    }
+
+    /// Keeps executable plan details and rollback copies only while a retained
+    /// receipt refers to them. Receipts are already bounded by AppModel; this
+    /// prevents plans and replaced package copies from growing forever or
+    /// outliving the history row that explains them.
+    public func pruneOperationHistory(keepingPlanIDs: Set<UUID>, fileManager: FileManager = .default) throws {
+        let plans = try listEntities(domain: .plans, as: OperationPlan.self)
+        let keptPlans = plans.filter { keepingPlanIDs.contains($0.id) }
+        for plan in plans where !keepingPlanIDs.contains(plan.id) {
+            try removeEntity(plan.id.uuidString.lowercased(), domain: .plans)
+        }
+
+        let retainedStepIDs = Set(keptPlans.flatMap(\.steps).map(\.id))
+        let rollbackRoot = receiptsURL.appending(path: "rollback", directoryHint: .isDirectory)
+        guard fileManager.fileExists(atPath: rollbackRoot.path(percentEncoded: false)) else { return }
+        let values = try rollbackRoot.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard values.isDirectory == true, values.isSymbolicLink != true else {
+            throw WorkspaceStoreError.unsafePath(rollbackRoot.path(percentEncoded: false))
+        }
+        for item in try fileManager.contentsOfDirectory(
+            at: rollbackRoot,
+            includingPropertiesForKeys: [.isSymbolicLinkKey],
+            options: []
+        ) {
+            if let stepID = UUID(uuidString: item.lastPathComponent), retainedStepIDs.contains(stepID) {
+                continue
+            }
+            try fileManager.removeItem(at: item)
         }
     }
 

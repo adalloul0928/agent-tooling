@@ -8,8 +8,9 @@ struct PlanReviewSheet: View {
     @State private var isSubmitting = false
     @State private var executionTask: Task<Void, Never>?
     /// Computed before approval, never during execution. A person cannot
-    /// consent to a removal they were only told about afterwards.
-    @State private var safetyReview: OperationPlanSafetyReview?
+    /// consent to a removal they were only told about afterwards, and the
+    /// execution boundary receives the digest of this exact reviewed plan.
+    @State private var reviewState: ReviewState = .loading
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,6 +44,23 @@ struct PlanReviewSheet: View {
                             title: "Before you approve",
                             message: headline
                         )
+                    }
+
+                    switch reviewState {
+                    case .loading:
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Checking destinations and package contents…")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .standardPanel()
+                    case .failed(let message):
+                        AttentionBanner(title: "This plan cannot be reviewed", message: message)
+                    case .ready:
+                        EmptyView()
                     }
 
                     Text("Planned steps")
@@ -91,13 +109,13 @@ struct PlanReviewSheet: View {
                 .keyboardShortcut(.cancelAction)
                 Spacer()
                 Button {
-                    guard !isSubmitting else { return }
+                    guard !isSubmitting, let reviewedPlan, safetyReview?.hasBlockedSteps == false else { return }
                     isSubmitting = true
                     executionTask = Task { @MainActor in
-                        await model.executePendingPlan()
+                        let completed = await model.executePendingPlan(reviewedPlan)
                         isSubmitting = false
                         executionTask = nil
-                        dismiss()
+                        if completed { dismiss() }
                     }
                 } label: {
                     if isSubmitting || model.isExecutingPlan {
@@ -113,7 +131,10 @@ struct PlanReviewSheet: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(plan.steps.isEmpty || isSubmitting || model.isExecutingPlan)
+                .disabled(
+                    plan.steps.isEmpty || isSubmitting || model.isExecutingPlan
+                        || reviewedPlan == nil || safetyReview?.hasBlockedSteps != false
+                )
             }
             .padding(.horizontal, 24)
             .frame(height: 78)
@@ -122,7 +143,19 @@ struct PlanReviewSheet: View {
         .background(AgentTheme.contentBackground)
         .interactiveDismissDisabled(isSubmitting || model.isExecutingPlan)
         .task(id: plan.id) {
-            safetyReview = model.safetyReview(for: plan)
+            reviewState = .loading
+            do {
+                let reviewedPlan = try OperationPlanApproval.review(plan)
+                let safetyReview = await model.safetyReviewAsync(for: plan)
+                guard !Task.isCancelled else { return }
+                guard safetyReview.planID == plan.id else {
+                    reviewState = .failed("The safety review did not match this plan. Close the sheet and prepare it again.")
+                    return
+                }
+                reviewState = .ready(safetyReview, reviewedPlan)
+            } catch {
+                reviewState = .failed(error.localizedDescription)
+            }
         }
         .onDisappear {
             if isSubmitting { executionTask?.cancel() }
@@ -136,10 +169,32 @@ struct PlanReviewSheet: View {
     }
 
     private var executionLabel: String {
+        switch reviewState {
+        case .loading: return "Checking safety"
+        case .failed: return "Review unavailable"
+        case .ready(let review, _):
+            if review.hasBlockedSteps { return "Blocked" }
+        }
         if planHasAutomaticSteps {
             return plan.requiresConfirmation ? "Review required" : "Ready to run"
         }
         return "Guided operation"
+    }
+
+    private var safetyReview: OperationPlanSafetyReview? {
+        guard case .ready(let safetyReview, _) = reviewState else { return nil }
+        return safetyReview
+    }
+
+    private var reviewedPlan: ReviewedOperationPlan? {
+        guard case .ready(_, let reviewedPlan) = reviewState else { return nil }
+        return reviewedPlan
+    }
+
+    private enum ReviewState {
+        case loading
+        case ready(OperationPlanSafetyReview, ReviewedOperationPlan)
+        case failed(String)
     }
 
 }
@@ -343,6 +398,12 @@ private struct PlanContentRiskPanel: View {
                     Text("and \(report.findings.count - Self.listLimit) more findings")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                }
+                ForEach(report.coverageNotes.prefix(Self.listLimit), id: \.self) { note in
+                    Label(note, systemImage: "exclamationmark.triangle")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }

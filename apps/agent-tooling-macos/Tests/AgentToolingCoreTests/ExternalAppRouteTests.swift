@@ -18,7 +18,7 @@ struct ExternalAppRouteTests {
         let id = UUID()
         #expect(
             ExternalAppRoute(url: try #require(URL(string: "agent-tooling://requests/\(id.uuidString)")))
-                == .skillCreationRequest(id)
+                == .pendingRequest(id)
         )
     }
 

@@ -81,11 +81,15 @@ signing_arguments=(--force --sign "$signing_identity")
 if [[ "$signing_identity" != "-" ]]; then
   signing_arguments+=(--options runtime --timestamp)
 fi
-codesign "${signing_arguments[@]}" "$assembled_bundle/Contents/Helpers/agent-tooling"
+codesign "${signing_arguments[@]}" \
+  --identifier com.arendalloul.agent-tooling.cli \
+  "$assembled_bundle/Contents/Helpers/agent-tooling"
 # The MCP server is signed as its own helper: a client launches it directly,
 # so it is executed outside the main app binary and needs a valid signature
 # of its own.
-codesign "${signing_arguments[@]}" "$assembled_bundle/Contents/Helpers/agent-tooling-mcp"
+codesign "${signing_arguments[@]}" \
+  --identifier com.arendalloul.agent-tooling.mcp \
+  "$assembled_bundle/Contents/Helpers/agent-tooling-mcp"
 codesign "${signing_arguments[@]}" "$assembled_bundle"
 codesign --verify --deep --strict "$assembled_bundle"
 

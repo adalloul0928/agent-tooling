@@ -103,7 +103,14 @@ enum DestinationOwnershipInspector {
         guard values?.isDirectory == true else {
             return .unprovable("A file already exists here. Agent Tooling has no record of creating it and will not replace it.")
         }
-        let contents = (try? fileManager.contentsOfDirectory(atPath: ManagedInstallPath.normalized(path))) ?? []
+        let contents: [String]
+        do {
+            contents = try fileManager.contentsOfDirectory(atPath: ManagedInstallPath.normalized(path))
+        } catch {
+            return .unprovable(
+                "Agent Tooling could not list this folder to prove that it is empty. Nothing will be replaced until the folder can be inspected."
+            )
+        }
         if contents.isEmpty { return .empty }
         guard let proof = authority.proof(forDestination: path) else {
             return .unprovable(
@@ -141,9 +148,22 @@ public struct OperationStepSafetyReview: Identifiable, Codable, Hashable, Sendab
 
     public var id: UUID { stepID }
 
-    public var isBlocked: Bool { !ownership.isProven }
+    public var isBlocked: Bool {
+        !ownership.isProven || replacement?.isTruncated == true || contentRisk?.isComplete == false
+    }
 
-    public var blockReason: String? { isBlocked ? ownership.summary : nil }
+    public var blockReason: String? {
+        if !ownership.isProven { return ownership.summary }
+        if replacement?.isTruncated == true {
+            return
+                "The existing and incoming folders could not be compared completely. Agent Tooling will not replace content until every removal can be shown for review."
+        }
+        if contentRisk?.isComplete == false {
+            return
+                "The package content scan was incomplete. Agent Tooling will not install files it could not inspect within the review limits."
+        }
+        return nil
+    }
 
 }
 
@@ -167,15 +187,32 @@ public struct OperationPlanSafetyReview: Codable, Hashable, Sendable {
 
     public var contentFindings: [ContentRiskFinding] { steps.flatMap { $0.contentRisk?.findings ?? [] } }
 
+    public var incompleteContentScans: [OperationStepSafetyReview] {
+        steps.filter { $0.contentRisk?.isComplete == false }
+    }
+
+    public var incompleteReplacementDiffs: [OperationStepSafetyReview] {
+        steps.filter { $0.replacement?.isTruncated == true }
+    }
+
     public var hasBlockedSteps: Bool { !blockedSteps.isEmpty }
 
     /// A single honest line for the top of the review sheet. It states facts
     /// and never tells the operator what to decide.
     public var headline: String? {
         var parts: [String] = []
-        if hasBlockedSteps {
-            let count = blockedSteps.count
+        let unverifiedDestinations = steps.count { !$0.ownership.isProven }
+        if unverifiedDestinations > 0 {
+            let count = unverifiedDestinations
             parts.append("\(count) step\(count == 1 ? "" : "s") blocked because the destination could not be verified")
+        }
+        if !incompleteContentScans.isEmpty {
+            let count = incompleteContentScans.count
+            parts.append("\(count) package scan\(count == 1 ? "" : "s") incomplete")
+        }
+        if !incompleteReplacementDiffs.isEmpty {
+            let count = incompleteReplacementDiffs.count
+            parts.append("\(count) folder comparison\(count == 1 ? "" : "s") incomplete")
         }
         if removedPathCount > 0 {
             parts.append("\(removedPathCount) existing item\(removedPathCount == 1 ? "" : "s") removed")
@@ -303,11 +340,16 @@ public struct OperationPlanSafetyReviewer {
         fileManager: FileManager,
         limit: Int
     ) -> (entries: Set<String>, isTruncated: Bool)? {
+        var encounteredEnumerationError = false
         guard
             let enumerator = fileManager.enumerator(
                 at: root,
                 includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
-                options: []
+                options: [],
+                errorHandler: { _, _ in
+                    encounteredEnumerationError = true
+                    return true
+                }
             )
         else { return nil }
         let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -321,10 +363,13 @@ public struct OperationPlanSafetyReviewer {
             let itemPath = item.standardizedFileURL.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             guard itemPath.hasPrefix(rootPath + "/") else { continue }
             let relative = String(itemPath.dropFirst(rootPath.count + 1))
-            let values = try? item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-            let isDirectory = values?.isDirectory == true && values?.isSymbolicLink != true
+            guard let values = try? item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]) else {
+                isTruncated = true
+                continue
+            }
+            let isDirectory = values.isDirectory == true && values.isSymbolicLink != true
             entries.insert(isDirectory ? relative + "/" : relative)
         }
-        return (entries, isTruncated)
+        return (entries, isTruncated || encounteredEnumerationError)
     }
 }

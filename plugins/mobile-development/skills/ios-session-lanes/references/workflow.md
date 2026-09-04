@@ -20,8 +20,13 @@ ios-session-bootstrap
 ios-session-lane
 ```
 
-The project profile recognizes PUMPD by its Git origin and required files.
-Hooks are silent in every other repository.
+The project profile recognizes PUMPD only when the single `origin` fetch URL
+normalizes to the exact `github.com/avad-technologies/pumpd-mobile-app`
+identity and all required files exist. HTTPS, `ssh://`, and SCP-style GitHub
+remotes normalize to that identity; owner, host, repository-name, ambiguous,
+and malformed lookalikes fail closed. Linked worktrees are checked against
+their own resolved top-level and the shared repository remote. Hooks are silent
+in every other repository.
 
 ## Installation
 

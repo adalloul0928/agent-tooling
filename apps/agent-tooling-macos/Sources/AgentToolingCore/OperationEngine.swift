@@ -70,7 +70,7 @@ public actor OperationExecutor {
             state = .attention
         } else if results.contains(where: { $0.status == .failed }) {
             state = .attention
-        } else if results.contains(where: { $0.status == .manual || $0.status == .skipped }) {
+        } else if results.contains(where: { $0.status == .manual || $0.status == .skipped || $0.status == .pending }) {
             state = .pending
         } else {
             state = .healthy
@@ -320,7 +320,7 @@ public actor OperationExecutor {
             return (.succeeded, combined.isEmpty ? "\(executable) completed." : combined)
 
         case .scan:
-            return (.succeeded, "A post-operation scan is queued by the control plane.")
+            return (.pending, "Waiting for the control plane's post-operation setup check.")
 
         case .openURL:
             return (.manual, step.detail)

@@ -614,6 +614,35 @@ struct CodexSkillDraftServiceTests {
         #expect(resolved?.path(percentEncoded: false) == canonical.resolvingSymlinksInPath().path(percentEncoded: false))
     }
 
+    @Test func processRunnerBuildsASecretFreeEnvironmentAndIgnoresParentPath() {
+        let environment = ProcessCommandRunner.childEnvironment(
+            inheriting: [
+                "PATH": "/tmp/attacker-first:/usr/bin",
+                "OPENAI_API_KEY": "must-not-cross",
+                "DYLD_INSERT_LIBRARIES": "/tmp/inject.dylib",
+                "GIT_SSH_COMMAND": "malicious-wrapper",
+                "HTTPS_PROXY": "https://name:secret@example.invalid",
+                "USER": "fixture-user",
+                "LOGNAME": "fixture-user",
+                "LANG": "en_GB.UTF-8",
+                "NO_COLOR": "",
+            ],
+            homeURL: URL(filePath: "/Users/fixture", directoryHint: .isDirectory),
+            temporaryDirectory: URL(filePath: "/tmp/safe", directoryHint: .isDirectory)
+        )
+
+        #expect(environment["HOME"] == "/Users/fixture")
+        #expect(environment["USER"] == "fixture-user")
+        #expect(environment["LANG"] == "en_GB.UTF-8")
+        #expect(environment["NO_COLOR"] == "1")
+        #expect(environment["PATH"]?.hasPrefix("/Users/fixture/.local/bin:") == true)
+        #expect(environment["PATH"]?.contains("/tmp/attacker-first") == false)
+        #expect(environment["OPENAI_API_KEY"] == nil)
+        #expect(environment["DYLD_INSERT_LIBRARIES"] == nil)
+        #expect(environment["GIT_SSH_COMMAND"] == nil)
+        #expect(environment["HTTPS_PROXY"] == nil)
+    }
+
     @Test func processRunnerWritesBoundedStandardInputWithoutAShell() async throws {
         let runner = ProcessCommandRunner(timeout: .seconds(3))
         let input = Data("skill instruction from stdin\n".utf8)

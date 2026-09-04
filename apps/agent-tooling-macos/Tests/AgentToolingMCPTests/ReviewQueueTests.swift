@@ -38,14 +38,14 @@ struct ReviewQueueTests {
 
         // The link must be one the app already routes, not a shape invented here.
         let url = try #require(URL(string: reviewURL))
-        #expect(ExternalAppRoute(url: url) == .skillCreationRequest(rows[0].id))
+        #expect(ExternalAppRoute(url: url) == .pendingRequest(rows[0].id))
     }
 
     @Test func nothingIsAppliedAndNoPlanIsBuilt() throws {
         let harness = try MCPTestHarness()
         try harness.initialize()
 
-        try harness.callTool("request_add_mcp_server", arguments: addServerArguments())
+        _ = try harness.callTool("request_add_mcp_server", arguments: addServerArguments())
 
         // The workspace the app reads must be untouched: no MCP server added,
         // and above all no operation plan for anything to execute.
@@ -75,8 +75,8 @@ struct ReviewQueueTests {
         let harness = try MCPTestHarness()
         try harness.initialize()
 
-        try harness.callTool("request_add_mcp_server", arguments: addServerArguments())
-        try harness.callTool("request_add_mcp_server", arguments: addServerArguments(name: "calendar"))
+        _ = try harness.callTool("request_add_mcp_server", arguments: addServerArguments())
+        _ = try harness.callTool("request_add_mcp_server", arguments: addServerArguments(name: "calendar"))
 
         let rows = try harness.pendingRequests()
         #expect(rows.count == 2)
@@ -85,9 +85,9 @@ struct ReviewQueueTests {
     @Test func repeatsFromADifferentClientStillCollapse() throws {
         let harness = try MCPTestHarness()
         try harness.initialize(clientName: "Claude Code")
-        try harness.callTool("request_add_mcp_server", arguments: addServerArguments())
+        _ = try harness.callTool("request_add_mcp_server", arguments: addServerArguments())
         try harness.initialize(clientName: "Codex")
-        try harness.callTool("request_add_mcp_server", arguments: addServerArguments())
+        _ = try harness.callTool("request_add_mcp_server", arguments: addServerArguments())
 
         let rows = try harness.pendingRequests()
         #expect(rows.count == 1)
@@ -98,15 +98,31 @@ struct ReviewQueueTests {
 
     @Test func theQueueBoundHoldsAndRefusesRatherThanEvicting() throws {
         let harness = try MCPTestHarness()
-        try harness.initialize()
+        try harness.initialize(clientName: "Queue fixture")
 
         for index in 0..<PendingAgentRequestQueue.maximumPendingRequests {
-            try harness.callTool("request_add_mcp_server", arguments: addServerArguments(name: "server-\(index)"))
+            _ = try PendingRequestQueueService.enqueue(
+                kind: .addMCPServer,
+                title: "Add server-\(index)",
+                summary: "Queue bound fixture",
+                componentID: "server-\(index)",
+                scope: .user,
+                targets: [.claude],
+                reason: nil,
+                reviewDetails: PendingRequestReviewDetails(
+                    endpoint: "https://weather.example.com/mcp",
+                    transport: MCPTransport.http.rawValue
+                ),
+                fingerprintInputs: ["server-\(index)", MCPTransport.http.rawValue, "https://weather.example.com/mcp", ""],
+                clientLabel: "Display-only fixture",
+                store: harness.store
+            )
         }
         let filled = try harness.pendingRequests()
         #expect(filled.count == PendingAgentRequestQueue.maximumPendingRequests)
         let firstRowID = try #require(filled.first?.id)
 
+        try harness.initialize(clientName: "Queue overflow fixture")
         let overflow = try #require(harness.rawCallTool("request_add_mcp_server", arguments: addServerArguments(name: "one-too-many")))
         guard case .object(let result)? = overflow["result"] else {
             Issue.record("The overflow call produced no result.")
@@ -120,6 +136,24 @@ struct ReviewQueueTests {
         // let a caller flush a request a person had not read yet.
         #expect(rows.first?.id == firstRowID)
         #expect(!rows.contains { $0.componentID == "one-too-many" })
+    }
+
+    @Test func oneSessionCannotConsumeTheWholeQueueOrResetItsQuotaWithDisplayLabels() throws {
+        let harness = try MCPTestHarness()
+
+        for index in 0..<ToolingMCPService.maximumReviewRequestsPerSession {
+            try harness.initialize(clientName: "Self-reported identity \(index)")
+            _ = try harness.callTool("request_add_mcp_server", arguments: addServerArguments(name: "noisy-\(index)"))
+        }
+        try harness.initialize(clientName: "One more invented identity")
+        let overflow = try #require(
+            harness.rawCallTool("request_add_mcp_server", arguments: addServerArguments(name: "noisy-overflow")))
+        guard case .object(let result)? = overflow["result"] else {
+            Issue.record("The session-quota response produced no result.")
+            return
+        }
+        #expect(result["isError"]?.boolValue == true)
+        #expect(try harness.pendingRequests().count == ToolingMCPService.maximumReviewRequestsPerSession)
     }
 
     @Test func aCreateSkillRequestAlsoWritesTheDraftTheAppRouteResolves() throws {
@@ -144,6 +178,27 @@ struct ReviewQueueTests {
         let resolved = try #require(draft)
         #expect(resolved.proposedName == "release-summary")
         #expect(resolved.targets == [.claude, .codex])
+    }
+
+    @Test func aCollapsedCreateSkillRequestRepairsItsMissingDraftPayload() throws {
+        let harness = try MCPTestHarness()
+        try harness.initialize()
+        let arguments: [String: JSONValue] = [
+            "instruction": .string("Summarize a release branch before tagging."),
+            "proposedName": .string("release-summary"),
+            "scope": .string("user"),
+            "targets": .array([.string("codex")]),
+        ]
+
+        _ = try harness.callTool("request_create_skill", arguments: arguments)
+        let request = try #require(harness.pendingRequests().first)
+        try harness.store.deleteCodexSkillDraftRequest(id: request.id)
+
+        let repeated = try harness.callTool("request_create_skill", arguments: arguments)
+
+        #expect(repeated["collapsedIntoExistingRequest"]?.boolValue == true)
+        #expect(try harness.pendingRequests().count == 1)
+        #expect(try harness.store.loadCodexSkillDraftRequest(id: request.id)?.proposedName == "release-summary")
     }
 
     @Test func aRequestWithAnInlineSecretIsRefused() throws {
@@ -232,7 +287,7 @@ struct ReviewQueueTests {
     @Test func aPendingRequestIsListedAndNeverReportsAnApproval() throws {
         let harness = try MCPTestHarness()
         try harness.initialize()
-        try harness.callTool("request_add_mcp_server", arguments: addServerArguments())
+        _ = try harness.callTool("request_add_mcp_server", arguments: addServerArguments())
 
         let listed = try harness.callTool("list_pending_requests")
         let rows = try #require(listed["requests"]?.arrayValue)

@@ -54,6 +54,25 @@ struct InstallSafetyTests {
         #expect(review.headline == nil)
     }
 
+    @Test func anIncompleteFolderComparisonBlocksReplacement() throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        try fixture.writeSource(["SKILL.md": "reviewed", "reference.md": "notes"])
+        try fixture.writeDestination(["SKILL.md": "older", "legacy.md": "not yet compared"])
+        let reviewer = OperationPlanSafetyReviewer(
+            authority: ManagedInstallAuthority(ledger: fixture.ledgerProvingDestination()),
+            managedRoots: OperationPlanSafetyReviewer.managedRoots(for: fixture.store),
+            maximumComparedItems: 1
+        )
+
+        let review = reviewer.review(try fixture.plan())
+
+        #expect(review.steps.first?.replacement?.isTruncated == true)
+        #expect(review.steps.first?.isBlocked == true)
+        #expect(review.steps.first?.blockReason?.contains("could not be compared completely") == true)
+        #expect(review.headline?.contains("folder comparison incomplete") == true)
+    }
+
     // MARK: - Ownership guard
 
     @Test func anUnprovableDestinationIsBlockedInReviewAndRefusedByTheEngine() async throws {
@@ -260,7 +279,7 @@ struct InstallSafetyTests {
         draft.selectedTargets = [.claude, .codex]
         _ = try #require(model.createSkill(from: draft))
 
-        await model.executePendingPlan()
+        await model.executePendingPlan(try OperationPlanApproval.review(try #require(model.pendingPlan)))
         #expect(model.installDrift.count == 2)
         #expect(model.installDrift.allSatisfy { $0.state == .matchesReview })
 

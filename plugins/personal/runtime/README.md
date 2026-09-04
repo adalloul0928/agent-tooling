@@ -19,6 +19,10 @@ The ledger is a derived index, never a competing source of truth. Gmail, iMessag
 
 - Gmail and iMessage sends require confirmation.
 - Calendar changes and material task changes require confirmation.
+- Confirmation is a durable, single-use grant for one action ID and the exact
+  recipient/target and request body. A caller-provided boolean is never an
+  approval; grants expire after ten minutes, and a changed or replayed action is
+  rejected.
 - High-confidence TickTick follow-ups may be created automatically at or above the configured threshold.
 - Idempotency keys prevent repeated scheduled runs from duplicating the same external action.
 - Raw iMessage bodies are returned transiently for classification but are not stored in the ledger.
@@ -37,6 +41,7 @@ lifeos commitment-upsert ...
 lifeos commitments
 lifeos action-request ...
 lifeos actions
+lifeos action-confirm <action-id>
 lifeos draft-save ...
 lifeos drafts
 lifeos decision-record ...
@@ -56,4 +61,15 @@ lifeos reviews ...
 
 All command output is JSON so Codex, Claude, and unattended tasks can consume it without scraping prose.
 
-`health-scan` reads JSON files from the private health inbox and the configured Health Auto Export iCloud Drive folder. The default allowlist accepts only sleep analysis, step count, active energy, resting heart rate, HRV SDNN, and workouts. Other exported health categories are filtered rather than persisted.
+For a confirmation-required command, run it once to create a proposal. In a
+human-operated terminal, run `lifeos action-confirm <action-id>`, review the
+displayed action type, recipient/target, complete request, and digest, then type
+the exact confirmation phrase. Re-run the original command with the same
+arguments and idempotency key to consume that one approval and execute it.
+`action-confirm` refuses non-interactive input. Any payload change creates a
+digest mismatch, an unused grant expires after ten minutes, and an approval
+cannot be replayed after an execution attempt.
+Automatic policy actions retain their existing idempotent execution path and do
+not accept or require confirmation grants.
+
+`health-scan` reads JSON files from the private health inbox and the configured Health Auto Export iCloud Drive folder. The default allowlist accepts only sleep analysis, step count, active energy, resting heart rate, HRV SDNN, and workouts. Other exported health categories are filtered rather than persisted. Input must be a regular, non-symlink, non-sparse file. Parsing is capped at 16 MiB and 25,000 extracted records per file; a scan is capped at 100 selected files, 2,000 discovered candidates, 64 MiB, and 50,000 records. JSON nesting, node/container counts, individual strings, and cumulative string content are bounded before records are persisted.

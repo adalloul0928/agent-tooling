@@ -27,6 +27,32 @@ struct WorkspaceEntityStoreTests {
         #expect(try store.loadEntity("source-a", domain: .sourceLocks, as: SourceLock.self) == nil)
     }
 
+    @Test func operationHistoryPruningKeepsOnlyReceiptBackedPlansAndRollbackCopies() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "OperationHistoryPruning-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try WorkspaceStore(rootURL: root)
+        let keptStep = OperationStep(kind: .writeFile, title: "Kept", detail: "Kept by a receipt.")
+        let removedStep = OperationStep(kind: .writeFile, title: "Removed", detail: "No retained receipt.")
+        let kept = OperationPlan(kind: .configureMCP, title: "Kept", summary: "Kept", steps: [keptStep])
+        let removed = OperationPlan(kind: .configureMCP, title: "Removed", summary: "Removed", steps: [removedStep])
+        try store.saveEntity(kept, id: kept.id.uuidString.lowercased(), domain: .plans)
+        try store.saveEntity(removed, id: removed.id.uuidString.lowercased(), domain: .plans)
+
+        let rollbackRoot = store.receiptsURL.appending(path: "rollback", directoryHint: .isDirectory)
+        let keptRollback = rollbackRoot.appending(path: keptStep.id.uuidString, directoryHint: .isDirectory)
+        let removedRollback = rollbackRoot.appending(path: removedStep.id.uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: keptRollback, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: removedRollback, withIntermediateDirectories: true)
+
+        try store.pruneOperationHistory(keepingPlanIDs: [kept.id])
+
+        let plans = try store.listEntities(domain: .plans, as: OperationPlan.self)
+        #expect(plans.map(\.id) == [kept.id])
+        #expect(FileManager.default.fileExists(atPath: keptRollback.path(percentEncoded: false)))
+        #expect(!FileManager.default.fileExists(atPath: removedRollback.path(percentEncoded: false)))
+    }
+
     @Test func everyNormalizedDomainIsAvailableAfterMigration() throws {
         let root = FileManager.default.temporaryDirectory.appending(
             path: "agent-tooling-domains-\(UUID().uuidString)",

@@ -393,7 +393,9 @@ struct MCPToolAnnotationTests {
         #expect(MCPLiveTool(name: "c", annotations: MCPLiveToolAnnotations(readOnlyHint: false)).safety == .destructive)
         #expect(MCPLiveTool(name: "d", annotations: MCPLiveToolAnnotations(destructiveHint: false)).safety == .additive)
         #expect(MCPLiveTool(name: "e", annotations: MCPLiveToolAnnotations(destructiveHint: true)).safety == .destructive)
-        #expect(MCPLiveTool(name: "f", annotations: MCPLiveToolAnnotations(readOnlyHint: true)).requiresRunConfirmation == false)
+        let claimedReadOnly = MCPLiveTool(name: "f", annotations: MCPLiveToolAnnotations(readOnlyHint: true))
+        #expect(claimedReadOnly.requiresRunConfirmation)
+        #expect(claimedReadOnly.safety.label == "Server says read-only")
     }
 
     @Test func annotationsDecodedFromAnEmptyObjectStayUnknown() {

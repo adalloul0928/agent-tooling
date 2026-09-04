@@ -9,7 +9,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case plugins = "Plugins"
     case collections = "Collections"
     case profiles = "Configurations"
-    case syncCenter = "Sync"
+    case syncCenter = "Clients"
     case activity = "Activity"
     case projects = "Projects"
     case accounts = "Accounts"

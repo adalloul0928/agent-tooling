@@ -2,8 +2,10 @@ import AgentToolingCore
 import SwiftUI
 
 struct SidebarView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(AppModel.self) private var model
+    @Environment(AppNavigationState.self) private var navigation
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("appearance") private var appearance = "System"
     @Binding var selection: AppSection
@@ -40,7 +42,10 @@ struct SidebarView: View {
                             isCollapsed: isCollapsed,
                             namespace: selectionNamespace
                         ) {
-                            withAnimation(.snappy(duration: 0.24)) { selection = section }
+                            if section == .syncCenter {
+                                navigation.showAllClients()
+                            }
+                            selection = section
                         }
                     }
                 }
@@ -134,7 +139,7 @@ struct SidebarView: View {
         }
         .buttonStyle(.plain)
         .keyboardShortcut("k", modifiers: .command)
-        .help("Search skills, servers, plugins, configurations, and actions")
+        .help("Search clients, tools, sources, receipts, and actions")
         .accessibilityLabel("Search everything")
     }
 
@@ -167,7 +172,7 @@ struct SidebarView: View {
     }
 
     /// The three clients this Mac is managing, with the verdict from the last
-    /// check. Selecting one opens Sync, where app status lives.
+    /// check. Selecting one opens the Clients pane with an exact, durable scope.
     private var clientsBlock: some View {
         VStack(alignment: .leading, spacing: 2) {
             if !isCollapsed {
@@ -179,28 +184,39 @@ struct SidebarView: View {
             }
             ForEach([ClientKind.claude, .codex, .gemini]) { client in
                 let verdict = model.clientVerdict(for: client)
+                let selected = selection == .syncCenter && navigation.selectedClient == client
                 Button {
-                    withAnimation(.snappy(duration: 0.24)) { selection = .syncCenter }
+                    navigation.openClient(client)
+                    selection = .syncCenter
                 } label: {
                     HStack(spacing: isCollapsed ? 0 : 9) {
                         ClientBrandIcon(client: client, size: 16)
                             .frame(width: isCollapsed ? 32 : 18)
                         if !isCollapsed {
                             Text(client.rawValue)
-                                .font(.callout)
+                                .font(.system(.callout, design: .default, weight: selected ? .semibold : .regular))
+                                .foregroundStyle(selected ? AgentTheme.blue : Color.primary)
                                 .lineLimit(1)
                             Spacer(minLength: 0)
-                            StatusGlyph(state: verdict.state, size: 12)
+                            StatusGlyph(state: verdict.state, size: 12, tint: selected ? AgentTheme.blue : nil)
                         }
                     }
                     .padding(.horizontal, isCollapsed ? 0 : 9)
                     .frame(height: 30)
                     .frame(maxWidth: .infinity)
+                    .background {
+                        if selected {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(AgentTheme.blue.opacity(0.13))
+                        }
+                    }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("\(client.rawValue): \(verdict.text)")
-                .accessibilityLabel("\(client.rawValue), \(verdict.text)")
+                .animation(reduceMotion ? nil : AgentMotion.selection, value: selected)
+                .help("Show only \(client.rawValue) in Clients. \(verdict.text).")
+                .accessibilityLabel("Show \(client.rawValue) only")
+                .accessibilityValue([selected ? "Selected" : "", verdict.text].filter { !$0.isEmpty }.joined(separator: ", "))
             }
         }
     }
@@ -214,6 +230,7 @@ struct SidebarView: View {
 }
 
 private struct SidebarRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let section: AppSection
     let selected: Bool
     let badge: String?
@@ -281,7 +298,8 @@ private struct SidebarRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(reduceMotion ? nil : AgentMotion.quick, value: hovering)
+        .animation(reduceMotion ? nil : AgentMotion.selection, value: selected)
         .help(helpText)
         .accessibilityLabel(section.rawValue)
         .accessibilityValue([selected ? "Selected" : "", healthText].filter { !$0.isEmpty }.joined(separator: ", "))

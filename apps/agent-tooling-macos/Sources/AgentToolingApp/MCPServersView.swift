@@ -97,7 +97,7 @@ struct MCPServersView: View {
             query = ""
             filter = .all
             selection = [id]
-        case .selectPlugin: break
+        case .selectPlugin, .selectProfile, .selectMarketplaceSource, .selectAccount, .selectReceipt: break
         }
         self.request = nil
     }

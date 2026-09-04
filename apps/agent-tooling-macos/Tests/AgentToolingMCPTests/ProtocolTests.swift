@@ -106,7 +106,7 @@ struct ProtocolTests {
         try harness.initialize(clientName: "Claude Code", clientVersion: "2.0.1")
         #expect(harness.service.client.displayLabel == "Claude Code 2.0.1")
 
-        try harness.callTool(
+        _ = try harness.callTool(
             "request_install_skill",
             arguments: [
                 "skillID": .string("release-summary"),
@@ -121,7 +121,7 @@ struct ProtocolTests {
         // A caller claiming to be the app itself gets exactly the same tier 2
         // treatment: a pending row, never an applied change.
         try harness.initialize(clientName: "Agent Tooling internal trusted admin", clientVersion: "1.0")
-        try harness.callTool(
+        _ = try harness.callTool(
             "request_install_skill",
             arguments: [
                 "skillID": .string("other-skill"),
@@ -148,8 +148,8 @@ struct ProtocolTests {
         let harness = try MCPTestHarness()
         try harness.initialize()
 
-        for _ in 0..<3 { try harness.callTool("search_inventory") }
-        try harness.callTool(
+        for _ in 0..<3 { _ = try harness.callTool("search_inventory") }
+        _ = try harness.callTool(
             "request_install_skill",
             arguments: [
                 "skillID": .string("release-summary"),
@@ -180,7 +180,7 @@ struct ProtocolTests {
         try harness.store.saveAgentActivityJournal(journal)
 
         try harness.initialize()
-        try harness.callTool("search_inventory")
+        _ = try harness.callTool("search_inventory")
 
         let reloaded = try harness.store.loadAgentActivityJournal()
         #expect(reloaded.entries.count == AgentActivityJournal.maximumEntries)

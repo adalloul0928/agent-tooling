@@ -30,7 +30,7 @@ Retain the raw wording in the authoritative destination when appropriate. Record
 
 ## Step 3 — write narrowly
 
-- For an explicitly requested task, discover TickTick projects and tags; use `lifeos ticktick-create-task --confirmed` with a stable idempotency key derived from the request and intended due date.
+- For an explicitly requested task, discover TickTick projects and tags and run `lifeos ticktick-create-task` with a stable idempotency key derived from the request and intended due date. It returns a proposal. Ask Aren to review it with `lifeos action-confirm <action-id>` in an interactive terminal, then rerun the exact task command with the same idempotency key. Never translate conversational assent into a confirmation flag.
 - For a high-confidence inferred follow-up, record the commitment, then use `lifeos ticktick-create-followup`. Below the automatic threshold, leave it as a candidate.
 - For an Obsidian capture, use the vault skill's taxonomy. Create a new note only when there is no appropriate existing note.
 - For a decision, use the decision workflow and template.

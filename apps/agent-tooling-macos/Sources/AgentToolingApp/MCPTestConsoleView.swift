@@ -29,9 +29,6 @@ final class MCPTestConsoleModel {
     private(set) var outcome: MCPToolCallOutcome?
     private(set) var toolFailure: String?
     private(set) var runningToolName: String?
-    /// Tools already confirmed during this connection, so a second run of the
-    /// same tool does not re-ask while the session stays open.
-    private(set) var confirmedTools: Set<String> = []
 
     private var session: MCPLiveTestSession?
     private var connectTask: Task<Void, Never>?
@@ -60,7 +57,6 @@ final class MCPTestConsoleModel {
         toolFailure = nil
         outcome = nil
         observation = nil
-        confirmedTools = []
         connectTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
@@ -86,11 +82,10 @@ final class MCPTestConsoleModel {
         }
     }
 
-    /// Runs one tool. Consent for a tool that is not annotated read-only is the
-    /// caller's responsibility and is recorded here so it is asked once.
+    /// Runs one tool after the caller has taken confirmation for this exact
+    /// invocation. Server-provided annotations never grant local authority.
     func run(tool: MCPLiveTool, arguments: [String: JSONValue]) {
         guard phase == .live, runningToolName == nil, let session else { return }
-        confirmedTools.insert(tool.name)
         runningToolName = tool.name
         toolFailure = nil
         outcome = nil
@@ -131,7 +126,6 @@ final class MCPTestConsoleModel {
         outcome = nil
         diagnostics = ""
         connectedAt = nil
-        confirmedTools = []
     }
 
     private func clearSession() {
@@ -344,7 +338,7 @@ private struct MCPTestConsoleSection: View {
                     tool: tool,
                     serverName: server.name,
                     isRunning: console.runningToolName == tool.name,
-                    needsConfirmation: tool.requiresRunConfirmation && !console.confirmedTools.contains(tool.name),
+                    needsConfirmation: tool.requiresRunConfirmation,
                     outcome: console.outcome?.toolName == tool.name ? console.outcome : nil,
                     failure: console.toolFailure
                 ) { arguments, needsConfirmation in

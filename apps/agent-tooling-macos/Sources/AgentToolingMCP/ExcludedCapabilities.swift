@@ -8,13 +8,11 @@ import Foundation
 // 1. There is no `apply`, `approve`, `deny`, `confirm`, or `execute` tool, and
 //    there never will be one.
 //
-//    `agent-tooling apply --confirm <planID> --digest <sha256>` looks like a
-//    consent check. It is not. The digest is a plain SHA-256 over the plan's
-//    own encoded bytes, so it proves only that the plan being executed is
-//    byte-identical to the plan someone read. It is content integrity. Anyone
-//    holding a plan can compute a valid digest for that plan in one line of
-//    code. That is safe today because the only caller is the app's own review
-//    sheet, where a human has actually looked at the diff.
+//    A public SHA-256 over a plan would be content integrity, not a consent
+//    check: anyone holding the plan could compute it. The packaged helper
+//    therefore has no plan/apply command. The only execution handoff is the
+//    app's review sheet, where a person sees the diff and the exact digest is
+//    checked again before the operation starts.
 //
 //    Exposing `apply` over MCP would hand a prompt-injected agent a
 //    self-approval primitive: build a plan, hash it, approve its own work, and

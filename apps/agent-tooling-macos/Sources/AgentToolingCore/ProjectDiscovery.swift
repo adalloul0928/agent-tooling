@@ -1085,6 +1085,6 @@ enum ProjectGitignore {
         guard let size = values.fileSize, size <= maximumBytes else {
             throw ProjectIgnoreError.tooLarge(gitignore.path(percentEncoded: false))
         }
-        return (try? BoundedFileAccess.readUTF8(at: gitignore, maximumBytes: maximumBytes, allowSymbolicLink: false)) ?? ""
+        return try BoundedFileAccess.readUTF8(at: gitignore, maximumBytes: maximumBytes, allowSymbolicLink: false)
     }
 }

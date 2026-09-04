@@ -44,12 +44,13 @@ public enum MCPToolSafety: String, Codable, Hashable, Sendable {
     case destructive
     case undeclared
 
-    /// Only an explicit read-only declaration avoids a confirmation.
-    public var requiresRunConfirmation: Bool { self != .readOnly }
+    /// Server annotations are display metadata, never local authorization.
+    /// Every live invocation requires a fresh confirmation in Agent Tooling.
+    public var requiresRunConfirmation: Bool { true }
 
     public var label: String {
         switch self {
-        case .readOnly: "Read-only"
+        case .readOnly: "Server says read-only"
         case .additive: "Changes data"
         case .destructive: "Destructive"
         case .undeclared: "Not annotated"
@@ -58,7 +59,8 @@ public enum MCPToolSafety: String, Codable, Hashable, Sendable {
 
     public var detail: String {
         switch self {
-        case .readOnly: "The server declares that this tool does not change its environment."
+        case .readOnly:
+            "The server claims this tool does not change its environment. Agent Tooling cannot verify that claim and still asks before every run."
         case .additive: "The server declares that this tool changes data but does not delete or overwrite it."
         case .destructive: "The server declares that this tool may delete or overwrite data."
         case .undeclared:
@@ -108,9 +110,9 @@ public struct MCPLiveTool: Identifiable, Codable, Hashable, Sendable {
 
     /// The single place that turns hints into a verdict.
     ///
-    /// A tool counts as read-only only when the server says so with
-    /// `readOnlyHint == true`. Anything else changes data at least, and a
-    /// missing `destructiveHint` keeps MCP's own default of `true`.
+    /// Classification is presentation only. A tool counts as declared
+    /// read-only when the server says so, but that untrusted hint never waives
+    /// the app's confirmation requirement.
     public var safety: MCPToolSafety {
         guard let annotations, !annotations.isEmpty else { return .undeclared }
         if annotations.readOnlyHint == true { return .readOnly }

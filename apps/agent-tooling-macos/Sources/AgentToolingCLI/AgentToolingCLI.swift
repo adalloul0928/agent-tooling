@@ -30,10 +30,6 @@ struct AgentToolingCLI {
             try search(remaining)
         case "request":
             try request(remaining)
-        case "plan":
-            try plan(remaining)
-        case "apply":
-            try await apply(remaining)
         case "export-diagnostics":
             try exportDiagnostics(remaining)
         default:
@@ -160,51 +156,49 @@ struct AgentToolingCLI {
             throw CLIError.invalidValue("--project")
         }
 
+        let store = try WorkspaceStore(rootURL: options.fileURL(for: "--workspace"))
+        let outcome = try PendingRequestQueueService.enqueue(
+            kind: .createSkill,
+            title: "Create the skill '\(proposedName ?? "(unnamed)")'",
+            summary: "Agent Tooling CLI is asking to create a skill"
+                + (proposedName.map { " named '\($0)'" } ?? "") + ".",
+            componentID: proposedName,
+            scope: scope,
+            targets: targets,
+            reason: nil,
+            reviewDetails: PendingRequestReviewDetails(
+                projectRoot: projectRoot,
+                instruction: instruction
+            ),
+            fingerprintInputs: [proposedName ?? "", instruction, projectRoot ?? ""],
+            clientLabel: "Agent Tooling CLI",
+            store: store
+        )
         let draftRequest = CodexSkillDraftRequest(
+            id: outcome.request.id,
             instruction: instruction,
             proposedName: proposedName,
             scope: scope,
             projectRoot: projectRoot,
             targets: targets
         )
-        let store = try WorkspaceStore(rootURL: options.fileURL(for: "--workspace"))
-        try store.saveCodexSkillDraftRequest(draftRequest)
+        do {
+            try store.saveCodexSkillDraftRequest(draftRequest)
+        } catch {
+            if !outcome.collapsed {
+                _ = try? PendingRequestQueueService.resolve(
+                    id: outcome.request.id,
+                    expectedFingerprint: outcome.request.fingerprint,
+                    store: store
+                )
+            }
+            throw error
+        }
         try writeJSON(
             IntegrationRequestResponse(
                 schemaVersion: IntegrationResponseLimits.schemaVersion,
-                request: .init(id: draftRequest.id, state: "pending-review")
+                request: .init(id: outcome.request.id, state: "pending-review")
             ))
-    }
-
-    private static func plan(_ arguments: [String]) throws {
-        let options = try CLIOptions(arguments: arguments, valueOptions: [])
-        let planURL = try options.requireOnePositional(label: "plan file")
-        let plan = try readPlan(at: URL(fileURLWithPath: planURL))
-        try writeJSON(OperationPlanApproval.review(plan), prettyPrinted: true)
-    }
-
-    private static func apply(_ arguments: [String]) async throws {
-        let options = try CLIOptions(
-            arguments: arguments,
-            valueOptions: ["--confirm", "--digest", "--workspace", "--home"]
-        )
-        let planPath = try options.requireOnePositional(label: "plan file")
-        guard let confirmation = options.value(for: "--confirm"), let planID = UUID(uuidString: confirmation) else {
-            throw CLIError.missingOption("--confirm <plan UUID>")
-        }
-        guard let digest = options.value(for: "--digest") else {
-            throw CLIError.missingOption("--digest <reviewed SHA-256>")
-        }
-        let plan = try readPlan(at: URL(fileURLWithPath: planPath))
-        try OperationPlanApproval.verify(plan, confirmedPlanID: planID, confirmedDigest: digest)
-        let workspaceURL = options.fileURL(for: "--workspace")
-        let homeURL = options.fileURL(for: "--home") ?? FileManager.default.homeDirectoryForCurrentUser
-        let store = try WorkspaceStore(rootURL: workspaceURL)
-        try store.saveEntity(plan, id: plan.id.uuidString, domain: .plans)
-        let engine = OperationEngine(store: store, homeURL: homeURL)
-        let receipt = await engine.execute(plan)
-        try writeJSON(receipt, prettyPrinted: true)
-        if receipt.state == .attention { Darwin.exit(3) }
     }
 
     private static func exportDiagnostics(_ arguments: [String]) throws {
@@ -222,21 +216,6 @@ struct AgentToolingCLI {
         let destination = URL(fileURLWithPath: destinationPath)
         try exporter.export(manifest, to: destination)
         print(destination.standardizedFileURL.path(percentEncoded: false))
-    }
-
-    private static func readPlan(at url: URL) throws -> OperationPlan {
-        let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
-        guard values.isRegularFile == true,
-            values.isSymbolicLink != true,
-            let size = values.fileSize,
-            size >= 0,
-            size <= 1_048_576
-        else {
-            throw CLIError.invalidPlanFile
-        }
-        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
-        guard data.count == size else { throw CLIError.invalidPlanFile }
-        return try AgentToolingCoding.decoder().decode(OperationPlan.self, from: data)
     }
 
     private static func writeJSON<Value: Encodable>(_ value: Value, prettyPrinted: Bool = false) throws {
@@ -258,12 +237,10 @@ struct AgentToolingCLI {
               doctor [--home PATH]
               search [--query TEXT] [--limit 1...100] [--workspace PATH] [--json]
               request create-skill --provider codex --scope global|project --targets LIST --instruction-stdin [--project PATH]
-              plan PLAN.json
-              apply PLAN.json --confirm UUID --digest SHA256 [--workspace PATH] [--home PATH]
               export-diagnostics OUTPUT.json [--workspace PATH] [--home PATH] [--app-version VERSION]
 
-            scan and doctor are read-only. apply accepts only a reviewed, digest-bound OperationPlan and executes it
-            through the same policy-enforcing engine used by the macOS app.
+            scan, doctor, search, and diagnostics are read-only. Requests only add bounded items to the app's review
+            queue. Client changes can be approved and run only inside the macOS app.
             """)
     }
 }
@@ -323,7 +300,6 @@ private enum CLIError: LocalizedError {
     case missingOption(String)
     case missingPositional(String)
     case unexpectedArguments
-    case invalidPlanFile
     case invalidValue(String)
     case invalidProvider
     case invalidInstruction
@@ -337,7 +313,6 @@ private enum CLIError: LocalizedError {
         case .missingOption(let option): "Required option missing: \(option)."
         case .missingPositional(let label): "Provide exactly one \(label)."
         case .unexpectedArguments: "This command does not accept positional arguments."
-        case .invalidPlanFile: "The plan must be a regular, non-symlink JSON file no larger than 1 MB."
         case .invalidValue(let option): "The value for '\(option)' is invalid."
         case .invalidProvider: "Only the authenticated local Codex provider is supported for skill creation."
         case .invalidInstruction: "Provide a non-empty UTF-8 instruction no larger than 64 KB."

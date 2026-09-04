@@ -49,17 +49,11 @@ enum RequestTools {
         let targets = try context.arguments.requiredTargets()
         let reason = try context.arguments.optionalString("reason", maximum: 500)
 
-        let endpointSummary =
-            transport == .http
-            ? ResponseRedaction.locationFreeSummary(destination.endpoint)
-            : ResponseRedaction.executableName(from: destination.endpoint)
-
         return try enqueue(
             context: context,
             kind: .addMCPServer,
             title: "Add the MCP server '\(serverID)'",
-            summary: "\(context.client.displayLabel) is asking to add a \(transport.rawValue) MCP server named '\(serverID)'"
-                + (endpointSummary.map { " (\($0))" } ?? "") + ".",
+            summary: "\(context.client.displayLabel) is asking to add a \(transport.rawValue) MCP server named '\(serverID)'.",
             componentID: serverID,
             scope: scope,
             targets: targets,
@@ -95,8 +89,8 @@ enum RequestTools {
             context: context,
             kind: .createSkill,
             title: "Create the skill '\(proposedName ?? "(unnamed)")'",
-            summary: "\(context.client.displayLabel) is asking to create a skill: "
-                + "\(String(instruction.prefix(240)))\(instruction.count > 240 ? "…" : "")",
+            summary: "\(context.client.displayLabel) is asking to create a skill"
+                + (proposedName.map { " named '\($0)'" } ?? "") + ".",
             componentID: proposedName,
             scope: scope,
             targets: targets,
@@ -106,19 +100,28 @@ enum RequestTools {
             identifier: identifier
         )
 
-        // A create-skill row is also written in the shape the app's existing
-        // `agent-tooling://requests/<uuid>` route already resolves, under the
-        // same identifier, so today's review screen opens straight onto it.
-        if !outcome.collapsed {
-            let draft = CodexSkillDraftRequest(
-                id: outcome.request.id,
-                instruction: instruction,
-                proposedName: proposedName,
-                scope: scope,
-                projectRoot: projectRoot,
-                targets: targets
-            )
+        // Keep the app's local draft payload bound to the queue row even when
+        // this call collapsed into an identical older request. That repairs a
+        // missing payload instead of leaving a review row that can never open.
+        let draft = CodexSkillDraftRequest(
+            id: outcome.request.id,
+            instruction: instruction,
+            proposedName: proposedName,
+            scope: scope,
+            projectRoot: projectRoot,
+            targets: targets
+        )
+        do {
             try context.store.saveCodexSkillDraftRequest(draft)
+        } catch {
+            if !outcome.collapsed {
+                _ = try? PendingRequestQueueService.resolve(
+                    id: outcome.request.id,
+                    expectedFingerprint: outcome.request.fingerprint,
+                    store: context.store
+                )
+            }
+            throw error
         }
         return response(for: outcome, context: context)
     }
@@ -189,7 +192,7 @@ enum RequestTools {
             scope: .user,
             targets: targets,
             reason: reason,
-            reviewDetails: PendingRequestReviewDetails(),
+            reviewDetails: PendingRequestReviewDetails(componentKind: kind),
             fingerprintInputs: [kind, id]
         )
     }
@@ -248,7 +251,7 @@ enum RequestTools {
             reason: reason.map { ResponseRedaction.redactedText(String($0.prefix(500))) },
             reviewDetails: reviewDetails,
             fingerprintInputs: fingerprintInputs,
-            client: context.client,
+            clientLabel: context.client.displayLabel,
             store: context.store,
             now: context.now,
             identifier: identifier ?? context.identifierFactory()

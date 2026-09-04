@@ -307,6 +307,18 @@ struct ProjectDiscoveryTests {
         }
     }
 
+    @Test func gitignoreReadFailureIsNotTreatedAsAnEmptyFile() throws {
+        let root = try temporaryDirectory()
+        let project = root.appending(path: "work/unreadable-ignore", directoryHint: .isDirectory)
+        try write(#"{}"#, to: project.appending(path: ".claude/settings.local.json"))
+        try Data([0xFF, 0xFE]).write(to: project.appending(path: ".gitignore"), options: .atomic)
+        let inspected = try #require(ProjectDiscovery.inspect(root: project, origins: []))
+
+        #expect(throws: BoundedFileAccessError.self) {
+            _ = try ProjectGitignore.plan(for: inspected)
+        }
+    }
+
     @Test func gitignoreRefusesToApplyAPlanWithNothingToDo() throws {
         let plan = ProjectIgnorePlan(
             projectPath: "/tmp", gitignorePath: "/tmp/.gitignore", missingPatterns: [], appendedText: "")

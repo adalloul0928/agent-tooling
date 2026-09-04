@@ -10,6 +10,10 @@ struct AppShellView: View {
     @State private var selection: AppSection
     @State private var paletteVisible = false
     @State private var screenRequest: ScreenRequest?
+    @State private var pendingRequestReview: PendingAgentRequest?
+    @State private var pendingRequestContinuation: PendingRequestContinuation?
+    @State private var presentedPendingRequestID: UUID?
+    @State private var requestPresentationActive = false
 
     init(initialSelection: AppSection = .overview) {
         _selection = State(initialValue: initialSelection)
@@ -33,9 +37,10 @@ struct AppShellView: View {
                     openPalette: { paletteVisible = true }
                 )
 
+                // Swap heavy screens immediately. Navigation feedback lives in
+                // the sidebar selection pill, so changing sections never keeps
+                // two list/detail hierarchies alive for a crossfade.
                 destination
-                    .id(selection)
-                    .transition(reduceMotion ? .identity : .opacity)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .paperPane()
             }
@@ -57,14 +62,43 @@ struct AppShellView: View {
         .foregroundStyle(.primary)
         .tint(AgentTheme.blue)
         .buttonBorderShape(.capsule)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: selection)
-        .animation(reduceMotion ? nil : .snappy(duration: 0.20), value: sidebarCollapsed)
+        .animation(reduceMotion ? nil : AgentMotion.selection, value: sidebarCollapsed)
         .groupBoxStyle(ControlGroupBoxStyle())
         .task {
             await model.bootstrap()
         }
         .onAppear { applyExternalNavigation() }
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
+        .onChange(of: selection) { _, section in
+            if let request = screenRequest, request.section != section {
+                screenRequest = nil
+            }
+        }
+        .sheet(item: $pendingRequestReview, onDismiss: finishPendingRequestPresentation) { request in
+            PendingRequestReviewSheet(
+                request: request,
+                onDefer: { pendingRequestReview = nil },
+                onReject: {
+                    guard
+                        model.rejectPendingRequest(
+                            id: request.id,
+                            expectedFingerprint: request.fingerprint
+                        )
+                    else { return }
+                    pendingRequestReview = nil
+                },
+                onContinue: {
+                    guard
+                        let continuation = model.acceptPendingRequest(
+                            id: request.id,
+                            expectedFingerprint: request.fingerprint
+                        )
+                    else { return }
+                    pendingRequestContinuation = continuation
+                    pendingRequestReview = nil
+                }
+            )
+        }
         .sheet(item: pendingPlanBinding) { plan in
             PlanReviewSheet(plan: plan)
                 .environment(model)
@@ -80,17 +114,21 @@ struct AppShellView: View {
     private var destination: some View {
         switch selection {
         case .overview: OverviewView(navigate: { selection = $0 })
-        case .marketplace: MarketplaceView()
+        case .marketplace: MarketplaceView(request: $screenRequest)
         case .skills: SkillsView(navigate: { selection = $0 })
         case .insights: InsightsView()
         case .mcpServers: MCPServersView(request: $screenRequest)
         case .plugins: PluginsView(navigate: { selection = $0 }, request: $screenRequest)
         case .collections: CollectionsView()
-        case .profiles: ProfilesView()
-        case .syncCenter: SyncCenterView()
-        case .activity: ActivityView()
+        case .profiles: ProfilesView(request: $screenRequest)
+        case .syncCenter:
+            SyncCenterView(
+                client: navigation.selectedClient,
+                onShowAllClients: { navigation.showAllClients() }
+            )
+        case .activity: ActivityView(request: $screenRequest)
         case .projects: ProjectsView()
-        case .accounts: AccountsView()
+        case .accounts: AccountsView(request: $screenRequest)
         case .settings: SettingsView()
         }
     }
@@ -104,7 +142,7 @@ struct AppShellView: View {
 
     private var pendingPlanBinding: Binding<OperationPlan?> {
         Binding(
-            get: { model.pendingPlan },
+            get: { requestPresentationActive ? nil : model.pendingPlan },
             set: { if $0 == nil { model.discardPendingPlan() } }
         )
     }
@@ -112,7 +150,31 @@ struct AppShellView: View {
     private func applyExternalNavigation() {
         if let requestedSection = navigation.requestedSection {
             selection = requestedSection
+            navigation.consumeRequestedSection(requestedSection)
         }
+        guard !requestPresentationActive, let requestID = navigation.requestedPendingRequestID else { return }
+        guard let request = model.pendingRequest(id: requestID) else {
+            navigation.consumePendingRequest(requestID)
+            return
+        }
+        presentedPendingRequestID = requestID
+        requestPresentationActive = true
+        pendingRequestReview = request
+    }
+
+    private func finishPendingRequestPresentation() {
+        if let requestID = presentedPendingRequestID {
+            navigation.consumePendingRequest(requestID)
+        }
+        presentedPendingRequestID = nil
+        requestPresentationActive = false
+
+        let continuation = pendingRequestContinuation
+        pendingRequestContinuation = nil
+        if case .skillCreation(let requestID) = continuation {
+            navigation.openSkillCreationRequest(requestID)
+        }
+        DispatchQueue.main.async { applyExternalNavigation() }
     }
 
     /// A palette result runs the screen's own action. Anything that touches a
@@ -120,7 +182,13 @@ struct AppShellView: View {
     private func activate(_ outcome: CommandPaletteOutcome) {
         switch outcome {
         case .navigate(let section):
-            selection = section
+            if section == .syncCenter {
+                navigation.showAllClients()
+            } else {
+                selection = section
+            }
+        case .openClient(let client):
+            navigation.openClient(client)
         case .screenRequest(let request):
             selection = request.section
             screenRequest = request

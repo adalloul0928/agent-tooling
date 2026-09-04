@@ -324,6 +324,184 @@ struct CollectionsTests {
         #expect(decoded.items.first?.tags == ["Release"])
     }
 
+    @Test func exportedCollectionCarriesNoMachineLocalLocations() throws {
+        let skill = Skill(
+            id: "portable-skill",
+            name: "Portable Skill",
+            displayName: "Portable Skill",
+            summary: "Generated from /Users/alice/Secret Project/notes.md",
+            bundle: "/Users/alice/Library/Application Support/Agent Tooling/package",
+            scope: ToolingScope.project.displayName,
+            owned: true,
+            triggers: [],
+            negativeTrigger: "",
+            files: ["SKILL.md"],
+            clients: [],
+            validationCount: 0,
+            projectRoot: "/Users/alice/Secret Project"
+        )
+        let plugin = Plugin(
+            id: "portable-plugin",
+            name: "Portable Plugin",
+            summary: "Loaded from file:///Users/alice/private/plugin.json",
+            source: "/Applications/Private Tool.app/Contents/Resources/plugin",
+            scope: ToolingScope.user.displayName,
+            revision: "local",
+            skills: [],
+            profiles: [],
+            clients: [],
+            installed: true
+        )
+        let stdio = MCPServer(
+            id: "local-stdio",
+            name: "Local stdio",
+            summary: "Uses ~/.config/private.json",
+            endpoint: "/Users/alice/bin/private-server --config /Users/alice/.config/private.json",
+            transport: .stdio,
+            authentication: "none",
+            scope: ToolingScope.project.displayName,
+            projectRoot: "/Users/alice/Secret Project",
+            clients: []
+        )
+        let references = [
+            ToolingItemReference(kind: .skill, identifier: skill.id),
+            ToolingItemReference(kind: .plugin, identifier: plugin.id),
+            ToolingItemReference(kind: .mcpServer, identifier: stdio.id),
+        ]
+        let document = CollectionExporter.document(
+            for: ToolingCollection(
+                id: "portable-kit",
+                name: "Portable Kit",
+                summary: "Do not reveal path:/Users/alice/Secret Project",
+                items: references
+            ),
+            skills: [skill],
+            plugins: [plugin],
+            mcpServers: [stdio]
+        )
+        let data = try CollectionExporter.encode(document)
+        let text = try #require(String(data: data, encoding: .utf8))
+
+        #expect(!text.contains("/Users/alice"))
+        #expect(!text.contains("file://"))
+        #expect(!text.contains("~/.config"))
+        #expect(!text.contains("/Applications/Private Tool.app"))
+        #expect(!text.contains("Secret Project"))
+        #expect(!text.contains("notes.md"))
+        #expect(!text.contains("private/plugin.json"))
+        #expect(text.contains("[local location omitted]"))
+        #expect(document.items.first(where: { $0.kind == .plugin })?.source == nil)
+        #expect(document.items.first(where: { $0.kind == .mcpServer })?.destination == nil)
+        #expect(Set(document.items.map(\.identifier)) == Set(["portable-skill", "portable-plugin", "local-stdio"]))
+    }
+
+    @Test func exportKeepsSanitizedPublicRemoteIdentitiesAndOmitsLocalHTTP() throws {
+        let plugin = Plugin(
+            id: "remote-plugin",
+            name: "Remote Plugin",
+            summary: "Public package",
+            source: "https://github.com/acme/agent-plugin?access_token=secret",
+            scope: ToolingScope.user.displayName,
+            revision: "main",
+            skills: [],
+            profiles: [],
+            clients: [],
+            installed: true
+        )
+        let remote = MCPServer(
+            id: "remote-mcp", name: "Remote", summary: "Remote endpoint",
+            endpoint: "https://user:pass@mcp.example.com/v1/tools?api_key=secret#private", transport: .http,
+            authentication: "OAuth", scope: ToolingScope.user.displayName, clients: [])
+        let local = MCPServer(
+            id: "loopback-mcp", name: "Loopback", summary: "Local endpoint",
+            endpoint: "http://127.0.0.1:8765/mcp", transport: .http,
+            authentication: "none", scope: ToolingScope.user.displayName, clients: [])
+        let localIPv6 = MCPServer(
+            id: "loopback-ipv6-mcp", name: "IPv6 Loopback", summary: "Local endpoint",
+            endpoint: "http://[::1]:8765/mcp", transport: .http,
+            authentication: "none", scope: ToolingScope.user.displayName, clients: [])
+        let localTrailingDot = MCPServer(
+            id: "localhost-dot-mcp", name: "Localhost", summary: "Local endpoint",
+            endpoint: "http://localhost.:8765/mcp", transport: .http,
+            authentication: "none", scope: ToolingScope.user.displayName, clients: [])
+        let abbreviatedLoopback = MCPServer(
+            id: "abbreviated-loopback-mcp", name: "Abbreviated loopback", summary: "Local endpoint",
+            endpoint: "http://127.1:8765/mcp", transport: .http,
+            authentication: "none", scope: ToolingScope.user.displayName, clients: [])
+        let publicIPv6 = MCPServer(
+            id: "public-ipv6-mcp", name: "Public IPv6", summary: "Remote endpoint",
+            endpoint: "https://[2606:4700:4700::1111]/mcp", transport: .http,
+            authentication: "none", scope: ToolingScope.user.displayName, clients: [])
+        let portablePlugin = Plugin(
+            id: "personal@agent-tooling", name: "Personal", summary: "Portable package",
+            source: "personal@agent-tooling", scope: ToolingScope.user.displayName,
+            revision: "main", skills: [], profiles: [], clients: [], installed: true)
+        let relativePlugin = Plugin(
+            id: "relative-plugin", name: "Relative", summary: "Local relative package",
+            source: "plugins/private-package", scope: ToolingScope.user.displayName,
+            revision: "local", skills: [], profiles: [], clients: [], installed: true)
+        let references = [
+            ToolingItemReference(kind: .plugin, identifier: plugin.id),
+            ToolingItemReference(kind: .plugin, identifier: portablePlugin.id),
+            ToolingItemReference(kind: .plugin, identifier: relativePlugin.id),
+            ToolingItemReference(kind: .mcpServer, identifier: remote.id),
+            ToolingItemReference(kind: .mcpServer, identifier: local.id),
+            ToolingItemReference(kind: .mcpServer, identifier: localIPv6.id),
+            ToolingItemReference(kind: .mcpServer, identifier: localTrailingDot.id),
+            ToolingItemReference(kind: .mcpServer, identifier: abbreviatedLoopback.id),
+            ToolingItemReference(kind: .mcpServer, identifier: publicIPv6.id),
+        ]
+        let document = CollectionExporter.document(
+            for: ToolingCollection(id: "remote-kit", name: "Remote Kit", items: references),
+            skills: [], plugins: [plugin, portablePlugin, relativePlugin],
+            mcpServers: [remote, local, localIPv6, localTrailingDot, abbreviatedLoopback, publicIPv6])
+
+        #expect(document.items.first(where: { $0.identifier == plugin.id })?.source == "https://github.com/acme/agent-plugin")
+        #expect(document.items.first(where: { $0.identifier == portablePlugin.id })?.source == "personal@agent-tooling")
+        #expect(document.items.first(where: { $0.identifier == relativePlugin.id })?.source == nil)
+        #expect(document.items.first(where: { $0.identifier == remote.id })?.destination == "https://mcp.example.com/v1/tools")
+        #expect(document.items.first(where: { $0.identifier == local.id })?.destination == nil)
+        #expect(document.items.first(where: { $0.identifier == localIPv6.id })?.destination == nil)
+        #expect(document.items.first(where: { $0.identifier == localTrailingDot.id })?.destination == nil)
+        #expect(document.items.first(where: { $0.identifier == abbreviatedLoopback.id })?.destination == nil)
+        #expect(document.items.first(where: { $0.identifier == publicIPv6.id })?.destination == "https://[2606:4700:4700::1111]/mcp")
+        _ = try CollectionExporter.encode(document)
+    }
+
+    @Test func exportFileNameDoesNotEchoALocalCollectionName() {
+        let collection = ToolingCollection(
+            id: "/Users/alice/private-kit",
+            name: "/Users/alice/Secret Project"
+        )
+        let name = CollectionExporter.suggestedFileName(for: collection)
+
+        #expect(!name.contains("alice"))
+        #expect(!name.contains("Secret"))
+        #expect(name.hasSuffix("-collection.json"))
+    }
+
+    @Test func legacyExportShapeStillDecodesButCannotBeResharedWithLocalPaths() throws {
+        let legacy = CollectionExportDocument(
+            exportedAt: Date(timeIntervalSince1970: 0),
+            name: "Legacy",
+            items: [
+                ExportedToolingItem(
+                    kind: .plugin,
+                    identifier: "legacy-plugin",
+                    name: "Legacy Plugin",
+                    source: "/Users/alice/legacy/plugin"
+                )
+            ]
+        )
+        let legacyData = try JSONEncoder().encode(legacy)
+        let decoded = try JSONDecoder().decode(CollectionExportDocument.self, from: legacyData)
+
+        #expect(decoded.items.first?.source == "/Users/alice/legacy/plugin")
+        #expect(throws: CollectionExportError.self) {
+            try CollectionExporter.encode(decoded)
+        }
+    }
+
     @Test func exportThroughTheModelKeepsTheSameGuarantee() throws {
         let root = try temporaryDirectory()
         let workspace = root.appending(path: "workspace", directoryHint: .isDirectory)

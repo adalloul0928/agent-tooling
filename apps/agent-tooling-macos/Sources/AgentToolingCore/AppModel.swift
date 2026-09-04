@@ -26,6 +26,7 @@ public final class AppModel {
     public internal(set) var installDrift: [InstalledPackageDrift] = []
     public internal(set) var mcpRuntimeStatuses: [MCPRuntimeStatus] = []
     public internal(set) var mcpRuntimeServers: [MCPRuntimeServer] = []
+    public internal(set) var pendingAgentRequests: [PendingAgentRequest] = []
     public internal(set) var pendingPlan: OperationPlan?
     public internal(set) var backupImportPreview: BackupImportPreview?
     public internal(set) var insightsReport: InsightsReport?
@@ -128,6 +129,7 @@ public final class AppModel {
         self.automaticallyCheckHealth = snapshot.preferences.automaticallyCheckHealth
         self.managedPolicies = snapshot.managedPolicies
         self.syncStages = Self.syncStages(from: snapshot.targetObservations)
+        self.pendingAgentRequests = (try? PendingRequestQueueService.pendingRequests(store: store)) ?? []
     }
 
     public static func live(
@@ -148,6 +150,7 @@ public final class AppModel {
 
     public var isBusy: Bool {
         isSyncing || isRunningDoctor || isExecutingPlan || isRefreshingMarketplace || isGeneratingSkill
+            || isScanningInsights || isDiscoveringProjects
     }
 
     /// Disables competing commands while a change is running or awaiting
@@ -175,6 +178,7 @@ public final class AppModel {
     public func bootstrap() async {
         guard !hasBootstrapped else { return }
         hasBootstrapped = true
+        refreshPendingRequests()
         if automaticallyCheckHealth {
             await runDoctor()
         }
@@ -203,20 +207,21 @@ public final class AppModel {
     /// Raw messages are tokenized and discarded inside the service; only the
     /// aggregate report is stored in this machine's local workspace database.
     public func runInsightsScan(options: InsightScanOptions) async {
-        guard !isScanningInsights else { return }
+        guard ensureReadyForChange() else { return }
         guard !options.clients.intersection([.claude, .codex]).isEmpty else {
             presentError("Select Claude Code, Codex, or both before scanning recent work.")
             return
         }
 
-        isScanningInsights = true
         lastError = nil
-        defer { isScanningInsights = false }
-
         if options.includeMarketplaceRecommendations, !isRefreshingMarketplace {
             await refreshMarketplace()
         }
         guard !Task.isCancelled else { return }
+
+        guard ensureReadyForChange() else { return }
+        isScanningInsights = true
+        defer { isScanningInsights = false }
 
         let report = await toolingInsightsService.scan(
             options: options,
@@ -263,8 +268,9 @@ public final class AppModel {
     }
 
     /// Reads real client state and never mutates a client configuration.
-    public func runDoctor() async {
-        guard ensureReadyForChange() else { return }
+    @discardableResult
+    public func runDoctor() async -> Bool {
+        guard ensureReadyForChange() else { return false }
         isRunningDoctor = true
         defer { isRunningDoctor = false }
         let start = Date.now
@@ -301,11 +307,11 @@ public final class AppModel {
             at: 0
         )
         candidate.activities = Array(candidate.activities.prefix(200))
-        _ = commit(candidate)
+        return commit(candidate)
     }
 
     /// Builds a reviewable plan. It does not perform changes until the user
-    /// confirms the plan through `executePendingPlan()`.
+    /// confirms the exact digest-bound plan through `executePendingPlan(_:)`.
     public func runSync() async {
         guard ensureReadyForChange() else { return }
         isSyncing = true
@@ -371,8 +377,28 @@ public final class AppModel {
         }
     }
 
-    public func executePendingPlan() async {
-        guard let pendingPlan, !isBusy else { return }
+    @discardableResult
+    public func executePendingPlan(_ reviewedPlan: ReviewedOperationPlan) async -> Bool {
+        guard let pendingPlan, !isBusy else { return false }
+        do {
+            try OperationPlanApproval.verify(
+                pendingPlan,
+                confirmedPlanID: reviewedPlan.plan.id,
+                confirmedDigest: reviewedPlan.digest
+            )
+        } catch {
+            presentError("The plan no longer matches what you reviewed: \(error.localizedDescription)")
+            return false
+        }
+        let latestSafetyReview = await safetyReviewAsync(for: pendingPlan)
+        guard !Task.isCancelled, self.pendingPlan?.id == pendingPlan.id else { return false }
+        guard latestSafetyReview.planID == pendingPlan.id, !latestSafetyReview.hasBlockedSteps else {
+            presentError(
+                latestSafetyReview.blockedSteps.first?.blockReason
+                    ?? "The plan's safety review is incomplete. Nothing was changed."
+            )
+            return false
+        }
         isExecutingPlan = true
         do {
             try store.saveEntity(
@@ -383,7 +409,7 @@ public final class AppModel {
         } catch {
             isExecutingPlan = false
             presentError("The approved plan could not be recorded before execution: \(error.localizedDescription)")
-            return
+            return false
         }
         // Receipt redaction is a product invariant, not a user preference.
         let receipt = await engine.execute(pendingPlan)
@@ -421,9 +447,13 @@ public final class AppModel {
         }
         isExecutingPlan = false
         if !Task.isCancelled {
-            await runDoctor()
+            let postOperationScanPersisted = await runDoctor()
+            if postOperationScanPersisted {
+                reconcilePostOperationScan(receiptID: receipt.id, plan: pendingPlan)
+            }
         }
         persist()
+        return true
     }
 
     private func operationCompletedRequiredSteps(plan: OperationPlan, receipt: OperationReceipt) -> Bool {
@@ -431,9 +461,49 @@ public final class AppModel {
         let results = Dictionary(uniqueKeysWithValues: receipt.results.map { ($0.stepID, $0.status) })
         return plan.steps.allSatisfy { step in
             guard let status = results[step.id] else { return false }
+            if step.kind == .scan { return status == .pending || status == .succeeded }
             return step.requiresUserAction || step.kind == .manual || step.kind == .openURL
                 ? status == .manual || status == .succeeded
                 : status == .succeeded
+        }
+    }
+
+    /// The engine records verification steps as pending because it cannot run
+    /// the app-level inventory scan itself. Once `runDoctor()` returns, replace
+    /// that provisional status in both the durable receipt and its activity.
+    private func reconcilePostOperationScan(receiptID: UUID, plan: OperationPlan) {
+        guard let receiptIndex = operationReceipts.firstIndex(where: { $0.id == receiptID }) else { return }
+        let scanStepIDs = Set(plan.steps.filter { $0.kind == .scan }.map(\.id))
+        guard !scanStepIDs.isEmpty else { return }
+
+        var receipt = operationReceipts[receiptIndex]
+        let finishedAt = Date.now
+        for index in receipt.results.indices
+        where scanStepIDs.contains(receipt.results[index].stepID) && receipt.results[index].status == .pending {
+            receipt.results[index].status = .succeeded
+            receipt.results[index].output = "Fresh local client state was inspected after the operation."
+            receipt.results[index].finishedAt = finishedAt
+        }
+        for index in receipt.itemOutcomes.indices
+        where scanStepIDs.contains(receipt.itemOutcomes[index].id) && receipt.itemOutcomes[index].status == .pending {
+            receipt.itemOutcomes[index].status = .succeeded
+            receipt.itemOutcomes[index].reason = "Fresh local client state was inspected after the operation."
+        }
+        receipt.state =
+            receipt.results.contains(where: { $0.status == .failed })
+            ? .attention
+            : receipt.results.contains(where: { [.manual, .skipped, .pending].contains($0.status) }) ? .pending : .healthy
+        receipt.verificationSummary =
+            "\(receipt.outcomeTally). The post-operation setup check completed and the current client state is recorded."
+        operationReceipts[receiptIndex] = receipt
+        if let activityIndex = activities.firstIndex(where: { $0.operationReceiptID == receiptID }) {
+            activities[activityIndex].state = receipt.state
+            activities[activityIndex].detail = receipt.verificationSummary
+        }
+        do {
+            try store.saveEntity(receipt, id: receipt.id.uuidString, domain: .receipts)
+        } catch {
+            presentError("The completed verification could not be added to its receipt: \(error.localizedDescription)")
         }
     }
 
@@ -1224,6 +1294,21 @@ public final class AppModel {
         OperationPlanSafetyReviewer.fromStore(store).review(plan)
     }
 
+    /// Large package trees are reviewed away from the main actor so the plan
+    /// sheet remains responsive while bounded filesystem and content checks
+    /// run. The caller must still compare the result to its current plan.
+    public func safetyReviewAsync(for plan: OperationPlan) async -> OperationPlanSafetyReview {
+        let store = self.store
+        let task = Task.detached(priority: .userInitiated) {
+            OperationPlanSafetyReviewer.fromStore(store).review(plan)
+        }
+        return await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
     private func activityKind(for kind: OperationKind) -> ActivityKind {
         switch kind {
         case .scan, .doctor: .validation
@@ -1289,6 +1374,7 @@ public final class AppModel {
         let snapshot = currentSnapshot()
         try WorkspaceSnapshotValidator.validate(snapshot, mode: .localState)
         try store.saveWorkspaceSnapshot(snapshot)
+        try store.pruneOperationHistory(keepingPlanIDs: Set(snapshot.operationReceipts.map(\.planID)))
     }
 
     @discardableResult

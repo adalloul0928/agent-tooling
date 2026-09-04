@@ -99,17 +99,33 @@ public struct ContentRiskFinding: Identifiable, Codable, Hashable, Sendable {
 public struct ContentRiskReport: Codable, Hashable, Sendable {
     public var findings: [ContentRiskFinding]
     public var filesScanned: Int
+    /// Bounded, package-relative explanations for content that was not fully
+    /// inspected. These are safe to show beside the disabled Run button.
+    public var coverageNotes: [String]
     /// True when the scan stopped early at a bound. The report is then a
     /// partial answer and says so rather than implying the package is clean.
     public var reachedScanLimit: Bool
 
-    public init(findings: [ContentRiskFinding] = [], filesScanned: Int = 0, reachedScanLimit: Bool = false) {
+    public init(
+        findings: [ContentRiskFinding] = [],
+        filesScanned: Int = 0,
+        coverageNotes: [String] = [],
+        reachedScanLimit: Bool = false
+    ) {
         self.findings = findings
         self.filesScanned = filesScanned
+        self.coverageNotes = coverageNotes
         self.reachedScanLimit = reachedScanLimit
     }
 
-    public var isClean: Bool { findings.isEmpty }
+    /// A report is complete only when every candidate file fit within the
+    /// scanner's file, byte, line, and finding bounds. A partial report must
+    /// never borrow the reassuring semantics of a clean one.
+    public var isComplete: Bool { !reachedScanLimit }
+
+    public var isClean: Bool { findings.isEmpty && isComplete }
+
+    public var requiresAttention: Bool { !isClean }
 
     public var maliciousCount: Int { findings.count { $0.severity == .malicious } }
 
@@ -142,17 +158,20 @@ public enum ContentRiskScanner {
     public struct Limits: Hashable, Sendable {
         public var maximumFiles: Int
         public var maximumFileBytes: Int
+        public var maximumTotalBytes: Int
         public var maximumLines: Int
         public var maximumFindings: Int
 
         public init(
             maximumFiles: Int = 2_000,
             maximumFileBytes: Int = 1_024 * 1_024,
+            maximumTotalBytes: Int = 32 * 1_024 * 1_024,
             maximumLines: Int = 20_000,
             maximumFindings: Int = 200
         ) {
             self.maximumFiles = maximumFiles
             self.maximumFileBytes = maximumFileBytes
+            self.maximumTotalBytes = maximumTotalBytes
             self.maximumLines = maximumLines
             self.maximumFindings = maximumFindings
         }
@@ -166,11 +185,17 @@ public enum ContentRiskScanner {
         limits: Limits = Limits()
     ) -> ContentRiskReport {
         let normalizedRoot = root.standardizedFileURL
+        var enumerationNotes: [String] = []
         guard
             let enumerator = fileManager.enumerator(
                 at: normalizedRoot,
                 includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey],
-                options: []
+                options: [],
+                errorHandler: { item, _ in
+                    let relative = relativePath(of: item, under: normalizedRoot) ?? item.lastPathComponent
+                    appendCoverageNote("\(relative) could not be enumerated completely.", to: &enumerationNotes)
+                    return true
+                }
             )
         else {
             return ContentRiskReport(
@@ -191,19 +216,42 @@ public enum ContentRiskScanner {
 
         var findings: [ContentRiskFinding] = []
         var filesScanned = 0
+        var bytesScanned = 0
         var reachedLimit = false
+        var coverageNotes: [String] = []
         while let item = enumerator.nextObject() as? URL {
             guard filesScanned < limits.maximumFiles, findings.count < limits.maximumFindings else {
                 reachedLimit = true
+                appendCoverageNote(
+                    findings.count >= limits.maximumFindings
+                        ? "The finding limit was reached; remaining package entries were not inspected."
+                        : "The file limit was reached before \(relativePath(of: item, under: normalizedRoot) ?? item.lastPathComponent).",
+                    to: &coverageNotes
+                )
                 break
             }
-            if Self.skippedDirectoryNames.contains(item.lastPathComponent) {
+            guard
+                let values = try? item.resourceValues(
+                    forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]),
+                let relativePath = Self.relativePath(of: item, under: normalizedRoot)
+            else {
+                reachedLimit = true
+                appendCoverageNote("An entry named \(item.lastPathComponent) could not be inspected.", to: &coverageNotes)
+                continue
+            }
+            if values.isDirectory == true, Self.skippedDirectoryNames.contains(item.lastPathComponent) {
+                // The installer copies these subtrees even though scanning them
+                // would be prohibitively noisy. Do not silently turn that
+                // performance exclusion into a clean review: any copied byte
+                // that was not inspected must block execution.
+                reachedLimit = true
+                appendCoverageNote(
+                    "\(relativePath) was not inspected because that generated or dependency subtree is excluded from content review.",
+                    to: &coverageNotes
+                )
                 enumerator.skipDescendants()
                 continue
             }
-            guard let values = try? item.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]),
-                let relativePath = Self.relativePath(of: item, under: normalizedRoot)
-            else { continue }
             if values.isSymbolicLink == true {
                 // A link points outside whatever the reviewer just read.
                 findings.append(
@@ -220,28 +268,49 @@ public enum ContentRiskScanner {
             guard values.isRegularFile == true else { continue }
             filesScanned += 1
             findings.append(contentsOf: executableFindings(for: item, relativePath: relativePath, fileManager: fileManager))
-            guard let size = values.fileSize, size <= limits.maximumFileBytes else {
+            guard let size = values.fileSize, size >= 0, size <= limits.maximumFileBytes else {
                 reachedLimit = true
+                appendCoverageNote("\(relativePath) exceeded the per-file review limit.", to: &coverageNotes)
                 continue
             }
+            guard size <= limits.maximumTotalBytes - min(bytesScanned, limits.maximumTotalBytes) else {
+                reachedLimit = true
+                appendCoverageNote("The package exceeded the total content review limit before \(relativePath).", to: &coverageNotes)
+                break
+            }
+            bytesScanned += size
             // A file the scanner cannot decode has not been checked. Counting it
             // as scanned and saying nothing would let one invalid byte in a
             // SKILL.md buy a "no content risks found" verdict.
             guard let data = try? Data(contentsOf: item), let text = String(data: data, encoding: .utf8) else {
                 reachedLimit = true
+                appendCoverageNote("\(relativePath) was unreadable or was not valid UTF-8 text.", to: &coverageNotes)
                 continue
             }
             let inspection = Self.inspect(text: text, relativePath: relativePath, limits: limits)
             findings.append(contentsOf: inspection.findings)
-            if inspection.wasTruncated { reachedLimit = true }
+            if inspection.wasTruncated {
+                reachedLimit = true
+                appendCoverageNote("\(relativePath) exceeded a line or line-length review limit.", to: &coverageNotes)
+            }
         }
 
+        if !enumerationNotes.isEmpty {
+            reachedLimit = true
+            for note in enumerationNotes { appendCoverageNote(note, to: &coverageNotes) }
+        }
         let bounded = Array(findings.prefix(limits.maximumFindings))
         return ContentRiskReport(
             findings: bounded,
             filesScanned: filesScanned,
+            coverageNotes: coverageNotes,
             reachedScanLimit: reachedLimit || bounded.count < findings.count
         )
+    }
+
+    private static func appendCoverageNote(_ note: String, to notes: inout [String]) {
+        guard notes.count < 32, !notes.contains(note) else { return }
+        notes.append(note)
     }
 
     /// Scans one piece of text. Exposed separately so the taxonomy can be

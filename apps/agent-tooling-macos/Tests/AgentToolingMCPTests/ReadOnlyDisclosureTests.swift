@@ -228,7 +228,7 @@ struct ReadOnlyDisclosureTests {
         )
         let rawRequestURL = try #require(request["url"]?.stringValue)
         let url = try #require(URL(string: rawRequestURL))
-        #expect(ExternalAppRoute(url: url) == .skillCreationRequest(id))
+        #expect(ExternalAppRoute(url: url) == .pendingRequest(id))
 
         // A request link without an identifier is a mistake, not a link to the
         // whole queue.

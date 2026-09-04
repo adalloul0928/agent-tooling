@@ -13,6 +13,28 @@ def emit(value: Any) -> None:
     print(json.dumps(value, indent=2, sort_keys=True, default=str))
 
 
+def confirm_action_interactively(lifeos: LifeOS, action_id: str) -> dict[str, Any]:
+    if not sys.stdin.isatty() or not sys.stderr.isatty():
+        raise PermissionError("action confirmation requires an interactive terminal")
+    action = lifeos.store.get_action(action_id)
+    digest = lifeos.store.action_payload_digest(action)
+    review = {
+        "action_id": action["id"],
+        "action_type": action["action_type"],
+        "recipient_or_target": action.get("target"),
+        "request": action.get("request", {}),
+        "payload_digest": digest,
+    }
+    print("Review this exact action. Nothing will execute during confirmation:", file=sys.stderr)
+    print(json.dumps(review, indent=2, sort_keys=True, ensure_ascii=False), file=sys.stderr)
+    phrase = f"CONFIRM {action['id'][:12]} {digest[:12]}"
+    print(f"Type exactly: {phrase}", file=sys.stderr)
+    response = sys.stdin.readline().rstrip("\n")
+    if response != phrase:
+        raise PermissionError("confirmation phrase did not match; action remains unconfirmed")
+    return lifeos.store.confirm_action(action_id, expected_payload_digest=digest)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lifeos", description="Local-first Personal AI / Life OS runtime")
     parser.add_argument("--home", type=Path, help="Override the machine-local Life OS state directory")
@@ -108,7 +130,7 @@ def build_parser() -> argparse.ArgumentParser:
     decisions.add_argument("--review-before")
     decisions.add_argument("--limit", type=int, default=100)
 
-    ticktick = sub.add_parser("ticktick-create-followup", help="Request and optionally execute a TickTick follow-up")
+    ticktick = sub.add_parser("ticktick-create-followup", help="Request a TickTick follow-up; confirmed actions execute on retry")
     ticktick.add_argument("--title", required=True)
     ticktick.add_argument("--project")
     ticktick.add_argument("--content")
@@ -117,7 +139,6 @@ def build_parser() -> argparse.ArgumentParser:
     ticktick.add_argument("--tags")
     ticktick.add_argument("--confidence", type=float, required=True)
     ticktick.add_argument("--idempotency-key", required=True)
-    ticktick.add_argument("--confirmed", action="store_true")
 
     ticktick_task = sub.add_parser("ticktick-create-task", help="Create a user-requested TickTick task with an audit record")
     ticktick_task.add_argument("--title", required=True)
@@ -127,7 +148,6 @@ def build_parser() -> argparse.ArgumentParser:
     ticktick_task.add_argument("--priority", type=int)
     ticktick_task.add_argument("--tags")
     ticktick_task.add_argument("--idempotency-key", required=True)
-    ticktick_task.add_argument("--confirmed", action="store_true", help="The user explicitly requested this exact task")
 
     sub.add_parser("ticktick-projects", help="List TickTick projects as JSON")
     ticktick_tasks = sub.add_parser("ticktick-tasks", help="List TickTick tasks as JSON")
@@ -140,19 +160,17 @@ def build_parser() -> argparse.ArgumentParser:
     ticktick_completed.add_argument("--end-date")
     sub.add_parser("ticktick-habits", help="List TickTick habits")
     sub.add_parser("ticktick-tags", help="List TickTick tags")
-    ticktick_project = sub.add_parser("ticktick-ensure-followups", help="Ensure the AI Follow-ups project exists")
-    ticktick_project.add_argument("--confirmed", action="store_true")
+    sub.add_parser("ticktick-ensure-followups", help="Ensure the AI Follow-ups project exists")
 
     imessage_recent = sub.add_parser("imessage-recent", help="Read recent iMessages and checkpoint metadata")
     imessage_recent.add_argument("--lookback-hours", type=int)
     imessage_recent.add_argument("--chat-limit", type=int, default=25)
     imessage_recent.add_argument("--message-limit", type=int, default=30)
 
-    imessage_send = sub.add_parser("imessage-send", help="Request or execute a confirmed iMessage send")
+    imessage_send = sub.add_parser("imessage-send", help="Request an iMessage send; confirmed actions execute on retry")
     imessage_send.add_argument("--to", required=True)
     imessage_send.add_argument("--text", required=True)
     imessage_send.add_argument("--idempotency-key", required=True)
-    imessage_send.add_argument("--confirmed", action="store_true")
 
     health = sub.add_parser("health-ingest", help="Ingest a Health Auto Export JSON file")
     health.add_argument("path", type=Path)
@@ -180,7 +198,6 @@ def build_parser() -> argparse.ArgumentParser:
     note.add_argument("relative_path")
     note.add_argument("--content-file", type=Path, required=True)
     note.add_argument("--overwrite", action="store_true")
-    note.add_argument("--confirmed", action="store_true", help="The user approved this exact overwrite")
 
     review = sub.add_parser("review-record", help="Record a completed durable review")
     review.add_argument("--type", required=True)
@@ -261,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "actions":
             emit(lifeos.store.list_actions(status=args.status, limit=args.limit))
         elif args.command == "action-confirm":
-            emit(lifeos.store.confirm_action(args.id))
+            emit(confirm_action_interactively(lifeos, args.id))
         elif args.command == "draft-save":
             emit(
                 lifeos.store.save_draft(
@@ -325,8 +342,8 @@ def main(argv: list[str] | None = None) -> int:
                 confidence=args.confidence,
                 idempotency_key=args.idempotency_key,
             )
-            if action["policy_decision"] == "automatic" or args.confirmed:
-                action = lifeos.execute_ticktick_create(action["id"], confirmed=args.confirmed)
+            if action["policy_decision"] == "automatic" or action["status"] == "confirmed":
+                action = lifeos.execute_ticktick_create(action["id"])
             emit(action)
         elif args.command == "ticktick-create-task":
             request = {
@@ -344,8 +361,8 @@ def main(argv: list[str] | None = None) -> int:
                 request=request,
                 idempotency_key=args.idempotency_key,
             )
-            if args.confirmed:
-                action = lifeos.execute_ticktick_create(action["id"], confirmed=True)
+            if action["status"] == "confirmed":
+                action = lifeos.execute_ticktick_create(action["id"])
             emit(action)
         elif args.command == "ticktick-projects":
             emit(lifeos.ticktick_projects())
@@ -358,7 +375,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "ticktick-tags":
             emit(lifeos.ticktick_tags())
         elif args.command == "ticktick-ensure-followups":
-            emit(lifeos.ensure_ticktick_followup_project(confirmed=args.confirmed))
+            emit(lifeos.ensure_ticktick_followup_project())
         elif args.command == "imessage-recent":
             emit(lifeos.imessage_recent(lookback_hours=args.lookback_hours, chat_limit=args.chat_limit, message_limit=args.message_limit))
         elif args.command == "imessage-send":
@@ -368,8 +385,8 @@ def main(argv: list[str] | None = None) -> int:
                 request={"to": args.to, "text": args.text},
                 idempotency_key=args.idempotency_key,
             )
-            if args.confirmed:
-                action = lifeos.execute_imessage_send(action["id"], confirmed=True)
+            if action["status"] == "confirmed":
+                action = lifeos.execute_imessage_send(action["id"])
             emit(action)
         elif args.command == "health-ingest":
             emit(lifeos.ingest_health_file(args.path))
@@ -403,7 +420,6 @@ def main(argv: list[str] | None = None) -> int:
                     args.relative_path,
                     args.content_file.read_text(encoding="utf-8"),
                     overwrite=args.overwrite,
-                    confirmed=args.confirmed,
                 )
             )
         elif args.command == "review-record":

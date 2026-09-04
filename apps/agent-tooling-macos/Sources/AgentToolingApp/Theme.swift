@@ -41,6 +41,14 @@ enum AgentTheme {
     }
 }
 
+/// A deliberately small motion vocabulary. Short, transform-only animations
+/// keep navigation legible without making data-heavy screens feel delayed.
+enum AgentMotion {
+    static let selection = Animation.snappy(duration: 0.22, extraBounce: 0)
+    static let content = Animation.smooth(duration: 0.16)
+    static let quick = Animation.easeOut(duration: 0.12)
+}
+
 extension NSColor {
     convenience init(hex: UInt32, alpha: Double = 1) {
         self.init(

@@ -9,29 +9,11 @@ struct SettingsView: View {
     @AppStorage("appearance") private var appearance = "System"
     @State private var showingRecoveryImport = false
     @State private var recoveryKeyCopied = false
-    @State private var category: SettingsCategory = .general
+    @SceneStorage("agentTooling.settings.category") private var category: SettingsCategory = .general
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Settings") {
-                Picker("Settings category", selection: $category) {
-                    ForEach(SettingsCategory.allCases) { category in
-                        Text(category.rawValue).tag(category)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 300)
-
-                if category == .library {
-                    Button {
-                        revealWorkspace()
-                    } label: {
-                        Label("Reveal workspace", systemImage: "folder")
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
+            SettingsToolbar(category: $category, revealWorkspace: revealWorkspace)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -210,7 +192,15 @@ struct SettingsView: View {
                     }
 
                     if category == .general {
-                        SettingsGroup(title: "MCP runtime", symbol: "server.rack") {
+                        SettingsGroup(title: "MCP connection modes", symbol: "server.rack") {
+                            Text(
+                                "Servers stay configured directly in each client by default. ToolHive is an optional, separate host for isolated workloads; Agent Tooling never moves servers into it automatically."
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Divider()
                             ForEach(Array(model.mcpRuntimeStatuses.enumerated()), id: \.element.id) { index, runtime in
                                 if index > 0 { Divider() }
                                 SettingsValueRow(
@@ -224,18 +214,18 @@ struct SettingsView: View {
                             }
                             if model.mcpRuntimeStatuses.isEmpty {
                                 SettingsActionRow(
-                                    title: "Runtime detection",
-                                    detail: "Direct client configuration is the default. ToolHive support is optional.",
-                                    actionTitle: "Check"
+                                    title: "Connection mode check",
+                                    detail: "Confirm direct client configuration and detect the optional ToolHive host.",
+                                    actionTitle: "Check Modes"
                                 ) {
                                     Task { await model.refreshMCPRuntimes() }
                                 }
                             } else {
                                 Divider()
                                 SettingsActionRow(
-                                    title: "Managed ToolHive servers",
+                                    title: "ToolHive workloads",
                                     detail:
-                                        "\(model.mcpRuntimeServers.count) workload\(model.mcpRuntimeServers.count == 1 ? "" : "s") observed. Agent Tooling does not move existing servers automatically.",
+                                        "\(model.mcpRuntimeServers.count) workload\(model.mcpRuntimeServers.count == 1 ? "" : "s") observed in the optional host. Existing client configurations stay where they are.",
                                     actionTitle: "Refresh"
                                 ) {
                                     Task { await model.refreshMCPRuntimes() }
@@ -477,6 +467,40 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
     case policy = "Policy & Safety"
 
     var id: String { rawValue }
+}
+
+private struct SettingsToolbar: View {
+    @Binding var category: SettingsCategory
+    let revealWorkspace: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            HStack {
+                Text("Settings")
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+                Button(action: revealWorkspace) {
+                    Label("Reveal workspace", systemImage: "folder")
+                }
+                .buttonStyle(.bordered)
+                .opacity(category == .library ? 1 : 0)
+                .disabled(category != .library)
+                .allowsHitTesting(category == .library)
+                .accessibilityHidden(category != .library)
+                .animation(reduceMotion ? nil : AgentMotion.quick, value: category == .library)
+            }
+
+            SlidingSegmentedControl<SettingsCategory>(
+                selection: $category,
+                items: SettingsCategory.allCases.map { .init(value: $0, title: $0.rawValue) },
+                accessibilityLabel: "Settings category"
+            )
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 54)
+    }
 }
 
 private struct RecoveryKeyImportSheet: View {

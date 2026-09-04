@@ -5,15 +5,23 @@ import SwiftUI
 struct MarketplaceView: View {
     @Environment(AppModel.self) private var model
     @Environment(AppNavigationState.self) private var navigation
-    @State private var selectedPackageID: String?
-    @State private var query = ""
-    @State private var componentFilter: MarketplaceComponentFilter = .all
-    @State private var clientFilter: MarketplaceClientFilter = .all
-    @State private var classificationFilter: MarketplaceClassificationFilter = .all
-    @State private var sortOrder: MarketplaceSortOrder = .relevance
-    @State private var selectedSourceID: UUID?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Binding var request: ScreenRequest?
+    @SceneStorage("agentTooling.marketplace.selectedPackage") private var selectedPackageID: String?
+    @SceneStorage("agentTooling.marketplace.query") private var query = ""
+    @SceneStorage("agentTooling.marketplace.component") private var componentFilter: MarketplaceComponentFilter = .all
+    @SceneStorage("agentTooling.marketplace.client") private var clientFilter: MarketplaceClientFilter = .all
+    @SceneStorage("agentTooling.marketplace.provenance") private var classificationFilter: MarketplaceClassificationFilter = .all
+    @SceneStorage("agentTooling.marketplace.sort") private var sortOrder: MarketplaceSortOrder = .relevance
+    @SceneStorage("agentTooling.marketplace.source") private var selectedSourceIDStorage: String?
+
+    init(request: Binding<ScreenRequest?> = .constant(nil)) {
+        _request = request
+    }
 
     var body: some View {
+        let packages = filteredPackages
+
         VStack(spacing: 0) {
             PageToolbar(title: "Marketplace", context: "\(model.marketplacePackages.count) packages from \(model.sources.count) sources") {
                 Button {
@@ -37,7 +45,7 @@ struct MarketplaceView: View {
                     sourcePane.frame(
                         minWidth: 210, idealWidth: 250, maxWidth: 300, minHeight: proxy.size.height, maxHeight: proxy.size.height,
                         alignment: .topLeading)
-                    packagePane.frame(
+                    packagePane(packages: packages).frame(
                         minWidth: 310, idealWidth: 390, maxWidth: 480, minHeight: proxy.size.height, maxHeight: proxy.size.height,
                         alignment: .topLeading)
                     detailPane.frame(
@@ -50,25 +58,59 @@ struct MarketplaceView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             applyExternalNavigation()
-            selectFirstPackageAfterListUpdate(ifNeeded: selectedPackageID == nil)
+            consumeRequest()
+            validateRestoredMarketplaceState()
         }
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
-        .onChange(of: filteredPackages.map(\.id)) { _, ids in
+        .onChange(of: request) { _, _ in consumeRequest() }
+        .onChange(of: packages.map(\.id)) { _, ids in
             let selectionIsInvalid = selectedPackageID == nil || !ids.contains(selectedPackageID ?? "")
             selectFirstPackageAfterListUpdate(ifNeeded: selectionIsInvalid)
+        }
+        .onChange(of: model.sources.map(\.id)) { _, ids in
+            if let selectedSourceID, !ids.contains(selectedSourceID) {
+                self.selectedSourceID = nil
+            }
         }
     }
 
     private func applyExternalNavigation() {
-        guard let requestedID = navigation.requestedMarketplacePackageID,
-            model.marketplacePackages.contains(where: { $0.id == requestedID })
-        else { return }
+        guard let requestedID = navigation.requestedMarketplacePackageID else { return }
+        defer { navigation.consumeMarketplacePackage(requestedID) }
+        guard model.marketplacePackages.contains(where: { $0.id == requestedID }) else { return }
         query = ""
         componentFilter = .all
         clientFilter = .all
         classificationFilter = .all
         selectedSourceID = nil
         selectedPackageID = requestedID
+    }
+
+    private func consumeRequest() {
+        guard let request else { return }
+        defer { self.request = nil }
+        guard case .selectMarketplaceSource(let id) = request,
+            model.sources.contains(where: { $0.id == id })
+        else { return }
+        query = ""
+        componentFilter = .all
+        clientFilter = .all
+        classificationFilter = .all
+        selectedSourceID = id
+        selectedPackageID = nil
+        selectFirstPackageAfterListUpdate(ifNeeded: true)
+    }
+
+    private func validateRestoredMarketplaceState() {
+        if let selectedSourceID,
+            !model.sources.contains(where: { $0.id == selectedSourceID })
+        {
+            self.selectedSourceID = nil
+        }
+        let visibleIDs = Set(filteredPackages.map(\.id))
+        selectFirstPackageAfterListUpdate(
+            ifNeeded: selectedPackageID.map { !visibleIDs.contains($0) } ?? true
+        )
     }
 
     private var sourcePane: some View {
@@ -104,76 +146,59 @@ struct MarketplaceView: View {
         .paneMaterial()
     }
 
-    private var packagePane: some View {
+    private func packagePane(packages: [MarketplacePackage]) -> some View {
         VStack(spacing: 0) {
-            VStack(spacing: 9) {
-                TextField("Search packages", text: $query)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Search marketplace packages")
-                FlowLayout(spacing: 8) {
-                    Picker("Component", selection: $componentFilter) {
-                        ForEach(MarketplaceComponentFilter.allCases) { filter in
-                            Text(filter.rawValue).tag(filter)
-                        }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                    .accessibilityLabel("Package component")
-                    Picker("App", selection: $clientFilter) {
-                        ForEach(MarketplaceClientFilter.allCases) { filter in
-                            Text(filter.rawValue).tag(filter)
-                        }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                    .accessibilityLabel("Filter by app")
-                    Picker("Provenance", selection: $classificationFilter) {
-                        ForEach(MarketplaceClassificationFilter.allCases) { filter in
-                            Text(filter.rawValue).tag(filter)
-                        }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                    .help(classificationFilter.measurement)
-                    .accessibilityLabel("Filter by provenance")
-                    Picker("Sort", selection: $sortOrder) {
-                        ForEach(MarketplaceSortOrder.allCases) { order in
-                            Text(order.displayName).tag(order)
-                        }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                    .help(sortOrder.measurement)
-                    .accessibilityLabel("Sort packages")
-                }
-                HStack(spacing: 6) {
-                    if let source = selectedSource {
-                        HStack(spacing: 6) {
-                            Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                                .foregroundStyle(AgentTheme.blue)
-                            Text(source.name).font(.caption.weight(.semibold)).lineLimit(1)
-                            Button {
-                                selectedSourceID = nil
-                            } label: {
-                                Image(systemName: "xmark.circle.fill").imageScale(.small)
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel("Show every source")
-                        }
-                        .padding(.horizontal, 9)
-                        .frame(height: 24)
-                        .background(AgentTheme.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    }
-                    Spacer(minLength: 0)
-                    Text(packageCountLabel)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    MarketplaceSearchField(text: $query)
+                    Text(resultCountDescription(packages.count))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .contentTransition(.numericText())
+                        .animation(reduceMotion ? nil : AgentMotion.quick, value: packages.count)
+                        .accessibilityLabel("\(resultCountDescription(packages.count)) in the marketplace")
                 }
+
+                ViewThatFits(in: .horizontal) {
+                    wideMarketplaceControls
+                    compactMarketplaceControls
+                }
+
+                Group {
+                    if hasActiveTokenFilter {
+                        FlowLayout(spacing: 6) {
+                            if let source = selectedSource {
+                                ActiveFilterToken(title: source.name, accessibilityName: "source") {
+                                    selectedSourceID = nil
+                                }
+                            }
+                            if clientFilter != .all {
+                                ActiveFilterToken(title: clientFilter.rawValue, accessibilityName: "app") {
+                                    clientFilter = .all
+                                }
+                            }
+                            if classificationFilter != .all {
+                                ActiveFilterToken(title: classificationFilter.rawValue, accessibilityName: "provenance") {
+                                    classificationFilter = .all
+                                }
+                            }
+                            Button("Clear all") { clearFilters() }
+                                .buttonStyle(.plain)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(AgentTheme.blue)
+                                .accessibilityLabel("Clear all marketplace filters")
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
+                    }
+                }
+                .animation(reduceMotion ? nil : AgentMotion.quick, value: hasActiveTokenFilter)
             }
             .padding(12)
+            .background(Color.primary.opacity(0.012))
+            .overlay(alignment: .bottom) { Divider().opacity(0.35) }
 
-            if filteredPackages.isEmpty {
+            if packages.isEmpty {
                 EmptyStateView(
                     symbol: hasActiveFilter ? "line.3.horizontal.decrease.circle" : "shippingbox",
                     title: hasActiveFilter ? "No matching packages" : "No packages found",
@@ -182,18 +207,14 @@ struct MarketplaceView: View {
                     isActionEnabled: hasActiveFilter || !model.isInteractionLocked
                 ) {
                     if hasActiveFilter {
-                        query = ""
-                        componentFilter = .all
-                        clientFilter = .all
-                        classificationFilter = .all
-                        selectedSourceID = nil
+                        clearFilters()
                     } else {
                         chooseSource()
                     }
                 }
             } else {
                 List(selection: $selectedPackageID) {
-                    ForEach(filteredPackages) { package in
+                    ForEach(packages) { package in
                         MarketplacePackageRow(
                             package: package,
                             selected: selectedPackageID == package.id,
@@ -202,8 +223,17 @@ struct MarketplaceView: View {
                         )
                         .tag(package.id)
                         .listRowBackground(SelectionRowBackground(selected: selectedPackageID == package.id))
-                        .accessibilityLabel(package.name)
-                        .accessibilityValue(selectedPackageID == package.id ? "Selected" : "")
+                        .accessibilityLabel("\(package.name), by \(package.publisher)")
+                        .accessibilityValue(
+                            [
+                                package.components.map(\.displayName).sorted().joined(separator: ", "),
+                                MarketplaceProvenanceClassifier.classify(package).classification.displayName,
+                                localState(for: package),
+                                selectedPackageID == package.id ? "Selected" : "",
+                            ]
+                            .filter { !$0.isEmpty }
+                            .joined(separator: ", ")
+                        )
                     }
                 }
                 .listStyle(.inset)
@@ -211,6 +241,128 @@ struct MarketplaceView: View {
             }
         }
         .paneMaterial()
+    }
+
+    private var wideMarketplaceControls: some View {
+        HStack(spacing: 8) {
+            componentSelector(segmentWidth: 45)
+            marketplaceFilterMenu(compact: false)
+            marketplaceSortMenu(compact: false)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var compactMarketplaceControls: some View {
+        HStack(spacing: 8) {
+            componentSelector(segmentWidth: nil)
+                .frame(maxWidth: .infinity)
+            marketplaceFilterMenu(compact: true)
+            marketplaceSortMenu(compact: true)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func componentSelector(segmentWidth: CGFloat?) -> some View {
+        SlidingSegmentedControl<MarketplaceComponentFilter>(
+            selection: $componentFilter,
+            items: MarketplaceComponentFilter.allCases.map { .init(value: $0, title: $0.rawValue) },
+            accessibilityLabel: "Package component",
+            segmentWidth: segmentWidth
+        )
+    }
+
+    private func marketplaceFilterMenu(compact: Bool) -> some View {
+        let activeCount = (clientFilter == .all ? 0 : 1) + (classificationFilter == .all ? 0 : 1)
+        return Menu {
+            Menu("App") {
+                ForEach(MarketplaceClientFilter.allCases) { filter in
+                    Button {
+                        clientFilter = filter
+                    } label: {
+                        if clientFilter == filter {
+                            Label(filter.rawValue, systemImage: "checkmark")
+                        } else {
+                            Text(filter.rawValue)
+                        }
+                    }
+                }
+            }
+            Menu("Provenance") {
+                ForEach(MarketplaceClassificationFilter.allCases) { filter in
+                    Button {
+                        classificationFilter = filter
+                    } label: {
+                        if classificationFilter == filter {
+                            Label(filter.rawValue, systemImage: "checkmark")
+                        } else {
+                            Text(filter.rawValue)
+                        }
+                    }
+                }
+            }
+        } label: {
+            MarketplaceMenuButtonLabel(
+                systemImage: "line.3.horizontal.decrease",
+                title: compact ? nil : "Filters",
+                badge: activeCount == 0 ? nil : activeCount,
+                active: activeCount > 0
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(activeCount == 0 ? "Filter packages by app or provenance" : "\(activeCount) filters active")
+        .accessibilityLabel("Package filters")
+        .accessibilityValue(activeCount == 0 ? "No app or provenance filter" : "\(activeCount) active")
+    }
+
+    private func marketplaceSortMenu(compact: Bool) -> some View {
+        Menu {
+            ForEach(MarketplaceSortOrder.allCases) { order in
+                Button {
+                    sortOrder = order
+                } label: {
+                    let title = order == .relevance ? "Smart (name until searching)" : order.displayName
+                    if sortOrder == order {
+                        Label(title, systemImage: "checkmark")
+                    } else {
+                        Text(title)
+                    }
+                }
+            }
+        } label: {
+            MarketplaceMenuButtonLabel(
+                systemImage: "arrow.up.arrow.down",
+                title: compact ? nil : visibleSortName,
+                active: sortOrder != .relevance
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Sort: \(visibleSortName). \(sortOrder.measurement)")
+        .accessibilityLabel("Sort packages")
+        .accessibilityValue(visibleSortName)
+    }
+
+    private var visibleSortName: String {
+        sortOrder == .relevance && normalizedQuery.isEmpty ? "Smart" : sortOrder.displayName
+    }
+
+    private func resultCountDescription(_ count: Int) -> String {
+        "\(count) \(count == 1 ? "result" : "results")"
+    }
+
+    private var hasActiveTokenFilter: Bool {
+        selectedSourceID != nil || clientFilter != .all || classificationFilter != .all
+    }
+
+    private func clearFilters() {
+        query = ""
+        componentFilter = .all
+        clientFilter = .all
+        classificationFilter = .all
+        selectedSourceID = nil
     }
 
     @ViewBuilder
@@ -434,23 +586,29 @@ struct MarketplaceView: View {
     }
 
     private var filteredPackages: [MarketplacePackage] {
+        let searchTerm = normalizedQuery
         let matches = model.marketplacePackages.filter { package in
             componentFilter.matches(package)
                 && clientFilter.matches(package)
                 && classificationFilter.matches(package)
                 && matchesSelectedSource(package)
-                && (query.isEmpty
+                && (searchTerm.isEmpty
                     || [package.name, package.publisher, package.summary, package.components.map(\.displayName).joined(separator: " ")]
                         .joined(separator: " ")
-                        .localizedCaseInsensitiveContains(query))
+                        .localizedCaseInsensitiveContains(searchTerm))
         }
-        return MarketplaceSorting.sorted(matches, by: sortOrder, searchTerm: query)
+        return MarketplaceSorting.sorted(matches, by: sortOrder, searchTerm: searchTerm)
     }
 
     private var selectedPackage: MarketplacePackage? { model.marketplacePackages.first { $0.id == selectedPackageID } }
 
     private var hasActiveFilter: Bool {
-        !query.isEmpty || componentFilter != .all || clientFilter != .all || classificationFilter != .all || selectedSourceID != nil
+        !normalizedQuery.isEmpty || componentFilter != .all || clientFilter != .all || classificationFilter != .all
+            || selectedSourceID != nil
+    }
+
+    private var normalizedQuery: String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// The empty state names the source and the filter that produced the
@@ -482,6 +640,11 @@ struct MarketplaceView: View {
     private var selectedSource: ToolingSource? {
         guard let selectedSourceID else { return nil }
         return model.sources.first { $0.id == selectedSourceID }
+    }
+
+    private var selectedSourceID: UUID? {
+        get { selectedSourceIDStorage.flatMap(UUID.init(uuidString:)) }
+        nonmutating set { selectedSourceIDStorage = newValue?.uuidString }
     }
 
     /// Native catalogs do not carry a source identifier, so each package is
@@ -518,10 +681,6 @@ struct MarketplaceView: View {
         ]
         let parts = counts.filter { $0.1 > 0 }.map { "\($0.1) \($0.0)\($0.1 == 1 ? "" : "s")" }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-
-    private var packageCountLabel: String {
-        "\(filteredPackages.count)"
     }
 
     private var sortedSources: [ToolingSource] {
@@ -589,6 +748,115 @@ struct MarketplaceView: View {
         } else {
             model.presentError("The package source is no longer available. Refresh Marketplace to update this listing.")
         }
+    }
+}
+
+private struct MarketplaceSearchField: View {
+    @Binding var text: String
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isFocused ? AgentTheme.blue : Color.secondary)
+                .accessibilityHidden(true)
+            TextField("Search packages", text: $text)
+                .textFieldStyle(.plain)
+                .focused($isFocused)
+                .accessibilityLabel("Search marketplace packages")
+            Button {
+                text = ""
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.plain)
+            .opacity(text.isEmpty ? 0 : 1)
+            .allowsHitTesting(!text.isEmpty)
+            .accessibilityHidden(text.isEmpty)
+            .accessibilityLabel("Clear marketplace search")
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 34)
+        .background(AgentTheme.controlBackground, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(isFocused ? AgentTheme.blue.opacity(0.72) : AgentTheme.separator.opacity(0.55), lineWidth: 0.75)
+        }
+        .animation(reduceMotion ? nil : AgentMotion.quick, value: isFocused)
+        .animation(reduceMotion ? nil : AgentMotion.quick, value: text.isEmpty)
+    }
+}
+
+private struct MarketplaceMenuButtonLabel: View {
+    let systemImage: String
+    var title: String?
+    var badge: Int?
+    var active = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .semibold))
+            if let title {
+                Text(title).lineLimit(1)
+            }
+            if let badge {
+                Text(badge, format: .number)
+                    .font(.caption2.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(active ? Color.white : Color.secondary)
+                    .frame(minWidth: 16, minHeight: 16)
+                    .background(Capsule().fill(active ? AgentTheme.blue : Color.primary.opacity(0.07)))
+            }
+            Image(systemName: "chevron.down")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(active ? AgentTheme.blue : Color.primary)
+        .padding(.horizontal, 9)
+        .frame(height: 28)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(active ? AgentTheme.blue.opacity(0.13) : Color.primary.opacity(0.055))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(active ? AgentTheme.blue.opacity(0.28) : AgentTheme.separator.opacity(0.42), lineWidth: 0.5)
+        }
+    }
+}
+
+private struct ActiveFilterToken: View {
+    let title: String
+    let accessibilityName: String
+    let remove: () -> Void
+
+    var body: some View {
+        Button(action: remove) {
+            HStack(spacing: 5) {
+                Text(title)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 190, alignment: .leading)
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .accessibilityHidden(true)
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(AgentTheme.blue)
+            .padding(.horizontal, 9)
+            .frame(height: 23)
+            .background(AgentTheme.blue.opacity(0.12), in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Remove \(accessibilityName) filter: \(title)")
+        .accessibilityLabel("Remove \(accessibilityName) filter: \(title)")
     }
 }
 
@@ -691,6 +959,7 @@ private enum MarketplaceComponentFilter: String, CaseIterable, Identifiable {
 
 private struct MarketplaceSourceRow: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let source: ToolingSource
     let symbol: String
     var contents: String?
@@ -700,22 +969,46 @@ private struct MarketplaceSourceRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            SymbolTile(symbol: symbol, size: 31)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(source.name).font(.callout.weight(.semibold)).lineLimit(1)
-                if let contents {
-                    Text(contents).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                } else {
-                    Text(source.kind.displayName).font(.caption).foregroundStyle(.secondary)
+            Button {
+                onSelect?()
+            } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    SymbolTile(symbol: symbol, size: 31)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(source.name).font(.callout.weight(.semibold)).lineLimit(1)
+                        if let contents {
+                            Text(contents).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        } else {
+                            Text(source.kind.displayName).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Text(source.trustSummary).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        if source.isOptionalBackup {
+                            Text("Optional Git source")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer(minLength: 0)
                 }
-                Text(source.trustSummary).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                if source.isOptionalBackup {
-                    Text("Optional Git source")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .help(selected ? "Show packages from every source" : "Show only packages from \(source.name)")
+            .accessibilityLabel(source.name)
+            .accessibilityValue(
+                [
+                    selected ? "Selected" : "",
+                    contents ?? source.kind.displayName,
+                    source.trustSummary,
+                    source.isOptionalBackup ? "Optional Git source" : "",
+                ]
+                .filter { !$0.isEmpty }
+                .joined(separator: ", ")
+            )
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityHint(selected ? "Shows every source again" : "Shows only packages from this source")
+
             Menu {
                 Button(MarketplaceLocation.webURL(from: source.location) == nil ? "Reveal in Finder" : "Open Website") { openSource() }
                 if [.localFolder, .gitRepository].contains(source.kind) {
@@ -735,10 +1028,7 @@ private struct MarketplaceSourceRow: View {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(selected ? AgentTheme.blue.opacity(0.14) : .clear)
         )
-        .contentShape(Rectangle())
-        .onTapGesture { onSelect?() }
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityHint(selected ? "Shows every source again" : "Shows only packages from this source")
+        .animation(reduceMotion ? nil : AgentMotion.quick, value: selected)
         .confirmationDialog(
             "Remove \(source.name)?",
             isPresented: $isConfirmingRemoval,

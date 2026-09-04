@@ -76,42 +76,64 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
     ) async throws -> CommandOutput {
         try Task.checkCancellation()
         let controller = RunningProcessController()
+        let timeoutSource = DispatchSource.makeTimerSource(queue: .global(qos: .userInitiated))
+        timeoutSource.setEventHandler {
+            controller.requestTimeoutIfActive()
+        }
+        timeoutSource.schedule(
+            deadline: .now() + Self.dispatchInterval(for: timeout),
+            leeway: .milliseconds(5)
+        )
+        timeoutSource.activate()
+        defer {
+            _ = controller.completeTimeoutWindow()
+            timeoutSource.cancel()
+        }
         return try await withTaskCancellationHandler {
-            try await withThrowingTaskGroup(of: CommandOutput.self) { group in
-                group.addTask(priority: .userInitiated) {
-                    try await Self.runProcess(
-                        executable: executable,
-                        arguments: arguments,
-                        standardInput: standardInput,
-                        currentDirectory: currentDirectory,
-                        controller: controller
-                    )
-                }
-                group.addTask {
-                    try await Task.sleep(for: timeout)
-                    controller.terminate(dueToTimeout: true)
-                    throw ProcessCommandRunnerError.timedOut(executable)
-                }
+            do {
+                let output = try await withThrowingTaskGroup(of: CommandOutput.self) { group in
+                    group.addTask(priority: .userInitiated) {
+                        try await Self.runProcess(
+                            executable: executable,
+                            arguments: arguments,
+                            standardInput: standardInput,
+                            currentDirectory: currentDirectory,
+                            controller: controller
+                        )
+                    }
 
-                defer {
-                    group.cancelAll()
-                    controller.terminate()
+                    defer {
+                        group.cancelAll()
+                        controller.terminate()
+                    }
+                    guard let first = try await group.next() else {
+                        throw ProcessCommandRunnerError.missingResult(executable)
+                    }
+                    return first
                 }
-                guard let first = try await group.next() else {
-                    throw ProcessCommandRunnerError.missingResult(executable)
-                }
-                // The process and timeout tasks can become ready in the same
-                // scheduler turn after SIGTERM. A task group does not promise
-                // which ready child `next()` returns first, so never interpret
-                // the terminated process result as a successful command.
-                if controller.didTimeOut {
+                if controller.completeTimeoutWindow() {
                     throw ProcessCommandRunnerError.timedOut(executable)
                 }
-                return first
+                return output
+            } catch {
+                if controller.completeTimeoutWindow() {
+                    throw ProcessCommandRunnerError.timedOut(executable)
+                }
+                throw error
             }
         } onCancel: {
             controller.terminate()
         }
+    }
+
+    private static func dispatchInterval(for duration: Duration) -> DispatchTimeInterval {
+        let components = duration.components
+        let seconds = max(
+            0,
+            Double(components.seconds) + Double(components.attoseconds) / 1_000_000_000_000_000_000
+        )
+        let nanoseconds = min(Double(Int.max), ceil(seconds * 1_000_000_000))
+        return .nanoseconds(Int(nanoseconds))
     }
 
     private static func runProcess(
@@ -123,22 +145,11 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
     ) async throws -> CommandOutput {
         let process = Process()
         process.currentDirectoryURL = currentDirectory
-        var environment = ProcessInfo.processInfo.environment
         let homeURL = FileManager.default.homeDirectoryForCurrentUser
-        let home = homeURL.path(percentEncoded: false)
-        let applicationPaths = [
-            "\(home)/.local/bin",
-            "\(home)/.cargo/bin",
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-            "/usr/bin",
-            "/bin",
-            "/usr/sbin",
-            "/sbin",
-        ]
-        let inheritedPaths = environment["PATH"]?.split(separator: ":").map(String.init) ?? []
-        environment["PATH"] = Array(NSOrderedSet(array: applicationPaths + inheritedPaths)).compactMap { $0 as? String }.joined(
-            separator: ":")
+        let environment = childEnvironment(
+            inheriting: ProcessInfo.processInfo.environment,
+            homeURL: homeURL
+        )
         process.environment = environment
         if let resolvedExecutable = canonicalExecutableURL(
             for: executable,
@@ -241,6 +252,63 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         return nil
     }
 
+    /// Constructs the complete child environment from an allowlist. GUI
+    /// launches often inherit credentials, build-system flags, or dynamic
+    /// loader settings that have no place in a client inventory/install
+    /// command. Paths are app-owned instead of accepting a caller's leading
+    /// PATH entry.
+    static func childEnvironment(
+        inheriting parent: [String: String],
+        homeURL: URL,
+        temporaryDirectory: URL = FileManager.default.temporaryDirectory
+    ) -> [String: String] {
+        let rawHome = homeURL.standardizedFileURL.path(percentEncoded: false)
+        let home = rawHome.count > 1 && rawHome.hasSuffix("/") ? String(rawHome.dropLast()) : rawHome
+        let paths = [
+            "\(home)/.local/bin",
+            "\(home)/.cargo/bin",
+            "\(home)/.volta/bin",
+            "\(home)/.bun/bin",
+            "\(home)/Library/pnpm",
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin",
+        ]
+        let user = parent["USER"].flatMap(safeEnvironmentAtom) ?? NSUserName()
+        let language = parent["LANG"].flatMap(safeLocale) ?? "en_US.UTF-8"
+        var environment = [
+            "HOME": home,
+            "USER": user,
+            "LOGNAME": parent["LOGNAME"].flatMap(safeEnvironmentAtom) ?? user,
+            "TMPDIR": temporaryDirectory.standardizedFileURL.path(percentEncoded: false),
+            "PATH": paths.joined(separator: ":"),
+            "LANG": language,
+            "LC_CTYPE": parent["LC_CTYPE"].flatMap(safeLocale) ?? language,
+            "TERM": "dumb",
+        ]
+        if parent["NO_COLOR"] != nil { environment["NO_COLOR"] = "1" }
+        return environment
+    }
+
+    private static func safeEnvironmentAtom(_ value: String) -> String? {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
+        guard !value.isEmpty, value.count <= 128,
+            value.unicodeScalars.allSatisfy({ allowed.contains($0) })
+        else { return nil }
+        return value
+    }
+
+    private static func safeLocale(_ value: String) -> String? {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._@-"))
+        guard !value.isEmpty, value.count <= 64,
+            value.unicodeScalars.allSatisfy({ allowed.contains($0) })
+        else { return nil }
+        return value
+    }
+
     private static func drain(_ handle: FileHandle) async throws -> CapturedStream {
         var captured = Data()
         var wasTruncated = false
@@ -293,6 +361,7 @@ private final class RunningProcessController: @unchecked Sendable {
     private var processGroupIdentifier: pid_t?
     private var terminationRequested = false
     private var timeoutRequested = false
+    private var timeoutActive = true
 
     var didTimeOut: Bool {
         lock.withLock { timeoutRequested }
@@ -309,13 +378,39 @@ private final class RunningProcessController: @unchecked Sendable {
         if terminateNow, process.isRunning { signal(process, groupIdentifier: groupIdentifier, signal: SIGTERM) }
     }
 
-    func terminate(dueToTimeout: Bool = false) {
+    func requestTimeoutIfActive() {
         lock.lock()
+        guard timeoutActive else {
+            lock.unlock()
+            return
+        }
+        timeoutActive = false
         terminationRequested = true
-        timeoutRequested = timeoutRequested || dueToTimeout
+        timeoutRequested = true
         let process = process
         let groupIdentifier = processGroupIdentifier
         lock.unlock()
+        terminate(process, groupIdentifier: groupIdentifier)
+    }
+
+    @discardableResult
+    func completeTimeoutWindow() -> Bool {
+        lock.withLock {
+            timeoutActive = false
+            return timeoutRequested
+        }
+    }
+
+    func terminate() {
+        lock.lock()
+        terminationRequested = true
+        let process = process
+        let groupIdentifier = processGroupIdentifier
+        lock.unlock()
+        terminate(process, groupIdentifier: groupIdentifier)
+    }
+
+    private func terminate(_ process: Process?, groupIdentifier: pid_t?) {
         guard let process, process.isRunning else { return }
         signal(process, groupIdentifier: groupIdentifier, signal: SIGTERM)
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) { [weak self, weak process] in
@@ -335,6 +430,7 @@ private final class RunningProcessController: @unchecked Sendable {
         if self.process === process {
             self.process = nil
             processGroupIdentifier = nil
+            timeoutActive = false
         }
         lock.unlock()
     }

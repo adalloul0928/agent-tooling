@@ -59,11 +59,19 @@
   ],
   "preferences": [
     {
+      "name": "allowDevelopmentHelperOverride",
+      "type": "checkbox",
+      "required": false,
+      "default": false,
+      "title": "Allow Development Helper",
+      "description": "Allow an unsigned CLI helper override only while this extension is running in Raycast development mode."
+    },
+    {
       "name": "cliPath",
       "type": "file",
       "required": false,
       "title": "CLI Helper Override",
-      "description": "Optional path to an agent-tooling executable for development builds. The signed helper inside the installed app is used by default."
+      "description": "Optional development-only path. It is rejected outside Raycast development mode or unless Allow Development Helper is enabled."
     }
   ],
   "dependencies": {

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct OverviewView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AppNavigationState.self) private var navigation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let navigate: (AppSection) -> Void
     @State private var selectedReceipt: ActivityReceipt?
@@ -16,10 +17,12 @@ struct OverviewView: View {
                 Button {
                     Task { await model.runDoctor() }
                 } label: {
-                    Label(model.isRunningDoctor ? "Checking…" : "Check Now", systemImage: "arrow.clockwise")
+                    Label(model.isRunningDoctor ? "Refreshing…" : "Refresh Checks", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
                 .disabled(model.isInteractionLocked)
+                .help("Re-scan local client commands, configurations, and installed tooling on this Mac")
+                .accessibilityLabel("Refresh local checks")
 
                 Button {
                     Task { await model.runSync() }
@@ -51,7 +54,7 @@ struct OverviewView: View {
                         terminals: terminals,
                         onLibrary: { navigate(.skills) },
                         onProfile: { navigate(.profiles) },
-                        onClient: { _ in navigate(.syncCenter) }
+                        onClient: { navigation.openClient($0) }
                     )
 
                     HStack(alignment: .top, spacing: 16) {
@@ -141,10 +144,12 @@ struct OverviewView: View {
     /// complete are named as such rather than counted as healthy.
     private var updatesCard: some View {
         TitledCard("Updates", count: updateSummary.sentence) {
-            Button("Check again") { Task { await model.refreshMarketplace() } }
+            Button("Refresh marketplace") { Task { await model.refreshMarketplace() } }
                 .buttonStyle(.plain)
                 .foregroundStyle(AgentTheme.blue)
                 .disabled(model.isInteractionLocked)
+                .help("Re-read reviewed marketplace catalogs and sources")
+                .accessibilityLabel("Refresh marketplace updates")
         } content: {
             ForEach(updateItems, id: \.plugin.id) { item in
                 InfoRow(item.plugin.name, detail: item.availability.detail) {

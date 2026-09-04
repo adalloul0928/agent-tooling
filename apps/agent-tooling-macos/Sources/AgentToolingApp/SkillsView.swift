@@ -13,6 +13,7 @@ struct SkillsView: View {
     @State private var untaggedOnly = false
     @State private var selectedID = ""
     @State private var skillBeingEdited: Skill?
+    @State private var skillBeingSourceEdited: Skill?
     @State private var codexCreatorPresented = false
     @State private var pendingCodexRequestID: UUID?
     @State private var installAfterCreator: CodexSkillInstallHandoff?
@@ -78,6 +79,12 @@ struct SkillsView: View {
                     return true
                 }
                 return false
+            }
+            .environment(model)
+        }
+        .sheet(item: $skillBeingSourceEdited) { skill in
+            SkillSourceEditorSheet(existingSkill: skill) { markdown in
+                model.updateSkillSource(id: skill.id, markdown: markdown) != nil
             }
             .environment(model)
         }
@@ -229,6 +236,7 @@ struct SkillsView: View {
             SkillDetailView(
                 skill: skill,
                 onEdit: { skillBeingEdited = skill },
+                onEditSource: { skillBeingSourceEdited = skill },
                 onInstall: { model.planInstall(skillID: skill.id) },
                 onAdopt: { model.planSkillAdoption(skillIDs: [skill.id]) }
             )
@@ -514,6 +522,7 @@ private struct SkillDetailView: View {
     @Environment(AppModel.self) private var model
     let skill: Skill
     let onEdit: () -> Void
+    let onEditSource: () -> Void
     let onInstall: () -> Void
     let onAdopt: () -> Void
 
@@ -527,10 +536,15 @@ private struct SkillDetailView: View {
                         Text(skill.owned ? "Managed by Agent Tooling" : skill.bundle).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if skill.owned, skill.authoringOrigin != .codexGenerated {
+                    if skill.owned, skill.authoringOrigin == .manual {
                         Button("Edit…", systemImage: "pencil", action: onEdit)
                             .buttonStyle(.bordered)
                             .disabled(model.isInteractionLocked)
+                    } else if skill.owned {
+                        Button("Edit Source…", systemImage: "doc.text", action: onEditSource)
+                            .buttonStyle(.bordered)
+                            .disabled(model.isInteractionLocked)
+                            .accessibilityHint("Edits the complete SKILL.md while preserving scripts, references, and assets")
                     }
                     if skill.owned {
                         Button("Review Install…", systemImage: "arrow.down.circle") { onInstall() }
