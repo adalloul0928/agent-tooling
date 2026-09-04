@@ -22,7 +22,9 @@ import {
 import {
 	branchName,
 	parseWorktreeOptions,
+	resolveRemoteBase,
 	safeWorktreeName,
+	validateOriginRemoteTrackingRef,
 } from "../scripts/create-worktree.mjs";
 import {
 	applyRecordedLaneSelection,
@@ -143,8 +145,8 @@ test("worktree creator produces safe client-specific branch names", () => {
 	assert.deepEqual(
 		parseWorktreeOptions(["--", "--client", "claude", "--name", "Feature Auth"]),
 		{
-			allowStaleBase: false,
-			base: "origin/preview",
+			baseRef: "origin/preview",
+			baseRefSource: "default",
 			client: "claude",
 			destinationRoot: "",
 			hook: false,
@@ -153,6 +155,143 @@ test("worktree creator produces safe client-specific branch names", () => {
 		},
 	);
 	assert.throws(() => safeWorktreeName("../../"), /safe worktree name/);
+});
+
+test("worktree bases accept only conservative origin remote-tracking refs", () => {
+	assert.equal(validateOriginRemoteTrackingRef("origin/preview"), "origin/preview");
+	assert.equal(
+		validateOriginRemoteTrackingRef("origin/codex/integrate-simulator-fleet-simslim"),
+		"origin/codex/integrate-simulator-fleet-simslim",
+	);
+	assert.deepEqual(
+		parseWorktreeOptions(["--base-ref", "origin/codex/integration", "--name", "feature"]),
+		{
+			baseRef: "origin/codex/integration",
+			baseRefSource: "base-ref",
+			client: "manual",
+			destinationRoot: "",
+			hook: false,
+			name: "feature",
+			projectRoot: "",
+		},
+	);
+	assert.equal(
+		parseWorktreeOptions(["--base", "origin/preview"]).baseRefSource,
+		"legacy-base",
+	);
+
+	for (const rejected of [
+		"a".repeat(40),
+		"preview",
+		"refs/heads/preview",
+		"upstream/preview",
+		"origin/../preview",
+		"origin/foo/../../bar",
+		"origin/foo;touch-pwned",
+		"origin/foo$(id)",
+		"origin/foo\nbar",
+		"origin/-upload-pack=evil",
+		"origin/foo.lock",
+		"origin/foo..bar",
+		"origin/foo@{1}",
+		"origin/foo\\bar",
+		"origin//foo",
+		"origin/foo/",
+		"origin/.hidden",
+	]) {
+		assert.throws(
+			() => validateOriginRemoteTrackingRef(rejected),
+			/origin\/<branch>/,
+			rejected,
+		);
+	}
+	assert.throws(
+		() =>
+			parseWorktreeOptions([
+				"--base-ref",
+				"origin/preview",
+				"--base",
+				"origin/preview",
+			]),
+		/exactly one/,
+	);
+	assert.throws(
+		() => parseWorktreeOptions(["--allow-stale-base"]),
+		/no longer supported/,
+	);
+});
+
+test("worktree bases fetch one exact origin branch and resolve one immutable commit", () => {
+	const commit = "a".repeat(40);
+	const calls = [];
+	const execute = (command, args, cwd, options) => {
+		calls.push({ args, command, cwd, options });
+		return calls.length === 1
+			? { status: 0, stderr: "", stdout: "" }
+			: { status: 0, stderr: "", stdout: `${commit}\n` };
+	};
+	assert.deepEqual(resolveRemoteBase("/repo", "origin/codex/integration", execute), {
+		requestedBaseRef: "origin/codex/integration",
+		resolvedBaseCommit: commit,
+	});
+	assert.deepEqual(calls, [
+		{
+			args: [
+				"fetch",
+				"--no-tags",
+				"origin",
+				"+refs/heads/codex/integration:refs/remotes/origin/codex/integration",
+			],
+			command: "git",
+			cwd: "/repo",
+			options: { allowFailure: true, quiet: true },
+		},
+		{
+			args: [
+				"rev-parse",
+				"--verify",
+				"--end-of-options",
+				"refs/remotes/origin/codex/integration^{commit}",
+			],
+			command: "git",
+			cwd: "/repo",
+			options: { allowFailure: true, quiet: true },
+		},
+	]);
+});
+
+test("worktree base resolution fails closed on fetch and SHA attestation errors", () => {
+	let callCount = 0;
+	assert.throws(
+		() =>
+			resolveRemoteBase("/repo", "origin/preview", () => {
+				callCount += 1;
+				return { status: 1, stderr: "offline", stdout: "" };
+			}),
+		/never use a stale integration base/,
+	);
+	assert.equal(callCount, 1);
+
+	assert.throws(
+		() =>
+			resolveRemoteBase("/repo", "origin/preview", (_command, args) =>
+				args[0] === "fetch"
+					? { status: 0, stderr: "", stdout: "" }
+					: { status: 0, stderr: "", stdout: "not-a-commit\n" },
+			),
+		/immutable commit/,
+	);
+
+	let injectionExecuted = false;
+	assert.throws(
+		() =>
+			resolveRemoteBase("/repo", "origin/preview;touch-pwned", () => {
+				injectionExecuted = true;
+				return { status: 0, stdout: "a".repeat(40) };
+			}),
+		/origin\/<branch>/,
+	);
+	assert.equal(injectionExecuted, false);
 });
 
 test("CLI parsing recommends local Supabase but requires confirmation", () => {

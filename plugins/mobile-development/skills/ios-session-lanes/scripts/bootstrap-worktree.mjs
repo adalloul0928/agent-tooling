@@ -27,7 +27,8 @@ import {
 import { withFileLock } from "./lane-lock.mjs";
 
 const receiptVersion = 5;
-const attestationVersion = 1;
+const attestationVersion = 2;
+const legacyAttestationVersion = 1;
 const commandTimeoutMs = 30 * 60 * 1000;
 const remoteRefreshMs = 24 * 60 * 60 * 1000;
 
@@ -196,16 +197,43 @@ export function managedAttestationPathFor(options = {}) {
 	return path.join(gitDirectory, "agent-tooling-managed-worktree.json");
 }
 
+function validManagedBaseRef(value) {
+	const requested = String(value ?? "");
+	const match = requested.match(/^origin\/(.+)$/);
+	if (!match || requested.length > 255) return false;
+	const branch = match[1];
+	return (
+		!branch.includes("..") &&
+		!branch.includes("@{") &&
+		branch.split("/").every(
+			(segment) =>
+				/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(segment) &&
+				!segment.endsWith(".") &&
+				!segment.toLowerCase().endsWith(".lock"),
+		)
+	);
+}
+
 export function writeManagedWorktreeAttestation(options = {}, details = {}) {
 	const context = assertSupportedProject(options.projectRoot || process.cwd());
 	const attestationPath = managedAttestationPathFor({ projectRoot: context.root });
 	const gitDirectory = gitValue(context, ["rev-parse", "--absolute-git-dir"]);
+	const requestedBaseRef = String(details.requestedBaseRef ?? "");
+	const resolvedBaseCommit = String(details.resolvedBaseCommit ?? "").toLowerCase();
+	if (!validManagedBaseRef(requestedBaseRef)) {
+		throw new Error("Managed worktree attestation requires its requested origin base ref.");
+	}
+	if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(resolvedBaseCommit)) {
+		throw new Error("Managed worktree attestation requires its immutable base commit.");
+	}
 	const attestation = {
 		client: String(details.client ?? "managed"),
 		createdAt: new Date().toISOString(),
 		createdBy: "ios-session-worktree",
 		gitDirectory,
 		origin: context.profile.match.canonicalGitHubOrigin,
+		requestedBaseRef,
+		resolvedBaseCommit,
 		root: realpathSync(context.root),
 		version: attestationVersion,
 	};
@@ -230,8 +258,13 @@ export function managedWorktreeAttestationStatus(options = {}) {
 		return { attestation: null, attestationPath, ok: false, reason: "managed worktree attestation invalid" };
 	}
 	const expectedGitDirectory = gitValue(context, ["rev-parse", "--absolute-git-dir"]);
+	const versionValid =
+		attestation.version === legacyAttestationVersion ||
+		(attestation.version === attestationVersion &&
+			validManagedBaseRef(attestation.requestedBaseRef) &&
+			/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(attestation.resolvedBaseCommit));
 	const valid =
-		attestation.version === attestationVersion &&
+		versionValid &&
 		attestation.createdBy === "ios-session-worktree" &&
 		attestation.root === realpathSync(context.root) &&
 		attestation.gitDirectory === expectedGitDirectory &&
@@ -456,6 +489,7 @@ function createReceipt(context, inputs, dopplerNames) {
 		context.profile.backend.requiredDopplerNames,
 		`Doppler ${context.profile.backend.dopplerProject}/${context.dopplerConfig}`,
 	);
+	const managedAttestation = managedWorktreeAttestationStatus({ projectRoot: context.root });
 	return {
 		completedAt: new Date().toISOString(),
 		doppler: {
@@ -467,6 +501,13 @@ function createReceipt(context, inputs, dopplerNames) {
 			project: context.profile.backend.dopplerProject,
 		},
 		git: {
+			base:
+				managedAttestation.ok && managedAttestation.attestation.version === attestationVersion
+					? {
+							requestedRef: managedAttestation.attestation.requestedBaseRef,
+							resolvedCommit: managedAttestation.attestation.resolvedBaseCommit,
+						}
+					: null,
 			branch: gitValue(context, ["branch", "--show-current"]) || "detached",
 			commit: gitValue(context, ["rev-parse", "HEAD"]),
 			commonDirectory: gitValue(context, ["rev-parse", "--git-common-dir"]),

@@ -53,7 +53,10 @@ Keep two secondary defaults automatic unless the task makes them relevant:
    This installs the pinned pnpm dependencies, pulls the mobile development
    environment from EAS into the ignored mobile environment file, validates
    Doppler secret-name access without writing Doppler values, and records a
-   secret-free receipt.
+   secret-free receipt. `ios-session-worktree` starts from freshly fetched
+   `origin/preview` by default. When a task must start from a long-lived remote
+   integration branch, pass its exact `origin/<branch>` name with `--base-ref`;
+   local refs, raw SHAs, other remotes, and stale fallbacks are refused.
 2. Confirm the lane choice, then start the current chat with
    `ios-session-lane up --client <claude|codex> --session-id <session-id>
    --preset <preset>`. A later `up` for the same lane reuses its recorded choices

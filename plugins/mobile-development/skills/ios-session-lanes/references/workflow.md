@@ -106,11 +106,23 @@ Create a worktree through the wrapper:
 ```bash
 ios-session-worktree --client codex --name feature-name
 ios-session-worktree --client claude --name feature-name
+ios-session-worktree --client codex --name feature-name \
+  --base-ref origin/codex/long-lived-integration
 ```
 
-The wrapper creates `codex/feature-name` or `claude/feature-name` from
-`origin/preview`, then runs bootstrap. If bootstrap fails, it preserves the
-branch and worktree and prints the repair command.
+The wrapper creates `codex/feature-name` or `claude/feature-name` from a freshly
+fetched `origin/preview`, then runs bootstrap. `--base-ref` may select a
+different remote-tracking branch from the configured `origin`. It accepts only
+the conservative `origin/<branch>` form: raw SHAs, local refs, other remotes,
+path-like or shell-like input, and stale fallback are rejected. The wrapper
+fetches the one named branch, resolves it once to an immutable commit, creates
+the worktree from that commit, and records both the requested ref and resolved
+commit in the private managed-worktree attestation and bootstrap receipt.
+
+The older `--base origin/<branch>` spelling remains a deprecated alias routed
+through the same validation and resolution path. `--allow-stale-base` is no
+longer supported. If bootstrap fails, the wrapper preserves the branch and
+worktree and prints the repair command.
 
 Bootstrap can also be run or checked directly:
 

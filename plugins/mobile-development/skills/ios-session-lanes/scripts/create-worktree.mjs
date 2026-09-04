@@ -30,8 +30,8 @@ export function safeWorktreeName(value) {
 export function parseWorktreeOptions(args) {
 	const profile = projectContext().profile;
 	const options = {
-		allowStaleBase: false,
-		base: profile.worktrees.defaultBase,
+		baseRef: profile.worktrees.defaultBase,
+		baseRefSource: "default",
 		client: "manual",
 		destinationRoot: "",
 		hook: false,
@@ -42,14 +42,24 @@ export function parseWorktreeOptions(args) {
 		const arg = args[index];
 		if (arg === "--") continue;
 		if (arg === "--hook") options.hook = true;
-		else if (arg === "--allow-stale-base") options.allowStaleBase = true;
-		else if (arg === "--base") options.base = requireValue(args, ++index, arg);
-		else if (arg === "--client") options.client = safeWorktreeName(requireValue(args, ++index, arg));
+		else if (arg === "--allow-stale-base") {
+			throw new Error(
+				"--allow-stale-base is no longer supported; managed worktrees require a freshly fetched, attested origin ref.",
+			);
+		} else if (arg === "--base-ref" || arg === "--base") {
+			if (options.baseRefSource !== "default") {
+				throw new Error("Specify exactly one of --base-ref or the deprecated --base alias.");
+			}
+			options.baseRef = validateOriginRemoteTrackingRef(requireValue(args, ++index, arg));
+			options.baseRefSource = arg === "--base" ? "legacy-base" : "base-ref";
+		} else if (arg === "--client")
+			options.client = safeWorktreeName(requireValue(args, ++index, arg));
 		else if (arg === "--name") options.name = safeWorktreeName(requireValue(args, ++index, arg));
 		else if (arg === "--destination-root") options.destinationRoot = requireValue(args, ++index, arg);
 		else if (arg === "--project-root") options.projectRoot = requireValue(args, ++index, arg);
 		else throw new Error(`Unknown worktree option ${arg}.`);
 	}
+	options.baseRef = validateOriginRemoteTrackingRef(options.baseRef);
 	return options;
 }
 
@@ -83,6 +93,66 @@ function run(command, args, cwd, { allowFailure = false, quiet = false } = {}) {
 		throw new Error(`${command} ${args.join(" ")} failed${detail ? `: ${detail}` : ""}.`);
 	}
 	return result;
+}
+
+export function validateOriginRemoteTrackingRef(value) {
+	const requested = String(value ?? "");
+	if (requested !== requested.trim() || requested.length > 255) {
+		throw new Error("The worktree base must be a valid origin/<branch> remote-tracking ref.");
+	}
+	const match = requested.match(/^origin\/(.+)$/);
+	if (!match) {
+		throw new Error("The worktree base must be a valid origin/<branch> remote-tracking ref.");
+	}
+	const branch = match[1];
+	const segments = branch.split("/");
+	const valid =
+		segments.length > 0 &&
+		segments.every(
+			(segment) =>
+				/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(segment) &&
+				segment !== "." &&
+				segment !== ".." &&
+				!segment.endsWith(".") &&
+				!segment.toLowerCase().endsWith(".lock"),
+		);
+	if (!valid || branch.includes("..") || branch.includes("@{")) {
+		throw new Error("The worktree base must be a valid origin/<branch> remote-tracking ref.");
+	}
+	return requested;
+}
+
+export function resolveRemoteBase(root, requestedBaseRef, execute = run) {
+	const validatedRef = validateOriginRemoteTrackingRef(requestedBaseRef);
+	const branch = validatedRef.slice("origin/".length);
+	const fetch = execute(
+		"git",
+		[
+			"fetch",
+			"--no-tags",
+			"origin",
+			`+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+		],
+		root,
+		{ allowFailure: true, quiet: true },
+	);
+	if (fetch.status !== 0) {
+		throw new Error(
+			`Could not fetch ${validatedRef}; managed worktrees never use a stale integration base.`,
+		);
+	}
+	const revision = `refs/remotes/origin/${branch}^{commit}`;
+	const resolved = execute(
+		"git",
+		["rev-parse", "--verify", "--end-of-options", revision],
+		root,
+		{ allowFailure: true, quiet: true },
+	);
+	const resolvedBaseCommit = String(resolved.stdout ?? "").trim().toLowerCase();
+	if (resolved.status !== 0 || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(resolvedBaseCommit)) {
+		throw new Error(`Could not resolve ${validatedRef} to an immutable commit.`);
+	}
+	return { requestedBaseRef: validatedRef, resolvedBaseCommit };
 }
 
 function capturedGit(root, args) {
@@ -148,35 +218,28 @@ function resolveWorktreePath(root, profile, options, discriminator) {
 	return destination;
 }
 
-function refreshBase(root, base, allowStaleBase) {
-	if (!base.startsWith("origin/")) return;
-	const branch = base.slice("origin/".length);
-	const result = run("git", ["fetch", "origin", branch], root, {
-		allowFailure: true,
-		quiet: true,
-	});
-	if (result.status !== 0) {
-		if (!allowStaleBase) {
-			throw new Error(
-				`Could not refresh ${base}. Retry with network access or pass --allow-stale-base explicitly.`,
-			);
-		}
-		process.stderr.write(`[worktree] Could not refresh ${base}; explicitly using the existing local ref.\n`);
-	}
-}
-
 export async function createWorktree(options, discriminator = "") {
 	const context = assertSupportedProject(options.projectRoot || process.cwd());
 	const root = context.root;
 	const name = safeWorktreeName(options.name);
-	refreshBase(root, options.base, options.allowStaleBase);
+	const { requestedBaseRef, resolvedBaseCommit } = resolveRemoteBase(
+		root,
+		options.baseRef ?? options.base ?? context.profile.worktrees.defaultBase,
+	);
+	if (options.baseRefSource === "legacy-base") {
+		process.stderr.write("[worktree] --base is deprecated; use --base-ref origin/<branch>.\n");
+	}
 	const destination = resolveWorktreePath(root, context.profile, options, discriminator);
 	const branch = uniqueBranch(root, options.client, name, discriminator);
-	run("git", ["worktree", "add", "--no-track", "-b", branch, destination, options.base], root);
+	run(
+		"git",
+		["worktree", "add", "--no-track", "-b", branch, destination, resolvedBaseCommit],
+		root,
+	);
 	try {
 		writeManagedWorktreeAttestation(
 			{ projectRoot: destination },
-			{ client: options.client },
+			{ client: options.client, requestedBaseRef, resolvedBaseCommit },
 		);
 		await bootstrap({ ...parseBootstrapOptions(["--quiet"]), projectRoot: destination });
 	} catch (error) {
@@ -185,8 +248,10 @@ export async function createWorktree(options, discriminator = "") {
 				`Repair it with ios-session-bootstrap --project-root "${destination}".`,
 		);
 	}
-	process.stderr.write(`[worktree] Ready ${destination} on ${branch}; bootstrap receipt verified.\n`);
-	return { branch, destination };
+	process.stderr.write(
+		`[worktree] Ready ${destination} on ${branch} from ${requestedBaseRef} at ${resolvedBaseCommit}; bootstrap receipt verified.\n`,
+	);
+	return { branch, destination, requestedBaseRef, resolvedBaseCommit };
 }
 
 async function main() {

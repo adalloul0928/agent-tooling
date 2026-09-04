@@ -513,8 +513,17 @@ export async function cleanupSpawnedProcessGroup(
 	let snapshot = inspectSpawnedProcessGroup(descriptor);
 	if (snapshot.status === "mismatch") {
 		if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
-		await delay(50);
-		snapshot = inspectSpawnedProcessGroup(descriptor);
+		const stabilizationDeadline = Date.now() + Math.min(500, Math.max(100, timeoutMs));
+		while (
+			await spawnedGroupInspectionMayStabilize(
+				snapshot,
+				child,
+				stabilizationDeadline,
+			)
+		) {
+			snapshot = inspectSpawnedProcessGroup(descriptor);
+			if (snapshot.status !== "mismatch") break;
+		}
 		if (snapshot.status === "mismatch") {
 			throw new Error(
 				`Refusing a group signal for spawned PGID ${child.pid}: ${snapshot.reason ?? "a member identity changed"}.`,
@@ -527,8 +536,13 @@ export async function cleanupSpawnedProcessGroup(
 	while (Date.now() < deadline) {
 		snapshot = inspectSpawnedProcessGroup(descriptor);
 		if (snapshot.status === "empty") return true;
+		if (await spawnedGroupInspectionMayStabilize(snapshot, child, deadline)) {
+			continue;
+		}
 		if (snapshot.status === "mismatch") {
-			throw new Error(`Spawned PGID ${child.pid} changed identity during cleanup.`);
+			throw new Error(
+				`Spawned PGID ${child.pid} changed identity during cleanup: ${snapshot.reason ?? "unknown mismatch"}.`,
+			);
 		}
 		await delay(50);
 	}
@@ -537,12 +551,42 @@ export async function cleanupSpawnedProcessGroup(
 	while (Date.now() < killDeadline) {
 		snapshot = inspectSpawnedProcessGroup(descriptor);
 		if (snapshot.status === "empty") return true;
+		if (await spawnedGroupInspectionMayStabilize(snapshot, child, killDeadline)) {
+			continue;
+		}
 		if (snapshot.status === "mismatch") {
-			throw new Error(`Spawned PGID ${child.pid} changed identity during cleanup.`);
+			throw new Error(
+				`Spawned PGID ${child.pid} changed identity during cleanup: ${snapshot.reason ?? "unknown mismatch"}.`,
+			);
 		}
 		await delay(25);
 	}
+	snapshot = inspectSpawnedProcessGroup(descriptor);
+	if (snapshot.status === "empty") return true;
+	if (snapshot.status === "mismatch") {
+		throw new Error(
+			`Spawned PGID ${child.pid} changed identity during cleanup: ${snapshot.reason ?? "unknown mismatch"}.`,
+		);
+	}
 	throw new Error(`Spawned PGID ${child.pid} retained active members after SIGKILL.`);
+}
+
+async function spawnedGroupInspectionMayStabilize(snapshot, child, deadline) {
+	if (snapshot.status !== "mismatch" || Date.now() >= deadline) return false;
+	if (snapshot.reason === "process-group membership did not stabilize") {
+		await delay(25);
+		return true;
+	}
+	if (snapshot.reason !== `PID ${child.pid} did not match the exact group identity`) {
+		return false;
+	}
+	while (Date.now() < deadline) {
+		if (child.exitCode !== null || child.signalCode !== null || !isPidAlive(child.pid)) {
+			return true;
+		}
+		await delay(10);
+	}
+	return false;
 }
 
 function signalSpawnedProcessGroup(descriptor, signal) {

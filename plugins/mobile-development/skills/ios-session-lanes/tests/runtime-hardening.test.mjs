@@ -60,6 +60,7 @@ import {
 	captureOwnedProcessRecordOrCleanup,
 	inspectOwnedProcessGroup,
 	inspectProcessIdentity,
+	isPidAlive,
 	metroProcessOwned,
 	ownedProcess,
 	processSignalTarget,
@@ -285,46 +286,48 @@ test("owned process shutdown waits for every exact process-group member", async 
 });
 
 test("spawn identity capture failure stops the exact child and surviving group members", async () => {
-	const workingDirectory = mkdtempSync(path.join(tmpdir(), "ios-lane-capture-cleanup-"));
-	const metroNonce = "capture-failure-metro-nonce";
-	const metroWorktreeHash = "capture-failure-worktree-hash";
-	const processNonce = "capture-failure-process-nonce";
-	const port = await unusedLoopbackPort();
-	const child = spawn(process.execPath, ["-e", processGroupLeaderScript(port)], {
-		cwd: workingDirectory,
-		detached: true,
-		env: {
-			...process.env,
-			IOS_SESSION_LANE_NONCE: metroNonce,
-			IOS_SESSION_LANE_PROCESS_NONCE: processNonce,
-			IOS_SESSION_LANE_WORKTREE_HASH: metroWorktreeHash,
-		},
-		stdio: "ignore",
-	});
-	child.unref();
-	try {
-		await waitFor(() => loopbackPortHasListener(port));
-		await assert.rejects(
-			captureOwnedProcessRecordOrCleanup(
-				child,
-				{
-					expectedCommandParts: ["command-part-that-is-not-present"],
-					expectedCwd: workingDirectory,
-					metroNonce,
-					metroWorktreeHash,
-					processNonce,
-					processRole: "metro",
-				},
-				{ attempts: 1, cleanupTimeoutMs: 250 },
-			),
-			/the exact spawned child\/group was stopped/,
-		);
-		await waitFor(() => !loopbackPortHasListener(port));
-	} finally {
+	for (let iteration = 0; iteration < 6; iteration += 1) {
+		const workingDirectory = mkdtempSync(path.join(tmpdir(), "ios-lane-capture-cleanup-"));
+		const metroNonce = `capture-failure-metro-nonce-${iteration}`;
+		const metroWorktreeHash = `capture-failure-worktree-hash-${iteration}`;
+		const processNonce = `capture-failure-process-nonce-${iteration}`;
+		const port = await unusedLoopbackPort();
+		const child = spawn(process.execPath, ["-e", processGroupLeaderScript(port)], {
+			cwd: workingDirectory,
+			detached: true,
+			env: {
+				...process.env,
+				IOS_SESSION_LANE_NONCE: metroNonce,
+				IOS_SESSION_LANE_PROCESS_NONCE: processNonce,
+				IOS_SESSION_LANE_WORKTREE_HASH: metroWorktreeHash,
+			},
+			stdio: "ignore",
+		});
+		child.unref();
 		try {
-			process.kill(-child.pid, "SIGKILL");
-		} catch {}
-		rmSync(workingDirectory, { force: true, recursive: true });
+			await waitFor(() => loopbackPortHasListener(port));
+			await assert.rejects(
+				captureOwnedProcessRecordOrCleanup(
+					child,
+					{
+						expectedCommandParts: ["command-part-that-is-not-present"],
+						expectedCwd: workingDirectory,
+						metroNonce,
+						metroWorktreeHash,
+						processNonce,
+						processRole: "metro",
+					},
+					{ attempts: 1, cleanupTimeoutMs: 250 },
+				),
+				/the exact spawned child\/group was stopped/,
+			);
+			await waitFor(() => !isPidAlive(child.pid) && !loopbackPortHasListener(port));
+		} finally {
+			try {
+				process.kill(-child.pid, "SIGKILL");
+			} catch {}
+			rmSync(workingDirectory, { force: true, recursive: true });
+		}
 	}
 });
 

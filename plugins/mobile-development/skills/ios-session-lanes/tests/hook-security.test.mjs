@@ -254,13 +254,23 @@ test("GitHub origin matching is canonical rather than substring based", () => {
 
 test("managed worktree attestations are private and bound to the exact worktree", () => {
 	const root = createProject();
+	const resolvedBaseCommit = "a".repeat(40);
 	const written = writeManagedWorktreeAttestation(
 		{ projectRoot: root },
-		{ client: "codex" },
+		{ client: "codex", requestedBaseRef: "origin/codex/integration", resolvedBaseCommit },
 	);
 	assert.equal(written.attestation.createdBy, "ios-session-worktree");
+	assert.equal(written.attestation.requestedBaseRef, "origin/codex/integration");
+	assert.equal(written.attestation.resolvedBaseCommit, resolvedBaseCommit);
 	assert.equal(managedWorktreeAttestationStatus({ projectRoot: root }).ok, true);
 	chmodSync(written.attestationPath, 0o644);
+	assert.equal(managedWorktreeAttestationStatus({ projectRoot: root }).ok, false);
+	chmodSync(written.attestationPath, 0o600);
+	writeFileSync(
+		written.attestationPath,
+		`${JSON.stringify({ ...written.attestation, requestedBaseRef: "origin/../attacker" })}\n`,
+		{ mode: 0o600 },
+	);
 	assert.equal(managedWorktreeAttestationStatus({ projectRoot: root }).ok, false);
 });
 

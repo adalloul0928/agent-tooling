@@ -1,8 +1,8 @@
 # iOS session lanes hardening summary
 
-Status: reviewed and ready to publish on `codex/ios-lanes-hardening`  
-Repository: `agent-tooling` only  
-Rebased base: `origin/main` at `483b330`  
+Status: extended with the lane suite validated on `codex/ios-lanes-base-ref`
+Repository: `agent-tooling` only
+Base: `origin/codex/ios-lanes-hardening` at `baec188`
 Updated: 2026-09-03 (America/Los_Angeles)
 
 ## Goal
@@ -41,6 +41,11 @@ owned lane registry
   pulls the mobile development environment into ignored
   `apps/mobile/.env.local`, validates every locally referenced Doppler name
   without printing values, and writes a secret-free private receipt.
+- Worktree creation defaults to a freshly fetched `origin/preview` and accepts
+  an explicit long-lived integration branch only as a validated
+  `--base-ref origin/<branch>`. The wrapper resolves that remote-tracking ref
+  once, creates from the immutable commit, records ref plus SHA in its private
+  attestation and receipt, and rejects stale fallback or caller-supplied SHAs.
 - One machine-global, clone-stable lane registry with atomic lifecycle, target,
   native-build, controller, backend, and Tailscale locks. A lane receives a
   unique Metro port and the lowest eligible simulator from
@@ -81,7 +86,10 @@ cover: dead Metro leaders with live owned children, installer path-swap deletion
 Tailscale Serve port replacement, harmless shell-inspection false positives,
 post-reset backend mount replacement, incomplete Doppler preflight, stale
 self-signed runtime manifests, wrapper symlink swaps, and generated-adapter
-drift after the canonical plugin-manifest migration.
+drift after the canonical plugin-manifest migration. The integration-base
+extension also hardened the leader-exit cleanup transition: transient process
+group membership is retried, but a group signal still requires exact ownership
+proof and completion still requires an observed-empty process group.
 
 The runtime fails closed when ownership or identity cannot be proved. Stale
 reaping removes only dead metadata; it never kills a live lane. Successful
@@ -90,13 +98,15 @@ reported paths after a canary.
 
 ## Verification
 
-- Complete iOS lane Node suite: 100/100 passed.
+- Complete iOS lane Node suite: 103/103 passed.
 - Runtime process-group and Tailscale lifecycle regressions: passed.
 - Installer/hook security and read-only integrity regressions: passed.
 - Backend ownership, environment, and bootstrap regressions: passed.
-- Static Python/profile tests, plugin adapter generation, isolated native-client
-  installs, `scripts/validate`, and `scripts/release-check`: passed on the final
-  rebased change.
+- Static Python/profile tests, plugin adapter generation, and isolated
+  native-client installs: passed.
+- `scripts/validate` and `scripts/release-check` currently stop at their
+  prerequisite gate because this host does not have the external `agentskills`
+  command. Rerun both unchanged in the release environment before publication.
 - No live Metro server, simulator, physical device, Docker/Supabase stack, or
   Tailscale Serve mapping was mutated by the final review tests.
 
