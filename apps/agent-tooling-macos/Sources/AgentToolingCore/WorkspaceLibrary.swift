@@ -142,7 +142,8 @@ public final class WorkspaceLibrary {
             files: try relativeFiles(in: packageURL.appending(path: "skills/\(id)", directoryHint: .isDirectory)),
             clients: clients,
             validationCount: 0,
-            projectRoot: projectRoot
+            projectRoot: projectRoot,
+            authoringOrigin: .manual
         )
         return CreatedSkill(
             skill: skill,
@@ -392,7 +393,8 @@ public final class WorkspaceLibrary {
             negativeTrigger: "",
             files: files,
             clients: presentClients.isEmpty ? candidate.skill.clients : presentClients,
-            validationCount: 0
+            validationCount: 0,
+            authoringOrigin: .externalAdopted
         )
     }
 
@@ -458,7 +460,7 @@ public final class WorkspaceLibrary {
 
     public func updateSkill(_ existing: Skill, from draft: SkillDraft) throws -> CreatedSkill {
         guard existing.owned else { throw WorkspaceLibraryError.notManaged(existing.id) }
-        guard existing.authoringOrigin != .codexGenerated else {
+        guard existing.authoringOrigin == .manual else {
             throw WorkspaceLibraryError.generatedSkillRequiresSourceEdit(existing.id)
         }
         try validate(draft)
@@ -527,6 +529,75 @@ public final class WorkspaceLibrary {
         )
     }
 
+    /// Reads the canonical source used by rich/generated/adopted skills. The
+    /// source editor works on the complete SKILL.md and leaves every sibling
+    /// script, reference, and asset untouched.
+    public func skillSource(for skill: Skill) throws -> String {
+        guard skill.owned else { throw WorkspaceLibraryError.notManaged(skill.id) }
+        return try BoundedFileAccess.readUTF8(
+            at: skillURL(for: skill).appending(path: "SKILL.md", directoryHint: .notDirectory),
+            maximumBytes: BoundedFileAccess.maximumTextBytes,
+            allowSymbolicLink: false
+        )
+    }
+
+    /// Replaces only SKILL.md inside a staged copy of the managed package.
+    /// Validation and rollback are identical to the template editor, but no
+    /// unrepresented files can disappear.
+    public func updateSkillSource(_ existing: Skill, markdown: String) throws -> CreatedSkill {
+        guard existing.owned else { throw WorkspaceLibraryError.notManaged(existing.id) }
+        guard !markdown.isEmpty, markdown.utf8.count <= BoundedFileAccess.maximumTextBytes else {
+            throw WorkspaceLibraryError.invalidSkillDefinition(existing.id)
+        }
+        let packagesURL = try managedPackagesURL()
+        let packageURL = packagesURL.appending(path: existing.bundle, directoryHint: .isDirectory)
+        let originalSkillURL = packageURL.appending(path: "skills/\(existing.id)", directoryHint: .isDirectory)
+        guard fileManager.fileExists(atPath: originalSkillURL.path(percentEncoded: false)) else {
+            throw WorkspaceLibraryError.missingSkillSource(existing.id)
+        }
+        _ = try DirectoryFingerprint.sha256(
+            of: packageURL, fileManager: fileManager, maximumItems: 10_000, maximumBytes: 64 * 1_024 * 1_024)
+
+        let stagingURL = packagesURL.appending(path: ".staging-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { removeTransientItemIfPresent(stagingURL) }
+        try fileManager.copyItem(at: packageURL, to: stagingURL)
+        let stagedSkillURL = stagingURL.appending(path: "skills/\(existing.id)", directoryHint: .isDirectory)
+        // Validate before opening the definition for writing as well as after.
+        // A tampered managed package must not turn SKILL.md into a link that
+        // redirects the editor's write outside the staged package.
+        try validateStagedPackage(stagingURL, skillID: existing.id)
+        try write(markdown, to: stagedSkillURL.appending(path: "SKILL.md", directoryHint: .notDirectory))
+        let validationCount = try validateSkillDefinition(
+            at: stagedSkillURL.appending(path: "SKILL.md", directoryHint: .notDirectory), id: existing.id)
+        try validateStagedPackage(stagingURL, skillID: existing.id)
+
+        var updated = existing
+        updated.summary = Self.frontmatterDescription(in: markdown) ?? existing.summary
+        updated.files = try relativeFiles(in: stagedSkillURL)
+        updated.validationCount = validationCount
+        let rollbackPackageURL = try replacePackage(at: packageURL, with: stagingURL)
+        return CreatedSkill(
+            skill: updated,
+            packageURL: packageURL,
+            skillURL: originalSkillURL,
+            rollbackPackageURL: rollbackPackageURL
+        )
+    }
+
+    private static func frontmatterDescription(in markdown: String) -> String? {
+        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard lines.first?.trimmingCharacters(in: .whitespaces) == "---",
+            let closing = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "---" })
+        else { return nil }
+        for line in lines[1..<closing] {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("description:") else { continue }
+            let value = trimmed.dropFirst("description:".count).trimmingCharacters(in: .whitespaces)
+            return value.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        }
+        return nil
+    }
+
     /// Completes an update after the matching desired-state snapshot has been
     /// saved. A cleanup failure does not invalidate the installed new package;
     /// the retained private copy is reported so the caller can surface it.
@@ -552,7 +623,7 @@ public final class WorkspaceLibrary {
         guard fileManager.fileExists(atPath: backup.path(percentEncoded: false)) else {
             throw WorkspaceLibraryError.missingRollbackCopy(backup.path(percentEncoded: false))
         }
-        let failedReplacement = packagesURL.appending(path: ".failed-(UUID().uuidString)", directoryHint: .isDirectory)
+        let failedReplacement = packagesURL.appending(path: ".failed-\(UUID().uuidString)", directoryHint: .isDirectory)
         try validateTransactionURL(failedReplacement)
         if fileManager.fileExists(atPath: result.packageURL.path(percentEncoded: false)) {
             do {
@@ -1115,7 +1186,7 @@ enum WorkspaceLibraryError: LocalizedError, Sendable {
         case .unsafeGeneratedDraft(let path): "The generated skill draft is outside Agent Tooling's private staging folder: \(path)"
         case .generatedDraftChanged: "The generated skill changed after review. Generate and review a fresh draft before saving it."
         case .generatedSkillRequiresSourceEdit(let identifier):
-            "\(identifier) contains Codex-authored source files. Edit its source directly so the template editor cannot discard them."
+            "\(identifier) contains source that the template editor cannot represent safely. Edit its complete SKILL.md so auxiliary files are preserved."
         case .replacementRollbackFailed(let path, let replacement, let rollback):
             "Updating the managed package at \(path) failed, and restoring its previous copy also failed. Replacement error: \(replacement). Restore error: \(rollback)."
         case .missingRollbackCopy(let path): "The previous managed package needed for rollback is missing at \(path)."

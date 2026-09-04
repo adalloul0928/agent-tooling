@@ -4,8 +4,14 @@ import SwiftUI
 
 struct AccountsView: View {
     @Environment(AppModel.self) private var model
+    @Binding var request: ScreenRequest?
     @State private var showingNewConnection = false
     @State private var connectorPendingRemoval: ConnectorRecord?
+    @State private var selectedAccountID: UUID?
+
+    init(request: Binding<ScreenRequest?> = .constant(nil)) {
+        _request = request
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,75 +33,80 @@ struct AccountsView: View {
                 .disabled(model.isInteractionLocked)
             }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Cloud connections")
-                            .font(.title2.weight(.semibold))
-                        Text(
-                            "Cloud authorization stays with each provider. Record when you last checked it; Agent Tooling never copies credentials."
-                        )
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 8)
-
-                    VStack(spacing: 0) {
-                        ForEach(sortedAccountSurfaces) { account in
-                            AccountSurfaceCard(account: account)
-                            if account.id != sortedAccountSurfaces.last?.id { Divider().opacity(0.35) }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Cloud connections")
+                                .font(.title2.weight(.semibold))
+                            Text(
+                                "Cloud authorization stays with each provider. Record when you last checked it; Agent Tooling never copies credentials."
+                            )
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
                         }
-                    }
-                    .standardPanel()
+                        .padding(.top, 8)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("Recorded connections").font(.title3.weight(.semibold))
-                            Spacer()
-                            Text("Metadata only").font(.caption).foregroundStyle(.secondary)
-                        }
-                        Text(
-                            "Track who owns each authorization and which local or cloud surface should expose it. This inventory intentionally contains secret references, never credential values."
-                        )
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        if model.connectors.isEmpty {
-                            EmptyStateView(
-                                symbol: "link", title: "No connections recorded",
-                                message:
-                                    "Record an OAuth, API-key, or admin-managed connection after configuring it in the product that owns authorization.",
-                                actionTitle: "Record connection",
-                                isActionEnabled: !model.isInteractionLocked
-                            ) {
-                                showingNewConnection = true
+                        VStack(spacing: 0) {
+                            ForEach(sortedAccountSurfaces) { account in
+                                AccountSurfaceCard(account: account, selected: selectedAccountID == account.id)
+                                    .id(account.id)
+                                if account.id != sortedAccountSurfaces.last?.id { Divider().opacity(0.35) }
                             }
-                        } else {
-                            VStack(spacing: 0) {
-                                ForEach(sortedConnectors) { connector in
-                                    ConnectorCard(connector: connector) {
-                                        connectorPendingRemoval = connector
-                                    }
-                                    if connector.id != sortedConnectors.last?.id { Divider().opacity(0.35) }
+                        }
+                        .standardPanel()
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("Recorded connections").font(.title3.weight(.semibold))
+                                Spacer()
+                                Text("Metadata only").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Text(
+                                "Track who owns each authorization and which local or cloud surface should expose it. This inventory intentionally contains secret references, never credential values."
+                            )
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            if model.connectors.isEmpty {
+                                EmptyStateView(
+                                    symbol: "link", title: "No connections recorded",
+                                    message:
+                                        "Record an OAuth, API-key, or admin-managed connection after configuring it in the product that owns authorization.",
+                                    actionTitle: "Record connection",
+                                    isActionEnabled: !model.isInteractionLocked
+                                ) {
+                                    showingNewConnection = true
                                 }
+                            } else {
+                                VStack(spacing: 0) {
+                                    ForEach(sortedConnectors) { connector in
+                                        ConnectorCard(connector: connector) {
+                                            connectorPendingRemoval = connector
+                                        }
+                                        if connector.id != sortedConnectors.last?.id { Divider().opacity(0.35) }
+                                    }
+                                }
+                                .standardPanel()
                             }
-                            .standardPanel()
                         }
-                    }
 
-                    GroupBox("What Agent Tooling will never do") {
-                        VStack(alignment: .leading, spacing: 9) {
-                            Label("Copy OAuth tokens between Claude, Codex, and Gemini", systemImage: "xmark.shield")
-                            Label("Claim a local plugin install changed a hosted chat product", systemImage: "xmark.shield")
-                            Label("Store account credentials in a Git export", systemImage: "xmark.shield")
+                        GroupBox("What Agent Tooling will never do") {
+                            VStack(alignment: .leading, spacing: 9) {
+                                Label("Copy OAuth tokens between Claude, Codex, and Gemini", systemImage: "xmark.shield")
+                                Label("Claim a local plugin install changed a hosted chat product", systemImage: "xmark.shield")
+                                Label("Store account credentials in a Git export", systemImage: "xmark.shield")
+                            }
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .padding(4)
                         }
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .padding(4)
                     }
+                    .frame(maxWidth: 860)
+                    .padding(28)
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: 860)
-                .padding(28)
-                .frame(maxWidth: .infinity)
+                .onAppear { consumeRequest(using: proxy) }
+                .onChange(of: request) { _, _ in consumeRequest(using: proxy) }
             }
         }
         .sheet(isPresented: $showingNewConnection) {
@@ -128,6 +139,21 @@ struct AccountsView: View {
 
     private var sortedConnectors: [ConnectorRecord] {
         model.connectors.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    private func consumeRequest(using proxy: ScrollViewProxy) {
+        guard let request else { return }
+        defer { self.request = nil }
+        guard case .selectAccount(let id) = request,
+            model.accountSurfaces.contains(where: { $0.id == id })
+        else { return }
+        selectedAccountID = id
+        Task { @MainActor in
+            await Task.yield()
+            withAnimation(.easeOut(duration: 0.18)) {
+                proxy.scrollTo(id, anchor: .center)
+            }
+        }
     }
 }
 
@@ -297,6 +323,7 @@ private struct ConnectionEditorSheet: View {
 private struct AccountSurfaceCard: View {
     @Environment(AppModel.self) private var model
     let account: AccountSurface
+    var selected = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
@@ -342,6 +369,11 @@ private struct AccountSurfaceCard: View {
             }
         }
         .padding(18)
+        .background(selected ? AgentTheme.blue.opacity(0.10) : .clear)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(account.name)
+        .accessibilityValue(selected ? "Selected" : "")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var destination: URL? {

@@ -18,6 +18,7 @@ public enum ClientKind: String, Codable, CaseIterable, Identifiable, Sendable {
 public enum SkillAuthoringOrigin: String, Codable, Hashable, Sendable {
     case manual
     case codexGenerated
+    case externalAdopted
 }
 
 public struct ClientState: Identifiable, Codable, Hashable, Sendable {

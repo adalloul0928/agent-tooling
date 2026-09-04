@@ -282,6 +282,83 @@ struct PageToolbar<Actions: View>: View {
     }
 }
 
+struct SlidingSegmentedControl<Value: Hashable>: View {
+    struct Item: Identifiable {
+        let value: Value
+        let title: String
+
+        var id: Value { value }
+    }
+
+    @Binding var selection: Value
+    let items: [Item]
+    let accessibilityLabel: String
+    var segmentWidth: CGFloat? = 112
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var selectionNamespace
+    @ScaledMetric(relativeTo: .callout) private var segmentHeight: CGFloat = 28
+    @ScaledMetric(relativeTo: .callout) private var segmentScale: CGFloat = 1
+
+    var body: some View {
+        let minimumWidth = segmentWidth.map { $0 * segmentScale }
+
+        HStack(spacing: 2) {
+            ForEach(items) { item in
+                let isSelected = item.value == selection
+                Button {
+                    selection = item.value
+                } label: {
+                    Text(item.title)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(isSelected ? Color.white : Color.primary)
+                        .lineLimit(1)
+                        .frame(minWidth: minimumWidth, minHeight: segmentHeight)
+                        .frame(maxWidth: segmentWidth == nil ? .infinity : nil)
+                        .fixedSize(horizontal: segmentWidth != nil, vertical: true)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(AgentTheme.blue)
+                            .matchedGeometryEffect(id: "sliding-segment-selection", in: selectionNamespace)
+                            .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
+                    }
+                }
+                .accessibilityLabel(item.title)
+                .accessibilityValue(isSelected ? "Selected" : "")
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(0.075))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(AgentTheme.separator.opacity(0.45), lineWidth: 0.5)
+        }
+        .animation(reduceMotion ? nil : AgentMotion.selection, value: selection)
+        .onMoveCommand { direction in
+            switch direction {
+            case .left: moveSelection(by: -1)
+            case .right: moveSelection(by: 1)
+            default: break
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private func moveSelection(by offset: Int) {
+        guard let index = items.firstIndex(where: { $0.value == selection }), !items.isEmpty else { return }
+        selection = items[(index + offset + items.count) % items.count].value
+    }
+}
+
 struct PanelHeader<Trailing: View>: View {
     let title: String
     @ViewBuilder let trailing: Trailing
@@ -734,8 +811,8 @@ struct ToolingMatrixRow: Identifiable {
 /// each client reported during the last check.
 struct ToolingMatrixView: View {
     let rows: [ToolingMatrixRow]
+    let clients: [ClientKind]
     var onSelect: ((AppSection) -> Void)?
-    private let clients: [ClientKind] = [.claude, .codex, .gemini]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -790,7 +867,7 @@ struct ToolingMatrixView: View {
             }
 
             Divider().opacity(0.35)
-            Text("Library shows known items. App columns show local installations found during the last check.")
+            Text(footerText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 14)
@@ -828,6 +905,14 @@ struct ToolingMatrixView: View {
         case .codex: "Codex"
         case .gemini: "Gemini"
         }
+    }
+
+    private var footerText: String {
+        if clients.count == 1, let client = clients.first {
+            return
+                "Library shows items associated with \(client.rawValue). The app column shows local installations found during the last check."
+        }
+        return "Library shows known items. App columns show local installations found during the last check."
     }
 }
 

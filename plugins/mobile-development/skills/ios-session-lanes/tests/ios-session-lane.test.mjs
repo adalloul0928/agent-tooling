@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
 	envNames,
 	envReferences,
@@ -32,6 +41,228 @@ import {
 	simViewToolIsReadOnly,
 } from "../scripts/ios-session-hook.mjs";
 import { install, mergeHooks } from "../scripts/install-runtime.mjs";
+import {
+	assertSupportedProject,
+	bundledProfile,
+	normalizeProjectProfile,
+	normalizeRepositoryRemote,
+	projectMatch,
+	resolveProjectRoot,
+} from "../scripts/project-context.mjs";
+
+const expectedRepositoryIdentity = "github.com/avad-technologies/pumpd-mobile-app";
+
+test("repository remotes normalize exact HTTPS, SSH, and SCP identities", () => {
+	for (const remote of [
+		"https://github.com/avad-technologies/pumpd-mobile-app.git",
+		"HTTPS://GITHUB.COM/AVAD-TECHNOLOGIES/PUMPD-MOBILE-APP.GIT/",
+		"ssh://git@github.com/avad-technologies/pumpd-mobile-app.git",
+		"ssh://git@github.com:22/avad-technologies/pumpd-mobile-app",
+		"git@github.com:avad-technologies/pumpd-mobile-app.git",
+		" git@GITHUB.COM:AVAD-TECHNOLOGIES/PUMPD-MOBILE-APP ",
+	]) {
+		assert.equal(normalizeRepositoryRemote(remote)?.key, expectedRepositoryIdentity);
+	}
+});
+
+test("repository remotes reject host, owner, repository, and path lookalikes", () => {
+	for (const remote of [
+		"https://github.com.evil/avad-technologies/pumpd-mobile-app",
+		"https://evil.example/github.com/avad-technologies/pumpd-mobile-app",
+		"https://github.com@evil.example/avad-technologies/pumpd-mobile-app",
+		"https://github.com/attacker/avad-technologies/pumpd-mobile-app",
+		"https://github.com/avad-technologies/pumpd-mobile-app/extra",
+		"git@github.com-evil:avad-technologies/pumpd-mobile-app",
+		"https://githуb.com/avad-technologies/pumpd-mobile-app",
+	]) {
+		assert.equal(normalizeRepositoryRemote(remote), null, remote);
+	}
+	for (const remote of [
+		"https://github.com/attacker/pumpd-mobile-app",
+		"https://github.com/avad-technologies/pumpd-mobile-app-suffix",
+	]) {
+		assert.notEqual(
+			normalizeRepositoryRemote(remote)?.key,
+			expectedRepositoryIdentity,
+		);
+	}
+});
+
+test("repository remotes reject unsupported and ambiguous syntax", () => {
+	for (const remote of [
+		"http://github.com/avad-technologies/pumpd-mobile-app",
+		"git://github.com/avad-technologies/pumpd-mobile-app",
+		"file:///tmp/pumpd-mobile-app",
+		"../pumpd-mobile-app",
+		"https://token@github.com/avad-technologies/pumpd-mobile-app",
+		"https://github.com:8443/avad-technologies/pumpd-mobile-app",
+		"https://github.com/avad-technologies/pumpd-mobile-app?ref=main",
+		"https://github.com/avad-technologies/pumpd-mobile-app#main",
+		"https://github.com/avad-technologies%2Fpumpd-mobile-app",
+		"https://github.com/avad-technologies\\pumpd-mobile-app",
+		"https://github.com/avad-technologies/../pumpd-mobile-app",
+		"https://github.com/avad-technologies/pumpd-mobile-app/.",
+		"https://github.com/avad-technologies/pumpd-mobile-app\nhttps://evil.example/x/y",
+		"https://github.com/avad-technologies/pumpd-mobile-app\n",
+		"",
+	]) {
+		assert.equal(normalizeRepositoryRemote(remote), null, remote);
+	}
+});
+
+test("project profile v2 requires a structured safe repository identity", () => {
+	const profile = bundledProfile();
+	assert.equal(profile.schemaVersion, 2);
+	assert.deepEqual(profile.match.repository, {
+		host: "github.com",
+		owner: "avad-technologies",
+		remote: "origin",
+		repo: "pumpd-mobile-app",
+	});
+	assert.throws(
+		() => normalizeProjectProfile({ ...profile, schemaVersion: 1 }),
+		/schemaVersion 2/,
+	);
+	assert.throws(
+		() =>
+			normalizeProjectProfile({
+				...profile,
+				match: { ...profile.match, requiredPaths: ["../pnpm-lock.yaml"] },
+			}),
+		/unsafe required path/,
+	);
+	assert.throws(
+		() =>
+			normalizeProjectProfile({
+				...profile,
+				match: {
+					...profile.match,
+					repository: { ...profile.match.repository, owner: "attacker/avad" },
+				},
+			}),
+		/invalid owner or repository/,
+	);
+});
+
+test("project matching requires one exact origin and every required path", (t) => {
+	const valid = makeProjectRepository(t, {
+		remote: "git@github.com:avad-technologies/pumpd-mobile-app.git",
+	});
+	assert.equal(projectMatch(valid).ok, true);
+
+	const wrongOwner = makeProjectRepository(t, {
+		remote: "https://github.com/attacker/pumpd-mobile-app.git",
+	});
+	const wrongOwnerMatch = projectMatch(wrongOwner);
+	assert.equal(wrongOwnerMatch.ok, false);
+	assert.equal(wrongOwnerMatch.reason, "origin_mismatch");
+	assert.equal(
+		wrongOwnerMatch.repositoryIdentity,
+		"github.com/attacker/pumpd-mobile-app",
+	);
+
+	const missingPath = makeProjectRepository(t, {
+		omitRequiredPath: "pnpm-lock.yaml",
+		remote: "https://github.com/avad-technologies/pumpd-mobile-app.git",
+	});
+	assert.equal(projectMatch(missingPath).ok, false);
+	assert.equal(projectMatch(missingPath).reason, "required_paths_missing");
+	assert.deepEqual(projectMatch(missingPath).missingPaths, ["pnpm-lock.yaml"]);
+});
+
+test("project matching fails closed for missing, malformed, and multiple origins", (t) => {
+	const missing = makeProjectRepository(t, {});
+	assert.equal(projectMatch(missing).reason, "origin_unavailable");
+
+	const malformed = makeProjectRepository(t, {
+		remote: "https://credential-value@github.com/avad-technologies/pumpd-mobile-app",
+	});
+	const malformedMatch = projectMatch(malformed);
+	assert.equal(malformedMatch.ok, false);
+	assert.equal(malformedMatch.reason, "origin_unrecognized");
+	assert.equal(malformedMatch.repositoryIdentity, null);
+
+	const multiple = makeProjectRepository(t, {
+		remote: "https://github.com/avad-technologies/pumpd-mobile-app.git",
+	});
+	runGit(multiple, [
+		"config",
+		"--add",
+		"remote.origin.url",
+		"git@github.com:attacker/pumpd-mobile-app.git",
+	]);
+	assert.equal(projectMatch(multiple).reason, "origin_ambiguous");
+	assert.equal(projectMatch(multiple).ok, false);
+});
+
+test("an explicit project root outranks the ambient compatibility override", (t) => {
+	const valid = makeProjectRepository(t, {
+		remote: "https://github.com/avad-technologies/pumpd-mobile-app.git",
+	});
+	const invalid = makeProjectRepository(t, {
+		remote: "https://github.com/attacker/pumpd-mobile-app.git",
+	});
+	const previous = process.env.IOS_SESSION_LANES_PROJECT_ROOT;
+	process.env.IOS_SESSION_LANES_PROJECT_ROOT = valid;
+	try {
+		assert.equal(resolveProjectRoot(invalid), realpathSync(invalid));
+		assert.equal(projectMatch(invalid).ok, false);
+	} finally {
+		if (previous === undefined) delete process.env.IOS_SESSION_LANES_PROJECT_ROOT;
+		else process.env.IOS_SESSION_LANES_PROJECT_ROOT = previous;
+	}
+});
+
+test("linked worktrees resolve and validate independently", (t) => {
+	const parent = temporaryDirectory(t, "pumpd-worktree-origin-test-");
+	const primary = path.join(parent, "primary");
+	const linked = path.join(parent, "linked");
+	mkdirSync(primary);
+	initializeProjectRepository(primary, {
+		commit: true,
+		remote: "https://github.com/avad-technologies/pumpd-mobile-app.git",
+	});
+	runGit(primary, ["worktree", "add", "--no-track", "-b", "linked-test", linked]);
+
+	const match = projectMatch(linked);
+	assert.equal(match.ok, true);
+	assert.equal(match.root, realpathSync(linked));
+	assert.notEqual(match.root, realpathSync(primary));
+});
+
+test("unsupported-project diagnostics never expose a raw credential-bearing origin", (t) => {
+	const root = makeProjectRepository(t, {
+		remote: "https://credential-value@github.com/avad-technologies/pumpd-mobile-app.git",
+	});
+	assert.throws(
+		() => assertSupportedProject(root),
+		(error) => {
+			assert.doesNotMatch(error.message, /credential-value|https:\/\//u);
+			assert.match(error.message, /origin_unrecognized/u);
+			return true;
+		},
+	);
+});
+
+test("the global hook stays silent when invoked outside a Git worktree", (t) => {
+	const outsideGit = temporaryDirectory(t, "pumpd-hook-non-git-test-");
+	const hook = fileURLToPath(
+		new URL("../scripts/ios-session-hook.mjs", import.meta.url),
+	);
+	const result = spawnSync(
+		process.execPath,
+		[hook, "start", "--client", "codex"],
+		{
+			cwd: outsideGit,
+			encoding: "utf8",
+			input: JSON.stringify({ cwd: outsideGit, session_id: "outside-git" }),
+			stdio: ["pipe", "pipe", "pipe"],
+		},
+	);
+	assert.equal(result.status, 0, result.stderr);
+	assert.equal(result.stdout, "");
+	assert.equal(result.stderr, "");
+});
 
 test("session keys distinguish clients and sessions", () => {
 	assert.equal(sessionKey("codex", "thread-1"), "codex:thread-1");
@@ -338,3 +569,49 @@ test("SimView is limited to observation while the lane input writer is active", 
 	assert.equal(simViewToolIsReadOnly("mcp__simview__type_text"), false);
 	assert.equal(simViewToolIsReadOnly("mcp__simview__enable_ui_probe"), false);
 });
+
+function makeProjectRepository(t, options) {
+	const root = temporaryDirectory(t, "pumpd-project-origin-test-");
+	initializeProjectRepository(root, options);
+	return root;
+}
+
+function initializeProjectRepository(
+	root,
+	{ commit = false, omitRequiredPath = "", remote = "" } = {},
+) {
+	runGit(root, ["init", "--quiet", "--initial-branch=main"]);
+	runGit(root, ["config", "user.email", "ios-session-lanes@example.invalid"]);
+	runGit(root, ["config", "user.name", "iOS Session Lanes Tests"]);
+	if (remote) runGit(root, ["remote", "add", "origin", remote]);
+	for (const relative of bundledProfile().match.requiredPaths) {
+		if (relative === omitRequiredPath) continue;
+		const target = path.join(root, relative);
+		mkdirSync(path.dirname(target), { recursive: true });
+		writeFileSync(target, `fixture for ${relative}\n`);
+	}
+	if (commit) {
+		runGit(root, ["add", "."]);
+		runGit(root, ["commit", "--quiet", "-m", "fixture"]);
+	}
+}
+
+function temporaryDirectory(t, prefix) {
+	const root = mkdtempSync(path.join(tmpdir(), prefix));
+	t.after(() => rmSync(root, { force: true, recursive: true }));
+	return root;
+}
+
+function runGit(root, args) {
+	const result = spawnSync("git", args, {
+		cwd: root,
+		encoding: "utf8",
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	assert.equal(
+		result.status,
+		0,
+		`git ${args.join(" ")} failed: ${(result.stderr || result.stdout || "").trim()}`,
+	);
+	return result.stdout.trim();
+}

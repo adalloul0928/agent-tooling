@@ -4,9 +4,14 @@ import SwiftUI
 
 struct ProfilesView: View {
     @Environment(AppModel.self) private var model
+    @Binding var request: ScreenRequest?
     @State private var selectedID = ""
     @State private var editingProfile: ToolingProfile?
     @State private var showingNewProfile = false
+
+    init(request: Binding<ScreenRequest?> = .constant(nil)) {
+        _request = request
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -62,12 +67,14 @@ struct ProfilesView: View {
             if !model.profiles.contains(where: { $0.id == selectedID }) {
                 selectedID = model.activeProfileID
             }
+            consumeRequest()
         }
         .onChange(of: model.profiles.map(\.id)) { _, ids in
             if !ids.contains(selectedID) {
                 selectedID = ids.contains(model.activeProfileID) ? model.activeProfileID : orderedProfiles.first?.id ?? ""
             }
         }
+        .onChange(of: request) { _, _ in consumeRequest() }
     }
 
     private var profileList: some View {
@@ -127,6 +134,15 @@ struct ProfilesView: View {
     }
 
     private var selectedProfile: ToolingProfile? { model.profiles.first { $0.id == selectedID } }
+
+    private func consumeRequest() {
+        guard let request else { return }
+        defer { self.request = nil }
+        guard case .selectProfile(let id) = request,
+            model.profiles.contains(where: { $0.id == id })
+        else { return }
+        selectedID = id
+    }
 
     private var orderedProfiles: [ToolingProfile] {
         model.profiles.sorted { lhs, rhs in

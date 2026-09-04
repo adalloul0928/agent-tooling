@@ -6,6 +6,7 @@ import SwiftUI
 /// the model for the same reviewed operation the screen's own button would.
 enum CommandPaletteOutcome: Equatable {
     case navigate(AppSection)
+    case openClient(ClientKind)
     case screenRequest(ScreenRequest)
     case openSkill(String)
     case openMarketplacePackage(String)
@@ -21,11 +22,19 @@ enum ScreenRequest: Equatable {
     case pasteImport
     case selectMCPServer(String)
     case selectPlugin(String)
+    case selectProfile(String)
+    case selectMarketplaceSource(UUID)
+    case selectAccount(UUID)
+    case selectReceipt(UUID)
 
     var section: AppSection {
         switch self {
         case .addMCPServer, .pasteImport, .selectMCPServer: .mcpServers
         case .selectPlugin: .plugins
+        case .selectProfile: .profiles
+        case .selectMarketplaceSource: .marketplace
+        case .selectAccount: .accounts
+        case .selectReceipt: .activity
         }
     }
 }
@@ -45,6 +54,11 @@ struct CommandPaletteItem: Identifiable, PaletteSearchable {
     var paletteSubtitle: String { subtitle }
     var paletteKeywords: [String] { keywords }
     var palettePriority: Int { priority }
+
+    var client: ClientKind? {
+        guard case .openClient(let client) = outcome else { return nil }
+        return client
+    }
 }
 
 /// Every named object the app already holds, in one list. Built once when the
@@ -55,7 +69,7 @@ enum CommandPaletteCatalog {
 
     @MainActor
     static func items(for model: AppModel) -> [CommandPaletteItem] {
-        actions(for: model) + sections() + skills(for: model) + servers(for: model) + plugins(for: model)
+        actions(for: model) + sections() + clients() + skills(for: model) + servers(for: model) + plugins(for: model)
             + configurations(for: model) + sources(for: model) + packages(for: model) + accounts(for: model)
             + receipts(for: model)
     }
@@ -148,6 +162,22 @@ enum CommandPaletteCatalog {
         }
     }
 
+    private static func clients() -> [CommandPaletteItem] {
+        ClientKind.allCases.map { client in
+            CommandPaletteItem(
+                id: "client.\(client.id)",
+                title: client.rawValue,
+                subtitle: "Show only this client's local state",
+                contextLabel: "Clients",
+                kind: nil,
+                symbol: "desktopcomputer",
+                keywords: ["client", "app", "local", "sync", "scope"],
+                priority: 70,
+                outcome: .openClient(client)
+            )
+        }
+    }
+
     @MainActor
     private static func skills(for model: AppModel) -> [CommandPaletteItem] {
         model.skills.map { skill in
@@ -211,7 +241,7 @@ enum CommandPaletteCatalog {
                 symbol: "slider.horizontal.3",
                 keywords: [profile.id, profile.summary],
                 priority: 40,
-                outcome: .navigate(.profiles)
+                outcome: .screenRequest(.selectProfile(profile.id))
             )
         }
     }
@@ -228,7 +258,7 @@ enum CommandPaletteCatalog {
                 symbol: "shippingbox",
                 keywords: [source.location],
                 priority: 30,
-                outcome: .navigate(.marketplace)
+                outcome: .screenRequest(.selectMarketplaceSource(source.id))
             )
         }
     }
@@ -262,7 +292,7 @@ enum CommandPaletteCatalog {
                 symbol: "person.badge.key",
                 keywords: [surface.status.rawValue],
                 priority: 20,
-                outcome: .navigate(.accounts)
+                outcome: .screenRequest(.selectAccount(surface.id))
             )
         }
     }
@@ -279,7 +309,7 @@ enum CommandPaletteCatalog {
                 symbol: "clock.arrow.circlepath",
                 keywords: [receipt.detail],
                 priority: 10,
-                outcome: .navigate(.activity)
+                outcome: .screenRequest(.selectReceipt(receipt.id))
             )
         }
     }
@@ -322,7 +352,7 @@ struct CommandPaletteView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.secondary)
-            TextField("Search skills, servers, plugins, configurations, and actions", text: $query)
+            TextField("Search clients, tools, sources, receipts, and actions", text: $query)
                 .textFieldStyle(.plain)
                 .font(.title3)
                 .focused($searchFocused)
@@ -365,6 +395,9 @@ struct CommandPaletteView: View {
                             }
                             .buttonStyle(.plain)
                             .id(item.id)
+                            .help("Open \(item.title) in \(item.contextLabel)")
+                            .accessibilityLabel("\(item.title), \(item.subtitle)")
+                            .accessibilityValue(index == highlighted ? "Selected" : "")
                         }
                     }
                     .padding(.vertical, 6)
@@ -410,7 +443,10 @@ private struct CommandPaletteRow: View {
 
     var body: some View {
         HStack(spacing: 11) {
-            if let kind = item.kind {
+            if let client = item.client {
+                ClientBrandIcon(client: client, size: 18)
+                    .frame(width: 24, height: 24)
+            } else if let kind = item.kind {
                 KindTile(kind: kind, size: 24)
             } else {
                 Image(systemName: item.symbol)

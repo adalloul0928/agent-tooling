@@ -482,7 +482,7 @@ struct InsightsView: View {
             let instruction = recommendation.draftInstruction ?? recommendation.summary
             let request = CodexSkillDraftRequest(instruction: instruction, targets: ClientKind.allCases)
             guard model.saveCodexSkillDraftRequest(request) else { return }
-            navigation.open(.skillCreationRequest(request.id))
+            navigation.openSkillCreationRequest(request.id)
         case .useExistingSkill:
             if let skillID = recommendation.skillID {
                 navigation.open(.skill(skillID))

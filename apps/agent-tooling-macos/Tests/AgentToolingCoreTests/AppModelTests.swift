@@ -262,7 +262,7 @@ struct AppModelTests {
         #expect(portableManifest?["schema_version"] == nil)
 
         let approvedPlan = try #require(model.pendingPlan)
-        await model.executePendingPlan()
+        await model.executePendingPlan(try OperationPlanApproval.review(approvedPlan))
 
         for path in [
             ".claude/skills/release-readiness/SKILL.md", ".agents/skills/release-readiness/SKILL.md",
@@ -514,7 +514,7 @@ struct AppModelTests {
         #expect(steps.allSatisfy { $0.projectRootPath == project.path(percentEncoded: false) })
         #expect(steps.allSatisfy { $0.destinationPath?.hasPrefix(project.path(percentEncoded: false)) == true })
 
-        await model.executePendingPlan()
+        await model.executePendingPlan(try OperationPlanApproval.review(try #require(model.pendingPlan)))
 
         for path in [
             ".claude/skills/project-review/SKILL.md", ".agents/skills/project-review/SKILL.md", ".gemini/skills/project-review/SKILL.md",
@@ -1211,20 +1211,29 @@ struct AppModelTests {
 
     @Test func processRunnerTimesOutAndStopsLongRunningCommand() async throws {
         let runner = ProcessCommandRunner(timeout: .milliseconds(100))
-        let start = ContinuousClock.now
+        let marker = try temporaryDirectory().appending(path: "child-finished")
 
         await #expect(throws: ProcessCommandRunnerError.self) {
-            _ = try await runner.run(executable: "sleep", arguments: ["5"], currentDirectory: nil)
+            _ = try await runner.run(
+                executable: "sh",
+                arguments: [
+                    "-c",
+                    "end=$((SECONDS + 5)); while [ \"$SECONDS\" -lt \"$end\" ]; do :; done; : > \"$1\"",
+                    "timeout-test",
+                    marker.path(percentEncoded: false),
+                ],
+                currentDirectory: nil
+            )
         }
 
-        // Leave room for a saturated concurrent test runner while still
-        // proving that the five-second child did not run to completion.
-        #expect(start.duration(to: .now) < .seconds(4))
+        // Wall-clock assertions measure Swift Testing executor saturation as
+        // much as the process timeout. The marker proves the stronger product
+        // guarantee: the child tree was stopped before its work completed.
+        #expect(!FileManager.default.fileExists(atPath: marker.path(percentEncoded: false)))
     }
 
     @Test func processRunnerDoesNotLetAppCommandsWaitForInteractiveInput() async throws {
         let runner = ProcessCommandRunner(timeout: .seconds(3))
-        let start = ContinuousClock.now
 
         let output = try await runner.run(
             executable: "sh",
@@ -1233,7 +1242,6 @@ struct AppModelTests {
         )
 
         #expect(output.status != 0)
-        #expect(start.duration(to: .now) < .seconds(2))
     }
 
     @Test func cancelledOperationReceiptDoesNotClaimItsSkippedStepsCompleted() async throws {
@@ -1874,6 +1882,9 @@ struct AppModelTests {
 
         let second = try AppModel(store: store, runner: StubRunner(versions: [:]), homeURL: root.appending(path: "home"))
         #expect(second.automaticallyCheckHealth == false)
+        #expect(second.mcpRuntimeStatuses.isEmpty)
+        await second.bootstrap()
+        #expect(second.mcpRuntimeStatuses.count == 2)
 
         let legacy = try JSONDecoder().decode(WorkspaceSnapshot.self, from: Data("{}".utf8))
         #expect(legacy.preferences == WorkspacePreferences())

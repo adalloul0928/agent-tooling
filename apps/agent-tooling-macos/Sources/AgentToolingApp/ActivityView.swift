@@ -3,9 +3,14 @@ import SwiftUI
 
 struct ActivityView: View {
     @Environment(AppModel.self) private var model
+    @Binding var request: ScreenRequest?
     @State private var query = ""
     @State private var filter: ActivityFilter = .all
     @State private var selectedID: UUID?
+
+    init(request: Binding<ScreenRequest?> = .constant(nil)) {
+        _request = request
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,8 +43,12 @@ struct ActivityView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear { selectFirstVisibleReceiptIfNeeded() }
+        .onAppear {
+            selectFirstVisibleReceiptIfNeeded()
+            consumeRequest()
+        }
         .onChange(of: displayedActivities.map(\.id)) { _, _ in selectFirstVisibleReceiptIfNeeded() }
+        .onChange(of: request) { _, _ in consumeRequest() }
     }
 
     private var activityList: some View {
@@ -147,6 +156,17 @@ struct ActivityView: View {
     }
 
     private var selectedReceipt: ActivityReceipt? { model.activities.first { $0.id == selectedID } }
+
+    private func consumeRequest() {
+        guard let request else { return }
+        defer { self.request = nil }
+        guard case .selectReceipt(let id) = request,
+            model.activities.contains(where: { $0.id == id })
+        else { return }
+        query = ""
+        filter = .all
+        selectedID = id
+    }
 
     private func selectFirstVisibleReceiptIfNeeded() {
         guard !displayedActivities.contains(where: { $0.id == selectedID }) else { return }

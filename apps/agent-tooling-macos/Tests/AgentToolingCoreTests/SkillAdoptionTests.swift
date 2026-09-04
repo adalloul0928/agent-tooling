@@ -40,10 +40,11 @@ struct SkillAdoptionTests {
         let packageURL = store.libraryURL.appending(path: "packages/local-doc-review", directoryHint: .isDirectory)
         #expect(!FileManager.default.fileExists(atPath: packageURL.path(percentEncoded: false)))
 
-        await model.executePendingPlan()
+        await model.executePendingPlan(try OperationPlanApproval.review(plan))
 
         let adopted = try #require(model.skills.first { $0.id == "doc-review" })
         #expect(adopted.owned)
+        #expect(adopted.authoringOrigin == .externalAdopted)
         #expect(adopted.bundle == "local-doc-review")
         #expect(adopted.validationCount == 3)
         #expect(adopted.files == ["SKILL.md", "references/reference.md"].sorted())
@@ -68,7 +69,7 @@ struct SkillAdoptionTests {
         let model = try AppModel(store: store, runner: AdoptionStubRunner(versions: ["claude": "2.0.0"]), homeURL: home)
         await model.runDoctor()
         model.planSkillAdoption(skillIDs: ["doc-review"])
-        await model.executePendingPlan()
+        await model.executePendingPlan(try OperationPlanApproval.review(try #require(model.pendingPlan)))
 
         #expect(model.canAdoptSkill(id: "doc-review") == false)
         model.planSkillAdoption(skillIDs: ["doc-review"])

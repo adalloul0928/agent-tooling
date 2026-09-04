@@ -262,22 +262,22 @@ enum ReadOnlyTools {
     // MARK: - Pending requests
 
     private static func listPendingRequests(_ context: ToolCallContext) throws -> ToolOutcome {
-        let queue = try context.store.loadPendingAgentRequestQueue()
+        let requests = try PendingRequestQueueService.pendingRequests(store: context.store, now: context.now)
         return ToolOutcome(
             payload: .object([
                 "schemaVersion": .number(Double(IntegrationResponseLimits.schemaVersion)),
-                "requests": .array(queue.requests.map(PendingRequestResponses.row)),
-                "pendingCount": .number(Double(queue.requests.count)),
+                "requests": .array(requests.map(PendingRequestResponses.row)),
+                "pendingCount": .number(Double(requests.count)),
                 "maximumPending": .number(Double(PendingAgentRequestQueue.maximumPendingRequests)),
             ]),
-            summary: "\(queue.requests.count) requests waiting for a person to review."
+            summary: "\(requests.count) requests waiting for a person to review."
         )
     }
 
     private static func getRequestStatus(_ context: ToolCallContext) throws -> ToolOutcome {
         let id = try context.arguments.requiredUUID("requestID")
-        let queue = try context.store.loadPendingAgentRequestQueue()
-        guard let request = queue.requests.first(where: { $0.id == id }) else {
+        let requests = try PendingRequestQueueService.pendingRequests(store: context.store, now: context.now)
+        guard let request = requests.first(where: { $0.id == id }) else {
             return ToolOutcome(
                 payload: .object([
                     "requestID": .string(id.uuidString.lowercased()),
@@ -365,7 +365,6 @@ enum PendingRequestResponses {
             "componentID": request.componentID.map(JSONValue.string) ?? .null,
             "scope": .string(request.scope.rawValue),
             "targets": .array(request.targets.map { JSONValue.string(IntegrationTextSanitizer.targetName($0)) }),
-            "reason": request.reason.map(JSONValue.string) ?? .null,
             "state": .string("pending-review"),
             "reviewURL": .string(request.reviewURL),
             "createdAt": .string(iso8601(request.createdAt)),

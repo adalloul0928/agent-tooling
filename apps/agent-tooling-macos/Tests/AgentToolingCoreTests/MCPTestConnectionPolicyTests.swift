@@ -183,4 +183,81 @@ struct MCPTestConnectionPolicyTests {
         #expect(MCPTestConnectionPolicy.consentSummary(for: stdio, serverName: "Fixture").contains("start this program"))
         #expect(MCPTestConnectionPolicy.consentSummary(for: http, serverName: "Fixture").contains("mcp.example.com"))
     }
+
+    @Test func anHTTP307RedirectIsRefusedInsteadOfFollowingItsLocation() async {
+        let channel = MCPHTTPTestChannel(
+            testingURL: URL(string: "https://approved.example/mcp")!,
+            protocolClasses: [RedirectingMCPURLProtocol.self]
+        )
+        do {
+            _ = try await channel.send(request: Data("{}".utf8), id: 1)
+            Issue.record("Expected the redirect to be refused")
+        } catch let error as MCPLiveTestError {
+            #expect(error.localizedDescription.lowercased().contains("redirect"))
+        } catch {
+            Issue.record("Expected MCPLiveTestError, got \(error)")
+        }
+        await channel.shutdown()
+    }
+
+    @Test func aResponseAttributedToAnotherOriginIsRefused() async {
+        let channel = MCPHTTPTestChannel(
+            testingURL: URL(string: "https://approved.example/mcp")!,
+            protocolClasses: [MismatchedOriginMCPURLProtocol.self]
+        )
+        do {
+            _ = try await channel.send(request: Data("{}".utf8), id: 1)
+            Issue.record("Expected the mismatched response URL to be refused")
+        } catch let error as MCPLiveTestError {
+            #expect(error.localizedDescription.contains("different endpoint"))
+        } catch {
+            Issue.record("Expected MCPLiveTestError, got \(error)")
+        }
+        await channel.shutdown()
+    }
+}
+
+private final class RedirectingMCPURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with _: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard
+            let requestURL = request.url,
+            let response = HTTPURLResponse(
+                url: requestURL,
+                statusCode: 307,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Location": "http://127.0.0.1:65535/private"]
+            )
+        else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+private final class MismatchedOriginMCPURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with _: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard
+            let responseURL = URL(string: "https://different.example/mcp"),
+            let response = HTTPURLResponse(
+                url: responseURL,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+            )
+        else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(#"{"jsonrpc":"2.0","id":1,"result":{}}"#.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }

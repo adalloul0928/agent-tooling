@@ -6,20 +6,130 @@ on:
       - "agent-tooling-app-v*"
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
-  artifact-metadata: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  authorize:
+    name: Authorize release tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      default_branch_tip: ${{ steps.authorize.outputs.default_branch_tip }}
+      release_commit: ${{ steps.authorize.outputs.release_commit }}
+      release_tag_object: ${{ steps.authorize.outputs.release_tag_object }}
+      release_version: ${{ steps.authorize.outputs.release_version }}
+
+    steps:
+      - name: Check out tag and branch history
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require an authorized annotated tag on the default branch
+        id: authorize
+        env:
+          ALLOWED_RELEASE_ACTORS: ${{ vars.MACOS_RELEASE_ALLOWED_ACTORS }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="${GITHUB_REF_NAME#agent-tooling-app-v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid app release tag: $GITHUB_REF_NAME" >&2
+            exit 64
+          fi
+          if [[ -z "$DEFAULT_BRANCH" ]] || ! git check-ref-format --branch "$DEFAULT_BRANCH" >/dev/null; then
+            echo "The repository default branch is missing or invalid" >&2
+            exit 78
+          fi
+          if [[ -z "$ALLOWED_RELEASE_ACTORS" ]]; then
+            echo "MACOS_RELEASE_ALLOWED_ACTORS must be a non-empty repository Actions variable" >&2
+            exit 78
+          fi
+
+          actor_is_allowed() {
+            local actor=${1,,}
+            local candidate
+            local -a configured_actors
+            IFS=',' read -r -a configured_actors <<< "$ALLOWED_RELEASE_ACTORS"
+            for candidate in "${configured_actors[@]}"; do
+              candidate="${candidate#"${candidate%%[![:space:]]*}"}"
+              candidate="${candidate%"${candidate##*[![:space:]]}"}"
+              if [[ -n "$candidate" && "${candidate,,}" == "$actor" ]]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          for actor in "$RELEASE_ACTOR" "$TRIGGERING_ACTOR"; do
+            if [[ -z "$actor" ]] || ! actor_is_allowed "$actor"; then
+              echo "Release actor is not authorized by MACOS_RELEASE_ALLOWED_ACTORS" >&2
+              exit 77
+            fi
+          done
+
+          tag_ref="refs/tags/$GITHUB_REF_NAME"
+          if [[ "$GITHUB_REF" != "$tag_ref" ]] || ! git show-ref --verify --quiet "$tag_ref"; then
+            echo "The workflow must run from the pushed release tag" >&2
+            exit 64
+          fi
+          if [[ "$(git cat-file -t "$tag_ref")" != "tag" ]]; then
+            echo "Release tags must be annotated tag objects; lightweight tags are not authorized" >&2
+            exit 77
+          fi
+
+          release_tag_object=$(git rev-parse "${tag_ref}^{tag}")
+          release_commit=$(git rev-parse "${tag_ref}^{commit}")
+          default_branch_ref="refs/remotes/origin/$DEFAULT_BRANCH"
+          if ! git show-ref --verify --quiet "$default_branch_ref"; then
+            echo "The fetched repository does not contain origin/$DEFAULT_BRANCH" >&2
+            exit 78
+          fi
+          default_branch_tip=$(git rev-parse "${default_branch_ref}^{commit}")
+          if ! git merge-base --is-ancestor "$release_commit" "$default_branch_tip"; then
+            echo "Release commit $release_commit is not an ancestor of origin/$DEFAULT_BRANCH" >&2
+            exit 77
+          fi
+          if [[ "$(git rev-parse "HEAD^{commit}")" != "$release_commit" ]]; then
+            echo "The checked-out event commit does not match the release tag target" >&2
+            exit 77
+          fi
+
+          {
+            echo "release_version=$version"
+            echo "release_tag_object=$release_tag_object"
+            echo "release_commit=$release_commit"
+            echo "default_branch_tip=$default_branch_tip"
+          } >> "$GITHUB_OUTPUT"
+
   release:
     name: Sign, notarize, and publish
+    needs: authorize
     runs-on: macos-26
     timeout-minutes: 45
+    environment: macos-release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      RELEASE_VERSION: ${{ needs.authorize.outputs.release_version }}
+      RELEASE_COMMIT: ${{ needs.authorize.outputs.release_commit }}
+      RELEASE_TAG_OBJECT: ${{ needs.authorize.outputs.release_tag_object }}
+      DMG_NAME: Agent-Tooling-${{ needs.authorize.outputs.release_version }}-arm64.dmg
+      EXPECTED_SIGNING_TEAM_ID: 434X69L4Z5
     defaults:
       run:
         working-directory: apps/agent-tooling-macos
@@ -28,17 +138,17 @@ jobs:
       - name: Check out tagged source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          fetch-depth: 0
           persist-credentials: false
+          ref: ${{ needs.authorize.outputs.release_commit }}
 
-      - name: Resolve release version
+      - name: Re-check the authorized release ref
         run: |
-          version="${GITHUB_REF_NAME#agent-tooling-app-v}"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid app release tag: $GITHUB_REF_NAME" >&2
-            exit 64
-          fi
-          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
-          echo "DMG_NAME=Agent-Tooling-$version-arm64.dmg" >> "$GITHUB_ENV"
+          tag_ref="refs/tags/$GITHUB_REF_NAME"
+          test "$(git cat-file -t "$tag_ref")" = tag
+          test "$(git rev-parse "${tag_ref}^{tag}")" = "$RELEASE_TAG_OBJECT"
+          test "$(git rev-parse "${tag_ref}^{commit}")" = "$RELEASE_COMMIT"
+          test "$(git rev-parse "HEAD^{commit}")" = "$RELEASE_COMMIT"
 
       - name: Require release credentials
         env:
@@ -117,14 +227,36 @@ jobs:
 
       - name: Verify Developer ID signature
         run: |
+          app="$RUNNER_TEMP/Agent Tooling.app"
           helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling"
+          mcp_helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling-mcp"
           test -x "$helper"
+          test -x "$mcp_helper"
           file "$helper"
+          file "$mcp_helper"
           codesign --verify --strict --verbose=2 "$helper"
-          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/Agent Tooling.app"
-          codesign -dv --verbose=4 "$RUNNER_TEMP/Agent Tooling.app" 2>&1 | tee "$RUNNER_TEMP/codesign-details.txt"
-          grep -q "flags=.*runtime" "$RUNNER_TEMP/codesign-details.txt"
-          grep -q "TeamIdentifier=" "$RUNNER_TEMP/codesign-details.txt"
+          codesign --verify --strict --verbose=2 "$mcp_helper"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          developer_id_requirement='anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "'"$EXPECTED_SIGNING_TEAM_ID"'"'
+          codesign --verify --strict -R "=identifier \"com.arendalloul.agent-tooling\" and $developer_id_requirement" "$app"
+          codesign --verify --strict -R "=identifier \"com.arendalloul.agent-tooling.cli\" and $developer_id_requirement" "$helper"
+          codesign --verify --strict -R "=identifier \"com.arendalloul.agent-tooling.mcp\" and $developer_id_requirement" "$mcp_helper"
+          codesign -dv --verbose=4 "$app" 2>&1 | tee "$RUNNER_TEMP/app-codesign-details.txt"
+          codesign -dv --verbose=4 "$helper" 2>&1 | tee "$RUNNER_TEMP/helper-codesign-details.txt"
+          codesign -dv --verbose=4 "$mcp_helper" 2>&1 | tee "$RUNNER_TEMP/mcp-helper-codesign-details.txt"
+          grep -q "flags=.*runtime" "$RUNNER_TEMP/app-codesign-details.txt"
+          grep -Fxq "Identifier=com.arendalloul.agent-tooling" "$RUNNER_TEMP/app-codesign-details.txt"
+          grep -Fxq "Identifier=com.arendalloul.agent-tooling.cli" "$RUNNER_TEMP/helper-codesign-details.txt"
+          grep -Fxq "Identifier=com.arendalloul.agent-tooling.mcp" "$RUNNER_TEMP/mcp-helper-codesign-details.txt"
+          grep -Fxq "TeamIdentifier=$EXPECTED_SIGNING_TEAM_ID" "$RUNNER_TEMP/app-codesign-details.txt"
+          grep -Fxq "TeamIdentifier=$EXPECTED_SIGNING_TEAM_ID" "$RUNNER_TEMP/helper-codesign-details.txt"
+          grep -Fxq "TeamIdentifier=$EXPECTED_SIGNING_TEAM_ID" "$RUNNER_TEMP/mcp-helper-codesign-details.txt"
+          app_authority=$(sed -n 's/^Authority=//p' "$RUNNER_TEMP/app-codesign-details.txt" | head -1)
+          helper_authority=$(sed -n 's/^Authority=//p' "$RUNNER_TEMP/helper-codesign-details.txt" | head -1)
+          mcp_helper_authority=$(sed -n 's/^Authority=//p' "$RUNNER_TEMP/mcp-helper-codesign-details.txt" | head -1)
+          test -n "$app_authority"
+          test "$app_authority" = "$helper_authority"
+          test "$app_authority" = "$mcp_helper_authority"
 
       - name: Create signed disk image
         env:
@@ -153,11 +285,15 @@ jobs:
           python3 scripts/generate-sbom.py \
             "$RELEASE_VERSION" \
             "$RUNNER_TEMP/$DMG_NAME.spdx.json" \
-            "$GITHUB_SHA"
+            "$RELEASE_COMMIT"
           cat > "$RUNNER_TEMP/release-notes.md" <<EOF
           ## Agent Tooling $RELEASE_VERSION
 
           Native macOS control center for Codex, Claude Code, and Gemini CLI tooling.
+
+          Source commit: \`$RELEASE_COMMIT\`
+
+          Annotated tag object: \`$RELEASE_TAG_OBJECT\`
 
           **Requirements:** Apple Silicon Mac running macOS 26 or newer.
 

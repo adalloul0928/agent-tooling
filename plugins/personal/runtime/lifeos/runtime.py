@@ -8,6 +8,7 @@ import plistlib
 import re
 import secrets
 import shutil
+import stat
 import subprocess
 import urllib.error
 import urllib.parse
@@ -34,6 +35,18 @@ HEALTH_METRIC_ALIASES = {
 
 
 class LifeOS:
+    maximum_health_file_bytes = 16 * 1_024 * 1_024
+    maximum_health_scan_bytes = 64 * 1_024 * 1_024
+    maximum_health_records_per_file = 25_000
+    maximum_health_records_per_scan = 50_000
+    maximum_health_json_depth = 32
+    maximum_health_json_nodes = 250_000
+    maximum_health_container_items = 100_000
+    maximum_health_string_characters = 65_536
+    maximum_health_cumulative_string_characters = 8 * 1_024 * 1_024
+    maximum_health_scan_files = 100
+    maximum_health_candidates = 2_000
+
     def __init__(self, home: Path | None = None):
         configured = os.environ.get("LIFE_OS_HOME")
         self.home = Path(configured).expanduser() if configured else (home or Path.home() / "Library" / "Application Support" / "LifeOS")
@@ -310,8 +323,8 @@ class LifeOS:
     def ticktick_tags(self) -> list[dict[str, Any]]:
         return self._ticktick_json(["tag", "list", "--json"])
 
-    def ensure_ticktick_followup_project(self, *, confirmed: bool = False) -> dict[str, Any]:
-        project_name = self.config["ticktick"]["followup_project"]
+    def ensure_ticktick_followup_project(self, *, project_name: str | None = None) -> dict[str, Any]:
+        project_name = project_name or self.config["ticktick"]["followup_project"]
         for project in self.ticktick_projects():
             if str(project.get("name", "")).casefold() == project_name.casefold():
                 return {"status": "ready", "project": project, "created": False}
@@ -321,10 +334,11 @@ class LifeOS:
             request={"name": project_name, "view_mode": "list", "kind": "TASK"},
             idempotency_key=stable_id("ticktick.create_project", project_name.casefold()),
         )
-        if action["status"] in {"proposed", "failed"} and confirmed:
-            action = self.store.confirm_action(action["id"])
         if action["status"] != "confirmed":
             return {"status": "confirmation_required", "action": action, "created": False}
+        action = self.store.consume_action_confirmation(
+            action["id"], expected_payload_digest=self.store.action_payload_digest(action)
+        )
         result = self._run(
             ["ticktick", "project", "create", "--name", project_name, "--view-mode", "list", "--kind", "TASK", "--json"],
             allow_failure=True,
@@ -346,12 +360,18 @@ class LifeOS:
         idempotency_key: str | None = None,
         source_event_id: str | None = None,
     ) -> dict[str, Any]:
-        decision = self.policy_decision(action_type, confidence=confidence, recipient=target)
+        normalized_request = dict(request)
+        normalized_target = target
+        if action_type == "ticktick.create_followup" and not normalized_request.get("project"):
+            project_name = str(self.config["ticktick"]["followup_project"])
+            normalized_request["project_name"] = project_name
+            normalized_target = normalized_target or project_name
+        decision = self.policy_decision(action_type, confidence=confidence, recipient=normalized_target)
         return self.store.request_action(
             {
                 "action_type": action_type,
-                "target": target,
-                "request": request,
+                "target": normalized_target,
+                "request": normalized_request,
                 "confidence": confidence,
                 "risk": self._risk(action_type),
                 "policy_decision": decision["decision"],
@@ -360,7 +380,7 @@ class LifeOS:
             }
         )
 
-    def execute_ticktick_create(self, action_id: str, *, confirmed: bool = False) -> dict[str, Any]:
+    def execute_ticktick_create(self, action_id: str) -> dict[str, Any]:
         action = self.store.get_action(action_id)
         if action["action_type"] not in {"ticktick.create_followup", "ticktick.create_task"}:
             raise LifeOSError("action is not a TickTick task creation")
@@ -369,19 +389,23 @@ class LifeOS:
         if action["status"] == "denied":
             raise PermissionError("action is denied by policy")
         if action["status"] in {"proposed", "failed"}:
-            if not confirmed:
-                raise PermissionError("action requires confirmation")
-            action = self.store.confirm_action(action_id)
+            raise PermissionError("action requires an exact interactive confirmation")
         ticktick = shutil.which("ticktick")
         if not ticktick:
             raise LifeOSError("ticktick CLI is unavailable")
-        request = action["request"]
+        request = dict(action["request"])
         if action["action_type"] == "ticktick.create_followup" and not request.get("project"):
-            followup = self.ensure_ticktick_followup_project(confirmed=confirmed)
+            project_name = request.get("project_name")
+            if not project_name or action.get("target") != project_name:
+                raise PermissionError("follow-up action does not bind its destination project")
+            followup = self.ensure_ticktick_followup_project(project_name=project_name)
             if followup["status"] != "ready":
                 raise PermissionError("the AI Follow-ups TickTick project must be confirmed and created first")
             project = followup["project"]
             request["project"] = project.get("id") or project.get("projectId")
+        action = self.store.consume_action_confirmation(
+            action_id, expected_payload_digest=self.store.action_payload_digest(action)
+        )
         command = [ticktick, "task", "create", "--title", request["title"], "--json"]
         for key, flag in (
             ("project", "--project"),
@@ -449,16 +473,17 @@ class LifeOS:
         self.store.set_checkpoint("imessage", utcnow(), {"start": start, "chat_count": len(output)})
         return {"since": start, "chats": output, "privacy": "Raw text is returned transiently and is not stored in the Life OS ledger."}
 
-    def execute_imessage_send(self, action_id: str, *, confirmed: bool = False) -> dict[str, Any]:
+    def execute_imessage_send(self, action_id: str) -> dict[str, Any]:
         action = self.store.get_action(action_id)
         if action["action_type"] != "imessage.send":
             raise LifeOSError("action is not an iMessage send")
         if action["status"] == "executed":
             return action
-        if action["status"] in {"proposed", "failed"} and confirmed:
-            action = self.store.confirm_action(action_id)
         if action["status"] != "confirmed":
             raise PermissionError("iMessage send requires explicit per-message confirmation")
+        action = self.store.consume_action_confirmation(
+            action_id, expected_payload_digest=self.store.action_payload_digest(action)
+        )
         request = action["request"]
         result = self._run(
             [
@@ -479,15 +504,21 @@ class LifeOS:
         return self.store.finish_action(action_id, status=status, result=result)
 
     def ingest_health_file(self, path: Path) -> dict[str, Any]:
-        path = path.expanduser().resolve()
-        if not path.is_file():
-            raise LifeOSError(f"health export does not exist: {path}")
-        raw = path.read_bytes()
-        try:
-            data = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise LifeOSError(f"health export is not valid UTF-8 JSON: {path}") from exc
+        return self._ingest_health_file(path, budget={"bytes": 0, "records": 0})
+
+    def _ingest_health_file(self, path: Path, *, budget: dict[str, int]) -> dict[str, Any]:
+        path, raw, data = self._load_health_json(path, budget=budget)
         records = self._extract_health_records(data)
+        if len(records) > self.maximum_health_records_per_file:
+            raise LifeOSError(
+                f"health export contains {len(records)} records; limit is {self.maximum_health_records_per_file}: {path}"
+            )
+        cumulative_records = budget["records"] + len(records)
+        if cumulative_records > self.maximum_health_records_per_scan:
+            raise LifeOSError(
+                f"health scan exceeds the cumulative {self.maximum_health_records_per_scan}-record limit"
+            )
+        budget["records"] = cumulative_records
         allowed_metrics = {
             self._canonical_health_metric(metric)
             for metric in self.config.get("health", {}).get("metrics", [])
@@ -568,13 +599,16 @@ class LifeOS:
     ) -> dict[str, Any]:
         if max_files < 1:
             raise LifeOSError("health scan max_files must be positive")
+        if max_files > self.maximum_health_scan_files:
+            raise LifeOSError(f"health scan max_files cannot exceed {self.maximum_health_scan_files}")
         configured = paths or [
             Path(item).expanduser()
             for item in self.config.get("health", {}).get("inbox_paths", [])
             if item
         ]
-        candidates: dict[Path, None] = {}
+        candidates: dict[Path, int] = {}
         scanned_roots: list[str] = []
+        enumeration_limited = False
         for root in [self.health_inbox, *configured]:
             resolved = root.expanduser().resolve()
             if str(resolved) not in scanned_roots:
@@ -582,14 +616,35 @@ class LifeOS:
             if not resolved.is_dir():
                 continue
             for candidate in resolved.rglob("*.json"):
-                if candidate.is_file() and not candidate.name.startswith("."):
-                    candidates[candidate.resolve()] = None
-        ordered = sorted(candidates, key=lambda item: (item.stat().st_mtime_ns, str(item)))[:max_files]
+                if candidate.name.startswith("."):
+                    continue
+                try:
+                    attributes = candidate.lstat()
+                except OSError:
+                    continue
+                if not stat.S_ISREG(attributes.st_mode) or stat.S_ISLNK(attributes.st_mode):
+                    continue
+                absolute_candidate = candidate.absolute()
+                if absolute_candidate not in candidates and len(candidates) >= self.maximum_health_candidates:
+                    enumeration_limited = True
+                    break
+                candidates[absolute_candidate] = attributes.st_mtime_ns
+            if enumeration_limited:
+                break
+        ordered = sorted(candidates, key=lambda item: (candidates[item], str(item)))[:max_files]
         results: list[dict[str, Any]] = []
         errors: list[dict[str, str]] = []
+        if enumeration_limited:
+            errors.append(
+                {
+                    "file": "(inbox scan)",
+                    "error": f"health inbox scan stopped at {self.maximum_health_candidates} candidate files",
+                }
+            )
+        budget = {"bytes": 0, "records": 0}
         for candidate in ordered:
             try:
-                results.append(self.ingest_health_file(candidate))
+                results.append(self._ingest_health_file(candidate, budget=budget))
             except (LifeOSError, OSError) as exc:
                 errors.append({"file": str(candidate), "error": str(exc)})
         return {
@@ -598,10 +653,97 @@ class LifeOS:
             "files_ingested": len(results),
             "records_filtered": sum(int(item["records_filtered"]) for item in results),
             "records_written": sum(int(item["records_written"]) for item in results),
+            "input_bytes": budget["bytes"],
+            "records_seen": budget["records"],
             "results": results,
             "roots": scanned_roots,
             "status": "ready" if results and not errors else ("empty" if not candidates else "needs_attention"),
         }
+
+    def _load_health_json(self, path: Path, *, budget: dict[str, int]) -> tuple[Path, bytes, Any]:
+        candidate = Path(os.path.abspath(os.fspath(path.expanduser())))
+        try:
+            initial = candidate.lstat()
+        except FileNotFoundError as exc:
+            raise LifeOSError(f"health export does not exist: {candidate}") from exc
+        if stat.S_ISLNK(initial.st_mode):
+            raise LifeOSError(f"health export must not be a symbolic link: {candidate}")
+        if not stat.S_ISREG(initial.st_mode):
+            raise LifeOSError(f"health export must be a regular file: {candidate}")
+
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        try:
+            descriptor = os.open(candidate, flags)
+        except OSError as exc:
+            raise LifeOSError(f"health export could not be opened safely: {candidate}: {exc}") from exc
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode):
+                raise LifeOSError(f"health export must be a regular file: {candidate}")
+            if (initial.st_dev, initial.st_ino) != (opened.st_dev, opened.st_ino):
+                raise LifeOSError(f"health export changed while it was being opened: {candidate}")
+            if opened.st_size > self.maximum_health_file_bytes:
+                raise LifeOSError(
+                    f"health export is {opened.st_size} bytes; limit is {self.maximum_health_file_bytes}: {candidate}"
+                )
+            allocated = getattr(opened, "st_blocks", None)
+            if opened.st_size > 0 and allocated is not None and allocated * 512 < opened.st_size:
+                raise LifeOSError(f"health export must not be sparse: {candidate}")
+            cumulative_bytes = budget["bytes"] + opened.st_size
+            if cumulative_bytes > self.maximum_health_scan_bytes:
+                raise LifeOSError(
+                    f"health scan exceeds the cumulative {self.maximum_health_scan_bytes}-byte input limit"
+                )
+            budget["bytes"] = cumulative_bytes
+            with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                raw = handle.read(self.maximum_health_file_bytes + 1)
+            if len(raw) > self.maximum_health_file_bytes:
+                raise LifeOSError(f"health export exceeds the byte limit while reading: {candidate}")
+            if len(raw) != opened.st_size:
+                raise LifeOSError(f"health export changed while it was being read: {candidate}")
+        finally:
+            os.close(descriptor)
+
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError, RecursionError) as exc:
+            raise LifeOSError(f"health export is not valid bounded UTF-8 JSON: {candidate}") from exc
+        self._validate_health_json(data, path=candidate)
+        return candidate, raw, data
+
+    def _validate_health_json(self, data: Any, *, path: Path) -> None:
+        stack: list[tuple[Any, int]] = [(data, 0)]
+        nodes = 0
+        string_characters = 0
+        while stack:
+            value, depth = stack.pop()
+            nodes += 1
+            if nodes > self.maximum_health_json_nodes:
+                raise LifeOSError(f"health export exceeds the JSON value-count limit: {path}")
+            if depth > self.maximum_health_json_depth:
+                raise LifeOSError(f"health export exceeds the JSON nesting limit: {path}")
+            if isinstance(value, dict):
+                if len(value) > self.maximum_health_container_items:
+                    raise LifeOSError(f"health export contains an oversized JSON object: {path}")
+                for key, child in value.items():
+                    if len(key) > self.maximum_health_string_characters:
+                        raise LifeOSError(f"health export contains an oversized JSON key: {path}")
+                    string_characters += len(key)
+                    stack.append((child, depth + 1))
+            elif isinstance(value, list):
+                if len(value) > self.maximum_health_container_items:
+                    raise LifeOSError(f"health export contains an oversized JSON array: {path}")
+                stack.extend((child, depth + 1) for child in value)
+            elif isinstance(value, str):
+                if len(value) > self.maximum_health_string_characters:
+                    raise LifeOSError(f"health export contains an oversized JSON string: {path}")
+                string_characters += len(value)
+            elif value is None or isinstance(value, (bool, int, float)):
+                continue
+            else:
+                raise LifeOSError(f"health export contains an unsupported JSON value: {path}")
+            if string_characters > self.maximum_health_cumulative_string_characters:
+                raise LifeOSError(f"health export exceeds the cumulative JSON string limit: {path}")
 
     def oura_sync(self, *, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
         config = self.config.get("oura", {})
@@ -815,7 +957,6 @@ class LifeOS:
         content: str,
         *,
         overwrite: bool = False,
-        confirmed: bool = False,
     ) -> dict[str, Any]:
         config = self.config["vault"]
         vault = Path(config["path"]).expanduser().resolve()
@@ -834,9 +975,6 @@ class LifeOS:
             return {"path": str(target), "bytes": len(content.encode("utf-8")), "status": "unchanged"}
         if existing is not None and not overwrite:
             raise FileExistsError(target)
-        if existing is not None and not confirmed:
-            raise PermissionError("editing an existing Obsidian note requires explicit confirmation")
-
         action_type = "obsidian.edit_existing" if existing is not None else "obsidian.create_designated"
         content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
         action = self.request_action(
@@ -847,12 +985,11 @@ class LifeOS:
         )
         if action["status"] == "executed":
             raise LifeOSError("the audited write already executed but the target no longer matches; review manually")
-        if action["status"] in {"proposed", "failed"}:
-            if not confirmed:
-                raise PermissionError("Obsidian write requires confirmation")
-            action = self.store.confirm_action(action["id"])
         if action["status"] != "confirmed":
             raise PermissionError("Obsidian write is not authorized")
+        action = self.store.consume_action_confirmation(
+            action["id"], expected_payload_digest=self.store.action_payload_digest(action)
+        )
 
         target.parent.mkdir(parents=True, exist_ok=True)
         try:

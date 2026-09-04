@@ -382,6 +382,21 @@ extension Data {
 
 // MARK: - HTTP
 
+/// Redirects are a second network destination, but the consent sheet names
+/// only the configured endpoint. Reject every redirect so a server cannot turn
+/// consent for one origin into traffic to another service.
+final class MCPRejectingRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(
+        _: URLSession,
+        task _: URLSessionTask,
+        willPerformHTTPRedirection _: HTTPURLResponse,
+        newRequest _: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
+    }
+}
+
 /// Speaks MCP over HTTP with an ephemeral session that holds no credentials.
 ///
 /// The session is built rather than shared: no cookie jar, no credential
@@ -390,11 +405,30 @@ extension Data {
 public actor MCPHTTPTestChannel: MCPTestChannel {
     private let url: URL
     private let session: URLSession
+    private let redirectDelegate: MCPRejectingRedirectDelegate
     private var sessionIdentifier: String?
     private let notes = MCPBoundedTextBuffer(limit: MCPTestConnectionPolicy.maximumDiagnosticCharacters)
 
     public init(url: URL, timeout: Duration = MCPTestConnectionPolicy.toolCallTimeout) {
         self.url = url
+        let configuration = Self.secureConfiguration(timeout: timeout)
+        let redirectDelegate = MCPRejectingRedirectDelegate()
+        self.redirectDelegate = redirectDelegate
+        session = URLSession(configuration: configuration, delegate: redirectDelegate, delegateQueue: nil)
+    }
+
+    /// Test-only transport injection. Production callers always use the
+    /// credentialless ephemeral configuration above.
+    init(testingURL url: URL, protocolClasses: [AnyClass], timeout: Duration = MCPTestConnectionPolicy.toolCallTimeout) {
+        self.url = url
+        let configuration = Self.secureConfiguration(timeout: timeout)
+        configuration.protocolClasses = protocolClasses
+        let redirectDelegate = MCPRejectingRedirectDelegate()
+        self.redirectDelegate = redirectDelegate
+        session = URLSession(configuration: configuration, delegate: redirectDelegate, delegateQueue: nil)
+    }
+
+    private static func secureConfiguration(timeout: Duration) -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieAcceptPolicy = .never
         configuration.httpShouldSetCookies = false
@@ -404,7 +438,7 @@ public actor MCPHTTPTestChannel: MCPTestChannel {
         configuration.httpAdditionalHeaders = [:]
         configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         configuration.timeoutIntervalForRequest = max(1, timeout.milliseconds / 1_000)
-        session = URLSession(configuration: configuration)
+        return configuration
     }
 
     public init(target: MCPTestTarget) throws {
@@ -460,6 +494,11 @@ public actor MCPHTTPTestChannel: MCPTestChannel {
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw MCPLiveTestError.protocolViolation("The endpoint did not answer with an HTTP response.")
             }
+            guard httpResponse.url == url else {
+                throw MCPLiveTestError.protocolViolation(
+                    "The server answered from a different endpoint. Review that endpoint as a new connection instead."
+                )
+            }
             return (data, httpResponse)
         } catch let error as MCPLiveTestError {
             throw error
@@ -472,6 +511,11 @@ public actor MCPHTTPTestChannel: MCPTestChannel {
     }
 
     private func check(_ response: HTTPURLResponse) throws {
+        if (300..<400).contains(response.statusCode) {
+            throw MCPLiveTestError.protocolViolation(
+                "The server tried to redirect the test. Redirects are blocked because the new destination was not approved."
+            )
+        }
         if response.statusCode == 401 || response.statusCode == 403 {
             throw MCPLiveTestError.authenticationRequired
         }

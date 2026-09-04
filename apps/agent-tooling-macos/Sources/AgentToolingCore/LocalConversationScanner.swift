@@ -21,6 +21,8 @@ public struct LocalConversationScanner: Sendable {
         let lookup = SkillNameLookup(skills: skills)
         var artifact = ConversationScanArtifact(windowStart: windowStart)
 
+        guard !Task.isCancelled else { return artifact }
+
         if options.clients.contains(.codex) {
             artifact.merge(
                 scanCodex(
@@ -31,6 +33,7 @@ public struct LocalConversationScanner: Sendable {
                 )
             )
         }
+        guard !Task.isCancelled else { return artifact }
         if options.clients.contains(.claude) {
             let jsonlResult = scanClaudeJSONL(
                 homeURL: homeURL,
@@ -95,6 +98,7 @@ public struct LocalConversationScanner: Sendable {
             var wasTruncated = queriedConversations.count > options.maximumConversationsPerClient
 
             for conversation in conversations {
+                if Task.isCancelled { break }
                 let queriedRows = try database.queryRows(
                     sql: """
                         SELECT item_type, item_json, created_at_ms, turn_id
@@ -115,6 +119,7 @@ public struct LocalConversationScanner: Sendable {
                 if queriedRows.count > options.maximumItemsPerConversation { wasTruncated = true }
                 let rows = queriedRows.suffix(options.maximumItemsPerConversation)
                 for (ordinal, candidate) in rows.enumerated() {
+                    if Task.isCancelled { break }
                     guard let row = candidate else {
                         skipped += 1
                         continue
@@ -245,6 +250,7 @@ public struct LocalConversationScanner: Sendable {
             var wasTruncated = queriedConversations.count > options.maximumConversationsPerClient
 
             for conversation in conversations {
+                if Task.isCancelled { break }
                 let queriedRows = try database.queryRows(
                     sql: """
                         SELECT kind, message, timestamp
@@ -273,6 +279,7 @@ public struct LocalConversationScanner: Sendable {
                 if queriedRows.count > options.maximumItemsPerConversation { wasTruncated = true }
                 let rows = queriedRows.suffix(options.maximumItemsPerConversation)
                 for candidate in rows {
+                    if Task.isCancelled { break }
                     guard let row = candidate else {
                         skipped += 1
                         continue
@@ -376,6 +383,7 @@ public struct LocalConversationScanner: Sendable {
         )
 
         for file in files {
+            if Task.isCancelled { break }
             guard let fileSize = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize,
                 fileSize >= 0,
                 fileSize <= remainingTranscriptBytes
@@ -401,6 +409,7 @@ public struct LocalConversationScanner: Sendable {
             if allLines.count > options.maximumItemsPerConversation { wasTruncated = true }
             let lines = allLines.suffix(options.maximumItemsPerConversation)
             for (ordinal, line) in lines.enumerated() {
+                if Task.isCancelled { break }
                 guard line.utf8.count <= options.maximumItemBytes,
                     let object = parseJSONObject(String(line)),
                     let dictionary = object as? [String: Any],

@@ -1,4 +1,6 @@
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import sqlite3
@@ -14,6 +16,7 @@ import sys
 sys.path.insert(0, str(RUNTIME_ROOT))
 
 from lifeos.runtime import LifeOS  # noqa: E402
+from lifeos.cli import build_parser, confirm_action_interactively  # noqa: E402
 
 
 class LifeOSRuntimeTests(unittest.TestCase):
@@ -32,6 +35,10 @@ class LifeOSRuntimeTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def approve(self, action: dict) -> dict:
+        digest = self.runtime.store.action_payload_digest(action)
+        return self.runtime.store.confirm_action(action["id"], expected_payload_digest=digest)
+
     def test_initialize_creates_private_state_and_schema(self):
         result = self.runtime.initialize()
         self.assertEqual(result["status"], "ready")
@@ -44,7 +51,9 @@ class LifeOSRuntimeTests(unittest.TestCase):
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         finally:
             connection.close()
-        self.assertTrue({"events", "commitments", "actions", "drafts", "decisions", "review_runs"}.issubset(tables))
+        self.assertTrue(
+            {"events", "commitments", "actions", "action_confirmations", "drafts", "decisions", "review_runs"}.issubset(tables)
+        )
 
     def test_events_are_idempotent_and_do_not_store_raw_content(self):
         first = self.runtime.store.record_event(
@@ -135,8 +144,15 @@ class LifeOSRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(first["id"], second["id"])
         self.assertEqual(first["status"], "proposed")
-        confirmed = self.runtime.store.confirm_action(first["id"])
+        confirmed = self.approve(first)
         self.assertEqual(confirmed["status"], "confirmed")
+        with self.assertRaisesRegex(PermissionError, "different action payload"):
+            self.runtime.request_action(
+                "imessage.send",
+                target=request["to"],
+                request={"to": request["to"], "text": "changed after proposal"},
+                idempotency_key="same-message",
+            )
 
         denied = self.runtime.request_action(
             "financial.transaction",
@@ -146,7 +162,9 @@ class LifeOSRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(denied["status"], "denied")
         with self.assertRaises(PermissionError):
-            self.runtime.store.confirm_action(denied["id"])
+            self.runtime.store.confirm_action(
+                denied["id"], expected_payload_digest=self.runtime.store.action_payload_digest(denied)
+            )
 
         with self.assertRaises(PermissionError):
             self.runtime.store.finish_action(first["id"], status="undone")
@@ -162,7 +180,111 @@ class LifeOSRuntimeTests(unittest.TestCase):
         executed = self.runtime.store.finish_action(action["id"], status="executed")
         self.assertEqual(executed["status"], "executed")
         with self.assertRaises(PermissionError):
-            self.runtime.store.confirm_action(action["id"])
+            self.runtime.store.confirm_action(
+                action["id"], expected_payload_digest=self.runtime.store.action_payload_digest(action)
+            )
+
+    def test_confirmation_is_payload_bound_single_use_and_interactive(self):
+        action = self.runtime.request_action(
+            "imessage.send",
+            target="+15555550123",
+            request={"to": "+15555550123", "text": "exact body"},
+            idempotency_key="payload-bound-confirmation",
+        )
+        digest = self.runtime.store.action_payload_digest(action)
+        with self.assertRaises(PermissionError):
+            self.runtime.store.confirm_action(action["id"], expected_payload_digest="0" * 64)
+
+        phrase = f"CONFIRM {action['id'][:12]} {digest[:12]}\n"
+
+        class InteractiveBuffer(io.StringIO):
+            def isatty(self):
+                return True
+
+        with mock.patch("lifeos.cli.sys.stdin", InteractiveBuffer(phrase)), mock.patch(
+            "lifeos.cli.sys.stderr", InteractiveBuffer()
+        ):
+            confirmed = confirm_action_interactively(self.runtime, action["id"])
+        self.assertEqual(confirmed["status"], "confirmed")
+
+        restarted = LifeOS(home=self.home)
+        restarted.initialize()
+        consumed = restarted.store.consume_action_confirmation(
+            action["id"], expected_payload_digest=digest
+        )
+        self.assertEqual(consumed["id"], action["id"])
+        with self.assertRaisesRegex(PermissionError, "already been used"):
+            self.runtime.store.consume_action_confirmation(
+                action["id"], expected_payload_digest=digest
+            )
+        with self.assertRaisesRegex(PermissionError, "already been used"):
+            self.runtime.store.confirm_action(action["id"], expected_payload_digest=digest)
+        with mock.patch("lifeos.cli.sys.stdin", io.StringIO(phrase)), mock.patch(
+            "lifeos.cli.sys.stderr", io.StringIO()
+        ), self.assertRaisesRegex(PermissionError, "interactive terminal"):
+            confirm_action_interactively(self.runtime, action["id"])
+
+        tampered = self.runtime.request_action(
+            "imessage.send",
+            target="+15555550124",
+            request={"to": "+15555550124", "text": "reviewed body"},
+            idempotency_key="payload-tamper-confirmation",
+        )
+        tampered_digest = self.runtime.store.action_payload_digest(tampered)
+        self.approve(tampered)
+        with self.runtime.store.connect() as connection:
+            connection.execute(
+                "UPDATE actions SET request_json=? WHERE id=?",
+                (json.dumps({"to": "+15555550124", "text": "different body"}), tampered["id"]),
+            )
+        with self.assertRaisesRegex(PermissionError, "changed after confirmation"):
+            self.runtime.store.consume_action_confirmation(
+                tampered["id"], expected_payload_digest=tampered_digest
+            )
+
+    def test_confirmation_grant_expires_and_exact_review_can_refresh_it(self):
+        action = self.runtime.request_action(
+            "imessage.send",
+            target="+15555550123",
+            request={"to": "+15555550123", "text": "time-bound body"},
+            idempotency_key="expiring-confirmation",
+        )
+        digest = self.runtime.store.action_payload_digest(action)
+        self.runtime.store.confirm_action(action["id"], expected_payload_digest=digest)
+        with self.runtime.store.connect() as connection:
+            connection.execute(
+                "UPDATE action_confirmations SET approved_at=? WHERE action_id=?",
+                ("2000-01-01T00:00:00+00:00", action["id"]),
+            )
+
+        with self.assertRaisesRegex(PermissionError, "expired"):
+            self.runtime.store.consume_action_confirmation(
+                action["id"], expected_payload_digest=digest
+            )
+
+        refreshed = self.runtime.store.confirm_action(
+            action["id"], expected_payload_digest=digest
+        )
+        self.assertEqual(refreshed["status"], "confirmed")
+        consumed = self.runtime.store.consume_action_confirmation(
+            action["id"], expected_payload_digest=digest
+        )
+        self.assertEqual(consumed["id"], action["id"])
+
+    def test_removed_confirmed_cli_flag_is_rejected(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            build_parser().parse_args(
+                [
+                    "imessage-send",
+                    "--to",
+                    "+15555550123",
+                    "--text",
+                    "hello",
+                    "--idempotency-key",
+                    "removed-confirmed-flag",
+                    "--confirmed",
+                ]
+            )
 
     def test_imessage_send_forces_imessage_without_sms_fallback(self):
         action = self.runtime.request_action(
@@ -172,8 +294,11 @@ class LifeOSRuntimeTests(unittest.TestCase):
             idempotency_key="imessage-channel-boundary",
         )
         response = {"command": "imsg", "returncode": 0, "stdout": "{}", "stderr": ""}
+        with self.assertRaises(TypeError):
+            self.runtime.execute_imessage_send(action["id"], confirmed=True)
+        self.approve(action)
         with mock.patch.object(self.runtime, "_run", return_value=response) as run:
-            result = self.runtime.execute_imessage_send(action["id"], confirmed=True)
+            result = self.runtime.execute_imessage_send(action["id"])
         command = run.call_args.args[0]
         self.assertEqual(result["status"], "executed")
         self.assertIn("--service", command)
@@ -199,11 +324,14 @@ class LifeOSRuntimeTests(unittest.TestCase):
             "stdout": json.dumps({"id": "task-1", "projectId": "project-1"}),
             "stderr": "",
         }
+        with self.assertRaises(TypeError):
+            self.runtime.execute_ticktick_create(action["id"], confirmed=True)
+        self.approve(action)
         with mock.patch("lifeos.runtime.shutil.which", return_value="/usr/local/bin/ticktick"), mock.patch.object(
             self.runtime, "_run", return_value=response
         ) as run:
-            result = self.runtime.execute_ticktick_create(action["id"], confirmed=True)
-            replay = self.runtime.execute_ticktick_create(action["id"], confirmed=True)
+            result = self.runtime.execute_ticktick_create(action["id"])
+            replay = self.runtime.execute_ticktick_create(action["id"])
         command = run.call_args.args[0]
         self.assertEqual(result["status"], "executed")
         self.assertEqual(replay["id"], result["id"])
@@ -211,6 +339,32 @@ class LifeOSRuntimeTests(unittest.TestCase):
         self.assertIn("--due-date", command)
         self.assertIn("--priority", command)
         self.assertEqual(result["undo"]["task_id"], "task-1")
+
+    def test_automatic_followup_binds_and_resolves_default_project_without_a_grant(self):
+        action = self.runtime.request_action(
+            "ticktick.create_followup",
+            target=None,
+            request={"title": "Automatic follow-up", "project": None},
+            confidence=0.95,
+            idempotency_key="automatic-default-followup",
+        )
+        self.assertEqual(action["policy_decision"], "automatic")
+        self.assertEqual(action["target"], "AI Follow-ups")
+        self.assertEqual(action["request"]["project_name"], "AI Follow-ups")
+        response = {
+            "command": "ticktick",
+            "returncode": 0,
+            "stdout": json.dumps({"id": "task-auto", "projectId": "project-auto"}),
+            "stderr": "",
+        }
+        with mock.patch("lifeos.runtime.shutil.which", return_value="/usr/local/bin/ticktick"), mock.patch.object(
+            self.runtime, "ticktick_projects", return_value=[{"id": "project-auto", "name": "AI Follow-ups"}]
+        ), mock.patch.object(self.runtime, "_run", return_value=response) as run:
+            result = self.runtime.execute_ticktick_create(action["id"])
+
+        self.assertEqual(result["status"], "executed")
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("--project") + 1], "project-auto")
 
     def test_keychain_secret_is_passed_on_stdin_not_process_arguments(self):
         response = {"command": "security", "returncode": 0, "stdout": "", "stderr": ""}
@@ -236,11 +390,19 @@ class LifeOSRuntimeTests(unittest.TestCase):
             self.runtime.write_obsidian_note(
                 "Personal/Reviews/Weekly/2026-W33.md", "# Changed\n", overwrite=True
             )
+        action = self.runtime.store.list_actions(status="proposed")[0]
+        self.approve(action)
+        with self.assertRaises(TypeError):
+            self.runtime.write_obsidian_note(
+                "Personal/Reviews/Weekly/2026-W33.md",
+                "# Changed\n",
+                overwrite=True,
+                confirmed=True,
+            )
         updated = self.runtime.write_obsidian_note(
             "Personal/Reviews/Weekly/2026-W33.md",
             "# Changed\n",
             overwrite=True,
-            confirmed=True,
         )
         self.assertEqual(updated["status"], "updated")
         self.assertEqual(updated["action"]["status"], "executed")
@@ -363,6 +525,92 @@ class LifeOSRuntimeTests(unittest.TestCase):
         self.assertEqual(first["files_ingested"], 1)
         self.assertEqual(second["files_ingested"], 1)
         self.assertEqual(len(self.runtime.store.list_events(source="apple_health")), 1)
+
+    def test_health_ingest_rejects_non_regular_sparse_and_oversized_files(self):
+        ordinary = self.root / "ordinary.json"
+        ordinary.write_text("{}", encoding="utf-8")
+
+        symlink = self.root / "linked.json"
+        symlink.symlink_to(ordinary)
+        with self.assertRaisesRegex(Exception, "symbolic link"):
+            self.runtime.ingest_health_file(symlink)
+
+        fifo = self.root / "pipe.json"
+        os.mkfifo(fifo)
+        with self.assertRaisesRegex(Exception, "regular file"):
+            self.runtime.ingest_health_file(fifo)
+
+        sparse = self.root / "sparse.json"
+        with sparse.open("wb") as handle:
+            handle.seek(1_048_575)
+            handle.write(b"}")
+        with mock.patch.object(self.runtime, "maximum_health_file_bytes", 2 * 1_024 * 1_024):
+            with self.assertRaisesRegex(Exception, "sparse"):
+                self.runtime.ingest_health_file(sparse)
+
+        oversized = self.root / "oversized.json"
+        oversized.write_bytes(b'{"x":"0123456789"}')
+        with mock.patch.object(self.runtime, "maximum_health_file_bytes", 8):
+            with self.assertRaisesRegex(Exception, "limit"):
+                self.runtime.ingest_health_file(oversized)
+
+    def test_health_ingest_enforces_structure_record_and_cumulative_limits(self):
+        nested = self.root / "nested.json"
+        nested.write_text(json.dumps({"a": {"b": {"c": 1}}}), encoding="utf-8")
+        with mock.patch.object(self.runtime, "maximum_health_json_depth", 2):
+            with self.assertRaisesRegex(Exception, "nesting"):
+                self.runtime.ingest_health_file(nested)
+
+        long_string = self.root / "long-string.json"
+        long_string.write_text(json.dumps({"value": "123456"}), encoding="utf-8")
+        with mock.patch.object(self.runtime, "maximum_health_string_characters", 5):
+            with self.assertRaisesRegex(Exception, "oversized JSON"):
+                self.runtime.ingest_health_file(long_string)
+
+        records = self.root / "too-many-records.json"
+        records.write_text(json.dumps([{"value": 1}, {"value": 2}]), encoding="utf-8")
+        with mock.patch.object(self.runtime, "maximum_health_records_per_file", 1):
+            with self.assertRaisesRegex(Exception, "records"):
+                self.runtime.ingest_health_file(records)
+        self.assertEqual(self.runtime.store.list_events(source="apple_health"), [])
+
+        too_many_values = self.root / "too-many-values.json"
+        too_many_values.write_text(json.dumps({"values": [1, 2]}), encoding="utf-8")
+        with mock.patch.object(self.runtime, "maximum_health_json_nodes", 3):
+            with self.assertRaisesRegex(Exception, "value-count"):
+                self.runtime.ingest_health_file(too_many_values)
+
+        oversized_container = self.root / "oversized-container.json"
+        oversized_container.write_text(json.dumps([{}, {}]), encoding="utf-8")
+        with mock.patch.object(self.runtime, "maximum_health_container_items", 1):
+            with self.assertRaisesRegex(Exception, "oversized JSON array"):
+                self.runtime.ingest_health_file(oversized_container)
+
+        cumulative_strings = self.root / "cumulative-strings.json"
+        cumulative_strings.write_text(
+            json.dumps({"first": "1234", "second": "5678"}), encoding="utf-8"
+        )
+        with mock.patch.object(self.runtime, "maximum_health_cumulative_string_characters", 15):
+            with self.assertRaisesRegex(Exception, "cumulative JSON string"):
+                self.runtime.ingest_health_file(cumulative_strings)
+
+        inbox = self.root / "bounded-inbox"
+        inbox.mkdir()
+        first = inbox / "one.json"
+        second = inbox / "two.json"
+        first.write_text(json.dumps([{"value": 1}]), encoding="utf-8")
+        second.write_text(json.dumps([{"value": 2}]), encoding="utf-8")
+        one_file_bytes = first.stat().st_size
+        with mock.patch.object(self.runtime, "maximum_health_scan_bytes", one_file_bytes + 1):
+            result = self.runtime.scan_health_inboxes(paths=[inbox], max_files=2)
+        self.assertEqual(result["files_ingested"], 1)
+        self.assertEqual(len(result["errors"]), 1)
+
+        with mock.patch.object(self.runtime, "maximum_health_records_per_scan", 1):
+            result = self.runtime.scan_health_inboxes(paths=[inbox], max_files=2)
+        self.assertEqual(result["files_ingested"], 1)
+        self.assertEqual(len(result["errors"]), 1)
+        self.assertIn("record limit", result["errors"][0]["error"])
 
     def test_decisions_and_drafts_are_idempotent(self):
         first = self.runtime.store.record_decision(

@@ -8,7 +8,6 @@ import {
 	localBootstrapStatus,
 	parseBootstrapOptions,
 } from "./bootstrap-worktree.mjs";
-import { getLane, sessionKey } from "./ios-session-lane.mjs";
 import { isMainModule, projectMatch } from "./project-context.mjs";
 
 const scriptsRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -75,6 +74,15 @@ function parseClient(args) {
 
 function payloadSessionId(payload) {
 	return String(payload.session_id ?? payload.thread_id ?? payload.conversation_id ?? "");
+}
+
+function sessionKey(client, sessionId) {
+	for (const [value, label] of [[client, "client"], [sessionId, "session id"]]) {
+		if (!value || !/^[A-Za-z0-9._:-]+$/u.test(value)) {
+			throw new Error(`A safe ${label} is required.`);
+		}
+	}
+	return `${client}:${sessionId}`;
 }
 
 function laneCommand(client, sessionId, suffix = "") {
@@ -146,7 +154,7 @@ function isShellTool(toolName) {
 	return /(?:^|__)(?:Bash|Shell|exec_command|run_command)$/i.test(toolName);
 }
 
-async function handlePreTool(payload, client) {
+async function handlePreTool(payload, client, root) {
 	const sessionId = payloadSessionId(payload);
 	if (!sessionId) return;
 	const toolName = String(payload.tool_name ?? payload.tool ?? "");
@@ -161,7 +169,7 @@ async function handlePreTool(payload, client) {
 
 	const controllerTool = controllerForTool(toolName);
 	if (!controllerTool) return;
-	const lane = await getLane(client, sessionId);
+	const lane = await getLaneForProject(root, client, sessionId);
 	if (!lane) {
 		deny(`No lane exists. Ask the user to choose simulator-local, simulator-preview, iphone-preview, or custom settings, then run ${laneCommand(client, sessionId, "--preset <preset>")}.`);
 		return;
@@ -187,6 +195,18 @@ async function handlePreTool(payload, client) {
 	}
 	if (!requestedUdid || requestedUdid !== lane.target.udid) {
 		deny(`${controllerTool} must explicitly target lane device ${lane.target.udid}.`);
+	}
+}
+
+async function getLaneForProject(root, client, sessionId) {
+	const previousRoot = process.env.IOS_SESSION_LANES_PROJECT_ROOT;
+	process.env.IOS_SESSION_LANES_PROJECT_ROOT = root;
+	try {
+		const { getLane } = await import("./ios-session-lane.mjs");
+		return await getLane(client, sessionId);
+	} finally {
+		if (previousRoot === undefined) delete process.env.IOS_SESSION_LANES_PROJECT_ROOT;
+		else process.env.IOS_SESSION_LANES_PROJECT_ROOT = previousRoot;
 	}
 }
 
@@ -236,7 +256,7 @@ async function main() {
 	const project = projectMatch(rootHint);
 	if (!project.ok) return;
 	if (action === "start") process.stdout.write(await handleStart(payload, client, project.root));
-	else if (action === "pretool") await handlePreTool(payload, client);
+	else if (action === "pretool") await handlePreTool(payload, client, project.root);
 	else if (action === "end") handleEnd(payload, client, project.root);
 	else throw new Error(`Unknown hook action ${action}.`);
 }

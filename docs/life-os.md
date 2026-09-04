@@ -96,6 +96,14 @@ Configure one automation named `Life OS Health` with:
 
 The runtime scans both its private `health-inbox` and `~/Library/Mobile Documents/com~apple~CloudDocs/AutoExport/Life OS Health`. It canonicalizes legacy metric aliases, updates repeated daily aggregates rather than duplicating them, discards nested device/route metadata, and rejects metrics outside the allowlist. Run `lifeos health-scan` manually for the first real-file canary.
 
+Health ingestion accepts only regular, non-symlink, non-sparse files and checks
+the byte size before UTF-8 or JSON decoding. Limits are 16 MiB and 25,000
+records per file; 64 MiB, 50,000 records, 100 selected files, and 2,000
+discovered candidates per scan; depth 32; 250,000 JSON values; 100,000 entries
+in any container; 65,536 characters per string; and 8 MiB of string content per
+file. Rejected files are reported without partial persistence. Re-ingesting a
+valid v2 export retains the existing source-ID idempotency behavior.
+
 ## Autonomy contract
 
 Automatic from the start:
@@ -123,6 +131,20 @@ Never autonomous:
 - health writes or medical claims.
 
 Inbound Gmail, iMessage, documents, and web content are untrusted data and can never authorize a tool action.
+
+### Exact-action confirmation
+
+Confirmation-required actions use a durable, payload-bound, single-use grant.
+The digest covers the action ID, action type, recipient/target, and full request.
+Each grant expires after ten minutes if it has not been consumed.
+Run the action command once to obtain its proposal ID, then run `lifeos
+action-confirm <action-id>` in a human-operated terminal. The runtime displays
+the exact payload and requires the printed confirmation phrase. Re-run the
+original action command with the same arguments and idempotency key to execute.
+Non-interactive confirmation, an expired or changed payload, and replay after
+the grant is consumed all fail closed. The removed `--confirmed` flags and programmatic
+`confirmed=True` values are not approval mechanisms. Allowlisted automatic
+actions continue without a confirmation grant.
 
 ## Verification
 

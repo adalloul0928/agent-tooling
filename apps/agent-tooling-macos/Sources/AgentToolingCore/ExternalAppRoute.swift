@@ -6,7 +6,7 @@ import Foundation
 public enum ExternalAppRoute: Equatable, Sendable {
     case section(ExternalAppSection)
     case skill(String)
-    case skillCreationRequest(UUID)
+    case pendingRequest(UUID)
 
     public init?(url: URL) {
         guard url.scheme?.lowercased() == "agent-tooling",
@@ -22,7 +22,7 @@ public enum ExternalAppRoute: Equatable, Sendable {
         switch (host, components) {
         case ("requests", let values) where values.count == 1:
             guard let id = UUID(uuidString: values[0]) else { return nil }
-            self = .skillCreationRequest(id)
+            self = .pendingRequest(id)
         case ("skills", let values) where values.count == 1:
             guard let id = try? WorkspaceLibrary.normalizedIdentifier(values[0]), id == values[0] else { return nil }
             self = .skill(id)

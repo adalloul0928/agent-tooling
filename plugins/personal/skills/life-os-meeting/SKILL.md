@@ -28,4 +28,4 @@ Read `../../runtime/references/workflow-contract.md` and use `../../runtime/temp
 
 ## Completion
 
-Write or update one meeting note at the configured canonical path, preserve source references, and report routed actions and unresolved ambiguities. Editing an existing meeting note requires Aren's explicit request for that exact meeting debrief; pass `--overwrite --confirmed` only when that request is present. Unrelated goals/plans remain protected.
+Write or update one meeting note at the configured canonical path, preserve source references, and report routed actions and unresolved ambiguities. Editing an existing meeting note requires its exact `lifeos obsidian-write --overwrite` proposal to be reviewed with `lifeos action-confirm <action-id>` in an interactive terminal; rerun the identical write command to consume the grant. Unrelated goals/plans remain protected.

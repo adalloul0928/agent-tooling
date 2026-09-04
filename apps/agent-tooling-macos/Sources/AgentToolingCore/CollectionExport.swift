@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// One item as it appears in an exported Collection: enough to recognise and
@@ -9,8 +10,8 @@ public struct ExportedToolingItem: Codable, Sendable, Equatable {
     public var summary: String
     public var scope: String
     public var tags: [String]
-    /// MCP servers only. The destination is redacted before it is written, so
-    /// user info and query strings never leave this Mac.
+    /// MCP servers only. Remote HTTP(S) identities are stripped of credentials;
+    /// local URLs and stdio command lines are omitted entirely.
     public var destination: String?
     public var transport: String?
     /// Names of the credentials the recipient must supply themselves. Never a
@@ -89,12 +90,15 @@ public struct CollectionExportDocument: Codable, Sendable, Equatable {
 enum CollectionExportError: LocalizedError, Sendable {
     case unknownCollection
     case credentialMaterialPresent
+    case localLocationPresent
 
     var errorDescription: String? {
         switch self {
         case .unknownCollection: "The selected collection is no longer available."
         case .credentialMaterialPresent:
             "The export was stopped because it still contained credential-like material. No file was written."
+        case .localLocationPresent:
+            "The export was stopped because it still contained a machine-local location. No file was written."
         }
     }
 }
@@ -127,11 +131,11 @@ public enum CollectionExporter {
                 items.append(
                     ExportedToolingItem(
                         kind: .skill,
-                        identifier: skill.id,
-                        name: redacted(skill.displayName.isEmpty ? skill.name : skill.displayName),
-                        summary: redacted(skill.summary),
-                        scope: redacted(skill.scope),
-                        tags: itemTags
+                        identifier: portableText(skill.id),
+                        name: portableText(skill.displayName.isEmpty ? skill.name : skill.displayName),
+                        summary: portableText(skill.summary),
+                        scope: portableText(skill.scope),
+                        tags: itemTags.map(portableText)
                     ))
             case .plugin:
                 guard let plugin = plugins.first(where: { $0.id == reference.identifier }) else {
@@ -141,12 +145,12 @@ public enum CollectionExporter {
                 items.append(
                     ExportedToolingItem(
                         kind: .plugin,
-                        identifier: plugin.id,
-                        name: redacted(plugin.name),
-                        summary: redacted(plugin.summary),
-                        scope: redacted(plugin.scope),
-                        tags: itemTags,
-                        source: redacted(plugin.source)
+                        identifier: portableText(plugin.id),
+                        name: portableText(plugin.name),
+                        summary: portableText(plugin.summary),
+                        scope: portableText(plugin.scope),
+                        tags: itemTags.map(portableText),
+                        source: sanitizedSource(plugin.source)
                     ))
             case .mcpServer:
                 guard let server = mcpServers.first(where: { $0.id == reference.identifier }) else {
@@ -156,24 +160,26 @@ public enum CollectionExporter {
                 items.append(
                     ExportedToolingItem(
                         kind: .mcpServer,
-                        identifier: server.id,
-                        name: redacted(server.name),
-                        summary: redacted(server.summary),
-                        scope: redacted(server.scope),
-                        tags: itemTags,
-                        destination: sanitizedDestination(server.endpoint),
+                        identifier: portableText(server.id),
+                        name: portableText(server.name),
+                        summary: portableText(server.summary),
+                        scope: portableText(server.scope),
+                        tags: itemTags.map(portableText),
+                        destination: sanitizedDestination(server.endpoint, transport: server.transport),
                         transport: server.transport.rawValue,
-                        requiredCredentialNames: server.secretNames.map(redacted).sorted()
+                        requiredCredentialNames: server.secretNames.map(portableText).sorted()
                     ))
             }
         }
 
         return CollectionExportDocument(
             exportedAt: exportedAt,
-            name: redacted(collection.name),
-            summary: redacted(collection.summary),
+            name: portableText(collection.name),
+            summary: portableText(collection.summary),
             items: items,
-            unresolvedItems: unresolved
+            unresolvedItems: unresolved.map {
+                ToolingItemReference(kind: $0.kind, identifier: portableText($0.identifier))
+            }
         )
     }
 
@@ -196,34 +202,149 @@ public enum CollectionExporter {
         guard SensitiveValueRedactor.redact(text) == text else {
             throw CollectionExportError.credentialMaterialPresent
         }
+        guard !containsLocalLocation(in: text) else {
+            throw CollectionExportError.localLocationPresent
+        }
         return data
     }
 
     /// A stable, Finder-friendly file name derived from the collection name.
     public static func suggestedFileName(for collection: ToolingCollection) -> String {
-        let base = (try? WorkspaceLibrary.normalizedIdentifier(collection.name)) ?? collection.id
+        let portableName = portableText(collection.name)
+        let portableID = portableText(collection.id)
+        let base = (try? WorkspaceLibrary.normalizedIdentifier(portableName)) ?? portableID
         return "\(base)-collection.\(fileExtension)"
     }
 
-    private static func redacted(_ value: String) -> String {
-        SensitiveValueRedactor.redact(value)
+    private static func portableText(_ value: String) -> String {
+        var result = SensitiveValueRedactor.redact(value)
+        for pattern in localLocationPatterns {
+            result = result.replacingOccurrences(
+                of: pattern,
+                with: "$1[local location omitted]",
+                options: [.regularExpression, .caseInsensitive]
+            )
+        }
+        return result
     }
 
-    /// A web destination is stripped structurally rather than pattern-matched:
-    /// user info, query and fragment are dropped outright, because a shared
-    /// shelf needs to say *where* a server lives and nothing more. Anything
-    /// that is not a web URL — a stdio command line — falls back to redaction.
-    private static func sanitizedDestination(_ value: String) -> String {
+    private static func sanitizedSource(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let components = URLComponents(string: trimmed), components.scheme != nil {
+            return sanitizedRemoteURL(trimmed)
+        }
+        // Local inventory labels and relative folders are not useful to a
+        // recipient. Preserve only a portable marketplace-style identity.
+        guard
+            trimmed.range(
+                of: #"^[A-Z0-9][A-Z0-9._-]*(?:@[A-Z0-9][A-Z0-9._-]*)?$"#,
+                options: [.regularExpression, .caseInsensitive]
+            ) != nil
+        else { return nil }
+        return portableText(trimmed)
+    }
+
+    private static func sanitizedDestination(_ value: String, transport: MCPTransport) -> String? {
+        guard transport == .http else {
+            // A stdio endpoint is an executable plus arbitrary argv. Even a
+            // seemingly portable command can carry a project or config path.
+            return nil
+        }
+        return sanitizedRemoteURL(value)
+    }
+
+    /// Preserve only a public HTTP(S) identity. Loopback, private, single-label,
+    /// file and other local destinations are meaningful only on this Mac.
+    private static func sanitizedRemoteURL(_ value: String) -> String? {
         guard var components = URLComponents(string: value),
             let scheme = components.scheme?.lowercased(),
-            ["http", "https"].contains(scheme)
+            ["http", "https"].contains(scheme),
+            let host = components.host?.lowercased(),
+            !isLocalHost(host)
         else {
-            return redacted(value)
+            return nil
         }
         components.user = nil
         components.password = nil
         components.query = nil
         components.fragment = nil
-        return components.string ?? redacted(value)
+        return components.string.map(portableText)
     }
+
+    private static func isLocalHost(_ host: String) -> Bool {
+        var normalized = host.lowercased()
+        if normalized.hasPrefix("[") && normalized.hasSuffix("]") {
+            normalized.removeFirst()
+            normalized.removeLast()
+        }
+        normalized = normalized.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        if normalized == "localhost" {
+            return true
+        }
+        if [".localhost", ".local", ".lan", ".home", ".internal"].contains(where: normalized.hasSuffix) {
+            return true
+        }
+        if normalized.contains(":") {
+            var address = in6_addr()
+            guard normalized.withCString({ inet_pton(AF_INET6, $0, &address) }) == 1 else {
+                return true
+            }
+            let bytes = withUnsafeBytes(of: &address) { Array($0) }
+            let unspecified = bytes.allSatisfy { $0 == 0 }
+            let loopback = bytes.dropLast().allSatisfy { $0 == 0 } && bytes.last == 1
+            let uniqueLocal = bytes[0] & 0xfe == 0xfc
+            let linkOrSiteLocal = bytes[0] == 0xfe && bytes[1] & 0xc0 != 0
+            let multicast = bytes[0] == 0xff
+            if unspecified || loopback || uniqueLocal || linkOrSiteLocal || multicast {
+                return true
+            }
+            if bytes.prefix(10).allSatisfy({ $0 == 0 }) && bytes[10] == 0xff && bytes[11] == 0xff {
+                return isLocalIPv4(Array(bytes.suffix(4)))
+            }
+            return false
+        }
+        if !normalized.contains(".") {
+            return true
+        }
+        let labels = normalized.split(separator: ".")
+        let numericLabels = labels.compactMap { Int($0) }
+        if numericLabels.count == labels.count {
+            guard labels.count == 4,
+                labels.allSatisfy({ $0 == "0" || !$0.hasPrefix("0") }),
+                numericLabels.allSatisfy({ (0...255).contains($0) })
+            else { return true }
+            return isLocalIPv4(numericLabels)
+        }
+        return false
+    }
+
+    private static func isLocalIPv4(_ octets: [Int]) -> Bool {
+        octets[0] == 0 || octets[0] == 10 || octets[0] == 127
+            || (octets[0] == 169 && octets[1] == 254)
+            || (octets[0] == 172 && (16...31).contains(octets[1]))
+            || (octets[0] == 192 && octets[1] == 168)
+    }
+
+    private static func isLocalIPv4(_ octets: [UInt8]) -> Bool {
+        isLocalIPv4(octets.map(Int.init))
+    }
+
+    private static func containsLocalLocation(in value: String) -> Bool {
+        localLocationPatterns.contains {
+            value.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil
+        }
+    }
+
+    /// Capture group one preserves the delimiter while replacing the location.
+    /// Consume the remainder of the field, rather than stopping at whitespace:
+    /// local project and bundle names commonly contain spaces, and retaining a
+    /// suffix would still disclose part of the machine-local location.
+    private static let localLocationPatterns = [
+        #"(^|[\s\"'=:\[(])(?:~?/)(?!/)[^\r\n\"'<>]*"#,
+        #"(^|[\s\"'=:\[(])(?:\$HOME|\$\{HOME\})/[^\r\n\"'<>]*"#,
+        #"(^|[\s\"'=:\[(])(?:[A-Z]:\\)[^\r\n\"'<>]*"#,
+        #"(^|[\s\"'=:\[(])file://[^\r\n\"'<>]*"#,
+    ]
+
 }

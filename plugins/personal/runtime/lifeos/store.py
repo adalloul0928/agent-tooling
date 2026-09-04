@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import sqlite3
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -141,6 +142,13 @@ CREATE TABLE IF NOT EXISTS actions (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS action_confirmations (
+    action_id TEXT PRIMARY KEY REFERENCES actions(id) ON DELETE CASCADE,
+    payload_digest TEXT NOT NULL,
+    approved_at TEXT NOT NULL,
+    consumed_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS checkpoints (
     connector TEXT PRIMARY KEY,
     cursor TEXT,
@@ -179,6 +187,8 @@ CREATE INDEX IF NOT EXISTS connector_runs_connector_idx ON connector_runs(connec
 
 
 class Store:
+    confirmation_ttl = timedelta(minutes=10)
+
     def __init__(self, path: Path):
         self.path = path
 
@@ -199,10 +209,10 @@ class Store:
         with self.connect() as connection:
             connection.executescript(SCHEMA)
             existing = connection.execute("SELECT version FROM schema_meta ORDER BY version DESC LIMIT 1").fetchone()
-            if existing is None:
+            if existing is None or int(existing["version"]) < 2:
                 connection.execute(
                     "INSERT INTO schema_meta(version, applied_at) VALUES (?, ?)",
-                    (1, utcnow()),
+                    (2, utcnow()),
                 )
 
     def record_event(self, event: dict[str, Any]) -> dict[str, Any]:
@@ -402,26 +412,134 @@ class Store:
                 values,
             )
             row = connection.execute("SELECT * FROM actions WHERE idempotency_key=?", (key,)).fetchone()
+            if (
+                row["id"] != action_id
+                or row["action_type"] != action["action_type"]
+                or row["target"] != action.get("target")
+                or json.loads(row["request_json"]) != action.get("request", {})
+            ):
+                raise PermissionError("idempotency key already belongs to a different action payload")
         return self._row(row)
 
-    def confirm_action(self, action_id: str) -> dict[str, Any]:
+    @staticmethod
+    def action_payload_digest(action: dict[str, Any] | sqlite3.Row) -> str:
+        """Bind approval to the exact action identity, recipient, and content."""
+        if isinstance(action, sqlite3.Row):
+            request = json.loads(action["request_json"])
+            action_id = action["id"]
+            action_type = action["action_type"]
+            target = action["target"]
+        else:
+            request = action.get("request", {})
+            action_id = action["id"]
+            action_type = action["action_type"]
+            target = action.get("target")
+        material = json.dumps(
+            {
+                "action_id": action_id,
+                "action_type": action_type,
+                "target": target,
+                "request": request,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _confirmation_is_current(cls, grant: sqlite3.Row, now: datetime) -> bool:
+        try:
+            approved_at = datetime.fromisoformat(grant["approved_at"])
+        except (IndexError, TypeError, ValueError):
+            return False
+        if approved_at.tzinfo is None:
+            return False
+        age = now - approved_at.astimezone(UTC)
+        return timedelta(0) <= age <= cls.confirmation_ttl
+
+    def confirm_action(self, action_id: str, *, expected_payload_digest: str) -> dict[str, Any]:
+        """Persist an exact-payload approval produced by the interactive CLI."""
         now = utcnow()
+        now_instant = datetime.fromisoformat(now)
         with self.connect() as connection:
             row = connection.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone()
             if row is None:
                 raise KeyError(action_id)
             if row["policy_decision"] == "never":
                 raise PermissionError("policy-denied actions cannot be confirmed")
-            if row["status"] == "confirmed":
-                return self._row(row)
-            if row["status"] not in {"proposed", "failed"}:
+            if row["policy_decision"] == "automatic":
+                raise PermissionError("automatic actions do not accept confirmation grants")
+            if row["status"] not in {"proposed", "confirmed", "failed"}:
                 raise PermissionError(f"cannot confirm an action in {row['status']} state")
+            actual_digest = self.action_payload_digest(row)
+            if not hmac.compare_digest(actual_digest, expected_payload_digest):
+                raise PermissionError("action payload changed after review")
+            existing_grant = connection.execute(
+                "SELECT payload_digest, approved_at, consumed_at FROM action_confirmations WHERE action_id=?",
+                (action_id,),
+            ).fetchone()
+            if row["status"] == "confirmed" and existing_grant is not None:
+                if not hmac.compare_digest(existing_grant["payload_digest"], actual_digest):
+                    raise PermissionError("confirmation does not match the current action payload")
+                if existing_grant["consumed_at"] is not None:
+                    raise PermissionError("confirmation grant has already been used")
+                if self._confirmation_is_current(existing_grant, now_instant):
+                    return self._row(row)
             connection.execute(
                 "UPDATE actions SET status='confirmed', confirmed_at=?, updated_at=? WHERE id=?",
                 (now, now, action_id),
             )
+            connection.execute(
+                """
+                INSERT INTO action_confirmations(action_id, payload_digest, approved_at, consumed_at)
+                VALUES (?, ?, ?, NULL)
+                ON CONFLICT(action_id) DO UPDATE SET
+                    payload_digest=excluded.payload_digest,
+                    approved_at=excluded.approved_at,
+                    consumed_at=NULL
+                """,
+                (action_id, actual_digest, now),
+            )
             row = connection.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone()
         return self._row(row)
+
+    def consume_action_confirmation(self, action_id: str, *, expected_payload_digest: str) -> dict[str, Any]:
+        """Atomically consume one exact-payload grant immediately before execution."""
+        now = utcnow()
+        now_instant = datetime.fromisoformat(now)
+        with self.connect() as connection:
+            action = connection.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone()
+            if action is None:
+                raise KeyError(action_id)
+            actual_digest = self.action_payload_digest(action)
+            if not hmac.compare_digest(actual_digest, expected_payload_digest):
+                raise PermissionError("action payload changed after confirmation")
+            if action["policy_decision"] == "automatic":
+                if action["status"] != "confirmed":
+                    raise PermissionError("automatic action is not executable")
+                return self._row(action)
+            if action["policy_decision"] != "confirm" or action["status"] != "confirmed":
+                raise PermissionError("action requires an exact interactive confirmation")
+            grant = connection.execute(
+                "SELECT payload_digest, approved_at, consumed_at FROM action_confirmations WHERE action_id=?",
+                (action_id,),
+            ).fetchone()
+            if grant is None:
+                raise PermissionError("action has no confirmation grant")
+            if not hmac.compare_digest(grant["payload_digest"], actual_digest):
+                raise PermissionError("confirmation does not match the current action payload")
+            if grant["consumed_at"] is not None:
+                raise PermissionError("confirmation grant has already been used")
+            if not self._confirmation_is_current(grant, now_instant):
+                raise PermissionError("confirmation grant expired; review the exact action again")
+            updated = connection.execute(
+                "UPDATE action_confirmations SET consumed_at=? WHERE action_id=? AND consumed_at IS NULL",
+                (now, action_id),
+            )
+            if updated.rowcount != 1:
+                raise PermissionError("confirmation grant has already been used")
+        return self.get_action(action_id)
 
     def finish_action(
         self,

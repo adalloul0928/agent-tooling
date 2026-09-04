@@ -8,6 +8,9 @@ final class AppNavigationState {
     private(set) var requestedSection: AppSection?
     private(set) var requestedSkillID: String?
     private(set) var requestedMarketplacePackageID: String?
+    private(set) var selectedClient: ClientKind?
+    private var pendingRequestQueue: [UUID] = []
+    var requestedPendingRequestID: UUID? { pendingRequestQueue.first }
     private var skillCreationQueue: [UUID] = []
     var requestedSkillCreationID: UUID? { skillCreationQueue.first }
     private(set) var revision = 0
@@ -23,20 +26,24 @@ final class AppNavigationState {
         switch route {
         case .section(let section):
             requestedSection = AppSection(section)
+            if requestedSection == .syncCenter {
+                selectedClient = nil
+            }
             requestedSkillID = nil
             requestedMarketplacePackageID = nil
+            pendingRequestQueue.removeAll()
             skillCreationQueue.removeAll()
         case .skill(let id):
             requestedSection = .skills
             requestedSkillID = id
             requestedMarketplacePackageID = nil
+            pendingRequestQueue.removeAll()
             skillCreationQueue.removeAll()
-        case .skillCreationRequest(let id):
-            requestedSection = .skills
+        case .pendingRequest(let id):
             requestedSkillID = nil
             requestedMarketplacePackageID = nil
-            if !skillCreationQueue.contains(id) {
-                skillCreationQueue.append(id)
+            if !pendingRequestQueue.contains(id) {
+                pendingRequestQueue.append(id)
             }
         }
         revision += 1
@@ -47,8 +54,41 @@ final class AppNavigationState {
         requestedSection = .marketplace
         requestedSkillID = nil
         requestedMarketplacePackageID = id
+        pendingRequestQueue.removeAll()
+        revision += 1
+    }
+
+    /// Opens the client-facing pane with one durable, exact client scope.
+    /// The scope survives navigation until the user explicitly returns to all
+    /// clients, while the section request itself remains one-shot.
+    func openClient(_ client: ClientKind) {
+        selectedClient = client
+        requestedSection = .syncCenter
+        requestedSkillID = nil
+        requestedMarketplacePackageID = nil
+        pendingRequestQueue.removeAll()
         skillCreationQueue.removeAll()
         revision += 1
+    }
+
+    func showAllClients() {
+        selectedClient = nil
+        requestedSection = .syncCenter
+        requestedSkillID = nil
+        requestedMarketplacePackageID = nil
+        pendingRequestQueue.removeAll()
+        skillCreationQueue.removeAll()
+        revision += 1
+    }
+
+    func consumeRequestedSection(_ section: AppSection) {
+        guard requestedSection == section else { return }
+        requestedSection = nil
+    }
+
+    func consumeMarketplacePackage(_ id: String) {
+        guard requestedMarketplacePackageID == id else { return }
+        requestedMarketplacePackageID = nil
     }
 
     /// Makes a search-only recommendation available for Marketplace review.
@@ -66,6 +106,19 @@ final class AppNavigationState {
             return
         }
         openMarketplacePackage(packageID)
+    }
+
+    func consumePendingRequest(_ id: UUID) {
+        guard pendingRequestQueue.first == id else { return }
+        pendingRequestQueue.removeFirst()
+    }
+
+    func openSkillCreationRequest(_ id: UUID) {
+        requestedSection = .skills
+        requestedSkillID = nil
+        requestedMarketplacePackageID = nil
+        if !skillCreationQueue.contains(id) { skillCreationQueue.append(id) }
+        revision += 1
     }
 
     func consumeSkillCreationRequest(_ id: UUID) {

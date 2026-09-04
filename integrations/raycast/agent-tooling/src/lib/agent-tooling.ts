@@ -1,13 +1,11 @@
 import {
   Application,
+  environment,
   getApplications,
   getPreferenceValues,
   open,
 } from "@raycast/api";
 import { spawn } from "node:child_process";
-import { constants as fsConstants } from "node:fs";
-import { access, lstat, realpath } from "node:fs/promises";
-import path from "node:path";
 import {
   CreateSkillDraftInput,
   decodeDoctorResponse,
@@ -18,19 +16,25 @@ import {
   RequestReference,
   SearchResponse,
 } from "./contracts";
-import { isPathInside, normalizeFilePreference } from "./paths";
+import {
+  AGENT_TOOLING_BUNDLE_ID,
+  developmentHelperOverrideAllowed,
+  validateDevelopmentHelper,
+  validatePackagedInstallation,
+} from "./installation-security";
+import { normalizeFilePreference } from "./paths";
 import { redactMessage } from "./redaction";
 import { AgentToolingRoute, routeURL } from "./routes";
 
 export type { AgentToolingRoute } from "./routes";
 export { routeURL } from "./routes";
 
-export const AGENT_TOOLING_BUNDLE_ID = "com.arendalloul.agent-tooling";
-const CLI_RELATIVE_PATH = path.join("Contents", "Helpers", "agent-tooling");
+export { AGENT_TOOLING_BUNDLE_ID } from "./installation-security";
 const MAX_ERROR_BYTES = 65_536;
 
 interface ExtensionPreferences {
   cliPath?: unknown;
+  allowDevelopmentHelperOverride?: unknown;
 }
 
 interface RunOptions {
@@ -49,6 +53,7 @@ interface ProcessOutput {
 
 export type AgentToolingFailureCode =
   | "app-not-found"
+  | "app-invalid"
   | "helper-not-found"
   | "helper-invalid"
   | "command-failed"
@@ -149,61 +154,68 @@ async function runAgentTooling(
 }
 
 export async function findAgentToolingApplication(): Promise<Application> {
+  return (await findVerifiedAgentToolingApplication()).application;
+}
+
+async function findVerifiedAgentToolingApplication(): Promise<{
+  application: Application;
+  helperPath: string;
+}> {
   const applications = (await getApplications()).filter(
     (application) => application.bundleId === AGENT_TOOLING_BUNDLE_ID,
   );
-  const app = applications.sort(
-    (left, right) => applicationPreference(left) - applicationPreference(right),
-  )[0];
-  if (!app) {
+  if (applications.length === 0) {
     throw new AgentToolingFailure(
       "app-not-found",
       "Agent Tooling is not installed. Install the desktop app before using this extension.",
     );
   }
-  return app;
+  const candidates = applications.sort(
+    (left, right) => applicationPreference(left) - applicationPreference(right),
+  );
+  for (const application of candidates) {
+    try {
+      const installation = await validatePackagedInstallation(application.path);
+      return {
+        application: { ...application, path: installation.appPath },
+        helperPath: installation.helperPath,
+      };
+    } catch {
+      continue;
+    }
+  }
+  throw new AgentToolingFailure(
+    "app-invalid",
+    "No installed Agent Tooling app has the expected Developer ID signature. Update or reinstall the app.",
+  );
 }
 
 async function resolveCLIPath(): Promise<string> {
   const preferences = getPreferenceValues<ExtensionPreferences>();
   const override = normalizeFilePreference(preferences.cliPath);
-  if (override) return await validateExecutable(override, undefined);
-
-  const app = await findAgentToolingApplication();
-  return await validateExecutable(
-    path.join(app.path, CLI_RELATIVE_PATH),
-    app.path,
-  );
-}
-
-async function validateExecutable(
-  candidatePath: string,
-  containingAppPath: string | undefined,
-): Promise<string> {
-  let resolvedPath: string;
-  try {
-    resolvedPath = await realpath(candidatePath);
-    const metadata = await lstat(resolvedPath);
-    if (!metadata.isFile()) throw new Error("not a regular file");
-    await access(resolvedPath, fsConstants.X_OK);
-  } catch {
-    const code = containingAppPath ? "helper-not-found" : "helper-invalid";
-    const message = containingAppPath
-      ? "The installed Agent Tooling app does not include its CLI helper. Update or reinstall the app."
-      : "The configured CLI helper is missing or is not executable.";
-    throw new AgentToolingFailure(code, message);
-  }
-
-  if (containingAppPath) {
-    const resolvedAppPath = await realpath(containingAppPath);
-    if (!isPathInside(resolvedAppPath, resolvedPath)) {
+  if (override) {
+    if (
+      !developmentHelperOverrideAllowed(
+        environment.isDevelopment,
+        preferences.allowDevelopmentHelperOverride,
+      )
+    ) {
       throw new AgentToolingFailure(
         "helper-invalid",
-        "The Agent Tooling helper resolves outside the signed app bundle.",
+        "The CLI helper override is available only in Raycast development mode after explicit opt-in.",
+      );
+    }
+    try {
+      return await validateDevelopmentHelper(override);
+    } catch {
+      throw new AgentToolingFailure(
+        "helper-invalid",
+        "The configured development CLI helper is missing or is not executable.",
       );
     }
   }
-  return resolvedPath;
+
+  return (await findVerifiedAgentToolingApplication()).helperPath;
 }
 
 function runExecutable(

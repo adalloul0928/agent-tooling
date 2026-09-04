@@ -31,4 +31,4 @@ Write one Obsidian decision note at the configured canonical path and record the
 
 ## Revisit
 
-Compare expected and actual outcomes, identify which assumptions held, and capture a reusable lesson. Judge process quality separately from outcome luck. Update the same note only after Aren confirms the exact edit; pass `--overwrite --confirmed` to the runtime after that confirmation. Update the normalized decision using its existing ID; do not create a parallel retrospective.
+Compare expected and actual outcomes, identify which assumptions held, and capture a reusable lesson. Judge process quality separately from outcome luck. To update the same note, first run `lifeos obsidian-write --overwrite` to create the exact proposal, ask Aren to review it with `lifeos action-confirm <action-id>` in an interactive terminal, then rerun the same write command so the single-use grant is consumed. Update the normalized decision using its existing ID; do not create a parallel retrospective.
