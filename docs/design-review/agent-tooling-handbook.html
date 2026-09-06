@@ -1,0 +1,1063 @@
+<title>Agent Tooling Handbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&display=swap">
+<style>
+:root {
+  --ground: #F7F8FB;
+  --surface: #FFFFFF;
+  --surface-2: #F1F3F8;
+  --ink: #12141C;
+  --muted: #5A6072;
+  --faint: #868DA0;
+  --line: rgba(18, 20, 28, 0.11);
+  --line-soft: rgba(18, 20, 28, 0.06);
+  --link: #0A5FCB;
+  --ok: #1E8A42;
+  --warn: #A96A00;
+  --err: #C33A30;
+  --ok-bg: rgba(46, 164, 79, 0.10);
+  --warn-bg: rgba(219, 139, 0, 0.12);
+  --err-bg: rgba(222, 74, 63, 0.10);
+  --code-bg: #F1F3F8;
+  --shadow: 0 1px 2px rgba(16, 20, 32, 0.05), 0 8px 24px rgba(16, 20, 32, 0.05);
+  --skill-a: #FF8A1F; --skill-b: #FFA34D;
+  --plugin-a: #B457F0; --plugin-b: #C77DFF;
+  --mcp-a: #22A6C9; --mcp-b: #4CC4E3;
+  --profile-a: #5E5CE6; --profile-b: #7D7BFF;
+  --graphite-a: #4A5068; --graphite-b: #6B7288;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #14161E;
+    --surface: #1E212B;
+    --surface-2: #232733;
+    --ink: #EEF1F7;
+    --muted: #9AA2B6;
+    --faint: #7C8397;
+    --line: rgba(255, 255, 255, 0.11);
+    --line-soft: rgba(255, 255, 255, 0.06);
+    --link: #6FA8FF;
+    --ok: #3BD160;
+    --warn: #FFB224;
+    --err: #FF6A62;
+    --ok-bg: rgba(59, 209, 96, 0.12);
+    --warn-bg: rgba(255, 178, 36, 0.13);
+    --err-bg: rgba(255, 106, 98, 0.12);
+    --code-bg: #171A23;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.28);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #14161E;
+  --surface: #1E212B;
+  --surface-2: #232733;
+  --ink: #EEF1F7;
+  --muted: #9AA2B6;
+  --faint: #7C8397;
+  --line: rgba(255, 255, 255, 0.11);
+  --line-soft: rgba(255, 255, 255, 0.06);
+  --link: #6FA8FF;
+  --ok: #3BD160;
+  --warn: #FFB224;
+  --err: #FF6A62;
+  --ok-bg: rgba(59, 209, 96, 0.12);
+  --warn-bg: rgba(255, 178, 36, 0.13);
+  --err-bg: rgba(255, 106, 98, 0.12);
+  --code-bg: #171A23;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.28);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 0 24px 96px;
+}
+@media (min-width: 1020px) {
+  .page { grid-template-columns: 244px minmax(0, 1fr); gap: 56px; padding-right: 40px; }
+}
+
+.masthead {
+  grid-column: 1 / -1;
+  padding: 64px 0 34px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 40px;
+}
+.eyebrow {
+  font-family: "Familjen Grotesk", -apple-system, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0 0 14px;
+}
+h1 {
+  font-family: "Familjen Grotesk", -apple-system, sans-serif;
+  font-weight: 700;
+  font-size: clamp(34px, 5.4vw, 52px);
+  line-height: 1.05;
+  letter-spacing: -0.022em;
+  margin: 0 0 16px;
+  text-wrap: balance;
+}
+.standfirst { font-size: 18px; color: var(--muted); max-width: 62ch; margin: 0; }
+.masthead-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 13px 5px 9px; font-size: 13px; color: var(--muted); box-shadow: var(--shadow);
+}
+.chip svg { flex: none; }
+
+.toc { display: none; }
+@media (min-width: 1020px) {
+  .toc {
+    display: block; position: sticky; top: 32px; align-self: start;
+    max-height: calc(100vh - 64px); overflow-y: auto; padding-bottom: 32px;
+  }
+}
+.toc h2 {
+  font-family: "Familjen Grotesk", -apple-system, sans-serif;
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--faint); margin: 0 0 12px; font-weight: 600;
+}
+.toc ol { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.toc a {
+  display: block; color: var(--muted); text-decoration: none; font-size: 13.5px; line-height: 1.4;
+  padding: 5px 10px; border-radius: 7px;
+}
+.toc a:hover { color: var(--ink); background: var(--surface); }
+
+main { min-width: 0; max-width: 76ch; }
+section { margin: 0 0 52px; scroll-margin-top: 28px; }
+
+.sec-head { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; }
+h2 {
+  font-family: "Familjen Grotesk", -apple-system, sans-serif;
+  font-weight: 600; font-size: 26px; letter-spacing: -0.014em; margin: 0; text-wrap: balance;
+}
+h3 {
+  font-family: "Familjen Grotesk", -apple-system, sans-serif;
+  font-weight: 600; font-size: 17px; letter-spacing: -0.005em; margin: 30px 0 6px;
+}
+h4 { font-size: 15px; font-weight: 650; margin: 20px 0 4px; }
+p { margin: 0 0 14px; }
+p.lede { color: var(--muted); margin-bottom: 22px; }
+a { color: var(--link); text-underline-offset: 2px; }
+
+ul, ol.steps { margin: 0 0 16px; padding-left: 22px; }
+li { margin: 0 0 7px; }
+ol.steps { counter-reset: step; list-style: none; padding-left: 0; }
+ol.steps > li { position: relative; padding-left: 38px; margin-bottom: 13px; }
+ol.steps > li::before {
+  counter-increment: step; content: counter(step);
+  position: absolute; left: 0; top: 1px; width: 24px; height: 24px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--muted);
+  font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600;
+  display: grid; place-items: center;
+}
+
+code {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em; background: var(--code-bg);
+  border: 1px solid var(--line-soft); border-radius: 5px; padding: 1px 5px;
+}
+pre {
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 16px; overflow-x: auto; margin: 0 0 18px;
+}
+pre code { background: none; border: 0; padding: 0; font-size: 13px; line-height: 1.6; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px 20px; box-shadow: var(--shadow); margin: 0 0 18px;
+}
+.card h3, .card h4 { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+
+.note {
+  border-left: 3px solid var(--line); padding: 2px 0 2px 16px; margin: 0 0 18px;
+  color: var(--muted); font-size: 15px;
+}
+.note strong { color: var(--ink); }
+.note.warn { border-left-color: var(--warn); }
+.note.safe { border-left-color: var(--ok); }
+
+.table-wrap { overflow-x: auto; margin: 0 0 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: "Familjen Grotesk", -apple-system, sans-serif;
+  font-weight: 600; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--faint); white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: 0; }
+tbody th { color: var(--ink); text-transform: none; letter-spacing: 0; font-size: 14px; white-space: normal; }
+td code { white-space: nowrap; }
+td.no { color: var(--faint); }
+.kbd { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace; font-size: 13px; white-space: nowrap; }
+
+.tile { flex: none; border-radius: 7px; display: grid; place-items: center; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px 22px; margin: 4px 0 20px; }
+.legend div { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--muted); }
+
+.verdict { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; padding: 2px 9px; border-radius: 999px; }
+.verdict.ok { color: var(--ok); background: var(--ok-bg); }
+.verdict.warn { color: var(--warn); background: var(--warn-bg); }
+.verdict.err { color: var(--err); background: var(--err-bg); }
+
+figure { margin: 0 0 22px; }
+figure svg { display: block; width: 100%; height: auto; }
+figcaption { font-size: 13.5px; color: var(--faint); margin-top: 10px; }
+
+footer {
+  grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 22px; margin-top: 12px;
+  color: var(--faint); font-size: 13.5px;
+}
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 4px; }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">macOS control center</p>
+    <h1>Agent Tooling Handbook</h1>
+    <p class="standfirst">Agent Tooling keeps one local library of skills, plugins, MCP servers, and desired-state
+      configurations, then installs them into Claude Code, Codex, and Gemini CLI. Nothing reaches a client until you
+      approve the exact plan.</p>
+    <div class="masthead-meta">
+      <span class="chip">
+        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 8.2l2 2 4-4.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Local-first: no account, no server
+      </span>
+      <span class="chip">
+        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l5.5 2.2v4c0 3.2-2.3 5.6-5.5 6.8-3.2-1.2-5.5-3.6-5.5-6.8v-4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        Every change is reviewed first
+      </span>
+      <span class="chip">
+        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5h12" stroke="currentColor" stroke-width="1.4"/></svg>
+        Three CLIs, one library
+      </span>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="Contents">
+    <h2>Getting oriented</h2>
+    <ol>
+      <li><a href="#model">The mental model</a></li>
+      <li><a href="#start">Setup</a></li>
+      <li><a href="#coverage">What it covers</a></li>
+      <li><a href="#buttons">Check vs. Review</a></li>
+      <li><a href="#screens">The eleven screens</a></li>
+    </ol>
+    <h2>Doing the work</h2>
+    <ol>
+      <li><a href="#skill">Create a skill with Codex</a></li>
+      <li><a href="#mcp">Add an MCP server</a></li>
+      <li><a href="#market">Marketplace</a></li>
+      <li><a href="#scope">Project-level scope</a></li>
+      <li><a href="#config">Configurations</a></li>
+      <li><a href="#sync">Sync and receipts</a></li>
+      <li><a href="#insights">Insights</a></li>
+    </ol>
+    <h2>Beyond one Mac</h2>
+    <ol>
+      <li><a href="#multi">Multiple computers</a></li>
+      <li><a href="#accounts">Connectors and accounts</a></li>
+      <li><a href="#safety">What keeps it safe</a></li>
+      <li><a href="#cli">Command line and Raycast</a></li>
+      <li><a href="#shortcuts">Keyboard shortcuts</a></li>
+      <li><a href="#edge">Edge cases</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- ============================== MODEL ============================== -->
+    <section id="model">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="9" width="3" height="5" rx="1" fill="#fff"/><rect x="6.5" y="5" width="3" height="9" rx="1" fill="#fff"/><rect x="11" y="2" width="3" height="12" rx="1" fill="#fff"/></svg>
+        </span>
+        <h2>The mental model</h2>
+      </div>
+      <p class="lede">Three things, left to right. Learn this and the whole app reads at a glance.</p>
+
+      <figure>
+        <svg viewBox="0 0 700 168" role="img" aria-label="Library feeds a configuration, which feeds Claude Code, Codex, and Gemini CLI.">
+          <defs>
+            <linearGradient id="gGraphite" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4A5068"/><stop offset="1" stop-color="#6B7288"/></linearGradient>
+            <linearGradient id="gProfile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5E5CE6"/><stop offset="1" stop-color="#7D7BFF"/></linearGradient>
+          </defs>
+          <rect x="8" y="52" width="52" height="52" rx="13" fill="url(#gGraphite)"/>
+          <rect x="20" y="76" width="6" height="14" rx="2" fill="#fff"/>
+          <rect x="30" y="68" width="6" height="22" rx="2" fill="#fff"/>
+          <rect x="40" y="62" width="6" height="28" rx="2" fill="#fff"/>
+          <text x="72" y="72" fill="currentColor" font-family="Familjen Grotesk, sans-serif" font-size="16" font-weight="600">Library</text>
+          <text x="72" y="92" fill="currentColor" opacity="0.6" font-size="13">Skills, plugins, MCP servers</text>
+          <path d="M232 78 H286" stroke="currentColor" stroke-opacity="0.28" stroke-width="1.5" fill="none"/>
+          <rect x="292" y="52" width="52" height="52" rx="13" fill="url(#gProfile)"/>
+          <path d="M304 68h28M304 78h28M304 88h28" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+          <circle cx="313" cy="68" r="3.6" fill="url(#gProfile)" stroke="#fff" stroke-width="2"/>
+          <circle cx="324" cy="78" r="3.6" fill="url(#gProfile)" stroke="#fff" stroke-width="2"/>
+          <circle cx="316" cy="88" r="3.6" fill="url(#gProfile)" stroke="#fff" stroke-width="2"/>
+          <text x="356" y="72" fill="currentColor" font-family="Familjen Grotesk, sans-serif" font-size="16" font-weight="600">Configuration</text>
+          <text x="356" y="92" fill="currentColor" opacity="0.6" font-size="13">Desired state</text>
+          <path d="M470 78 C512 78 512 30 548 30" stroke="currentColor" stroke-opacity="0.28" stroke-width="1.5" fill="none"/>
+          <path d="M470 78 H548" stroke="currentColor" stroke-opacity="0.28" stroke-width="1.5" fill="none"/>
+          <path d="M470 78 C512 78 512 126 548 126" stroke="currentColor" stroke-opacity="0.28" stroke-width="1.5" fill="none"/>
+          <circle cx="562" cy="30" r="5" fill="#D97757"/>
+          <text x="578" y="35" fill="currentColor" font-size="14">Claude Code</text>
+          <circle cx="562" cy="78" r="5" fill="currentColor" opacity="0.75"/>
+          <text x="578" y="83" fill="currentColor" font-size="14">Codex</text>
+          <circle cx="562" cy="126" r="5" fill="#7D7BFF"/>
+          <text x="578" y="131" fill="currentColor" font-size="14">Gemini CLI</text>
+        </svg>
+        <figcaption>The Overview screen draws this same path with your real counts. A dashed branch means that client needs attention.</figcaption>
+      </figure>
+
+      <p><strong>Library</strong> is everything Agent Tooling knows about: packages it manages for you, plus everything it
+        found already installed on this Mac. <strong>Configuration</strong> is the desired state you name and switch
+        between. <strong>Clients</strong> are the three command-line apps that actually run your tooling.</p>
+
+      <p>The app never writes to a client as a side effect. Every action that would change a client first produces a plan
+        you read and approve, and every executed plan leaves a receipt.</p>
+
+      <h3>The row grammar</h3>
+      <p>Almost every list uses the same four parts: a colored tile for what kind of thing it is, its name, one clause of
+        detail, and a verdict on the right. Colors are stable across the whole app.</p>
+      <div class="legend">
+        <div><span class="tile" style="width:20px;height:20px;background:linear-gradient(150deg,var(--skill-a),var(--skill-b))"></span> Skill</div>
+        <div><span class="tile" style="width:20px;height:20px;background:linear-gradient(150deg,var(--plugin-a),var(--plugin-b))"></span> Plugin</div>
+        <div><span class="tile" style="width:20px;height:20px;background:linear-gradient(150deg,var(--mcp-a),var(--mcp-b))"></span> MCP server</div>
+        <div><span class="tile" style="width:20px;height:20px;background:linear-gradient(150deg,var(--profile-a),var(--profile-b))"></span> Configuration</div>
+      </div>
+      <p>A tile at half strength means the item was discovered on this Mac but is not managed by Agent Tooling. Small
+        brand marks show which clients carry it; a dimmed mark means that client does not have it. File paths never
+        appear in a list — they live behind the ⓘ button in the detail pane.</p>
+
+      <h3>Managed vs. discovered</h3>
+      <p>This distinction runs through everything. A <strong>managed</strong> item was created or imported through
+        Agent Tooling, so its canonical source lives in the app's library and it can be installed, edited, backed up, and
+        carried to another Mac. A <strong>discovered</strong> item was found in a client's own folders. It is shown, searched,
+        and counted, but the app does not own it: it will not edit it, sync it, or include it in a backup.</p>
+    </section>
+
+    <!-- ============================== SETUP ============================== -->
+    <section id="start">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8m0 0l3-3m-3 3L5 7" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M3 12.5h10" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </span>
+        <h2>Setup</h2>
+      </div>
+      <p class="lede">Build the bundle once, then open it like any other Mac app.</p>
+
+      <h3>Requirements</h3>
+      <ul>
+        <li>macOS 26 or newer, with Xcode 27 and Swift 6.2 to build it</li>
+        <li>At least one of Claude Code, Codex, or Gemini CLI installed — the app is useful with one, and none is a valid state</li>
+        <li>No GitHub account, no remote, no sign-in of any kind</li>
+      </ul>
+
+      <pre><code>cd apps/agent-tooling-macos
+./scripts/package-app.sh
+open '.build/Agent Tooling.app'</code></pre>
+
+      <p>Pass a destination to install it properly, then it behaves like a normal application including
+        <em>Open at login</em>:</p>
+      <pre><code>./scripts/package-app.sh '/Applications/Agent Tooling.app'</code></pre>
+
+      <h3>What the first launch does</h3>
+      <p>It creates <code>~/Library/Application Support/Agent Tooling</code> containing a SQLite database, the managed
+        package <code>library/</code>, a <code>cache/</code>, and later an <code>exports/</code> folder for backups.
+        Then it runs one read-only scan and opens on Overview.</p>
+
+      <p>The scan reads configuration files and asks each installed CLI for its inventory. It writes nothing. These are the
+        exact places it looks:</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Client</th><th>Configuration read</th><th>Skills read from</th><th>Plugins read from</th></tr></thead>
+          <tbody>
+            <tr>
+              <th>Claude Code</th>
+              <td><code>~/.claude/settings.json</code><br><code>~/.claude.json</code></td>
+              <td><code>~/.claude/skills</code></td>
+              <td><code>~/.claude/plugins</code></td>
+            </tr>
+            <tr>
+              <th>Codex</th>
+              <td><code>~/.codex/config.toml</code></td>
+              <td><code>~/.agents/skills</code><br><code>~/.codex/skills</code></td>
+              <td><code>~/.codex/plugins</code></td>
+            </tr>
+            <tr>
+              <th>Gemini CLI</th>
+              <td><code>~/.gemini/settings.json</code><br><code>~/.gemini/settings.toml</code></td>
+              <td><code>~/.gemini/skills</code><br><code>~/.agents/skills</code><br><code>~/.gemini/extensions</code></td>
+              <td><code>~/.gemini/extensions</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Worth setting on day one</h3>
+      <ul>
+        <li><strong>Settings → General</strong>: keep <em>Check health automatically</em> on so each launch refreshes
+          reality; decide whether you want the menu bar item and Open at login.</li>
+        <li><strong>Configurations</strong>: the app starts with one called Local Library. Rename it or add a second one
+          before you start ticking required plugins and servers.</li>
+        <li><strong>Settings → Library &amp; Sync</strong>: if you already know you want a second Mac, set up encrypted
+          folder sync now and store the recovery key — see <a href="#multi">Multiple computers</a>.</li>
+      </ul>
+
+      <div class="note safe"><strong>Nothing is installed by setup.</strong> A fresh install shows everything you already
+        had, with zero managed items. The library fills up only when you create or import something.</div>
+    </section>
+
+    <!-- ============================== COVERAGE ============================== -->
+    <section id="coverage">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--mcp-a),var(--mcp-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="4" rx="1.3" fill="none" stroke="#fff" stroke-width="1.4"/><rect x="2" y="9" width="12" height="4" rx="1.3" fill="none" stroke="#fff" stroke-width="1.4"/><circle cx="4.6" cy="5" r="0.9" fill="#fff"/><circle cx="4.6" cy="11" r="0.9" fill="#fff"/></svg>
+        </span>
+        <h2>What it covers</h2>
+      </div>
+      <p class="lede">Three command-line clients are written to. Everything else in the ecosystem is either read-only
+        or recorded as a note to yourself.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Capability</th><th>Claude Code</th><th>Codex</th><th>Gemini CLI</th></tr></thead>
+          <tbody>
+            <tr><th>Install a managed skill</th><td>Yes — copies into <code>~/.claude/skills</code></td><td>Yes — <code>~/.agents/skills</code></td><td>Yes — <code>~/.gemini/skills</code></td></tr>
+            <tr><th>Add an MCP server</th><td>Yes — <code>claude mcp add</code>, user, project, or local scope</td><td>Yes — <code>codex mcp add</code>, user scope only</td><td>Yes — <code>gemini mcp add</code>, user or project scope</td></tr>
+            <tr><th>Remove an MCP server</th><td>Yes, per scope</td><td>Yes</td><td>Yes, per scope</td></tr>
+            <tr><th>Install or remove a plugin</th><td>Yes — <code>claude plugin install/uninstall</code> with its marketplace</td><td>Yes — <code>codex plugin add/remove</code></td><td class="no">No command; the gallery is a link you open yourself</td></tr>
+            <tr><th>Read its native catalog</th><td>Yes</td><td>Yes</td><td class="no">No documented API; not scraped</td></tr>
+            <tr><th>Project-scoped install</th><td>Yes</td><td>Skills yes; MCP is a manual step</td><td>Yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>What it does not touch</h3>
+      <p>Only those three CLIs have adapters. The following are deliberately outside the app's reach, and it will not
+        pretend otherwise:</p>
+      <ul>
+        <li><strong>Claude Desktop</strong> — not scanned, not configured. Its MCP configuration is separate from Claude
+          Code's, and Agent Tooling has no adapter for it. You can record a connection note against it, nothing more.</li>
+        <li><strong>ChatGPT desktop and ChatGPT web</strong> — same. Local Codex configuration is not inherited by
+          ChatGPT, which is exactly why the Accounts screen calls that out.</li>
+        <li><strong>Claude.ai, Gemini web, IDE extensions</strong> — account-level surfaces. They are listed so you can
+          record when you last checked them.</li>
+      </ul>
+
+      <div class="note warn"><strong>Why the line is drawn there.</strong> The three CLIs expose documented, scriptable
+        configuration on local disk. The desktop and web surfaces do not, so anything the app claimed about them would be
+        a guess. It records your own verification instead of inventing a status.</div>
+
+      <h3>What it manages, in its own library</h3>
+      <ul>
+        <li><strong>Skills</strong> — portable packages it can create with Codex, import from a folder or repository, install, edit, validate, back up, and carry to another Mac.</li>
+        <li><strong>MCP servers</strong> — definitions you write once and then configure per client with native commands.</li>
+        <li><strong>Plugins</strong> — observed everywhere; installed through each client's own plugin manager, never by copying files.</li>
+        <li><strong>Configurations</strong> — named desired state with inheritance.</li>
+        <li><strong>Catalog sources</strong> — Agent Plugins folders and Git checkouts you add, plus the official MCP Registry and each client's native catalog.</li>
+        <li><strong>Connections</strong> — metadata about who owns an authorization and where you verified it.</li>
+      </ul>
+    </section>
+
+    <!-- ============================== BUTTONS ============================== -->
+    <section id="buttons">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8a5 5 0 0 1 8.4-3.7M13 8a5 5 0 0 1-8.4 3.7" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M11.6 2.4v2.2H9.4M4.4 13.6v-2.2h2.2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <h2>Check vs. Review</h2>
+      </div>
+      <p class="lede">Two actions, four labels. One looks, the other proposes.</p>
+
+      <div class="card">
+        <h4>Check Now · Check Clients · Check Setup <span class="kbd">⇧⌘D</span></h4>
+        <p><span class="verdict ok">Reads only</span> Rescans all three clients, refreshes the skill, plugin, and MCP
+          inventories from what is actually on disk, and writes a <em>Setup check completed</em> receipt listing the
+          configuration files it inspected. It never changes a client. Run it after installing a CLI, after editing
+          something outside the app, or whenever a screen looks stale.</p>
+      </div>
+
+      <div class="card">
+        <h4>Review Sync · Review Changes · Sync Agent Tooling <span class="kbd">⇧⌘R</span></h4>
+        <p><span class="verdict warn">Proposes a change</span> Compares your managed skills against the clients each one
+          targets and builds a plan: one copy step per skill per client, plus a verification rescan. Nothing happens
+          until you press <em>Run N steps</em>. If there is nothing to sync it says so rather than inventing work.</p>
+      </div>
+
+      <p>Both appear on Overview with short labels and on the Sync screen with longer ones; the menu bar item carries
+        both too. The number on the Review Sync button is the attention count, not a queue: MCP servers needing setup,
+        plus failing checks in the current configuration, plus clients whose command was not found.</p>
+
+      <div class="note warn"><strong>Sync covers managed skills only.</strong> It does not push MCP servers or plugins.
+        MCP servers are configured per client from their own detail pane, and plugins install through Marketplace, because
+        both go through native commands rather than file copies.</div>
+    </section>
+
+    <!-- ============================== SCREENS ============================== -->
+    <section id="screens">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.4" fill="#fff"/><rect x="9" y="2" width="5" height="5" rx="1.4" fill="#fff"/><rect x="2" y="9" width="5" height="5" rx="1.4" fill="#fff"/><rect x="9" y="9" width="5" height="5" rx="1.4" fill="#fff"/></svg>
+        </span>
+        <h2>The eleven screens</h2>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Screen</th><th>What it answers</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Overview</strong></td><td>Is anything wrong, and what changed recently? Carries Check Now, Review Sync, and the configuration switcher.</td></tr>
+            <tr><td><strong>Insights</strong></td><td>What did I repeat lately, which skills go unused, and what would help next time?</td></tr>
+            <tr><td><strong>Marketplace</strong></td><td>What can I install, from which catalog, and is it reviewable?</td></tr>
+            <tr><td><strong>Skills</strong></td><td>Every skill on this Mac, managed or discovered, and which clients carry it.</td></tr>
+            <tr><td><strong>Plugins</strong></td><td>Installed plugins, the skills inside them, and which client has each one.</td></tr>
+            <tr><td><strong>MCP Servers</strong></td><td>Configured servers, their transport and scope, and which clients can use them.</td></tr>
+            <tr><td><strong>Configurations</strong></td><td>Named desired states, what each requires, and which one is current.</td></tr>
+            <tr><td><strong>Sync</strong></td><td>How the library compares with each client, item by item.</td></tr>
+            <tr><td><strong>Activity</strong></td><td>The receipt for every operation, with duration, affected paths, and the exact command.</td></tr>
+            <tr><td><strong>Accounts</strong></td><td>Which cloud authorizations exist and when you last verified them.</td></tr>
+            <tr><td><strong>Settings</strong></td><td>App detection, behavior, appearance, backup, encrypted sync, and policy.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Lists and detail panes are split. Selecting a row on the left fills the detail on the right; the detail is where
+        actions, paths, and verification live. Long lists page with a <em>Show more</em> control.</p>
+    </section>
+
+    <!-- ============================== SKILL ============================== -->
+    <section id="skill">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--skill-a),var(--skill-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h5l3.5 3.5V14H4z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 2v4h3.5" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        </span>
+        <h2>Create a skill with Codex</h2>
+      </div>
+      <p class="lede">New skill uses the Codex CLI you are already signed in to. Claude is never invoked as a generator,
+        and no API key is requested or stored.</p>
+
+      <ol class="steps">
+        <li>Open <strong>Skills</strong> and press <span class="kbd">⌘N</span>, or click <strong>New skill…</strong></li>
+        <li>Describe the workflow in plain language: what it should do, when it should be used, and any constraint it
+          must follow. A suggested name is offered and you can replace it.</li>
+        <li>Choose the install scope, This Mac or a project folder, and tick which clients should receive it later.</li>
+        <li>Click <strong>Generate draft</strong>. Codex runs in an isolated staging folder with your own configuration,
+          plugins, and hooks disabled.</li>
+        <li>Read every generated file. The Save button stays disabled until each one has been opened.</li>
+        <li>Click <strong>Save skill and review install</strong>. The package is written into the managed library and an
+          install plan opens.</li>
+        <li>Approve the plan, or cancel and install later from the skill's detail pane.</li>
+      </ol>
+
+      <p>Managed skills carry a <em>Managed by Agent Tooling</em> label, a definition-check count, and a
+        <strong>Reveal Source in Finder</strong> action. Skills you wrote by hand also get an <strong>Edit…</strong>
+        button that reopens the five-step editor: purpose, triggers, placement, bundled files, review. Codex-generated
+        packages deliberately omit that editor so their richer source is never flattened by a template.</p>
+    </section>
+
+    <!-- ============================== MCP ============================== -->
+    <section id="mcp">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--mcp-a),var(--mcp-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="4" rx="1.3" fill="none" stroke="#fff" stroke-width="1.4"/><rect x="2" y="9" width="12" height="4" rx="1.3" fill="none" stroke="#fff" stroke-width="1.4"/><circle cx="4.6" cy="5" r="0.9" fill="#fff"/><circle cx="4.6" cy="11" r="0.9" fill="#fff"/></svg>
+        </span>
+        <h2>Add an MCP server</h2>
+      </div>
+      <p class="lede">Two steps: the connection, then which clients get it.</p>
+
+      <ol class="steps">
+        <li>Open <strong>MCP Servers</strong> and click <strong>Add server…</strong></li>
+        <li>Name it in lowercase words separated by hyphens; the sheet rejects anything that would not make a valid
+          identifier and says so immediately.</li>
+        <li>Pick the transport, HTTP or stdio, then give the endpoint URL or the launch command.</li>
+        <li>Choose authentication and scope, then continue and switch on the clients you want.</li>
+        <li>Click <strong>Add server</strong>. Desired state is saved and a plan opens showing the exact native command
+          for each client.</li>
+        <li>Approve to run them, or cancel to keep the definition and configure a client later from the detail pane's
+          <strong>Set up…</strong> menu.</li>
+      </ol>
+
+      <p>Each client is configured independently, so one failure never rolls back another client's success. The
+        <strong>Remove…</strong> menu builds the matching removal command per client. Authentication is always a guided
+        manual step: the app records that a server needs it and points you at the owning product; it never copies a
+        token between clients.</p>
+
+      <div class="note warn"><strong>Configured is not authenticated.</strong> A green verdict means the server is present
+        in that client's configuration. Live tool health and OAuth are separate checks that belong to the server and the
+        client.</div>
+    </section>
+
+    <!-- ============================== MARKET ============================== -->
+    <section id="market">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--plugin-a),var(--plugin-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6.2L3.6 3h8.8l1.1 3.2" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><path d="M3 6.2h10v6.3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </span>
+        <h2>Marketplace</h2>
+      </div>
+      <p class="lede">Five catalogs ship by default and each publishes a different kind of thing. Add your own folder or
+        Git checkout for anything they do not carry.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Source</th><th>What it publishes</th><th>How it is read</th></tr></thead>
+          <tbody>
+            <tr><th>Claude marketplaces</th><td>Plugins</td><td>Claude Code's own catalog command</td></tr>
+            <tr><th>OpenAI plugin directory</th><td>Plugins</td><td>Codex's own catalog command</td></tr>
+            <tr><th>MCP Registry</th><td>MCP servers</td><td>The official registry's documented API</td></tr>
+            <tr><th>Gemini extensions</th><td>Nothing listed</td><td>A link to the native gallery; no documented API, and it is not scraped</td></tr>
+            <tr><th>Agent Plugins</th><td>Nothing by itself</td><td>The portable package format — it describes what an added folder should contain</td></tr>
+            <tr><th>Folders and Git checkouts you add</th><td>Skills, plugins, MCP servers</td><td>Inspected on disk when you refresh</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note warn"><strong>Why no skills appear in the built-in catalogs.</strong> None of them publishes
+        standalone skills: Claude and Codex catalogs list <em>plugins</em>, and the registry lists <em>MCP servers</em>. A
+        plugin may contain skills, but the catalog entry is still a plugin. Skills show up when you add a source that
+        actually contains them — an Agent Plugins folder or a checked-out repository with <code>skills/</code>
+        directories. Each source row shows its own breakdown, so you can see at a glance which one carries what.</div>
+
+      <h3>Narrowing the list</h3>
+      <p>Click a source to show only its packages; click it again, or the × on the filter chip, to go back to
+        everything. The two menus below the search field narrow by component — skills, plugins, MCP — and by app, so
+        <em>Claude Code</em> hides anything that has no Claude install route. When a combination has no results, the
+        empty state says which source and filter produced that, rather than looking like a failed fetch.</p>
+
+      <h3>Adding your own catalog</h3>
+      <ol class="steps">
+        <li>Clone the repository yourself, wherever you keep checkouts.</li>
+        <li><strong>Add source…</strong> and pick that folder. It is inspected immediately and its packages join the list.</li>
+        <li>Refresh whenever you want to re-read it.</li>
+      </ol>
+
+      <p>There is no background fetch. A Git-backed source is read from the working copy on disk, so to pick up upstream
+        changes you <code>git pull</code> it yourself and press Refresh. That is a deliberate boundary: the app's entire
+        Git vocabulary is <code>init</code> and <code>status</code> inside its own backup folder, so it never runs a
+        network Git operation on your behalf or executes code from a remote you have not looked at. If you want it
+        automatic, a <code>git pull</code> on a schedule — a cron entry or a launch agent — plus Refresh gives you the
+        same result with the fetching under your control.</p>
+    </section>
+
+    <!-- ============================== SCOPE ============================== -->
+    <section id="scope">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--profile-a),var(--profile-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.2 1.6h4.8A1.5 1.5 0 0 1 14 6.1v5.4A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </span>
+        <h2>Project-level scope</h2>
+      </div>
+      <p class="lede">Skills, MCP servers, and configurations can all be scoped to one project folder instead of the
+        whole Mac.</p>
+
+      <p>Choose <strong>Project</strong> in the skill editor's Placement step, in the MCP sheet's Scope row, or when
+        creating a configuration, then pick the folder. The folder must be a real directory, not a symlink, and the app
+        re-verifies it at approval time.</p>
+
+      <h3>Where a project-scoped skill lands</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Client</th><th>This Mac</th><th>Project</th></tr></thead>
+          <tbody>
+            <tr><th>Claude Code</th><td><code>~/.claude/skills/&lt;id&gt;</code></td><td><code>&lt;project&gt;/.claude/skills/&lt;id&gt;</code></td></tr>
+            <tr><th>Codex</th><td><code>~/.agents/skills/&lt;id&gt;</code></td><td><code>&lt;project&gt;/.agents/skills/&lt;id&gt;</code></td></tr>
+            <tr><th>Gemini CLI</th><td><code>~/.gemini/skills/&lt;id&gt;</code></td><td><code>&lt;project&gt;/.gemini/skills/&lt;id&gt;</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>How MCP scope maps to each CLI</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Scope in the app</th><th>Claude Code</th><th>Gemini CLI</th><th>Codex</th></tr></thead>
+          <tbody>
+            <tr><th>This Mac</th><td><code>--scope user</code></td><td><code>--scope user</code></td><td>Default, no flag</td></tr>
+            <tr><th>Project</th><td><code>--scope project</code></td><td><code>--scope project</code></td><td class="no">Manual step</td></tr>
+            <tr><th>This project only</th><td><code>--scope local</code></td><td><code>--scope project</code></td><td class="no">Manual step</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>For project and local scope the command runs with the project folder as its working directory, and the engine
+        accepts that directory only when it exactly matches the project root you reviewed.</p>
+
+      <div class="note warn"><strong>Codex has no MCP scope flag.</strong> Rather than quietly writing a project server
+        into your global Codex config, the plan turns that step into a manual review that names the situation. Claude Code
+        and Gemini CLI take the scope natively.</div>
+
+      <h3>Project scope and multiple Macs</h3>
+      <p>Project roots are absolute paths, so they are stripped from anything that leaves this Mac. A project-scoped
+        skill arrives on the second Mac as a managed package with no folder attached; pick the local folder there and
+        install it again. This is deliberate — the same repository rarely sits at the same path on two machines.</p>
+    </section>
+
+    <!-- ============================== CONFIG ============================== -->
+    <section id="config">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--profile-a),var(--profile-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h10" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><circle cx="6" cy="4.5" r="2" fill="none" stroke="#fff" stroke-width="1.5"/><circle cx="10" cy="8" r="2" fill="none" stroke="#fff" stroke-width="1.5"/><circle cx="7" cy="11.5" r="2" fill="none" stroke="#fff" stroke-width="1.5"/></svg>
+        </span>
+        <h2>Configurations</h2>
+      </div>
+      <p class="lede">A configuration is a named list of what this Mac, or one project, should have. Switching one never
+        writes to a client by itself.</p>
+
+      <p>Create one from <strong>New configuration…</strong> with a name, a summary, a scope, and optionally a parent to
+        inherit from. Then use <strong>Edit configuration…</strong> to tick the plugins and MCP servers it requires.</p>
+
+      <p>Inheritance merges: a child gets everything its parent requires plus its own additions. <strong>Make Current</strong>
+        switches which one Overview compares against, and its health checks report how many requirements are satisfied
+        right now. To close the gap, configure the servers and install the plugins; the configuration is the checklist,
+        not the installer.</p>
+
+      <p>Names must be unique. A duplicate is refused with a plain explanation rather than silently creating a second
+        entry with the same identifier.</p>
+    </section>
+
+    <!-- ============================== SYNC ============================== -->
+    <section id="sync">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8a5 5 0 0 1 8.4-3.7M13 8a5 5 0 0 1-8.4 3.7" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M11.6 2.4v2.2H9.4M4.4 13.6v-2.2h2.2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <h2>Sync and receipts</h2>
+      </div>
+      <p class="lede">Sync is a comparison first and a change second.</p>
+
+      <p>The <strong>Sync</strong> screen opens with an installation map: one row per kind of tool, one column for the
+        library and one for each client, so you can see at a glance that Claude has fewer skills than Codex or that
+        Gemini has no MCP servers. Below it, each client reports whether its command-line tool was found.</p>
+
+      <p>Approving a plan runs its steps and records a receipt, then a fresh scan runs so the screens reflect reality
+        rather than intent. Every receipt in <strong>Activity</strong> keeps the operation type, start time, duration, an
+        identifier, the affected local paths behind ⓘ buttons, and the executed command behind a disclosure with a Copy
+        action. Receipts are redacted before they are stored.</p>
+    </section>
+
+    <!-- ============================== INSIGHTS ============================== -->
+    <section id="insights">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--skill-a),var(--skill-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 12.5h4M6.5 14h3" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><path d="M8 1.8a4.2 4.2 0 0 1 2.5 7.6c-.4.3-.6.7-.6 1.1H6.1c0-.4-.2-.8-.6-1.1A4.2 4.2 0 0 1 8 1.8z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        </span>
+        <h2>Insights</h2>
+      </div>
+      <p class="lede">Scan recent local chat history to find repeated work, unused skills, and gaps worth filling.</p>
+
+      <p>Choose the sources, Claude Code and Codex, a review period of seven, thirty, or ninety days, and how many
+        conversations per source to inspect. Optionally allow catalog suggestions, which sends broad capability topics
+        from an audited list to connected catalogs; your chat text and local names never leave the Mac.</p>
+
+      <p>The report has three parts: coverage, telling you honestly how much it read and what it skipped; opportunities,
+        each of which can open the matching skill or marketplace package; and quality findings on the skills you already
+        have.</p>
+
+      <div class="note safe"><strong>What is stored.</strong> Chat text is processed transiently. The report keeps
+        aggregate counts and recommendations, never messages or excerpts.</div>
+    </section>
+
+    <!-- ============================== MULTI ============================== -->
+    <section id="multi">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3" width="8" height="6" rx="1.4" fill="none" stroke="#fff" stroke-width="1.4"/><rect x="6.5" y="7" width="8" height="6" rx="1.4" fill="none" stroke="#fff" stroke-width="1.4"/></svg>
+        </span>
+        <h2>Multiple computers</h2>
+      </div>
+      <p class="lede">There is no cloud account, so identical setups come from a file you control. Pick encrypted folder
+        sync for personal machines, a Git backup if you want history, and a policy manifest for other people.</p>
+
+      <h3>Encrypted folder sync — the normal answer</h3>
+      <p>One AES-GCM encrypted file, <code>agent-tooling.encrypted.json</code>, written into any folder you choose,
+        including one that iCloud Drive, Dropbox, or a NAS happens to sync. The key never travels with it.</p>
+
+      <ol class="steps">
+        <li><strong>Mac 1</strong>: Settings → Library &amp; Sync → Encrypted archive → <strong>Choose folder…</strong>,
+          then approve the export plan.</li>
+        <li><strong>Mac 1</strong>: click <strong>Copy key</strong> and put the Base64 recovery key in your password
+          manager. Without it the archive is unreadable anywhere else.</li>
+        <li><strong>Mac 2</strong>: install the app, then Settings → Library &amp; Sync → <strong>Import key…</strong>
+          and paste that key <em>before</em> touching the archive.</li>
+        <li><strong>Mac 2</strong>: Import encrypted archive → <strong>Inspect…</strong>, point at the file, read the
+          preview, then run the restore plan it produces.</li>
+        <li><strong>Mac 2</strong>: press <span class="kbd">⇧⌘R</span> and approve, which installs the managed skills
+          into the clients there.</li>
+        <li><strong>Mac 2</strong>: open each MCP server and use <strong>Set up…</strong> per client, and reinstall any
+          plugins from Marketplace. Those are native commands, so they do not ride along in a file.</li>
+      </ol>
+
+      <p>Repeat the export whenever the library changes. It is a snapshot, not a live channel: two Macs never negotiate,
+        the newest archive simply wins at the moment you choose to restore it.</p>
+
+      <h4>What travels</h4>
+      <ul>
+        <li>Managed skills and their actual package files, with POSIX permissions preserved</li>
+        <li>MCP server definitions you created — observed ones from a client's own config are dropped</li>
+        <li>Configurations, including inheritance</li>
+        <li>Imported managed policies</li>
+        <li>Catalog sources that are <code>http</code> or <code>https</code></li>
+        <li>Connection records and account surfaces, with every verification reset to unverified</li>
+      </ul>
+
+      <h4>What does not travel</h4>
+      <ul>
+        <li>The encryption key — Keychain only, moved by you</li>
+        <li>Plugins, and the cached marketplace listings</li>
+        <li>Anything merely discovered on the first Mac: observed skills, observed servers, scan results</li>
+        <li>Activity and receipts, which are a log of one machine</li>
+        <li>Project roots, local folder sources, the imported repository path, and backup or sync settings</li>
+        <li>Client installation state — the second Mac decides that for itself, which is why you sync after restoring</li>
+      </ul>
+
+      <h3>Local Git backup — when you want history</h3>
+      <p><strong>Prepare Backup…</strong> exports the same portable state plus the package library into
+        <code>exports/git-backup</code> inside the workspace and runs <code>git init</code> there. The app's entire Git
+        vocabulary is <code>init</code> and <code>status</code>: it never commits, adds a remote, or pushes, and the plan
+        includes a manual step reminding you that connecting a remote is your decision. Commit and push it yourself, clone
+        it on the second Mac, then use <strong>Inspect…</strong> to review and accept it. A backup that already exists and
+        has uncommitted changes blocks the export rather than overwriting your work.</p>
+
+      <h3>Managed policy — for a team or a fleet</h3>
+      <p>Ship a data-only <code>agent-tooling-policy/v1</code> JSON file through a shared folder or a checkout. Each
+        person imports it from Settings → Policy &amp; Safety, and it can add managed configurations and block named
+        plugin identifiers. It carries no scripts and is never fetched in the background, so it standardizes intent
+        without becoming remote control.</p>
+
+      <div class="note"><strong>Choosing between them.</strong> Encrypted sync moves the packages themselves and is the
+        one to use for your own second Mac. Git gives you diffs and history for a library you evolve deliberately. A
+        policy shares the shape of a setup with people whose libraries you do not own.</div>
+    </section>
+
+    <!-- ============================== ACCOUNTS ============================== -->
+    <section id="accounts">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.2" cy="6" r="2.6" fill="none" stroke="#fff" stroke-width="1.4"/><path d="M2.4 13c0-2.2 1.7-3.6 3.8-3.6s3.8 1.4 3.8 3.6" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><path d="M11.4 6.2h2.4M12.6 5v2.4" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </span>
+        <h2>Connectors and accounts</h2>
+      </div>
+      <p class="lede">Cloud connectors belong to the product that issued them. Agent Tooling tracks them as facts about
+        your setup, never as things it can change.</p>
+
+      <p>The Accounts screen seeds three cloud surfaces and links straight to where each one actually lives:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Surface</th><th>Why it is separate</th></tr></thead>
+          <tbody>
+            <tr><th>Claude.ai connectors</th><td>Account connectors are not Claude Code configuration. Verify them in Claude's account settings.</td></tr>
+            <tr><th>ChatGPT apps and connectors</th><td>ChatGPT web does not inherit local Codex configuration. Verify hosted apps in ChatGPT settings.</td></tr>
+            <tr><th>Gemini account and enterprise extensions</th><td>Gemini web and managed workspace resources need account or administrator verification.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Each row has <strong>Open settings</strong>, which opens the real page, and <strong>Record verification</strong>,
+        which stamps the date you checked. That timestamp is the whole feature: an honest note that you looked, rather
+        than a status the app cannot actually observe.</p>
+
+      <h3>Recorded connections</h3>
+      <p><strong>Record connection…</strong> captures a name, provider, who owns the authorization — local client,
+        product account, external secret manager, or organization admin — the surface it should appear on, a scope, and
+        optionally the <em>names</em> of the secrets involved, such as <code>LINEAR_API_KEY</code>. The sheet says it
+        plainly: no login, token, or secret value is collected. Each connection gets a binding you can mark verified, and
+        removing one deletes only Agent Tooling's note; it never revokes anything upstream.</p>
+
+      <div class="note warn"><strong>So what about a Claude Desktop or ChatGPT connector?</strong> Set it up in that
+        product, then record it here so your inventory is complete and you know when you last checked it. The app has no
+        adapter that could configure it, and it will not claim one.</div>
+    </section>
+
+    <!-- ============================== SAFETY ============================== -->
+    <section id="safety">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8l5 2v4c0 3-2.1 5.2-5 6.3-2.9-1.1-5-3.3-5-6.3v-4z" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.8 8.1l1.6 1.6 3-3.2" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <h2>What keeps it safe</h2>
+      </div>
+      <p class="lede">Five rules hold everywhere, including from the command line.</p>
+
+      <div class="card">
+        <h4>Review before change</h4>
+        <p>Nothing touches a client until a plan is approved. The plan lists each step, the exact command or the source
+          and destination of each copy, and which client it applies to.</p>
+      </div>
+      <div class="card">
+        <h4>A fixed command allowlist</h4>
+        <p>The engine runs only <code>claude</code>, <code>codex</code>, <code>gemini</code>, and <code>git</code>, and
+          only in argument shapes it recognizes — <code>git</code> is limited to <code>init</code> and
+          <code>status</code> inside the backup folder. Anything else is refused by name.</p>
+      </div>
+      <div class="card">
+        <h4>Writes stay inside known folders</h4>
+        <p>File operations are limited to the managed library, the supported client skill folders, a project root you
+          selected yourself, and the backup area. A replaced file is moved to a rollback area rather than overwritten.</p>
+      </div>
+      <div class="card">
+        <h4>Receipts are redacted</h4>
+        <p>Tokens, keys, and secret-looking values are stripped before any receipt or diagnostic bundle is written.
+          Recorded connections store secret <em>reference names</em>, never values.</p>
+      </div>
+      <div class="card">
+        <h4>Honest verification words</h4>
+        <p><span class="verdict ok">Observed</span> means a read-only scan found it.
+          <span class="verdict ok">Installed</span> means a write or native command has a receipt.
+          <span class="verdict warn">Authenticated</span> is never inferred; you record it after verifying in the
+          product that owns the authorization.</p>
+      </div>
+    </section>
+
+    <!-- ============================== CLI ============================== -->
+    <section id="cli">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 5.5L6.8 8 4 10.5" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.4 11h3.4" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </span>
+        <h2>Command line and Raycast</h2>
+      </div>
+      <p class="lede">The helper ships inside the app bundle at
+        <code>Agent Tooling.app/Contents/Helpers/agent-tooling</code> and shares the app's policy engine.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>scan</code></td><td>Read-only inventory of all three clients, as JSON.</td></tr>
+            <tr><td><code>doctor</code></td><td>Same scan plus a health verdict. Exits with status 2 when a client's command is missing.</td></tr>
+            <tr><td><code>search</code></td><td>Query the local library by name, summary, bundle, or scope.</td></tr>
+            <tr><td><code>request create-skill</code></td><td>Queue a Codex skill request for review in the app. It cannot generate or install anything itself.</td></tr>
+            <tr><td><code>plan</code></td><td>Review a plan file and print its SHA-256 digest.</td></tr>
+            <tr><td><code>apply</code></td><td>Execute a plan, but only with the matching plan identifier and reviewed digest. Exits 3 if a step needs attention.</td></tr>
+            <tr><td><code>export-diagnostics</code></td><td>Write a redacted support bundle.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Apply is deliberately hard to misuse. Editing a plan after reviewing it changes its digest, and the command then
+        refuses to run:</p>
+      <pre><code>agent-tooling plan changes.json                 # prints {"digest": "...", "plan": {...}}
+agent-tooling apply changes.json \
+  --confirm &lt;plan-uuid&gt; --digest &lt;sha256&gt;</code></pre>
+
+      <p>The companion Raycast extension in <code>integrations/raycast/agent-tooling</code> uses that same helper, so it
+        can search your inventory, queue a skill request, check setup, and open Sync. It cannot approve or execute
+        anything.</p>
+    </section>
+
+    <!-- ============================== SHORTCUTS ============================== -->
+    <section id="shortcuts">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="4" width="12" height="8" rx="2" fill="none" stroke="#fff" stroke-width="1.4"/><path d="M5 7h.01M8 7h.01M11 7h.01M5.5 9.5h5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </span>
+        <h2>Keyboard shortcuts</h2>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Keys</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td class="kbd">⇧⌘R</td><td>Review sync: compare managed skills and open the plan</td></tr>
+            <tr><td class="kbd">⇧⌘D</td><td>Check setup: rescan the three clients, read-only</td></tr>
+            <tr><td class="kbd">⌘N</td><td>New skill, from the Skills screen</td></tr>
+            <tr><td class="kbd">⌃⌘S</td><td>Collapse or expand the sidebar</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The menu bar item repeats Check Setup and Review sync. The sidebar header carries a light and dark toggle and
+        the sidebar collapse control.</p>
+    </section>
+
+    <!-- ============================== EDGE ============================== -->
+    <section id="edge">
+      <div class="sec-head">
+        <span class="tile" style="width:26px;height:26px;background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5l5.8 10H2.2z" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6.4v3" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="11" r="0.8" fill="#fff"/></svg>
+        </span>
+        <h2>Edge cases</h2>
+      </div>
+      <p class="lede">The situations most likely to surprise you, and what the app does about each.</p>
+
+      <h3>A client is missing</h3>
+      <p>Its command reports as unavailable everywhere, and any plan step that needed it becomes a manual step explaining
+        what to install. Configuration already on disk is still read, and skills are still written to that client's folder,
+        so it works the moment you install the tool and run Check Setup.</p>
+
+      <h3>One client fails, others succeed</h3>
+      <p>Each client is a separate step. A failure marks the receipt as needing attention and names the failing step; the
+        clients that succeeded keep their result. There is no all-or-nothing rollback across clients.</p>
+
+      <h3>You edit a managed skill outside the app</h3>
+      <p>Install steps carry a fingerprint of the reviewed source. If the folder changes between review and approval, the
+        copy is refused rather than silently installing something you did not read. Run Check Setup, then review again.</p>
+
+      <h3>A project folder moved or was deleted</h3>
+      <p>Project-scoped operations re-verify the folder at approval time and refuse a path that is missing, is a symlink,
+        or does not match the reviewed root. Re-pick the folder in the editor.</p>
+
+      <h3>Two Macs drift apart</h3>
+      <p>Nothing merges automatically. Restoring compares first: a Git backup lists conflicting skills, configurations, and
+        sources and makes you accept them explicitly, and an encrypted restore shows what the archive contains before it
+        replaces the managed library. The previous library is kept as a rollback artifact.</p>
+
+      <h3>You lose the recovery key</h3>
+      <p>The archive cannot be decrypted, by you or anyone else. There is no reset. Copy the key when you first enable
+        encrypted sync, and note that importing a different key on a Mac replaces the one already in its Keychain.</p>
+
+      <h3>A policy blocks something you want</h3>
+      <p>Installing a blocked plugin is refused with a message naming the policy. Policies are data you imported, so
+        review the source file listed in Settings → Policy &amp; Safety.</p>
+
+      <h3>A marketplace source is down</h3>
+      <p>The reason is recorded under that source's name and the other sources keep working. One malformed listing in a
+        catalog no longer takes down the whole catalog.</p>
+
+      <h3>Two actions at once</h3>
+      <p>Only one change may be in flight, and a prepared plan blocks other actions until you approve or discard it —
+        otherwise the plan you are reading could stop matching reality. Adding a source or importing a repository
+        refreshes catalogs in the background, which is why a second action right afterwards may say to wait.</p>
+
+      <h3>The Codex generator refuses to stage a draft</h3>
+      <p>It will not write into a folder other users can also write to. Keep the workspace in your home folder, where it
+        is by default.</p>
+
+      <h3>Something needs support</h3>
+      <p>Settings → General → <strong>Export…</strong> writes a redacted diagnostics file with app, macOS, and client
+        versions plus validation summaries. Package contents, credentials, and personal paths are excluded.</p>
+    </section>
+
+  </main>
+
+  <footer>
+    Agent Tooling runs entirely on this Mac. Credentials stay in your Keychain, your environment provider, or the client
+    that owns them.
+  </footer>
+</div>

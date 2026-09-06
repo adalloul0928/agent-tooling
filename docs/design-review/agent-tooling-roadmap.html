@@ -1,0 +1,482 @@
+<title>Agent Tooling Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&display=swap">
+<style>
+:root {
+  --ground:#F7F8FB; --surface:#FFFFFF; --surface-2:#F1F3F8;
+  --ink:#12141C; --muted:#5A6072; --faint:#868DA0;
+  --line:rgba(18,20,28,.11); --line-soft:rgba(18,20,28,.06);
+  --link:#0A5FCB; --ok:#1E8A42; --warn:#A96A00; --err:#C33A30;
+  --ok-bg:rgba(46,164,79,.10); --warn-bg:rgba(219,139,0,.12); --err-bg:rgba(222,74,63,.10);
+  --code-bg:#F1F3F8;
+  --shadow:0 1px 2px rgba(16,20,32,.05), 0 8px 24px rgba(16,20,32,.05);
+  --skill-a:#FF8A1F; --skill-b:#FFA34D;
+  --plugin-a:#B457F0; --plugin-b:#C77DFF;
+  --mcp-a:#22A6C9; --mcp-b:#4CC4E3;
+  --profile-a:#5E5CE6; --profile-b:#7D7BFF;
+  --graphite-a:#4A5068; --graphite-b:#6B7288;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#14161E; --surface:#1E212B; --surface-2:#232733;
+  --ink:#EEF1F7; --muted:#9AA2B6; --faint:#7C8397;
+  --line:rgba(255,255,255,.11); --line-soft:rgba(255,255,255,.06);
+  --link:#6FA8FF; --ok:#3BD160; --warn:#FFB224; --err:#FF6A62;
+  --ok-bg:rgba(59,209,96,.12); --warn-bg:rgba(255,178,36,.13); --err-bg:rgba(255,106,98,.12);
+  --code-bg:#171A23;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.28);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --ground:#14161E; --surface:#1E212B; --surface-2:#232733;
+  --ink:#EEF1F7; --muted:#9AA2B6; --faint:#7C8397;
+  --line:rgba(255,255,255,.11); --line-soft:rgba(255,255,255,.06);
+  --link:#6FA8FF; --ok:#3BD160; --warn:#FFB224; --err:#FF6A62;
+  --ok-bg:rgba(59,209,96,.12); --warn-bg:rgba(255,178,36,.13); --err-bg:rgba(255,106,98,.12);
+  --code-bg:#171A23;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.28);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.page{max-width:1140px;margin:0 auto;padding:0 24px 96px}
+
+.masthead{padding:60px 0 30px;border-bottom:1px solid var(--line);margin-bottom:36px}
+.eyebrow{font-family:"Familjen Grotesk",-apple-system,sans-serif;font-weight:600;font-size:12px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 14px}
+h1{font-family:"Familjen Grotesk",-apple-system,sans-serif;font-weight:700;
+  font-size:clamp(34px,5.4vw,52px);line-height:1.05;letter-spacing:-.022em;margin:0 0 16px;text-wrap:balance}
+.standfirst{font-size:18px;color:var(--muted);max-width:64ch;margin:0}
+
+h2{font-family:"Familjen Grotesk",-apple-system,sans-serif;font-weight:600;font-size:25px;
+  letter-spacing:-.014em;margin:0 0 6px;text-wrap:balance}
+h3{font-family:"Familjen Grotesk",-apple-system,sans-serif;font-weight:600;font-size:17px;margin:26px 0 8px}
+h4{font-size:15px;font-weight:650;margin:18px 0 4px}
+section{margin:0 0 48px;scroll-margin-top:24px}
+.sec-head{display:flex;align-items:center;gap:11px;margin-bottom:6px}
+.dot{width:13px;height:13px;border-radius:4px;flex:none}
+p{margin:0 0 14px}
+p.lede{color:var(--muted);margin-bottom:20px;max-width:74ch}
+a{color:var(--link);text-underline-offset:2px}
+ul,ol{margin:0 0 16px;padding-left:22px}
+li{margin:0 0 8px}
+
+code{font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;font-size:.875em;
+  background:var(--code-bg);border:1px solid var(--line-soft);border-radius:5px;padding:1px 5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+  overflow-x:auto;margin:0 0 18px}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.6}
+
+.table-wrap{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+th{font-family:"Familjen Grotesk",-apple-system,sans-serif;font-weight:600;font-size:12px;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td.rank{font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap;font-weight:600}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;
+  box-shadow:var(--shadow);margin:0 0 16px}
+.card h3,.card h4{margin-top:0}
+.card > :last-child{margin-bottom:0}
+
+.note{border-left:3px solid var(--line);padding:2px 0 2px 16px;margin:0 0 18px;color:var(--muted);font-size:15px}
+.note strong{color:var(--ink)}
+.note.warn{border-left-color:var(--warn)}
+.note.safe{border-left-color:var(--ok)}
+.note.err{border-left-color:var(--err)}
+
+.tag{display:inline-block;font-size:11.5px;font-weight:600;padding:1px 8px;border-radius:999px;
+  background:var(--surface-2);color:var(--muted);border:1px solid var(--line-soft);white-space:nowrap}
+.tag.p1{color:var(--err);background:var(--err-bg);border-color:transparent}
+.tag.p2{color:var(--warn);background:var(--warn-bg);border-color:transparent}
+.tag.p3{color:var(--ok);background:var(--ok-bg);border-color:transparent}
+
+footer{border-top:1px solid var(--line);padding-top:20px;margin-top:10px;color:var(--faint);font-size:13.5px}
+:focus-visible{outline:2px solid var(--link);outline-offset:2px;border-radius:4px}
+</style>
+
+<div class="page">
+
+<header class="masthead">
+  <p class="eyebrow">Design review · September 2026</p>
+  <h1>Agent Tooling Roadmap</h1>
+  <p class="standfirst">Five agents read the source, docs, release notes, and screenshots of the tools closest to
+    ours. This is what they do better, what to take, and what to deliberately leave alone — with the three things you
+    asked about worked out in detail.</p>
+</header>
+
+<!-- ===================== HEADLINE ===================== -->
+<section id="headline">
+  <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--skill-a),var(--skill-b))"></span>
+    <h2>The single biggest gap</h2></div>
+
+  <div class="card">
+    <h3>Your own install reads “0 managed · 250 discovered”</h3>
+    <p>Every competitor has a path from <em>discovered</em> to <em>managed</em>. skills-manager has
+      <strong>“Scan Local Skills”</strong> (“Scanned {tools} tool folders and found {skills} importable skills”) and a
+      <code>skills adopt &lt;dir&gt;</code> command that pulls a skill already sitting in an agent folder into the
+      central library <em>without duplicating it</em>. SkillDock has <strong>“扫描导入”</strong> (scan &amp; import) on
+      every screen. Agent Tooling shows you 250 skills it can see and offers you nothing to do with any of them.</p>
+    <p>Until that path exists, the app is a viewer for most people on day one, and the library — the thing every other
+      feature depends on — stays empty. <strong>Build Adopt first.</strong> Select discovered skills → one plan that
+      copies them into the managed library → they become editable, installable, backed up, and portable to a second
+      Mac. It uses machinery you already have.</p>
+  </div>
+</section>
+
+<!-- ===================== RANKING ===================== -->
+<section id="ranking">
+  <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))"></span>
+    <h2>Everything, ranked</h2></div>
+  <p class="lede">Ordered by value per unit of work. The three you named are marked.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Change</th><th>Why now</th><th>Size</th></tr></thead>
+      <tbody>
+        <tr><td class="rank">1</td><td><strong>Adopt discovered items</strong> into the managed library</td><td>Unblocks every other feature; you have 250 items and 0 managed</td><td><span class="tag p1">M</span></td></tr>
+        <tr><td class="rank">2</td><td><strong>Projects</strong> section <span class="tag">you asked</span></td><td>Project scope exists in the engine but has no home in the UI</td><td><span class="tag p1">L</span></td></tr>
+        <tr><td class="rank">3</td><td><strong>Collections</strong> + tags <span class="tag">you asked</span></td><td>Configurations are too heavy for “give me my writing set”</td><td><span class="tag p2">M</span></td></tr>
+        <tr><td class="rank">4</td><td>Paste-to-import an MCP server or skill</td><td>Removes the whole “retype this into a form” class of friction</td><td><span class="tag p3">S</span></td></tr>
+        <tr><td class="rank">5</td><td>Drift detection from the fingerprints you already store</td><td>Answers “is what I installed still what I reviewed?”</td><td><span class="tag p3">S</span></td></tr>
+        <tr><td class="rank">6</td><td>Removal and ownership guards <em>in the plan</em></td><td>Three competitors added these only after data-loss bugs</td><td><span class="tag p3">S</span></td></tr>
+        <tr><td class="rank">7</td><td><strong>Agent Tooling MCP server</strong> <span class="tag">you asked</span></td><td>Read-only + queue-a-request; never approve</td><td><span class="tag p2">M</span></td></tr>
+        <tr><td class="rank">8</td><td>Live MCP test console</td><td>Turns “Configured” into an honest “Responding · 14 tools”</td><td><span class="tag p2">M</span></td></tr>
+        <tr><td class="rank">9</td><td>⌘K palette across every entity</td><td>Cheap; you already have many small named objects</td><td><span class="tag p3">S</span></td></tr>
+        <tr><td class="rank">10</td><td>Multi-select → one plan (a “stack”)</td><td>aitmpl’s cart, but ending in your review sheet</td><td><span class="tag p3">S</span></td></tr>
+        <tr><td class="rank">11</td><td>Marketplace: provenance, sorting, richer detail</td><td>You have the filters now; the signals are thin</td><td><span class="tag p2">M</span></td></tr>
+        <tr><td class="rank">12</td><td>Per-tool toggles inside one MCP server</td><td>Approve capabilities, not just servers</td><td><span class="tag p2">M</span></td></tr>
+        <tr><td class="rank">13</td><td>Itemized batch outcomes</td><td>Name what was skipped and why, never an aggregate toast</td><td><span class="tag p3">S</span></td></tr>
+        <tr><td class="rank">14</td><td>Sync scope panel in the UI</td><td>Show the boundary before connecting, not only in docs</td><td><span class="tag p3">S</span></td></tr>
+        <tr><td class="rank">15</td><td>Hidden-Unicode and risk scanning on import</td><td>You already detect executable content; extend the taxonomy</td><td><span class="tag p2">M</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===================== COLLECTIONS ===================== -->
+<section id="collections">
+  <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--profile-a),var(--profile-b))"></span>
+    <h2>Collections</h2></div>
+  <p class="lede">Seven products model grouping. The pattern that survives contact with users is two layers, not one.</p>
+
+  <h3>What everyone else calls it</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Product</th><th>Term</th><th>Filter or real change?</th><th>How many active</th></tr></thead>
+      <tbody>
+        <tr><td>mcpm.sh</td><td>Virtual Profile</td><td>Pure tag over one global registry</td><td>Many; no “current” concept at all</td></tr>
+        <tr><td>Docker MCP Toolkit</td><td>Profile</td><td>Real bundle, per client via <code>--profile</code></td><td>Many; each client names its own</td></tr>
+        <tr><td>ToolHive</td><td>Group</td><td>Real; also gates network access</td><td>One group per server, many per client</td></tr>
+        <tr><td>skills-manager</td><td>Preset</td><td>Real, labelled <strong>“Apply (one-time write)”</strong></td><td>Many, since they all write the same state</td></tr>
+        <tr><td>skills-manager</td><td>Tags</td><td>Labelled <strong>“filtering only”</strong></td><td>n/a</td></tr>
+        <tr><td>Continue Hub</td><td>Assistant of Blocks</td><td>Real composition via <code>uses: owner/slug@version</code></td><td>Exactly one per editor window</td></tr>
+        <tr><td>Claude Code Tool Manager</td><td>Profile</td><td>Snapshot of global enabled state</td><td>Exactly one, app-wide</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>The design</h3>
+  <ol>
+    <li><strong>Collections are not a second Configurations.</strong> A Configuration stays the one resolved,
+      activatable thing — the Assistant, the Profile. A Collection is reusable <em>material</em> a Configuration is
+      built from, the way Continue composes Blocks. A Configuration’s required list becomes: its own items, plus its
+      inheritance chain, plus any Collections it includes.</li>
+    <li><strong>Group whole skills, plugins, and servers</strong> — not individual tools inside them. ToolHive and mcpm
+      both prove server-level grouping is enough on its own.</li>
+    <li><strong>Let Collections overlap.</strong> One skill in three Collections is normal. Don’t copy ToolHive’s
+      strict one-group-per-server rule, which forces you to run duplicate instances to model overlap.</li>
+    <li><strong>There is no globally “active” Collection.</strong> Almost nobody does that. Activeness belongs to a
+      consumer — a Configuration, a client, a project. Attaching and detaching is the whole interaction.</li>
+    <li><strong>Steal skills-manager’s honesty about what applying means.</strong> Its diagram literally labels the
+      action <em>“Apply (one-time write)”</em> and calls Tags <em>“filtering only.”</em> That one word — <em>one-time</em>
+      — prevents the single most common misunderstanding: that a Collection is a live link.</li>
+    <li><strong>Add tags separately, and add them now.</strong> They are the cheapest organizational win in the whole
+      review: multi-valued, bulk-editable, with an <strong>“Untagged”</strong> filter pill so the unsorted pile is one
+      click away. Tags filter. Collections apply. Never merge the two.</li>
+    <li><strong>Export as a file, strip the secrets.</strong> Docker’s wording is the rule to copy: “Credentials are not
+      included in shared profiles for security reasons.” Add a native Share Sheet over that file and you get AirDrop
+      sharing with no server to run. Note that both products in this review that bet on hosted sharing — mcp.run’s
+      profile URLs and Continue Hub — are the two that no longer exist.</li>
+    <li><strong>Put the switcher where the work is.</strong> mcp.run buried profile management in Settings and it is a
+      known annoyance. skills-manager instead puts a <strong>Presets submenu right in the menu bar</strong>, each one
+      toggleable with a ✓ or a partial count. Do that.</li>
+    <li><strong>Give it its own section and its own icon family.</strong> Also show small Collection pills on each item
+      row so you can see membership without opening every Collection. And keep it visually distinct from
+      Configurations — MetaMCP’s “Namespaces” next to “Endpoints” in one sidebar is a documented source of confusion.</li>
+  </ol>
+
+  <div class="note safe"><strong>Naming.</strong> If Collections and Configurations still feel too close, the honest
+    split is <em>Collections are what you have; Configurations are what this Mac should have.</em> One is a shelf, the
+    other is a contract.</div>
+</section>
+
+<!-- ===================== PROJECTS ===================== -->
+<section id="projects">
+  <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--mcp-a),var(--mcp-b))"></span>
+    <h2>Projects</h2></div>
+  <p class="lede">Your engine already supports project scope for skills and MCP servers. It has nowhere to live in the
+    interface, so nobody will ever use it.</p>
+
+  <h3>How the others do it</h3>
+  <ul>
+    <li><strong>opcode</strong> discovers projects by scanning <code>~/.claude/projects/</code> — Claude Code’s own
+      session index — plus an “Open Project” picker. Its per-project screen is three tabs: Slash Commands, Project
+      Hooks, Local Hooks.</li>
+    <li><strong>skills-manager</strong> gives projects a permanent sidebar section, three ways to add one (pick a
+      folder, <em>scan a root like <code>~/Work</code></em>, or link an arbitrary directory), and a colored sync-health
+      dot per row: red diverged, amber needs attention, blue project-only, green in sync.</li>
+    <li><strong>Claude Code Tool Manager</strong> lets you <em>drag an MCP card onto a project</em> or onto “Global,”
+      and supports per-project environment overrides.</li>
+    <li><strong>SkillDock</strong> has no project support at all — its own contributor checklist says to record
+      project-level paths, and a <code>feature/project-level-skills</code> branch sits unmerged. This is open ground.</li>
+  </ul>
+
+  <h3>The design</h3>
+  <ol>
+    <li><strong>Discover, don’t make people register.</strong> Read <code>~/.claude/projects/</code> for folders Claude
+      Code has actually run in, offer a folder picker, and offer a “scan this root” option for a directory like
+      <code>~/ws</code>. A project should be a derived thing you can also pin, not a record the user must create.</li>
+    <li><strong>One sidebar entry leading to a list, not an icon rail.</strong> Rails exist in session managers because
+      people hop constantly; you visit a project’s config occasionally. Master–detail split, matching every other
+      screen you have.</li>
+    <li><strong>Rows show configuration facts, not run status.</strong> Name, a git branch chip, then compact badges:
+      “3 MCP servers · 2 skills · CLAUDE.md”, plus one sync-health dot. A project with no local overrides should look
+      visibly plain.</li>
+    <li><strong>The detail pane mirrors your global sections</strong> — tabs named Skills, MCP Servers, Plugins,
+      Configuration — so anyone who knows the global screens knows this one immediately.</li>
+    <li><strong>Mark inherited versus overridden explicitly</strong> on every row. This is the question the sidebar
+      cannot currently answer anywhere in the app.</li>
+    <li><strong>Split committed from machine-local.</strong> <code>.claude/settings.json</code> is shared with your
+      team; <code>.claude/settings.local.json</code> is not. opcode separates them and offers a one-click “add to
+      .gitignore.” This is a real footgun worth solving.</li>
+    <li><strong>Project roots do not travel.</strong> They are stripped on export by design, so a project-scoped skill
+      arrives on a second Mac unattached. Say so in the Projects empty state rather than letting someone discover it
+      during a restore.</li>
+    <li><strong>Do not import kanban boards, session lists, or live status dots.</strong> Those belong to tools that
+      run agents. Borrowing that language would promise something the app does not do.</li>
+  </ol>
+</section>
+
+<!-- ===================== MCP ===================== -->
+<section id="mcp">
+  <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--mcp-a),var(--mcp-b))"></span>
+    <h2>An MCP server for the app itself</h2></div>
+  <p class="lede">Your instinct is right and it is buildable — but there is one specific thing that must never be a
+    tool, and it is not obvious.</p>
+
+  <div class="note err"><strong>The finding that shapes the whole design.</strong> Your <code>apply</code> command
+    takes <code>--confirm &lt;planID&gt; --digest &lt;sha256&gt;</code>, and the digest is a pure SHA-256 of the plan’s own
+    bytes. That is <em>content integrity</em> — proof the plan being run is byte-identical to the plan someone read —
+    and not <em>consent</em>. Anyone holding the plan can compute a valid digest for it. That is fine today, because
+    only your review sheet calls it. Expose it as an MCP tool and you hand any prompt-injected agent a self-approval
+    primitive: it can build a plan, hash it, and approve its own work. <strong>Never expose <code>apply</code>,
+    and never expose an approve or deny tool.</strong></div>
+
+  <h3>What the field looks like</h3>
+  <ul>
+    <li><strong>Claude Code Tool Manager already ships this</strong> — a local MCP server on
+      <code>127.0.0.1:23847</code> exposing <code>create_mcp</code>, <code>update_mcp</code>, <code>delete_mcp</code>,
+      <code>create_skill</code>, <code>delete_skill</code>, <code>create_hook</code> and more to any connected client,
+      marketed as “Ask Claude to add this MCP to my project and it just works.” Nothing in that path shows a human a
+      diff. That is the thing to beat, not to copy.</li>
+    <li><strong>tech-leads-club/agent-skills</strong> ships the opposite: exactly four read-only tools —
+      <code>list_skills</code>, <code>search_skills</code>, <code>read_skill</code>, <code>fetch_skill_files</code> —
+      with documented progressive disclosure so an agent fetches only what it needs. Installation stays in the CLI.</li>
+    <li><strong>MetaMCP and ToolHive</strong> both keep the administrative surface and the agent surface on entirely
+      different code paths.</li>
+    <li>The MCP specification is explicit for exactly your shape: if a client supports one-click local server
+      configuration it <em>must</em> implement consent showing the full untruncated command, and <em>“use the stdio
+      transport to limit access to just the MCP client.”</em> Research cited by OWASP found tool-poisoning succeeds
+      <strong>84% of the time when auto-approval is on</strong>.</li>
+  </ul>
+
+  <h3>The design</h3>
+  <p>Ship it as an <code>AgentToolingMCP</code> target beside the existing CLI helper, over <strong>stdio</strong> from
+    inside the app bundle — not a localhost port, which any local process can reach and which DNS rebinding can attack.
+    Three tiers:</p>
+
+  <div class="card">
+    <h4>Read-only <span class="tag p3">safe</span></h4>
+    <p><code>search_inventory</code>, <code>get_component</code>, <code>get_client_status</code>,
+      <code>list_receipts</code>, <code>get_receipt</code>, <code>list_pending_requests</code>,
+      <code>get_request_status</code>, <code>open_review_screen</code>. Most are thin wrappers over
+      <code>agent-tooling search</code> and <code>doctor</code>, which already emit exactly these shapes. Return secret
+      <em>reference names</em> only, and omit configuration paths by default so a home directory never leaks into a
+      transcript.</p>
+  </div>
+
+  <div class="card">
+    <h4>Queue a request <span class="tag p2">needs a human</span></h4>
+    <p><code>request_add_mcp_server</code>, <code>request_create_skill</code>, <code>request_install_skill</code>,
+      <code>request_install_plugin</code>, <code>request_remove_component</code>. Each appends one bounded row to the
+      pending queue and returns
+      <code>{state:"pending-review", reviewURL:"agent-tooling://requests/&lt;uuid&gt;"}</code> — the exact shape
+      <code>request create-skill</code> already returns today. The MCP layer never builds an OperationPlan; that
+      happens in-app when a human opens the link. Bound the queue, collapse duplicate requests into the existing
+      pending one, and take exactly one component per call — no bulk variants, so one injected instruction cannot
+      become twenty rows.</p>
+  </div>
+
+  <div class="card">
+    <h4>Never <span class="tag p1">excluded by construction</span></h4>
+    <p>Anything that applies, executes, confirms, approves, or denies. Any tool returning a secret value. The
+      <code>--home</code> and <code>--workspace</code> overrides, which exist for tests and would reintroduce a
+      path-confinement bypass. Any generic <code>run_command</code>. Anything that edits the allowlist, the redaction
+      patterns, or the server’s own registration.</p>
+  </div>
+
+  <p>Two details worth taking: record the caller’s self-reported <code>clientInfo</code> so the review screen can say
+    “Claude Code is asking to add X” — as display only, never as authorization — and append every tool call, including
+    read-only ones, to your existing activity trail, so Insights can show “an agent searched 40 times and queued 2
+    requests today.”</p>
+
+  <div class="note"><strong>Elicitation.</strong> MCP’s elicitation primitive can fill in a missing parameter — “which
+    project root?” — but must not carry the approve decision. Its dialog renders in the agent’s client from
+    server-supplied text; your review sheet is the only surface that can show the real redacted command next to the
+    file it changes.</div>
+</section>
+
+<!-- ===================== MARKETPLACE ===================== -->
+<section id="marketplace">
+  <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--plugin-a),var(--plugin-b))"></span>
+    <h2>Marketplace</h2></div>
+  <p class="lede">You just added source and app filters. These are the next rungs, in order.</p>
+
+  <ol>
+    <li><strong>Show provenance on every row.</strong> PulseMCP’s single best idea is a Classification facet with three
+      values — Reference, Official, Community — each with its own icon, shown on the card and filterable. You already
+      know which catalog a package came from; turn that into a badge people can trust at a glance.</li>
+    <li><strong>Real sorting.</strong> You have none. PulseMCP offers eight, including Most Popular this week and
+      Recently Released; aitmpl offers Most Popular and Alphabetical. Start with Relevance, Name, and Recently Updated.</li>
+    <li><strong>Show the tools a server exposes, with their annotations.</strong> Smithery lists every tool with its
+      input and output schema as a table, and marks each <code>read-only</code>, <code>destructive</code>, or
+      <code>idempotent</code> from MCP’s own annotations. For a review-first app this is the highest-value detail you
+      could add: a person can see a destructive tool <em>before</em> approving the plan.</li>
+    <li><strong>Multi-select into one plan.</strong> aitmpl’s Stack Builder collects picks in a tray and emits a single
+      combined command. Yours should collect picks and emit a single reviewed plan — a much better ending than theirs.</li>
+    <li><strong>Write real empty states.</strong> claude-plugins.dev renders a bare “0 plugins” with no guidance;
+      Smithery has no zero-result state at all and silently returns 100 unrelated results. aitmpl gets it right: “No
+      results for X” plus a Clear search button. You already name the source and filter that produced the emptiness —
+      keep that.</li>
+    <li><strong>Mask secret-looking fields and route them to the Keychain.</strong> Smithery treats any config key whose
+      name contains “key” as a password field and stores values in the OS keychain rather than the client config.</li>
+    <li><strong>Adopt Claude’s own scope vocabulary at install time</strong>, as claude-code-templates does: User
+      (all projects) / Project (shared with team) / Local (personal, not committed). It maps exactly onto your scopes
+      and onto the committed-versus-local split in Projects.</li>
+    <li><strong>Grade honestly, and say what the grade means.</strong> Glama shows three letter grades per server —
+      License, Quality, Maintenance — and its tooltip for Quality is disarmingly literal: <em>“‘A’ indicates that we
+      were able to successfully run the server. ‘F’ indicates that we were not able to successfully start it.”</em>
+      That is the same discipline as your Observed / Installed / Authenticated vocabulary, applied to a catalog. An
+      ungraded item shows “Not graded” rather than hiding the row.</li>
+  </ol>
+
+  <div class="note"><strong>Worth knowing about tool descriptions.</strong> Glama open-sourced a
+    <a href="https://github.com/glama-ai/tool-definition-quality-score">Tool Definition Quality Score</a> that grades
+    every tool on six dimensions — behaviour, conciseness, completeness, parameters, purpose, usage guidelines — citing
+    a study of 856 tools across 103 servers: <em>97% contain at least one defect, 89% omit usage constraints, and
+    tools with well-written descriptions get selected by models 260% more often.</em> Your Insights screen already
+    produces quality findings for skills. This is the same idea for MCP tools, and the rubric is already written.</div>
+</section>
+
+<!-- ===================== SAFETY ===================== -->
+<section id="safety">
+  <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))"></span>
+    <h2>Turn your safety model into visible features</h2></div>
+  <p class="lede">You already have the machinery. These make it legible — and each one is something a competitor added
+    only after a real data-loss bug.</p>
+
+  <ul>
+    <li><strong>Removal guard, at plan time.</strong> skills-manager v1.34.0 added this after users lost files: before
+      an update replaces a folder, diff current against incoming, and if anything would be <em>deleted</em>, hold it
+      back and say so. Put that list in the plan sheet: “this update removes 3 files.”</li>
+    <li><strong>Ownership guard, at plan time.</strong> Their v1.32.0 refuses to overwrite any target it cannot prove
+      is empty, its own symlink, or a recorded prior install. You confine writes to known folders; proving
+      <em>ownership</em> of the specific destination is the missing half.</li>
+    <li><strong>Drift detection.</strong> tech-leads-club pins a SHA-256 content hash per installed skill in a lockfile
+      specifically so tampering is detectable later. You already compute a reviewed-source fingerprint for every
+      install — store it and compare on each setup check. “Installed but modified since you reviewed it” is a status
+      nobody else surfaces.</li>
+    <li><strong>Itemized batch outcomes.</strong> Both Chinese-language apps report “succeeded N, failed N, skipped N”
+      and name which ones and why. Your receipts already hold per-step results; surface them that way after a
+      multi-step plan instead of a single verdict.</li>
+    <li><strong>A sync scope panel.</strong> skills-manager shows, before you ever connect a backend, exactly what
+      travels and what never leaves the machine. You have that list in the handbook; it belongs on the screen where
+      someone chooses a folder.</li>
+    <li><strong>Extend the content scan.</strong> You detect executable content. The Snyk agent-scan taxonomy that
+      tech-leads-club runs in CI adds prompt injection in skill instructions, suspicious download URLs, unverifiable
+      remote dependencies, and — cheapest and most striking — <strong>hidden Unicode</strong>: zero-width characters,
+      bidi overrides, and Tag-block steganography used to smuggle instructions past human review. That one is a few
+      lines of Swift and directly protects the thing you promise, which is that a human really reviewed it.</li>
+    <li><strong>Diff descriptions on re-scan, and look for injection.</strong> Glama re-introspects hosted servers on a
+      schedule and diffs the result, analysing changes specifically for <em>“instructions directed at an LLM consumer,
+      role-override attempts, exfiltration prompts.”</em> That is the live defence against a rug pull — a server whose
+      tool description turns malicious <em>after</em> you approved it. You already fingerprint what was reviewed;
+      comparing the new description against the approved one and flagging injection-shaped changes is the natural
+      extension, and no desktop tool in this review does it.</li>
+    <li><strong>Split severity into Risky and Malicious.</strong> Glama routes Malicious to internal review and
+      delisting, but surfaces Risky <em>on the listing</em> “so operators can make an informed decision.” A
+      review-first app should never silently drop an item — it should show the finding next to the approve button.</li>
+  </ul>
+
+  <div class="note safe"><strong>What a serious behavioural check looks like.</strong> Glama builds and runs every
+    server in an ephemeral Firecracker microVM and watches syscalls and network: access to credential paths not
+    required by the declared capabilities (SSH keys, cloud credential directories, browser cookie stores), outbound
+    traffic to hosts not referenced in the manifest or source, process forks into unrelated binaries, filesystem
+    writes outside the declared working directory. You are not going to run a VM fleet — but that list is a good
+    checklist to <em>describe</em> in a plan for a stdio server whose command you are about to run.</div>
+</section>
+
+<!-- ===================== POLISH ===================== -->
+<section id="polish">
+  <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--skill-a),var(--skill-b))"></span>
+    <h2>Smaller wins</h2></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Idea</th><th>Where it comes from</th><th>Why it fits you</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Paste to import</strong></td><td>Claude Code Tool Manager accepts a pasted <code>claude mcp add …</code> string or a JSON block and infers the server; it also accepts a pasted SKILL.md with frontmatter</td><td>Kills an entire class of retyping. Pairs perfectly with a plan: paste, see the plan, approve</td></tr>
+        <tr><td><strong>Live test console</strong></td><td>Same app: connect, show live Tools/Resources/Prompts counts, run one tool from a generated form, show latency</td><td>Your vocabulary says “Configured is not authenticated.” This is how you’d earn the right to say “Responding · 14 tools”</td></tr>
+        <tr><td><strong>⌘K across everything</strong></td><td>skills-manager searches skills, presets, projects and actions in one palette</td><td>You have many small named objects across eleven screens</td></tr>
+        <tr><td><strong>Per-tool toggles in a server</strong></td><td>SkillDock enables individual capabilities inside one MCP server (“3/4 enabled”)</td><td>Lets a plan approve capabilities rather than whole servers</td></tr>
+        <tr><td><strong>Health dots in the sidebar</strong></td><td>skills-manager colours every project row: in sync, diverged, needs attention, local only</td><td>For a desired-state tool, “does reality match the declaration” is the whole product</td></tr>
+        <tr><td><strong>Bulk select mode</strong></td><td>All three GUIs: an explicit Select toggle with a floating action bar</td><td>Needed the moment Adopt exists and you are choosing from 250 items</td></tr>
+        <tr><td><strong>Menu-bar Collections</strong></td><td>skills-manager’s tray has a Presets submenu with ✓ and partial counts, plus “N updates available”</td><td>Your menu bar currently repeats two buttons; this makes it worth keeping</td></tr>
+        <tr><td><strong>Update-available badges</strong></td><td>Everyone. skills-manager runs a per-item state machine: Up to date, Update available, Check failed, Source missing</td><td>You track sources and revisions already</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===================== NOT ===================== -->
+<section id="not">
+  <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))"></span>
+    <h2>What not to build</h2></div>
+  <ul>
+    <li><strong>Session running, kanban boards, worktrees.</strong> Conductor, Nimbalyst, and Vibe Kanban own that, and
+      Vibe Kanban — 28,000 stars — is sunsetting anyway. It is a different product.</li>
+    <li><strong>A hosted registry or sharing backend.</strong> Both products in this review that centred one are gone:
+      mcp.run redirects elsewhere and Continue Hub no longer resolves. Files outlive vendors.</li>
+    <li><strong>An auto-approve mode</strong>, in any form, including “remember this decision.” Tool poisoning
+      succeeds 84% of the time when auto-approval is on, and it would delete the only thing that makes this app
+      different.</li>
+    <li><strong>A localhost HTTP control port.</strong> Claude Code Tool Manager has one; the MCP spec recommends stdio
+      precisely to avoid it.</li>
+    <li><strong>Chasing catalog size.</strong> Glama lists 80,000 servers. You will not win that and it is not what a
+      review-first tool is for.</li>
+  </ul>
+</section>
+
+<footer>
+  Compiled 2 September 2026 from five parallel reviews covering skills-manager, SkillDock, Claude Code Tool Manager,
+  opcode, Conductor, Nimbalyst, Vibe Kanban, c9watch, mcpm.sh, MetaMCP, ToolHive, Toolbase, mcp.run, Docker MCP
+  Toolkit, Smithery, Continue Hub, VS Code, PulseMCP, aitmpl, claude-plugins.dev, and tech-leads-club/agent-skills.
+  Findings come from source, docs, release notes, and screenshots rather than marketing pages; star counts and archive
+  status were verified against the GitHub API.
+</footer>
+</div>

@@ -1,0 +1,443 @@
+<title>Agent Tooling Landscape</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&display=swap">
+<style>
+:root {
+  --ground: #F7F8FB; --surface: #FFFFFF; --surface-2: #F1F3F8;
+  --ink: #12141C; --muted: #5A6072; --faint: #868DA0;
+  --line: rgba(18,20,28,0.11); --line-soft: rgba(18,20,28,0.06);
+  --link: #0A5FCB; --ok: #1E8A42; --warn: #A96A00; --err: #C33A30;
+  --ok-bg: rgba(46,164,79,0.10); --warn-bg: rgba(219,139,0,0.12); --err-bg: rgba(222,74,63,0.10);
+  --code-bg: #F1F3F8;
+  --shadow: 0 1px 2px rgba(16,20,32,0.05), 0 8px 24px rgba(16,20,32,0.05);
+  --hot-a: #FF8A1F; --hot-b: #FFA34D;
+  --cool-a: #22A6C9; --cool-b: #4CC4E3;
+  --violet-a: #B457F0; --violet-b: #C77DFF;
+  --indigo-a: #5E5CE6; --indigo-b: #7D7BFF;
+  --graphite-a: #4A5068; --graphite-b: #6B7288;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #14161E; --surface: #1E212B; --surface-2: #232733;
+    --ink: #EEF1F7; --muted: #9AA2B6; --faint: #7C8397;
+    --line: rgba(255,255,255,0.11); --line-soft: rgba(255,255,255,0.06);
+    --link: #6FA8FF; --ok: #3BD160; --warn: #FFB224; --err: #FF6A62;
+    --ok-bg: rgba(59,209,96,0.12); --warn-bg: rgba(255,178,36,0.13); --err-bg: rgba(255,106,98,0.12);
+    --code-bg: #171A23;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 10px 30px rgba(0,0,0,0.28);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #14161E; --surface: #1E212B; --surface-2: #232733;
+  --ink: #EEF1F7; --muted: #9AA2B6; --faint: #7C8397;
+  --line: rgba(255,255,255,0.11); --line-soft: rgba(255,255,255,0.06);
+  --link: #6FA8FF; --ok: #3BD160; --warn: #FFB224; --err: #FF6A62;
+  --ok-bg: rgba(59,209,96,0.12); --warn-bg: rgba(255,178,36,0.13); --err-bg: rgba(255,106,98,0.12);
+  --code-bg: #171A23;
+  --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 10px 30px rgba(0,0,0,0.28);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--ground); color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+}
+.page { max-width: 1120px; margin: 0 auto; padding: 0 24px 96px; }
+
+.masthead { padding: 60px 0 30px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+.eyebrow {
+  font-family: "Familjen Grotesk", -apple-system, sans-serif; font-weight: 600; font-size: 12px;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin: 0 0 14px;
+}
+h1 {
+  font-family: "Familjen Grotesk", -apple-system, sans-serif; font-weight: 700;
+  font-size: clamp(34px, 5.4vw, 52px); line-height: 1.05; letter-spacing: -0.022em;
+  margin: 0 0 16px; text-wrap: balance;
+}
+.standfirst { font-size: 18px; color: var(--muted); max-width: 64ch; margin: 0; }
+.stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.stat {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 15px; box-shadow: var(--shadow); min-width: 118px;
+}
+.stat b {
+  display: block; font-family: "Familjen Grotesk", -apple-system, sans-serif;
+  font-size: 22px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
+}
+.stat span { font-size: 12.5px; color: var(--faint); }
+
+h2 {
+  font-family: "Familjen Grotesk", -apple-system, sans-serif; font-weight: 600;
+  font-size: 25px; letter-spacing: -0.014em; margin: 0 0 6px; text-wrap: balance;
+}
+h3 {
+  font-family: "Familjen Grotesk", -apple-system, sans-serif; font-weight: 600;
+  font-size: 16px; margin: 28px 0 8px;
+}
+section { margin: 0 0 46px; scroll-margin-top: 24px; }
+.sec-head { display: flex; align-items: center; gap: 11px; margin-bottom: 6px; }
+.dot { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+p { margin: 0 0 14px; }
+p.lede { color: var(--muted); margin-bottom: 20px; max-width: 72ch; }
+a { color: var(--link); text-underline-offset: 2px; }
+ul { margin: 0 0 16px; padding-left: 22px; }
+li { margin: 0 0 7px; }
+
+code {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace; font-size: 0.875em;
+  background: var(--code-bg); border: 1px solid var(--line-soft); border-radius: 5px; padding: 1px 5px;
+}
+
+.table-wrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: "Familjen Grotesk", -apple-system, sans-serif; font-weight: 600; font-size: 12px;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: 0; }
+td.name { white-space: nowrap; font-weight: 600; }
+td.stars { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); text-align: right; }
+td.kind { white-space: nowrap; color: var(--muted); font-size: 13.5px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 17px 19px; box-shadow: var(--shadow); margin: 0 0 14px;
+}
+.card h3 { margin: 0 0 4px; font-size: 16px; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+.card p + p { margin-top: 8px; }
+
+.note { border-left: 3px solid var(--line); padding: 2px 0 2px 16px; margin: 0 0 18px; color: var(--muted); font-size: 15px; }
+.note strong { color: var(--ink); }
+.note.warn { border-left-color: var(--warn); }
+.note.safe { border-left-color: var(--ok); }
+
+.tag {
+  display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px;
+  background: var(--surface-2); color: var(--muted); border: 1px solid var(--line-soft); white-space: nowrap;
+}
+.tag.dead { color: var(--err); background: var(--err-bg); border-color: transparent; }
+.tag.new { color: var(--ok); background: var(--ok-bg); border-color: transparent; }
+.tag.close { color: var(--warn); background: var(--warn-bg); border-color: transparent; }
+
+footer { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 10px; color: var(--faint); font-size: 13.5px; }
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 4px; }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Competitive scan · September 2026</p>
+    <h1>Agent Tooling Landscape</h1>
+    <p class="standfirst">Everyone building in this space right now is solving one of four problems: installing MCP
+      servers, distributing skills, keeping rules consistent across agents, or governing all of it for an org. Almost
+      nobody is doing what Agent Tooling does — treating a personal machine's agent setup as reviewable, receipted,
+      desired state.</p>
+    <div class="stats">
+      <div class="stat"><b>70+</b><span>projects found</span></div>
+      <div class="stat"><b>9</b><span>direct overlaps</span></div>
+      <div class="stat"><b>1</b><span>doing plan-before-change</span></div>
+      <div class="stat"><b>4</b><span>parallel searches</span></div>
+    </div>
+  </header>
+
+  <!-- ===================== CLOSEST ===================== -->
+  <section id="closest">
+    <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--hot-a),var(--hot-b))"></span>
+      <h2>Closest to what you are building</h2></div>
+    <p class="lede">These are the ones to actually look at. Each overlaps on a different axis: GUI, multi-client
+      install, or machine-to-machine sync.</p>
+
+    <div class="card">
+      <h3><a href="https://github.com/xingkongliang/skills-manager">skills-manager</a> <span class="tag close">closest overall</span> <span class="tag">4,335★</span></h3>
+      <p>A Tauri desktop app plus a CLI sharing one SQLite engine, managing and deploying skills across 50+ tools. The
+        part worth studying: <strong>git-backed sync to any private remote</strong>, with skill-aware merge, conflict
+        resolution, and restorable snapshots. That is the multi-machine story you are building toward with encrypted
+        folder sync, solved a different way.</p>
+      <p>Pushed today. Created March 2026 and already the most-starred thing in this category.</p>
+    </div>
+
+    <div class="card">
+      <h3><a href="https://github.com/wanghuan9/skilldock">SkillDock</a> <span class="tag">504★</span></h3>
+      <p>Desktop control center that scans real project directories and installs, organizes, syncs, and updates skills,
+        MCP servers, and plugins across Claude Code, Cursor, Codex, Windsurf, and Gemini CLI — with git-aware diffs.
+        Closest to your screen-by-screen scope, and it covers project directories, which is the thing you handle with
+        project scope.</p>
+    </div>
+
+    <div class="card">
+      <h3><a href="https://github.com/tylergraydev/claude-code-tool-manager">Claude Code Tool Manager</a> <span class="tag">379★</span></h3>
+      <p>Tauri + Svelte GUI to see and toggle MCP servers, commands, skills, sub-agents, and hooks per project for
+        Claude Code. Single-client where you are three-client, but the per-project toggling model is worth comparing
+        against your configurations.</p>
+    </div>
+
+    <div class="card">
+      <h3><a href="https://github.com/tech-leads-club/agent-skills">tech-leads-club/agent-skills</a> <span class="tag">5,110★</span></h3>
+      <p>The strongest CLI competitor. Installs skills across 19 agents, runs Snyk security scanning before publishing,
+        and tracks installs with a <strong>lockfile plus content hashes</strong> — which is essentially your reviewed
+        source fingerprint, applied to updates. Their pitch cites 13% of marketplace skills carrying critical
+        vulnerabilities.</p>
+    </div>
+
+    <div class="card">
+      <h3><a href="https://promptzy.app/">Promptzy</a> <span class="tag">macOS, closed source</span></h3>
+      <p>Native Mac menu-bar app calling itself the source of truth for AI skills, with multi-directional sync and
+        conflict resolution across Claude, Cursor, Copilot, ChatGPT, Gemini, Windsurf. Free tier, $5 one-time Pro, and
+        <strong>iCloud sync</strong> as the paid feature. The nearest thing to your product shape and positioning.</p>
+    </div>
+
+    <div class="card">
+      <h3><a href="https://github.com/chrisleekr/agentsync">AgentSync</a> <span class="tag new">brand new</span> <span class="tag">1★</span></h3>
+      <p>Snapshots Claude, Cursor, Codex, Copilot, VS Code, and OpenCode config, encrypts it with <code>age</code>
+        recipients, and pushes to a per-machine namespace in a git-backed vault. Essentially your encrypted folder sync
+        with a different key model. Unadopted so far, but the design is the closest match to your multi-Mac path.</p>
+    </div>
+
+    <div class="card">
+      <h3><a href="https://github.com/agentplugins/agent-plugins-spec">Agent Plugins Specification</a> <span class="tag">1,226★</span></h3>
+      <p>Not a competitor — the standard your library already speaks. A cross-vendor packaging spec
+        (<code>plugin.json</code> + <code>skills/</code> + optional <code>mcp.json</code>) with a steering committee
+        reported to include Amazon, Cursor, Microsoft, OpenAI, and Vercel, adopted by ChatGPT/Codex, Cursor, Copilot,
+        Kiro, and VS Code. v1.1 is in draft. This is the one to track for interoperability.</p>
+    </div>
+  </section>
+
+  <!-- ===================== MCP INSTALLERS ===================== -->
+  <section id="mcp">
+    <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--cool-a),var(--cool-b))"></span>
+      <h2>MCP server installers and managers</h2></div>
+    <p class="lede">The most crowded category. Nearly all of them write config into clients without showing you the
+      change first.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Project</th><th>What it is</th><th>Form</th><th>Stars</th></tr></thead>
+        <tbody>
+          <tr><td class="name"><a href="https://github.com/pathintegral-institute/mcpm.sh">mcpm.sh</a></td><td>Install once globally, organize with virtual profiles, push into any client config. Has <code>update --check</code>, the closest thing to a dry run.</td><td class="kind">CLI</td><td class="stars">995</td></tr>
+          <tr><td class="name"><a href="https://github.com/stacklok/toolhive">ToolHive</a></td><td>Runs every MCP server in an isolated container behind a gateway, with audit logs, OTel tracing, OIDC policy, and server signing. The governance leader.</td><td class="kind">CLI + K8s</td><td class="stars">2,066</td></tr>
+          <tr><td class="name"><a href="https://github.com/openclaw/mcporter">mcporter</a></td><td>Imports MCP config <em>from</em> Cursor, Claude Code/Desktop, Codex, Windsurf, OpenCode, and VS Code to call their tools uniformly. Reads rather than writes.</td><td class="kind">CLI + lib</td><td class="stars">4,977</td></tr>
+          <tr><td class="name"><a href="https://github.com/metatool-ai/metamcp">MetaMCP</a></td><td>Self-hosted aggregator that merges many servers into one endpoint, with workspace switching that works like profiles.</td><td class="kind">GUI + proxy</td><td class="stars">2,645</td></tr>
+          <tr><td class="name"><a href="https://github.com/Klavis-AI/klavis">Klavis AI</a></td><td>50–100+ managed MCP integrations with built-in OAuth, plus a meta-server that bundles many servers into one to save context.</td><td class="kind">Hosted + OSS</td><td class="stars">5,799</td></tr>
+          <tr><td class="name"><a href="https://github.com/1mcp-app/agent">1MCP</a></td><td>Starts and stops multiple servers as subprocesses, exposing them as a single unified MCP server.</td><td class="kind">CLI</td><td class="stars">494</td></tr>
+          <tr><td class="name"><a href="https://github.com/arcadeai-labs/smithery-cli">Smithery CLI</a></td><td>Search, add, and call tools from Smithery's registry. Note the repo now lives under Arcade Labs.</td><td class="kind">CLI</td><td class="stars">832</td></tr>
+          <tr><td class="name"><a href="https://github.com/docker/mcp-gateway">Docker MCP Gateway</a></td><td>Docker Desktop's MCP Toolkit: 300+ verified servers as signed container images, set up once and connected to every client.</td><td class="kind">GUI + CLI</td><td class="stars">1,551</td></tr>
+          <tr><td class="name"><a href="https://github.com/anaisbetts/mcp-installer">mcp-installer</a></td><td>A meta MCP server: ask Claude in plain language to install a server and it edits the config for you. Stale since late 2024.</td><td class="kind">MCP server</td><td class="stars">1,533</td></tr>
+          <tr><td class="name"><a href="https://github.com/michaellatman/mcp-get">mcp-get</a></td><td>The early installer and registry. <span class="tag dead">archived</span> — maintainers point at Smithery.</td><td class="kind">CLI</td><td class="stars">507</td></tr>
+          <tr><td class="name"><a href="https://github.com/dcSpark/mcp-dockmaster">MCP Dockmaster</a></td><td>App-store style desktop app for one-click server install. Quiet since mid-2025.</td><td class="kind">Tauri GUI</td><td class="stars">89</td></tr>
+          <tr><td class="name"><a href="https://github.com/kwonye/mcpx">mcpx</a></td><td>“Install once, auth once, sync to every AI coding tool” via <code>mcpx sync</code>. Brand new and unproven, but exactly your multi-client thesis.</td><td class="kind">CLI</td><td class="stars">4</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Also real but thinner: <a href="https://github.com/nstebbins/mcp-manager">nstebbins/mcp-manager</a> (25★),
+      <a href="https://github.com/marcusschiesser/mcp-config">mcp-config</a> (64★),
+      <a href="https://github.com/lydakis/mcpx">lydakis/mcpx</a> (52★, unrelated to the one above),
+      <a href="https://github.com/Jeamee/MCPHub-Desktop">MCPHub-Desktop</a> (150★, stale),
+      <a href="https://gettoolbase.ai">Toolbase</a> and <a href="https://docs.mcp.run">mcp.run</a> (closed products with
+      per-client profiles).</p>
+  </section>
+
+  <!-- ===================== REGISTRIES ===================== -->
+  <section id="registries">
+    <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--cool-a),var(--cool-b))"></span>
+      <h2>Registries and catalogs</h2></div>
+    <p class="lede">Where the packages come from. Your Marketplace screen already reads the first one and both native
+      client catalogs.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Registry</th><th>What it is</th><th>Stars</th></tr></thead>
+        <tbody>
+          <tr><td class="name"><a href="https://github.com/modelcontextprotocol/registry">Official MCP Registry</a></td><td>The community-owned, namespace-authenticated metadata registry backed by Anthropic, GitHub, PulseMCP, and Microsoft. The upstream everyone else re-indexes.</td><td class="stars">7,215</td></tr>
+          <tr><td class="name"><a href="https://glama.ai/mcp/servers">Glama</a></td><td>80k+ listed servers layered on the official registry, adding health checks, quality scores, and security audits.</td><td class="stars">—</td></tr>
+          <tr><td class="name"><a href="https://www.pulsemcp.com/servers">PulseMCP</a></td><td>Daily-updated directory aggregating the official registry, Glama, and Smithery.</td><td class="stars">—</td></tr>
+          <tr><td class="name"><a href="https://github.com/chatmcp/mcpso">mcp.so</a></td><td>Community marketplace with admin-reviewed submissions. OSS snapshot is stale even if the site is not.</td><td class="stars">2,105</td></tr>
+          <tr><td class="name"><a href="https://opentools.com">OpenTools</a></td><td>Open registry plus an OpenAI-compatible function-calling API layered over MCP tools.</td><td class="stars">—</td></tr>
+          <tr><td class="name"><a href="https://github.com/punkpeye/awesome-mcp-servers">awesome-mcp-servers</a></td><td>The dominant curated list by a wide margin.</td><td class="stars">93,857</td></tr>
+          <tr><td class="name"><a href="https://github.com/modelcontextprotocol/servers">modelcontextprotocol/servers</a></td><td>Anthropic's reference server collection — filesystem, git, fetch, memory. What most installers actually install.</td><td class="stars">90,034</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Client-native galleries</h3>
+    <p>Each of these writes into exactly one client, which is the gap your app exists to fill:
+      <a href="https://code.visualstudio.com/docs/agent-customization/mcp-servers">VS Code MCP gallery</a>,
+      <a href="https://cursor.directory">Cursor Directory</a>,
+      <a href="https://github.com/cline/mcp-marketplace">Cline MCP Marketplace</a>,
+      Windsurf's plugin store, and <a href="https://www.continue.dev/hub">Continue Hub</a>.</p>
+  </section>
+
+  <!-- ===================== SKILLS ===================== -->
+  <section id="skills">
+    <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--hot-a),var(--hot-b))"></span>
+      <h2>Skills and plugin distribution</h2></div>
+    <p class="lede">The newest category, and the one moving fastest. Note the star counts — this is where the attention
+      is.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Project</th><th>What it is</th><th>Targets</th><th>Stars</th></tr></thead>
+        <tbody>
+          <tr><td class="name"><a href="https://github.com/anthropics/skills">anthropics/skills</a></td><td>The official Agent Skills spec plus reference skills and an authoring template.</td><td class="kind">Claude</td><td class="stars">173,252</td></tr>
+          <tr><td class="name"><a href="https://github.com/openai/skills">openai/skills</a></td><td>The official Skills Catalog for Codex.</td><td class="kind">Codex</td><td class="stars">25,356</td></tr>
+          <tr><td class="name"><a href="https://github.com/anthropics/claude-plugins-official">claude-plugins-official</a></td><td>Anthropic's curated plugin directory, including skill-creator and plugin-dev.</td><td class="kind">Claude Code</td><td class="stars">35,800</td></tr>
+          <tr><td class="name"><a href="https://github.com/davila7/claude-code-templates">claude-code-templates</a></td><td><code>npx</code> installer for 1000+ agents, commands, MCPs, and hooks, with a dashboard at aitmpl.com.</td><td class="kind">Claude Code</td><td class="stars">30,500</td></tr>
+          <tr><td class="name"><a href="https://github.com/SuperClaude-Org/SuperClaude_Framework">SuperClaude</a></td><td>Commands and agent personas layered on Claude Code. Beware the many near-identical forks.</td><td class="kind">Claude Code</td><td class="stars">23,900</td></tr>
+          <tr><td class="name"><a href="https://github.com/automazeio/ccpm">ccpm</a></td><td>Spec-driven project management using GitHub Issues and git worktrees for parallel sub-agents.</td><td class="kind">Claude Code</td><td class="stars">8,400</td></tr>
+          <tr><td class="name"><a href="https://github.com/iflytek/skillhub">skillhub</a></td><td>Self-hosted enterprise skill registry: versioned publishing, RBAC, audit logs, Docker/K8s.</td><td class="kind">Any</td><td class="stars">5,000</td></tr>
+          <tr><td class="name"><a href="https://claude-plugins.dev/">claude-plugins.dev</a></td><td>Community registry with a one-shot <code>npx claude-plugins install</code> that resolves marketplace and plugin together.</td><td class="kind">Claude Code</td><td class="stars">—</td></tr>
+          <tr><td class="name"><a href="https://github.com/gemini-cli-extensions">Gemini CLI Extensions</a></td><td>Google's first-party extension mechanism plus an auto-crawled gallery at geminicli.com/extensions.</td><td class="kind">Gemini CLI</td><td class="stars">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Skill validators</h3>
+    <p>A small cottage industry, none dominant yet:
+      <a href="https://github.com/bitflight-devops/skilllint">skilllint</a>,
+      <a href="https://github.com/thedaviddias/skill-check">skill-check</a> (188★),
+      <a href="https://github.com/agent-ecosystem/skill-validator">skill-validator</a> (236★), plus Anthropic's own
+      <code>claude plugin validate</code> and the skill-creator plugin's benchmark harness. Your definition checks land
+      in the same territory.</p>
+
+    <h3>Curated lists worth mining for content</h3>
+    <p><a href="https://github.com/ComposioHQ/awesome-claude-skills">awesome-claude-skills</a> (74,319★),
+      <a href="https://github.com/hesreallyhim/awesome-claude-code">awesome-claude-code</a> (53,401★),
+      <a href="https://github.com/PatrickJS/awesome-cursorrules">awesome-cursorrules</a> (40,700★),
+      <a href="https://github.com/awesome-opencode/awesome-opencode">awesome-opencode</a> (10,000★),
+      <a href="https://github.com/RoggeOhta/awesome-codex-cli">awesome-codex-cli</a> (499★),
+      <a href="https://github.com/Piebald-AI/awesome-gemini-cli-extensions">awesome-gemini-cli-extensions</a> (66★).</p>
+  </section>
+
+  <!-- ===================== SYNC ===================== -->
+  <section id="sync">
+    <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--indigo-a),var(--indigo-b))"></span>
+      <h2>Cross-tool config and rules sync</h2></div>
+    <p class="lede">Write one config, project it into every agent's native format. Extremely crowded with
+      near-identical single-maintainer CLIs — these are the ones with real traction.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Project</th><th>What it is</th><th>Multi-machine story</th><th>Stars</th></tr></thead>
+        <tbody>
+          <tr><td class="name"><a href="https://github.com/agentsmd/agents.md">AGENTS.md</a></td><td>The markdown standard everything else generates, now stewarded by the Agentic AI Foundation.</td><td class="kind">n/a — it's the format</td><td class="stars">24,077</td></tr>
+          <tr><td class="name"><a href="https://github.com/intellectronica/ruler">Ruler</a></td><td>One set of instructions and MCP config applied to many agents' native files via <code>ruler.toml</code>.</td><td class="kind">Commit <code>.ruler/</code> to git</td><td class="stars">2,907</td></tr>
+          <tr><td class="name"><a href="https://github.com/dyoshikawa/rulesync">rulesync</a></td><td>Generates 20+ tools' rule and MCP files from one <code>.rulesync/</code> source.</td><td class="kind">Git</td><td class="stars">1,375</td></tr>
+          <tr><td class="name"><a href="https://github.com/FutureExcited/vibe-rules">vibe-rules</a></td><td>Local rule store at <code>~/.vibe-rules/</code> with per-editor conversion. Stale since Aug 2025.</td><td class="kind">Local only</td><td class="stars">529</td></tr>
+          <tr><td class="name"><a href="https://github.com/yzhao062/anywhere-agents">anywhere-agents</a></td><td>One config for all agents, with a destructive-command guard.</td><td class="kind">Git</td><td class="stars">241</td></tr>
+          <tr><td class="name"><a href="https://github.com/block/ai-rules">Block's ai-rules</a></td><td>Rules, commands, and skills across agents from one place. Published by Block.</td><td class="kind">Git</td><td class="stars">128</td></tr>
+          <tr><td class="name"><a href="https://github.com/PanisHandsome/ai-rules-sync">ai-rules-sync</a></td><td>Zero-dependency converter between AGENTS.md, CLAUDE.md, .cursorrules, Copilot, Windsurf, Cline, Aider, Gemini. Also a GitHub Action.</td><td class="kind">Git / CI</td><td class="stars">119</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Dotfiles-style personal sync</h3>
+    <p>The pattern people actually use today for multiple Macs: chezmoi or stow templating over
+      <code>~/.claude</code>, <code>~/.codex</code>, <code>~/.cursor</code>. Working examples:
+      <a href="https://github.com/signalridge/dotfiles">signalridge/dotfiles</a> (chezmoi + Nix, symlinks every agent's
+      skills folder and reconciles Claude MCP config with a run-script) and
+      <a href="https://github.com/ooloth/dotfiles">ooloth/dotfiles</a> (one-command bootstrap of a new Mac).</p>
+  </section>
+
+  <!-- ===================== GOVERNANCE ===================== -->
+  <section id="governance">
+    <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--graphite-a),var(--graphite-b))"></span>
+      <h2>Enterprise governance and gateways</h2></div>
+    <p class="lede">Where audit trails and allow-lists already exist — but always as a network gateway for an org,
+      never as a local record for one person.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Product</th><th>What it is</th><th>Model</th></tr></thead>
+        <tbody>
+          <tr><td class="name"><a href="https://github.com/agentic-community/mcp-gateway-registry">MCP Gateway &amp; Registry</a></td><td>Centralized OAuth, dynamic discovery, and a governed allow-list of MCP servers. 892★, very active.</td><td class="kind">Open source</td></tr>
+          <tr><td class="name"><a href="https://obot.ai">Obot</a></td><td>Enterprise AI control plane and MCP gateway with registry approval, audit trails, and policy enforcement. 973★.</td><td class="kind">Open core</td></tr>
+          <tr><td class="name"><a href="https://mcpmanager.ai">MCP Manager</a></td><td>Commercial gateway whose entire pitch is audit trail plus governance: SSO, PII filtering, OTel export.</td><td class="kind">SaaS</td></tr>
+          <tr><td class="name"><a href="https://portkey.ai/features/mcp">Portkey MCP Gateway</a></td><td>Centralized auth, allow-listed registry, access control, observability.</td><td class="kind">SaaS</td></tr>
+          <tr><td class="name"><a href="https://kiro.dev/docs/enterprise/governance/mcp/">Kiro Enterprise Governance</a></td><td>AWS admin console with a JSON allow-list of approved MCP servers at org level.</td><td class="kind">Commercial</td></tr>
+          <tr><td class="name"><a href="https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-mcp-server-access">Copilot org policy</a></td><td>Org-wide custom instructions plus enterprise policy restricting Copilot to a private MCP registry.</td><td class="kind">Platform feature</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Meta-reference: <a href="https://github.com/bh-rat/awesome-mcp-enterprise">awesome-mcp-enterprise</a> tracks this
+      whole tier.</p>
+  </section>
+
+  <!-- ===================== ADJACENT ===================== -->
+  <section id="adjacent">
+    <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--violet-a),var(--violet-b))"></span>
+      <h2>Adjacent: session managers and desktop clients</h2></div>
+    <p class="lede">Not competitors, but they own the "GUI for agents" mental slot, and some of them manage MCP config
+      on the side.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>App</th><th>What it is</th><th>Platform</th><th>Stars</th></tr></thead>
+        <tbody>
+          <tr><td class="name"><a href="https://github.com/winfunc/opcode">opcode</a></td><td>Formerly Claudia. Project and session browser, custom agents, usage analytics, checkpoints, MCP management, OS sandboxing. Quiet since the ownership transfer.</td><td class="kind">Tauri, macOS/Linux</td><td class="stars">22,394</td></tr>
+          <tr><td class="name"><a href="https://conductor.build">Conductor</a></td><td>Runs several Claude Code, Codex, and Cursor sessions in parallel, each in an isolated git worktree.</td><td class="kind">Tauri, macOS</td><td class="stars">closed</td></tr>
+          <tr><td class="name"><a href="https://github.com/nimbalyst/nimbalyst">Nimbalyst</a></td><td>Successor to Crystal. Parallel agent sessions in worktrees with WYSIWYG editors and task tracking.</td><td class="kind">Desktop + mobile</td><td class="stars">1,635</td></tr>
+          <tr><td class="name"><a href="https://github.com/BloopAI/vibe-kanban">Vibe Kanban</a></td><td>Kanban board orchestrating agents across worktrees. Hugely popular, but the project says it is sunsetting.</td><td class="kind">Local web</td><td class="stars">27,994</td></tr>
+          <tr><td class="name"><a href="https://github.com/minchenlee/c9watch">c9watch</a></td><td>Menu-bar dashboard of every running Claude Code session and whether it needs permission.</td><td class="kind">Native macOS</td><td class="stars">127</td></tr>
+          <tr><td class="name"><a href="https://github.com/CherryHQ/cherry-studio">Cherry Studio</a></td><td>Multi-provider desktop AI client with a dedicated MCP settings panel.</td><td class="kind">Electron</td><td class="stars">51,373</td></tr>
+          <tr><td class="name"><a href="https://boltai.com">BoltAI</a></td><td>Native SwiftUI Mac client with per-agent MCP tool toggles and project-level config. $79–$199 one-time.</td><td class="kind">Native macOS</td><td class="stars">closed</td></tr>
+          <tr><td class="name"><a href="https://github.com/nanbingxyz/5ire">5ire</a></td><td>Cross-platform MCP client with a local knowledge base.</td><td class="kind">Electron</td><td class="stars">5,345</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Also: <a href="https://www.raycast.com/raycast/model-context-protocol-registry">Raycast's MCP commands</a>
+      (install, start, stop, inspect servers without leaving the launcher) — relevant since you already ship a Raycast
+      extension, and <a href="https://apps.apple.com/ae/app/6754086328">Vibe Manager – MCP Sync</a> on the Mac App Store.</p>
+  </section>
+
+  <!-- ===================== POSITION ===================== -->
+  <section id="position">
+    <div class="sec-head"><span class="dot" style="background:linear-gradient(150deg,var(--hot-a),var(--hot-b))"></span>
+      <h2>Where this leaves you</h2></div>
+
+    <h3>Nobody else does these</h3>
+    <ul>
+      <li><strong>Plan before change, with a digest.</strong> Across 70+ projects, not one shows a Terraform-style diff
+        of exactly what will be written and refuses to run if the plan changed after review. The nearest is mcpm.sh's
+        <code>update --check</code>, which only covers version bumps.</li>
+      <li><strong>Receipts for one person.</strong> Audit logs exist only in the enterprise gateway tier — ToolHive,
+        Obot, mcpmanager.ai — where they are a network product for an org. Nobody keeps a local, redacted,
+        per-operation receipt on a personal machine.</li>
+      <li><strong>Honest verification vocabulary.</strong> Observed versus Installed versus Authenticated, with the app
+        refusing to infer the last one, appears to be unique. Everything else reports a single ambiguous
+        "installed" state.</li>
+      <li><strong>Per-client partial success.</strong> Configuring three clients independently and keeping the
+        successes when one fails is not something the multi-client installers advertise.</li>
+    </ul>
+
+    <h3>Where others are ahead, and worth stealing</h3>
+    <ul>
+      <li><strong>Git-backed sync with conflict resolution</strong> (skills-manager) is a friendlier multi-machine story
+        than an encrypted blob, because you can see history and merge. Your Git backup is one commit away from this.</li>
+      <li><strong>Lockfile plus content hashes</strong> (tech-leads-club/agent-skills) turns your reviewed-source
+        fingerprint into an update mechanism: know when an installed skill drifted from the library.</li>
+      <li><strong>Security scanning before install</strong> — Snyk in agent-skills, image signing in Docker's catalog,
+        provenance in ToolHive. You already detect executable content; scanning is the next step.</li>
+      <li><strong>Filter a catalog by source and by client.</strong> Cursor Directory and the VS Code gallery both do
+        this and it is table stakes.</li>
+      <li><strong>Containerized isolation</strong> (ToolHive, Docker) is the strongest answer to "should I trust this
+        MCP server", and is orthogonal to everything you have built.</li>
+    </ul>
+
+    <div class="note safe"><strong>The honest summary.</strong> The GUI slot is contested — skills-manager and SkillDock
+      are doing a version of your app, and Promptzy is doing your positioning on macOS. What none of them treat as the
+      point is the review-and-receipt discipline. That is the thing to lead with, not "manage your skills".</div>
+  </section>
+
+  <footer>
+    Compiled 2 September 2026 from four parallel searches. GitHub star counts and archive status were verified against
+    the GitHub API on that date; entries marked closed or with no star count are commercial products where a count could
+    not be verified. Two references could not be independently confirmed and were excluded: an "mcpmarket.com" listing
+    for a Component Sync tool, and a chezmoi MCP-sync tutorial with no public repo.
+  </footer>
+</div>
