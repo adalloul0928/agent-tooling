@@ -1,0 +1,738 @@
+<title>Glasshouse — Agent Tooling Mac App Concepts</title>
+<style>
+  /* ============ Gallery chrome (deliberately single-theme: dark walls frame both light & dark scenes) ============ */
+  :root{
+    --bg:#0b0d13; --panel:#12141c; --panel2:#171a24;
+    --ink:#e9ebf2; --muted:#8b90a3; --faint:#5b6072;
+    --hair:rgba(255,255,255,.08); --hair2:rgba(255,255,255,.14);
+    --accent:#7aa2ff;
+    --ok:#30d158; --warn:#ffd60a; --bad:#ff453a; --manual:#98989d;
+    --claude:#d97757; --codex:#10a37f;
+    --sys:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:var(--bg)}
+  body{
+    font-family:var(--sys); background:var(--bg); color:var(--ink);
+    line-height:1.5; -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  ::selection{background:rgba(122,162,255,.3)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- header ---------- */
+  .hero{max-width:1240px;margin:0 auto;padding:56px 32px 8px}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  .hero h1{font-size:clamp(28px,4vw,44px);font-weight:700;letter-spacing:-.02em;margin:10px 0 12px;text-wrap:balance}
+  .hero p{max-width:62ch;color:var(--muted);font-size:15px}
+  .hero p b{color:var(--ink);font-weight:600}
+  .truth{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .truth span{font-family:var(--mono);font-size:11.5px;color:var(--muted);border:1px solid var(--hair);border-radius:100px;padding:5px 12px;background:var(--panel)}
+  .truth i{font-style:normal;margin-right:6px}
+
+  /* ---------- concept switcher ---------- */
+  .switch-wrap{position:sticky;top:0;z-index:50;padding:14px 32px;background:linear-gradient(var(--bg) 55%,rgba(11,13,19,0));pointer-events:none}
+  .switch{pointer-events:auto;max-width:1240px;margin:0 auto;display:flex;gap:4px;padding:4px;border-radius:14px;
+    background:rgba(23,26,36,.72);border:1px solid var(--hair2);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);
+    box-shadow:0 12px 32px rgba(0,0,0,.4); overflow-x:auto}
+  .switch button{flex:1;min-width:150px;border:0;background:transparent;color:var(--muted);font-family:var(--sys);
+    font-size:13px;font-weight:600;padding:9px 14px;border-radius:10px;cursor:pointer;white-space:nowrap;transition:color .15s}
+  .switch button small{display:block;font-weight:500;font-size:10.5px;color:var(--faint);letter-spacing:.02em;margin-top:1px}
+  .switch button[aria-selected="true"]{background:rgba(122,162,255,.14);color:var(--ink);box-shadow:inset 0 0 0 1px rgba(122,162,255,.28)}
+  .switch button[aria-selected="true"] small{color:var(--accent)}
+  .switch button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+  /* ---------- concept sections ---------- */
+  .concept{max-width:1240px;margin:0 auto;padding:34px 32px 10px;display:none}
+  .concept.active{display:block}
+  .c-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  .c-head .n{font-family:var(--mono);font-size:12px;color:var(--faint)}
+  .c-head h2{font-size:26px;font-weight:700;letter-spacing:-.02em}
+  .c-head .thesis{color:var(--muted);font-size:14px}
+  .stage-scroll{overflow-x:auto;border-radius:22px;margin-top:16px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+  .stage{min-width:1180px;height:820px;border-radius:22px;position:relative;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;border:1px solid var(--hair2)}
+  .specs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;background:var(--hair);
+    border:1px solid var(--hair);border-radius:14px;overflow:hidden;margin:18px 0 30px}
+  .specs>div{background:var(--panel);padding:14px 18px}
+  .specs h4{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:5px}
+  .specs p{font-size:13px;color:var(--muted)}
+  .specs p b{color:var(--ink);font-weight:600}
+
+  /* ============ Shared mac-mockup primitives ============ */
+  .lights{display:flex;gap:8px}
+  .lights i{width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.15)}
+  .lights i:nth-child(1){background:#ff5f57}.lights i:nth-child(2){background:#febc2e}.lights i:nth-child(3){background:#28c840}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)} .dot.manual{background:var(--manual)}
+  .dot.claude{background:var(--claude)} .dot.codex{background:var(--codex)}
+  .mockup, .mockup *{line-height:1.35}
+  svg.ic{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* iOS-style toggle */
+  .tog{width:36px;height:22px;border-radius:11px;background:rgba(120,120,128,.32);position:relative;flex:none}
+  .tog.on{background:#34c759}
+  .tog::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:left .15s}
+  .tog.on::after{left:16px}
+
+  /* ============================================================
+     CONCEPT A — CONSOLE  (light System-Settings style)
+  ============================================================ */
+  .wall-a{background:
+    radial-gradient(90rem 50rem at 85% -10%, #f9d8c4 0%, transparent 50%),
+    radial-gradient(70rem 46rem at -10% 20%, #b9d4f5 0%, transparent 55%),
+    radial-gradient(60rem 60rem at 55% 120%, #e3d0f2 0%, transparent 55%),
+    linear-gradient(160deg,#c7d8f2 0%,#e8dcee 48%,#f6e2d3 100%)}
+  .win-a{width:1120px;height:744px;border-radius:12px;display:flex;overflow:hidden;color:#1d1d1f;
+    box-shadow:0 42px 90px rgba(30,30,60,.35),0 2px 8px rgba(30,30,60,.2);border:.5px solid rgba(255,255,255,.65)}
+  .a-side{width:252px;flex:none;padding:16px 12px;display:flex;flex-direction:column;gap:2px;
+    background:rgba(255,255,255,.42);backdrop-filter:blur(38px) saturate(1.8);-webkit-backdrop-filter:blur(38px) saturate(1.8);
+    border-right:.5px solid rgba(60,60,90,.14)}
+  .a-side .lights{padding:2px 6px 14px}
+  .a-search{display:flex;align-items:center;gap:7px;background:rgba(120,120,140,.14);border-radius:8px;padding:6px 9px;
+    font-size:12.5px;color:#71717a;margin:0 4px 12px}
+  .a-prof{display:flex;align-items:center;gap:10px;margin:0 4px 14px;padding:9px 10px;border-radius:11px;
+    background:rgba(255,255,255,.55);box-shadow:0 1px 3px rgba(40,40,80,.1);border:.5px solid rgba(255,255,255,.7)}
+  .a-prof .orb{width:32px;height:32px;border-radius:9px;flex:none;background:conic-gradient(from 210deg,#7aa2ff,#b98ef7,#ff9c7a,#7aa2ff)}
+  .a-prof b{display:block;font-size:12.5px;font-weight:600}
+  .a-prof span{font-size:10.5px;color:#8e8e93}
+  .a-prof .chev{margin-left:auto;color:#aeaeb2;font-size:11px}
+  .a-nav{display:flex;flex-direction:column;gap:1px}
+  .a-nav a{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:500;color:#3a3a3c;padding:6px 10px;border-radius:8px}
+  .a-nav a .cnt{margin-left:auto;font-size:11px;color:#98989d}
+  .a-nav a.sel{background:#0a84ff;color:#fff}
+  .a-nav a.sel .cnt{color:rgba(255,255,255,.8)}
+  .a-nav a .badge{margin-left:auto;background:#0a84ff;color:#fff;font-size:10.5px;font-weight:600;border-radius:100px;padding:1px 7px}
+  .a-nav .grp{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#98989d;font-weight:600;padding:14px 10px 4px}
+  .a-foot{margin-top:auto;padding:10px;display:flex;align-items:center;gap:8px;font-size:11px;color:#6e6e73;font-family:var(--mono)}
+  .a-main{flex:1;background:rgba(248,248,252,.82);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);padding:22px 26px;overflow:hidden;display:flex;flex-direction:column;gap:16px}
+  .a-top{display:flex;align-items:center;gap:14px}
+  .a-top h3{font-size:21px;font-weight:700;letter-spacing:-.01em}
+  .a-seg{display:flex;background:rgba(120,120,140,.14);border-radius:9px;padding:2px;margin-left:auto}
+  .a-seg span{font-size:12px;font-weight:500;padding:4px 14px;border-radius:7px;color:#48484a}
+  .a-seg span.on{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.14);font-weight:600}
+  .a-run{display:flex;align-items:center;gap:7px;background:#0a84ff;color:#fff;font-size:12.5px;font-weight:600;
+    padding:7px 14px;border-radius:9px;box-shadow:0 4px 12px rgba(10,132,255,.35)}
+  .a-card{background:rgba(255,255,255,.66);backdrop-filter:blur(24px) saturate(1.6);-webkit-backdrop-filter:blur(24px) saturate(1.6);
+    border:.5px solid rgba(255,255,255,.8);border-radius:16px;box-shadow:0 8px 28px rgba(50,50,90,.1)}
+  .a-hero{display:flex;align-items:center;gap:30px;padding:22px 28px}
+  .a-ring{position:relative;width:132px;height:132px;flex:none}
+  .a-ring svg{width:132px;height:132px;transform:rotate(-90deg)}
+  .a-ring .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .a-ring .mid b{font-size:26px;font-weight:700;letter-spacing:-.02em}
+  .a-ring .mid span{font-size:10.5px;color:#8e8e93;font-weight:500}
+  .a-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex:1}
+  .a-stat{padding:12px 16px;border-radius:12px;background:rgba(255,255,255,.6);border:.5px solid rgba(60,60,90,.08)}
+  .a-stat .v{font-size:24px;font-weight:700;letter-spacing:-.02em}
+  .a-stat .l{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#6e6e73;font-weight:500;margin-top:2px}
+  .a-hero-meta{position:absolute;right:28px;bottom:14px;font-size:11px;color:#98989d;font-family:var(--mono)}
+  .a-sect{font-size:12.5px;font-weight:600;color:#6e6e73;margin:2px 2px -8px}
+  .a-row{display:flex;align-items:center;gap:12px;padding:13px 18px;font-size:13px}
+  .a-row+.a-row{border-top:.5px solid rgba(60,60,90,.1)}
+  .a-row .id{font-family:var(--mono);font-size:11.5px;color:#48484a}
+  .a-row .msg{color:#8e8e93;font-size:12px}
+  .a-row .act{margin-left:auto;flex:none;font-size:12px;font-weight:600;color:#0a84ff;background:rgba(10,132,255,.12);padding:5px 13px;border-radius:100px}
+  .a-row .act.filled{background:#0a84ff;color:#fff}
+  .a-minis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .a-mini{padding:14px 18px}
+  .a-mini .t{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#6e6e73}
+  .a-mini .v{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-top:6px}
+  .a-mini .s{font-size:11px;color:#98989d;margin-top:1px}
+
+  /* ============================================================
+     CONCEPT B — LATTICE  (dark surface matrix)
+  ============================================================ */
+  .wall-b{background:
+    radial-gradient(70rem 40rem at 15% -10%, #2b3fae55 0%, transparent 55%),
+    radial-gradient(60rem 50rem at 95% 15%, #7c4fd066 0%, transparent 55%),
+    radial-gradient(50rem 40rem at 60% 115%, #0e7f7f4d 0%, transparent 60%),
+    linear-gradient(155deg,#090a1c 0%,#131540 55%,#251a4d 100%)}
+  .win-b{width:1132px;height:756px;border-radius:12px;overflow:hidden;color:#f2f3f8;display:flex;flex-direction:column;
+    background:rgba(18,19,30,.58);backdrop-filter:blur(42px) saturate(1.5);-webkit-backdrop-filter:blur(42px) saturate(1.5);
+    border:.5px solid rgba(255,255,255,.16);box-shadow:0 46px 100px rgba(0,0,10,.6)}
+  .b-bar{display:flex;align-items:center;gap:16px;padding:13px 18px;border-bottom:.5px solid rgba(255,255,255,.1)}
+  .b-bar b{font-size:13.5px;font-weight:600}
+  .b-bar .hint{font-size:11px;color:rgba(235,235,245,.45)}
+  .b-chips{display:flex;gap:8px;margin-left:auto}
+  .b-chip{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:rgba(235,235,245,.75);
+    background:rgba(255,255,255,.08);border:.5px solid rgba(255,255,255,.12);border-radius:100px;padding:5px 12px}
+  .b-chip.on{background:rgba(122,162,255,.22);border-color:rgba(122,162,255,.5);color:#cfe0ff}
+  .b-body{flex:1;display:flex;min-height:0}
+  .b-grid{flex:1;padding:16px 8px 12px 20px;overflow:hidden;display:flex;flex-direction:column}
+  table.b-m{border-collapse:collapse;width:100%}
+  .b-m th,.b-m td{padding:0;text-align:center}
+  .b-m .lbl{text-align:left;font-size:12.5px;font-weight:500;padding:5px 10px 5px 2px;white-space:nowrap;color:rgba(242,243,248,.92)}
+  .b-m .lbl small{color:rgba(235,235,245,.4);font-weight:400;margin-left:7px;font-size:11px}
+  .b-m .grp td{padding:14px 0 5px 2px;text-align:left;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:rgba(235,235,245,.42);font-weight:600}
+  .b-m thead .fam{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding-bottom:2px}
+  .b-m thead .fam.claude{color:#f2a488}.b-m thead .fam.codex{color:#5fd3b3}
+  .b-m thead .srf{font-size:10.5px;color:rgba(235,235,245,.55);font-weight:500;padding:2px 0 10px;width:56px}
+  .b-m thead .famline{height:2px;border-radius:2px;margin:0 10px}
+  .cell{width:24px;height:24px;border-radius:7px;margin:2.5px auto;position:relative}
+  .cell.g{background:rgba(48,209,88,.9);box-shadow:0 0 10px rgba(48,209,88,.35)}
+  .cell.g.p::after{content:"P";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:rgba(0,40,10,.75)}
+  .cell.r{background:rgba(255,69,58,.16);box-shadow:inset 0 0 0 1.6px var(--bad)}
+  .cell.y{background:rgba(255,214,10,.82)}
+  .cell.n{background:rgba(255,255,255,.07)}
+  .cell.n::after{content:"";position:absolute;left:8px;right:8px;top:11px;height:1.6px;background:rgba(255,255,255,.25);border-radius:2px}
+  .cell.sel{outline:2px solid #7aa2ff;outline-offset:2px}
+  .b-legend{display:flex;gap:18px;align-items:center;padding:12px 4px 2px;font-size:11px;color:rgba(235,235,245,.55);margin-top:auto}
+  .b-legend span{display:flex;align-items:center;gap:7px}
+  .b-legend .cell{width:14px;height:14px;border-radius:4.5px;margin:0}
+  .b-rail{width:308px;flex:none;border-left:.5px solid rgba(255,255,255,.1);background:rgba(10,11,20,.45);
+    backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);padding:18px;display:flex;flex-direction:column;gap:13px;font-size:12.5px}
+  .b-rail .path{font-family:var(--mono);font-size:11px;color:rgba(235,235,245,.5)}
+  .b-rail h4{font-size:15px;font-weight:700;letter-spacing:-.01em}
+  .st-chip{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.06em;border-radius:100px;padding:4px 11px;width:fit-content}
+  .st-chip.bad{background:rgba(255,69,58,.16);color:#ff7d73;border:.5px solid rgba(255,69,58,.4)}
+  .b-rail p{color:rgba(235,235,245,.62);font-size:12px}
+  .b-code{font-family:var(--mono);font-size:11px;background:rgba(0,0,0,.42);border:.5px solid rgba(255,255,255,.12);
+    border-radius:10px;padding:11px 13px;color:#b8e39a;overflow-x:auto;white-space:nowrap}
+  .b-code i{font-style:normal;color:rgba(235,235,245,.4)}
+  .b-acts{display:flex;gap:8px}
+  .b-btn{flex:1;text-align:center;font-size:12.5px;font-weight:600;border-radius:9px;padding:8px 0;background:rgba(255,255,255,.1);border:.5px solid rgba(255,255,255,.14)}
+  .b-btn.pri{background:#0a84ff;border-color:transparent;box-shadow:0 4px 14px rgba(10,132,255,.4)}
+  .b-note{font-size:11px;color:rgba(235,235,245,.45);border-left:2px solid rgba(255,255,255,.16);padding-left:10px}
+  .b-pr{margin-top:auto;display:flex;align-items:center;gap:9px;font-size:11.5px;color:rgba(235,235,245,.6);
+    background:rgba(255,255,255,.06);border:.5px solid rgba(255,255,255,.1);border-radius:10px;padding:9px 12px}
+  .b-pr b{color:#cfe0ff;font-weight:600}
+
+  /* ============================================================
+     CONCEPT C — SHELF  (warm light App-Store catalog)
+  ============================================================ */
+  .wall-c{background:
+    radial-gradient(80rem 46rem at 90% -20%, #f7c9b2 0%, transparent 55%),
+    radial-gradient(70rem 50rem at -15% 30%, #e9c4e6 0%, transparent 55%),
+    radial-gradient(60rem 46rem at 60% 120%, #bcd2f2 0%, transparent 60%),
+    linear-gradient(150deg,#f3d6c3 0%,#ecc9e2 50%,#c8d7f0 100%)}
+  .win-c{width:1120px;height:744px;border-radius:12px;display:flex;overflow:hidden;color:#1d1d1f;
+    box-shadow:0 42px 90px rgba(70,40,50,.35);border:.5px solid rgba(255,255,255,.6)}
+  .c-side{width:208px;flex:none;padding:16px 12px;background:rgba(255,255,255,.4);
+    backdrop-filter:blur(38px) saturate(1.8);-webkit-backdrop-filter:blur(38px) saturate(1.8);
+    border-right:.5px solid rgba(80,50,60,.12);display:flex;flex-direction:column}
+  .c-side .lights{padding:2px 6px 16px}
+  .c-side a{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:500;color:#3a3a3c;padding:6.5px 10px;border-radius:8px}
+  .c-side a.sel{background:rgba(255,255,255,.75);box-shadow:0 1px 4px rgba(80,40,60,.12);font-weight:600}
+  .c-side a .badge{margin-left:auto;background:#ff453a;color:#fff;font-size:10.5px;font-weight:600;border-radius:100px;padding:1px 6.5px}
+  .c-user{margin-top:auto;display:flex;gap:9px;align-items:center;padding:10px;border-radius:10px;background:rgba(255,255,255,.5)}
+  .c-user .orb{width:26px;height:26px;border-radius:50%;background:conic-gradient(from 40deg,#ff9c7a,#b98ef7,#7aa2ff,#ff9c7a)}
+  .c-user b{font-size:11.5px;display:block}
+  .c-user span{font-size:10px;color:#8e8e93;font-family:var(--mono)}
+  .c-main{flex:1;overflow:hidden;background:rgba(252,250,250,.78);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);padding:24px 26px;display:flex;flex-direction:column;gap:18px}
+  .c-htop{display:flex;align-items:center}
+  .c-htop h3{font-size:21px;font-weight:700;letter-spacing:-.01em}
+  .c-htop .src{margin-left:auto;font-size:11.5px;color:#8e8e93;font-family:var(--mono)}
+  .c-hero{border-radius:18px;padding:24px 28px;display:flex;align-items:center;gap:26px;color:#fff;position:relative;overflow:hidden;
+    background:linear-gradient(120deg,#3a3f8f 0%,#7350b5 55%,#b0609b 100%);box-shadow:0 16px 40px rgba(80,60,140,.4)}
+  .c-hero::after{content:"";position:absolute;inset:0;background:radial-gradient(40rem 20rem at 85% -30%,rgba(255,255,255,.35),transparent 60%)}
+  .c-hero>*{position:relative;z-index:1}
+  .c-hero .tile{width:84px;height:84px;border-radius:20px;flex:none;background:rgba(255,255,255,.2);backdrop-filter:blur(10px);
+    border:.5px solid rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center}
+  .c-hero .tile svg{width:40px;height:40px;stroke:#fff;stroke-width:1.5}
+  .c-hero .eb{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;opacity:.75}
+  .c-hero h4{font-size:24px;font-weight:700;letter-spacing:-.02em;margin:3px 0 4px}
+  .c-hero p{font-size:12.5px;opacity:.85;max-width:52ch}
+  .c-hero .pills{display:flex;gap:8px;margin-top:12px}
+  .c-pill{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;border-radius:100px;padding:5px 12px;
+    background:rgba(255,255,255,.18);border:.5px solid rgba(255,255,255,.35)}
+  .c-manage{margin-left:auto;align-self:center;background:#fff;color:#3a3f8f;font-size:13px;font-weight:700;border-radius:100px;padding:9px 20px;box-shadow:0 6px 18px rgba(0,0,20,.25)}
+  .c-sect{display:flex;align-items:baseline;gap:10px;margin-bottom:-6px}
+  .c-sect h5{font-size:15px;font-weight:700}
+  .c-sect span{font-size:12px;color:#98989d}
+  .c-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .c-card{background:rgba(255,255,255,.66);border:.5px solid rgba(255,255,255,.85);border-radius:15px;padding:15px 16px;
+    box-shadow:0 6px 20px rgba(90,60,80,.1);display:flex;flex-direction:column;gap:8px;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+  .c-card.drift{box-shadow:0 6px 20px rgba(255,69,58,.14);border-color:rgba(255,69,58,.35)}
+  .c-card .top{display:flex;align-items:center;gap:11px}
+  .c-icon{width:38px;height:38px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff}
+  .c-icon svg{width:19px;height:19px;stroke-width:1.7}
+  .c-card b{font-size:13.5px;font-weight:600;display:block}
+  .c-card .meta{font-size:11px;color:#8e8e93}
+  .c-card .desc{font-size:11.5px;color:#6e6e73;min-height:30px}
+  .c-card .foot{display:flex;align-items:center;gap:6px;margin-top:auto}
+  .cl-pill{display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;border-radius:100px;padding:3px 9px;background:rgba(120,120,140,.12);color:#48484a}
+  .cl-pill.miss{background:rgba(255,69,58,.12);color:#d70015}
+  .c-card .get{margin-left:auto;font-size:11.5px;font-weight:700;color:#0a84ff;background:rgba(10,132,255,.12);border-radius:100px;padding:4px 13px}
+  .c-card .get.warn{color:#d70015;background:rgba(255,69,58,.12)}
+  .c-vend{display:flex;gap:10px}
+  .c-vchip{flex:1;background:rgba(255,255,255,.55);border:.5px solid rgba(255,255,255,.8);border-radius:12px;padding:10px 13px}
+  .c-vchip b{font-size:11.5px;font-weight:600;display:block}
+  .c-vchip span{font-size:10px;color:#8e8e93}
+
+  /* ============================================================
+     CONCEPT D — PRISM  (dark command palette)
+  ============================================================ */
+  .wall-d{background:
+    radial-gradient(70rem 40rem at 80% -10%, #0f5c4e88 0%, transparent 55%),
+    radial-gradient(60rem 50rem at 5% 30%, #14435e77 0%, transparent 60%),
+    radial-gradient(50rem 40rem at 50% 120%, #0a2f4d66 0%, transparent 60%),
+    linear-gradient(160deg,#04110f 0%,#0a2e29 55%,#122437 100%)}
+  .d-menubar{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:18px;padding:0 16px;
+    background:rgba(10,20,18,.4);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+    border-bottom:.5px solid rgba(255,255,255,.08);font-size:12px;color:rgba(240,245,244,.85);font-weight:500}
+  .d-menubar .apple{font-size:13px}
+  .d-menubar .right{margin-left:auto;display:flex;gap:14px;align-items:center;font-variant-numeric:tabular-nums}
+  .d-pal{width:664px;border-radius:16px;overflow:hidden;color:#eef2f1;
+    background:rgba(16,24,22,.62);backdrop-filter:blur(46px) saturate(1.6);-webkit-backdrop-filter:blur(46px) saturate(1.6);
+    border:.5px solid rgba(255,255,255,.18);box-shadow:0 50px 110px rgba(0,10,8,.7),0 0 0 .5px rgba(0,0,0,.4)}
+  .d-in{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:.5px solid rgba(255,255,255,.1)}
+  .d-in svg{width:19px;height:19px;color:rgba(238,242,241,.5)}
+  .d-in .q{font-size:17px;font-weight:500}
+  .d-in .caret{width:2px;height:20px;background:#34d0a8;border-radius:2px}
+  .d-in .hint{margin-left:auto;font-size:11px;color:rgba(238,242,241,.4)}
+  .d-grp{padding:9px 18px 3px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:rgba(238,242,241,.4);font-weight:700}
+  .d-row{display:flex;align-items:center;gap:12px;padding:9.5px 18px;font-size:13.5px}
+  .d-row .tile{width:30px;height:30px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff}
+  .d-row .tile svg{width:15px;height:15px;stroke-width:1.8}
+  .d-row b{font-weight:600}
+  .d-row .sub{font-size:11px;color:rgba(238,242,241,.45);font-family:var(--mono)}
+  .d-row .end{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;color:rgba(238,242,241,.55)}
+  .d-row.sel{background:rgba(52,208,168,.14);box-shadow:inset 2.5px 0 0 #34d0a8}
+  .d-kbd{font-family:var(--mono);font-size:10px;background:rgba(255,255,255,.09);border:.5px solid rgba(255,255,255,.14);border-radius:5px;padding:2px 6px}
+  .d-foot{display:flex;align-items:center;gap:16px;padding:10px 18px;border-top:.5px solid rgba(255,255,255,.1);font-size:11px;color:rgba(238,242,241,.5)}
+  .d-foot .doc{margin-left:auto;display:flex;align-items:center;gap:7px;font-variant-numeric:tabular-nums}
+  .d-toast{position:absolute;top:46px;right:22px;display:flex;align-items:center;gap:10px;font-size:12px;color:#eef2f1;
+    background:rgba(16,26,23,.72);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);
+    border:.5px solid rgba(255,255,255,.16);border-radius:12px;padding:11px 15px;box-shadow:0 16px 40px rgba(0,10,8,.5)}
+  .d-toast b{font-weight:600}
+  .d-toast .mono{font-family:var(--mono);font-size:11px;color:#8be3c8}
+  .d-widget{position:absolute;bottom:24px;right:24px;display:flex;align-items:center;gap:12px;
+    background:rgba(16,26,23,.66);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);
+    border:.5px solid rgba(255,255,255,.14);border-radius:14px;padding:11px 14px;color:#eef2f1;box-shadow:0 18px 44px rgba(0,10,8,.5)}
+  .d-widget .num-lg{font-size:16px;font-weight:700}
+  .d-widget .sub{font-size:10px;color:rgba(238,242,241,.5)}
+  .d-widget .fix{font-size:11px;font-weight:700;background:rgba(255,69,58,.2);color:#ff8d84;border-radius:100px;padding:4px 11px}
+
+  /* ============================================================
+     CONCEPT E — DECK  (menu-bar control center)
+  ============================================================ */
+  .wall-e{background:
+    radial-gradient(70rem 44rem at 20% -10%, #5b2e9e77 0%, transparent 55%),
+    radial-gradient(64rem 50rem at 100% 30%, #9e3e7a55 0%, transparent 60%),
+    radial-gradient(50rem 44rem at 50% 125%, #2b1f6b88 0%, transparent 60%),
+    linear-gradient(160deg,#140f33 0%,#311d5e 55%,#4b2560 100%)}
+  .e-menubar{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:18px;padding:0 14px;
+    background:rgba(20,14,40,.42);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+    border-bottom:.5px solid rgba(255,255,255,.08);font-size:12px;color:rgba(244,240,250,.85);font-weight:500}
+  .e-menubar .right{margin-left:auto;display:flex;gap:13px;align-items:center;font-variant-numeric:tabular-nums}
+  .e-menubar .gh{background:rgba(255,255,255,.16);border-radius:5px;padding:2px 7px;display:flex;align-items:center;gap:5px}
+  .e-panel{position:absolute;top:38px;right:14px;width:372px;border-radius:18px;padding:12px;color:#f2effa;
+    background:rgba(28,22,48,.55);backdrop-filter:blur(46px) saturate(1.6);-webkit-backdrop-filter:blur(46px) saturate(1.6);
+    border:.5px solid rgba(255,255,255,.18);box-shadow:0 40px 100px rgba(5,0,20,.7);
+    display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .e-tile{background:rgba(255,255,255,.09);border:.5px solid rgba(255,255,255,.12);border-radius:14px;padding:13px 14px}
+  .e-tile.w{grid-column:span 2}
+  .e-tile h6{font-size:11px;font-weight:600;color:rgba(242,239,250,.6);display:flex;align-items:center;gap:7px;margin-bottom:8px}
+  .e-doc{display:flex;gap:14px;align-items:center}
+  .e-doc .ring{position:relative;width:66px;height:66px;flex:none}
+  .e-doc .ring svg{width:66px;height:66px;transform:rotate(-90deg)}
+  .e-doc .ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+  .e-doc .big{font-size:19px;font-weight:700;letter-spacing:-.01em}
+  .e-doc .sub{font-size:10.5px;color:rgba(242,239,250,.55)}
+  .e-fix{margin-top:7px;display:inline-flex;font-size:11px;font-weight:700;background:rgba(255,69,58,.22);color:#ff9c94;border-radius:100px;padding:3.5px 11px}
+  .e-kv b{display:block;font-size:13px;font-weight:600;font-family:var(--mono)}
+  .e-kv span{font-size:10.5px;color:rgba(242,239,250,.55)}
+  .e-seg{display:flex;background:rgba(255,255,255,.1);border-radius:8px;padding:2px;margin-top:4px}
+  .e-seg span{flex:1;text-align:center;font-size:10.5px;font-weight:600;padding:4px 0;border-radius:6px;color:rgba(242,239,250,.6)}
+  .e-seg span.on{background:rgba(255,255,255,.22);color:#fff}
+  .e-auth{display:flex;flex-direction:column;gap:7px}
+  .e-arow{display:flex;align-items:center;gap:9px;font-size:12.5px}
+  .e-arow .mono{font-family:var(--mono);font-size:11px;color:rgba(242,239,250,.5);margin-left:2px}
+  .e-arow .re{margin-left:auto;font-size:10.5px;font-weight:700;color:#ffd60a;background:rgba(255,214,10,.16);border-radius:100px;padding:3px 10px}
+  .e-arow .okc{margin-left:auto;font-size:11px;color:#5ee08a}
+  .e-open{grid-column:span 2;text-align:center;font-size:12px;font-weight:600;color:rgba(242,239,250,.8);padding:9px;border-radius:11px;background:rgba(255,255,255,.08);border:.5px solid rgba(255,255,255,.1)}
+  .e-open .d-kbd{margin-left:7px}
+  .e-desktopmark{position:absolute;left:40px;bottom:36px;color:rgba(255,255,255,.5);font-size:12px;max-width:300px}
+  .e-desktopmark b{color:rgba(255,255,255,.85);font-weight:600;font-size:13px;display:block;margin-bottom:4px}
+
+  /* ---------- footer ---------- */
+  .next{max-width:1240px;margin:0 auto;padding:10px 32px 70px;color:var(--muted);font-size:14px}
+  .next b{color:var(--ink)}
+  .next .hairline{height:1px;background:var(--hair);margin-bottom:26px}
+
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<header class="hero">
+  <div class="eyebrow">Agent-Tooling · Mac App · 5 Directions</div>
+  <h1>Glasshouse</h1>
+  <p>A native Mac control plane for the <b>agent-tooling</b> repo — profiles, plugins, skills, and MCPs across every surface they install to, with changes pushed back to GitHub as PRs. Working name; every number below is your machine's real state, not placeholder data.</p>
+  <div class="truth">
+    <span><i style="color:var(--ok)">●</i>117 pass</span>
+    <span><i style="color:var(--warn)">●</i>1 warn</span>
+    <span><i style="color:var(--bad)">●</i>1 fail — pumpd-automations</span>
+    <span><i style="color:var(--manual)">●</i>12 manual</span>
+    <span>7 plugins · 32 owned skills · 40 vendor · 8 MCPs</span>
+    <span>main @ e67a03c</span>
+  </div>
+</header>
+
+<div class="switch-wrap">
+  <div class="switch" role="tablist" aria-label="Concepts">
+    <button role="tab" aria-selected="true" data-c="a">A · Console<small>Settings-style dashboard</small></button>
+    <button role="tab" aria-selected="false" data-c="b">B · Lattice<small>Capability × surface matrix</small></button>
+    <button role="tab" aria-selected="false" data-c="c">C · Shelf<small>App Store catalog</small></button>
+    <button role="tab" aria-selected="false" data-c="d">D · Prism<small>Command palette</small></button>
+    <button role="tab" aria-selected="false" data-c="e">E · Deck<small>Menu-bar control center</small></button>
+  </div>
+</div>
+
+<!-- ============================================================ A · CONSOLE ============================================================ -->
+<section class="concept active" id="c-a">
+  <div class="c-head"><span class="n">01 / 05</span><h2>Console</h2><span class="thesis">The familiar shape — System Settings, but for your agents. Health first, everything else one click left.</span></div>
+  <div class="stage-scroll"><div class="stage wall-a"><div class="win-a mockup">
+
+    <aside class="a-side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="a-search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</div>
+      <div class="a-prof"><div class="orb"></div><div><b>pumpd-workstation</b><span>131 checks · extends 2</span></div><span class="chev">▾</span></div>
+      <nav class="a-nav">
+        <a class="sel"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 12l5-5"/><circle cx="12" cy="12" r="1.6"/></svg>Overview</a>
+        <a><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>Plugins<span class="cnt">7</span></a>
+        <a><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg>Skills<span class="cnt">72</span></a>
+        <a><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg>MCP Servers<span class="cnt">8</span></a>
+        <a><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>Profiles<span class="cnt">4</span></a>
+        <a><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M9 5v14"/></svg>Surfaces</a>
+        <div class="grp">Repository</div>
+        <a><svg class="ic" viewBox="0 0 24 24"><path d="M9 19c-4 1.5-4-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg>Changes<span class="badge">3</span></a>
+        <a><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg>Doctor</a>
+      </nav>
+      <div class="a-foot"><span class="dot ok"></span>main · e67a03c · synced 2m</div>
+    </aside>
+
+    <div class="a-main">
+      <div class="a-top">
+        <h3>Overview</h3>
+        <div class="a-seg"><span class="on">All</span><span>Claude</span><span>Codex</span></div>
+        <div class="a-run"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M6 4.5v15l13-7.5z" fill="#fff" stroke="none"/></svg>Run Doctor</div>
+      </div>
+
+      <div class="a-card a-hero" style="position:relative">
+        <div class="a-ring">
+          <svg viewBox="0 0 132 132">
+            <circle cx="66" cy="66" r="56" stroke="rgba(120,120,140,.16)" stroke-width="11" fill="none"/>
+            <circle cx="66" cy="66" r="56" stroke="#30d158" stroke-width="11" fill="none" stroke-linecap="round" stroke-dasharray="314 352" stroke-dashoffset="0"/>
+            <circle cx="66" cy="66" r="56" stroke="#98989d" stroke-width="11" fill="none" stroke-linecap="round" stroke-dasharray="30 352" stroke-dashoffset="-317"/>
+            <circle cx="66" cy="66" r="56" stroke="#ffd60a" stroke-width="11" fill="none" stroke-dasharray="3 352" stroke-dashoffset="-349"/>
+            <circle cx="66" cy="66" r="56" stroke="#ff453a" stroke-width="11" fill="none" stroke-linecap="round" stroke-dasharray="2.5 352" stroke-dashoffset="-353"/>
+          </svg>
+          <div class="mid"><b class="num">117<span style="font-size:14px;color:#aeaeb2">/131</span></b><span>checks pass</span></div>
+        </div>
+        <div class="a-stats num">
+          <div class="a-stat"><div class="v">117</div><div class="l"><span class="dot ok"></span>Pass</div></div>
+          <div class="a-stat"><div class="v">1</div><div class="l"><span class="dot warn"></span>Warn</div></div>
+          <div class="a-stat"><div class="v" style="color:#d70015">1</div><div class="l"><span class="dot bad"></span>Fail</div></div>
+          <div class="a-stat"><div class="v">12</div><div class="l"><span class="dot manual"></span>Manual</div></div>
+        </div>
+        <div class="a-hero-meta">doctor · pumpd-workstation · 2 min ago</div>
+      </div>
+
+      <div class="a-sect">Needs attention</div>
+      <div class="a-card">
+        <div class="a-row"><span class="dot bad"></span><div><span class="id">claude.pumpd-automations-plugin</span><div class="msg">Plugin not enabled in ~/.claude/settings.json — 10 scheduled automations inactive</div></div><span class="act filled">Fix</span></div>
+        <div class="a-row"><span class="dot warn"></span><div><span class="id">codex.pumpd-automations-plugin</span><div class="msg">Install deferred on Codex by owner note — advisory only</div></div><span class="act">Review</span></div>
+        <div class="a-row"><span class="dot manual"></span><div><span class="id">expo.mcp-oauth</span><div class="msg">Browser OAuth last verified Jul 23 — session reported expired today</div></div><span class="act">Re-auth</span></div>
+      </div>
+
+      <div class="a-minis num">
+        <div class="a-card a-mini"><div class="t"><span class="dot claude"></span><span class="dot codex"></span>Plugins</div><div class="v">6<span style="color:#aeaeb2;font-size:15px">/7</span></div><div class="s">enabled on both clients</div></div>
+        <div class="a-card a-mini"><div class="t">Owned skills</div><div class="v">32</div><div class="s">across 6 bundles</div></div>
+        <div class="a-card a-mini"><div class="t">Vendor skills</div><div class="v">40</div><div class="s">5 collections · skills CLI</div></div>
+        <div class="a-card a-mini"><div class="t">MCP servers</div><div class="v">8</div><div class="s">3 OAuth · 3 Doppler · 2 npx</div></div>
+      </div>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Best for</h4><p>Daily driver. <b>Health, drift, and the fix</b> are the landing view; catalog and matrix live as sidebar rooms.</p></div>
+    <div><h4>Key interaction</h4><p><b>Fix</b> runs the check's committed install recipe; <b>Changes (3)</b> is the git tray — review staged profile edits, then push as a PR.</p></div>
+    <div><h4>Tradeoff</h4><p>Conventional. It will never surprise you — the matrix and store views are one level deep instead of front and center.</p></div>
+  </div>
+</section>
+
+<!-- ============================================================ B · LATTICE ============================================================ -->
+<section class="concept" id="c-b">
+  <div class="c-head"><span class="n">02 / 05</span><h2>Lattice</h2><span class="thesis">The view no client can show you: every capability × every surface, colored by the doctor's verdict.</span></div>
+  <div class="stage-scroll"><div class="stage wall-b"><div class="win-b mockup">
+
+    <div class="b-bar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <b>Lattice</b><span class="hint">pumpd-workstation · 131 checks</span>
+      <div class="b-chips">
+        <span class="b-chip">All kinds ▾</span>
+        <span class="b-chip">First-party ▾</span>
+        <span class="b-chip on"><span class="dot bad" style="width:6px;height:6px"></span>Drift only · off</span>
+        <span class="b-chip"><svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</span>
+      </div>
+    </div>
+
+    <div class="b-body">
+      <div class="b-grid">
+        <table class="b-m">
+          <thead>
+            <tr><th></th><th colspan="4" class="fam claude">Claude</th><th colspan="4" class="fam codex">OpenAI</th></tr>
+            <tr><th></th><th colspan="4"><div class="famline" style="background:linear-gradient(90deg,transparent,#d9775788,transparent)"></div></th><th colspan="4"><div class="famline" style="background:linear-gradient(90deg,transparent,#10a37f88,transparent)"></div></th></tr>
+            <tr><th></th><th class="srf">Code</th><th class="srf">Desktop</th><th class="srf">Cloud</th><th class="srf">claude.ai</th><th class="srf">CLI</th><th class="srf">Desktop</th><th class="srf">Cloud</th><th class="srf">ChatGPT</th></tr>
+          </thead>
+          <tbody>
+            <tr class="grp"><td colspan="9">First-party plugins · 7</td></tr>
+            <tr><td class="lbl">personal<small>4 skills</small></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell y"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr><td class="lbl">developer-workflows<small>9 skills · 1 MCP</small></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr><td class="lbl">cyrus-workflows<small>7 skills</small></td><td><div class="cell g p"></div></td><td><div class="cell g p"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr><td class="lbl">pumpd-workflows<small>1 skill</small></td><td><div class="cell g p"></div></td><td><div class="cell g p"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr><td class="lbl">pumpd-automations<small>10 skills</small></td><td><div class="cell r sel"></div></td><td><div class="cell r"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell y"></div></td><td><div class="cell y"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr><td class="lbl">wet-in-seattle<small>1 skill · 1 MCP</small></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr><td class="lbl">mobile-development<small>3 MCPs</small></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr class="grp"><td colspan="9">MCP servers</td></tr>
+            <tr><td class="lbl">heroui-pro<small>Doppler · plugin</small></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr><td class="lbl">ios-simulator-mcp<small>npx · plugin</small></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr><td class="lbl">sentry<small>OAuth · user + curated</small></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell y"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell y"></div></td></tr>
+            <tr><td class="lbl">expo<small>OAuth-only · no CI</small></td><td><div class="cell y"></div></td><td><div class="cell y"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr><td class="lbl">supabase<small>OAuth · user + curated</small></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell y"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell y"></div></td></tr>
+            <tr class="grp"><td colspan="9">Vendor collections · skills CLI</td></tr>
+            <tr><td class="lbl">expo/skills<small>9 of 23</small></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr><td class="lbl">software-mansion-labs<small>all 8</small></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+            <tr><td class="lbl">anthropics/skills<small>12 of 18</small></td><td><div class="cell g"></div></td><td><div class="cell g"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td><td><div class="cell y"></div></td><td><div class="cell y"></div></td><td><div class="cell n"></div></td><td><div class="cell n"></div></td></tr>
+          </tbody>
+        </table>
+        <div class="b-legend">
+          <span><div class="cell g"></div>Installed & expected</span>
+          <span><div class="cell g p"></div>Project scope</span>
+          <span><div class="cell r"></div>Drift — expected, missing</span>
+          <span><div class="cell y"></div>Deferred / unverified</span>
+          <span><div class="cell n"></div>Absent by design</span>
+        </div>
+      </div>
+
+      <aside class="b-rail">
+        <div class="path">pumpd-automations → Claude Code</div>
+        <h4>Drift: plugin not enabled</h4>
+        <span class="st-chip bad"><span class="dot bad"></span>FAIL · required</span>
+        <p>Expected <b style="color:#fff">enabled</b> at user scope; ~/.claude/settings.json has no entry. 10 scheduled automation skills are inactive interactively.</p>
+        <div class="b-code"><i>$</i> claude plugin install \<br>&nbsp;&nbsp;pumpd-automations@agent-tooling</div>
+        <div class="b-acts"><span class="b-btn pri">Apply fix</span><span class="b-btn">Copy</span></div>
+        <div class="b-note">User-scoped on purpose: automations fire unattended in whatever directory the scheduler uses, so project scope would never be active.</div>
+        <div class="b-acts"><span class="b-btn">Edit expectation…</span></div>
+        <div class="b-pr"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg><span>Expectation edits commit to a branch → <b>PR with auto-merge</b></span></div>
+      </aside>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Best for</h4><p>The reason this repo exists — <b>"where is this thing, really?"</b> answered in one glance across all 8 surfaces.</p></div>
+    <div><h4>Key interaction</h4><p>Click any cell → detail rail with the doctor message, the committed recipe, <b>Apply</b>, and expectation editing that opens a PR.</p></div>
+    <div><h4>Tradeoff</h4><p>Dense. Brilliant weekly, heavy daily — wants Console's overview as a sibling tab, not a replacement.</p></div>
+  </div>
+</section>
+
+<!-- ============================================================ C · SHELF ============================================================ -->
+<section class="concept" id="c-c">
+  <div class="c-head"><span class="n">03 / 05</span><h2>Shelf</h2><span class="thesis">Your private marketplace, treated with App Store dignity — browse, install, and see per-client state on every card.</span></div>
+  <div class="stage-scroll"><div class="stage wall-c"><div class="win-c mockup">
+
+    <aside class="c-side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <a class="sel"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg>Discover</a>
+      <a><svg class="ic" viewBox="0 0 24 24"><path d="M4 7l8-4 8 4-8 4z"/><path d="M4 7v10l8 4 8-4V7"/><path d="M12 11v10"/></svg>Installed</a>
+      <a><svg class="ic" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>Updates<span class="badge">2</span></a>
+      <a><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>Profiles</a>
+      <div class="c-user"><div class="orb"></div><div><b>Aren</b><span>agent-tooling@main</span></div></div>
+    </aside>
+
+    <div class="c-main">
+      <div class="c-htop"><h3>Discover</h3><span class="src">2 marketplaces · refreshed 2m ago</span></div>
+
+      <div class="c-hero">
+        <div class="tile"><svg viewBox="0 0 24 24" fill="none"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 19h2"/></svg></div>
+        <div>
+          <div class="eb">First-party plugin · MCP bundle</div>
+          <h4>mobile-development</h4>
+          <p>iOS Simulator, HeroUI Native, and HeroUI Native Pro as managed MCPs — the Pro token injected by Doppler at launch, never stored locally.</p>
+          <div class="pills"><span class="c-pill"><span class="dot claude"></span>Claude · installed</span><span class="c-pill"><span class="dot codex"></span>Codex · installed</span><span class="c-pill">User scope</span></div>
+        </div>
+        <span class="c-manage">Manage</span>
+      </div>
+
+      <div class="c-sect"><h5>All plugins</h5><span>7 · agent-tooling marketplace</span></div>
+      <div class="c-grid">
+        <div class="c-card">
+          <div class="top"><div class="c-icon" style="background:linear-gradient(135deg,#5ac8fa,#0a84ff)"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></div><div><b>personal</b><span class="meta">4 skills · user scope</span></div></div>
+          <div class="desc">Obsidian vault, family check-in, personal tasks.</div>
+          <div class="foot"><span class="cl-pill"><span class="dot claude"></span>✓</span><span class="cl-pill"><span class="dot codex"></span>✓</span><span class="get">Open</span></div>
+        </div>
+        <div class="c-card">
+          <div class="top"><div class="c-icon" style="background:linear-gradient(135deg,#30d158,#0aa14f)"><svg class="ic" viewBox="0 0 24 24"><path d="M7 8l-4 4 4 4M17 8l4 4-4 4M13 5l-2 14"/></svg></div><div><b>developer-workflows</b><span class="meta">9 skills · 1 MCP</span></div></div>
+          <div class="desc">Cross-project quality workflows + heroui-pro MCP.</div>
+          <div class="foot"><span class="cl-pill"><span class="dot claude"></span>✓</span><span class="cl-pill"><span class="dot codex"></span>✓</span><span class="get">Open</span></div>
+        </div>
+        <div class="c-card">
+          <div class="top"><div class="c-icon" style="background:linear-gradient(135deg,#bf5af2,#8944ab)"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></div><div><b>cyrus-workflows</b><span class="meta">7 skills · project</span></div></div>
+          <div class="desc">PUMPD research, planning, review, delegation.</div>
+          <div class="foot"><span class="cl-pill"><span class="dot claude"></span>✓</span><span class="cl-pill"><span class="dot codex"></span>✓</span><span class="get">Open</span></div>
+        </div>
+        <div class="c-card drift">
+          <div class="top"><div class="c-icon" style="background:linear-gradient(135deg,#ff9f0a,#ff6b2c)"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 10v3.5l2 2M9 2h6"/></svg></div><div><b>pumpd-automations</b><span class="meta">10 skills · user scope</span></div></div>
+          <div class="desc">Scheduled scans that file Linear Triage suggestions.</div>
+          <div class="foot"><span class="cl-pill miss"><span class="dot claude"></span>missing</span><span class="cl-pill"><span class="dot codex"></span>deferred</span><span class="get warn">Install</span></div>
+        </div>
+        <div class="c-card">
+          <div class="top"><div class="c-icon" style="background:linear-gradient(135deg,#64d2ff,#5e9fe0)"><svg class="ic" viewBox="0 0 24 24"><path d="M4 15c2-5 5-8 8-8s6 3 8 8"/><path d="M4 15h16"/><path d="M8 19h8"/></svg></div><div><b>wet-in-seattle</b><span class="meta">1 skill · 1 MCP</span></div></div>
+          <div class="desc">IAWIS weekly report + Doppler-backed Analytics MCP.</div>
+          <div class="foot"><span class="cl-pill"><span class="dot claude"></span>✓</span><span class="cl-pill"><span class="dot codex"></span>✓</span><span class="get">Open</span></div>
+        </div>
+        <div class="c-card">
+          <div class="top"><div class="c-icon" style="background:linear-gradient(135deg,#8e8e93,#5b5b60)"><svg class="ic" viewBox="0 0 24 24"><path d="M14 6l4 4-9 9H5v-4z"/><path d="M12 8l4 4"/></svg></div><div><b>pumpd-workflows</b><span class="meta">1 skill · project</span></div></div>
+          <div class="desc">Local PUMPD maintenance outside the Cyrus pipeline.</div>
+          <div class="foot"><span class="cl-pill"><span class="dot claude"></span>✓</span><span class="cl-pill"><span class="dot codex"></span>✓</span><span class="get">Open</span></div>
+        </div>
+      </div>
+
+      <div class="c-sect"><h5>Vendor collections</h5><span>installed via skills CLI · never mirrored</span></div>
+      <div class="c-vend num">
+        <div class="c-vchip"><b>expo/skills</b><span>9 of 23 · both clients</span></div>
+        <div class="c-vchip"><b>software-mansion</b><span>8 of 8 · both clients</span></div>
+        <div class="c-vchip"><b>callstack</b><span>9 of 10 · 1 name collision</span></div>
+        <div class="c-vchip"><b>supabase</b><span>2 of 2 · both clients</span></div>
+        <div class="c-vchip"><b>anthropics</b><span>12 of 18 · Codex 10</span></div>
+      </div>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Best for</h4><p>Browsing and installing. Makes the private catalog feel <b>as legitimate as the official ones</b> — drift shows up as a red card in the shelf.</p></div>
+    <div><h4>Key interaction</h4><p><b>Install</b> picks destination (Claude / Codex) and scope (user / project) in one sheet, then runs the native install command.</p></div>
+    <div><h4>Tradeoff</h4><p>Weakest at diagnosis — doctor detail and the surface matrix need their own rooms behind these cards.</p></div>
+  </div>
+</section>
+
+<!-- ============================================================ D · PRISM ============================================================ -->
+<section class="concept" id="c-d">
+  <div class="c-head"><span class="n">04 / 05</span><h2>Prism</h2><span class="thesis">Almost no app at all — a summoned glass palette over whatever you're doing. Type, act, dismiss.</span></div>
+  <div class="stage-scroll"><div class="stage wall-d">
+    <div class="d-menubar mockup"><span class="apple"></span><b>Finder</b><span>File</span><span>Edit</span><span>View</span><div class="right"><span>◐</span><span>♪</span><span>Fri Aug 8</span><span class="num">9:41 AM</span></div></div>
+
+    <div class="d-toast mockup"><span class="dot ok"></span><div><b>Profile change pushed</b><div class="mono">PR #51 · auto-merge armed · base-workstation.json</div></div></div>
+
+    <div class="d-pal mockup">
+      <div class="d-in">
+        <svg viewBox="0 0 24 24" class="ic"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <span class="q">heroui</span><span class="caret"></span>
+        <span class="hint">⌘K actions · ⇥ profiles</span>
+      </div>
+      <div class="d-grp">MCP Servers</div>
+      <div class="d-row sel">
+        <div class="tile" style="background:linear-gradient(135deg,#30d158,#0aa14f)"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/></svg></div>
+        <div><b>heroui-pro</b><div class="sub">developer-workflows · Doppler → mcp-remote</div></div>
+        <div class="end"><span class="dot ok"></span>Claude · Codex<span class="d-kbd">↩</span></div>
+      </div>
+      <div class="d-row">
+        <div class="tile" style="background:linear-gradient(135deg,#5ac8fa,#0a84ff)"><svg class="ic" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 19h2"/></svg></div>
+        <div><b>heroui-native</b><div class="sub">mobile-development · npx @heroui/native-mcp@1.1.0</div></div>
+        <div class="end"><span class="dot ok"></span>Claude · Codex</div>
+      </div>
+      <div class="d-row">
+        <div class="tile" style="background:linear-gradient(135deg,#bf5af2,#8944ab)"><svg class="ic" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M12 7l1.2 2.9 3 .4-2.3 2 .7 3-2.6-1.7-2.6 1.7.7-3-2.3-2 3-.4z"/></svg></div>
+        <div><b>heroui-native-pro</b><div class="sub">mobile-development · Doppler · licensed token</div></div>
+        <div class="end"><span class="dot ok"></span>Claude · Codex</div>
+      </div>
+      <div class="d-grp">Actions</div>
+      <div class="d-row">
+        <div class="tile" style="background:rgba(255,255,255,.14)"><svg class="ic" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg></div>
+        <div><b>Rotate HeroUI Pro token</b><div class="sub">doppler · agent-tooling/prd · HEROUI_PRO_PERSONAL_TOKEN</div></div>
+        <div class="end"><span class="d-kbd">⌘R</span></div>
+      </div>
+      <div class="d-row">
+        <div class="tile" style="background:rgba(255,255,255,.14)"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg></div>
+        <div><b>Doctor: check heroui-* declarations</b><div class="sub">3 checks · all passing</div></div>
+        <div class="end"><span class="d-kbd">⌘D</span></div>
+      </div>
+      <div class="d-foot">
+        <span><span class="d-kbd">↩</span> open</span><span><span class="d-kbd">⌘I</span> install</span><span><span class="d-kbd">⌘⇧P</span> push change</span>
+        <div class="doc"><span class="dot ok"></span>117<span class="dot warn"></span>1<span class="dot bad"></span>1 · pumpd-workstation</div>
+      </div>
+    </div>
+
+    <div class="d-widget mockup">
+      <svg viewBox="0 0 40 40" style="width:40px;height:40px;transform:rotate(-90deg)">
+        <circle cx="20" cy="20" r="16" stroke="rgba(255,255,255,.14)" stroke-width="5" fill="none"/>
+        <circle cx="20" cy="20" r="16" stroke="#30d158" stroke-width="5" fill="none" stroke-linecap="round" stroke-dasharray="90 101"/>
+        <circle cx="20" cy="20" r="16" stroke="#ff453a" stroke-width="5" fill="none" stroke-linecap="round" stroke-dasharray="2 101" stroke-dashoffset="-93"/>
+      </svg>
+      <div><div class="num-lg num">117/131</div><div class="sub">doctor · 2m ago</div></div>
+      <span class="fix">1 fix</span>
+    </div>
+  </div></div>
+  <div class="specs">
+    <div><h4>Best for</h4><p>Speed and staying out of the way. <b>Every capability is four keystrokes away</b>; the git push is a keyboard action with a toast receipt.</p></div>
+    <div><h4>Key interaction</h4><p>Summon with a hotkey; rows carry live status and destination; <b>⌘⇧P</b> pushes staged profile edits as a PR without opening a window.</p></div>
+    <div><h4>Tradeoff</h4><p>No canvas for browsing or the matrix — this is a companion shape that presumes a full window (A/B/C) exists somewhere.</p></div>
+  </div>
+</section>
+
+<!-- ============================================================ E · DECK ============================================================ -->
+<section class="concept" id="c-e">
+  <div class="c-head"><span class="n">05 / 05</span><h2>Deck</h2><span class="thesis">Control Center for your agents — glanceable tiles in the menu bar, the full app one click away.</span></div>
+  <div class="stage-scroll"><div class="stage wall-e">
+    <div class="e-menubar mockup"><span class="apple"></span><b>Glasshouse</b><div class="right"><span>◐</span><span>⌁</span><span class="gh"><span class="dot bad" style="width:6px;height:6px"></span>1</span><span>Fri Aug 8</span><span class="num">9:41 AM</span></div></div>
+
+    <div class="e-panel mockup">
+      <div class="e-tile w">
+        <h6><span class="dot ok"></span>Doctor · pumpd-workstation</h6>
+        <div class="e-doc">
+          <div class="ring">
+            <svg viewBox="0 0 66 66">
+              <circle cx="33" cy="33" r="27" stroke="rgba(255,255,255,.14)" stroke-width="7" fill="none"/>
+              <circle cx="33" cy="33" r="27" stroke="#30d158" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="151 170"/>
+              <circle cx="33" cy="33" r="27" stroke="#98989d" stroke-width="7" fill="none" stroke-dasharray="14 170" stroke-dashoffset="-153"/>
+              <circle cx="33" cy="33" r="27" stroke="#ff453a" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="2 170" stroke-dashoffset="-168"/>
+            </svg>
+            <b class="num">89%</b>
+          </div>
+          <div>
+            <div class="big num">117 / 131 checks</div>
+            <div class="sub num">1 fail · 1 warn · 12 manual · ran 2m ago</div>
+            <span class="e-fix">Fix pumpd-automations →</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="e-tile e-kv"><h6><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>Sync</h6><b>main · e67a03c</b><span>marketplaces refreshed 2m ago</span></div>
+      <div class="e-tile e-kv"><h6><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg>Changes</h6><b class="num">3 staged</b><span>profile edits → open PR</span></div>
+
+      <div class="e-tile w">
+        <h6>Profile</h6>
+        <div class="e-seg"><span>base</span><span class="on">pumpd-workstation</span><span>wet-in-seattle</span></div>
+      </div>
+
+      <div class="e-tile w">
+        <h6>MCP authentication</h6>
+        <div class="e-auth">
+          <div class="e-arow"><span class="dot ok"></span>sentry<span class="mono">OAuth · avad/pumpd</span><span class="okc">✓ Jul 23</span></div>
+          <div class="e-arow"><span class="dot warn"></span>expo<span class="mono">OAuth-only · no CI fallback</span><span class="re">Re-auth</span></div>
+          <div class="e-arow"><span class="dot ok"></span>supabase<span class="mono">OAuth · hosted</span><span class="okc">✓ Jul 23</span></div>
+          <div class="e-arow"><span class="dot ok"></span>doppler<span class="mono">CLI · feeds 3 MCPs</span><span class="okc">✓ me</span></div>
+        </div>
+      </div>
+
+      <div class="e-open">Open Glasshouse<span class="d-kbd">⌘⇧G</span></div>
+    </div>
+
+    <div class="e-desktopmark mockup"><b>Lives in the menu bar</b>The icon carries the drift count. The panel answers "is everything okay?" in two seconds; anything deeper hands off to the main window.</div>
+  </div></div>
+  <div class="specs">
+    <div><h4>Best for</h4><p>Ambient trust. <b>Drift becomes a menu-bar badge</b> you notice the moment it appears, not a script you remember to run.</p></div>
+    <div><h4>Key interaction</h4><p>Tiles are shallow buttons: Fix runs the recipe, Re-auth opens the OAuth flow, Changes opens the PR sheet.</p></div>
+    <div><h4>Tradeoff</h4><p>Not an app shape by itself — it's the always-on companion to whichever main window direction wins.</p></div>
+  </div>
+</section>
+
+<footer class="next">
+  <div class="hairline"></div>
+  <p><b>How these compose:</b> A, B, C are competing <b>main-window</b> shapes; D and E are <b>companion</b> shapes that pair with any of them. The likely product is one main window plus one companion — e.g. Console with Lattice as a tab, plus Deck in the menu bar. Pick a direction (or a hybrid) and the next pass turns it into a working shell.</p>
+</footer>
+
+<script>
+  const tabs=document.querySelectorAll('.switch button');
+  const sections={a:document.getElementById('c-a'),b:document.getElementById('c-b'),c:document.getElementById('c-c'),d:document.getElementById('c-d'),e:document.getElementById('c-e')};
+  tabs.forEach(t=>t.addEventListener('click',()=>{
+    tabs.forEach(x=>x.setAttribute('aria-selected',x===t?'true':'false'));
+    Object.entries(sections).forEach(([k,s])=>s.classList.toggle('active',k===t.dataset.c));
+  }));
+</script>

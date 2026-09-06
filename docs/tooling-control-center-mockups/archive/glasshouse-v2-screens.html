@@ -1,0 +1,1008 @@
+<title>Glasshouse — Screen Set</title>
+<style>
+  /* ============ Gallery chrome (dark walls, deliberate single theme) ============ */
+  :root{
+    --bg:#0b0d13; --panel:#12141c;
+    --ink:#e9ebf2; --muted:#8b90a3; --faint:#5b6072;
+    --hair:rgba(255,255,255,.08); --hair2:rgba(255,255,255,.14);
+    --accent:#7aa2ff;
+    --ok:#30d158; --warn:#ff9f0a; --bad:#ff453a; --man:#98989d;
+    --claude:#d97757; --codex:#10a37f;
+    --blue:#0a84ff;
+    --sys:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:var(--bg)}
+  body{font-family:var(--sys);background:var(--bg);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  ::selection{background:rgba(122,162,255,.3)}
+  .num{font-variant-numeric:tabular-nums}
+
+  .hero{max-width:1240px;margin:0 auto;padding:52px 32px 6px}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  .hero h1{font-size:clamp(26px,4vw,40px);font-weight:700;letter-spacing:-.02em;margin:10px 0 12px;text-wrap:balance}
+  .hero p{max-width:68ch;color:var(--muted);font-size:14.5px}
+  .hero p b{color:var(--ink);font-weight:600}
+  .truth{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .truth span{font-family:var(--mono);font-size:11px;color:var(--muted);border:1px solid var(--hair);border-radius:100px;padding:5px 12px;background:var(--panel)}
+
+  .switch-wrap{position:sticky;top:0;z-index:50;padding:12px 32px;background:linear-gradient(var(--bg) 55%,rgba(11,13,19,0));pointer-events:none}
+  .switch{pointer-events:auto;max-width:1240px;margin:0 auto;display:flex;gap:2px;padding:4px;border-radius:13px;
+    background:rgba(23,26,36,.75);border:1px solid var(--hair2);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);
+    box-shadow:0 12px 32px rgba(0,0,0,.4);overflow-x:auto}
+  .switch button{border:0;background:transparent;color:var(--muted);font-family:var(--sys);font-size:12.5px;font-weight:600;
+    padding:8px 13px;border-radius:9px;cursor:pointer;white-space:nowrap;flex:1}
+  .switch button i{font-style:normal;font-family:var(--mono);font-size:10px;color:var(--faint);margin-right:6px}
+  .switch button[aria-selected="true"]{background:rgba(122,162,255,.15);color:var(--ink);box-shadow:inset 0 0 0 1px rgba(122,162,255,.3)}
+  .switch button[aria-selected="true"] i{color:var(--accent)}
+  .switch button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+  .screen{max-width:1240px;margin:0 auto;padding:30px 32px 6px;display:none}
+  .screen.active{display:block}
+  .s-head{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap;margin-bottom:4px}
+  .s-head .n{font-family:var(--mono);font-size:12px;color:var(--faint)}
+  .s-head h2{font-size:24px;font-weight:700;letter-spacing:-.02em}
+  .s-head .thesis{color:var(--muted);font-size:13.5px}
+  .stage-scroll{overflow-x:auto;border-radius:22px;margin-top:14px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+  .stage{min-width:1180px;height:812px;border-radius:22px;position:relative;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;border:1px solid var(--hair2)}
+  .specs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;background:var(--hair);
+    border:1px solid var(--hair);border-radius:14px;overflow:hidden;margin:16px 0 26px}
+  .specs>div{background:var(--panel);padding:13px 17px}
+  .specs h4{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:5px}
+  .specs p{font-size:12.5px;color:var(--muted)}
+  .specs p b{color:var(--ink);font-weight:600}
+  .specs code{font-family:var(--mono);font-size:11px;color:#a9c4ff}
+
+  /* ============ THE product wallpaper (one scene, whole app) ============ */
+  .wall{background:
+    radial-gradient(85rem 48rem at 88% -12%, #f7d3bd 0%, transparent 52%),
+    radial-gradient(72rem 48rem at -12% 22%, #b5d0f2 0%, transparent 55%),
+    radial-gradient(64rem 56rem at 52% 122%, #e0cdf0 0%, transparent 56%),
+    linear-gradient(158deg,#c4d6f1 0%,#e6d9ee 50%,#f5e0d2 100%)}
+
+  /* ============ Shared Glasshouse shell ============ */
+  .mock, .mock *{line-height:1.35}
+  .lights{display:flex;gap:8px}
+  .lights i{width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.15)}
+  .lights i:nth-child(1){background:#ff5f57}.lights i:nth-child(2){background:#febc2e}.lights i:nth-child(3){background:#28c840}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+  .dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}.dot.man{background:var(--man)}
+  .dot.claude{background:var(--claude)}.dot.codex{background:var(--codex)}
+  svg.ic{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  .shell{width:1120px;height:744px;border-radius:12px;display:flex;overflow:hidden;color:#1d1d1f;
+    box-shadow:0 42px 90px rgba(40,35,70,.35),0 2px 8px rgba(40,35,70,.2);border:.5px solid rgba(255,255,255,.65)}
+  .side{width:248px;flex:none;padding:16px 12px;display:flex;flex-direction:column;gap:2px;
+    background:rgba(255,255,255,.42);backdrop-filter:blur(38px) saturate(1.8);-webkit-backdrop-filter:blur(38px) saturate(1.8);
+    border-right:.5px solid rgba(60,60,90,.14)}
+  .side .lights{padding:2px 6px 14px}
+  .s-search{display:flex;align-items:center;gap:7px;background:rgba(120,120,140,.14);border-radius:8px;padding:6px 9px;font-size:12.5px;color:#71717a;margin:0 4px 12px}
+  .s-prof{display:flex;align-items:center;gap:10px;margin:0 4px 13px;padding:9px 10px;border-radius:11px;
+    background:rgba(255,255,255,.55);box-shadow:0 1px 3px rgba(40,40,80,.1);border:.5px solid rgba(255,255,255,.7)}
+  .s-prof .orb{width:31px;height:31px;border-radius:9px;flex:none;background:conic-gradient(from 210deg,#7aa2ff,#b98ef7,#ff9c7a,#7aa2ff)}
+  .s-prof b{display:block;font-size:12.5px;font-weight:600}
+  .s-prof span{font-size:10.5px;color:#8e8e93}
+  .s-prof .chev{margin-left:auto;color:#aeaeb2;font-size:11px}
+  .nav{display:flex;flex-direction:column;gap:1px}
+  .nav a{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:500;color:#3a3a3c;padding:6px 10px;border-radius:8px}
+  .nav a .cnt{margin-left:auto;font-size:11px;color:#98989d}
+  .nav a.sel{background:var(--blue);color:#fff}
+  .nav a.sel .cnt{color:rgba(255,255,255,.8)}
+  .nav a .badge{margin-left:auto;background:var(--blue);color:#fff;font-size:10.5px;font-weight:600;border-radius:100px;padding:1px 7px}
+  .nav a .redot{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--bad)}
+  .nav .grp{font-size:11px;color:#86868b;font-weight:600;padding:13px 10px 4px}
+  .ni{width:19px;height:19px;border-radius:5.5px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:inset 0 .5px 0 rgba(255,255,255,.35),0 .5px 1px rgba(0,0,0,.12)}
+  .ni svg{width:12px;height:12px;stroke-width:2.1}
+  .s-foot{margin-top:auto;padding:10px;display:flex;align-items:center;gap:8px;font-size:11px;color:#6e6e73;font-family:var(--mono)}
+  .content{flex:1;background:rgba(248,248,252,.82);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);
+    padding:20px 24px;overflow:hidden;display:flex;flex-direction:column;gap:14px;min-width:0}
+  .ctop{display:flex;align-items:center;gap:12px}
+  .ctop h3{font-size:20px;font-weight:600;letter-spacing:-.35px}
+  .ctop .sub{font-size:11.5px;color:#8e8e93}
+  .seg{display:flex;background:rgba(120,120,128,.13);border-radius:9px;padding:2px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:inset 0 0 0 .5px rgba(0,0,0,.03)}
+  .seg span{font-size:12px;font-weight:500;padding:4px 13px;border-radius:7px;color:#3c3c43;white-space:nowrap;letter-spacing:-.08px}
+  .seg span.on{background:rgba(255,255,255,.92);box-shadow:0 1px 2.5px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.03);font-weight:600}
+  .btn{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;padding:6px 14px;border-radius:100px;white-space:nowrap;letter-spacing:-.08px}
+  .btn.pri{background:rgba(10,132,255,.92);color:#fff;border:.5px solid rgba(255,255,255,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.34),0 1px 2.5px rgba(20,30,80,.18)}
+  .btn.ghost{background:rgba(255,255,255,.55);color:#1d1d1f;border:.5px solid rgba(255,255,255,.75);backdrop-filter:blur(14px) saturate(1.5);-webkit-backdrop-filter:blur(14px) saturate(1.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 1px 2.5px rgba(50,50,100,.08)}
+  .btn.danger{background:rgba(255,59,48,.1);color:#d70015;border:.5px solid rgba(255,59,48,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
+  .push{margin-left:auto}
+  .gcard{background:rgba(255,255,255,.6);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+    border:.5px solid rgba(255,255,255,.85);border-radius:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 6px 18px rgba(60,60,110,.07)}
+  .sect{font-size:12.5px;font-weight:600;color:#6e6e73;margin:0 2px -6px}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;border-radius:100px;padding:3px 9px;background:rgba(120,120,128,.12);color:#3c3c43;white-space:nowrap;box-shadow:inset 0 .5px 0 rgba(255,255,255,.45)}
+  .chip.blue{background:rgba(10,132,255,.1);color:#0a6ae0}
+  .chip.ok{background:rgba(52,199,89,.13);color:#248a3d}
+  .chip.warn{background:rgba(255,159,10,.14);color:#9a5300}
+  .chip.bad{background:rgba(255,59,48,.1);color:#d70015}
+  .chip.mono{font-family:var(--mono);font-weight:500}
+  .cp{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;border-radius:100px;padding:3px 9px;background:rgba(120,120,128,.12);color:#3c3c43;box-shadow:inset 0 .5px 0 rgba(255,255,255,.45)}
+  .tog{width:34px;height:20px;border-radius:10px;background:rgba(120,120,128,.24);position:relative;flex:none;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.04),inset 0 1px 1.5px rgba(0,0,0,.06)}
+  .tog.on{background:#34c759;box-shadow:inset 0 1px 1.5px rgba(0,0,0,.08)}
+  .tog::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.22),0 0 0 .5px rgba(0,0,0,.02)}
+  .tog.on::after{left:16px}
+  .tog.err{box-shadow:0 0 0 2px rgba(255,69,58,.5)}
+  .row{display:flex;align-items:center;gap:12px;padding:12px 18px;font-size:13px}
+  .row+.row{border-top:.5px solid rgba(60,60,90,.1)}
+  .row .id{font-family:var(--mono);font-size:11.5px;color:#48484a}
+  .row .msg{color:#8e8e93;font-size:11.5px}
+  .row .act{margin-left:auto;flex:none;font-size:12px;font-weight:600;color:#0a6ae0;background:rgba(10,132,255,.1);padding:4.5px 12px;border-radius:100px;box-shadow:inset 0 .5px 0 rgba(255,255,255,.5)}
+  .row .act.filled{background:rgba(10,132,255,.92);color:#fff;border:.5px solid rgba(255,255,255,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.34),0 1px 2px rgba(20,30,80,.15)}
+  .code{font-family:var(--mono);font-size:11px;background:#1c1e26;border-radius:10px;padding:10px 13px;color:#b8e39a;overflow-x:auto;white-space:nowrap}
+  .code i{font-style:normal;color:#6b7080}
+  .code .add{color:#7ddf95}.code .del{color:#ff8d84}
+  .icon-tile{border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.38),0 1px 2px rgba(30,30,70,.14)}
+
+  /* ---------- 1 Overview ---------- */
+  .ov-hero{display:flex;align-items:center;gap:26px;padding:20px 26px}
+  .ring{position:relative;width:96px;height:96px;flex:none}
+  .ring svg{width:96px;height:96px;transform:rotate(-90deg)}
+  .ring .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ring .mid b{font-size:22px;font-weight:600;letter-spacing:-.4px}
+  .ring .mid span{font-size:9.5px;color:#86868b;font-weight:500}
+  .ov-right{flex:1;display:flex;flex-direction:column;gap:9px;min-width:0}
+  .ov-right .t{font-size:16px;font-weight:600;letter-spacing:-.2px}
+  .ov-right .s{font-size:11.5px;color:#86868b;margin-top:-6px}
+  .capbar{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:1.5px}
+  .capbar i{display:block;height:100%}
+  .leg{display:flex;gap:16px;font-size:11px;color:#6e6e73}
+  .leg span{display:flex;align-items:center;gap:5px}
+  .leg b{font-weight:600;color:#1d1d1f}
+  .ov-cols{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;flex:1;min-height:0}
+  .feed{padding:5px 0;overflow:hidden}
+  .feed .row{padding:10px 18px}
+  .feed .t{font-size:12.5px;font-weight:600}
+  .feed .s{font-size:11px;color:#8e8e93;font-family:var(--mono)}
+  .feed .when{margin-left:auto;font-size:10.5px;color:#aeaeb2;font-family:var(--mono);flex:none}
+
+  /* ---------- 2 Marketplace ---------- */
+  .mk-hero{border-radius:16px;padding:19px 24px;display:flex;align-items:center;gap:22px;color:#fff;position:relative;overflow:hidden;
+    background:linear-gradient(120deg,#3f4494 0%,#6b4fb3 55%,#8e58a8 100%);box-shadow:0 12px 30px rgba(35,28,70,.28)}
+  .mk-hero::after{content:"";position:absolute;inset:0;background:radial-gradient(40rem 20rem at 85% -30%,rgba(255,255,255,.35),transparent 60%)}
+  .mk-hero>*{position:relative;z-index:1}
+  .mk-hero .tile{width:70px;height:70px;border-radius:17px;flex:none;background:rgba(255,255,255,.2);border:.5px solid rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center}
+  .mk-hero .eb{font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;opacity:.75}
+  .mk-hero h4{font-size:21px;font-weight:600;letter-spacing:-.35px;margin:2px 0 3px}
+  .mk-hero p{font-size:12px;opacity:.85;max-width:54ch}
+  .mk-hero .pills{display:flex;gap:7px;margin-top:9px}
+  .wpill{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;border-radius:100px;padding:4px 11px;background:rgba(255,255,255,.18);border:.5px solid rgba(255,255,255,.35)}
+  .mk-manage{margin-left:auto;align-self:center;background:#fff;color:#3a3f8f;font-size:12.5px;font-weight:700;border-radius:100px;padding:8px 18px}
+  .mk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .mk-card{padding:13px 15px;display:flex;flex-direction:column;gap:7px}
+  .mk-card .top{display:flex;align-items:center;gap:10px}
+  .mk-card .icon-tile{width:36px;height:36px}
+  .mk-card b{font-size:13px;font-weight:600;display:block}
+  .mk-card .meta{font-size:10.5px;color:#8e8e93}
+  .mk-card .desc{font-size:11px;color:#6e6e73;min-height:28px}
+  .mk-card .foot{display:flex;align-items:center;gap:6px;margin-top:auto}
+  .mk-card .get{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--blue);background:rgba(10,132,255,.12);border-radius:100px;padding:4px 12px}
+  .mk-card .get.warn{color:#d70015;background:rgba(255,69,58,.12)}
+  .mk-card.drift{border-color:rgba(255,69,58,.35);box-shadow:0 6px 20px rgba(255,69,58,.12)}
+  .vend{display:flex;gap:10px}
+  .vchip{flex:1;padding:9px 13px}
+  .vchip b{font-size:11.5px;font-weight:600;display:block}
+  .vchip span{font-size:10px;color:#8e8e93}
+
+  /* ---------- 3 Plugins table ---------- */
+  .tbl{display:flex;flex-direction:column;min-height:0}
+  .tbl .thead{display:flex;align-items:center;gap:12px;padding:9px 18px;font-size:11px;color:#86868b;font-weight:600;border-bottom:.5px solid rgba(60,60,90,.12)}
+  .pl-name{flex:1;display:flex;align-items:center;gap:11px;min-width:0}
+  .pl-name .icon-tile{width:34px;height:34px}
+  .pl-name b{font-size:13px;font-weight:600;display:block}
+  .pl-name span{font-size:10.5px;color:#8e8e93;display:block}
+  .col-scope{width:118px;flex:none}
+  .col-cont{width:120px;flex:none;font-size:11px;color:#6e6e73}
+  .col-cl{width:104px;flex:none;display:flex;align-items:center;gap:7px;font-size:11px;color:#6e6e73}
+  .col-upd{width:80px;flex:none;font-size:10.5px;color:#98989d;font-family:var(--mono)}
+  .tfoot{font-size:10.5px;color:#98989d;padding:9px 4px 0}
+  .tfoot code{font-family:var(--mono);color:#6e6e73}
+
+  /* ---------- 4 Sheet ---------- */
+  .dim{position:absolute;inset:0;background:rgba(30,25,50,.32);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+  .sheet{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:680px;max-height:660px;border-radius:18px;overflow:hidden;
+    background:rgba(250,250,253,.92);backdrop-filter:blur(40px) saturate(1.6);-webkit-backdrop-filter:blur(40px) saturate(1.6);
+    border:.5px solid rgba(255,255,255,.9);box-shadow:0 50px 120px rgba(20,15,50,.5);color:#1d1d1f;display:flex;flex-direction:column}
+  .sh-head{display:flex;align-items:center;gap:14px;padding:20px 22px 14px}
+  .sh-head .icon-tile{width:56px;height:56px;border-radius:14px}
+  .sh-head h4{font-size:19px;font-weight:600;letter-spacing:-.3px}
+  .sh-head .by{font-size:11.5px;color:#8e8e93}
+  .sh-head .x{margin-left:auto;width:26px;height:26px;border-radius:50%;background:rgba(120,120,140,.14);display:flex;align-items:center;justify-content:center;color:#6e6e73;font-size:12px}
+  .sh-tabs{display:flex;gap:2px;padding:0 22px;border-bottom:.5px solid rgba(60,60,90,.12)}
+  .sh-tabs span{font-size:12.5px;font-weight:600;color:#8e8e93;padding:8px 12px;border-bottom:2px solid transparent}
+  .sh-tabs span.on{color:#1d1d1f;border-color:var(--blue)}
+  .sh-body{padding:14px 22px;overflow:hidden;display:flex;flex-direction:column;gap:12px}
+  .sh-foot{margin-top:auto;display:flex;align-items:center;gap:10px;padding:13px 22px;border-top:.5px solid rgba(60,60,90,.12);font-size:11px;color:#8e8e93}
+
+  /* ---------- 5 Skills ---------- */
+  .sk-wrap{display:flex;gap:14px;flex:1;min-height:0}
+  .sk-list{flex:1.15;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .sk-grp{font-size:11px;color:#86868b;font-weight:600;padding:11px 18px 5px}
+  .sk-row{display:flex;align-items:center;gap:10px;padding:8.5px 18px;font-size:12.5px}
+  .sk-row b{font-weight:600;white-space:nowrap}
+  .sk-row .d{font-size:10.5px;color:#8e8e93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sk-row.sel{background:rgba(10,132,255,.1);box-shadow:inset 2.5px 0 0 var(--blue)}
+  .sk-det{flex:1;padding:18px 20px;display:flex;flex-direction:column;gap:11px;overflow:hidden}
+  .sk-det h4{font-size:17px;font-weight:600;letter-spacing:-.25px}
+  .sk-det p{font-size:12px;color:#48484a}
+  .sk-det .lab{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#98989d;font-weight:700;margin-bottom:-5px}
+  .sk-trig{display:flex;flex-wrap:wrap;gap:6px}
+  .sk-trig span{font-size:11px;color:#48484a;background:rgba(120,120,140,.12);border-radius:8px;padding:4px 9px}
+  .sk-path{font-family:var(--mono);font-size:10.5px;color:#6e6e73;background:rgba(120,120,140,.1);border-radius:8px;padding:8px 11px;overflow-x:auto;white-space:nowrap}
+
+  /* ---------- 6 MCP ---------- */
+  .mcp-name b{font-size:13px;font-weight:600;font-family:var(--mono)}
+  .mcp-name span{font-size:10.5px;color:#8e8e93;display:block}
+  .callout{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;font-size:11.5px;color:#48484a}
+  .callout b{font-weight:600}
+  .callout .ic{margin-top:1px;color:#1d8a3e}
+
+  /* ---------- 7 Profiles ---------- */
+  .pf-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .pf-card{padding:13px 15px;display:flex;flex-direction:column;gap:6px}
+  .pf-card b{font-size:12.5px;font-weight:600;font-family:var(--mono)}
+  .pf-card .d{font-size:10.5px;color:#8e8e93;min-height:26px}
+  .pf-card .m{display:flex;gap:5px;flex-wrap:wrap}
+  .pf-card.sel{box-shadow:0 0 0 2px var(--blue),0 8px 28px rgba(50,50,90,.09)}
+  .pf-flow{display:flex;align-items:center;gap:10px;padding:14px 18px;flex-wrap:wrap}
+  .pf-node{font-family:var(--mono);font-size:11.5px;font-weight:600;background:rgba(255,255,255,.7);border:.5px solid rgba(60,60,90,.14);border-radius:9px;padding:7px 12px}
+  .pf-node.hot{background:rgba(10,132,255,.1);border-color:rgba(10,132,255,.4);color:#0a6ae0}
+  .pf-arrow{color:#aeaeb2;font-size:13px}
+  .pf-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;margin:2px 18px 0}
+  .pf-bar i{display:block;height:100%}
+  .pf-leg{display:flex;flex-wrap:wrap;gap:12px;padding:9px 18px 13px;font-size:10.5px;color:#6e6e73}
+  .pf-leg em{font-style:normal;font-family:var(--mono)}
+  .pf-leg .sw{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
+
+  /* ---------- 8 Doctor ---------- */
+  .dr-hist{display:flex;align-items:flex-end;gap:3px;height:26px;margin-left:6px}
+  .dr-hist i{width:7px;border-radius:2.5px;background:rgba(52,199,89,.42)}
+  .dr-hist i.f{background:rgba(255,69,58,.75)}
+  .dr-exp{padding:14px 18px;display:flex;flex-direction:column;gap:10px;background:rgba(255,69,58,.05)}
+  .dr-exp .h{display:flex;align-items:center;gap:10px}
+  .dr-more{padding:11px 18px;font-size:11.5px;color:#8e8e93;display:flex;align-items:center;gap:8px}
+  .kindchips{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+  .kindchips .chip{font-family:var(--mono);font-weight:500}
+
+  /* ---------- 9 Changes ---------- */
+  .ch-wrap{display:flex;gap:14px;flex:1;min-height:0}
+  .ch-list{flex:1.35;display:flex;flex-direction:column;gap:11px;min-width:0}
+  .ch-card{padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+  .ch-card .f{display:flex;align-items:center;gap:9px}
+  .ch-card .file{font-family:var(--mono);font-size:11px;color:#6e6e73}
+  .ch-card .t{font-size:12.5px;font-weight:600}
+  .ch-rail{flex:1;display:flex;flex-direction:column;gap:11px;min-width:0}
+  .tl{padding:14px 16px;display:flex;flex-direction:column;gap:0}
+  .tl .step{display:flex;gap:11px}
+  .tl .rail{display:flex;flex-direction:column;align-items:center}
+  .tl .bub{width:20px;height:20px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:rgba(10,132,255,.12);color:#0a6ae0}
+  .tl .bub.done{background:#34c759;color:#fff}
+  .tl .line{width:1.5px;flex:1;background:rgba(60,60,90,.16);min-height:12px}
+  .tl .tx{padding-bottom:12px}
+  .tl .tx b{font-size:12px;font-weight:600;display:block}
+  .tl .tx span{font-size:10.5px;color:#8e8e93;font-family:var(--mono)}
+  .pr-card{padding:13px 16px;display:flex;flex-direction:column;gap:8px}
+  .pr-card .t{font-size:12px;font-weight:600;font-family:var(--mono)}
+
+  /* ---------- 10 Menu bar ---------- */
+  .menubar{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:18px;padding:0 14px;
+    background:rgba(255,255,255,.38);backdrop-filter:blur(26px) saturate(1.8);-webkit-backdrop-filter:blur(26px) saturate(1.8);
+    border-bottom:.5px solid rgba(60,60,90,.12);font-size:12px;color:#2c2c2e;font-weight:500}
+  .menubar .right{margin-left:auto;display:flex;gap:13px;align-items:center;font-variant-numeric:tabular-nums}
+  .menubar .gh{background:rgba(60,60,90,.14);border-radius:5px;padding:2px 7px;display:flex;align-items:center;gap:5px}
+  .deck{position:absolute;top:38px;right:14px;width:368px;border-radius:18px;padding:12px;color:#1d1d1f;
+    background:rgba(250,250,253,.68);backdrop-filter:blur(46px) saturate(1.8);-webkit-backdrop-filter:blur(46px) saturate(1.8);
+    border:.5px solid rgba(255,255,255,.85);box-shadow:0 40px 100px rgba(40,30,70,.4);
+    display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .dk-tile{background:rgba(255,255,255,.62);border:.5px solid rgba(255,255,255,.85);border-radius:14px;padding:12px 13px;box-shadow:0 2px 10px rgba(50,50,90,.06)}
+  .dk-tile.w{grid-column:span 2}
+  .dk-tile h6{font-size:10.5px;font-weight:600;color:#8e8e93;display:flex;align-items:center;gap:7px;margin-bottom:7px}
+  .dk-doc{display:flex;gap:13px;align-items:center}
+  .dk-doc .big{font-size:17px;font-weight:600;letter-spacing:-.3px}
+  .dk-doc .sub{font-size:10px;color:#8e8e93}
+  .dk-fix{margin-top:6px;display:inline-flex;font-size:10.5px;font-weight:700;background:rgba(255,69,58,.12);color:#d70015;border-radius:100px;padding:3px 10px}
+  .dk-kv b{display:block;font-size:12.5px;font-weight:600;font-family:var(--mono)}
+  .dk-kv span{font-size:10px;color:#8e8e93}
+  .dk-seg{display:flex;background:rgba(120,120,140,.14);border-radius:8px;padding:2px;margin-top:3px}
+  .dk-seg span{flex:1;text-align:center;font-size:10px;font-weight:600;padding:4px 0;border-radius:6px;color:#6e6e73}
+  .dk-seg span.on{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.14);color:#1d1d1f}
+  .dk-arow{display:flex;align-items:center;gap:8px;font-size:12px}
+  .dk-arow+.dk-arow{margin-top:6px}
+  .dk-arow .mono{font-family:var(--mono);font-size:10px;color:#98989d}
+  .dk-arow .re{margin-left:auto;font-size:10px;font-weight:700;color:#8f6400;background:rgba(255,204,0,.22);border-radius:100px;padding:3px 9px}
+  .dk-arow .okc{margin-left:auto;font-size:10.5px;color:#1d8a3e;font-family:var(--mono)}
+  .dk-open{grid-column:span 2;text-align:center;font-size:12px;font-weight:600;color:#3a3a3c;padding:8px;border-radius:11px;background:rgba(255,255,255,.55);border:.5px solid rgba(255,255,255,.8)}
+  .kbd{font-family:var(--mono);font-size:10px;background:rgba(120,120,140,.16);border-radius:5px;padding:2px 6px;margin-left:6px}
+  .desk-note{position:absolute;left:40px;bottom:36px;color:rgba(50,45,70,.65);font-size:12px;max-width:300px}
+  .desk-note b{color:rgba(35,30,55,.9);font-weight:600;font-size:13px;display:block;margin-bottom:4px}
+
+  .next{max-width:1240px;margin:0 auto;padding:8px 32px 64px;color:var(--muted);font-size:13.5px}
+  .next b{color:var(--ink)}
+  .next .hairline{height:1px;background:var(--hair);margin-bottom:22px}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<header class="hero">
+  <div class="eyebrow">Glasshouse · One App · Ten Screens</div>
+  <h1>The screen set</h1>
+  <p>Console is the shell, the Shelf marketplace lives inside it, Deck rides the menu bar. The command palette is deferred to a future <b>Raycast extension</b> — the app just exposes the same actions. Every screen below runs on your machine's real state; the drift running through them all is the missing <b>pumpd-automations</b> install and the expired Expo OAuth.</p>
+  <div class="truth">
+    <span>doctor 117 ✓ · 1 ⚠ · 1 ✗ · 12 manual</span>
+    <span>7 plugins · 32 owned + 40 vendor skills · 9 MCPs</span>
+    <span>profiles: base · pumpd-project · pumpd-workstation · wis</span>
+    <span>main @ e67a03c</span>
+  </div>
+</header>
+
+<div class="switch-wrap">
+  <div class="switch" role="tablist" aria-label="Screens">
+    <button role="tab" aria-selected="true" data-s="1"><i>1</i>Overview</button>
+    <button role="tab" aria-selected="false" data-s="2"><i>2</i>Marketplace</button>
+    <button role="tab" aria-selected="false" data-s="3"><i>3</i>Plugins</button>
+    <button role="tab" aria-selected="false" data-s="4"><i>4</i>Plugin sheet</button>
+    <button role="tab" aria-selected="false" data-s="5"><i>5</i>Skills</button>
+    <button role="tab" aria-selected="false" data-s="6"><i>6</i>MCP Servers</button>
+    <button role="tab" aria-selected="false" data-s="7"><i>7</i>Profiles</button>
+    <button role="tab" aria-selected="false" data-s="8"><i>8</i>Doctor</button>
+    <button role="tab" aria-selected="false" data-s="9"><i>9</i>Changes</button>
+    <button role="tab" aria-selected="false" data-s="10"><i>10</i>Menu bar</button>
+  </div>
+</div>
+
+<!-- ==================================================== 1 · OVERVIEW ==================================================== -->
+<section class="screen active" id="s-1">
+  <div class="s-head"><span class="n">01</span><h2>Overview</h2><span class="thesis">Landing view. Health, what needs you, and what the machine did on its own.</span></div>
+  <div class="stage-scroll"><div class="stage wall"><div class="shell mock">
+    <aside class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="s-search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</div>
+      <div class="s-prof"><div class="orb"></div><div><b>pumpd-workstation</b><span>131 checks · extends 2</span></div><span class="chev">▾</span></div>
+      <nav class="nav">
+        <a class="sel"><span class="ni" style="background:#0a84ff"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 12l5-5"/><circle cx="12" cy="12" r="1.6"/></svg></span>Overview</a>
+        <a><span class="ni" style="background:#5e5ce6"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v6M9 10h6"/><circle cx="12" cy="12" r="9"/></svg></span>Marketplace</a>
+        <a><span class="ni" style="background:#bf5af2"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>Plugins<span class="cnt">7</span></a>
+        <a><span class="ni" style="background:#ff9f0a"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg></span>Skills<span class="cnt">72</span></a>
+        <a><span class="ni" style="background:#32ade6"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg></span>MCP Servers<span class="cnt">9</span></a>
+        <a><span class="ni" style="background:#8e8e93"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span>Profiles<span class="cnt">4</span></a>
+        <a><span class="ni" style="background:#ff453a"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg></span>Doctor<span class="redot"></span></a>
+        <div class="grp">Repository</div>
+        <a><span class="ni" style="background:#34c759"><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg></span>Changes<span class="badge">3</span></a>
+      </nav>
+      <div class="s-foot"><span class="dot ok"></span>main · e67a03c · synced 2m</div>
+    </aside>
+    <div class="content">
+      <div class="ctop"><h3>Overview</h3><div class="seg push"><span class="on">All</span><span>Claude</span><span>Codex</span></div><span class="btn pri">Run Doctor</span></div>
+      <div class="gcard ov-hero">
+        <div class="ring">
+          <svg viewBox="0 0 96 96">
+            <circle cx="48" cy="48" r="41" stroke="rgba(52,199,89,.16)" stroke-width="8" fill="none"/>
+            <circle cx="48" cy="48" r="41" stroke="#30d158" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="230 258"/>
+          </svg>
+          <div class="mid"><b class="num">89%</b><span>passing</span></div>
+        </div>
+        <div class="ov-right num">
+          <div class="t">117 of 131 checks passing</div>
+          <div class="s">pumpd-workstation · ran 2 min ago in 1.9 s</div>
+          <div class="capbar">
+            <i style="flex:117;background:#30d158"></i>
+            <i style="flex:1.6;background:#ff9f0a"></i>
+            <i style="flex:1.6;background:#ff453a"></i>
+            <i style="flex:12;background:#c7c7cc"></i>
+          </div>
+          <div class="leg">
+            <span><span class="dot ok"></span>Pass <b>117</b></span>
+            <span><span class="dot warn"></span>Warn <b>1</b></span>
+            <span><span class="dot bad"></span>Fail <b>1</b></span>
+            <span><span class="dot man"></span>Manual <b>12</b></span>
+          </div>
+        </div>
+      </div>
+      <div class="sect">Needs attention</div>
+      <div class="gcard">
+        <div class="row"><span class="dot bad"></span><div><span class="id">claude.pumpd-automations-plugin</span><div class="msg">Not enabled in ~/.claude/settings.json — 10 scheduled automations inactive interactively</div></div><span class="act filled">Fix</span></div>
+        <div class="row"><span class="dot warn"></span><div><span class="id">codex.pumpd-automations-plugin</span><div class="msg">Install deferred on Codex by owner note — advisory</div></div><span class="act">Review</span></div>
+        <div class="row"><span class="dot warn"></span><div><span class="id">expo.mcp-oauth</span><div class="msg">Browser OAuth expired — verified Jul 23, reported dead today</div></div><span class="act">Re-auth</span></div>
+      </div>
+      <div class="ov-cols">
+        <div style="display:flex;flex-direction:column;gap:8px;min-height:0"><div class="sect">Activity</div>
+          <div class="gcard feed" style="flex:1">
+            <div class="row"><span class="dot ok"></span><div><div class="t">PR #49 merged — post-sync canary skill</div><div class="s">test(developer-workflows) · e67a03c</div></div><span class="when">2d</span></div>
+            <div class="row"><span class="dot ok"></span><div><div class="t">Marketplaces refreshed</div><div class="s">claude + codex · agent-tooling@main</div></div><span class="when">2m</span></div>
+            <div class="row"><span class="dot ok"></span><div><div class="t">Doctor ran 131 checks</div><div class="s">117 pass · 1 warn · 1 fail · 12 manual</div></div><span class="when">2m</span></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;min-height:0"><div class="sect">Scheduled automations</div>
+          <div class="gcard feed" style="flex:1">
+            <div class="row"><span class="dot ok"></span><div><div class="t">pumpd-sentry-miner</div><div class="s">daily 6:00 AM · last run filed 2 Triage</div></div><span class="when">3h</span></div>
+            <div class="row"><span class="dot man"></span><div><div class="t">pumpd-docs-freshness</div><div class="s">Mon 9:00 AM · next in 3d</div></div><span class="when">—</span></div>
+            <div class="row"><span class="dot bad"></span><div><div class="t">8 more registered</div><div class="s">plugin missing on Claude → not invocable</div></div><span class="act">Fix</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Purpose</h4><p>Answer <b>"is everything okay, and what changed?"</b> in five seconds.</p></div>
+    <div><h4>Key actions</h4><p>Run Doctor · Fix (runs committed recipe) · Re-auth (opens OAuth) · jump anywhere via sidebar.</p></div>
+    <div><h4>Reads · writes</h4><p>Reads <code>scripts/doctor --json</code>, git log, scheduled-tasks dir. Writes nothing.</p></div>
+  </div>
+</section>
+
+<!-- ==================================================== 2 · MARKETPLACE ==================================================== -->
+<section class="screen" id="s-2">
+  <div class="s-head"><span class="n">02</span><h2>Marketplace</h2><span class="thesis">The Shelf, docked. Browse the private catalog and vendor collections; install with destination + scope.</span></div>
+  <div class="stage-scroll"><div class="stage wall"><div class="shell mock">
+    <aside class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="s-search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</div>
+      <div class="s-prof"><div class="orb"></div><div><b>pumpd-workstation</b><span>131 checks · extends 2</span></div><span class="chev">▾</span></div>
+      <nav class="nav">
+        <a><span class="ni" style="background:#0a84ff"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 12l5-5"/><circle cx="12" cy="12" r="1.6"/></svg></span>Overview</a>
+        <a class="sel"><span class="ni" style="background:#5e5ce6"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v6M9 10h6"/><circle cx="12" cy="12" r="9"/></svg></span>Marketplace</a>
+        <a><span class="ni" style="background:#bf5af2"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>Plugins<span class="cnt">7</span></a>
+        <a><span class="ni" style="background:#ff9f0a"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg></span>Skills<span class="cnt">72</span></a>
+        <a><span class="ni" style="background:#32ade6"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg></span>MCP Servers<span class="cnt">9</span></a>
+        <a><span class="ni" style="background:#8e8e93"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span>Profiles<span class="cnt">4</span></a>
+        <a><span class="ni" style="background:#ff453a"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg></span>Doctor<span class="redot"></span></a>
+        <div class="grp">Repository</div>
+        <a><span class="ni" style="background:#34c759"><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg></span>Changes<span class="badge">3</span></a>
+      </nav>
+      <div class="s-foot"><span class="dot ok"></span>main · e67a03c · synced 2m</div>
+    </aside>
+    <div class="content">
+      <div class="ctop"><h3>Marketplace</h3><div class="seg"><span class="on">agent-tooling · 7</span><span>Vendor collections · 5</span><span>Official</span></div><span class="btn ghost push">Add marketplace…</span><span class="sub">refreshed 2m ago</span></div>
+      <div class="mk-hero">
+        <div class="tile"><svg viewBox="0 0 24 24" fill="none" style="width:34px;height:34px;stroke:#fff;stroke-width:1.5"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 19h2"/></svg></div>
+        <div>
+          <div class="eb">First-party plugin · MCP bundle</div>
+          <h4>mobile-development</h4>
+          <p>iOS Simulator, HeroUI Native, and HeroUI Native Pro as managed MCPs — the Pro token injected by Doppler at launch, never stored locally.</p>
+          <div class="pills"><span class="wpill"><span class="dot claude"></span>Claude · installed</span><span class="wpill"><span class="dot codex"></span>Codex · installed</span><span class="wpill">User scope</span></div>
+        </div>
+        <span class="mk-manage">Manage</span>
+      </div>
+      <div class="mk-grid">
+        <div class="gcard mk-card">
+          <div class="top"><div class="icon-tile" style="background:linear-gradient(180deg,#4da6ff,#0a84ff)"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></div><div><b>personal</b><span class="meta">4 skills · user scope</span></div></div>
+          <div class="desc">Obsidian vault, family check-in, personal tasks.</div>
+          <div class="foot"><span class="cp"><span class="dot claude"></span>✓</span><span class="cp"><span class="dot codex"></span>✓</span><span class="get">Open</span></div>
+        </div>
+        <div class="gcard mk-card">
+          <div class="top"><div class="icon-tile" style="background:linear-gradient(180deg,#4cd964,#28b14c)"><svg class="ic" viewBox="0 0 24 24"><path d="M7 8l-4 4 4 4M17 8l4 4-4 4M13 5l-2 14"/></svg></div><div><b>developer-workflows</b><span class="meta">9 skills · 1 MCP · user</span></div></div>
+          <div class="desc">Cross-project quality workflows + heroui-pro MCP.</div>
+          <div class="foot"><span class="cp"><span class="dot claude"></span>✓</span><span class="cp"><span class="dot codex"></span>✓</span><span class="get">Open</span></div>
+        </div>
+        <div class="gcard mk-card">
+          <div class="top"><div class="icon-tile" style="background:linear-gradient(180deg,#cd7bf5,#a550e0)"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></div><div><b>cyrus-workflows</b><span class="meta">7 skills · project · pumpd</span></div></div>
+          <div class="desc">PUMPD research, planning, review, delegation.</div>
+          <div class="foot"><span class="cp"><span class="dot claude"></span>✓</span><span class="cp"><span class="dot codex"></span>✓</span><span class="get">Open</span></div>
+        </div>
+        <div class="gcard mk-card drift">
+          <div class="top"><div class="icon-tile" style="background:linear-gradient(180deg,#ffb340,#ff9500)"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 10v3.5l2 2M9 2h6"/></svg></div><div><b>pumpd-automations</b><span class="meta">10 skills · user scope</span></div></div>
+          <div class="desc">Scheduled scans that file Linear Triage suggestions.</div>
+          <div class="foot"><span class="cp" style="background:rgba(255,69,58,.12);color:#d70015"><span class="dot claude"></span>missing</span><span class="cp"><span class="dot codex"></span>deferred</span><span class="get warn">Install</span></div>
+        </div>
+        <div class="gcard mk-card">
+          <div class="top"><div class="icon-tile" style="background:linear-gradient(180deg,#6bd5ff,#38b6f0)"><svg class="ic" viewBox="0 0 24 24"><path d="M4 15c2-5 5-8 8-8s6 3 8 8"/><path d="M4 15h16M8 19h8"/></svg></div><div><b>wet-in-seattle</b><span class="meta">1 skill · 1 MCP · project</span></div></div>
+          <div class="desc">IAWIS weekly report + Doppler-backed Analytics MCP.</div>
+          <div class="foot"><span class="cp"><span class="dot claude"></span>✓</span><span class="cp"><span class="dot codex"></span>✓</span><span class="get">Open</span></div>
+        </div>
+        <div class="gcard mk-card">
+          <div class="top"><div class="icon-tile" style="background:linear-gradient(180deg,#a6a6ac,#7d7d83)"><svg class="ic" viewBox="0 0 24 24"><path d="M14 6l4 4-9 9H5v-4z"/><path d="M12 8l4 4"/></svg></div><div><b>pumpd-workflows</b><span class="meta">1 skill · project · pumpd</span></div></div>
+          <div class="desc">Local PUMPD maintenance outside the Cyrus pipeline.</div>
+          <div class="foot"><span class="cp"><span class="dot claude"></span>✓</span><span class="cp"><span class="dot codex"></span>✓</span><span class="get">Open</span></div>
+        </div>
+      </div>
+      <div class="sect">Vendor collections <span style="font-weight:400;color:#98989d">— installed via skills CLI, never mirrored</span></div>
+      <div class="vend num">
+        <div class="gcard vchip"><b>expo/skills</b><span>9 of 23 · both clients</span></div>
+        <div class="gcard vchip"><b>software-mansion</b><span>8 of 8 · both clients</span></div>
+        <div class="gcard vchip"><b>callstack</b><span>9 of 10 · 1 collision</span></div>
+        <div class="gcard vchip"><b>supabase</b><span>2 of 2 · both clients</span></div>
+        <div class="gcard vchip"><b>anthropics</b><span>12 of 18 · Codex 10</span></div>
+      </div>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Purpose</h4><p>Browsing + acquiring. The private catalog treated <b>as legitimately as the official ones</b>; drift shows as a red card in the shelf.</p></div>
+    <div><h4>Key actions</h4><p>Install → sheet picks client(s) + scope, runs <code>claude plugin install</code> / codex equivalent. Add marketplace registers a catalog once.</p></div>
+    <div><h4>Reads · writes</h4><p>Reads both <code>marketplace.json</code> catalogs + install state. Writes via native CLIs only.</p></div>
+  </div>
+</section>
+
+<!-- ==================================================== 3 · PLUGINS ==================================================== -->
+<section class="screen" id="s-3">
+  <div class="s-head"><span class="n">03</span><h2>Plugins</h2><span class="thesis">Management, not browsing: per-client enablement as honest toggles over the real settings files.</span></div>
+  <div class="stage-scroll"><div class="stage wall"><div class="shell mock">
+    <aside class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="s-search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</div>
+      <div class="s-prof"><div class="orb"></div><div><b>pumpd-workstation</b><span>131 checks · extends 2</span></div><span class="chev">▾</span></div>
+      <nav class="nav">
+        <a><span class="ni" style="background:#0a84ff"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 12l5-5"/><circle cx="12" cy="12" r="1.6"/></svg></span>Overview</a>
+        <a><span class="ni" style="background:#5e5ce6"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v6M9 10h6"/><circle cx="12" cy="12" r="9"/></svg></span>Marketplace</a>
+        <a class="sel"><span class="ni" style="background:#bf5af2"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>Plugins<span class="cnt">7</span></a>
+        <a><span class="ni" style="background:#ff9f0a"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg></span>Skills<span class="cnt">72</span></a>
+        <a><span class="ni" style="background:#32ade6"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg></span>MCP Servers<span class="cnt">9</span></a>
+        <a><span class="ni" style="background:#8e8e93"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span>Profiles<span class="cnt">4</span></a>
+        <a><span class="ni" style="background:#ff453a"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg></span>Doctor<span class="redot"></span></a>
+        <div class="grp">Repository</div>
+        <a><span class="ni" style="background:#34c759"><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg></span>Changes<span class="badge">3</span></a>
+      </nav>
+      <div class="s-foot"><span class="dot ok"></span>main · e67a03c · synced 2m</div>
+    </aside>
+    <div class="content">
+      <div class="ctop"><h3>Plugins</h3><div class="seg"><span class="on">All 7</span><span>User 4</span><span>Project 3</span></div><span class="btn ghost push">Update all</span></div>
+      <div class="gcard tbl" style="flex:1">
+        <div class="thead"><span style="flex:1">Plugin</span><span class="col-scope">Scope</span><span class="col-cont">Contents</span><span class="col-cl">Claude</span><span class="col-cl">Codex</span><span class="col-upd">Updated</span></div>
+        <div class="row">
+          <div class="pl-name"><div class="icon-tile" style="width:34px;height:34px;background:linear-gradient(180deg,#4da6ff,#0a84ff)"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></div><div><b>personal</b><span>Obsidian vault, check-ins, tasks</span></div></div>
+          <span class="col-scope"><span class="chip">User</span></span><span class="col-cont">4 skills</span>
+          <span class="col-cl"><span class="tog on"></span></span><span class="col-cl"><span class="tog on"></span></span><span class="col-upd">e67a03c</span>
+        </div>
+        <div class="row">
+          <div class="pl-name"><div class="icon-tile" style="width:34px;height:34px;background:linear-gradient(180deg,#4cd964,#28b14c)"><svg class="ic" viewBox="0 0 24 24"><path d="M7 8l-4 4 4 4M17 8l4 4-4 4M13 5l-2 14"/></svg></div><div><b>developer-workflows</b><span>Quality workflows + heroui-pro MCP</span></div></div>
+          <span class="col-scope"><span class="chip">User</span></span><span class="col-cont">9 skills · 1 MCP</span>
+          <span class="col-cl"><span class="tog on"></span></span><span class="col-cl"><span class="tog on"></span></span><span class="col-upd">e67a03c</span>
+        </div>
+        <div class="row">
+          <div class="pl-name"><div class="icon-tile" style="width:34px;height:34px;background:linear-gradient(180deg,#cd7bf5,#a550e0)"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></div><div><b>cyrus-workflows</b><span>PUMPD research → retro pipeline</span></div></div>
+          <span class="col-scope"><span class="chip blue">Project · pumpd</span></span><span class="col-cont">7 skills</span>
+          <span class="col-cl"><span class="tog on"></span></span><span class="col-cl"><span class="tog on"></span></span><span class="col-upd">c269854</span>
+        </div>
+        <div class="row" style="background:rgba(255,69,58,.045)">
+          <div class="pl-name"><div class="icon-tile" style="width:34px;height:34px;background:linear-gradient(180deg,#ffb340,#ff9500)"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 10v3.5l2 2M9 2h6"/></svg></div><div><b>pumpd-automations</b><span>10 scheduled Linear-Triage scanners</span></div></div>
+          <span class="col-scope"><span class="chip">User</span></span><span class="col-cont">10 skills</span>
+          <span class="col-cl"><span class="tog err"></span><span class="chip bad">Fix</span></span><span class="col-cl"><span class="tog"></span><span class="chip warn">deferred</span></span><span class="col-upd">9dc9f92</span>
+        </div>
+        <div class="row">
+          <div class="pl-name"><div class="icon-tile" style="width:34px;height:34px;background:linear-gradient(180deg,#a6a6ac,#7d7d83)"><svg class="ic" viewBox="0 0 24 24"><path d="M14 6l4 4-9 9H5v-4z"/><path d="M12 8l4 4"/></svg></div><div><b>pumpd-workflows</b><span>Local PUMPD maintenance</span></div></div>
+          <span class="col-scope"><span class="chip blue">Project · pumpd</span></span><span class="col-cont">1 skill</span>
+          <span class="col-cl"><span class="tog on"></span></span><span class="col-cl"><span class="tog on"></span></span><span class="col-upd">63d0eb5</span>
+        </div>
+        <div class="row">
+          <div class="pl-name"><div class="icon-tile" style="width:34px;height:34px;background:linear-gradient(180deg,#6bd5ff,#38b6f0)"><svg class="ic" viewBox="0 0 24 24"><path d="M4 15c2-5 5-8 8-8s6 3 8 8"/><path d="M4 15h16M8 19h8"/></svg></div><div><b>wet-in-seattle</b><span>IAWIS reporting + Analytics MCP</span></div></div>
+          <span class="col-scope"><span class="chip blue">Project · iawis</span></span><span class="col-cont">1 skill · 1 MCP</span>
+          <span class="col-cl"><span class="tog on"></span></span><span class="col-cl"><span class="tog on"></span></span><span class="col-upd">e67a03c</span>
+        </div>
+        <div class="row">
+          <div class="pl-name"><div class="icon-tile" style="width:34px;height:34px;background:linear-gradient(180deg,#7b7bf0,#5e5ce6)"><svg class="ic" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 19h2"/></svg></div><div><b>mobile-development</b><span>iOS Simulator + HeroUI Native MCPs</span></div></div>
+          <span class="col-scope"><span class="chip">User</span></span><span class="col-cont">3 MCPs</span>
+          <span class="col-cl"><span class="tog on"></span></span><span class="col-cl"><span class="tog on"></span></span><span class="col-upd">e67a03c</span>
+        </div>
+      </div>
+      <div class="tfoot">Toggles write <code>enabledPlugins</code> in <code>~/.claude/settings.json</code> (or the project's) and <code>[plugins]</code> in <code>~/.codex/config.toml</code> — the same files the doctor reads. Project rows target that project's settings file.</div>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Purpose</h4><p>Per-client, per-scope <b>enablement at a glance</b> — the two toggle columns are the Claude/Codex parity story.</p></div>
+    <div><h4>Key actions</h4><p>Toggle client · Fix drift · Update all (marketplace refresh) · row click → plugin sheet (screen 4).</p></div>
+    <div><h4>Reads · writes</h4><p>Reads settings.json / config.toml / git. Writes through <code>claude plugin</code> + codex CLI, never raw file edits.</p></div>
+  </div>
+</section>
+
+<!-- ==================================================== 4 · PLUGIN SHEET ==================================================== -->
+<section class="screen" id="s-4">
+  <div class="s-head"><span class="n">04</span><h2>Plugin sheet</h2><span class="thesis">Click any plugin row → the whole story: bundled skills, its MCP, and the dual-adapter parity.</span></div>
+  <div class="stage-scroll"><div class="stage wall"><div class="shell mock" style="filter:saturate(.9)">
+    <aside class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="s-search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</div>
+      <div class="s-prof"><div class="orb"></div><div><b>pumpd-workstation</b><span>131 checks · extends 2</span></div><span class="chev">▾</span></div>
+      <nav class="nav">
+        <a><span class="ni" style="background:#0a84ff"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 12l5-5"/><circle cx="12" cy="12" r="1.6"/></svg></span>Overview</a>
+        <a><span class="ni" style="background:#5e5ce6"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v6M9 10h6"/><circle cx="12" cy="12" r="9"/></svg></span>Marketplace</a>
+        <a class="sel"><span class="ni" style="background:#bf5af2"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>Plugins<span class="cnt">7</span></a>
+        <a><span class="ni" style="background:#ff9f0a"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg></span>Skills<span class="cnt">72</span></a>
+        <a><span class="ni" style="background:#32ade6"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg></span>MCP Servers<span class="cnt">9</span></a>
+        <a><span class="ni" style="background:#8e8e93"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span>Profiles<span class="cnt">4</span></a>
+        <a><span class="ni" style="background:#ff453a"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg></span>Doctor<span class="redot"></span></a>
+        <div class="grp">Repository</div>
+        <a><span class="ni" style="background:#34c759"><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg></span>Changes<span class="badge">3</span></a>
+      </nav>
+      <div class="s-foot"><span class="dot ok"></span>main · e67a03c · synced 2m</div>
+    </aside>
+    <div class="content"><div class="ctop"><h3>Plugins</h3></div><div class="gcard" style="flex:1;opacity:.55"></div></div>
+    <div class="dim"></div>
+    <div class="sheet">
+      <div class="sh-head">
+        <div class="icon-tile" style="background:linear-gradient(180deg,#4cd964,#28b14c)"><svg class="ic" viewBox="0 0 24 24" style="width:26px;height:26px"><path d="M7 8l-4 4 4 4M17 8l4 4-4 4M13 5l-2 14"/></svg></div>
+        <div><h4>developer-workflows</h4><div class="by">by Arend Alloul · agent-tooling@main · User scope</div>
+          <div style="display:flex;gap:6px;margin-top:6px"><span class="cp"><span class="dot claude"></span>Claude ✓</span><span class="cp"><span class="dot codex"></span>Codex ✓</span></div>
+        </div>
+        <span class="x">✕</span>
+      </div>
+      <div class="sh-tabs"><span class="on">Skills · 9</span><span>MCP servers · 1</span><span>Adapters</span><span>Activity</span></div>
+      <div class="sh-body">
+        <div class="gcard">
+          <div class="row"><svg class="ic" viewBox="0 0 24 24" style="color:#8e8e93"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg><div><b style="font-size:12.5px">skill-forge</b><div class="msg">Author a new Agent Skill and publish it so both clients pick it up</div></div><span class="chip mono push">SKILL.md</span></div>
+          <div class="row"><svg class="ic" viewBox="0 0 24 24" style="color:#8e8e93"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg><div><b style="font-size:12.5px">mcp-preflight</b><div class="msg">Triage configured-but-unusable MCP servers, emit the exact fix</div></div><span class="chip mono push">SKILL.md</span></div>
+          <div class="row"><svg class="ic" viewBox="0 0 24 24" style="color:#8e8e93"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg><div><b style="font-size:12.5px">worktree-bootstrap</b><div class="msg">Bring a fresh git worktree to a runnable state</div></div><span class="chip mono push">SKILL.md</span></div>
+          <div class="row"><svg class="ic" viewBox="0 0 24 24" style="color:#8e8e93"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg><div><b style="font-size:12.5px">env-topology</b><div class="msg">Map of env vars + secrets across Doppler, Supabase, Vercel, EAS, CI</div></div><span class="chip mono push">SKILL.md</span></div>
+          <div class="dr-more">5 more — doppler-cli-skill, sync-agent-tooling, thermo-nuclear-…, post-sync-canary, workflow-sync-test</div>
+        </div>
+        <div class="gcard callout">
+          <svg class="ic" viewBox="0 0 24 24" style="color:#0a6ae0"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/></svg>
+          <div><b>heroui-pro</b> — stdio via mcp-remote · <b>Doppler-backed</b>: <code style="font-family:var(--mono);font-size:10.5px">HEROUI_PRO_PERSONAL_TOKEN</code> fetched at launch from agent-tooling/prd, never written to disk.</div>
+          <span class="chip ok push">healthy</span>
+        </div>
+        <div class="gcard callout">
+          <svg class="ic" viewBox="0 0 24 24" style="color:#1d8a3e"><path d="M20 6L9 17l-5-5"/></svg>
+          <div><b>Dual adapters present</b> — <code style="font-family:var(--mono);font-size:10.5px">.claude-plugin/plugin.json</code> + <code style="font-family:var(--mono);font-size:10.5px">.codex-plugin/plugin.json</code> over one physical skill core.</div>
+        </div>
+      </div>
+      <div class="sh-foot"><span>Installed Jul 23 · updated 2d ago (#49)</span><span class="btn ghost push">Update</span><span class="btn danger">Uninstall ▾</span></div>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Purpose</h4><p>One plugin's <b>full anatomy</b> — the repo-contract (skills core, MCP, dual adapters) made visible instead of implied.</p></div>
+    <div><h4>Key actions</h4><p>Update · Uninstall per client · open any SKILL.md · jump to the MCP's row on screen 6.</p></div>
+    <div><h4>Reads · writes</h4><p>Reads <code>plugins/&lt;name&gt;/</code> from the repo checkout + install state. Uninstall runs the native CLI.</p></div>
+  </div>
+</section>
+
+<!-- ==================================================== 5 · SKILLS ==================================================== -->
+<section class="screen" id="s-5">
+  <div class="s-head"><span class="n">05</span><h2>Skills</h2><span class="thesis">All 72 in one list — owned next to vendor — with a real detail rail, not a modal.</span></div>
+  <div class="stage-scroll"><div class="stage wall"><div class="shell mock">
+    <aside class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="s-search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</div>
+      <div class="s-prof"><div class="orb"></div><div><b>pumpd-workstation</b><span>131 checks · extends 2</span></div><span class="chev">▾</span></div>
+      <nav class="nav">
+        <a><span class="ni" style="background:#0a84ff"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 12l5-5"/><circle cx="12" cy="12" r="1.6"/></svg></span>Overview</a>
+        <a><span class="ni" style="background:#5e5ce6"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v6M9 10h6"/><circle cx="12" cy="12" r="9"/></svg></span>Marketplace</a>
+        <a><span class="ni" style="background:#bf5af2"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>Plugins<span class="cnt">7</span></a>
+        <a class="sel"><span class="ni" style="background:#ff9f0a"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg></span>Skills<span class="cnt">72</span></a>
+        <a><span class="ni" style="background:#32ade6"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg></span>MCP Servers<span class="cnt">9</span></a>
+        <a><span class="ni" style="background:#8e8e93"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span>Profiles<span class="cnt">4</span></a>
+        <a><span class="ni" style="background:#ff453a"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg></span>Doctor<span class="redot"></span></a>
+        <div class="grp">Repository</div>
+        <a><span class="ni" style="background:#34c759"><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg></span>Changes<span class="badge">3</span></a>
+      </nav>
+      <div class="s-foot"><span class="dot ok"></span>main · e67a03c · synced 2m</div>
+    </aside>
+    <div class="content">
+      <div class="ctop"><h3>Skills</h3><div class="seg"><span class="on">All 72</span><span>Owned 32</span><span>Vendor 40</span></div><span class="chip push">Collection · Any ▾</span></div>
+      <div class="sk-wrap">
+        <div class="gcard sk-list">
+          <div class="sk-grp">Owned — agent-tooling</div>
+          <div class="sk-row sel"><b>skill-forge</b><span class="d">Author a new Agent Skill and publish it to the repo</span><span class="chip push">developer-workflows</span></div>
+          <div class="sk-row"><b>thermo-nuclear-code-quality-review</b><span class="d">Extremely strict maintainability review</span><span class="chip push">developer-workflows</span></div>
+          <div class="sk-row"><b>worktree-bootstrap</b><span class="d">Fresh worktree → runnable state</span><span class="chip push">developer-workflows</span></div>
+          <div class="sk-row"><b>obsidian-vault</b><span class="d">Safely read, organize, commit vault notes</span><span class="chip push">personal</span></div>
+          <div class="sk-row"><b>pumpd-plan</b><span class="d">Plan PUMPD work for Cyrus delegation</span><span class="chip push">cyrus-workflows</span></div>
+          <div class="sk-row"><b>pumpd-sentry-miner</b><span class="d">Scheduled Sentry scan → Linear Triage</span><span class="chip push">pumpd-automations</span></div>
+          <div class="sk-row"><b>iawis-weekly-report</b><span class="d">GA4 + Shopify weekly KPI report</span><span class="chip push">wet-in-seattle</span></div>
+          <div class="sk-grp">Vendor — installed, never mirrored</div>
+          <div class="sk-row"><b>react-native-best-practices</b><span class="d">SWM production RN + New Architecture</span><span class="chip push">software-mansion</span></div>
+          <div class="sk-row"><b>expo-router</b><span class="d">File-based navigation for Expo Router</span><span class="chip push">expo/skills</span></div>
+          <div class="sk-row"><b>supabase</b><span class="d">All Supabase products + client libraries</span><span class="chip push">supabase</span></div>
+          <div class="sk-row"><b>github-actions</b><span class="d">RN CI builds with downloadable artifacts</span><span class="chip push">callstack</span></div>
+          <div class="sk-row"><b>mcp-builder</b><span class="d">Build high-quality MCP servers</span><span class="chip push">anthropics</span></div>
+          <div class="dr-more">60 more — filtered by search, collection, client, or scope</div>
+        </div>
+        <div class="gcard sk-det">
+          <div style="display:flex;align-items:center;gap:10px"><h4>skill-forge</h4><span class="chip blue push">developer-workflows</span></div>
+          <div style="display:flex;gap:6px"><span class="cp"><span class="dot claude"></span>Claude · plugin</span><span class="cp"><span class="dot codex"></span>Codex · plugin</span><span class="chip">User scope</span></div>
+          <p>Author a new Agent Skill and publish it to the agent-tooling repository so both Claude and Codex pick it up. Interviews for name and trigger phrasing, checks collisions across owned and vendor skills, writes one portable SKILL.md, adds native adapters, validates, opens a PR with auto-merge.</p>
+          <div class="lab">Triggers</div>
+          <div class="sk-trig"><span>"let's make a skill"</span><span>"turn this into a skill"</span><span>"capture this as a reusable workflow"</span></div>
+          <div class="lab">Source</div>
+          <div class="sk-path">plugins/developer-workflows/skills/skill-forge/SKILL.md</div>
+          <div class="sk-path" style="background:transparent;padding:0 2px;color:#98989d">references/ 2 · assets/ 1 · added #43 · touched #49</div>
+          <div style="display:flex;gap:8px;margin-top:auto"><span class="btn pri">Open SKILL.md</span><span class="btn ghost">Reveal in repo</span></div>
+        </div>
+      </div>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Purpose</h4><p>The full skill surface in one place — <b>owned and vendor side by side</b>, since triggering doesn't care who authored it.</p></div>
+    <div><h4>Key actions</h4><p>Search/filter · open SKILL.md · see triggers before invoking · trace a vendor skill to its collection + install recipe.</p></div>
+    <div><h4>Reads · writes</h4><p>Reads <code>plugins/*/skills/*/SKILL.md</code> frontmatter + <code>~/.claude/skills</code> + <code>~/.agents/skills</code>. Read-only.</p></div>
+  </div>
+</section>
+
+<!-- ==================================================== 6 · MCP SERVERS ==================================================== -->
+<section class="screen" id="s-6">
+  <div class="s-head"><span class="n">06</span><h2>MCP Servers</h2><span class="thesis">Every server, who supplies it, and how it authenticates — names only, never values.</span></div>
+  <div class="stage-scroll"><div class="stage wall"><div class="shell mock">
+    <aside class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="s-search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</div>
+      <div class="s-prof"><div class="orb"></div><div><b>pumpd-workstation</b><span>131 checks · extends 2</span></div><span class="chev">▾</span></div>
+      <nav class="nav">
+        <a><span class="ni" style="background:#0a84ff"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 12l5-5"/><circle cx="12" cy="12" r="1.6"/></svg></span>Overview</a>
+        <a><span class="ni" style="background:#5e5ce6"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v6M9 10h6"/><circle cx="12" cy="12" r="9"/></svg></span>Marketplace</a>
+        <a><span class="ni" style="background:#bf5af2"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>Plugins<span class="cnt">7</span></a>
+        <a><span class="ni" style="background:#ff9f0a"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg></span>Skills<span class="cnt">72</span></a>
+        <a class="sel"><span class="ni" style="background:#32ade6"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg></span>MCP Servers<span class="cnt">9</span></a>
+        <a><span class="ni" style="background:#8e8e93"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span>Profiles<span class="cnt">4</span></a>
+        <a><span class="ni" style="background:#ff453a"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg></span>Doctor<span class="redot"></span></a>
+        <div class="grp">Repository</div>
+        <a><span class="ni" style="background:#34c759"><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg></span>Changes<span class="badge">3</span></a>
+      </nav>
+      <div class="s-foot"><span class="dot ok"></span>main · e67a03c · synced 2m</div>
+    </aside>
+    <div class="content">
+      <div class="ctop"><h3>MCP Servers</h3><div class="seg"><span class="on">All 9</span><span>Doppler 3</span><span>OAuth 3</span><span>Plain 3</span></div><span class="btn ghost push">Add server…</span></div>
+      <div class="gcard tbl" style="flex:1">
+        <div class="thead"><span style="flex:1">Server</span><span style="width:168px;flex:none">Supplied by</span><span style="width:104px;flex:none">Transport</span><span style="width:120px;flex:none">Auth</span><span style="width:84px;flex:none">Clients</span><span style="width:104px;flex:none">Status</span></div>
+        <div class="row"><div class="mcp-name" style="flex:1"><b>heroui-pro</b><span>mcp.heroui.pro via mcp-remote</span></div><span style="width:168px;flex:none"><span class="chip blue">plugin · developer-workflows</span></span><span style="width:104px;flex:none;font-size:11px;color:#6e6e73">stdio</span><span style="width:120px;flex:none"><span class="chip">Doppler</span></span><span style="width:84px;flex:none"><span class="dot claude"></span> <span class="dot codex"></span></span><span style="width:104px;flex:none"><span class="chip ok">healthy</span></span></div>
+        <div class="row"><div class="mcp-name" style="flex:1"><b>heroui-native</b><span>npx @heroui/native-mcp@1.1.0</span></div><span style="width:168px;flex:none"><span class="chip blue">plugin · mobile-development</span></span><span style="width:104px;flex:none;font-size:11px;color:#6e6e73">stdio</span><span style="width:120px;flex:none"><span class="chip">none</span></span><span style="width:84px;flex:none"><span class="dot claude"></span> <span class="dot codex"></span></span><span style="width:104px;flex:none"><span class="chip ok">healthy</span></span></div>
+        <div class="row"><div class="mcp-name" style="flex:1"><b>heroui-native-pro</b><span>native-mcp.heroui.pro via mcp-remote</span></div><span style="width:168px;flex:none"><span class="chip blue">plugin · mobile-development</span></span><span style="width:104px;flex:none;font-size:11px;color:#6e6e73">stdio</span><span style="width:120px;flex:none"><span class="chip">Doppler</span></span><span style="width:84px;flex:none"><span class="dot claude"></span> <span class="dot codex"></span></span><span style="width:104px;flex:none"><span class="chip ok">healthy</span></span></div>
+        <div class="row"><div class="mcp-name" style="flex:1"><b>ios-simulator-mcp</b><span>npx ios-simulator-mcp@1.6.0</span></div><span style="width:168px;flex:none"><span class="chip blue">plugin · mobile-development</span></span><span style="width:104px;flex:none;font-size:11px;color:#6e6e73">stdio</span><span style="width:120px;flex:none"><span class="chip">none</span></span><span style="width:84px;flex:none"><span class="dot claude"></span> <span class="dot codex"></span></span><span style="width:104px;flex:none"><span class="chip ok">healthy</span></span></div>
+        <div class="row"><div class="mcp-name" style="flex:1"><b>analytics-mcp</b><span>Google GA4 · launched through doppler run</span></div><span style="width:168px;flex:none"><span class="chip blue">plugin · wet-in-seattle</span></span><span style="width:104px;flex:none;font-size:11px;color:#6e6e73">stdio</span><span style="width:120px;flex:none"><span class="chip">Doppler + ADC</span></span><span style="width:84px;flex:none"><span class="dot claude"></span> <span class="dot codex"></span></span><span style="width:104px;flex:none"><span class="chip ok">healthy</span></span></div>
+        <div class="row"><div class="mcp-name" style="flex:1"><b>sentry</b><span>mcp.sentry.dev/avad-technologies-llc/pumpd</span></div><span style="width:168px;flex:none"><span class="chip">user raw · curated on Codex</span></span><span style="width:104px;flex:none;font-size:11px;color:#6e6e73">http</span><span style="width:120px;flex:none"><span class="chip">Browser OAuth</span></span><span style="width:84px;flex:none"><span class="dot claude"></span> <span class="dot codex"></span></span><span style="width:104px;flex:none"><span class="chip ok">✓ Jul 23</span></span></div>
+        <div class="row" style="background:rgba(255,204,0,.06)"><div class="mcp-name" style="flex:1"><b>expo</b><span>mcp.expo.dev — OAuth-only, no CI fallback</span></div><span style="width:168px;flex:none"><span class="chip">user raw · curated on Codex</span></span><span style="width:104px;flex:none;font-size:11px;color:#6e6e73">http</span><span style="width:120px;flex:none"><span class="chip">Browser OAuth</span></span><span style="width:84px;flex:none"><span class="dot claude"></span> <span class="dot codex"></span></span><span style="width:104px;flex:none"><span class="chip warn">Re-auth</span></span></div>
+        <div class="row"><div class="mcp-name" style="flex:1"><b>supabase</b><span>mcp.supabase.com</span></div><span style="width:168px;flex:none"><span class="chip">user raw · curated on Codex</span></span><span style="width:104px;flex:none;font-size:11px;color:#6e6e73">http</span><span style="width:120px;flex:none"><span class="chip">Browser OAuth</span></span><span style="width:84px;flex:none"><span class="dot claude"></span> <span class="dot codex"></span></span><span style="width:104px;flex:none"><span class="chip ok">✓ Jul 23</span></span></div>
+        <div class="row"><div class="mcp-name" style="flex:1"><b>supabase_local</b><span>PUMPD .mcp.json — local stack</span></div><span style="width:168px;flex:none"><span class="chip blue">project · pumpd</span></span><span style="width:104px;flex:none;font-size:11px;color:#6e6e73">stdio</span><span style="width:120px;flex:none"><span class="chip">none</span></span><span style="width:84px;flex:none"><span class="dot claude"></span></span><span style="width:104px;flex:none"><span class="chip ok">healthy</span></span></div>
+      </div>
+      <div class="gcard callout">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+        <div><b>Duplicate guard passing</b> — raw <span style="font-family:var(--mono)">linear / expo / ios-simulator-mcp</span> stay absent on Codex because the curated plugins supply them (<span style="font-family:var(--mono);font-size:10.5px">codex.duplicate-*-mcp</span>). Secrets stay out of Git: Doppler fetches tokens at launch; this screen shows <b>names only</b>.</div>
+      </div>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Purpose</h4><p>The auth story made scannable: <b>who supplies each server, over what transport, with which credential class</b>.</p></div>
+    <div><h4>Key actions</h4><p>Re-auth (opens the client's OAuth flow) · Add server at chosen scope · jump to supplying plugin.</p></div>
+    <div><h4>Reads · writes</h4><p>Reads <code>~/.claude.json</code>, plugin <code>.mcp.json</code>s, <code>config.toml</code>, project files. Writes via <code>claude mcp add</code> only.</p></div>
+  </div>
+</section>
+
+<!-- ==================================================== 7 · PROFILES ==================================================== -->
+<section class="screen" id="s-7">
+  <div class="s-head"><span class="n">07</span><h2>Profiles</h2><span class="thesis">Desired state as a first-class object: composition, variables, and what the 131 checks are made of.</span></div>
+  <div class="stage-scroll"><div class="stage wall"><div class="shell mock">
+    <aside class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="s-search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</div>
+      <div class="s-prof"><div class="orb"></div><div><b>pumpd-workstation</b><span>131 checks · extends 2</span></div><span class="chev">▾</span></div>
+      <nav class="nav">
+        <a><span class="ni" style="background:#0a84ff"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 12l5-5"/><circle cx="12" cy="12" r="1.6"/></svg></span>Overview</a>
+        <a><span class="ni" style="background:#5e5ce6"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v6M9 10h6"/><circle cx="12" cy="12" r="9"/></svg></span>Marketplace</a>
+        <a><span class="ni" style="background:#bf5af2"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>Plugins<span class="cnt">7</span></a>
+        <a><span class="ni" style="background:#ff9f0a"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg></span>Skills<span class="cnt">72</span></a>
+        <a><span class="ni" style="background:#32ade6"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg></span>MCP Servers<span class="cnt">9</span></a>
+        <a class="sel"><span class="ni" style="background:#8e8e93"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span>Profiles<span class="cnt">4</span></a>
+        <a><span class="ni" style="background:#ff453a"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg></span>Doctor<span class="redot"></span></a>
+        <div class="grp">Repository</div>
+        <a><span class="ni" style="background:#34c759"><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg></span>Changes<span class="badge">3</span></a>
+      </nav>
+      <div class="s-foot"><span class="dot ok"></span>main · e67a03c · synced 2m</div>
+    </aside>
+    <div class="content">
+      <div class="ctop"><h3>Profiles</h3><span class="btn ghost push">New profile</span><span class="btn pri">Edit → PR</span></div>
+      <div class="pf-cards">
+        <div class="gcard pf-card"><b>base-workstation</b><div class="d">Cross-client tooling on the primary workstation</div><div class="m"><span class="chip num">104 checks</span></div></div>
+        <div class="gcard pf-card"><b>pumpd-project</b><div class="d">Committed config for reliable PUMPD work</div><div class="m"><span class="chip num">11 checks</span><span class="chip mono">project_root</span></div></div>
+        <div class="gcard pf-card sel"><b>pumpd-workstation</b><div class="d">Effective desired state for PUMPD development</div><div class="m"><span class="chip blue">extends 2</span><span class="chip num">131 checks</span></div></div>
+        <div class="gcard pf-card"><b>wet-in-seattle-workstation</b><div class="d">IAWIS reporting & operations tooling</div><div class="m"><span class="chip blue">extends 1</span><span class="chip mono">project_root</span></div></div>
+      </div>
+      <div class="sect">Composition</div>
+      <div class="gcard">
+        <div class="pf-flow">
+          <span class="pf-node">base-workstation</span><span class="pf-arrow">+</span>
+          <span class="pf-node">pumpd-project</span><span class="pf-arrow">→</span>
+          <span class="pf-node hot">pumpd-workstation</span>
+          <span class="pf-arrow" style="margin-left:auto"></span>
+          <span class="chip mono">agent_tooling_ref = main</span>
+          <span class="chip mono">project_root = ~/ws/PUMPD-MOBILE-APP/…</span>
+        </div>
+        <div class="pf-bar num">
+          <i style="flex:84;background:#7aa2ff" title="path 84"></i>
+          <i style="flex:10;background:#10a37f" title="codex_plugin 10"></i>
+          <i style="flex:9;background:#d97757" title="claude_plugin 9"></i>
+          <i style="flex:12;background:#bf5af2" title="mcp 12"></i>
+          <i style="flex:3;background:#ffcc00" title="marketplace 3"></i>
+          <i style="flex:1;background:#5b5b60" title="setting 1"></i>
+          <i style="flex:12;background:#c7c7cc" title="manual 12"></i>
+        </div>
+        <div class="pf-leg num">
+          <span><i class="sw" style="background:#7aa2ff"></i><em>path</em> 84 — vendor skills + project files</span>
+          <span><i class="sw" style="background:#10a37f"></i><em>codex_plugin</em> 10</span>
+          <span><i class="sw" style="background:#d97757"></i><em>claude_plugin</em> 9</span>
+          <span><i class="sw" style="background:#bf5af2"></i><em>mcp</em> 12</span>
+          <span><i class="sw" style="background:#ffcc00"></i><em>marketplace</em> 3</span>
+          <span><i class="sw" style="background:#5b5b60"></i><em>setting</em> 1</span>
+          <span><i class="sw" style="background:#c7c7cc"></i><em>manual</em> 12</span>
+        </div>
+      </div>
+      <div class="sect">Manual checks — the doctor never automates these</div>
+      <div class="gcard" style="flex:1;overflow:hidden">
+        <div class="row"><span class="dot warn"></span><div><span class="id">expo.mcp-oauth</span><div class="msg">Re-auth browser OAuth in each client when the session lapses</div></div><span class="chip warn push">stale · Jul 23</span><span class="act">Verify</span></div>
+        <div class="row"><span class="dot ok"></span><div><span class="id">doppler.cli-authenticated</span><div class="msg">`doppler me` — feeds heroui-pro, heroui-native-pro, analytics-mcp</div></div><span class="chip push num">✓ Jul 23</span><span class="act">Verify</span></div>
+        <div class="row"><span class="dot man"></span><div><span class="id">pumpd.claude-cloud-canary</span><div class="msg">Cloud session sees committed project tooling</div></div><span class="chip push">never verified</span><span class="act">Verify</span></div>
+        <div class="dr-more">9 more — sentry.mcp-oauth ✓ · supabase.mcp-oauth ✓ · codex.cli-on-path ✓ · hosted.claude-account · …</div>
+      </div>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Purpose</h4><p>Make <b>profiles/*.json legible</b> — inheritance, variables, and check composition — without opening a JSON file.</p></div>
+    <div><h4>Key actions</h4><p>Switch active profile · Verify stamps <code>last_verified</code> (a staged change) · Edit → PR opens the change tray.</p></div>
+    <div><h4>Reads · writes</h4><p>Reads <code>profiles/*.json</code> + <code>schemas/profile.schema.json</code>. Edits become commits on a branch — screen 9.</p></div>
+  </div>
+</section>
+
+<!-- ==================================================== 8 · DOCTOR ==================================================== -->
+<section class="screen" id="s-8">
+  <div class="s-head"><span class="n">08</span><h2>Doctor</h2><span class="thesis">The full report: problems expanded with their recipes, manual checklist, and 117 passes folded away.</span></div>
+  <div class="stage-scroll"><div class="stage wall"><div class="shell mock">
+    <aside class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="s-search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</div>
+      <div class="s-prof"><div class="orb"></div><div><b>pumpd-workstation</b><span>131 checks · extends 2</span></div><span class="chev">▾</span></div>
+      <nav class="nav">
+        <a><span class="ni" style="background:#0a84ff"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 12l5-5"/><circle cx="12" cy="12" r="1.6"/></svg></span>Overview</a>
+        <a><span class="ni" style="background:#5e5ce6"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v6M9 10h6"/><circle cx="12" cy="12" r="9"/></svg></span>Marketplace</a>
+        <a><span class="ni" style="background:#bf5af2"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>Plugins<span class="cnt">7</span></a>
+        <a><span class="ni" style="background:#ff9f0a"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg></span>Skills<span class="cnt">72</span></a>
+        <a><span class="ni" style="background:#32ade6"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg></span>MCP Servers<span class="cnt">9</span></a>
+        <a><span class="ni" style="background:#8e8e93"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span>Profiles<span class="cnt">4</span></a>
+        <a class="sel"><span class="ni" style="background:#ff453a"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg></span>Doctor<span class="redot" style="background:#fff"></span></a>
+        <div class="grp">Repository</div>
+        <a><span class="ni" style="background:#34c759"><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg></span>Changes<span class="badge">3</span></a>
+      </nav>
+      <div class="s-foot"><span class="dot ok"></span>main · e67a03c · synced 2m</div>
+    </aside>
+    <div class="content">
+      <div class="ctop">
+        <h3>Doctor</h3><span class="chip mono">pumpd-workstation</span>
+        <div class="dr-hist num"><i style="height:60%"></i><i style="height:70%"></i><i style="height:65%"></i><i style="height:80%"></i><i style="height:75%"></i><i style="height:85%"></i><i style="height:80%"></i><i style="height:90%"></i><i style="height:85%"></i><i style="height:88%"></i><i style="height:92%"></i><i style="height:90%"></i><i style="height:95%"></i><i class="f" style="height:100%"></i></div>
+        <span class="sub">131 checks · 1.9 s · 2 min ago</span>
+        <div class="seg push"><span class="on">Problems 2</span><span>Manual 12</span><span>All 131</span></div>
+        <span class="btn pri">Run</span>
+      </div>
+      <div class="gcard">
+        <div class="dr-exp">
+          <div class="h"><span class="dot bad"></span><span class="id" style="font-weight:600">claude.pumpd-automations-plugin</span><span class="chip mono">claude_plugin</span><span class="chip bad push">FAIL · required</span></div>
+          <div class="msg" style="font-size:12px;color:#48484a">Claude plugin pumpd-automations@agent-tooling is not enabled in ~/.claude/settings.json. Deliberately user-scoped: automations fire unattended in whatever directory the scheduler uses, so a project-scoped install would never be active.</div>
+          <div class="code"><i>$</i> claude plugin install pumpd-automations@agent-tooling</div>
+          <div style="display:flex;gap:8px"><span class="btn pri">Apply fix</span><span class="btn ghost">Copy</span><span class="btn ghost">Edit expectation…</span></div>
+        </div>
+        <div class="row"><span class="dot warn"></span><div><span class="id">codex.pumpd-automations-plugin</span><div class="msg">Not enabled — advisory: owner defers the Codex install; severity "warning" in profile</div></div><span class="chip mono push">codex_plugin</span><span class="act">Accept as expected</span></div>
+      </div>
+      <div class="sect">Manual checklist</div>
+      <div class="gcard">
+        <div class="row"><span class="dot warn"></span><div><span class="id">expo.mcp-oauth</span><div class="msg">OAuth-only, no PAT/CI fallback — session reported dead today</div></div><span class="chip warn push">stale · Jul 23</span><span class="act filled">Re-auth</span></div>
+        <div class="row"><span class="dot ok"></span><div><span class="id">sentry.mcp-oauth</span><div class="msg">Local OAuth session also feeds the scheduled sentry-miner runs</div></div><span class="chip push num">✓ Jul 23</span><span class="act">Verify</span></div>
+        <div class="row"><span class="dot man"></span><div><span class="id">desktop.claude-obsidian-canary</span><div class="msg">Run the Obsidian matrix in a fresh Claude Desktop session</div></div><span class="chip push">never verified</span><span class="act">Verify</span></div>
+        <div class="dr-more">9 more manual checks</div>
+      </div>
+      <div class="gcard row" style="border-radius:15px">
+        <svg class="ic" viewBox="0 0 24 24" style="color:#1d8a3e"><path d="M20 6L9 17l-5-5"/></svg>
+        <div style="font-size:12.5px;font-weight:600">117 passing</div>
+        <div class="kindchips"><span class="chip num">path 84</span><span class="chip num">codex_plugin 9</span><span class="chip num">claude_plugin 8</span><span class="chip num">mcp 12</span><span class="chip num">marketplace 3</span><span class="chip num">setting 1</span></div>
+        <span class="act" style="background:transparent">Show ▾</span>
+      </div>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Purpose</h4><p>The full <code>doctor --json</code> rendered for action: <b>problems first with their committed recipes</b>, passes folded.</p></div>
+    <div><h4>Key actions</h4><p>Run · Apply fix (setup's plan, gated per-check) · Accept-as-expected edits the profile · Verify stamps manual checks.</p></div>
+    <div><h4>Reads · writes</h4><p>Reads <code>scripts/doctor --json</code>. Apply runs <code>scripts/setup --only &lt;id&gt; --apply</code>; nothing else mutates.</p></div>
+  </div>
+</section>
+
+<!-- ==================================================== 9 · CHANGES ==================================================== -->
+<section class="screen" id="s-9">
+  <div class="s-head"><span class="n">09</span><h2>Changes</h2><span class="thesis">The control plane's write path: staged edits → branch → PR → guarded auto-merge. Profiles stay the source of truth.</span></div>
+  <div class="stage-scroll"><div class="stage wall"><div class="shell mock">
+    <aside class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="s-search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</div>
+      <div class="s-prof"><div class="orb"></div><div><b>pumpd-workstation</b><span>131 checks · extends 2</span></div><span class="chev">▾</span></div>
+      <nav class="nav">
+        <a><span class="ni" style="background:#0a84ff"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 12l5-5"/><circle cx="12" cy="12" r="1.6"/></svg></span>Overview</a>
+        <a><span class="ni" style="background:#5e5ce6"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v6M9 10h6"/><circle cx="12" cy="12" r="9"/></svg></span>Marketplace</a>
+        <a><span class="ni" style="background:#bf5af2"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>Plugins<span class="cnt">7</span></a>
+        <a><span class="ni" style="background:#ff9f0a"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-5.8 1.6L12 17l-2.2-5.4L4 10l5.8-1.6z"/></svg></span>Skills<span class="cnt">72</span></a>
+        <a><span class="ni" style="background:#32ade6"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg></span>MCP Servers<span class="cnt">9</span></a>
+        <a><span class="ni" style="background:#8e8e93"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span>Profiles<span class="cnt">4</span></a>
+        <a><span class="ni" style="background:#ff453a"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg></span>Doctor<span class="redot"></span></a>
+        <div class="grp">Repository</div>
+        <a class="sel"><span class="ni" style="background:#34c759"><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg></span>Changes<span class="badge" style="background:#fff;color:#0a6ae0">3</span></a>
+      </nav>
+      <div class="s-foot"><span class="dot ok"></span>main · e67a03c · synced 2m</div>
+    </aside>
+    <div class="content">
+      <div class="ctop"><h3>Changes</h3><span class="chip mono">glasshouse/enable-codex-automations</span><span class="sub num">3 staged</span><span class="btn ghost push">Discard</span><span class="btn pri">Commit &amp; open PR</span></div>
+      <div class="ch-wrap">
+        <div class="ch-list">
+          <div class="gcard ch-card">
+            <div class="f"><svg class="ic" viewBox="0 0 24 24" style="color:#8e8e93"><path d="M13 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9z"/><path d="M13 3v6h6"/></svg><div><div class="t">Enable pumpd-automations on Codex — drop the deferral</div><div class="file">profiles/pumpd-workstation.json</div></div><span class="chip blue push">profile edit</span></div>
+            <div class="code"><i>@@ codex.pumpd-automations-plugin @@</i><br><span class="del">-      "severity": "warning",</span><br><span class="del">-      "note": "Advisory: owner defers the pumpd-automations install on Codex…"</span><br><span class="add">+      "expected": "enabled"</span></div>
+          </div>
+          <div class="gcard ch-card">
+            <div class="f"><svg class="ic" viewBox="0 0 24 24" style="color:#8e8e93"><path d="M13 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9z"/><path d="M13 3v6h6"/></svg><div><div class="t">Stamp expo OAuth re-verified after re-auth</div><div class="file">profiles/base-workstation.json</div></div><span class="chip blue push">verify stamp</span></div>
+            <div class="code"><i>@@ manual_checks · expo.mcp-oauth @@</i><br><span class="del">-      "last_verified": "2026-07-23"</span><br><span class="add">+      "last_verified": "2026-08-08"</span></div>
+          </div>
+          <div class="gcard ch-card">
+            <div class="f"><svg class="ic" viewBox="0 0 24 24" style="color:#8e8e93"><path d="M13 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9z"/><path d="M13 3v6h6"/></svg><div><div class="t">Record the Codex automations adoption</div><div class="file">docs/tooling-inventory.md</div></div><span class="chip push">docs</span></div>
+            <div class="code"><span class="add">+ `pumpd-automations` is now enabled on Codex as well; the deferral note is retired.</span></div>
+          </div>
+        </div>
+        <div class="ch-rail">
+          <div class="sect">How this ships</div>
+          <div class="gcard tl">
+            <div class="step"><div class="rail"><div class="bub done">✓</div><div class="line"></div></div><div class="tx"><b>Commit on a branch</b><span>never directly to main</span></div></div>
+            <div class="step"><div class="rail"><div class="bub">2</div><div class="line"></div></div><div class="tx"><b>Push · open PR · auto-merge armed</b><span>gh pr create --label automerge</span></div></div>
+            <div class="step"><div class="rail"><div class="bub">3</div><div class="line"></div></div><div class="tx"><b>CI validates the contract</b><span>.github/workflows/validate.yml</span></div></div>
+            <div class="step"><div class="rail"><div class="bub">4</div><div class="line"></div></div><div class="tx"><b>Guarded merge on green</b><span>guarded-auto-merge.yml</span></div></div>
+            <div class="step"><div class="rail"><div class="bub">5</div></div><div class="tx" style="padding-bottom:2px"><b>Marketplaces track main</b><span>both clients refresh → new state live</span></div></div>
+          </div>
+          <div class="sect">Pull request preview</div>
+          <div class="gcard pr-card">
+            <div class="t">chore(profiles): enable pumpd-automations on codex</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip num">#52</span><span class="chip ok">auto-merge</span><span class="chip">validate · pending</span></div>
+            <div class="msg" style="font-size:11px">Doctor after merge: expected 118 ✓ · 0 ⚠ · 1 ✗ remaining (Claude install still required locally).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div></div>
+  <div class="specs">
+    <div><h4>Purpose</h4><p>Full control plane <b>without a second source of truth</b> — every UI mutation is a reviewable commit that ships through the repo's own gate.</p></div>
+    <div><h4>Key actions</h4><p>Review diffs · Discard · Commit &amp; open PR (auto-merge) · watch CI state come back.</p></div>
+    <div><h4>Reads · writes</h4><p>Writes <code>profiles/*.json</code> + docs on a branch; ships via <code>gh</code>. Never pushes main directly.</p></div>
+  </div>
+</section>
+
+<!-- ==================================================== 10 · MENU BAR ==================================================== -->
+<section class="screen" id="s-10">
+  <div class="s-head"><span class="n">10</span><h2>Menu bar</h2><span class="thesis">Deck, restyled to the product's light glass. Drift is a badge you notice, not a script you remember.</span></div>
+  <div class="stage-scroll"><div class="stage wall">
+    <div class="menubar mock"><span style="font-size:13px"></span><b>Glasshouse</b><div class="right"><span>◐</span><span>⌁</span><span class="gh"><span class="dot bad" style="width:6px;height:6px"></span><span class="num">1</span></span><span>Fri Aug 8</span><span class="num">9:41 AM</span></div></div>
+    <div class="deck mock">
+      <div class="dk-tile w">
+        <h6><span class="dot ok"></span>Doctor · pumpd-workstation</h6>
+        <div class="dk-doc">
+          <div class="ring" style="width:58px;height:58px">
+            <svg viewBox="0 0 96 96" style="width:58px;height:58px">
+              <circle cx="48" cy="48" r="41" stroke="rgba(52,199,89,.16)" stroke-width="9" fill="none"/>
+              <circle cx="48" cy="48" r="41" stroke="#30d158" stroke-width="9" fill="none" stroke-linecap="round" stroke-dasharray="230 258"/>
+            </svg>
+            <div class="mid"><b class="num" style="font-size:12.5px">89%</b></div>
+          </div>
+          <div>
+            <div class="big num">117 / 131 checks</div>
+            <div class="sub num">1 fail · 1 warn · 12 manual · 2m ago</div>
+            <span class="dk-fix">Fix pumpd-automations →</span>
+          </div>
+        </div>
+      </div>
+      <div class="dk-tile dk-kv"><h6><svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>Sync</h6><b>main · e67a03c</b><span>refreshed 2m ago</span></div>
+      <div class="dk-tile dk-kv"><h6><svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M15.5 12H12a3 3 0 0 1-3-3"/></svg>Changes</h6><b class="num">3 staged</b><span>→ open PR</span></div>
+      <div class="dk-tile w"><h6>Profile</h6><div class="dk-seg"><span>base</span><span class="on">pumpd-workstation</span><span>wet-in-seattle</span></div></div>
+      <div class="dk-tile w">
+        <h6>MCP authentication</h6>
+        <div class="dk-arow"><span class="dot ok"></span>sentry<span class="mono">OAuth · avad/pumpd</span><span class="okc">✓ Jul 23</span></div>
+        <div class="dk-arow"><span class="dot warn"></span>expo<span class="mono">OAuth-only · no CI fallback</span><span class="re">Re-auth</span></div>
+        <div class="dk-arow"><span class="dot ok"></span>supabase<span class="mono">OAuth · hosted</span><span class="okc">✓ Jul 23</span></div>
+        <div class="dk-arow"><span class="dot ok"></span>doppler<span class="mono">CLI · feeds 3 MCPs</span><span class="okc">✓ me</span></div>
+      </div>
+      <div class="dk-open">Open Glasshouse<span class="kbd">⌘⇧G</span></div>
+    </div>
+    <div class="desk-note mock"><b>Always on, one glance</b>The badge carries the drift count. Every tile is a shallow button; anything deeper hands off to the main window on the matching screen.</div>
+  </div></div>
+  <div class="specs">
+    <div><h4>Purpose</h4><p><b>Ambient trust.</b> Two seconds to "everything's fine" — or a badge the moment it isn't.</p></div>
+    <div><h4>Key actions</h4><p>Fix → recipe · Re-auth → OAuth · Changes → PR sheet · profile switch · ⌘⇧G opens the app on the matching screen.</p></div>
+    <div><h4>Reads · writes</h4><p>Same daemon state as the app — doctor cache, git status, auth stamps. No exclusive logic.</p></div>
+  </div>
+</section>
+
+<footer class="next">
+  <div class="hairline"></div>
+  <p><b>Coverage:</b> browsing (2), management (3–6), desired state (7), diagnosis (8), the write path (9), ambience (10). The Lattice matrix from round one folded into columns and chips ("Clients", per-surface pills) rather than owning a screen; the palette returns later as a Raycast extension speaking to the same local daemon. Next pass when you're ready: pick the stack (SwiftUI vs Tauri) and turn the shell + Overview + Doctor into a working slice.</p>
+</footer>
+
+<script>
+  const tabs=document.querySelectorAll('.switch button');
+  const secs={};document.querySelectorAll('.screen').forEach(s=>secs[s.id.slice(2)]=s);
+  tabs.forEach(t=>t.addEventListener('click',()=>{
+    tabs.forEach(x=>x.setAttribute('aria-selected',x===t?'true':'false'));
+    Object.entries(secs).forEach(([k,s])=>s.classList.toggle('active',k===t.dataset.s));
+  }));
+</script>
