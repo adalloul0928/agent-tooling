@@ -361,7 +361,7 @@ enum LocalTargetScan {
             return claudeInventory(from: output.standardOutput, fileManager: fileManager)
         case "codex":
             async let pluginOutput = runner.run(
-                executable: executable, arguments: ["plugin", "list", "--available", "--json"], currentDirectory: nil)
+                executable: executable, arguments: ["plugin", "list", "--json"], currentDirectory: nil)
             async let mcpOutput = runner.run(executable: executable, arguments: ["mcp", "list", "--json"], currentDirectory: nil)
             var inventory = NativeInventory()
             if let output = try? await pluginOutput, output.status == 0 {

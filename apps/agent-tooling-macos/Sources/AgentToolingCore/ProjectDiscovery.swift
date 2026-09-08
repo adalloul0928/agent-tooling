@@ -499,6 +499,7 @@ enum ProjectDiscovery {
     static func inspect(
         root: URL,
         origins: Set<ProjectDiscoveryOrigin>,
+        clients: Set<ClientKind> = Set(ClientKind.allCases),
         fileManager: FileManager = .default
     ) -> DiscoveredProject? {
         let standardized = root.standardizedFileURL
@@ -513,6 +514,7 @@ enum ProjectDiscovery {
         var plugins: [ProjectComponentRecord] = []
 
         for descriptor in ProjectFileDescriptor.manifest + additionalLocalDescriptors(root: standardized, fileManager: fileManager) {
+            guard descriptor.client.map(clients.contains) ?? true else { continue }
             let url = standardized.appending(path: descriptor.relativePath)
             var childIsDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: url.path(percentEncoded: false), isDirectory: &childIsDirectory) else { continue }

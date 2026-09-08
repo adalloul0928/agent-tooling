@@ -57,6 +57,10 @@ struct UpdateAvailabilityTests {
         #expect(verdict == .updateAvailable(installed: "a1b2c3d", available: "f9e8d7c"))
         #expect(verdict.health == .pending)
         #expect(verdict.hasUpdate)
+        let mixed = UpdateAvailabilityEvaluator.evaluate(
+            plugin: plugin(), sources: [source(revision: "1.0.0")], packages: [])
+        #expect(mixed.isUnverified)
+        #expect(!mixed.hasUpdate)
     }
 
     @Test("Never claims up to date for an unchecked or unreported revision")
@@ -67,7 +71,7 @@ struct UpdateAvailabilityTests {
             packages: []
         )
         #expect(neverRefreshed.isUnverified)
-        #expect(neverRefreshed.title == "Check failed")
+        #expect(neverRefreshed.title == "Not checked")
 
         let unknownInstalled = UpdateAvailabilityEvaluator.evaluate(
             plugin: plugin(revision: "Unknown"),
@@ -89,8 +93,8 @@ struct UpdateAvailabilityTests {
     func reportsMissingSource() {
         let verdict = UpdateAvailabilityEvaluator.evaluate(plugin: plugin(), sources: [], packages: [])
 
-        #expect(verdict.title == "Source missing")
-        #expect(verdict.health == .unavailable)
+        #expect(verdict.title == "Update status unknown")
+        #expect(verdict.health == .pending)
     }
 
     @Test("Reports a check failure when the client did not say where a plugin came from")
@@ -101,7 +105,7 @@ struct UpdateAvailabilityTests {
             packages: []
         )
 
-        #expect(verdict.title == "Check failed")
+        #expect(verdict.title == "Update status unknown")
     }
 
     @Test("Prefers the catalog verdict, including its unresolved states")
@@ -149,6 +153,25 @@ struct UpdateAvailabilityTests {
                 packages: [package(status: .current, revision: "a1b2c3d")]
             ) == .upToDate(revision: "a1b2c3d")
         )
+    }
+
+    @Test("Names and incompatible clients cannot establish update provenance")
+    func rejectsUnrelatedCatalogMatches() {
+        let unrelated = MarketplacePackage(
+            id: "claude:other@publisher", name: "Release Tools", publisher: "publisher",
+            summary: "", sourceName: "Other", revision: "new",
+            components: [.plugin], supportedClients: [.claude], location: "")
+        #expect(UpdateAvailabilityEvaluator.catalogPackage(for: plugin(), in: [unrelated]) == nil)
+        var wrongClient = unrelated
+        wrongClient.id = "codex:release-tools"
+        wrongClient.supportedClients = [.codex]
+        #expect(UpdateAvailabilityEvaluator.catalogPackage(for: plugin(), in: [wrongClient]) == nil)
+        let summary = UpdateAvailabilityEvaluator.summary([
+            .unknown(reason: "No revision"), .notChecked(reason: "Not refreshed")
+        ])
+        #expect(summary.checkFailed == 0)
+        #expect(summary.sourceMissing == 0)
+        #expect(summary.uncheckedCount == 2)
     }
 
     @Test("Summarizes only what was measured")

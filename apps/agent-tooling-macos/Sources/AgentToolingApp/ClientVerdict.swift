@@ -10,7 +10,7 @@ struct ClientVerdict {
 
 extension AppModel {
     func clientVerdict(for client: ClientKind) -> ClientVerdict {
-        let observations = targetObservations.filter { $0.surface.client == client }
+        let observations = visibleTargetObservations.filter { $0.surface.client == client }
         guard !observations.isEmpty else { return ClientVerdict(state: .pending, text: "Not checked yet") }
         if observations.contains(where: \.isCommandAvailable) {
             let checked = observations.map(\.lastScannedAt).max().map { date in

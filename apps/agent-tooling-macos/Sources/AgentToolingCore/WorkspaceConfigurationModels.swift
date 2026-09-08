@@ -122,14 +122,17 @@ public struct EncryptedSyncConfiguration: Codable, Hashable, Sendable {
 
 public struct WorkspacePreferences: Codable, Hashable, Sendable {
     public var automaticallyCheckHealth: Bool
+    public var enabledClients: Set<ClientKind>
 
-    public init(automaticallyCheckHealth: Bool = true) {
+    public init(automaticallyCheckHealth: Bool = true, enabledClients: Set<ClientKind> = Set(ClientKind.allCases)) {
+        self.enabledClients = enabledClients
         self.automaticallyCheckHealth = automaticallyCheckHealth
     }
 
     private enum CodingKeys: String, CodingKey {
         case confirmWrites
         case automaticallyCheckHealth
+        case enabledClients
     }
 
     public init(from decoder: any Decoder) throws {
@@ -138,12 +141,14 @@ public struct WorkspacePreferences: Codable, Hashable, Sendable {
         // is intentionally decoded and ignored now that write review is a
         // product invariant.
         _ = try container.decodeIfPresent(Bool.self, forKey: .confirmWrites)
+        enabledClients = try container.decodeIfPresent(Set<ClientKind>.self, forKey: .enabledClients) ?? Set(ClientKind.allCases)
         automaticallyCheckHealth = try container.decodeIfPresent(Bool.self, forKey: .automaticallyCheckHealth) ?? true
     }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(automaticallyCheckHealth, forKey: .automaticallyCheckHealth)
+        try container.encode(enabledClients, forKey: .enabledClients)
     }
 }
 

@@ -124,7 +124,7 @@ extension AppModel {
                 failures.append("\(provider.displayName): \(diagnostic)")
             }
         }
-        let native = await MarketplaceService.discoverNativeCatalogs(runner: runner)
+        let native = await MarketplaceService.discoverNativeCatalogs(runner: runner, clients: enabledClients)
         packages.append(contentsOf: native.packages)
         updateNativeSource(.claudeMarketplace, detail: native.notes[.claude], in: &candidate.sources)
         updateNativeSource(.openAIPluginDirectory, detail: native.notes[.codex], in: &candidate.sources)
@@ -153,7 +153,7 @@ extension AppModel {
 
     public func reviewMarketplacePackage(_ id: String) {
         guard ensureReadyForChange() else { return }
-        guard let package = marketplacePackages.first(where: { $0.id == id }) else {
+        guard let package = visibleMarketplacePackages.first(where: { $0.id == id }) else {
             lastError = "The selected marketplace package is no longer available."
             return
         }
@@ -182,8 +182,9 @@ extension AppModel {
     }
 
     public func planMarketplaceInstall(packageID: String, client: ClientKind, remove: Bool = false) {
+        guard requireEnabledClients([client]) else { return }
         guard ensureReadyForChange() else { return }
-        guard let package = marketplacePackages.first(where: { $0.id == packageID }),
+        guard let package = visibleMarketplacePackages.first(where: { $0.id == packageID }),
             let route = package.nativeInstalls.first(where: { $0.client == client })
         else {
             lastError = "This package does not expose a verified native installer for \(client.rawValue)."

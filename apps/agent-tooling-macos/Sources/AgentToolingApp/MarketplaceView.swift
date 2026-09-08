@@ -23,7 +23,10 @@ struct MarketplaceView: View {
         let packages = filteredPackages
 
         VStack(spacing: 0) {
-            PageToolbar(title: "Marketplace", context: "\(model.marketplacePackages.count) packages from \(model.sources.count) sources") {
+            PageToolbar(
+                title: "Marketplace",
+                context: "\(model.visibleMarketplacePackages.count) packages from \(model.visibleSources.count) sources"
+            ) {
                 Button {
                     chooseSource()
                 } label: {
@@ -55,6 +58,10 @@ struct MarketplaceView: View {
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             }
         }
+        .onAppear { if !model.isClientEnabled(clientFilter.client) { clientFilter = .all } }
+        .onChange(of: model.enabledClients) { _, _ in
+            if !model.isClientEnabled(clientFilter.client) { clientFilter = .all }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             applyExternalNavigation()
@@ -67,7 +74,7 @@ struct MarketplaceView: View {
             let selectionIsInvalid = selectedPackageID == nil || !ids.contains(selectedPackageID ?? "")
             selectFirstPackageAfterListUpdate(ifNeeded: selectionIsInvalid)
         }
-        .onChange(of: model.sources.map(\.id)) { _, ids in
+        .onChange(of: model.visibleSources.map(\.id)) { _, ids in
             if let selectedSourceID, !ids.contains(selectedSourceID) {
                 self.selectedSourceID = nil
             }
@@ -77,7 +84,7 @@ struct MarketplaceView: View {
     private func applyExternalNavigation() {
         guard let requestedID = navigation.requestedMarketplacePackageID else { return }
         defer { navigation.consumeMarketplacePackage(requestedID) }
-        guard model.marketplacePackages.contains(where: { $0.id == requestedID }) else { return }
+        guard model.visibleMarketplacePackages.contains(where: { $0.id == requestedID }) else { return }
         query = ""
         componentFilter = .all
         clientFilter = .all
@@ -90,7 +97,7 @@ struct MarketplaceView: View {
         guard let request else { return }
         defer { self.request = nil }
         guard case .selectMarketplaceSource(let id) = request,
-            model.sources.contains(where: { $0.id == id })
+            model.visibleSources.contains(where: { $0.id == id })
         else { return }
         query = ""
         componentFilter = .all
@@ -103,7 +110,7 @@ struct MarketplaceView: View {
 
     private func validateRestoredMarketplaceState() {
         if let selectedSourceID,
-            !model.sources.contains(where: { $0.id == selectedSourceID })
+            !model.visibleSources.contains(where: { $0.id == selectedSourceID })
         {
             self.selectedSourceID = nil
         }
@@ -116,7 +123,7 @@ struct MarketplaceView: View {
     private var sourcePane: some View {
         VStack(alignment: .leading, spacing: 0) {
             PanelHeader("Sources") {
-                Text("\(model.sources.count) available")
+                Text("\(model.visibleSources.count) available")
             }
             ScrollView {
                 VStack(spacing: 0) {
@@ -275,7 +282,7 @@ struct MarketplaceView: View {
         let activeCount = (clientFilter == .all ? 0 : 1) + (classificationFilter == .all ? 0 : 1)
         return Menu {
             Menu("App") {
-                ForEach(MarketplaceClientFilter.allCases) { filter in
+                ForEach(MarketplaceClientFilter.allCases.filter { model.isClientEnabled($0.client) }) { filter in
                     Button {
                         clientFilter = filter
                     } label: {
@@ -567,7 +574,7 @@ struct MarketplaceView: View {
     /// What the last refresh could say about the catalog behind a package.
     /// Grading uses this instead of guessing that silence means healthy.
     private func reachability(for package: MarketplacePackage) -> SourceReachability {
-        guard let source = model.sources.first(where: { matches($0, package) }) else { return .unknown }
+        guard let source = model.visibleSources.first(where: { matches($0, package) }) else { return .unknown }
         if source.trustSummary.localizedCaseInsensitiveContains("unavailable") {
             return .unreachable(source.trustSummary)
         }
@@ -587,7 +594,7 @@ struct MarketplaceView: View {
 
     private var filteredPackages: [MarketplacePackage] {
         let searchTerm = normalizedQuery
-        let matches = model.marketplacePackages.filter { package in
+        let matches = model.visibleMarketplacePackages.filter { package in
             componentFilter.matches(package)
                 && clientFilter.matches(package)
                 && classificationFilter.matches(package)
@@ -600,7 +607,7 @@ struct MarketplaceView: View {
         return MarketplaceSorting.sorted(matches, by: sortOrder, searchTerm: searchTerm)
     }
 
-    private var selectedPackage: MarketplacePackage? { model.marketplacePackages.first { $0.id == selectedPackageID } }
+    private var selectedPackage: MarketplacePackage? { model.visibleMarketplacePackages.first { $0.id == selectedPackageID } }
 
     private var hasActiveFilter: Bool {
         !normalizedQuery.isEmpty || componentFilter != .all || clientFilter != .all || classificationFilter != .all
@@ -639,7 +646,7 @@ struct MarketplaceView: View {
 
     private var selectedSource: ToolingSource? {
         guard let selectedSourceID else { return nil }
-        return model.sources.first { $0.id == selectedSourceID }
+        return model.visibleSources.first { $0.id == selectedSourceID }
     }
 
     private var selectedSourceID: UUID? {
@@ -672,7 +679,7 @@ struct MarketplaceView: View {
     /// A one-line inventory per source, so an empty component filter is
     /// explained by the catalog rather than looking like a failure.
     private func contentsSummary(for source: ToolingSource) -> String? {
-        let packages = model.marketplacePackages.filter { matches(source, $0) }
+        let packages = model.visibleMarketplacePackages.filter { matches(source, $0) }
         guard !packages.isEmpty else { return nil }
         let counts: [(String, Int)] = [
             ("skill", packages.filter { $0.components.contains(.skill) }.count),
@@ -684,7 +691,7 @@ struct MarketplaceView: View {
     }
 
     private var sortedSources: [ToolingSource] {
-        model.sources.sorted {
+        model.visibleSources.sorted {
             let nameOrder = $0.name.localizedCaseInsensitiveCompare($1.name)
             return nameOrder == .orderedSame ? $0.id.uuidString < $1.id.uuidString : nameOrder == .orderedAscending
         }

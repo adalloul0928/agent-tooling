@@ -66,7 +66,7 @@ extension AppModel {
             presentError("That request changed after you opened it. Nothing was approved; reopen the current queue entry.")
             return nil
         }
-        guard validatePendingRequestEnvelope(request) else { return nil }
+        guard validatePendingRequestEnvelope(request), requireEnabledClients(Set(request.targets)) else { return nil }
 
         var skillDraft: CodexSkillDraftRequest?
         if request.kind == .createSkill {

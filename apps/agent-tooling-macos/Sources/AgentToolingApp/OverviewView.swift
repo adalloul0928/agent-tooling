@@ -198,7 +198,7 @@ struct OverviewView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(AgentTheme.blue)
         } content: {
-            if model.activities.isEmpty {
+            if model.visibleActivities.isEmpty {
                 Text("Checks and reviewed changes will appear here.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -219,18 +219,18 @@ struct OverviewView: View {
     }
 
     private var lastScanText: String {
-        guard let date = model.targetObservations.map(\.lastScannedAt).max() else {
+        guard let date = model.visibleTargetObservations.map(\.lastScannedAt).max() else {
             return "Not checked yet"
         }
         return "Checked \(date.formatted(.relative(presentation: .named)))"
     }
 
     private var managedCount: Int {
-        model.skills.filter(\.owned).count + model.plugins.count + model.mcpServers.filter(\.isManagedDefinition).count
+        model.visibleSkills.filter(\.owned).count + model.visiblePlugins.count + model.visibleMCPServers.filter(\.isManagedDefinition).count
     }
 
     private var discoveredCount: Int {
-        model.skills.filter { !$0.owned }.count + model.mcpServers.filter { !$0.isManagedDefinition }.count
+        model.visibleSkills.filter { !$0.owned }.count + model.visibleMCPServers.filter { !$0.isManagedDefinition }.count
     }
 
     private var desiredCount: Int {
@@ -240,7 +240,7 @@ struct OverviewView: View {
     }
 
     private var terminals: [ConduitTerminal] {
-        [ClientKind.claude, .codex, .gemini].map { client in
+        model.availableClients.map { client in
             let verdict = model.clientVerdict(for: client)
             return ConduitTerminal(client: client, state: verdict.state, text: verdict.text)
         }
@@ -262,16 +262,16 @@ struct OverviewView: View {
     }
 
     private var recommendations: [ToolRecommendation] {
-        Array((model.insightsReport?.recommendations ?? []).prefix(2))
+        Array((model.visibleInsightsReport?.recommendations ?? []).prefix(2))
     }
 
     private var recentActivities: [ActivityReceipt] {
         var seenTitles = Set<String>()
-        return Array(model.activities.filter { seenTitles.insert($0.displayTitle).inserted }.prefix(5))
+        return Array(model.visibleActivities.filter { seenTitles.insert($0.displayTitle).inserted }.prefix(5))
     }
 
     private var attentionItems: [OverviewAttention] {
-        let targets = model.targetObservations
+        let targets = model.visibleTargetObservations
             .filter { !$0.isCommandAvailable }
             .map {
                 OverviewAttention(
@@ -284,7 +284,7 @@ struct OverviewView: View {
         let configurationChecks = (model.activeProfile?.checks ?? [])
             .filter { $0.state == .attention || $0.state == .unavailable }
             .map { OverviewAttention(id: "profile-\($0.id)", title: $0.name, detail: $0.detail, state: $0.state) }
-        let servers = model.mcpServers
+        let servers = model.visibleMCPServers
             .filter { $0.aggregateState == .attention || $0.aggregateState == .unavailable }
             .map { OverviewAttention(id: "mcp-\($0.id)", title: $0.name, detail: $0.summary, state: $0.aggregateState) }
         return Array((targets + configurationChecks + servers).prefix(4))

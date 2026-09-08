@@ -46,6 +46,7 @@ struct SkillEditorSheet: View {
             Divider()
             footer
         }
+        .onAppear { draft.selectedTargets.formIntersection(model.enabledClients) }
         .frame(width: 900, height: 650)
         .background(AgentTheme.contentBackground)
         .onChange(of: draft.syncClients) { _, enabled in
@@ -193,9 +194,9 @@ struct SkillEditorSheet: View {
 
             FormField(title: "Install targets", help: "Each target gets a separate reviewable installation") {
                 VStack(spacing: 0) {
-                    ForEach(Array(ClientKind.allCases.enumerated()), id: \.element) { index, client in
+                    ForEach(Array(model.availableClients.enumerated()), id: \.element) { index, client in
                         TargetSelectionRow(client: client, selected: targetBinding(client))
-                        if index < ClientKind.allCases.count - 1 { Divider() }
+                        if index < model.availableClients.count - 1 { Divider() }
                     }
                 }
                 .standardPanel(cornerRadius: 13)
@@ -348,7 +349,7 @@ struct SkillEditorSheet: View {
     }
 
     private var nameCollision: Bool {
-        model.skills.contains {
+        model.visibleSkills.contains {
             $0.id != existingSkill.id && $0.name.caseInsensitiveCompare(normalizedName) == .orderedSame
         }
     }
@@ -523,8 +524,8 @@ private struct TargetSelectionRow: View {
     }
 
     private var isInstalled: Bool {
-        guard !model.targetObservations.isEmpty else { return true }
-        return model.targetObservations.contains { observation in
+        guard !model.visibleTargetObservations.isEmpty else { return true }
+        return model.visibleTargetObservations.contains { observation in
             guard observation.isCommandAvailable else { return false }
             switch (client, observation.surface) {
             case (.claude, .claudeCode), (.claude, .claudeDesktop), (.claude, .claudeCloud),

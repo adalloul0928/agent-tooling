@@ -6,6 +6,8 @@ struct PluginsView: View {
     let navigate: (AppSection) -> Void
     @Binding var request: ScreenRequest?
     @State private var query = ""
+    @State private var clientFilter = "All apps"
+    @State private var connectorRecords: [DiscoveredConnectorRow] = []
     @State private var selection: Set<String> = []
     @State private var stackClient: ClientKind = .claude
     @State private var stackError: String?
@@ -36,31 +38,43 @@ struct PluginsView: View {
                 .disabled(model.isInteractionLocked)
             }
 
-            GeometryReader { proxy in
+            if selection.isEmpty {
+                collectionPane
+            } else {
                 HSplitView {
-                    collectionPane.frame(
-                        minWidth: 350, idealWidth: 420, maxWidth: 500, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                        alignment: .topLeading)
-                    detailPane.frame(
-                        minWidth: 540, maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                        alignment: .topLeading)
+                    collectionPane.frame(minWidth: 320, idealWidth: 600)
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text("Plugin details").font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Button { selection = [] } label: { Image(systemName: "xmark") }
+                                .buttonStyle(.plain).help("Close details")
+                        }.padding(16)
+                        Divider()
+                        detailPane
+                    }.frame(minWidth: 400, idealWidth: 600)
                 }
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             }
+
+        }
+        .onAppear {
+            if !model.isClientEnabled(stackClient), let first = model.availableClients.first { stackClient = first }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             pruneSelection()
             consumeRequest()
         }
-        .onChange(of: model.plugins) { _, _ in pruneSelection() }
+        .onChange(of: model.visiblePlugins) { _, _ in pruneSelection() }
         .onChange(of: filteredPlugins.map(\.id)) { _, _ in pruneSelection() }
         .onChange(of: request) { _, _ in consumeRequest() }
+        .onExitCommand { selection = [] }
+        .task(id: model.visiblePlugins) { connectorRecords = ConnectorInventory.records(plugins: model.visiblePlugins) }
     }
 
     private func consumeRequest() {
         guard let request else { return }
-        if case .selectPlugin(let id) = request, model.plugins.contains(where: { $0.id == id }) {
+        if case .selectPlugin(let id) = request, model.visiblePlugins.contains(where: { $0.id == id }) {
             query = ""
             selection = [id]
         }
@@ -70,6 +84,11 @@ struct PluginsView: View {
     private var collectionPane: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
+                Picker("App", selection: $clientFilter) {
+                    Text("All apps").tag("All apps")
+                    ForEach(model.availableClients, id: \.self) { Text($0.rawValue).tag($0.rawValue) }
+                }.fixedSize()
+                Spacer()
                 TextField("Search plugins", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Search plugins")
@@ -88,19 +107,26 @@ struct PluginsView: View {
                     if query.isEmpty { navigate(.marketplace) } else { query = "" }
                 }
             } else {
-                List(filteredPlugins, selection: $selection) { plugin in
-                    PluginCollectionRow(
-                        plugin: plugin,
-                        availability: availability(for: plugin),
-                        selected: selection.contains(plugin.id)
-                    )
-                    .tag(plugin.id)
-                    .listRowBackground(SelectionRowBackground(selected: selection.contains(plugin.id)))
-                    .accessibilityLabel(plugin.name)
-                    .accessibilityValue(selection.contains(plugin.id) ? "Selected" : "")
+                Table(filteredPlugins, selection: $selection) {
+                    TableColumn("Name") { plugin in
+                        Label(plugin.name, systemImage: "puzzlepiece.extension")
+                            .font(.callout.weight(.medium))
+                    }.width(min: 180, ideal: 250)
+                    TableColumn("Description") { plugin in
+                        Text(plugin.summary).foregroundStyle(.secondary).lineLimit(1).help(plugin.summary)
+                    }.width(min: 120, ideal: 360)
+                    TableColumn("Skills") { plugin in
+                        Text("\(plugin.skills.count)").monospacedDigit().foregroundStyle(.secondary)
+                    }.width(50)
+                    TableColumn("Apps") { plugin in
+                        TableClientMarks(clients: model.availableClients, present: Set(plugin.clients.filter(\.reportsLocalPresence).map(\.client)))
+                    }.width(70)
+                    TableColumn("Updates") { plugin in
+                        UpdateStateBadge(availability: availability(for: plugin))
+                    }.width(min: 110, ideal: 130)
                 }
-                .listStyle(.inset)
-                .scrollContentBackground(.hidden)
+                .tableStyle(.inset)
+
             }
         }
         .paneMaterial()
@@ -126,20 +152,17 @@ struct PluginsView: View {
     }
 
     private func availability(for plugin: Plugin) -> UpdateAvailability {
-        UpdateAvailabilityEvaluator.evaluate(plugin: plugin, sources: model.sources, packages: model.marketplacePackages)
+        UpdateAvailabilityEvaluator.evaluate(plugin: plugin, sources: model.visibleSources, packages: model.visibleMarketplacePackages)
     }
 
     private var toolbarContext: String {
-        let summary = UpdateAvailabilityEvaluator.summary(model.pluginUpdateAvailability().map(\.availability))
-        let installed = "\(model.plugins.count) installed"
-        guard !model.plugins.isEmpty else { return installed }
-        return "\(installed) · \(summary.sentence)"
+        "\(model.visiblePlugins.count) plugins"
     }
 
     /// Several picks, one plan. Removing plugins one at a time means one review
     /// each; the stack makes it a single reviewed operation.
     private var stackedPlugins: [Plugin] {
-        model.plugins
+        model.visiblePlugins
             .filter { selection.contains($0.id) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -149,7 +172,7 @@ struct PluginsView: View {
             let plan = try StackedPlanBuilder.pluginRemovalPlan(
                 plugins: stackedPlugins,
                 client: stackClient,
-                packages: model.marketplacePackages
+                packages: model.visibleMarketplacePackages
             )
             stackError = model.reviewComposedPlan(plan) ? nil : model.lastError
         } catch {
@@ -157,27 +180,37 @@ struct PluginsView: View {
         }
     }
 
+    private var displayPlugins: [Plugin] {
+        model.visiblePlugins.map { original in
+            var plugin = original
+            if let connector = connectorRecords.first(where: { $0.pluginID == plugin.id }) {
+                plugin.name = connector.name
+                plugin.summary = connector.summary
+            }
+            return plugin
+        }
+    }
+
     private var filteredPlugins: [Plugin] {
-        model.plugins.filter { plugin in
-            query.isEmpty
+        displayPlugins.filter { plugin in
+            (clientFilter == "All apps" || plugin.clients.contains { $0.client.rawValue == clientFilter && $0.reportsLocalPresence })
+                && (query.isEmpty
                 || [plugin.name, plugin.summary, plugin.source, plugin.skills.joined(separator: " ")]
                     .joined(separator: " ")
-                    .localizedCaseInsensitiveContains(query)
+                    .localizedCaseInsensitiveContains(query))
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private var selectedPlugin: Plugin? {
         guard let id = selection.first, selection.count == 1 else { return nil }
-        return model.plugins.first { $0.id == id }
+        return displayPlugins.first { $0.id == id }
     }
 
     private func pruneSelection() {
         let visible = filteredPlugins.map(\.id)
         let kept = selection.intersection(visible)
-        if kept.isEmpty {
-            selection = Set(visible.prefix(1))
-        } else if kept != selection {
+        if kept != selection {
             selection = kept
         }
         stackError = nil
@@ -248,7 +281,7 @@ private struct PluginStackPane: View {
 
                 GroupBox("Remove from") {
                     Picker("App", selection: $client) {
-                        ForEach(ClientKind.allCases) { candidate in Text(candidate.rawValue).tag(candidate) }
+                        ForEach(model.availableClients) { candidate in Text(candidate.rawValue).tag(candidate) }
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
@@ -411,9 +444,9 @@ private struct PluginDetailView: View {
     /// Says when the comparison happened, so "up to date" is always dated.
     private var lastCheckedText: String {
         let candidates = [
-            UpdateAvailabilityEvaluator.trackedSource(for: plugin, in: model.sources)?.lastRefreshedAt,
-            UpdateAvailabilityEvaluator.catalogPackage(for: plugin, in: model.marketplacePackages)
-                .flatMap { package in model.sources.first { $0.id == package.sourceID }?.lastRefreshedAt },
+            UpdateAvailabilityEvaluator.trackedSource(for: plugin, in: model.visibleSources)?.lastRefreshedAt,
+            UpdateAvailabilityEvaluator.catalogPackage(for: plugin, in: model.visibleMarketplacePackages)
+                .flatMap { package in model.visibleSources.first { $0.id == package.sourceID }?.lastRefreshedAt },
         ]
         guard let date = candidates.compactMap({ $0 }).max() else { return "Not checked yet" }
         return date.formatted(.relative(presentation: .named))

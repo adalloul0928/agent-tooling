@@ -21,7 +21,7 @@ extension AppModel {
     /// verdict to give, and a project carrying no local configuration reports
     /// nothing rather than a reassuring tick it has not earned.
     private var projectsHealth: HealthState? {
-        let inspected = projects.compactMap(\.configurationHealth)
+        let inspected = visibleProjects.compactMap(\.configurationHealth)
         if inspected.contains(.attention) { return .attention }
         if inspected.contains(.pending) { return .pending }
         return nil
@@ -29,13 +29,13 @@ extension AppModel {
 
     /// The plugin verdicts this app is prepared to stand behind, in list order.
     func pluginUpdateAvailability() -> [(plugin: Plugin, availability: UpdateAvailability)] {
-        plugins.map { plugin in
-            (plugin, UpdateAvailabilityEvaluator.evaluate(plugin: plugin, sources: sources, packages: marketplacePackages))
+        visiblePlugins.map { plugin in
+            (plugin, UpdateAvailabilityEvaluator.evaluate(plugin: plugin, sources: visibleSources, packages: visibleMarketplacePackages))
         }
     }
 
     private var skillsHealth: HealthState? {
-        let owned = skills.filter(\.owned)
+        let owned = visibleSkills.filter(\.owned)
         if owned.contains(where: { $0.clients.contains { $0.state == .attention } }) { return .attention }
         return nil
     }
@@ -43,15 +43,15 @@ extension AppModel {
     /// Update news is the calm pending state; a client that reported a problem
     /// is the only thing here that warrants a warning.
     private var pluginsHealth: HealthState? {
-        if plugins.contains(where: { $0.clients.contains { $0.state == .attention } }) { return .attention }
+        if visiblePlugins.contains(where: { $0.clients.contains { $0.state == .attention } }) { return .attention }
         if pluginUpdateAvailability().contains(where: { $0.availability.hasUpdate }) { return .pending }
         return nil
     }
 
     private var mcpHealth: HealthState? {
-        if mcpServers.contains(where: { $0.aggregateState == .attention }) { return .attention }
-        if mcpServers.contains(where: { $0.aggregateState == .unavailable }) { return .unavailable }
-        if mcpServers.contains(where: { $0.aggregateState == .pending }) { return .pending }
+        if visibleMCPServers.contains(where: { $0.aggregateState == .attention }) { return .attention }
+        if visibleMCPServers.contains(where: { $0.aggregateState == .unavailable }) { return .unavailable }
+        if visibleMCPServers.contains(where: { $0.aggregateState == .pending }) { return .pending }
         return nil
     }
 
@@ -63,6 +63,6 @@ extension AppModel {
     }
 
     private var accountsHealth: HealthState? {
-        accountSurfaces.contains { $0.status != .verified } ? .pending : nil
+        visibleAccountSurfaces.contains { $0.status != .verified } ? .pending : nil
     }
 }

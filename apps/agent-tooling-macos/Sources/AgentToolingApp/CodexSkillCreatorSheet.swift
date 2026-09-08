@@ -48,6 +48,7 @@ struct CodexSkillCreatorSheet: View {
             Divider()
             footer
         }
+        .onAppear { targets.formIntersection(model.enabledClients) }
         .frame(width: 940, height: 700)
         .background(AgentTheme.contentBackground)
         .task(id: pendingRequestID) {
@@ -167,7 +168,7 @@ struct CodexSkillCreatorSheet: View {
                         detail: "Codex creates the draft. These are optional destinations for the later install plan."
                     ) {
                         VStack(spacing: 0) {
-                            ForEach(Array(ClientKind.allCases.enumerated()), id: \.element) { index, client in
+                            ForEach(Array(model.availableClients.enumerated()), id: \.element) { index, client in
                                 Toggle(isOn: targetBinding(client)) {
                                     HStack(spacing: 9) {
                                         ClientBrandIcon(client: client, size: 20)
@@ -177,7 +178,7 @@ struct CodexSkillCreatorSheet: View {
                                     }
                                 }
                                 .padding(.vertical, 9)
-                                if index < ClientKind.allCases.count - 1 {
+                                if index < model.availableClients.count - 1 {
                                     Divider()
                                 }
                             }

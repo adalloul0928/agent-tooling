@@ -244,9 +244,11 @@ enum InstalledPackageDriftInspector {
     static func inspect(
         _ authority: ManagedInstallAuthority,
         fileManager: FileManager = .default,
-        maximumRecords: Int = ManagedInstallLedger.maximumRecords
+        maximumRecords: Int = ManagedInstallLedger.maximumRecords,
+        clients: Set<ClientKind> = Set(ClientKind.allCases)
     ) -> [InstalledPackageDrift] {
-        authority.provenInstalls.prefix(maximumRecords).map { record in
+        authority.provenInstalls.filter { ClientSelection.includes(path: $0.destinationPath, clients: clients) }.prefix(maximumRecords).map
+        { record in
             drift(for: record, fileManager: fileManager)
         }
     }
@@ -256,9 +258,10 @@ enum InstalledPackageDriftInspector {
     /// setup check should not make the window wait on it.
     static func inspect(
         store: WorkspaceStore,
-        maximumRecords: Int = ManagedInstallLedger.maximumRecords
+        maximumRecords: Int = ManagedInstallLedger.maximumRecords,
+        clients: Set<ClientKind> = Set(ClientKind.allCases)
     ) async -> [InstalledPackageDrift] {
-        await Task.detached { inspect(.fromStore(store), maximumRecords: maximumRecords) }.value
+        await Task.detached { inspect(.fromStore(store), maximumRecords: maximumRecords, clients: clients) }.value
     }
 
     static func drift(for record: ManagedInstallRecord, fileManager: FileManager = .default) -> InstalledPackageDrift {

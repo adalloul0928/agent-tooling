@@ -69,11 +69,11 @@ struct CollectionsView: View {
         }
         .onAppear {
             if !model.collections.contains(where: { $0.id == selectedID }) {
-                selectedID = orderedCollections.first?.id ?? ""
+                selectedID = ""
             }
         }
         .onChange(of: model.collections.map(\.id)) { _, ids in
-            if !ids.contains(selectedID) { selectedID = orderedCollections.first?.id ?? "" }
+            if !ids.contains(selectedID) { selectedID = "" }
         }
     }
 
@@ -87,17 +87,11 @@ struct CollectionsView: View {
     }
 
     private var collectionsSplit: some View {
-        GeometryReader { proxy in
-            HSplitView {
-                collectionList.frame(
-                    minWidth: 330, idealWidth: 390, maxWidth: 470, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                    alignment: .topLeading)
-                collectionDetail.frame(
-                    minWidth: 560, maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                    alignment: .topLeading)
+        BrowserDetailLayout(selection: $selectedID, title: "Collection details") {
+                collectionList
+            } detail: {
+                collectionDetail
             }
-            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
-        }
     }
 
     private var collectionList: some View {
@@ -395,7 +389,7 @@ private struct CollectionDetailView: View {
     }
 
     private var resolvedItems: [InventoryItem] {
-        collection.items.map { model.inventoryItem(for: $0) }
+        collection.items.filter(model.isItemVisible).map { model.inventoryItem(for: $0) }
     }
 
     private func export() {
@@ -1042,7 +1036,7 @@ extension AppModel {
         let items: [InventoryItem]
         switch kind {
         case .skill:
-            items = skills.map {
+            items = visibleSkills.map {
                 InventoryItem(
                     reference: ToolingItemReference(kind: .skill, identifier: $0.id),
                     name: $0.displayName.isEmpty ? $0.name : $0.displayName,
@@ -1051,7 +1045,7 @@ extension AppModel {
                 )
             }
         case .plugin:
-            items = plugins.map {
+            items = visiblePlugins.map {
                 InventoryItem(
                     reference: ToolingItemReference(kind: .plugin, identifier: $0.id),
                     name: $0.name,
@@ -1060,7 +1054,7 @@ extension AppModel {
                 )
             }
         case .mcpServer:
-            items = mcpServers.map {
+            items = visibleMCPServers.map {
                 InventoryItem(
                     reference: ToolingItemReference(kind: .mcpServer, identifier: $0.id),
                     name: $0.name,

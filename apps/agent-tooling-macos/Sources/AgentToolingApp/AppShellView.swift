@@ -68,6 +68,9 @@ struct AppShellView: View {
             await model.bootstrap()
         }
         .onAppear { applyExternalNavigation() }
+        .onChange(of: model.enabledClients) { _, _ in
+            if let client = navigation.selectedClient, !model.isClientEnabled(client) { navigation.showAllClients() }
+        }
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
         .onChange(of: selection) { _, section in
             if let request = screenRequest, request.section != section {
@@ -123,7 +126,7 @@ struct AppShellView: View {
         case .profiles: ProfilesView(request: $screenRequest)
         case .syncCenter:
             SyncCenterView(
-                client: navigation.selectedClient,
+                client: navigation.selectedClient.flatMap { model.isClientEnabled($0) ? $0 : nil },
                 onShowAllClients: { navigation.showAllClients() }
             )
         case .activity: ActivityView(request: $screenRequest)
