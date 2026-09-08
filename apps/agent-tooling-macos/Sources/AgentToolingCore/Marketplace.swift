@@ -56,34 +56,55 @@ final class MarketplaceService {
     /// as an installer. Gemini's gallery has no equivalent local JSON catalog,
     /// so it remains a source link while installed extensions are discovered by
     /// the target scanner.
-    static func discoverNativeCatalogs(runner: any CommandRunning) async -> NativeCatalogDiscovery {
+    static func discoverNativeCatalogs(
+        runner: any CommandRunning, clients: Set<ClientKind> = Set(ClientKind.allCases)
+    ) async -> NativeCatalogDiscovery {
         let service = MarketplaceService()
-        async let claude = runner.run(executable: "claude", arguments: ["plugin", "list", "--available", "--json"], currentDirectory: nil)
-        async let codex = runner.run(executable: "codex", arguments: ["plugin", "list", "--available", "--json"], currentDirectory: nil)
-
         var packages: [MarketplacePackage] = []
         var notes: [ClientKind: String] = [:]
-
-        do {
-            let result = try await claude
-            guard result.status == 0 else { throw NativeCatalogError.commandFailed("Claude", result.standardError) }
-            let found = service.packagesFromClaudeCatalogJSON(result.standardOutput)
-            packages.append(contentsOf: found)
-            notes[.claude] = "\(found.count) plugin\(found.count == 1 ? "" : "s") reported by Claude Code"
-        } catch {
-            notes[.claude] = "Claude catalog unavailable: \(service.safeDiagnostic(error))"
+        for client in [ClientKind.claude, .codex] where clients.contains(client) {
+            do {
+                let result = try await runner.run(
+                    executable: client == .claude ? "claude" : "codex",
+                    arguments: ["plugin", "list", "--available", "--json"], currentDirectory: nil)
+                guard result.status == 0 else { throw NativeCatalogError.commandFailed(client.rawValue, result.standardError) }
+                var found =
+                    client == .claude
+                    ? service.packagesFromClaudeCatalogJSON(result.standardOutput)
+                    : service.packagesFromCodexCatalogJSON(result.standardOutput)
+                // Large Codex catalogs exceed the bounded command output. Query
+                // installed marketplace names separately instead of parsing partial JSON.
+                if client == .codex && result.standardOutput.contains("[output truncated") {
+                    let installed = try await runner.run(
+                        executable: "codex", arguments: ["plugin", "list", "--json"], currentDirectory: nil)
+                    guard installed.status == 0,
+                        let data = installed.standardOutput.data(using: .utf8),
+                        let document = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                        let entries = document["installed"] as? [[String: Any]]
+                    else { throw NativeCatalogError.commandFailed(client.rawValue, "Installed plugin inventory unavailable") }
+                    let marketplaces = Set(entries.compactMap { entry -> String? in
+                        guard let id = entry["pluginId"] as? String,
+                              let name = id.split(separator: "@").last, id.contains("@"),
+                              !name.isEmpty, name.allSatisfy({ $0.isLetter || $0.isNumber || "-_.".contains($0) })
+                        else { return nil }
+                        return String(name)
+                    })
+                    found = []
+                    for marketplace in marketplaces.sorted().prefix(32) {
+                        let page = try await runner.run(
+                            executable: "codex",
+                            arguments: ["plugin", "list", "--marketplace", marketplace, "--available", "--json"],
+                            currentDirectory: nil)
+                        guard page.status == 0, !page.standardOutput.contains("[output truncated") else { continue }
+                        found += service.packagesFromCodexCatalogJSON(page.standardOutput)
+                    }
+                }
+                packages.append(contentsOf: found)
+                notes[client] = "\(found.count) plugins reported by \(client.rawValue)"
+            } catch {
+                notes[client] = "\(client.rawValue) catalog unavailable: \(service.safeDiagnostic(error))"
+            }
         }
-
-        do {
-            let result = try await codex
-            guard result.status == 0 else { throw NativeCatalogError.commandFailed("Codex", result.standardError) }
-            let found = service.packagesFromCodexCatalogJSON(result.standardOutput)
-            packages.append(contentsOf: found)
-            notes[.codex] = "\(found.count) plugin\(found.count == 1 ? "" : "s") reported by Codex"
-        } catch {
-            notes[.codex] = "Codex catalog unavailable: \(service.safeDiagnostic(error))"
-        }
-
         return NativeCatalogDiscovery(packages: service.deduplicatedPackages(packages), notes: notes)
     }
 

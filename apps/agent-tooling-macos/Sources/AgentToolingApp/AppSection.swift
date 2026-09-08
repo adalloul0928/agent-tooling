@@ -5,7 +5,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case marketplace = "Marketplace"
     case skills = "Skills"
     case insights = "Insights"
-    case mcpServers = "MCP Servers"
+    case mcpServers = "Connections"
     case plugins = "Plugins"
     case collections = "Collections"
     case profiles = "Configurations"

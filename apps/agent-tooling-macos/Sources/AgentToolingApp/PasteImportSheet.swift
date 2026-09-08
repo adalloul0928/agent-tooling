@@ -29,6 +29,12 @@ struct PasteImportSheet: View {
             Divider()
             footer
         }
+        .onAppear {
+            serverDraft.addToClaude = serverDraft.addToClaude && model.isClientEnabled(.claude)
+            serverDraft.addToCodex = serverDraft.addToCodex && model.isClientEnabled(.codex)
+            serverDraft.addToGemini = serverDraft.addToGemini && model.isClientEnabled(.gemini)
+        }
+        .onAppear { skillDraft.selectedTargets.formIntersection(model.enabledClients) }
         .frame(width: 680, height: 620)
         .background(AgentTheme.contentBackground)
     }
@@ -139,7 +145,7 @@ struct PasteImportSheet: View {
                 }
                 .buttonStyle(.bordered)
                 Spacer()
-                Text("Examples: claude mcp add …, {\"mcpServers\": …}, https://…, or a SKILL.md")
+                Text("Examples: an mcp add command, {\"mcpServers\": …}, https://…, or a SKILL.md")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
@@ -208,9 +214,9 @@ struct PasteImportSheet: View {
             }
 
             Section("Install for") {
-                Toggle("Claude Code", isOn: $serverDraft.addToClaude)
-                Toggle("Codex", isOn: $serverDraft.addToCodex)
-                Toggle("Gemini CLI", isOn: $serverDraft.addToGemini)
+                if model.isClientEnabled(.claude) { Toggle("Claude Code", isOn: $serverDraft.addToClaude) }
+                if model.isClientEnabled(.codex) { Toggle("Codex", isOn: $serverDraft.addToCodex) }
+                if model.isClientEnabled(.gemini) { Toggle("Gemini CLI", isOn: $serverDraft.addToGemini) }
             }
 
             if let serverError {
@@ -225,6 +231,7 @@ struct PasteImportSheet: View {
         .onChange(of: selectedServer) { _, index in
             guard servers.indices.contains(index) else { return }
             serverDraft = servers[index].draft
+            restrictServerTargets()
         }
     }
 
@@ -238,7 +245,7 @@ struct PasteImportSheet: View {
         guard !rawName.isEmpty else { return "Give the server a name." }
         do {
             let identifier = try WorkspaceLibrary.normalizedIdentifier(rawName)
-            if model.mcpServers.contains(where: { $0.id == identifier }) {
+            if model.visibleMCPServers.contains(where: { $0.id == identifier }) {
                 return "A server with this name already exists."
             }
         } catch {
@@ -299,7 +306,7 @@ struct PasteImportSheet: View {
             }
 
             Section("Install for") {
-                ForEach(ClientKind.allCases) { client in
+                ForEach(model.availableClients) { client in
                     Toggle(client.rawValue, isOn: targetBinding(client))
                 }
                 Text("The package is created in the managed library first. Installing into an app is a separate reviewed plan.")
@@ -343,6 +350,12 @@ struct PasteImportSheet: View {
 
     // MARK: - Reading
 
+    private func restrictServerTargets() {
+        serverDraft.addToClaude = serverDraft.addToClaude && model.isClientEnabled(.claude)
+        serverDraft.addToCodex = serverDraft.addToCodex && model.isClientEnabled(.codex)
+        serverDraft.addToGemini = serverDraft.addToGemini && model.isClientEnabled(.gemini)
+    }
+
     private func readClipboard() {
         guard let value = NSPasteboard.general.string(forType: .string) else {
             failure = "The clipboard holds no text to read."
@@ -361,12 +374,14 @@ struct PasteImportSheet: View {
                 importNotes = result.notes
                 selectedServer = 0
                 serverDraft = result.servers.first?.draft ?? MCPDraft()
+                restrictServerTargets()
                 skill = nil
                 failure = nil
             case .skill(let result):
                 shape = .skillMarkdown
                 skill = result
                 skillDraft = result.draft
+                skillDraft.selectedTargets.formIntersection(model.enabledClients)
                 servers = []
                 importNotes = result.notes
                 failure = nil

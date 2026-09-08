@@ -6,6 +6,7 @@ import Foundation
 extension AppModel {
     @discardableResult
     public func createSkill(from draft: SkillDraft) -> Skill? {
+        guard requireEnabledClients(draft.selectedTargets) else { return nil }
         guard ensureReadyForChange() else { return nil }
         let previousSnapshot = currentSnapshot()
         var createdResult: CreatedSkill?
@@ -76,6 +77,7 @@ extension AppModel {
     }
 
     public func generateCodexSkillDraft(_ request: CodexSkillDraftRequest) async -> CodexSkillDraftResult? {
+        guard requireEnabledClients(Set(request.targets).union([.codex])) else { return nil }
         guard ensureReadyForChange() else { return nil }
         guard saveCodexSkillDraftRequest(request) else { return nil }
         isGeneratingSkill = true
@@ -92,6 +94,7 @@ extension AppModel {
 
     @discardableResult
     public func adoptCodexSkillDraft(_ result: CodexSkillDraftResult) async -> Skill? {
+        guard requireEnabledClients(Set(result.request.targets)) else { return nil }
         guard ensureReadyForChange() else { return nil }
         let previousSnapshot = currentSnapshot()
         var createdResult: CreatedSkill?
@@ -241,6 +244,7 @@ extension AppModel {
 
     @discardableResult
     public func updateSkill(id: String, from draft: SkillDraft) -> Skill? {
+        guard requireEnabledClients(draft.selectedTargets) else { return nil }
         guard ensureReadyForChange() else { return nil }
         guard let existing = skills.first(where: { $0.id == id }) else {
             lastError = "The selected skill is no longer available."
@@ -252,6 +256,7 @@ extension AppModel {
             let result = try library.updateSkill(existing, from: draft)
             updateResult = result
             var updated = result.skill
+            updated.clients += existing.clients.filter { !isClientEnabled($0.client) }
             updated.validationCount = try library.validateSkill(updated)
             skills.removeAll { $0.id == id }
             skills.insert(updated, at: 0)
@@ -317,6 +322,7 @@ extension AppModel {
             let result = try library.updateSkillSource(existing, markdown: markdown)
             updateResult = result
             var updated = result.skill
+            updated.clients += existing.clients.filter { !isClientEnabled($0.client) }
             updated.validationCount = try library.validateSkill(updated)
             skills.removeAll { $0.id == id }
             skills.insert(updated, at: 0)
@@ -379,7 +385,7 @@ extension AppModel {
     /// clients always adopts the same copy.
     func observedSkillSourcePaths() -> [String: String] {
         var paths: [String: String] = [:]
-        for observation in targetObservations.sorted(by: { $0.surface.displayName < $1.surface.displayName }) {
+        for observation in visibleTargetObservations.sorted(by: { $0.surface.displayName < $1.surface.displayName }) {
             for (id, metadata) in observation.skillMetadata where paths[id] == nil {
                 paths[id] = metadata.path
             }

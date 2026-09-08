@@ -40,16 +40,10 @@ struct ProfilesView: View {
                 .disabled(model.isInteractionLocked)
             }
 
-            GeometryReader { proxy in
-                HSplitView {
-                    profileList.frame(
-                        minWidth: 330, idealWidth: 390, maxWidth: 470, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                        alignment: .topLeading)
-                    profileDetail.frame(
-                        minWidth: 560, maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                        alignment: .topLeading)
-                }
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+            BrowserDetailLayout(selection: $selectedID, title: "Configuration details") {
+                profileList
+            } detail: {
+                profileDetail
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -65,13 +59,13 @@ struct ProfilesView: View {
         }
         .onAppear {
             if !model.profiles.contains(where: { $0.id == selectedID }) {
-                selectedID = model.activeProfileID
+                selectedID = ""
             }
             consumeRequest()
         }
         .onChange(of: model.profiles.map(\.id)) { _, ids in
             if !ids.contains(selectedID) {
-                selectedID = ids.contains(model.activeProfileID) ? model.activeProfileID : orderedProfiles.first?.id ?? ""
+                selectedID = ""
             }
         }
         .onChange(of: request) { _, _ in consumeRequest() }
@@ -312,8 +306,8 @@ private struct ProfileDetailView: View {
     }
 
     private func legacyCheckDetail(_ check: ProfileCheck) -> String {
-        ["Agent targets", "Observed targets"].contains(check.name)
-            ? "Check Claude Code, Codex, and Gemini CLI on this Mac."
+        (check.id == "apps" || ["Agent targets", "Observed targets"].contains(check.name))
+            ? "Check your selected clients on this Mac."
             : check.detail.replacingOccurrences(of: "Run Doctor", with: "Check setup")
     }
 }
@@ -458,11 +452,11 @@ private struct ProfileEditorSheet: View {
     }
 
     private var sortedPlugins: [Plugin] {
-        model.plugins.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        model.visiblePlugins.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     private var sortedMCPServers: [MCPServer] {
-        model.mcpServers.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        model.visibleMCPServers.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 }
 

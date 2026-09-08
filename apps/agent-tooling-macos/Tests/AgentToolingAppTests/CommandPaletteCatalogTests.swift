@@ -32,6 +32,18 @@ struct CommandPaletteCatalogTests {
         model.discardPendingPlan()
     }
 
+    @Test("Unchecked clients disappear from search and account destinations")
+    func excludesUncheckedClients() throws {
+        let model = try makeModel()
+        #expect(model.setClientEnabled(.gemini, enabled: false))
+        let items = CommandPaletteCatalog.items(for: model)
+        #expect(!items.contains { $0.outcome == .openClient(.gemini) })
+        #expect(!items.contains { $0.title.localizedCaseInsensitiveContains("gemini") })
+        #expect(items.contains { $0.outcome == .openClient(.claude) })
+        #expect(model.setClientEnabled(.gemini, enabled: true))
+        #expect(CommandPaletteCatalog.items(for: model).contains { $0.outcome == .openClient(.gemini) })
+    }
+
     @Test("Indexes every screen, the shell actions, and the named objects")
     func indexesScreensActionsAndObjects() throws {
         let model = try makeModel()

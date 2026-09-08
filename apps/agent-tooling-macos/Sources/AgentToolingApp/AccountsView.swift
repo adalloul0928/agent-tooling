@@ -67,7 +67,7 @@ struct AccountsView: View {
                             )
                             .font(.callout)
                             .foregroundStyle(.secondary)
-                            if model.connectors.isEmpty {
+                            if model.visibleConnectors.isEmpty {
                                 EmptyStateView(
                                     symbol: "link", title: "No connections recorded",
                                     message:
@@ -134,18 +134,18 @@ struct AccountsView: View {
     }
 
     private var sortedAccountSurfaces: [AccountSurface] {
-        model.accountSurfaces.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        model.visibleAccountSurfaces.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     private var sortedConnectors: [ConnectorRecord] {
-        model.connectors.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        model.visibleConnectors.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     private func consumeRequest(using proxy: ScrollViewProxy) {
         guard let request else { return }
         defer { self.request = nil }
         guard case .selectAccount(let id) = request,
-            model.accountSurfaces.contains(where: { $0.id == id })
+            model.visibleAccountSurfaces.contains(where: { $0.id == id })
         else { return }
         selectedAccountID = id
         Task { @MainActor in
@@ -250,7 +250,7 @@ private struct ConnectionEditorSheet: View {
                 }
                 .accessibilityLabel("Authorization owner")
                 Picker("Expected surface", selection: $target) {
-                    ForEach(TargetSurface.allCases) { target in Text(target.displayName).tag(target) }
+                    ForEach(model.availableTargetSurfaces) { target in Text(target.displayName).tag(target) }
                 }
                 .accessibilityLabel("Expected surface")
                 Picker("Scope", selection: $scope) {
@@ -275,13 +275,16 @@ private struct ConnectionEditorSheet: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(validationMessage != nil || model.isInteractionLocked)
+                .disabled(validationMessage != nil || model.isInteractionLocked || model.enabledClients.isEmpty)
             }
             if let validationMessage {
                 Label(validationMessage, systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(.red)
             }
+        }
+        .onAppear {
+            if !model.isClientEnabled(target.client), let first = model.availableTargetSurfaces.first { target = first }
         }
         .padding(24)
         .frame(width: 540)
@@ -307,7 +310,7 @@ private struct ConnectionEditorSheet: View {
                 scope: scope,
                 secretReferenceNames: parsedSecretReferences
             )
-            if model.connectors.contains(where: {
+            if model.visibleConnectors.contains(where: {
                 $0.name.localizedCaseInsensitiveCompare(draft.name) == .orderedSame
                     && $0.bindings.contains(where: { $0.target == target })
             }) {

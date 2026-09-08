@@ -47,6 +47,23 @@ engine has a fixed executable allowlist, restricts file writes to managed or
 supported locations, moves replaced files to a rollback area, redacts receipts,
 and records partial per-target outcomes.
 
+## Choose clients
+
+Open **Clients → Choose Clients…** or **Settings → General → Clients you use**
+and check the clients you want Agent Tooling to manage. Unchecking a client
+immediately removes it from navigation, inventory badges, account checks,
+marketplace routes, project configuration, search, and operation destinations.
+Setup, marketplace, history, and drift scans skip unchecked clients. You can
+uncheck every client and continue using the local library.
+
+This is a preference for this Mac. Existing workspaces start with all clients
+selected. Selection survives relaunch and is not imported from another Mac's
+backup. Unchecking does not uninstall a client, delete its configuration, or
+remove saved desired state; checking it again restores its saved state. Run
+Check Clients to refresh its current installation. Historical records involving
+unchecked clients are hidden, while their original receipts remain on disk.
+Client selection is locked while an operation is running or awaiting review.
+
 ## Create a skill with Codex
 
 The **New skill** action uses the locally installed Codex CLI and its bundled
@@ -152,3 +169,45 @@ swift test --disable-sandbox
 means a target write or native CLI command has a receipt. “Authenticated” and
 “cloud connector verified” require verification in the owning product; the app
 will never infer them from a local installation.
+
+## Browse skills by ownership and source
+
+Skills opens on **All skills**, with **My skills** and **Third-party** tabs.
+Source, installation type, maintenance location, and client filters are saved
+locally between launches. The Source menu lists discovered bundles, including
+workflow plugins. Agent Tooling marketplace plugins are classified as My skills automatically;
+recognized external publishers are classified as Third-party. Skill details explain
+the evidence and allow a saved override or a return to automatic classification.
+Unknown publishers and standalone skills without provenance remain unclassified;
+standalone overrides apply individually. Classification never changes installed files.
+
+My skills separates **Maintained here** from **Maintained elsewhere**. Skills
+created or copied into the library are maintained here. Repository and plugin
+skills can remain maintained elsewhere, with a link to reveal their observed
+installed source. Copying a discovered skill into the library creates a separately
+maintained standalone copy; it does not migrate its plugin dependencies or merge
+publisher updates. Existing distinct skill identities are preserved.
+
+The skill list uses the full content width until a row is selected. Selecting a
+skill opens a resizable detail pane; its close button or Escape restores the full
+list. Tabs and search remain above the list, with source/app menus and a compact
+Filters menu for installation, maintenance, and tags.
+
+Skill details offer per-client installation and native user-level availability.
+Discovered standalone skills can be copied directly to a supported client without
+adoption. Plugin skills use a verified native marketplace installer for the whole
+bundle. Codex installed-plugin discovery requests only installed entries; targeted
+marketplace lookup avoids truncating a large available catalog during installation.
+
+Codex switches write the documented per-path `skills.config` setting. Claude
+standalone switches write `skillOverrides`; Claude plugin switches explicitly
+control the whole plugin via `enabledPlugins`. These are user preferences on this
+Mac, not effective project/organization policy or live session state. Restart the
+client after changes. Config edits preserve unrelated entries, keep private local
+backups, and refuse symlinked settings or unsupported configuration syntax.
+
+### Connections and compact browsers
+
+The Connections screen separates account connector declarations discovered in installed Codex plugin manifests from directly configured MCP servers. Connector discovery reads bounded local `.app.json` mappings and display metadata; it does not enumerate cloud accounts or establish authentication. Empty connector results do not mean the user has no cloud connections. Account status remains explicitly unchecked.
+
+Plugins and MCP servers use column tables with client filters. Skills, Plugins, Connections, Collections, Configurations, and Projects open with the browser filling the page; selecting an item reveals details, and Close/Escape restores the browser. Plugin and direct MCP table selections retain their existing multi-selection review actions.

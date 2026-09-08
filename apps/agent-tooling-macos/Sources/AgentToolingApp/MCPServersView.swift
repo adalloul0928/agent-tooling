@@ -2,10 +2,15 @@ import AgentToolingCore
 import AppKit
 import SwiftUI
 
-struct MCPServersView: View {
+struct DirectMCPServersView: View {
     @Environment(AppModel.self) private var model
     @Binding var request: ScreenRequest?
     @State private var query = ""
+    @State private var clientFilter = "All apps"
+    @State private var sourceFilter = ""
+    @State private var pluginFilter = ""
+    @State private var marketplaceFilter = ""
+    @State private var transportFilter = ""
     @State private var filter: MCPFilter = .all
     @State private var selection: Set<String> = []
     @State private var activeSheet: MCPSheet?
@@ -22,7 +27,7 @@ struct MCPServersView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "MCP Servers", context: toolbarContext) {
+            PageToolbar(title: "Connections", context: toolbarContext) {
                 Button {
                     activeSheet = .paste
                 } label: {
@@ -43,19 +48,24 @@ struct MCPServersView: View {
                 .disabled(model.isInteractionLocked)
             }
 
-            GeometryReader { proxy in
+            if selection.isEmpty {
+                collectionPane
+            } else {
                 HSplitView {
-                    collectionPane
-                        .frame(
-                            minWidth: 350, idealWidth: 420, maxWidth: 500, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                            alignment: .topLeading)
-                    detailPane
-                        .frame(
-                            minWidth: 540, maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                            alignment: .topLeading)
+                    collectionPane.frame(minWidth: 320, idealWidth: 600)
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text("Connection details").font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Button { selection = [] } label: { Image(systemName: "xmark") }
+                                .buttonStyle(.plain).help("Close details")
+                        }.padding(16)
+                        Divider()
+                        detailPane
+                    }.frame(minWidth: 400, idealWidth: 600)
                 }
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             }
+
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .sheet(item: $activeSheet) { sheet in
@@ -72,9 +82,10 @@ struct MCPServersView: View {
             pruneSelection()
             consumeRequest()
         }
-        .onChange(of: model.mcpServers) { _, _ in pruneSelection() }
+        .onChange(of: model.visibleMCPServers) { _, _ in pruneSelection() }
         .onChange(of: filteredServers.map(\.id)) { _, _ in pruneSelection() }
         .onChange(of: request) { _, _ in consumeRequest() }
+        .onExitCommand { selection = [] }
         // BEGIN live-test-console
         .environment(capabilities)
         .task { capabilities.activate(workspaceRoot: URL(fileURLWithPath: model.workspacePath, isDirectory: true)) }
@@ -93,7 +104,7 @@ struct MCPServersView: View {
         case .addMCPServer: activeSheet = .add
         case .pasteImport: activeSheet = .paste
         case .selectMCPServer(let id):
-            guard model.mcpServers.contains(where: { $0.id == id }) else { break }
+            guard model.visibleMCPServers.contains(where: { $0.id == id }) else { break }
             query = ""
             filter = .all
             selection = [id]
@@ -105,6 +116,11 @@ struct MCPServersView: View {
     private var collectionPane: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
+                Picker("App", selection: $clientFilter) {
+                    Text("All apps").tag("All apps")
+                    ForEach(model.availableClients, id: \.self) { Text($0.rawValue).tag($0.rawValue) }
+                }.fixedSize()
+                Spacer()
                 TextField("Search servers", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Search MCP servers")
@@ -121,6 +137,22 @@ struct MCPServersView: View {
                 .accessibilityLabel("MCP server status")
                 .pickerStyle(.segmented)
                 .fixedSize()
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        if !sourceFilter.isEmpty {
+                            ConnectionFilterPill(title: sourceFilter, color: ConnectionPillColors.color(for: sourceFilter), active: true) { sourceFilter = "" }
+                        }
+                        if !pluginFilter.isEmpty {
+                            ConnectionFilterPill(title: ConnectionSource.title(pluginFilter), color: ConnectionPillColors.color(for: pluginFilter), active: true) { pluginFilter = "" }
+                        }
+                        if !marketplaceFilter.isEmpty {
+                            ConnectionFilterPill(title: ConnectionSource.title(marketplaceFilter), color: ConnectionPillColors.color(for: marketplaceFilter), active: true) { marketplaceFilter = "" }
+                        }
+                        if !transportFilter.isEmpty {
+                            ConnectionFilterPill(title: transportFilter, color: ConnectionPillColors.color(for: transportFilter), active: true) { transportFilter = "" }
+                        }
+                    }
+                }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
@@ -133,19 +165,52 @@ struct MCPServersView: View {
                     title: emptyStateTitle,
                     message: emptyStateMessage,
                     actionTitle: emptyStateActionTitle,
-                    isActionEnabled: !model.mcpServers.isEmpty || !model.isInteractionLocked,
+                    isActionEnabled: !model.visibleMCPServers.isEmpty || !model.isInteractionLocked,
                     action: performEmptyStateAction
                 )
             } else {
-                List(filteredServers, selection: $selection) { server in
-                    MCPCollectionRow(server: server, selected: selection.contains(server.id))
-                        .tag(server.id)
-                        .listRowBackground(SelectionRowBackground(selected: selection.contains(server.id)))
-                        .accessibilityLabel(server.name)
-                        .accessibilityValue(selection.contains(server.id) ? "Selected" : "")
-                }
-                .listStyle(.inset)
-                .scrollContentBackground(.hidden)
+                Table(filteredServers, selection: $selection) {
+                    TableColumn("Name") { server in
+                        Label(server.name, systemImage: "network").font(.callout.weight(.medium))
+                    }.width(min: 170, ideal: 240)
+                    TableColumn("Source") { server in
+                        let source = ConnectionSource(server.endpoint).source
+                        ConnectionFilterPill(title: source, color: ConnectionPillColors.color(for: source), active: sourceFilter == source) {
+                            sourceFilter = sourceFilter == source ? "" : source
+                        }.help(server.endpoint)
+                    }.width(95)
+                    TableColumn("Plugin") { server in
+                        if let plugin = ConnectionSource(server.endpoint).plugin {
+                            ConnectionFilterPill(title: ConnectionSource.title(plugin), color: ConnectionPillColors.color(for: plugin), active: pluginFilter == plugin) {
+                                pluginFilter = pluginFilter == plugin ? "" : plugin
+                            }
+                        } else { Text("—").foregroundStyle(.tertiary) }
+                    }.width(min: 140, ideal: 180)
+                    TableColumn("Marketplace") { server in
+                        if let marketplace = ConnectionSource(server.endpoint).marketplace {
+                            ConnectionFilterPill(title: ConnectionSource.title(marketplace), color: ConnectionPillColors.color(for: marketplace), active: marketplaceFilter == marketplace) {
+                                marketplaceFilter = marketplaceFilter == marketplace ? "" : marketplace
+                            }
+                        } else { Text("—").foregroundStyle(.tertiary) }
+                    }.width(min: 110, ideal: 135)
+                    TableColumn("Transport") { server in
+                        let transport = server.transport.rawValue
+                        ConnectionFilterPill(title: transport, color: ConnectionPillColors.color(for: transport), active: transportFilter == transport) {
+                            transportFilter = transportFilter == transport ? "" : transport
+                        }
+                    }.width(90)
+                    TableColumn("Apps") { server in
+                        TableClientMarks(clients: model.availableClients, present: Set(server.clients.filter(\.reportsLocalPresence).map(\.client)))
+                    }.width(70)
+                    TableColumn("Tools") { server in
+                        Text(capabilities.summary(for: server.id) ?? "—")
+                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    }.width(100)
+                    TableColumn("Status") { server in
+                        StatusGlyph(state: server.aggregateState, size: 13)
+                    }.width(50)
+                }.tableStyle(.inset)
+
             }
         }
         .paneMaterial()
@@ -175,14 +240,14 @@ struct MCPServersView: View {
     /// Several picks become one plan. Selecting more than one row swaps the
     /// detail pane for the stack, so the ending is a single review.
     private var stackedServers: [MCPServer] {
-        model.mcpServers
+        model.visibleMCPServers
             .filter { selection.contains($0.id) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private var installedClients: Set<ClientKind> {
         Set(
-            model.targetObservations
+            model.visibleTargetObservations
                 .filter(\.isCommandAvailable)
                 .compactMap(\.surface.client)
         )
@@ -202,57 +267,61 @@ struct MCPServersView: View {
     }
 
     private var filteredServers: [MCPServer] {
-        model.mcpServers.filter { server in
+        model.visibleMCPServers.filter { server in
+            let provenance = ConnectionSource(server.endpoint)
+            let matchesSource = (sourceFilter.isEmpty || sourceFilter == provenance.source)
+                && (pluginFilter.isEmpty || pluginFilter == provenance.plugin)
+                && (marketplaceFilter.isEmpty || marketplaceFilter == provenance.marketplace)
+                && (transportFilter.isEmpty || transportFilter == server.transport.rawValue)
             let matchesStatus =
                 filter == .all || (filter == .attention && server.aggregateState != .healthy)
                 || (filter == .connected && server.aggregateState == .healthy)
             let searchable = [server.name, server.summary, server.endpoint, server.authentication].joined(separator: " ")
-            return matchesStatus && (query.isEmpty || searchable.localizedCaseInsensitiveContains(query))
+            return (clientFilter == "All apps" || server.clients.contains { $0.client.rawValue == clientFilter && $0.reportsLocalPresence })
+                && matchesSource && matchesStatus && (query.isEmpty || searchable.localizedCaseInsensitiveContains(query))
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private var selectedServer: MCPServer? {
         guard let id = selection.first, selection.count == 1 else { return nil }
-        return model.mcpServers.first { $0.id == id }
+        return model.visibleMCPServers.first { $0.id == id }
     }
 
     private var toolbarContext: String {
-        let usable = model.mcpServers.filter { $0.aggregateState == .healthy }.count
-        let base = "\(model.mcpServers.count) configured · \(usable) usable"
+        let usable = model.visibleMCPServers.filter { $0.aggregateState == .healthy }.count
+        let base = "\(model.visibleMCPServers.count) configured · \(usable) usable"
         return stackedServers.count > 1 ? "\(base) · \(stackedServers.count) selected" : base
     }
 
     private func pruneSelection() {
         let visible = filteredServers.map(\.id)
         let kept = selection.intersection(visible)
-        if kept.isEmpty {
-            selection = Set(visible.prefix(1))
-        } else if kept != selection {
+        if kept != selection {
             selection = kept
         }
         if stackTargets.isEmpty {
-            stackTargets = installedClients.isEmpty ? Set(ClientKind.allCases) : installedClients
+            stackTargets = installedClients.isEmpty ? Set(model.availableClients) : installedClients
         }
         stackError = nil
     }
 
     private var emptyStateTitle: String {
-        model.mcpServers.isEmpty ? "No MCP servers yet" : "No matching servers"
+        model.visibleMCPServers.isEmpty ? "No MCP servers yet" : "No matching servers"
     }
 
     private var emptyStateMessage: String {
-        model.mcpServers.isEmpty
+        model.visibleMCPServers.isEmpty
             ? "Add a server definition, choose its apps, and review every native configuration command before it runs."
             : "Clear the search or change the status filter."
     }
 
     private var emptyStateActionTitle: String {
-        model.mcpServers.isEmpty ? "Add Server" : "Clear Filters"
+        model.visibleMCPServers.isEmpty ? "Add Server" : "Clear Filters"
     }
 
     private func performEmptyStateAction() {
-        if model.mcpServers.isEmpty {
+        if model.visibleMCPServers.isEmpty {
             activeSheet = .add
         } else {
             query = ""
@@ -325,7 +394,7 @@ private struct MCPStackPane: View {
 
                 GroupBox("Configure for") {
                     VStack(spacing: 0) {
-                        ForEach(ClientKind.allCases) { client in
+                        ForEach(model.availableClients) { client in
                             LabeledValueRow(client.rawValue) {
                                 HStack(spacing: 8) {
                                     Toggle(
@@ -347,7 +416,7 @@ private struct MCPStackPane: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            if client != ClientKind.allCases.last { Divider().opacity(0.35) }
+                            if client != model.availableClients.last { Divider().opacity(0.35) }
                         }
                     }
                 }
@@ -521,7 +590,7 @@ private struct MCPDetailView: View {
     }
 
     private func isClientInstalled(_ client: ClientKind) -> Bool {
-        model.targetObservations.contains { observation in
+        model.visibleTargetObservations.contains { observation in
             guard observation.isCommandAvailable else { return false }
             switch (client, observation.surface) {
             case (.claude, .claudeCode), (.claude, .claudeDesktop), (.claude, .claudeCloud),
@@ -615,12 +684,13 @@ private struct AddMCPServerSheet: View {
                     }
                 } else {
                     Section("Install for") {
-                        Toggle("Claude Code", isOn: $draft.addToClaude)
-                            .accessibilityLabel("Add to Claude Code")
-                        Toggle("Codex", isOn: $draft.addToCodex)
-                            .accessibilityLabel("Add to Codex")
-                        Toggle("Gemini CLI", isOn: $draft.addToGemini)
-                            .accessibilityLabel("Add to Gemini CLI")
+                        if model.isClientEnabled(.claude) {
+                            Toggle("Claude Code", isOn: $draft.addToClaude).accessibilityLabel("Add to Claude Code")
+                        }
+                        if model.isClientEnabled(.codex) { Toggle("Codex", isOn: $draft.addToCodex).accessibilityLabel("Add to Codex") }
+                        if model.isClientEnabled(.gemini) {
+                            Toggle("Gemini CLI", isOn: $draft.addToGemini).accessibilityLabel("Add to Gemini CLI")
+                        }
                     }
                     Section("Review") {
                         LabeledContent("Server", value: draft.name)
@@ -653,6 +723,11 @@ private struct AddMCPServerSheet: View {
             }
             .padding(16)
         }
+        .onAppear {
+            draft.addToClaude = draft.addToClaude && model.isClientEnabled(.claude)
+            draft.addToCodex = draft.addToCodex && model.isClientEnabled(.codex)
+            draft.addToGemini = draft.addToGemini && model.isClientEnabled(.gemini)
+        }
         .frame(width: 680, height: 600)
         .background(AgentTheme.contentBackground)
     }
@@ -674,7 +749,7 @@ private struct AddMCPServerSheet: View {
         if !rawName.isEmpty {
             do {
                 let identifier = try WorkspaceLibrary.normalizedIdentifier(rawName)
-                if model.mcpServers.contains(where: { $0.id == identifier }) {
+                if model.visibleMCPServers.contains(where: { $0.id == identifier }) {
                     return "A server with this name already exists."
                 }
             } catch {

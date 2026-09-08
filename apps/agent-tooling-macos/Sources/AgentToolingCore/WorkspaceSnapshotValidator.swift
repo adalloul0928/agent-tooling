@@ -673,6 +673,7 @@ enum WorkspaceSnapshotValidationError: LocalizedError, Sendable {
 extension WorkspaceSnapshot {
     func portableDesiredState() -> WorkspaceSnapshot {
         var portable = self
+        portable.preferences.enabledClients = Set(ClientKind.allCases)
         portable.skills = skills.filter(\.owned).map { skill in
             var copy = skill
             copy.projectRoot = nil

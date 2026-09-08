@@ -50,18 +50,10 @@ struct ProjectsView: View {
                 .keyboardShortcut("n", modifiers: .command)
             }
 
-            GeometryReader { proxy in
-                HSplitView {
-                    collectionPane
-                        .frame(
-                            minWidth: 340, idealWidth: 410, maxWidth: 520, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                            alignment: .topLeading)
-                    detailPane
-                        .frame(
-                            minWidth: 540, maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                            alignment: .topLeading)
-                }
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+            BrowserDetailLayout(selection: $selectedPath, title: "Project details") {
+                collectionPane
+            } detail: {
+                detailPane
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -69,7 +61,7 @@ struct ProjectsView: View {
         .sheet(item: $ignoreReview) { review in
             ProjectIgnoreReviewSheet(plan: review.plan) { model.applyProjectIgnorePlan(review.plan) }
         }
-        .onChange(of: model.projects) { _, _ in selectFirstVisibleProjectIfNeeded() }
+        .onChange(of: model.visibleProjects) { _, _ in selectFirstVisibleProjectIfNeeded() }
         .onChange(of: filteredProjects.map(\.id)) { _, _ in selectFirstVisibleProjectIfNeeded() }
     }
 
@@ -156,7 +148,7 @@ struct ProjectsView: View {
     // MARK: Data
 
     private var filteredProjects: [DiscoveredProject] {
-        model.projects.filter { project in
+        model.visibleProjects.filter { project in
             let matchesFilter =
                 switch filter {
                 case .all: true
@@ -168,20 +160,20 @@ struct ProjectsView: View {
         }
     }
 
-    private var selectedProject: DiscoveredProject? { model.projects.first { $0.path == selectedPath } }
+    private var selectedProject: DiscoveredProject? { model.visibleProjects.first { $0.path == selectedPath } }
 
     private var toolbarContext: String {
         if model.isDiscoveringProjects { return "Looking for projects on this Mac…" }
-        let configured = model.projects.filter { !$0.isPlain }.count
-        let pinned = model.projects.filter(\.isPinned).count
-        var parts = ["\(model.projects.count) found", "\(configured) configured"]
+        let configured = model.visibleProjects.filter { !$0.isPlain }.count
+        let pinned = model.visibleProjects.filter(\.isPinned).count
+        var parts = ["\(model.visibleProjects.count) found", "\(configured) configured"]
         if pinned > 0 { parts.append("\(pinned) pinned") }
         return parts.joined(separator: " · ")
     }
 
     private func selectFirstVisibleProjectIfNeeded() {
         guard !filteredProjects.contains(where: { $0.path == selectedPath }) else { return }
-        selectedPath = filteredProjects.first?.path ?? ""
+        selectedPath = ""
     }
 
     private var emptyStateTitle: String {
@@ -262,7 +254,7 @@ private enum ProjectFilter: String, CaseIterable, Identifiable {
 
 private enum ProjectDetailTab: String, CaseIterable, Identifiable {
     case skills = "Skills"
-    case mcpServers = "MCP Servers"
+    case mcpServers = "Connections"
     case plugins = "Plugins"
     case configuration = "Configuration"
     var id: String { rawValue }
@@ -375,14 +367,14 @@ private struct ProjectDetailView: View {
                             plural: "skills",
                             rows: skillRows,
                             caption:
-                                "A project skill lives in .claude/skills, .agents/skills, or .gemini/skills inside the repository and hides a skill of the same name installed on this Mac. Create and edit skills in the Skills section."
+                                "A project skill lives in a selected client’s skill folder inside the repository and hides a skill of the same name installed on this Mac. Create and edit skills in the Skills section."
                         )
                     case .mcpServers:
                         componentSection(
                             plural: "MCP servers",
                             rows: mcpRows,
                             caption:
-                                "Project MCP servers come from files inside the repository. Adding or removing one still goes through a reviewed plan in the MCP Servers section."
+                                "Project MCP servers come from files inside the repository. Adding or removing one still goes through a reviewed plan in the Connections section."
                         )
                     case .plugins:
                         componentSection(
@@ -511,7 +503,7 @@ private struct ProjectDetailView: View {
     private var skillRows: [ProjectComponentRow] {
         ProjectOverlay.rows(
             kind: .skill,
-            inherited: model.skills
+            inherited: model.visibleSkills
                 .filter { ($0.projectRoot?.isEmpty ?? true) }
                 .map {
                     ProjectInheritedComponent(
@@ -525,7 +517,7 @@ private struct ProjectDetailView: View {
                 + declaredButUnwritten(
                     kind: .skill,
                     existing: project.skills,
-                    candidates: model.skills
+                    candidates: model.visibleSkills
                         .filter { ProjectPath.matches($0.projectRoot, project: project.path) }
                         .map { (id: $0.id, name: $0.displayName) }
                 )
@@ -535,7 +527,7 @@ private struct ProjectDetailView: View {
     private var mcpRows: [ProjectComponentRow] {
         ProjectOverlay.rows(
             kind: .mcpServer,
-            inherited: model.mcpServers
+            inherited: model.visibleMCPServers
                 .filter { ($0.projectRoot?.isEmpty ?? true) }
                 .map {
                     ProjectInheritedComponent(
@@ -549,7 +541,7 @@ private struct ProjectDetailView: View {
                 + declaredButUnwritten(
                     kind: .mcpServer,
                     existing: project.mcpServers,
-                    candidates: model.mcpServers
+                    candidates: model.visibleMCPServers
                         .filter { ProjectPath.matches($0.projectRoot, project: project.path) }
                         .map { (id: $0.id, name: $0.name) }
                 )
@@ -559,7 +551,7 @@ private struct ProjectDetailView: View {
     private var pluginRows: [ProjectComponentRow] {
         ProjectOverlay.rows(
             kind: .plugin,
-            inherited: model.plugins.map {
+            inherited: model.visiblePlugins.map {
                 ProjectInheritedComponent(
                     id: $0.id,
                     name: $0.name,
@@ -608,7 +600,7 @@ private struct ProjectDetailView: View {
 
         SectionCaption(
             text:
-                "A file under .claude/, .codex/, .gemini/, or .agents/ whose name contains .local. belongs to this Mac and should never be committed. Everything else in those folders travels with the repository."
+                "A file in a client configuration folder whose name contains .local. belongs to this Mac and should never be committed. Everything else in those folders travels with the repository."
         )
         SectionCaption(
             text:
@@ -668,7 +660,7 @@ private struct ComponentRows: View {
     /// re-reviewed here; everything else stays read-only.
     private func reviewableServer(for row: ProjectComponentRow) -> MCPServer? {
         guard row.kind == .mcpServer, row.origin != .inherited else { return nil }
-        return model.mcpServers.first {
+        return model.visibleMCPServers.first {
             $0.id == row.id && $0.isManagedDefinition && ProjectPath.matches($0.projectRoot, project: project.path)
         }
     }

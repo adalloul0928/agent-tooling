@@ -182,7 +182,7 @@ struct SidebarView: View {
                     .padding(.horizontal, 10)
                     .padding(.bottom, 4)
             }
-            ForEach([ClientKind.claude, .codex, .gemini]) { client in
+            ForEach(model.availableClients) { client in
                 let verdict = model.clientVerdict(for: client)
                 let selected = selection == .syncCenter && navigation.selectedClient == client
                 Button {

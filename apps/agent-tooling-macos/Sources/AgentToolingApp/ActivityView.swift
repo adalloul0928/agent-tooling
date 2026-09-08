@@ -14,7 +14,7 @@ struct ActivityView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Activity", context: "\(model.activities.count) receipts") {
+            PageToolbar(title: "Activity", context: "\(model.visibleActivities.count) receipts") {
                 Button {
                     selectedID = displayedActivities.first?.id
                 } label: {
@@ -69,11 +69,11 @@ struct ActivityView: View {
             if displayedActivities.isEmpty {
                 EmptyStateView(
                     symbol: "clock.arrow.circlepath",
-                    title: model.activities.isEmpty ? "No activity yet" : "No matching activity",
-                    message: model.activities.isEmpty
+                    title: model.visibleActivities.isEmpty ? "No activity yet" : "No matching activity",
+                    message: model.visibleActivities.isEmpty
                         ? "Checks, reviewed changes, and account attestations will appear here."
                         : "Try another kind or clear the search.",
-                    actionTitle: model.activities.isEmpty ? nil : "Clear Filters"
+                    actionTitle: model.visibleActivities.isEmpty ? nil : "Clear Filters"
                 ) {
                     query = ""
                     filter = .all
@@ -104,7 +104,7 @@ struct ActivityView: View {
     /// none is an alarm. Hiding the unreadable ones would turn a folder the app
     /// cannot check into a folder that looks unchanged.
     private var driftReports: [InstalledPackageDrift] {
-        model.installDrift.filter { $0.state != .matchesReview }
+        model.visibleInstallDrift.filter { $0.state != .matchesReview }
     }
 
     @ViewBuilder
@@ -112,7 +112,7 @@ struct ActivityView: View {
         if let receipt = selectedReceipt {
             ActivityReceiptDetail(
                 receipt: receipt,
-                operationReceipt: model.operationReceipts.first { $0.id == receipt.operationReceiptID }
+                operationReceipt: model.visibleOperationReceipts.first { $0.id == receipt.operationReceiptID }
             )
         } else {
             EmptyStateView(
@@ -121,7 +121,7 @@ struct ActivityView: View {
     }
 
     private var filteredActivities: [ActivityReceipt] {
-        model.activities.filter { receipt in
+        model.visibleActivities.filter { receipt in
             (filter.kind == nil || receipt.kind == filter.kind)
                 && (query.isEmpty
                     || [receipt.displayTitle, receipt.detail, receipt.command ?? ""].joined(separator: " ")
@@ -155,13 +155,13 @@ struct ActivityView: View {
         return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
     }
 
-    private var selectedReceipt: ActivityReceipt? { model.activities.first { $0.id == selectedID } }
+    private var selectedReceipt: ActivityReceipt? { model.visibleActivities.first { $0.id == selectedID } }
 
     private func consumeRequest() {
         guard let request else { return }
         defer { self.request = nil }
         guard case .selectReceipt(let id) = request,
-            model.activities.contains(where: { $0.id == id })
+            model.visibleActivities.contains(where: { $0.id == id })
         else { return }
         query = ""
         filter = .all

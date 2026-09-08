@@ -183,11 +183,7 @@ struct SettingsView: View {
 
                     if category == .general {
                         SettingsGroup(title: "Apps", symbol: "macbook.and.iphone") {
-                            SettingsClientRow(client: .codex, detail: targetDetail(.codex), state: targetState(.codex))
-                            Divider()
-                            SettingsClientRow(client: .claude, detail: targetDetail(.claude), state: targetState(.claude))
-                            Divider()
-                            SettingsClientRow(client: .gemini, detail: targetDetail(.gemini), state: targetState(.gemini))
+                            ClientSelectionView()
                         }
                     }
 
@@ -447,7 +443,7 @@ struct SettingsView: View {
     }
 
     private func targetState(_ client: ClientKind) -> HealthState {
-        guard let observation = model.targetObservations.first(where: { $0.surface.client == client }) else { return .pending }
+        guard let observation = model.visibleTargetObservations.first(where: { $0.surface.client == client }) else { return .pending }
         return observation.isCommandAvailable ? .healthy : .attention
     }
 
@@ -456,7 +452,7 @@ struct SettingsView: View {
     }
 
     private func targetDetail(_ client: ClientKind) -> String {
-        guard let observation = model.targetObservations.first(where: { $0.surface.client == client }) else { return "Not scanned" }
+        guard let observation = model.visibleTargetObservations.first(where: { $0.surface.client == client }) else { return "Not scanned" }
         return observation.version ?? (observation.installed ? "Configuration found; command unavailable" : "Not found on PATH")
     }
 }

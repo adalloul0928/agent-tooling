@@ -141,9 +141,11 @@ public struct ClientAdapterRegistry: Sendable {
         adapters.first { $0.client == client }
     }
 
-    public func scanAll(homeURL: URL, runner: any CommandRunning) async -> [TargetObservation] {
+    public func scanAll(homeURL: URL, runner: any CommandRunning, clients: Set<ClientKind> = Set(ClientKind.allCases)) async
+        -> [TargetObservation]
+    {
         await withTaskGroup(of: TargetObservation.self) { group in
-            for adapter in adapters {
+            for adapter in adapters where clients.contains(adapter.client) {
                 group.addTask { await adapter.scan(homeURL: homeURL, runner: runner) }
             }
             var observations: [TargetObservation] = []

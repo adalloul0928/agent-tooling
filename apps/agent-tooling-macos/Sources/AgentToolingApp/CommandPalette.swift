@@ -69,7 +69,7 @@ enum CommandPaletteCatalog {
 
     @MainActor
     static func items(for model: AppModel) -> [CommandPaletteItem] {
-        actions(for: model) + sections() + clients() + skills(for: model) + servers(for: model) + plugins(for: model)
+        actions(for: model) + sections() + clients(for: model) + skills(for: model) + servers(for: model) + plugins(for: model)
             + configurations(for: model) + sources(for: model) + packages(for: model) + accounts(for: model)
             + receipts(for: model)
     }
@@ -162,8 +162,9 @@ enum CommandPaletteCatalog {
         }
     }
 
-    private static func clients() -> [CommandPaletteItem] {
-        ClientKind.allCases.map { client in
+    @MainActor
+    private static func clients(for model: AppModel) -> [CommandPaletteItem] {
+        model.availableClients.map { client in
             CommandPaletteItem(
                 id: "client.\(client.id)",
                 title: client.rawValue,
@@ -180,7 +181,7 @@ enum CommandPaletteCatalog {
 
     @MainActor
     private static func skills(for model: AppModel) -> [CommandPaletteItem] {
-        model.skills.map { skill in
+        model.visibleSkills.map { skill in
             CommandPaletteItem(
                 id: "skill.\(skill.id)",
                 title: skill.displayName,
@@ -197,12 +198,12 @@ enum CommandPaletteCatalog {
 
     @MainActor
     private static func servers(for model: AppModel) -> [CommandPaletteItem] {
-        model.mcpServers.map { server in
+        model.visibleMCPServers.map { server in
             CommandPaletteItem(
                 id: "mcp.\(server.id)",
                 title: server.name,
                 subtitle: "MCP server · \(server.transport.rawValue) · \(server.scope)",
-                contextLabel: "MCP Servers",
+                contextLabel: "Connections",
                 kind: .mcpServer,
                 symbol: "server.rack",
                 keywords: [server.id, server.authentication],
@@ -214,7 +215,7 @@ enum CommandPaletteCatalog {
 
     @MainActor
     private static func plugins(for model: AppModel) -> [CommandPaletteItem] {
-        model.plugins.map { plugin in
+        model.visiblePlugins.map { plugin in
             CommandPaletteItem(
                 id: "plugin.\(plugin.id)",
                 title: plugin.name,
@@ -248,7 +249,7 @@ enum CommandPaletteCatalog {
 
     @MainActor
     private static func sources(for model: AppModel) -> [CommandPaletteItem] {
-        model.sources.map { source in
+        model.visibleSources.map { source in
             CommandPaletteItem(
                 id: "source.\(source.id.uuidString)",
                 title: source.name,
@@ -265,7 +266,7 @@ enum CommandPaletteCatalog {
 
     @MainActor
     private static func packages(for model: AppModel) -> [CommandPaletteItem] {
-        model.marketplacePackages.prefix(maximumPackages).map { package in
+        model.visibleMarketplacePackages.prefix(maximumPackages).map { package in
             CommandPaletteItem(
                 id: "package.\(package.id)",
                 title: package.name,
@@ -282,7 +283,7 @@ enum CommandPaletteCatalog {
 
     @MainActor
     private static func accounts(for model: AppModel) -> [CommandPaletteItem] {
-        model.accountSurfaces.map { surface in
+        model.visibleAccountSurfaces.map { surface in
             CommandPaletteItem(
                 id: "account.\(surface.id.uuidString)",
                 title: surface.name,
@@ -299,7 +300,7 @@ enum CommandPaletteCatalog {
 
     @MainActor
     private static func receipts(for model: AppModel) -> [CommandPaletteItem] {
-        model.activities.prefix(maximumReceipts).map { receipt in
+        model.visibleActivities.prefix(maximumReceipts).map { receipt in
             CommandPaletteItem(
                 id: "receipt.\(receipt.id.uuidString)",
                 title: receipt.displayTitle,

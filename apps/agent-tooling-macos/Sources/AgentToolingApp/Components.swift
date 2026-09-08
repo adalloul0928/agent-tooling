@@ -110,7 +110,8 @@ struct SymbolTile: View {
 struct ClientMarks: View {
     let present: Set<ClientKind>
     var size: CGFloat = 15
-    private let order: [ClientKind] = [.claude, .codex, .gemini]
+    @Environment(AppModel.self) private var model
+    private var order: [ClientKind] { model.availableClients }
 
     var body: some View {
         HStack(spacing: 7) {
@@ -1034,5 +1035,24 @@ private extension ClientState {
     var detailWithRevision: String {
         guard let revision else { return detail }
         return "\(detail) · \(revision)"
+    }
+}
+
+/// Native table cells can be recycled while their enclosing view is changing.
+/// Keep their content independent of required observable environment objects.
+struct TableClientMarks: View {
+    let clients: [ClientKind]
+    let present: Set<ClientKind>
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ForEach(clients) { client in
+                ClientBrandIcon(client: client, size: 15)
+                    .opacity(present.contains(client) ? 1 : 0.22)
+                    .grayscale(present.contains(client) ? 0 : 1)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(clients.filter(present.contains).map(\.rawValue).joined(separator: ", "))
     }
 }

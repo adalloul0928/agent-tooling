@@ -49,7 +49,7 @@ struct InsightsView: View {
                         errorState(scanError)
                     }
 
-                    if let report = model.insightsReport {
+                    if let report = model.visibleInsightsReport {
                         reportContent(report)
                     } else if !model.isScanningInsights && scanError == nil {
                         firstRunState
@@ -73,7 +73,7 @@ struct InsightsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes the saved aggregate report. Claude Code and Codex chat history will not be changed.")
+            Text("This removes the saved aggregate report. Client chat history will not be changed.")
         }
     }
 
@@ -103,16 +103,20 @@ struct InsightsView: View {
                 VStack(spacing: 14) {
                     configurationRow("Sources", detail: "Local history only") {
                         VStack(alignment: .leading, spacing: 9) {
-                            Toggle(isOn: $includeClaude) {
-                                HStack(spacing: 8) {
-                                    ClientBrandIcon(client: .claude, size: 16)
-                                    Text("Claude Code")
+                            if model.isClientEnabled(.claude) {
+                                Toggle(isOn: $includeClaude) {
+                                    HStack(spacing: 8) {
+                                        ClientBrandIcon(client: .claude, size: 16)
+                                        Text("Claude Code")
+                                    }
                                 }
                             }
-                            Toggle(isOn: $includeCodex) {
-                                HStack(spacing: 8) {
-                                    ClientBrandIcon(client: .codex, size: 16)
-                                    Text("Codex")
+                            if model.isClientEnabled(.codex) {
+                                Toggle(isOn: $includeCodex) {
+                                    HStack(spacing: 8) {
+                                        ClientBrandIcon(client: .codex, size: 16)
+                                        Text("Codex")
+                                    }
                                 }
                             }
                         }
@@ -440,7 +444,7 @@ struct InsightsView: View {
     }
 
     private var toolbarContext: String? {
-        guard let report = model.insightsReport else { return nil }
+        guard let report = model.visibleInsightsReport else { return nil }
         return "Updated \(report.generatedAt.formatted(.relative(presentation: .named)))"
     }
 
@@ -457,10 +461,10 @@ struct InsightsView: View {
     private func scan() async {
         guard canScan else { return }
         scanError = nil
-        let previousReportID = model.insightsReport?.id
+        let previousReportID = model.visibleInsightsReport?.id
         var clients: Set<ClientKind> = []
-        if includeClaude { clients.insert(.claude) }
-        if includeCodex { clients.insert(.codex) }
+        if includeClaude && model.isClientEnabled(.claude) { clients.insert(.claude) }
+        if includeCodex && model.isClientEnabled(.codex) { clients.insert(.codex) }
         let options = InsightScanOptions(
             clients: clients,
             lookbackDays: lookbackDays,
@@ -468,9 +472,9 @@ struct InsightsView: View {
             includeMarketplaceRecommendations: includeMarketplaceRecommendations
         )
         await model.runInsightsScan(options: options)
-        if model.insightsReport?.id != previousReportID {
+        if model.visibleInsightsReport?.id != previousReportID {
         }
-        if model.insightsReport?.id == previousReportID, let error = model.lastError {
+        if model.visibleInsightsReport?.id == previousReportID, let error = model.lastError {
             scanError = error
         }
     }
@@ -480,7 +484,7 @@ struct InsightsView: View {
         switch recommendation.kind {
         case .createCustomSkill:
             let instruction = recommendation.draftInstruction ?? recommendation.summary
-            let request = CodexSkillDraftRequest(instruction: instruction, targets: ClientKind.allCases)
+            let request = CodexSkillDraftRequest(instruction: instruction, targets: model.availableClients)
             guard model.saveCodexSkillDraftRequest(request) else { return }
             navigation.openSkillCreationRequest(request.id)
         case .useExistingSkill:

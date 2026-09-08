@@ -818,7 +818,7 @@ struct AppModelTests {
             versions: ["claude": "claude 2.1", "codex": "codex 1.0"],
             responses: [
                 "claude plugin list --json": CommandOutput(status: 0, standardOutput: claudeJSON, standardError: ""),
-                "codex plugin list --available --json": CommandOutput(status: 0, standardOutput: codexJSON, standardError: ""),
+                "codex plugin list --json": CommandOutput(status: 0, standardOutput: codexJSON, standardError: ""),
                 "codex mcp list --json": CommandOutput(status: 0, standardOutput: codexMCPJSON, standardError: ""),
             ]
         )

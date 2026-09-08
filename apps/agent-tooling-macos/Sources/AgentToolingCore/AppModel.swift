@@ -35,7 +35,9 @@ public final class AppModel {
     /// A Git repository can be imported as a source or backup. It is not the
     /// database or a prerequisite for using the app.
     public internal(set) var repositoryPath: String
+    public internal(set) var enabledClients = Set(ClientKind.allCases)
     public internal(set) var automaticallyCheckHealth = true
+    public internal(set) var skillAvailabilityRevision = 0
     public internal(set) var isSyncing = false
     public internal(set) var isRunningDoctor = false
     public internal(set) var isExecutingPlan = false
@@ -126,6 +128,7 @@ public final class AppModel {
         self.repositoryPath = snapshot.importedRepositoryPath ?? store.rootURL.path(percentEncoded: false)
         self.backupConfiguration = snapshot.backupConfiguration
         self.encryptedSyncConfiguration = snapshot.encryptedSyncConfiguration
+        self.enabledClients = snapshot.preferences.enabledClients
         self.automaticallyCheckHealth = snapshot.preferences.automaticallyCheckHealth
         self.managedPolicies = snapshot.managedPolicies
         self.syncStages = Self.syncStages(from: snapshot.targetObservations)
@@ -162,9 +165,9 @@ public final class AppModel {
     }
 
     public var attentionCount: Int {
-        let mcpAttention = mcpServers.filter { $0.aggregateState == .attention || $0.aggregateState == .unavailable }.count
+        let mcpAttention = visibleMCPServers.filter { $0.aggregateState == .attention || $0.aggregateState == .unavailable }.count
         let profileAttention = activeProfile?.checks.filter { $0.state == .attention || $0.state == .unavailable }.count ?? 0
-        let clientAttention = targetObservations.filter { !$0.isCommandAvailable }.count
+        let clientAttention = visibleTargetObservations.filter { !$0.isCommandAvailable }.count
         return mcpAttention + profileAttention + clientAttention
     }
 
@@ -207,6 +210,8 @@ public final class AppModel {
     /// Raw messages are tokenized and discarded inside the service; only the
     /// aggregate report is stored in this machine's local workspace database.
     public func runInsightsScan(options: InsightScanOptions) async {
+        var options = options
+        options.clients.formIntersection(enabledClients)
         guard ensureReadyForChange() else { return }
         guard !options.clients.intersection([.claude, .codex]).isEmpty else {
             presentError("Select Claude Code, Codex, or both before scanning recent work.")
@@ -225,8 +230,8 @@ public final class AppModel {
 
         let report = await toolingInsightsService.scan(
             options: options,
-            skills: skills,
-            marketplacePackages: marketplacePackages,
+            skills: visibleSkills,
+            marketplacePackages: visibleMarketplacePackages,
             homeURL: homeURL,
             marketplaceProviders: marketplaceProviders
         )
@@ -274,13 +279,17 @@ public final class AppModel {
         isRunningDoctor = true
         defer { isRunningDoctor = false }
         let start = Date.now
-        let observations = await adapters.scanAll(homeURL: homeURL, runner: runner)
-        let compiled = InventoryCompiler.compile(observations: observations, homeURL: homeURL)
-        let missing = observations.filter { !$0.isCommandAvailable }.map { $0.surface.displayName }
+        let scanned = await adapters.scanAll(homeURL: homeURL, runner: runner, clients: enabledClients)
+        let observations = scanned + targetObservations.filter { !isClientEnabled($0.surface.client) }
+        var compiled = InventoryCompiler.compile(observations: scanned, homeURL: homeURL)
+        compiled.skills = retainingExcludedClients(compiled.skills, existing: skills, clients: \.clients)
+        compiled.mcpServers = retainingExcludedClients(compiled.mcpServers, existing: mcpServers, clients: \.clients)
+        compiled.plugins = retainingExcludedClients(compiled.plugins, existing: plugins, clients: \.clients)
+        let missing = scanned.filter { !$0.isCommandAvailable }.map { $0.surface.displayName }
         // Compare every install this app can prove it made against the
         // fingerprint recorded when the operator reviewed it. Drift is
         // reported as information; it never changes the setup-check state.
-        installDrift = await InstalledPackageDriftInspector.inspect(store: store)
+        installDrift = await InstalledPackageDriftInspector.inspect(store: store, clients: enabledClients)
         let driftSummary = InstalledPackageDriftInspector.summary(for: installDrift)
         let state: HealthState = missing.isEmpty ? .healthy : .attention
         var candidate = currentSnapshot()
@@ -294,7 +303,9 @@ public final class AppModel {
                 title: "Setup check completed",
                 detail: [
                     missing.isEmpty
-                        ? "Claude Code, Codex, and Gemini CLI were inspected from local state."
+                        ? enabledClients.isEmpty
+                            ? "No clients selected."
+                            : "Inspected \(availableClients.map(\.rawValue).joined(separator: ", ")) from local state."
                         : "Not found: \(Array(Set(missing)).sorted().joined(separator: ", ")). Existing configuration was still inspected.",
                     driftSummary,
                 ].compactMap { $0 }.joined(separator: " "),
@@ -316,12 +327,12 @@ public final class AppModel {
         guard ensureReadyForChange() else { return }
         isSyncing = true
         defer { isSyncing = false }
-        let installable = skills.filter { $0.owned && !$0.clients.isEmpty }
+        let installable = visibleSkills.filter { $0.owned && !$0.clients.isEmpty }
         var steps: [OperationStep] = []
         var selectedClients = Set<ClientKind>()
         var scopes = Set<ToolingScope>()
         for skill in installable {
-            let configuredTargets = Set(skill.clients.map(\.client))
+            let configuredTargets = Set(skill.clients.map(\.client)).intersection(enabledClients)
             do {
                 let plan = try library.installPlan(for: skill, targets: configuredTargets, homeURL: homeURL)
                 steps.append(contentsOf: plan.steps)
@@ -344,7 +355,7 @@ public final class AppModel {
                         kind: .manual,
                         title: skills.contains(where: \.owned) ? "No app selected" : "No local skills to install",
                         detail: skills.contains(where: \.owned)
-                            ? "Open a local skill, choose Claude Code, Codex, or Gemini CLI, then sync again."
+                            ? "Open a local skill, choose an enabled client, then sync again."
                             : "Create a local skill or import a package, then choose the targets and scope.",
                         requiresUserAction: true
                     )
@@ -380,6 +391,7 @@ public final class AppModel {
     @discardableResult
     public func executePendingPlan(_ reviewedPlan: ReviewedOperationPlan) async -> Bool {
         guard let pendingPlan, !isBusy else { return false }
+        guard validateEnabledClients(in: pendingPlan) else { return false }
         do {
             try OperationPlanApproval.verify(
                 pendingPlan,
@@ -525,6 +537,7 @@ public final class AppModel {
     @discardableResult
     public func reviewComposedPlan(_ plan: OperationPlan) -> Bool {
         guard ensureReadyForChange() else { return false }
+        guard validateEnabledClients(in: plan) else { return false }
         guard !plan.steps.isEmpty else {
             lastError = "There is nothing to review in this plan."
             return false
@@ -555,14 +568,15 @@ public final class AppModel {
         includeFreshSessionCanary: Bool = false
     ) {
         guard ensureReadyForChange() else { return }
-        guard let skill = skills.first(where: { $0.id == skillID }) else {
+        if let targets, !requireEnabledClients(targets) { return }
+        guard let skill = visibleSkills.first(where: { $0.id == skillID }) else {
             lastError = "The selected skill is no longer available."
             return
         }
         do {
             pendingPlan = try library.installPlan(
                 for: skill,
-                targets: targets ?? Set(skill.clients.map(\.client)),
+                targets: targets ?? Set(skill.clients.map(\.client)).intersection(enabledClients),
                 homeURL: homeURL,
                 includeFreshSessionCanary: includeFreshSessionCanary
             )
@@ -586,6 +600,7 @@ public final class AppModel {
             return nil
         }
         let selected = draft.selectedTargets
+        guard requireEnabledClients(selected) else { return nil }
         guard !selected.isEmpty else {
             lastError = "Choose at least one app for this MCP server."
             return nil
@@ -657,7 +672,8 @@ public final class AppModel {
 
     public func planMCPConfiguration(server: MCPServer, targets: Set<ClientKind>? = nil) {
         guard ensureReadyForChange() else { return }
-        let selected = targets ?? Set(server.clients.map(\.client))
+        let selected = targets ?? Set(server.clients.map(\.client)).intersection(enabledClients)
+        guard requireEnabledClients(selected) else { return }
         guard !selected.isEmpty else {
             lastError = "Choose at least one app before reviewing this MCP configuration."
             return
@@ -736,6 +752,7 @@ public final class AppModel {
     }
 
     public func planPluginRemoval(pluginID: String, client: ClientKind) async {
+        guard requireEnabledClients([client]) else { return }
         guard ensureReadyForChange() else { return }
         if marketplacePackages.isEmpty { await refreshMarketplace() }
         let catalogPrefix = client == .claude ? "claude" : client == .codex ? "codex" : "gemini"
@@ -900,9 +917,9 @@ public final class AppModel {
         }
 
         var result = selected
-        result.enabledPlugins = enabledPlugins.sorted()
-        result.requiredMCPs = requiredMCPs.sorted()
-        result.requiredSkills = requiredSkills.sorted()
+        result.enabledPlugins = enabledPlugins.filter { isItemVisible(.init(kind: .plugin, identifier: $0)) }.sorted()
+        result.requiredMCPs = requiredMCPs.filter { isItemVisible(.init(kind: .mcpServer, identifier: $0)) }.sorted()
+        result.requiredSkills = requiredSkills.filter { isItemVisible(.init(kind: .skill, identifier: $0)) }.sorted()
         result.includedCollections = includedCollections.sorted()
         result.checks = checks
         return result
@@ -936,6 +953,7 @@ public final class AppModel {
     }
 
     public func authenticate(serverID: String, client: ClientKind) {
+        guard requireEnabledClients([client]) else { return }
         guard ensureReadyForChange() else { return }
         guard let server = mcpServers.first(where: { $0.id == serverID }) else {
             lastError = "The selected MCP server is no longer available."
@@ -963,6 +981,7 @@ public final class AppModel {
     }
 
     public func planMCPRemoval(serverID: String, client: ClientKind) {
+        guard requireEnabledClients([client]) else { return }
         guard ensureReadyForChange() else { return }
         guard let server = mcpServers.first(where: { $0.id == serverID }) else {
             lastError = "The selected MCP server is no longer available."
@@ -1085,6 +1104,7 @@ public final class AppModel {
         secretReferenceNames: [String]
     ) -> Bool {
         guard ensureReadyForChange() else { return false }
+        guard isClientEnabled(target.client) else { return false }
         let draft: ValidatedConnectorDraft
         do {
             draft = try ConnectorValidator.validate(
@@ -1242,6 +1262,7 @@ public final class AppModel {
         repositoryPath = snapshot.importedRepositoryPath ?? workspacePath
         backupConfiguration = snapshot.backupConfiguration
         encryptedSyncConfiguration = snapshot.encryptedSyncConfiguration
+        enabledClients = snapshot.preferences.enabledClients
         automaticallyCheckHealth = snapshot.preferences.automaticallyCheckHealth
         managedPolicies = snapshot.managedPolicies
         syncStages = Self.syncStages(from: snapshot.targetObservations)
@@ -1354,7 +1375,7 @@ public final class AppModel {
             backupConfiguration: backupConfiguration,
             encryptedSyncConfiguration: encryptedSyncConfiguration,
             preferences: WorkspacePreferences(
-                automaticallyCheckHealth: automaticallyCheckHealth
+                automaticallyCheckHealth: automaticallyCheckHealth, enabledClients: enabledClients
             ),
             managedPolicies: managedPolicies,
             collections: collections,
@@ -1415,7 +1436,7 @@ public final class AppModel {
                         ProfileCheck(
                             id: "workspace", name: "Local workspace", detail: "Managed package library and SQLite state", state: .healthy),
                         ProfileCheck(
-                            id: "apps", name: "App status", detail: "Check setup to inspect Claude Code, Codex, and Gemini CLI",
+                            id: "apps", name: "App status", detail: "Check setup to inspect your selected clients",
                             state: .pending),
                     ],
                     enabledPlugins: [],

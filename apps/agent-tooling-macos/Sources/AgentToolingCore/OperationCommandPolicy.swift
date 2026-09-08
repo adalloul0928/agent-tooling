@@ -174,7 +174,7 @@ struct OperationCommandPolicy: Sendable {
 
     private static let allowedCommands: Set<String> = ["claude", "codex", "gemini", "git"]
 
-    private static func isSafePluginIdentifier(_ value: String) -> Bool {
+    static func isSafePluginIdentifier(_ value: String) -> Bool {
         !value.isEmpty
             && value.count <= 512
             && !value.hasPrefix("-")

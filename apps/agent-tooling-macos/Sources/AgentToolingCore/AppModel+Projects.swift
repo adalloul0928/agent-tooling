@@ -24,8 +24,9 @@ extension AppModel {
         let home = homeURL
         let pinned = pinnedProjectPaths
         let roots = projectScanRoots
+        let clients = enabledClients
         let discovered = await Task.detached {
-            Self.inspectProjects(homeURL: home, pinnedPaths: pinned, scanRoots: roots)
+            Self.inspectProjects(homeURL: home, pinnedPaths: pinned, scanRoots: roots, clients: clients)
         }.value
         projects = discovered
         isDiscoveringProjects = false
@@ -147,7 +148,9 @@ extension AppModel {
         let normalized = ProjectPath.canonical(path)
         guard let index = projects.firstIndex(where: { $0.path == normalized }) else { return }
         let origins = projects[index].origins
-        guard let refreshed = ProjectDiscovery.inspect(root: URL(fileURLWithPath: normalized, isDirectory: true), origins: origins)
+        guard
+            let refreshed = ProjectDiscovery.inspect(
+                root: URL(fileURLWithPath: normalized, isDirectory: true), origins: origins, clients: enabledClients)
         else {
             projects.remove(at: index)
             return
@@ -178,7 +181,8 @@ extension AppModel {
     nonisolated private static func inspectProjects(
         homeURL: URL,
         pinnedPaths: [String],
-        scanRoots: [String]
+        scanRoots: [String],
+        clients: Set<ClientKind>
     ) -> [DiscoveredProject] {
         var origins: [String: Set<ProjectDiscoveryOrigin>] = [:]
         var order: [String] = []
@@ -198,14 +202,15 @@ extension AppModel {
                 add(url, .scannedRoot)
             }
         }
-        for url in ProjectDiscovery.sessionIndexRoots(homeURL: homeURL) {
+        for url in (clients.contains(.claude) ? ProjectDiscovery.sessionIndexRoots(homeURL: homeURL) : []) {
             add(url, .sessionIndex)
         }
 
         return
             order
             .compactMap { path in
-                ProjectDiscovery.inspect(root: URL(fileURLWithPath: path, isDirectory: true), origins: origins[path] ?? [])
+                ProjectDiscovery.inspect(
+                    root: URL(fileURLWithPath: path, isDirectory: true), origins: origins[path] ?? [], clients: clients)
             }
             .sorted(by: projectOrder)
     }

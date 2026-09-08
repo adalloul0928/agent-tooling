@@ -2,6 +2,7 @@ import AgentToolingCore
 import SwiftUI
 
 struct SyncCenterView: View {
+    @State private var showingClientSelection = false
     @Environment(AppModel.self) private var model
     @Environment(AppNavigationState.self) private var navigation
     let client: ClientKind?
@@ -15,6 +16,8 @@ struct SyncCenterView: View {
     var body: some View {
         VStack(spacing: 0) {
             PageToolbar(title: "Clients", context: toolbarContext) {
+                Button("Choose Clients…") { showingClientSelection = true }
+                    .popover(isPresented: $showingClientSelection) { ClientSelectionView().frame(width: 380) }
                 Button {
                     Task { await model.runDoctor() }
                 } label: {
@@ -66,6 +69,9 @@ struct SyncCenterView: View {
             .scrollIndicators(.hidden)
         }
         .onAppear { model.refreshPendingRequests() }
+        .onChange(of: model.enabledClients) { _, _ in
+            if let client, !model.isClientEnabled(client) { onShowAllClients() }
+        }
     }
 
     private var toolbarContext: String {
@@ -183,7 +189,7 @@ struct SyncCenterView: View {
     }
 
     private var sortedTargets: [TargetObservation] {
-        model.targetObservations
+        model.visibleTargetObservations
             .filter { client == nil || $0.surface.client == client }
             .sorted { $0.surface.displayName.localizedStandardCompare($1.surface.displayName) == .orderedAscending }
     }
@@ -192,18 +198,18 @@ struct SyncCenterView: View {
         [
             ToolingMatrixRow(
                 id: .skills, title: "Skills", symbol: "doc.text",
-                libraryCount: scopedLibraryCount(for: model.skills.map(\.clients)),
-                installedCounts: installedCounts(for: model.skills.map(\.clients)), kind: .skill
+                libraryCount: scopedLibraryCount(for: model.visibleSkills.map(\.clients)),
+                installedCounts: installedCounts(for: model.visibleSkills.map(\.clients)), kind: .skill
             ),
             ToolingMatrixRow(
                 id: .mcpServers, title: "MCP servers", symbol: "server.rack",
-                libraryCount: scopedLibraryCount(for: model.mcpServers.map(\.clients)),
-                installedCounts: installedCounts(for: model.mcpServers.map(\.clients)), kind: .mcpServer
+                libraryCount: scopedLibraryCount(for: model.visibleMCPServers.map(\.clients)),
+                installedCounts: installedCounts(for: model.visibleMCPServers.map(\.clients)), kind: .mcpServer
             ),
             ToolingMatrixRow(
                 id: .plugins, title: "Plugins", symbol: "puzzlepiece.extension",
-                libraryCount: scopedLibraryCount(for: model.plugins.map(\.clients)),
-                installedCounts: installedCounts(for: model.plugins.map(\.clients)), kind: .plugin
+                libraryCount: scopedLibraryCount(for: model.visiblePlugins.map(\.clients)),
+                installedCounts: installedCounts(for: model.visiblePlugins.map(\.clients)), kind: .plugin
             ),
         ]
     }
@@ -229,21 +235,21 @@ struct SyncCenterView: View {
     }
 
     private var scopedReceipts: [OperationReceipt] {
-        model.operationReceipts.filter { receipt in
+        model.visibleOperationReceipts.filter { receipt in
             guard let client else { return true }
             return receipt.targetSurfaces.contains { $0.client == client }
         }
     }
 
     private var scopedPendingRequests: [PendingAgentRequest] {
-        model.pendingAgentRequests.filter { request in
+        model.visiblePendingAgentRequests.filter { request in
             guard let client else { return true }
             return request.targets.contains(client)
         }
     }
 
     private var visibleClients: [ClientKind] {
-        client.map { [$0] } ?? [.claude, .codex, .gemini]
+        client.map { model.isClientEnabled($0) ? [$0] : [] } ?? model.availableClients
     }
 
     private func scopedLibraryCount(for clientLists: [[ClientState]]) -> Int {
