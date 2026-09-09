@@ -47,13 +47,11 @@ struct ReviewQueueTests {
 
         _ = try harness.callTool("request_add_mcp_server", arguments: addServerArguments())
 
-        // The workspace the app reads must be untouched: no MCP server added,
-        // and above all no operation plan for anything to execute.
-        let snapshot = try harness.store.loadWorkspaceSnapshot() ?? WorkspaceSnapshot()
-        #expect(snapshot.mcpServers.isEmpty)
-        #expect(snapshot.operationReceipts.isEmpty)
-        let plans = try harness.store.listEntities(domain: .plans, as: OperationPlan.self)
-        #expect(plans.isEmpty)
+        // The workspace the app reads must be untouched: no connection added,
+        // and above all nothing that happened for a person to discover after.
+        let snapshot = try #require(try harness.store.snapshot())
+        #expect(snapshot.document.artifacts.isEmpty)
+        #expect(try harness.store.operationReceipts().isEmpty)
     }
 
     @Test func duplicateRequestsCollapseIntoTheExistingRow() throws {
@@ -174,7 +172,7 @@ struct ReviewQueueTests {
         #expect(rows.count == 1)
         #expect(payload["state"]?.stringValue == "pending-review")
 
-        let draft = try harness.store.loadCodexSkillDraftRequest(id: rows[0].id)
+        let draft = try harness.store.requestDraft(rows[0].id, as: CodexSkillDraftRequest.self)
         let resolved = try #require(draft)
         #expect(resolved.proposedName == "release-summary")
         #expect(resolved.targets == [.claude, .codex])
@@ -192,13 +190,14 @@ struct ReviewQueueTests {
 
         _ = try harness.callTool("request_create_skill", arguments: arguments)
         let request = try #require(harness.pendingRequests().first)
-        try harness.store.deleteCodexSkillDraftRequest(id: request.id)
+        try harness.store.deleteRequestDraft(request.id)
 
         let repeated = try harness.callTool("request_create_skill", arguments: arguments)
 
         #expect(repeated["collapsedIntoExistingRequest"]?.boolValue == true)
         #expect(try harness.pendingRequests().count == 1)
-        #expect(try harness.store.loadCodexSkillDraftRequest(id: request.id)?.proposedName == "release-summary")
+        #expect(try harness.store.requestDraft(request.id, as: CodexSkillDraftRequest.self)?
+            .proposedName == "release-summary")
     }
 
     @Test func aRequestWithAnInlineSecretIsRefused() throws {

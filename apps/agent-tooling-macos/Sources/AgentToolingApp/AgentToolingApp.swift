@@ -3,322 +3,120 @@ import SwiftUI
 
 @main
 struct AgentToolingApplication: App {
-    @State private var model: AppModel?
-    @State private var workspacePreview: WorkspaceLibrarySession?
-    @State private var migrationPilot: WorkspaceMigrationReviewSession?
-    @State private var migrationPilotHome: URL?
+    @State private var workspace: WorkspaceLaunch.Workspace?
     @State private var startupError: String?
     @AppStorage("appearance") private var appearance = "System"
-    @AppStorage("showMenuBarItem") private var showMenuBarItem = true
-    @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
-    @State private var navigation = AppNavigationState()
-
-    init() {
-        do {
-            if let pilot = try WorkspaceMigrationPilotLaunch.parse(arguments: ProcessInfo.processInfo.arguments) {
-                _migrationPilot = State(initialValue: try pilot.openSession())
-                _migrationPilotHome = State(initialValue: pilot.homeRoot)
-                _model = State(initialValue: nil)
-                _startupError = State(initialValue: nil)
-                return
-            }
-            if let preview = try WorkspacePreviewLaunch.parse(arguments: ProcessInfo.processInfo.arguments) {
-                _workspacePreview = State(initialValue: try preview.openSession())
-                _model = State(initialValue: nil)
-                _startupError = State(initialValue: nil)
-                return
-            }
-            let launchContext = LaunchContext.current
-            if let selected = try WorkspaceAuthorityLaunch.openWritableSession(
-                legacyRoot: launchContext.workspaceRoot ?? WorkspaceStore.defaultRootURL()
-            ) {
-                _workspacePreview = State(initialValue: selected)
-                _model = State(initialValue: nil)
-                _startupError = State(initialValue: nil)
-                return
-            }
-            if let workspaceRoot = launchContext.workspaceRoot {
-                _model = State(
-                    initialValue: try AppModel(
-                        store: WorkspaceStore(rootURL: workspaceRoot),
-                        runner: ProcessCommandRunner(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser),
-                        homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser
-                    )
-                )
-            } else {
-                _model = State(
-                    initialValue: try AppModel.live(runner: ProcessCommandRunner(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser),
-                        homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser))
-            }
-            _startupError = State(initialValue: nil)
-        } catch {
-            _model = State(initialValue: nil)
-            _startupError = State(initialValue: error.localizedDescription)
-        }
-    }
 
     var body: some Scene {
         Window("Agent Tooling", id: "main") {
             Group {
-                if let migrationPilot, let migrationPilotHome {
-                    WorkspaceMigrationPilotHost(session: migrationPilot, homeRoot: migrationPilotHome)
-                } else if let workspacePreview {
-                    WorkspaceLibraryView(session: workspacePreview)
-                } else if let model {
-                    AppShellView(initialSelection: launchSelection, onWorkspaceAuthorityChanged: loadModel)
-                        .environment(model)
-                        .environment(navigation)
+                if let workspace {
+                    WorkspaceShellView(
+                        session: workspace.library, syncSession: workspace.sync,
+                        settingsSession: workspace.settings, deploymentSession: workspace.deployment,
+                        historySession: workspace.history, authoringSession: workspace.authoring,
+                        exportSession: workspace.export, presetsSession: workspace.presets,
+                        declarationSession: workspace.declarations)
+                } else if let startupError {
+                    StartupFailureView(message: startupError) { Task { await load() } }
                 } else {
-                    StartupFailureView(message: startupError ?? "The local workspace could not be opened.") {
-                        loadModel()
-                    }
+                    // A first run scans the installed clients, which takes a
+                    // moment and is worth saying rather than showing an empty
+                    // window somebody would take for a broken one.
+                    ProgressView("Opening your workspace…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .frame(minWidth: 1_180, minHeight: 760)
             .containerBackground(.clear, for: .window)
             .background(WindowConfigurator())
             .preferredColorScheme(colorScheme)
-            .onOpenURL { url in
-                guard workspacePreview == nil, migrationPilot == nil else { return }
-                guard navigation.open(url: url) else {
-                    model?.presentError("Agent Tooling rejected an invalid or unsupported link.")
-                    return
-                }
-                bringMainWindowForward()
-            }
+            .task { await load() }
         }
         .defaultSize(width: 1_440, height: 900)
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
-        .commands {
-            CommandGroup(after: .newItem) {
-                Button("Sync Agent Tooling") {
-                    guard let model else { return }
-                    Task { await model.runSync() }
-                }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-                .disabled(model == nil || model?.isInteractionLocked == true)
 
-                Button("Check Setup") {
-                    guard let model else { return }
-                    Task { await model.runDoctor() }
-                }
-                .keyboardShortcut("d", modifiers: [.command, .shift])
-                .disabled(model == nil || model?.isInteractionLocked == true)
-            }
-            CommandGroup(after: .sidebar) {
-                Button(sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar") {
-                    sidebarCollapsed.toggle()
-                }
-                .keyboardShortcut("s", modifiers: [.command, .control])
-            }
-        }
+        Settings { AppearanceSettingsView(appearance: $appearance) }
+    }
 
-        MenuBarExtra("Agent Tooling", systemImage: "slider.horizontal.3", isInserted: $showMenuBarItem) {
-            if migrationPilot != nil {
-                Text("Migration review")
-                Button("Quit Agent Tooling") { NSApp.terminate(nil) }
-            } else if let workspacePreview {
-                Text(workspacePreview.access == .readOnly ? "Workspace preview · Read only" : "Workspace library")
-                Button("Quit Agent Tooling") { NSApp.terminate(nil) }
-            } else if let model {
-                MenuBarContent()
-                    .environment(model)
-            } else {
-                Text("Agent Tooling could not open its workspace")
-                Button("Retry") { loadModel() }
-                Divider()
-                Button("Quit Agent Tooling") { NSApp.terminate(nil) }
-            }
+    /// Opens the workspace, creating one on a first run.
+    ///
+    /// Failure is shown rather than swallowed: an app that opens to an empty
+    /// library after failing to read one looks exactly like an app whose
+    /// library is empty.
+    private func load() async {
+        guard workspace == nil else { return }
+        do {
+            let context = LaunchContext.current
+            workspace = try await WorkspaceLaunch.open(
+                supportRoot: context.workspaceRoot,
+                homeRoot: context.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
+            startupError = nil
+        } catch {
+            workspace = nil
+            startupError = error.localizedDescription
         }
     }
 
     private var colorScheme: ColorScheme? {
         switch appearance {
+        case "Light": .light
         case "Dark": .dark
-        case "System": nil
-        default: .light
-        }
-    }
-
-    private var launchSelection: AppSection {
-        let arguments = ProcessInfo.processInfo.arguments
-        guard let index = arguments.firstIndex(of: "--agent-tooling-section"), arguments.indices.contains(index + 1) else {
-            return .overview
-        }
-
-        let requestedSection = arguments[index + 1].lowercased()
-        return AppSection.allCases.first { $0.rawValue.lowercased() == requestedSection } ?? .overview
-    }
-
-    private func loadModel() {
-        migrationPilot = nil
-        migrationPilotHome = nil
-        workspacePreview = nil
-        model = nil
-        do {
-            if let pilot = try WorkspaceMigrationPilotLaunch.parse(arguments: ProcessInfo.processInfo.arguments) {
-                migrationPilot = try pilot.openSession()
-                migrationPilotHome = pilot.homeRoot
-                startupError = nil
-                return
-            }
-            if let preview = try WorkspacePreviewLaunch.parse(arguments: ProcessInfo.processInfo.arguments) {
-                workspacePreview = try preview.openSession()
-                model = nil
-                startupError = nil
-                return
-            }
-            let launchContext = LaunchContext.current
-            if let selected = try WorkspaceAuthorityLaunch.openWritableSession(
-                legacyRoot: launchContext.workspaceRoot ?? WorkspaceStore.defaultRootURL()
-            ) {
-                workspacePreview = selected
-                model = nil
-                startupError = nil
-                return
-            }
-            workspacePreview = nil
-            if let workspaceRoot = launchContext.workspaceRoot {
-                model = try AppModel(
-                    store: WorkspaceStore(rootURL: workspaceRoot),
-                    runner: ProcessCommandRunner(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser),
-                    homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser
-                )
-            } else {
-                model = try AppModel.live(runner: ProcessCommandRunner(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser),
-                    homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
-            }
-            startupError = nil
-        } catch {
-            workspacePreview = nil
-            model = nil
-            startupError = error.localizedDescription
-        }
-    }
-
-    private func bringMainWindowForward() {
-        NSApp.unhide(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "agent-tooling-main" }) {
-            window.deminiaturize(nil)
-            window.makeKeyAndOrderFront(nil)
+        default: nil
         }
     }
 }
 
-/// Development-only launch overrides let visual and interaction tests use a
-/// disposable workspace instead of touching the person's real library.
-private struct LaunchContext {
+private struct AppearanceSettingsView: View {
+    @Binding var appearance: String
+
+    var body: some View {
+        Form {
+            Picker("Appearance", selection: $appearance) {
+                Text("System").tag("System")
+                Text("Light").tag("Light")
+                Text("Dark").tag("Dark")
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 360)
+        .padding(20)
+    }
+}
+
+/// Shown when the workspace could not be opened at all.
+struct StartupFailureView: View {
+    let message: String
+    var retry: () -> Void
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Agent Tooling could not open your workspace", systemImage: "exclamationmark.triangle")
+        } description: {
+            Text(message)
+        } actions: {
+            Button("Try again", action: retry).buttonStyle(.borderedProminent)
+        }
+    }
+}
+
+/// Where this launch was told to look. Used by tests and packaged pilots to
+/// point the app at a scratch folder; absent in ordinary use.
+struct LaunchContext {
     var workspaceRoot: URL?
     var homeRoot: URL?
 
     static var current: LaunchContext {
-        let arguments = ProcessInfo.processInfo.arguments
-        return LaunchContext(
-            workspaceRoot: value(after: "--agent-tooling-workspace", in: arguments).map {
-                URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.resolvingSymlinksInPath()
-            },
-            homeRoot: value(after: "--agent-tooling-home", in: arguments).map {
-                URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.resolvingSymlinksInPath()
-            }
-        )
-    }
-
-    private static func value(after flag: String, in arguments: [String]) -> String? {
-        guard let index = arguments.firstIndex(of: flag), arguments.indices.contains(index + 1) else { return nil }
-        return arguments[index + 1]
-    }
-}
-
-private struct StartupFailureView: View {
-    let message: String
-    let retry: () -> Void
-
-    var body: some View {
-        ContentUnavailableView {
-            Label("Local workspace unavailable", systemImage: "externaldrive.badge.exclamationmark")
-        } description: {
-            Text(message)
-        } actions: {
-            Button("Try Again", action: retry)
-                .buttonStyle(.borderedProminent)
-            Button("Quit") { NSApp.terminate(nil) }
-                .buttonStyle(.bordered)
-        }
-    }
-}
-
-private struct MenuBarContent: View {
-    @Environment(\.openWindow) private var openWindow
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        Button("Open Agent Tooling") {
-            openWindow(id: "main")
-            NSApp.activate(ignoringOtherApps: true)
-        }
-        Divider()
-        CollectionsMenu()
-            .environment(model)
-        Divider()
-        Button(model.isRunningDoctor ? "Checking setup…" : "Check Setup") {
-            Task { await model.runDoctor() }
-        }
-        .disabled(model.isInteractionLocked)
-        Button(model.isSyncing ? "Preparing changes…" : "Review sync") {
-            openWindow(id: "main")
-            NSApp.activate(ignoringOtherApps: true)
-            Task { await model.runSync() }
-        }
-        .disabled(model.isInteractionLocked)
-        Divider()
-        Button("Quit Agent Tooling") { NSApp.terminate(nil) }
-    }
-}
-
-/// Collections belong where the work is, not buried in Settings. Each one
-/// toggles against the current configuration and carries a checkmark, or a
-/// partial count when the configuration already requires part of the shelf
-/// without including the shelf itself.
-private struct CollectionsMenu: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        Menu("Collections") {
-            if model.collections.isEmpty {
-                Text("No collections yet")
-            } else if let profile = model.activeProfile {
-                Text("Included in \(profile.name)")
-                ForEach(orderedCollections) { collection in
-                    Toggle(isOn: inclusionBinding(collection, profileID: profile.id)) {
-                        Text(title(for: collection, profileID: profile.id))
-                    }
-                    .disabled(model.isInteractionLocked || profile.scope == .managed)
-                }
-                Divider()
-                Text("Including a collection changes desired state only. Review a sync to apply it.")
-            } else {
-                Text("Select a configuration first")
+        var context = LaunchContext()
+        var arguments = ProcessInfo.processInfo.arguments.dropFirst().makeIterator()
+        while let argument = arguments.next() {
+            switch argument {
+            case "--workspace": context.workspaceRoot = arguments.next().map { URL(fileURLWithPath: $0).standardizedFileURL }
+            case "--home": context.homeRoot = arguments.next().map { URL(fileURLWithPath: $0).standardizedFileURL }
+            default: continue
             }
         }
-    }
-
-    private var orderedCollections: [ToolingCollection] {
-        model.collections.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
-
-    private func inclusionBinding(_ collection: ToolingCollection, profileID: String) -> Binding<Bool> {
-        Binding(
-            get: { model.isCollectionIncluded(collection.id, inProfile: profileID) },
-            set: { model.setCollectionInclusion($0, of: collection.id, inProfile: profileID) }
-        )
-    }
-
-    private func title(for collection: ToolingCollection, profileID: String) -> String {
-        guard !model.isCollectionIncluded(collection.id, inProfile: profileID) else { return collection.name }
-        let coverage = model.collectionCoverage(collection.id, inProfile: profileID)
-        guard coverage.covered > 0, coverage.total > 0 else { return collection.name }
-        return "\(collection.name) — \(coverage.covered) of \(coverage.total)"
+        return context
     }
 }

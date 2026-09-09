@@ -26,15 +26,13 @@ struct AgentActivityJournal: Codable, Sendable {
     var dailyToolCallCounts: [String: [String: Int]] = [:]
 }
 
-extension WorkspaceStore {
-    private static var agentActivityJournalKey: String { "agent-mcp.activity-journal.v1" }
-
+extension WorkspaceRevisionStore {
     func loadAgentActivityJournal() throws -> AgentActivityJournal {
-        try load(Self.agentActivityJournalKey, as: AgentActivityJournal.self) ?? AgentActivityJournal()
+        try activityJournal(as: AgentActivityJournal.self, default: AgentActivityJournal())
     }
 
     func saveAgentActivityJournal(_ journal: AgentActivityJournal) throws {
-        try save(journal, for: Self.agentActivityJournalKey)
+        try saveActivityJournal(journal)
     }
 }
 
@@ -45,7 +43,7 @@ enum AgentActivityJournalService {
         outcome: HealthState,
         detail: String,
         client: UntrustedClientIdentity,
-        store: WorkspaceStore,
+        store: WorkspaceRevisionStore,
         now: Date = .now
     ) {
         // A failure to journal must never fail the tool call it is describing,

@@ -36,7 +36,9 @@ public struct AgentPluginHTTPServer: Codable, Hashable, Sendable {
     }
 }
 
-enum AgentPluginMCPServer: Hashable, Sendable {
+public typealias AgentPluginMCPServerDeclaration = AgentPluginMCPServer
+
+public enum AgentPluginMCPServer: Hashable, Sendable {
     case stdio(AgentPluginStdioServer)
     case streamableHTTP(AgentPluginHTTPServer)
     case sse(AgentPluginHTTPServer)

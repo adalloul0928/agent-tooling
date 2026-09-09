@@ -14,6 +14,7 @@ enum ReadOnlyTools {
         case "search_inventory": try searchInventory(context)
         case "get_component": try getComponent(context)
         case "get_client_status": try getClientStatus(context)
+        case "get_effective_settings": try getEffectiveSettings(context)
         case "list_receipts": try listReceipts(context)
         case "get_receipt": try getReceipt(context)
         case "list_pending_requests": try listPendingRequests(context)
@@ -21,6 +22,69 @@ enum ReadOnlyTools {
         case "open_review_screen": try openReviewScreen(context)
         default: throw ToolInputError.unknownTool(name)
         }
+    }
+
+    // MARK: - Effective settings
+
+    /// Reads the agent's own files and explains them. Nothing is written, and a
+    /// file this build cannot parse is reported rather than treated as empty.
+    private static func getEffectiveSettings(_ context: ToolCallContext) throws -> ToolOutcome {
+        let client = try context.arguments.requiredEnumeration("client", allowed: ["claude-code", "codex"])
+        let projectPath = try context.arguments.optionalString("project_path", maximum: 4_096)
+        var projectRoot: URL?
+        if let projectPath {
+            let url = URL(fileURLWithPath: projectPath)
+            guard projectPath.hasPrefix("/"), url.standardizedFileURL.path == projectPath else {
+                throw ToolInputError.invalidProjectRoot
+            }
+            projectRoot = url
+        }
+        // The installed version is what this Mac last observed, never a guess.
+        let surface: TargetSurface = client == "codex" ? .codexCLI : .claudeCode
+        let version = try context.snapshot().targetObservations
+            .first { $0.surface == surface }?.version
+
+        let configuration: EffectiveConfiguration
+        do {
+            let reader = ConfigurationLayerReader()
+            if client == "codex" {
+                let adapter = CodexConfigurationAdapter(installedClientVersion: version)
+                configuration = EffectiveConfigurationResolver.resolve(
+                    adapter: adapter, installedClientVersion: version,
+                    layers: try reader.codexLayers(homeRoot: context.homeRoot, adapter: adapter))
+            } else {
+                configuration = EffectiveConfigurationResolver.resolve(
+                    adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: version,
+                    layers: try reader.claudeCodeLayers(homeRoot: context.homeRoot, projectRoot: projectRoot))
+            }
+        } catch {
+            return ToolOutcome(
+                payload: .object(["client": .string(client), "readable": .bool(false)]),
+                summary: "This agent's settings files could not be read. They were left exactly as they are.")
+        }
+        let rows = configuration.rows.map { row in
+            JSONValue.object([
+                "key": .string(row.key),
+                "name": .string(row.displayName),
+                "value": .string(row.value.displayText),
+                "defined_by": .string(row.definedBy.rawValue),
+                "combines_layers": .bool(row.rule == .combineList),
+                "overridden_in": .array(row.contributions.filter(\.isOverridden)
+                    .map { .string($0.layer.rawValue) }),
+                "fixed_by_higher_layer": .bool(row.isConstrained),
+                "requires_new_session": .bool(row.requiresNewSession),
+            ])
+        }
+        return ToolOutcome(
+            payload: .object([
+                "client": .string(client),
+                "installed_version": version.map { JSONValue.string($0) } ?? .null,
+                "session_overrides_unknown": .bool(configuration.sessionOverridesUnknown),
+                "summary": .string(configuration.summary),
+                "settings": .array(rows),
+                "not_interpreted": .array(configuration.unrecognized.map { .string($0.key) }),
+            ]),
+            summary: "\(rows.count) settings for \(client). \(configuration.summary)")
     }
 
     // MARK: - Inventory

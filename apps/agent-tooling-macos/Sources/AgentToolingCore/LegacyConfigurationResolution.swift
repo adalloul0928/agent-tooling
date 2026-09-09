@@ -2,7 +2,7 @@ import Foundation
 
 /// Names a configuration in the state shape that existed before the portable
 /// configuration migration. Policy-template resolution is a comparison-only
-/// extension: `AppModel` resolves `WorkspaceSnapshot.profiles`, while this
+/// extension: the old app resolved `WorkspaceSnapshot.profiles`, while this
 /// identity can also address a raw profile retained under `managedPolicies`.
 /// A policy profile is qualified by its policy because those identifiers are
 /// independent from workspace configuration identifiers.
@@ -18,7 +18,7 @@ public enum LegacyConfigurationIdentity: Hashable, Sendable {
     }
 }
 
-/// The old resolver's observable contract, kept separate from `AppModel` so a
+/// The old resolver's observable contract, kept separate so a
 /// migration can compare both representations without making either one the
 /// implementation of the other.
 public struct LegacyConfigurationResolution: Hashable, Sendable {
@@ -90,7 +90,7 @@ public enum LegacyConfigurationResolutionError: Error, Equatable, LocalizedError
 
 /// A bounded, pure copy of the legacy configuration-resolution behavior.
 ///
-/// It intentionally accepts a snapshot rather than an `AppModel`: migration
+/// It intentionally accepts a snapshot rather than a live model: migration
 /// comparisons must not depend on live UI caches, file access, or model state.
 public enum LegacyConfigurationResolver {
     public static func resolve(

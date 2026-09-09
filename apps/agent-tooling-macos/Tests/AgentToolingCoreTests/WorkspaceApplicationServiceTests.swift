@@ -137,19 +137,6 @@ struct WorkspaceApplicationServiceTests {
         #expect(try fixture.scalar("SELECT COUNT(*) FROM revisions") == 1)
     }
 
-    @Test func legacyWriterHasNoAccessToTheNewAuthority() async throws {
-        let fixture = try Fixture()
-        defer { fixture.remove() }
-        let legacy = try WorkspaceStore(rootURL: fixture.root)
-        try legacy.save("old app edit", for: "workspace.snapshot")
-        #expect(legacy.databaseURL != fixture.store.databaseURL)
-        #expect(try fixture.store.snapshot()?.document == fixture.document)
-        _ = try await fixture.service.renameArtifact(fixture.rename("New authority"))
-        #expect(try legacy.load("workspace.snapshot", as: String.self) == "old app edit")
-        #expect(!FileManager.default.fileExists(atPath:
-            fixture.store.databaseURL.deletingLastPathComponent().appending(path: "agent-tooling.sqlite").path))
-    }
-
     @Test func bootstrapRefusesOverwriteMismatchedDeviceAndMissingAncestry() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

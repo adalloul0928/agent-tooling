@@ -16,7 +16,7 @@ struct PendingRequestQueueTests {
         )
 
         #expect(resolved?.id == outcome.request.id)
-        #expect(try fixture.store.loadPendingAgentRequestQueue().requests.isEmpty)
+        #expect(try fixture.store.pendingRequestQueue().requests.isEmpty)
         #expect(
             try PendingRequestQueueService.resolve(
                 id: outcome.request.id,
@@ -37,7 +37,7 @@ struct PendingRequestQueueTests {
                 store: fixture.store
             )
         }
-        let remaining = try fixture.store.loadPendingAgentRequestQueue().requests
+        let remaining = try fixture.store.pendingRequestQueue().requests
         #expect(remaining.map(\.id) == [outcome.request.id])
         #expect(remaining.map(\.fingerprint) == [outcome.request.fingerprint])
         #expect(remaining.first?.componentID == outcome.request.componentID)
@@ -60,7 +60,8 @@ struct PendingRequestQueueTests {
             store: fixture.store,
             now: oldDate
         )
-        try fixture.store.saveCodexSkillDraftRequest(
+        try fixture.store.saveRequestDraft(
+            old.request.id,
             CodexSkillDraftRequest(id: old.request.id, instruction: "Old instruction"))
         let repeated = try PendingRequestQueueService.enqueue(
             kind: .createSkill,
@@ -83,15 +84,26 @@ struct PendingRequestQueueTests {
             client: "Current client",
             now: oldDate.addingTimeInterval(PendingAgentRequestQueue.maximumPendingAge + 1)
         )
-        let rows = try fixture.store.loadPendingAgentRequestQueue().requests
+        let rows = try fixture.store.pendingRequestQueue().requests
         #expect(rows.map(\.componentID) == ["current"])
-        #expect(try fixture.store.loadCodexSkillDraftRequest(id: old.request.id) == nil)
+        #expect(try fixture.store.requestDraft(old.request.id, as: CodexSkillDraftRequest.self) == nil)
     }
     @Test func concurrentProcessesDoNotOverwriteEachOthersRequests() async throws {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "PendingQueueConcurrency-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: root) }
-        let stores = try (0..<16).map { _ in try WorkspaceStore(rootURL: root) }
+        // Sixteen separate handles on one workspace, the way sixteen processes
+        // would each open it.
+        let document = try WorkspaceDocumentCoding.seal(.init(
+            workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+        let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
+        let first = try WorkspaceRevisionStore(containerRoot: root,
+            workspaceID: document.workspaceID, deviceID: device.deviceID)
+        try first.initialize(document: document, device: device)
+        let stores = try [first] + (1..<16).map { _ in
+            try WorkspaceRevisionStore(containerRoot: root, workspaceID: document.workspaceID,
+                                       deviceID: device.deviceID)
+        }
         try await withThrowingTaskGroup(of: Void.self) { group in
             for (index, store) in stores.enumerated() {
                 group.addTask {
@@ -112,7 +124,9 @@ struct PendingRequestQueueTests {
             }
             try await group.waitForAll()
         }
-        let rows = try WorkspaceStore(rootURL: root).loadPendingAgentRequestQueue().requests
+        let rows = try WorkspaceRevisionStore(
+            containerRoot: root, workspaceID: stores[0].workspaceID,
+            deviceID: stores[0].deviceID).pendingRequestQueue().requests
         #expect(rows.count == 16)
         #expect(Set(rows.compactMap(\.componentID)).count == 16)
     }
@@ -129,15 +143,20 @@ struct PendingRequestQueueTests {
         )
 
         #expect(current.isEmpty)
-        #expect(try fixture.store.loadPendingAgentRequestQueue().requests.isEmpty)
+        #expect(try fixture.store.pendingRequestQueue().requests.isEmpty)
     }
     private struct Fixture {
         let root: URL
-        let store: WorkspaceStore
+        let store: WorkspaceRevisionStore
         init() throws {
             root = FileManager.default.temporaryDirectory
                 .appending(path: "PendingQueueLifecycle-\(UUID().uuidString)", directoryHint: .isDirectory)
-            store = try WorkspaceStore(rootURL: root)
+            let document = try WorkspaceDocumentCoding.seal(.init(
+                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+            let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
+            store = try WorkspaceRevisionStore(containerRoot: root,
+                workspaceID: document.workspaceID, deviceID: device.deviceID)
+            try store.initialize(document: document, device: device)
         }
         func enqueue(component: String, client: String, now: Date = .now) throws -> PendingRequestOutcome {
             try PendingRequestQueueService.enqueue(

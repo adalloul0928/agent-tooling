@@ -112,7 +112,7 @@ enum RequestTools {
             targets: targets
         )
         do {
-            try context.store.saveCodexSkillDraftRequest(draft)
+            try context.store.saveRequestDraft(draft.id, draft)
         } catch {
             if !outcome.collapsed {
                 _ = try? PendingRequestQueueService.resolve(
@@ -259,7 +259,7 @@ enum RequestTools {
     }
 
     private static func response(for outcome: PendingRequestOutcome, context: ToolCallContext) -> ToolOutcome {
-        let pendingCount = (try? context.store.loadPendingAgentRequestQueue().requests.count) ?? 0
+        let pendingCount = (try? context.store.pendingRequestQueue().requests.count) ?? 0
         let request = outcome.request
         let payload = JSONValue.object([
             "schemaVersion": .number(Double(IntegrationResponseLimits.schemaVersion)),

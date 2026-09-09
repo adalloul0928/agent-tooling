@@ -21,6 +21,9 @@ public enum OperationStepKind: String, Codable, CaseIterable, Sendable {
     case writeFile
     case writeEncryptedArchive
     case copyDirectory
+    /// Removes a directory this app can prove it installed and that still
+    /// matches what was approved. It never touches anything else.
+    case removeManagedDirectory
     case replaceManagedLibrary
     case command
     case scan

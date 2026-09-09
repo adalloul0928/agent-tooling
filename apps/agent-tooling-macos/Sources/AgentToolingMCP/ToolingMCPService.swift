@@ -18,7 +18,8 @@ final class ToolingMCPService {
     /// independent of self-reported clientInfo, which is display text only.
     static let maximumReviewRequestsPerSession = 8
 
-    private let store: WorkspaceStore
+    private let store: WorkspaceRevisionStore
+    private let homeRoot: URL
     private let clock: () -> Date
     private let identifierFactory: () -> UUID
     /// Self-reported by the caller, unverified, display only.
@@ -27,11 +28,13 @@ final class ToolingMCPService {
     private var acceptedReviewRequests = 0
 
     init(
-        store: WorkspaceStore,
+        store: WorkspaceRevisionStore,
+        homeRoot: URL = FileManager.default.homeDirectoryForCurrentUser,
         clock: @escaping () -> Date = { .now },
         identifierFactory: @escaping () -> UUID = { UUID() }
     ) {
         self.store = store
+        self.homeRoot = homeRoot
         self.clock = clock
         self.identifierFactory = identifierFactory
     }
@@ -165,6 +168,7 @@ final class ToolingMCPService {
                 arguments: try ToolArguments(tool: tool, params: params),
                 client: client,
                 store: store,
+                homeRoot: homeRoot,
                 now: clock(),
                 identifierFactory: identifierFactory
             )

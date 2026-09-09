@@ -30,7 +30,7 @@ public struct WorkspaceAssignmentReview: Sendable, Equatable {
 
 /// Explicitly bound to one workspace and device. This session never discovers,
 /// initializes, migrates, or selects a store, and never writes native clients.
-/// The legacy AppModel remains separate until the authority cutover is complete.
+/// The only session the app's screens read from.
 @MainActor @Observable
 public final class WorkspaceLibrarySession {
     public let workspaceID: WorkspaceObjectID

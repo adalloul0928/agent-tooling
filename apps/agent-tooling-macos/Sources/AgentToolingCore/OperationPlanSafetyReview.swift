@@ -265,18 +265,18 @@ public struct OperationPlanSafetyReviewer {
     }
 
     public static func fromStore(
-        _ store: WorkspaceStore,
+        _ store: any ManagedOperationStore,
         fileManager: FileManager = .default
     ) -> OperationPlanSafetyReviewer {
         OperationPlanSafetyReviewer(
-            authority: .fromStore(store),
+            authority: store.installAuthority(),
             managedRoots: OperationPlanSafetyReviewer.managedRoots(for: store),
             fileManager: fileManager
         )
     }
 
     /// The destinations Agent Tooling owns outright because it created them.
-    public static func managedRoots(for store: WorkspaceStore) -> [URL] {
+    public static func managedRoots(for store: any ManagedOperationStore) -> [URL] {
         [
             store.libraryURL.standardizedFileURL,
             store.rootURL
