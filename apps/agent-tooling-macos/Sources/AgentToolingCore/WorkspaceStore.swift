@@ -21,11 +21,15 @@ public final class WorkspaceStore: @unchecked Sendable {
     private var database: OpaquePointer?
     private let queue = DispatchQueue(label: "com.agenttooling.workspace-store")
 
+    public static func defaultRootURL(fileManager: FileManager = .default) -> URL {
+        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appending(path: applicationFolderName, directoryHint: .isDirectory)
+    }
+
     public init(rootURL: URL? = nil, fileManager: FileManager = .default) throws {
         let requestedBase =
             (rootURL
-            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: Self.applicationFolderName, directoryHint: .isDirectory)).standardizedFileURL
+            ?? Self.defaultRootURL(fileManager: fileManager)).standardizedFileURL
         guard requestedBase.isFileURL,
             requestedBase.path(percentEncoded: false).hasPrefix("/"),
             !Self.isProtectedRoot(requestedBase, fileManager: fileManager)
@@ -33,6 +37,9 @@ public final class WorkspaceStore: @unchecked Sendable {
             throw WorkspaceStoreError.unsafePath(requestedBase.absoluteString)
         }
         try Self.refuseSymbolicLink(at: requestedBase, fileManager: fileManager)
+        if try WorkspaceAuthorityStore.readIfPresent(legacyRoot: requestedBase)?.choice == .versioned {
+            throw WorkspaceAuthorityStoreError.versionedSelected
+        }
         try fileManager.createDirectory(at: requestedBase, withIntermediateDirectories: true)
         let base = requestedBase.resolvingSymlinksInPath().standardizedFileURL
         self.rootURL = base
@@ -119,7 +126,7 @@ public final class WorkspaceStore: @unchecked Sendable {
         try Self.validateKey(key)
         let data = try JSONEncoder.agentTooling().encode(value)
         guard data.count <= Self.maximumRecordBytes else { throw WorkspaceStoreError.recordTooLarge(key) }
-        try queue.sync {
+        try withWriteAccess {
             guard let database else { throw WorkspaceStoreError.closed }
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
@@ -146,7 +153,7 @@ public final class WorkspaceStore: @unchecked Sendable {
 
     public func remove(_ key: String) throws {
         try Self.validateKey(key)
-        try queue.sync {
+        try withWriteAccess {
             guard let database else { throw WorkspaceStoreError.closed }
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
@@ -165,7 +172,7 @@ public final class WorkspaceStore: @unchecked Sendable {
         _ update: (inout PendingAgentRequestQueue) throws -> Result
     ) throws -> Result {
         let key = "agent-mcp.request-queue.v1"
-        return try queue.sync {
+        return try withWriteAccess {
             guard let database else { throw WorkspaceStoreError.closed }
             try execute("BEGIN IMMEDIATE", database: database)
             do {
@@ -254,7 +261,7 @@ public final class WorkspaceStore: @unchecked Sendable {
         guard data.count <= Self.maximumRecordBytes else {
             throw WorkspaceStoreError.recordTooLarge("\(domain.rawValue).\(id)")
         }
-        try queue.sync {
+        try withWriteAccess {
             guard let database else { throw WorkspaceStoreError.closed }
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
@@ -276,7 +283,7 @@ public final class WorkspaceStore: @unchecked Sendable {
 
     public func removeEntity(_ id: String, domain: WorkspaceEntityDomain) throws {
         try Self.validateKey(id)
-        try queue.sync {
+        try withWriteAccess {
             guard let database else { throw WorkspaceStoreError.closed }
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
@@ -293,6 +300,12 @@ public final class WorkspaceStore: @unchecked Sendable {
     /// prevents plans and replaced package copies from growing forever or
     /// outliving the history row that explains them.
     public func pruneOperationHistory(keepingPlanIDs: Set<UUID>, fileManager: FileManager = .default) throws {
+        try WorkspaceAuthorityStore.withLegacyWriteAccess(legacyRoot: rootURL) {
+            try pruneOperationHistoryUnlocked(keepingPlanIDs: keepingPlanIDs, fileManager: fileManager)
+        }
+    }
+
+    private func pruneOperationHistoryUnlocked(keepingPlanIDs: Set<UUID>, fileManager: FileManager) throws {
         let plans = try listEntities(domain: .plans, as: OperationPlan.self)
         let keptPlans = plans.filter { keepingPlanIDs.contains($0.id) }
         for plan in plans where !keepingPlanIDs.contains(plan.id) {
@@ -351,7 +364,7 @@ public final class WorkspaceStore: @unchecked Sendable {
         let metadataData = try encodeRecord(metadata)
         let compatibilityData = try encodeRecord(snapshot)
 
-        try queue.sync {
+        try withWriteAccess {
             guard let database else { throw WorkspaceStoreError.closed }
             try execute("BEGIN IMMEDIATE", database: database)
             do {
@@ -403,7 +416,7 @@ public final class WorkspaceStore: @unchecked Sendable {
     }
 
     private func migrate(fileManager: FileManager) throws {
-        try queue.sync {
+        try withWriteAccess {
             guard let database else { throw WorkspaceStoreError.closed }
             try execute("PRAGMA journal_mode = WAL", database: database)
             try execute("PRAGMA synchronous = FULL", database: database)
@@ -450,6 +463,15 @@ public final class WorkspaceStore: @unchecked Sendable {
                     }
                 }
             }
+        }
+    }
+
+    /// Cooperating app/CLI/MCP writers recheck authority on every mutation, even
+    /// when this legacy connection was opened before another process selected it.
+    /// The registry lock is acquired before either store's SQLite writer lock.
+    private func withWriteAccess<T>(_ body: () throws -> T) throws -> T {
+        try WorkspaceAuthorityStore.withLegacyWriteAccess(legacyRoot: rootURL) {
+            try queue.sync(execute: body)
         }
     }
 
@@ -674,7 +696,7 @@ public final class WorkspaceStore: @unchecked Sendable {
     }
 }
 
-private struct WorkspaceMetadata: Codable {
+struct WorkspaceMetadata: Codable {
     var activities: [ActivityReceipt]
     var activeProfileID: String
     var importedRepositoryPath: String?
@@ -730,7 +752,7 @@ private struct StoredEntityValue<Value> {
     var value: Value
 }
 
-private enum StoredWorkspacePackage: Codable {
+enum StoredWorkspacePackage: Codable {
     case skill(Skill)
     case mcpServer(MCPServer)
     case plugin(Plugin)
@@ -751,7 +773,7 @@ private enum StoredWorkspacePackage: Codable {
     }
 }
 
-private enum StoredTargetBinding: Codable {
+enum StoredTargetBinding: Codable {
     case account(AccountSurface)
     case connector(ConnectorRecord)
 
@@ -776,7 +798,7 @@ public enum WorkspaceEntityDomain: String, Codable, CaseIterable, Sendable {
     case plans
     case receipts
 
-    fileprivate var tableName: String {
+    var tableName: String {
         switch self {
         case .packages: "packages"
         case .sources: "sources"

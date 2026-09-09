@@ -38,7 +38,7 @@ struct ProjectsView: View {
                 } label: {
                     Label("Rescan", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .disabled(model.isDiscoveringProjects)
 
                 Button {
@@ -46,7 +46,8 @@ struct ProjectsView: View {
                 } label: {
                     Label("Add project…", systemImage: "plus")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
+                .tint(AgentTheme.selection)
                 .keyboardShortcut("n", modifiers: .command)
             }
 
@@ -69,24 +70,23 @@ struct ProjectsView: View {
 
     private var collectionPane: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 9) {
-                TextField("Search projects", text: $query)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Search projects")
-                HStack(spacing: 8) {
-                    // A fixed width clipped the segmented control, so selecting
-                    // a segment resized it over the search field beside it.
-                    Picker("Show", selection: $filter) {
-                        ForEach(ProjectFilter.allCases) { item in Text(item.rawValue).tag(item) }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
+                    projectFilter
+                    Spacer(minLength: 16)
+                    InventorySearchField(placeholder: "Search projects", text: $query)
+                        .frame(width: 320)
+                }
+                VStack(alignment: .leading, spacing: 9) {
+                    InventorySearchField(placeholder: "Search projects", text: $query)
+                    HStack {
+                        projectFilter
+                        Spacer(minLength: 0)
                     }
-                    .labelsHidden()
-                    .accessibilityLabel("Project filter")
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                    Spacer(minLength: 0)
                 }
             }
-            .padding(12)
+            .padding(.horizontal, WorkspaceLayout.pageInset)
+            .padding(.vertical, 10)
 
             if model.isDiscoveringProjects && filteredProjects.isEmpty {
                 // Scanning a machine's worth of recorded folders takes a
@@ -128,6 +128,14 @@ struct ProjectsView: View {
             }
         }
         .paneMaterial()
+    }
+
+    private var projectFilter: some View {
+        WorkspaceSegmentedPicker("Show", selection: $filter) {
+            ForEach(ProjectFilter.allCases) { item in Text(item.rawValue).tag(item) }
+        }
+        .accessibilityLabel("Project filter")
+        .fixedSize()
     }
 
     @ViewBuilder
@@ -349,11 +357,10 @@ private struct ProjectDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Picker("Section", selection: $tab) {
+            WorkspaceSegmentedPicker("Section", selection: $tab) {
                 ForEach(ProjectDetailTab.allCases) { item in Text(item.rawValue).tag(item) }
             }
             .labelsHidden()
-            .pickerStyle(.segmented)
             .accessibilityLabel("Project section")
             .padding(.horizontal, 22)
             .padding(.bottom, 12)
@@ -578,6 +585,7 @@ private struct ProjectDetailView: View {
             ) {
                 Button("Add to .gitignore…") { onReviewIgnore(project) }
                     .buttonStyle(.borderedProminent)
+                    .tint(AgentTheme.selection)
                     .controlSize(.small)
             }
         }
@@ -807,6 +815,7 @@ private struct ProjectIgnoreReviewSheet: View {
                     dismiss()
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(AgentTheme.selection)
                 .keyboardShortcut(.defaultAction)
             }
             .padding(16)

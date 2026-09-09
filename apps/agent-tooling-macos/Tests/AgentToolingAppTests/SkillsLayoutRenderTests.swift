@@ -11,10 +11,14 @@ struct SkillsLayoutRenderTests {
     @Test func fullWidthBrowserRendersAtCompactAndWideSizes() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "skills-layout-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
+        let preferencesID = "skills-layout-\(UUID())"
+        let preferences = try #require(UserDefaults(suiteName: preferencesID))
+        defer { preferences.removePersistentDomain(forName: preferencesID) }
         let model = try AppModel(store: WorkspaceStore(rootURL: root))
         for width in [800.0, 1200.0] {
             let view = NSHostingView(
                 rootView: SkillsView()
+                    .defaultAppStorage(preferences)
                     .environment(model)
                     .environment(AppNavigationState())
                     .environment(\.colorScheme, .dark)

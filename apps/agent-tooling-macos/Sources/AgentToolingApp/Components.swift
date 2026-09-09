@@ -51,14 +51,7 @@ extension ToolingKind {
 }
 
 extension AgentTheme {
-    /// Collections get their own hue in the identity palette. Configurations
-    /// are indigo; a green-teal keeps the shelf visually separate from the
-    /// contract it feeds.
-    static let collection = Color(
-        nsColor: NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            return NSColor(hex: isDark ? 0x3FC79A : 0x139E77)
-        })
+    static let collection = graphite
 }
 
 struct KindTile: View {
@@ -69,21 +62,14 @@ struct KindTile: View {
     var ghost = false
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(kind.color.gradient)
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(.white.opacity(0.22), lineWidth: 0.5)
-            Image(systemName: kind.symbol)
-                .font(.system(size: size * 0.5, weight: .medium))
-                .foregroundStyle(.white)
-        }
-        .frame(width: size, height: size)
-        .opacity(ghost ? 0.5 : 1)
-        .accessibilityHidden(true)
+        Image(systemName: kind.symbol)
+            .symbolRenderingMode(.hierarchical)
+            .font(.system(size: size * 0.64, weight: .regular))
+            .foregroundStyle(kind.color)
+            .frame(width: size, height: size)
+            .opacity(ghost ? 0.7 : 1)
+            .accessibilityHidden(true)
     }
-
-    private var radius: CGFloat { max(6, size * 0.28) }
 }
 
 /// A neutral graphite tile for objects outside the four identity kinds.
@@ -153,7 +139,7 @@ struct SelectionRowBackground: View {
     var body: some View {
         if selected {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(AgentTheme.blue)
+                .fill(AgentTheme.selection)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 1)
         } else {
@@ -248,6 +234,9 @@ struct AttentionBanner<Action: View>: View {
 // MARK: - Toolbar and cards
 
 struct PageToolbar<Actions: View>: View {
+    @Environment(\.workspaceSelection) private var section
+    @Environment(\.workspaceNavigate) private var navigate
+    @Environment(\.connectionCategory) private var connectionCategory
     let title: String
     let context: String?
     @ViewBuilder let actions: Actions
@@ -259,104 +248,152 @@ struct PageToolbar<Actions: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 15, weight: .semibold))
-                if let context {
-                    Text(context)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+        VStack(spacing: 0) {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(section?.workspaceTitle ?? title)
+                        .font(.system(size: 20, weight: .semibold))
+                    if let context {
+                        Text(context)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
-            }
 
-            Spacer()
+                Spacer()
 
-            HStack(spacing: 8) {
-                actions
+                GlassEffectContainer(spacing: 8) {
+                    HStack(spacing: 8) {
+                        actions
+                    }
+                }
+                .tint(nil as Color?)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
             }
-            .buttonBorderShape(.capsule)
+            .padding(.horizontal, WorkspaceLayout.pageInset)
+            .padding(.vertical, 10)
+            .frame(minHeight: 58)
+
+            if let section, !section.workspaceTabs.isEmpty {
+                HStack(spacing: 16) {
+                    WorkspaceSegmentedPicker(
+                        "\(section.workspaceTitle ?? title) section",
+                        selection: Binding(get: { section }, set: { navigate($0) })
+                    ) {
+                        ForEach(section.workspaceTabs) { tab in
+                            Text(tab == .syncCenter ? "Installed apps" : tab.rawValue).tag(tab)
+                        }
+                    }
+                    .fixedSize()
+                    Spacer(minLength: 0)
+                    if let connectionCategory {
+                        WorkspaceSegmentedPicker("Connection type", selection: connectionCategory) {
+                            Text("MCP servers").tag("MCP servers")
+                            Text("Connectors").tag("Connectors")
+                        }
+                        .fixedSize()
+                    }
+                }
+                .padding(.horizontal, WorkspaceLayout.pageInset)
+                .padding(.bottom, 10)
+                Divider().opacity(0.5)
+            }
         }
-        .padding(.horizontal, 18)
-        .frame(height: 54)
     }
 }
 
-struct SlidingSegmentedControl<Value: Hashable>: View {
-    struct Item: Identifiable {
-        let value: Value
-        let title: String
+extension EnvironmentValues {
+    @Entry var workspaceSelection: AppSection? = nil
+    @Entry var workspaceNavigate: (AppSection) -> Void = { _ in }
+    @Entry var connectionCategory: Binding<String>? = nil
+}
 
-        var id: Value { value }
-    }
-
-    @Binding var selection: Value
-    let items: [Item]
-    let accessibilityLabel: String
-    var segmentWidth: CGFloat? = 112
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var selectionNamespace
-    @ScaledMetric(relativeTo: .callout) private var segmentHeight: CGFloat = 28
-    @ScaledMetric(relativeTo: .callout) private var segmentScale: CGFloat = 1
+/// One search field treatment across the library. Native text editing and
+/// accessibility are retained, including an explicit clear action.
+struct InventorySearchField: View {
+    let placeholder: String
+    @Binding var text: String
 
     var body: some View {
-        let minimumWidth = segmentWidth.map { $0 * segmentScale }
-
-        HStack(spacing: 2) {
-            ForEach(items) { item in
-                let isSelected = item.value == selection
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain).accessibilityLabel(placeholder)
+            if !text.isEmpty {
                 Button {
-                    selection = item.value
+                    text = ""
                 } label: {
-                    Text(item.title)
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(isSelected ? Color.white : Color.primary)
-                        .lineLimit(1)
-                        .frame(minWidth: minimumWidth, minHeight: segmentHeight)
-                        .frame(maxWidth: segmentWidth == nil ? .infinity : nil)
-                        .fixedSize(horizontal: segmentWidth != nil, vertical: true)
-                        .contentShape(Rectangle())
+                    Image(systemName: "xmark.circle.fill")
                 }
-                .buttonStyle(.plain)
-                .background {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(AgentTheme.blue)
-                            .matchedGeometryEffect(id: "sliding-segment-selection", in: selectionNamespace)
-                            .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
-                    }
-                }
-                .accessibilityLabel(item.title)
-                .accessibilityValue(isSelected ? "Selected" : "")
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+                .accessibilityLabel("Clear \(placeholder.lowercased())")
             }
         }
-        .padding(3)
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(0.075))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(AgentTheme.separator.opacity(0.45), lineWidth: 0.5)
-        }
-        .animation(reduceMotion ? nil : AgentMotion.selection, value: selection)
-        .onMoveCommand { direction in
-            switch direction {
-            case .left: moveSelection(by: -1)
-            case .right: moveSelection(by: 1)
-            default: break
+        .font(.system(size: 13))
+        .padding(.horizontal, 11)
+        .frame(height: 36)
+        .background(AgentTheme.controlBackground, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AgentTheme.separator.opacity(0.4), lineWidth: 0.5))
+    }
+}
+
+struct InspectorHeader: View {
+    let title: String
+    let close: () -> Void
+
+    var body: some View {
+        HStack {
+            Text(title).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+            Spacer()
+            Button(action: close) {
+                Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).frame(width: 28, height: 28)
             }
+            .buttonStyle(.plain).foregroundStyle(.secondary)
+            .help("Close \(title.lowercased())").accessibilityLabel("Close \(title.lowercased())")
+            .keyboardShortcut(.escape, modifiers: [])
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(accessibilityLabel)
+        .padding(.horizontal, 20).frame(height: 48)
+        .background(AgentTheme.controlBackground.opacity(0.35))
+        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+    }
+}
+
+/// Finite, mutually exclusive choices use the same native control everywhere.
+/// Use one supported native capsule shape and neutral tint across toolbars
+/// and content panes; the system draws selection, focus, and accessibility states.
+struct WorkspaceSegmentedPicker<Value: Hashable, Content: View>: View {
+    let title: String
+    @Binding var selection: Value
+    @ViewBuilder let content: Content
+
+    init(_ title: String, selection: Binding<Value>, @ViewBuilder content: () -> Content) {
+        self.title = title
+        _selection = selection
+        self.content = content()
     }
 
-    private func moveSelection(by offset: Int) {
-        guard let index = items.firstIndex(where: { $0.value == selection }), !items.isEmpty else { return }
-        selection = items[(index + offset + items.count) % items.count].value
+    var body: some View {
+        Picker(title, selection: $selection) { content }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .font(.system(size: 13))
+            .controlSize(.regular)
+            .buttonBorderShape(.capsule)
+            .tint(nil as Color?)
+            .accessibilityLabel(title)
+    }
+}
+
+extension View {
+    /// Filter and sorting menus share the system's neutral pop-up treatment.
+    func inventoryMenuStyle() -> some View {
+        menuStyle(.borderedButton)
+            .controlSize(.regular)
+            .buttonBorderShape(.capsule)
+            .tint(nil as Color?)
+            .foregroundStyle(.primary)
     }
 }
 
@@ -644,6 +681,7 @@ struct EmptyStateView: View {
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .buttonStyle(.borderedProminent)
+                    .tint(AgentTheme.selection)
                     .disabled(!isActionEnabled)
             }
         }
@@ -695,6 +733,7 @@ struct SelectionActionBar: View {
                 .buttonStyle(.bordered)
             Button(actionTitle, action: action)
                 .buttonStyle(.borderedProminent)
+                .tint(AgentTheme.selection)
                 .disabled(!isActionEnabled)
                 .lineLimit(1)
         }

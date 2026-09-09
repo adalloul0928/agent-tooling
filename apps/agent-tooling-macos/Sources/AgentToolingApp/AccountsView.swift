@@ -21,14 +21,15 @@ struct AccountsView: View {
                 } label: {
                     Label(model.isRunningDoctor ? "Checking…" : "Check local apps", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .disabled(model.isInteractionLocked)
                 Button {
                     showingNewConnection = true
                 } label: {
                     Label("Record connection…", systemImage: "plus")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
+                .tint(AgentTheme.selection)
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(model.isInteractionLocked)
             }
@@ -90,7 +91,7 @@ struct AccountsView: View {
                             }
                         }
 
-                        GroupBox("What Agent Tooling will never do") {
+                        DisclosureGroup("Account handling") {
                             VStack(alignment: .leading, spacing: 9) {
                                 Label("Copy OAuth tokens between Claude, Codex, and Gemini", systemImage: "xmark.shield")
                                 Label("Claim a local plugin install changed a hosted chat product", systemImage: "xmark.shield")
@@ -101,9 +102,11 @@ struct AccountsView: View {
                             .padding(4)
                         }
                     }
-                    .frame(maxWidth: 860)
-                    .padding(28)
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: 1_000, alignment: .leading)
+                    .padding(.horizontal, WorkspaceLayout.pageInset)
+                    .padding(.top, WorkspaceLayout.contentTopInset)
+                    .padding(.bottom, WorkspaceLayout.pageInset)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .onAppear { consumeRequest(using: proxy) }
                 .onChange(of: request) { _, _ in consumeRequest(using: proxy) }
@@ -274,6 +277,7 @@ private struct ConnectionEditorSheet: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(AgentTheme.selection)
                 .keyboardShortcut(.defaultAction)
                 .disabled(validationMessage != nil || model.isInteractionLocked || model.enabledClients.isEmpty)
             }
@@ -363,6 +367,7 @@ private struct AccountSurfaceCard: View {
                     model.markAccountSurfaceVerified(account.id)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(AgentTheme.selection)
                 .accessibilityLabel(
                     account.status == .verified
                         ? "Record another verification for \(account.name)"

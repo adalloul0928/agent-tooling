@@ -14,6 +14,24 @@ final class MarketplaceService {
         static let summaryCharacters = 8_192
     }
 
+    private struct ManifestInspection {
+        var manifest: [String: Any]
+        var diagnostics: [AgentPluginManifestDiagnostic]
+        var rawManifestData: Data
+    }
+
+    private enum FixedLocation {
+        case absent
+        case regularFile(URL)
+        case directory(URL)
+        case invalid(String)
+    }
+
+    private struct SkillInspection {
+        var directories: [URL]
+        var conflicts: [PackageConflict]
+    }
+
     private let fileManager: FileManager
 
     init(fileManager: FileManager = .default) {
@@ -62,12 +80,23 @@ final class MarketplaceService {
         let service = MarketplaceService()
         var packages: [MarketplacePackage] = []
         var notes: [ClientKind: String] = [:]
+        var outcomes: [ClientKind: NativeCatalogClientOutcome] = [
+            .claude: clients.contains(.claude) ? .incomplete : .excluded,
+            .codex: clients.contains(.codex) ? .incomplete : .excluded,
+        ]
         for client in [ClientKind.claude, .codex] where clients.contains(client) {
             do {
                 let result = try await runner.run(
                     executable: client == .claude ? "claude" : "codex",
                     arguments: ["plugin", "list", "--available", "--json"], currentDirectory: nil)
                 guard result.status == 0 else { throw NativeCatalogError.commandFailed(client.rawValue, result.standardError) }
+                let truncated = result.standardOutput.contains("[output truncated")
+                guard !truncated || client == .codex else {
+                    throw NativeCatalogError.incompleteResponse(client.rawValue)
+                }
+                let complete = !truncated && (client == .claude
+                    ? service.isCompleteClaudeCatalogJSON(result.standardOutput)
+                    : service.isCompleteCodexCatalogJSON(result.standardOutput))
                 var found =
                     client == .claude
                     ? service.packagesFromClaudeCatalogJSON(result.standardOutput)
@@ -79,33 +108,55 @@ final class MarketplaceService {
                         executable: "codex", arguments: ["plugin", "list", "--json"], currentDirectory: nil)
                     guard installed.status == 0,
                         let data = installed.standardOutput.data(using: .utf8),
+                        data.count <= Limit.catalogBytes,
                         let document = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                        let entries = document["installed"] as? [[String: Any]]
+                        let entries = document["installed"] as? [[String: Any]],
+                        entries.count <= Limit.directoryEntries
                     else { throw NativeCatalogError.commandFailed(client.rawValue, "Installed plugin inventory unavailable") }
-                    let marketplaces = Set(entries.compactMap { entry -> String? in
+                    let marketplaceValues = entries.map { entry -> String? in
                         guard let id = entry["pluginId"] as? String,
                               let name = id.split(separator: "@").last, id.contains("@"),
                               !name.isEmpty, name.allSatisfy({ $0.isLetter || $0.isNumber || "-_.".contains($0) })
                         else { return nil }
                         return String(name)
-                    })
+                    }
+                    guard marketplaceValues.allSatisfy({ $0 != nil }) else {
+                        throw NativeCatalogError.incompleteResponse(client.rawValue)
+                    }
+                    let marketplaces = Set(marketplaceValues.compactMap { $0 })
                     found = []
                     for marketplace in marketplaces.sorted().prefix(32) {
                         let page = try await runner.run(
                             executable: "codex",
                             arguments: ["plugin", "list", "--marketplace", marketplace, "--available", "--json"],
                             currentDirectory: nil)
-                        guard page.status == 0, !page.standardOutput.contains("[output truncated") else { continue }
+                        guard page.status == 0,
+                              !page.standardOutput.contains("[output truncated"),
+                              service.isCompleteCodexCatalogJSON(page.standardOutput) else {
+                            continue
+                        }
                         found += service.packagesFromCodexCatalogJSON(page.standardOutput)
                     }
+                    // Installed marketplace names cannot prove the global
+                    // available catalog is complete. Overlay successful pages,
+                    // but retain all unmatched cached Codex rows.
+                    packages.append(contentsOf: found)
+                    outcomes[client] = .incomplete
+                    notes[client] = "\(client.rawValue) catalog response was incomplete; cached entries were retained"
+                    continue
                 }
                 packages.append(contentsOf: found)
-                notes[client] = "\(found.count) plugins reported by \(client.rawValue)"
+                outcomes[client] = complete ? .complete : .incomplete
+                notes[client] = complete
+                    ? "\(found.count) plugins reported by \(client.rawValue)"
+                    : "\(client.rawValue) catalog response was incomplete; cached entries were retained"
             } catch {
+                outcomes[client] = .incomplete
                 notes[client] = "\(client.rawValue) catalog unavailable: \(service.safeDiagnostic(error))"
             }
         }
-        return NativeCatalogDiscovery(packages: service.deduplicatedPackages(packages), notes: notes)
+        return NativeCatalogDiscovery(
+            packages: service.deduplicatedPackages(packages), notes: notes, outcomes: outcomes)
     }
 
     func packagesFromCodexCatalogJSON(_ text: String) -> [MarketplacePackage] {
@@ -153,6 +204,21 @@ final class MarketplaceService {
         return deduplicatedPackages(packages)
     }
 
+    private func isCompleteCodexCatalogJSON(_ text: String) -> Bool {
+        guard let root = jsonDictionary(from: text),
+              root["error"] == nil, root["errors"] == nil,
+              root["installed"] != nil, root["available"] != nil else { return false }
+        var count = 0
+        for key in ["installed", "available"] where root[key] != nil {
+            guard let entries = root[key] as? [[String: Any]], entries.allSatisfy({ entry in
+                safeCatalogIdentifier(string("pluginId", in: entry) ?? string("id", in: entry)) != nil
+            }) else { return false }
+            count += entries.count
+            guard count <= Limit.directoryEntries else { return false }
+        }
+        return true
+    }
+
     func packagesFromClaudeCatalogJSON(_ text: String) -> [MarketplacePackage] {
         guard let root = jsonObject(from: text) else { return [] }
         let entries = pluginObjects(in: root)
@@ -191,6 +257,63 @@ final class MarketplaceService {
             )
         }
         return deduplicatedPackages(packages)
+    }
+
+    private func isCompleteClaudeCatalogJSON(_ text: String) -> Bool {
+        guard let root = jsonObject(from: text), catalogTreeIsBounded(root) else { return false }
+        let entries: [[String: Any]]
+        if let array = root as? [Any] {
+            guard array.count <= Limit.directoryEntries,
+                  let typed = array as? [[String: Any]], typed.count == array.count else { return false }
+            entries = typed
+        } else if let dictionary = root as? [String: Any] {
+            guard dictionary["error"] == nil, dictionary["errors"] == nil else { return false }
+            let knownKeys = ["plugins", "installed", "available"].filter { dictionary[$0] != nil }
+            guard !knownKeys.isEmpty else { return false }
+            var values: [[String: Any]] = []
+            for key in knownKeys {
+                guard let raw = dictionary[key] as? [Any],
+                      let typed = raw as? [[String: Any]], typed.count == raw.count,
+                      values.count + typed.count <= Limit.directoryEntries else { return false }
+                values += typed
+            }
+            entries = values
+        } else {
+            return false
+        }
+        guard pluginObjects(in: root).count == entries.count else { return false }
+        return entries.allSatisfy { entry in
+            let isCandidate = entry["pluginName"] is String || entry["pluginId"] is String
+                || (entry["name"] is String && ["installed", "enabled", "version", "installPath", "scope", "description"]
+                    .contains { entry[$0] != nil })
+            guard isCandidate else { return false }
+            let name = safeCatalogIdentifier(
+                string("name", in: entry) ?? string("pluginName", in: entry) ?? string("pluginId", in: entry))
+            let marketplace =
+                (string("marketplace", in: entry, maximumCharacters: Limit.packageNameCharacters)
+                ?? string("marketplaceName", in: entry, maximumCharacters: Limit.packageNameCharacters)
+                ?? string("source", in: entry, maximumCharacters: Limit.packageNameCharacters))
+                .flatMap { boundedCatalogName($0) }
+            guard let name else { return false }
+            let rawPluginID = name.contains("@") ? name : marketplace.map { "\(name)@\($0)" } ?? name
+            return safeCatalogIdentifier(rawPluginID) != nil
+        }
+    }
+
+    private func catalogTreeIsBounded(_ root: Any) -> Bool {
+        var remaining = Limit.directoryEntries
+        func visit(_ value: Any, depth: Int) -> Bool {
+            guard depth <= Limit.traversalDepth, remaining > 0 else { return false }
+            remaining -= 1
+            if let dictionary = value as? [String: Any] {
+                return dictionary.values.allSatisfy { visit($0, depth: depth + 1) }
+            }
+            if let array = value as? [Any] {
+                return array.allSatisfy { visit($0, depth: depth + 1) }
+            }
+            return true
+        }
+        return visit(root, depth: 0)
     }
 
     private func inspectFolder(_ source: ToolingSource) throws -> [MarketplacePackage] {
@@ -388,19 +511,28 @@ final class MarketplaceService {
         let packageRoot = root.resolvingSymlinksInPath().standardizedFileURL
         guard try isDirectory(packageRoot) else { throw MarketplaceError.invalidPackage(root.path(percentEncoded: false)) }
 
-        let portableManifestURL = try regularFile(packageRoot.appending(path: "plugin.json"), within: packageRoot)
+        let portableManifestLocation = fixedLocation(packageRoot.appending(path: "plugin.json"), within: packageRoot)
+        let portableManifestURL: URL?
+        switch portableManifestLocation {
+        case .absent: portableManifestURL = nil
+        case .regularFile(let url): portableManifestURL = url
+        case .directory, .invalid:
+            throw MarketplaceError.invalidManifest(packageRoot.appending(path: "plugin.json").path(percentEncoded: false), "plugin.json must be a regular file inside the package.")
+        }
         let claudeManifestURL = try regularFile(packageRoot.appending(path: ".claude-plugin/plugin.json"), within: packageRoot)
         let codexManifestURL = try regularFile(packageRoot.appending(path: ".codex-plugin/plugin.json"), within: packageRoot)
         let manifestURL = portableManifestURL ?? claudeManifestURL ?? codexManifestURL
-        let manifest: [String: Any]?
+        let manifestInspection: ManifestInspection?
         if let manifestURL {
             let isPortableManifest = portableManifestURL == manifestURL
-            manifest = try self.manifest(at: manifestURL, portable: isPortableManifest)
+            manifestInspection = try self.manifest(at: manifestURL, portable: isPortableManifest)
         } else {
-            manifest = nil
+            manifestInspection = nil
         }
+        let manifest = manifestInspection?.manifest
 
-        let skillDirectories = try validSkillDirectories(at: packageRoot)
+        let skills = try validSkillDirectories(at: packageRoot)
+        let skillDirectories = skills.directories
         let skillNames = skillDirectories.map(\.lastPathComponent)
         let rootSkillURL = try regularFile(packageRoot.appending(path: "SKILL.md"), within: packageRoot)
         let rootIsSkill: Bool
@@ -426,20 +558,36 @@ final class MarketplaceService {
         let description = manifestDescription ?? rootSkillDescription ?? fallbackDescription
         var components: Set<ComponentKind> = []
         if !skillNames.isEmpty || rootIsSkill { components.insert(.skill) }
-        let portableMCPURL = try regularFile(packageRoot.appending(path: "mcp.json"), within: packageRoot)
+        let portableMCPLocation = fixedLocation(packageRoot.appending(path: "mcp.json"), within: packageRoot)
+        let portableMCPURL: URL?
+        var componentConflicts = skills.conflicts
+        switch portableMCPLocation {
+        case .absent: portableMCPURL = nil
+        case .regularFile(let url): portableMCPURL = url
+        case .directory, .invalid:
+            portableMCPURL = nil
+            componentConflicts.append(PackageConflict(id: "mcp:location", summary: "mcp.json: invalid component location."))
+        }
         let portableMCP: AgentPluginMCPLoadResult?
         do {
             if let portableMCPURL {
                 let mcpData = try readData(at: portableMCPURL, maximumBytes: Limit.manifestBytes)
-                portableMCP = try AgentPluginMCPConfigurationLoader.load(mcpData)
+                portableMCP = try AgentPluginMCPConfigurationLoader.load(mcpData, packageRoot: packageRoot)
             } else {
                 portableMCP = nil
             }
         } catch {
-            throw MarketplaceError.invalidManifest(
-                portableMCPURL?.path(percentEncoded: false) ?? packageRoot.appending(path: "mcp.json").path(percentEncoded: false),
-                error.localizedDescription
-            )
+            portableMCP = nil
+            let summary: String
+            if portableManifestURL != nil,
+                let mcpError = error as? AgentPluginMCPValidationError,
+                case .unsupportedSchema = mcpError
+            {
+                summary = "mcp.json: schema version does not match plugin.json."
+            } else {
+                summary = "mcp.json: invalid component configuration."
+            }
+            componentConflicts.append(PackageConflict(id: "mcp:configuration", summary: summary))
         }
         let hasLegacyMCP = try regularFile(packageRoot.appending(path: ".mcp.json"), within: packageRoot) != nil
         let hasMCP = !(portableMCP?.servers.isEmpty ?? true) || hasLegacyMCP
@@ -458,7 +606,11 @@ final class MarketplaceService {
         }
         let portableMCPConflicts = portableMCP?.issues.map {
             PackageConflict(id: "mcp:\($0.serverName)", summary: "\($0.serverName): \($0.message)")
+        } ?? []
+        let manifestConflicts = (manifestInspection?.diagnostics ?? []).enumerated().map { index, diagnostic in
+            PackageConflict(id: "manifest:\(index)", summary: manifestDiagnosticSummary(diagnostic))
         }
+        let packageConflicts = portableMCPConflicts + manifestConflicts + componentConflicts
         let lastUpdate = localUpdateRecord(
             root: packageRoot,
             files: [manifestURL, rootSkillURL, portableMCPURL] + skillDirectories.map { $0.appending(path: "SKILL.md") }
@@ -476,12 +628,14 @@ final class MarketplaceService {
             supportedClients: try supportedClients(
                 at: packageRoot, hasPortableManifest: portableManifestURL != nil, hasPortableSkill: !skillNames.isEmpty || rootIsSkill),
             hasExecutableContent: executable,
-            trustSummary: !(portableMCP?.issues.isEmpty ?? true)
+            trustSummary: !portableMCPConflicts.isEmpty
                 ? "Review invalid portable MCP entries before installing"
+                : !(manifestConflicts + componentConflicts).isEmpty
+                    ? "Review manifest warnings before installing"
                 : executable
                     ? "Review scripts, hooks, and permissions before installing" : "Review manifest and license before installing",
             location: packageRoot.path(percentEncoded: false),
-            conflicts: portableMCPConflicts?.isEmpty == true ? nil : portableMCPConflicts,
+            conflicts: packageConflicts.isEmpty ? nil : packageConflicts,
             lastUpdate: lastUpdate
         )
     }
@@ -533,11 +687,16 @@ final class MarketplaceService {
         return nil
     }
 
-    private func manifest(at url: URL, portable: Bool) throws -> [String: Any] {
+    private func manifest(at url: URL, portable: Bool) throws -> ManifestInspection {
         let data = try readData(at: url, maximumBytes: Limit.manifestBytes)
         if portable {
             do {
-                _ = try AgentPluginManifest.decodeAndValidate(data)
+                let result = try AgentPluginManifest.load(data)
+                return ManifestInspection(
+                    manifest: portableManifestMetadata(result),
+                    diagnostics: result.diagnostics,
+                    rawManifestData: result.rawManifestData
+                )
             } catch {
                 throw MarketplaceError.invalidManifest(
                     url.path(percentEncoded: false),
@@ -553,7 +712,43 @@ final class MarketplaceService {
         if !portable, manifest["name"] != nil, safeCatalogIdentifier(manifest["name"] as? String) == nil {
             throw MarketplaceError.invalidManifest(url.path(percentEncoded: false), "The name is not a safe package identifier.")
         }
-        return manifest
+        return ManifestInspection(manifest: manifest, diagnostics: [], rawManifestData: data)
+    }
+
+    /// Portable manifest fields are a safe metadata projection. Unknown root
+    /// values and opaque extension values remain in rawManifestData only.
+    private func portableManifestMetadata(_ result: AgentPluginManifestLoadResult) -> [String: Any] {
+        let manifest = result.manifest
+        var metadata: [String: Any] = ["$schema": manifest.schema, "name": manifest.name]
+        if let value = manifest.version { metadata["version"] = value }
+        if let value = manifest.description { metadata["description"] = value }
+        if let author = manifest.author {
+            var authorMetadata: [String: String] = [:]
+            if let value = author.name { authorMetadata["name"] = value }
+            if let value = author.email { authorMetadata["email"] = value }
+            if let value = author.url { authorMetadata["url"] = value }
+            metadata["author"] = authorMetadata
+        }
+        if let value = manifest.homepage { metadata["homepage"] = value }
+        if let value = manifest.repository { metadata["repository"] = value }
+        if let value = manifest.license { metadata["license"] = value }
+        if let value = manifest.keywords { metadata["keywords"] = value }
+        if !result.extensionNamespaces.isEmpty {
+            metadata["extensions"] = Dictionary(uniqueKeysWithValues: result.extensionNamespaces.map { ($0, true) })
+        }
+        return metadata
+    }
+
+    private func manifestDiagnosticSummary(_ diagnostic: AgentPluginManifestDiagnostic) -> String {
+        switch diagnostic.kind {
+        case .ignoredUnknownRootField(let field):
+            guard let field = boundedSummary(field) else {
+                return "plugin.json: ignored an unsafe unknown field."
+            }
+            return "plugin.json: ignored unknown field \"\(field)\"."
+        case .ignoredNonObjectExtensions:
+            return "plugin.json: ignored non-object extensions."
+        }
     }
 
     private func packageName(_ rawValue: String) throws -> String {
@@ -578,41 +773,67 @@ final class MarketplaceService {
         return SensitiveValueRedactor.redact(value)
     }
 
-    private func validSkillDirectories(at root: URL) throws -> [URL] {
-        guard let skillsRoot = try directory(root.appending(path: "skills"), within: root) else { return [] }
-        var result: [URL] = []
-        for entry in try directoryEntries(at: skillsRoot) {
-            guard let skillDirectory = try directory(entry, within: root),
-                let skillFile = try regularFile(skillDirectory.appending(path: "SKILL.md"), within: root),
-                try validSkill(at: skillFile, expectedName: skillDirectory.lastPathComponent)
-            else { continue }
-            result.append(skillDirectory)
+    private func validSkillDirectories(at root: URL) throws -> SkillInspection {
+        let location = fixedLocation(root.appending(path: "skills"), within: root)
+        guard case .directory(let skillsRoot) = location else {
+            switch location {
+            case .absent: return SkillInspection(directories: [], conflicts: [])
+            default: return SkillInspection(directories: [], conflicts: [PackageConflict(id: "skills:location", summary: "skills: invalid component location.")])
+            }
         }
-        return result.sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+        var result: [URL] = []
+        var conflicts: [PackageConflict] = []
+        do {
+            for entry in try directoryEntries(at: skillsRoot) {
+                do {
+                    let entryLocation = fixedLocation(entry, within: root)
+                    guard case .directory(let skillDirectory) = entryLocation else {
+                        if case .invalid = entryLocation {
+                            conflicts.append(PackageConflict(id: "skill:\(entry.lastPathComponent)", summary: "\(entry.lastPathComponent): invalid skill location."))
+                        }
+                        continue
+                    }
+                    let skillFileLocation = fixedLocation(skillDirectory.appending(path: "SKILL.md"), within: root)
+                    guard case .regularFile(let skillFile) = skillFileLocation else {
+                        if case .absent = skillFileLocation { continue }
+                        conflicts.append(PackageConflict(id: "skill:\(skillDirectory.lastPathComponent)", summary: "\(skillDirectory.lastPathComponent): invalid SKILL.md location."))
+                        continue
+                    }
+                    guard try validSkill(at: skillFile, expectedName: skillDirectory.lastPathComponent) else {
+                        conflicts.append(PackageConflict(id: "skill:\(skillDirectory.lastPathComponent)", summary: "\(skillDirectory.lastPathComponent): invalid skill."))
+                        continue
+                    }
+                    result.append(skillDirectory)
+                } catch {
+                    conflicts.append(PackageConflict(id: "skill:\(entry.lastPathComponent)", summary: "\(entry.lastPathComponent): invalid skill."))
+                }
+            }
+        } catch {
+            conflicts.append(PackageConflict(id: "skills:scan", summary: "skills: unable to inspect component."))
+        }
+        return SkillInspection(directories: result.sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }, conflicts: conflicts)
+    }
+
+    private func fixedLocation(_ url: URL, within root: URL) -> FixedLocation {
+        let path = url.path(percentEncoded: false)
+        let exists = (try? fileManager.attributesOfItem(atPath: path)) != nil
+            || (try? fileManager.destinationOfSymbolicLink(atPath: path)) != nil
+        guard exists else { return .absent }
+        let resolved = url.resolvingSymlinksInPath().standardizedFileURL
+        guard contains(resolved, in: root) else { return .invalid("escapes") }
+        guard let values = try? resolved.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey]) else { return .invalid("unreadable") }
+        if values.isRegularFile == true { return .regularFile(resolved) }
+        if values.isDirectory == true { return .directory(resolved) }
+        return .invalid("wrong kind")
     }
 
     private func validSkill(at url: URL, expectedName: String?) throws -> Bool {
         let contents = try readString(at: url, maximumBytes: Limit.skillBytes)
-        let lines = contents.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        guard lines.first?.trimmingCharacters(in: .whitespaces) == "---",
-            let closing = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "---" }),
-            closing > 1
-        else { return false }
-        var name: String?
-        var description: String?
-        for line in lines[1..<closing] {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("name:") {
-                name = String(trimmed.dropFirst("name:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            } else if trimmed.hasPrefix("description:") {
-                description = String(trimmed.dropFirst("description:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-        guard let name, !name.isEmpty,
-            let normalized = try? WorkspaceLibrary.normalizedIdentifier(name),
-            normalized == name,
-            expectedName == nil || expectedName == name,
-            boundedSummary(description) != nil
+        let frontmatter = try SkillFrontmatter.parse(contents)
+        guard let normalized = try? WorkspaceLibrary.normalizedIdentifier(frontmatter.name),
+            normalized == frontmatter.name,
+            expectedName == nil || expectedName == frontmatter.name,
+            boundedSummary(frontmatter.description) != nil
         else { return false }
         return true
     }
@@ -768,20 +989,43 @@ final class MarketplaceService {
     }
 }
 
+enum NativeCatalogClientOutcome: String, Equatable, Sendable {
+    case excluded
+    case complete
+    case incomplete
+}
+
 struct NativeCatalogDiscovery: Sendable {
     var packages: [MarketplacePackage]
     var notes: [ClientKind: String]
+    var outcomes: [ClientKind: NativeCatalogClientOutcome]
 
+    func retainedCachedPackages(from cached: [MarketplacePackage]) -> [MarketplacePackage] {
+        let discoveredIDs = Set(packages.map(\.id))
+        return cached.filter { package in
+            guard !discoveredIDs.contains(package.id), let client = Self.client(for: package.id) else { return false }
+            return outcomes[client] != .complete
+        }
+    }
+
+    private static func client(for packageID: String) -> ClientKind? {
+        if packageID.hasPrefix("claude:") { return .claude }
+        if packageID.hasPrefix("codex:") { return .codex }
+        return nil
+    }
 }
 
 private enum NativeCatalogError: LocalizedError {
     case commandFailed(String, String)
+    case incompleteResponse(String)
 
     var errorDescription: String? {
         switch self {
         case .commandFailed(let client, let output):
             let diagnostic = String(SensitiveValueRedactor.redact(output).prefix(1_024))
             return "\(client) catalog command failed\(diagnostic.isEmpty ? "" : ": \(diagnostic)")"
+        case .incompleteResponse(let client):
+            return "\(client) catalog response was incomplete"
         }
     }
 }

@@ -58,12 +58,14 @@ public enum DestinationOwnership: Codable, Hashable, Sendable {
     case ledgerInstall(Date)
     /// This app installed here according to a stored plan and its receipt.
     case receiptInstall(Date)
+    /// Explicit repository link recorded these exact installed bytes.
+    case linkedInstallation
     /// Ownership could not be established. The reason is shown to the operator.
     case unprovable(String)
 
     public var isProven: Bool {
         switch self {
-        case .managedRoot, .absent, .empty, .ledgerInstall, .receiptInstall: true
+        case .managedRoot, .absent, .empty, .ledgerInstall, .receiptInstall, .linkedInstallation: true
         case .unprovable: false
         }
     }
@@ -77,6 +79,7 @@ public enum DestinationOwnership: Codable, Hashable, Sendable {
             "Agent Tooling installed here on \(date.formatted(date: .abbreviated, time: .shortened))."
         case .receiptInstall(let date):
             "A stored receipt records that Agent Tooling installed here on \(date.formatted(date: .abbreviated, time: .shortened))."
+        case .linkedInstallation: "The installed files match the version recorded for this repository link."
         case .unprovable(let reason): reason
         }
     }
@@ -88,9 +91,22 @@ enum DestinationOwnershipInspector {
         of destination: URL,
         managedRoots: [URL],
         authority: ManagedInstallAuthority,
+        expectedFingerprint: String? = nil,
         fileManager: FileManager = .default
     ) -> DestinationOwnership {
         let path = destination.path(percentEncoded: false)
+        // A supplied baseline is mandatory even for an app-owned install: local
+        // edits after linking must never be authorized by an older receipt.
+        if let expectedFingerprint {
+            guard expectedFingerprint.count == 64, expectedFingerprint.allSatisfy({ $0.isHexDigit }),
+                let actual = try? DirectoryFingerprint.sha256(of: destination, fileManager: fileManager),
+                actual == expectedFingerprint
+            else {
+                return .unprovable(
+                    "The installed files changed since this repository was linked or updated. Review your local changes before updating.")
+            }
+            return .linkedInstallation
+        }
         if managedRoots.contains(where: { ManagedInstallPath.sameLocation($0.path(percentEncoded: false), path) }) {
             return .managedRoot
         }
@@ -284,6 +300,7 @@ public struct OperationPlanSafetyReviewer {
                     of: $0,
                     managedRoots: managedRoots,
                     authority: authority,
+                    expectedFingerprint: step.destinationFingerprint,
                     fileManager: fileManager
                 )
             } ?? .unprovable("This step does not name a destination, so nothing about it can be verified.")

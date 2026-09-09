@@ -17,7 +17,7 @@ extension AppModel {
     /// Projects are derived, not registered: Claude Code's own session index,
     /// any folder the user asked to scan, and any folder pinned by hand.
     public func discoverProjects(force: Bool = false) async {
-        guard !isDiscoveringProjects else { return }
+        guard !isWorkspaceMigrationReviewActive, !isDiscoveringProjects else { return }
         guard force || !hasDiscoveredProjects else { return }
         loadProjectPreferencesIfNeeded()
         isDiscoveringProjects = true
@@ -36,6 +36,7 @@ extension AppModel {
     /// Adds a folder the user chose. Choosing it pins it, because a folder
     /// Claude Code has never run in has nothing else to keep it on the list.
     public func addProject(at url: URL) async {
+        guard ensureReadyForChange() else { return }
         loadProjectPreferencesIfNeeded()
         let path = ProjectPath.canonical(url)
         var isDirectory: ObjCBool = false
@@ -58,6 +59,7 @@ extension AppModel {
     }
 
     public func setProjectPinned(_ path: String, pinned: Bool) {
+        guard ensureReadyForChange() else { return }
         loadProjectPreferencesIfNeeded()
         let normalized = ProjectPath.canonical(path)
         var values = pinnedProjectPaths.filter { $0 != normalized }
@@ -86,6 +88,7 @@ extension AppModel {
     }
 
     public func addProjectScanRoot(at url: URL) async {
+        guard ensureReadyForChange() else { return }
         loadProjectPreferencesIfNeeded()
         let path = ProjectPath.canonical(url)
         var isDirectory: ObjCBool = false
@@ -103,6 +106,7 @@ extension AppModel {
     }
 
     public func removeProjectScanRoot(_ path: String) async {
+        guard ensureReadyForChange() else { return }
         loadProjectPreferencesIfNeeded()
         guard projectScanRoots.contains(path) else { return }
         guard persistProjectPreferences(pinned: pinnedProjectPaths, scanRoots: projectScanRoots.filter { $0 != path }) else { return }
@@ -120,6 +124,7 @@ extension AppModel {
     /// nothing.
     @discardableResult
     public func applyProjectIgnorePlan(_ plan: ProjectIgnorePlan) -> Bool {
+        guard ensureReadyForChange() else { return false }
         do {
             let changed = try ProjectGitignore.apply(plan)
             guard changed else { return false }
@@ -166,6 +171,10 @@ extension AppModel {
     }
 
     private func persistProjectPreferences(pinned: [String], scanRoots: [String]) -> Bool {
+        guard !isWorkspaceMigrationReviewActive else {
+            presentError("Migration review is active. Finish or cancel it before changing this workspace.")
+            return false
+        }
         do {
             try store.save(pinned, for: Self.pinnedProjectsKey)
             try store.save(scanRoots, for: Self.projectScanRootsKey)

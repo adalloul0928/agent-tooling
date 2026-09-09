@@ -87,52 +87,104 @@ extension AppModel {
     }
 
     public var visibleSkills: [Skill] {
-        skills.compactMap { value in
+        let source = skills
+        let clients = enabledClients
+        if let cached = visibleInventoryCache.skills { return cached }
+        let result: [Skill] = source.compactMap { value in
             var value = value
-            value.clients.removeAll { !isClientEnabled($0.client) }
-            return value.owned || value.clients.contains(where: \.reportsLocalPresence) ? value : nil
+            value.clients.removeAll { !clients.contains($0.client) }
+            // Keep an explicit upstream relationship inspectable after its
+            // installation disappears. Use recorded paths for client scope:
+            // inventory client arrays also contain absent-client placeholders.
+            let linkedToEnabledClient =
+                value.repositoryBinding?.installedFingerprints.keys.contains { path in
+                    guard let client = ClientSelection.client(for: path) else { return false }
+                    return clients.contains(client)
+                } == true
+            return value.owned || value.clients.contains(where: \.reportsLocalPresence) || linkedToEnabledClient ? value : nil
         }
+        visibleInventoryCache.skills = result
+        return result
     }
     public var visibleMCPServers: [MCPServer] {
-        mcpServers.compactMap { value in
+        let source = mcpServers
+        let clients = enabledClients
+        if let cached = visibleInventoryCache.mcpServers { return cached }
+        let result: [MCPServer] = source.compactMap { value in
             var value = value
-            value.clients.removeAll { !isClientEnabled($0.client) }
+            value.clients.removeAll { !clients.contains($0.client) }
             return value.isManagedDefinition || value.clients.contains(where: \.reportsLocalPresence) ? value : nil
         }
+        visibleInventoryCache.mcpServers = result
+        return result
     }
     public var visiblePlugins: [Plugin] {
-        plugins.compactMap { value in
+        let source = plugins
+        let clients = enabledClients
+        if let cached = visibleInventoryCache.plugins { return cached }
+        let result: [Plugin] = source.compactMap { value in
             var value = value
-            value.clients.removeAll { !isClientEnabled($0.client) }
+            value.clients.removeAll { !clients.contains($0.client) }
             return value.clients.contains(where: \.reportsLocalPresence) ? value : nil
         }
+        visibleInventoryCache.plugins = result
+        return result
     }
-    public var visibleTargetObservations: [TargetObservation] { targetObservations.filter { isClientEnabled($0.surface.client) } }
-    public var visibleAccountSurfaces: [AccountSurface] { accountSurfaces.filter { isClientEnabled($0.surface.client) } }
+    public var visibleTargetObservations: [TargetObservation] {
+        let source = targetObservations
+        let clients = enabledClients
+        if let cached = visibleInventoryCache.targetObservations { return cached }
+        let result = source.filter { $0.surface.client.map(clients.contains) ?? true }
+        visibleInventoryCache.targetObservations = result
+        return result
+    }
+    public var visibleAccountSurfaces: [AccountSurface] {
+        let source = accountSurfaces
+        let clients = enabledClients
+        if let cached = visibleInventoryCache.accountSurfaces { return cached }
+        let result = source.filter { $0.surface.client.map(clients.contains) ?? true }
+        visibleInventoryCache.accountSurfaces = result
+        return result
+    }
     public var visibleConnectors: [ConnectorRecord] {
-        connectors.compactMap { value in
+        let source = connectors
+        let clients = enabledClients
+        if let cached = visibleInventoryCache.connectors { return cached }
+        let result: [ConnectorRecord] = source.compactMap { value in
             var value = value
-            value.bindings.removeAll { !isClientEnabled($0.target.client) }
+            value.bindings.removeAll { !($0.target.client.map(clients.contains) ?? true) }
             return value.bindings.isEmpty ? nil : value
         }
+        visibleInventoryCache.connectors = result
+        return result
     }
     public var visibleMarketplacePackages: [MarketplacePackage] {
-        marketplacePackages.compactMap { value in
+        let source = marketplacePackages
+        let clients = enabledClients
+        if let cached = visibleInventoryCache.marketplacePackages { return cached }
+        let result: [MarketplacePackage] = source.compactMap { value in
             var value = value
-            value.supportedClients.formIntersection(enabledClients)
-            value.nativeInstalls.removeAll { !isClientEnabled($0.client) }
+            value.supportedClients.formIntersection(clients)
+            value.nativeInstalls.removeAll { !clients.contains($0.client) }
             return value.supportedClients.isEmpty ? nil : value
         }
+        visibleInventoryCache.marketplacePackages = result
+        return result
     }
     public var visibleSources: [ToolingSource] {
-        sources.filter { source in
+        let inventory = sources
+        let clients = enabledClients
+        if let cached = visibleInventoryCache.sources { return cached }
+        let result = inventory.filter { source in
             switch source.kind {
-            case .claudeMarketplace: isClientEnabled(.claude)
-            case .openAIPluginDirectory: isClientEnabled(.codex)
-            case .geminiExtensionGallery: isClientEnabled(.gemini)
+            case .claudeMarketplace: clients.contains(.claude)
+            case .openAIPluginDirectory: clients.contains(.codex)
+            case .geminiExtensionGallery: clients.contains(.gemini)
             default: true
             }
         }
+        visibleInventoryCache.sources = result
+        return result
     }
     public var visibleProjects: [DiscoveredProject] { projects }
     public var visibleSyncStages: [SyncStage] {
@@ -148,24 +200,35 @@ extension AppModel {
     // Receipts remain intact on disk. Hide records involving an unchecked client
     // rather than rewriting an immutable record or misrepresenting partial history.
     public var visibleOperationReceipts: [OperationReceipt] {
-        operationReceipts.filter { $0.targetSurfaces.allSatisfy { isClientEnabled($0.client) } }
+        let source = operationReceipts
+        let clients = enabledClients
+        if let cached = visibleInventoryCache.operationReceipts { return cached }
+        let result = source.filter { $0.targetSurfaces.allSatisfy { $0.client.map(clients.contains) ?? true } }
+        visibleInventoryCache.operationReceipts = result
+        return result
     }
     public var visibleActivities: [ActivityReceipt] {
-        let hiddenReceiptIDs = Set(operationReceipts.filter { !($0.targetSurfaces.allSatisfy { isClientEnabled($0.client) }) }.map(\.id))
-        return activities.filter { activity in
-            if let id = activity.operationReceiptID, hiddenReceiptIDs.contains(id) { return false }
-            // Legacy activity rows have no structured client metadata.
-            let text = ([activity.title, activity.detail, activity.command ?? ""] + activity.affectedPaths).joined(separator: " ")
-            return !ClientKind.allCases.filter { !isClientEnabled($0) }.contains { client in
-                let aliases: [String] =
-                    switch client {
-                    case .claude: ["claude"]
-                    case .codex: ["codex", "chatgpt", ".agents/"]
-                    case .gemini: ["gemini"]
-                    }
-                return aliases.contains { text.localizedCaseInsensitiveContains($0) }
+        let receipts = operationReceipts
+        let source = activities
+        let clients = enabledClients
+        if let cached = visibleInventoryCache.activities { return cached }
+        let hiddenReceiptIDs = Set(receipts.filter { !($0.targetSurfaces.allSatisfy { $0.client.map(clients.contains) ?? true }) }.map(\.id))
+        let excludedAliases = ClientKind.allCases.filter { !clients.contains($0) }.flatMap { client -> [String] in
+            switch client {
+            case .claude: ["claude"]
+            case .codex: ["codex", "chatgpt", ".agents/"]
+            case .gemini: ["gemini"]
             }
         }
+        let result = source.filter { activity in
+            if let id = activity.operationReceiptID, hiddenReceiptIDs.contains(id) { return false }
+            // Legacy activity rows have no structured client metadata.
+            guard !excludedAliases.isEmpty else { return true }
+            let text = ([activity.title, activity.detail, activity.command ?? ""] + activity.affectedPaths).joined(separator: " ")
+            return !excludedAliases.contains { text.localizedCaseInsensitiveContains($0) }
+        }
+        visibleInventoryCache.activities = result
+        return result
     }
     public var visiblePendingAgentRequests: [PendingAgentRequest] {
         pendingAgentRequests.filter { Set($0.targets).isSubset(of: enabledClients) }
@@ -179,10 +242,29 @@ extension AppModel {
 /// Native destination classification shared by execution checks and drift reads.
 enum ClientSelection {
     static func includes(path: String, clients: Set<ClientKind>) -> Bool {
-        let parts = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
-        if parts.contains(".claude") { return clients.contains(.claude) }
-        if parts.contains(".codex") || parts.contains(".agents") { return clients.contains(.codex) }
-        if parts.contains(".gemini") { return clients.contains(.gemini) }
-        return true
+        client(for: path).map(clients.contains) ?? true
     }
+
+    static func client(for path: String) -> ClientKind? {
+        let parts = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
+        if parts.contains(".claude") { return .claude }
+        if parts.contains(".codex") || parts.contains(".agents") { return .codex }
+        if parts.contains(".gemini") { return .gemini }
+        return nil
+    }
+}
+
+/// Main-actor-owned, disposable derived state. Never persisted or used to
+/// authorize a filesystem operation; native writes revalidate their own inputs.
+struct VisibleInventoryCache {
+    var skills: [Skill]?
+    var mcpServers: [MCPServer]?
+    var plugins: [Plugin]?
+    var targetObservations: [TargetObservation]?
+    var accountSurfaces: [AccountSurface]?
+    var connectors: [ConnectorRecord]?
+    var marketplacePackages: [MarketplacePackage]?
+    var sources: [ToolingSource]?
+    var operationReceipts: [OperationReceipt]?
+    var activities: [ActivityReceipt]?
 }

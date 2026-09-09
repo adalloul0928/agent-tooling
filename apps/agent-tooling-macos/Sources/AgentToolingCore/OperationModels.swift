@@ -41,6 +41,9 @@ public struct OperationStep: Identifiable, Codable, Hashable, Sendable {
     /// review sheet.
     public var sourceFingerprint: String?
     public var destinationPath: String?
+    /// Existing source-linked installation, captured when the repository was
+    /// linked. Updates require this exact tree both at review and before swap.
+    public var destinationFingerprint: String?
     /// Optional working directory for a native command. The engine accepts it
     /// only when it exactly matches the separately reviewed project root.
     public var currentDirectoryPath: String?
@@ -67,6 +70,7 @@ public struct OperationStep: Identifiable, Codable, Hashable, Sendable {
         sourcePath: String? = nil,
         sourceFingerprint: String? = nil,
         destinationPath: String? = nil,
+        destinationFingerprint: String? = nil,
         currentDirectoryPath: String? = nil,
         projectRootPath: String? = nil,
         contents: String? = nil,
@@ -84,6 +88,7 @@ public struct OperationStep: Identifiable, Codable, Hashable, Sendable {
         self.sourcePath = sourcePath
         self.sourceFingerprint = sourceFingerprint
         self.destinationPath = destinationPath
+        self.destinationFingerprint = destinationFingerprint
         self.currentDirectoryPath = currentDirectoryPath
         self.projectRootPath = projectRootPath
         self.contents = contents
@@ -108,26 +113,24 @@ public struct OperationStep: Identifiable, Codable, Hashable, Sendable {
 }
 
 enum SensitiveValueRedactor {
-    private static let credentialPatterns = [
+    private static let credentialExpressions: [NSRegularExpression] = [
         "(?i)https?://[^/@\\s]+@",
         "(?i)https?://[^\\s?#]+\\?[^\\s#]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|token|secret|password)=[^&\\s#]+",
         "(?im)(^|[ \\t])--?(?:api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|token|secret|password)(?:=|[ \\t]+)[^\\s]+",
         "(?i)(api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|token|secret|password)\\s*[:=]\\s*[^\\s]+",
         "(?i)bearer\\s+[A-Za-z0-9._~+/-]+",
         "sk-[A-Za-z0-9_-]{16,}",
-    ]
+    ].compactMap { try? NSRegularExpression(pattern: $0) }
 
     static func containsCredentialValue(in text: String) -> Bool {
         let range = NSRange(text.startIndex..., in: text)
-        return credentialPatterns.contains { pattern in
-            guard let expression = try? NSRegularExpression(pattern: pattern) else { return false }
-            return expression.firstMatch(in: text, range: range) != nil
+        return credentialExpressions.contains { expression in
+            expression.firstMatch(in: text, range: range) != nil
         }
     }
 
-    static func redact(_ text: String) -> String {
-        var value = text
-        let replacements: [(pattern: String, replacement: String)] = [
+    private static let replacements: [(expression: NSRegularExpression, replacement: String)] = {
+        let patterns: [(pattern: String, replacement: String)] = [
             ("(?i)(https?://)[^/@\\s]+@", "$1[redacted]@"),
             ("(?i)(https?://[^\\s?#]+)\\?[^\\s#]+", "$1?[redacted]"),
             (
@@ -145,10 +148,17 @@ enum SensitiveValueRedactor {
             ("(?i)bearer\\s+[A-Za-z0-9._~+/-]+", "Bearer [redacted]"),
             ("sk-[A-Za-z0-9_-]+", "[redacted]"),
         ]
+        return patterns.compactMap { item in
+            guard let expression = try? NSRegularExpression(pattern: item.pattern) else { return nil }
+            return (expression, item.replacement)
+        }
+    }()
+
+    static func redact(_ text: String) -> String {
+        var value = text
         for replacement in replacements {
-            guard let expression = try? NSRegularExpression(pattern: replacement.pattern) else { continue }
             let range = NSRange(value.startIndex..., in: value)
-            value = expression.stringByReplacingMatches(in: value, range: range, withTemplate: replacement.replacement)
+            value = replacement.expression.stringByReplacingMatches(in: value, range: range, withTemplate: replacement.replacement)
         }
         return value
     }

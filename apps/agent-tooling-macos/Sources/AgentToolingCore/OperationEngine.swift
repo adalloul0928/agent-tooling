@@ -261,13 +261,15 @@ public actor OperationExecutor {
             else { throw OperationEngineError.malformedStep(step.title) }
             let source = URL(fileURLWithPath: sourcePath)
             try validateSource(source)
-            let destination = try copyDestination(destinationPath, projectRootPath: step.projectRootPath)
-            try requireProvenOwnership(of: destination)
+            let destination = try copyDestination(
+                destinationPath, projectRootPath: step.projectRootPath, linkedUpdate: step.destinationFingerprint != nil)
+            try requireProvenOwnership(of: destination, expectedFingerprint: step.destinationFingerprint)
             let removals = removedEntryCount(replacing: destination, with: source)
             try replaceDirectory(
                 at: destination,
                 withCopyOf: source,
                 expectedFingerprint: sourceFingerprint,
+                destinationFingerprint: step.destinationFingerprint,
                 projectRootPath: step.projectRootPath,
                 planStepID: step.id
             )
@@ -341,11 +343,12 @@ public actor OperationExecutor {
     /// `~/.claude/skills/<name>`, for example. This is that missing half, and
     /// it is checked again immediately before the swap so the answer cannot go
     /// stale between the check and the write.
-    private func requireProvenOwnership(of destination: URL) throws {
+    private func requireProvenOwnership(of destination: URL, expectedFingerprint: String? = nil) throws {
         let ownership = DestinationOwnershipInspector.ownership(
             of: destination,
             managedRoots: managedRoots,
             authority: installAuthority,
+            expectedFingerprint: expectedFingerprint,
             fileManager: fileManager
         )
         guard ownership.isProven else {
@@ -433,7 +436,7 @@ public actor OperationExecutor {
         return destination
     }
 
-    private func copyDestination(_ rawPath: String, projectRootPath: String? = nil) throws -> URL {
+    private func copyDestination(_ rawPath: String, projectRootPath: String? = nil, linkedUpdate: Bool = false) throws -> URL {
         let destination = URL(fileURLWithPath: rawPath).standardizedFileURL
         let exactDestinations = [
             store.libraryURL,
@@ -474,6 +477,10 @@ public actor OperationExecutor {
             (homeURL.appending(path: ".gemini/skills", directoryHint: .isDirectory), homeURL),
         ].map { ($0.0.standardizedFileURL, $0.1.standardizedFileURL) }
 
+        if linkedUpdate {
+            permittedSkillRoots.append((homeURL.appending(path: ".codex/skills").standardizedFileURL, homeURL.standardizedFileURL))
+        }
+
         if let projectRootPath {
             let projectRoot = URL(fileURLWithPath: projectRootPath).standardizedFileURL
             let directValues = try projectRoot.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
@@ -490,6 +497,9 @@ public actor OperationExecutor {
                     (projectRoot.appending(path: ".agents/skills", directoryHint: .isDirectory), projectRoot),
                     (projectRoot.appending(path: ".gemini/skills", directoryHint: .isDirectory), projectRoot),
                 ].map { ($0.0.standardizedFileURL, $0.1.standardizedFileURL) })
+            if linkedUpdate {
+                permittedSkillRoots.append((projectRoot.appending(path: ".codex/skills").standardizedFileURL, projectRoot))
+            }
         }
 
         guard OperationCommandPolicy.isSafeMCPIdentifier(destination.lastPathComponent),
@@ -594,6 +604,7 @@ public actor OperationExecutor {
         at destination: URL,
         withCopyOf source: URL,
         expectedFingerprint: String,
+        destinationFingerprint: String?,
         projectRootPath: String?,
         planStepID: UUID
     ) throws {
@@ -612,10 +623,11 @@ public actor OperationExecutor {
         )
         guard actualFingerprint == expectedFingerprint else { throw OperationEngineError.sourceChangedAfterReview }
         try commitPreparedItem(staged, to: destination, planStepID: planStepID) {
-            _ = try self.copyDestination(destination.path(percentEncoded: false), projectRootPath: projectRootPath)
+            _ = try self.copyDestination(
+                destination.path(percentEncoded: false), projectRootPath: projectRootPath, linkedUpdate: destinationFingerprint != nil)
             // Re-proved immediately before the swap so a destination that
             // gained unowned content while the copy was staged is still caught.
-            try self.requireProvenOwnership(of: destination)
+            try self.requireProvenOwnership(of: destination, expectedFingerprint: destinationFingerprint)
         }
     }
 

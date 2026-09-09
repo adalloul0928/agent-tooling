@@ -99,17 +99,17 @@ struct ToolHiveMCPRuntimeProvider: MCPRuntimeProvider {
 
     func status() async -> MCPRuntimeStatus {
         do {
-            let result = try await runner.run(executable: "thv", arguments: ["version"], currentDirectory: nil)
-            guard result.status == 0 else { return unavailableStatus(detail: result.standardError) }
-            let version = bounded(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines), limit: 256)
-            return MCPRuntimeStatus(
-                id: id,
-                displayName: "ToolHive",
-                isAvailable: true,
-                version: version.isEmpty ? nil : version,
-                capabilities: [.lifecycle, .isolation, .networkPolicy, .secretReferences, .health, .logs, .toolInventory],
-                detail: "Optional isolated MCP runtime detected."
-            )
+            switch try await ToolHiveRuntimeInspection(runner: runner).version() {
+            case .available(let version, let diagnostic):
+                return MCPRuntimeStatus(id: id, displayName: "ToolHive", isAvailable: true,
+                    version: version.version, capabilities: [.health, .logs],
+                    detail: diagnostic ?? "Read-only workload status and log inspection available.")
+            case .unavailable(let diagnostic):
+                return unavailableStatus(detail: diagnostic)
+            case .unsupportedResponse(let diagnostic), .commandFailed(let diagnostic):
+                return MCPRuntimeStatus(id: id, displayName: "ToolHive", isAvailable: true,
+                    capabilities: [], detail: diagnostic.isEmpty ? "ToolHive could not be inspected." : diagnostic)
+            }
         } catch {
             return unavailableStatus(detail: error.localizedDescription)
         }
@@ -117,12 +117,20 @@ struct ToolHiveMCPRuntimeProvider: MCPRuntimeProvider {
 
     func servers() async throws -> [MCPRuntimeServer] {
         let runtimeStatus = await status()
+        return try await servers(after: runtimeStatus)
+    }
+
+    /// Reuses a refresh's version probe instead of launching the CLI twice.
+    func servers(after runtimeStatus: MCPRuntimeStatus) async throws -> [MCPRuntimeServer] {
+        try Task.checkCancellation()
         guard runtimeStatus.isAvailable else { return [] }
+        guard runtimeStatus.capabilities.contains(.health) else { throw MCPRuntimeError.invalidResponse }
         let result = try await runner.run(
             executable: "thv",
             arguments: ["list", "--all", "--format", "json"],
             currentDirectory: nil
         )
+        try Task.checkCancellation()
         guard result.status == 0 else {
             throw MCPRuntimeError.commandFailed(bounded(result.standardError, limit: 1_024))
         }

@@ -53,6 +53,9 @@ public struct SkillAdoption: Sendable {
     public var plan: OperationPlan
     public var skills: [Skill]
     public var rejections: [SkillAdoptionRejection]
+    /// Discovered records can use a plugin namespace or a folder name. Keep
+    /// their IDs so the approved copy can replace the right source records.
+    public var sourceSkillIDs: [String: String] = [:]
     var stagedLibraryURL: URL
 }
 
@@ -279,12 +282,22 @@ public final class WorkspaceLibrary {
         // the library is rewritten to add one.
         var adopted: [Skill] = []
         var rejections: [SkillAdoptionRejection] = []
+        var sourceSkillIDs: [String: String] = [:]
         var claimed = reservedIdentifiers
+        let sourceIdentifiers = Set(candidates.map { $0.skill.id })
         for candidate in candidates {
             do {
-                let skill = try stageAdoptedPackage(for: candidate, in: staging, reservedIdentifiers: claimed)
+                guard sourceSkillIDs[candidate.skill.id] == nil else {
+                    throw WorkspaceLibraryError.adoptionIdentifierTaken(candidate.skill.id)
+                }
+                // A different selected record still owns its discovery ID,
+                // even if its source later proves unusable. Never adopt over
+                // that record merely because it was included in the batch.
+                let reserved = claimed.union(sourceIdentifiers.subtracting([candidate.skill.id]))
+                let skill = try stageAdoptedPackage(for: candidate, in: staging, reservedIdentifiers: reserved)
                 claimed.insert(skill.id)
                 adopted.append(skill)
+                sourceSkillIDs[candidate.skill.id] = skill.id
             } catch {
                 rejections.append(
                     SkillAdoptionRejection(
@@ -294,7 +307,7 @@ public final class WorkspaceLibrary {
                     ))
             }
         }
-        guard !adopted.isEmpty else { throw WorkspaceLibraryError.noAdoptableSkills(Self.skippedSummary(rejections)) }
+        guard !adopted.isEmpty else { throw WorkspaceLibraryError.noAdoptableSkillCandidates(rejections) }
 
         try normalizePrivatePermissions(under: staging)
         let steps = try adopted.map { skill in
@@ -323,7 +336,10 @@ public final class WorkspaceLibrary {
             requiresConfirmation: true
         )
         isPrepared = true
-        return SkillAdoption(plan: plan, skills: adopted, rejections: rejections, stagedLibraryURL: staging)
+        return SkillAdoption(
+            plan: plan, skills: adopted, rejections: rejections,
+            sourceSkillIDs: sourceSkillIDs, stagedLibraryURL: staging
+        )
     }
 
     /// Removes the staged copy an unapproved adoption prepared. An approved
@@ -346,23 +362,31 @@ public final class WorkspaceLibrary {
         guard sourceValues?.isSymbolicLink != true else { throw WorkspaceLibraryError.adoptionSourceLinked(rawPath) }
         guard sourceValues?.isDirectory == true else { throw WorkspaceLibraryError.adoptionSourceMissing(rawPath) }
 
-        let id = try adoptedIdentifier(for: candidate.skill)
-        guard !reservedIdentifiers.contains(id) else { throw WorkspaceLibraryError.adoptionIdentifierTaken(id) }
-        let packageID = "local-\(id)"
-        let packageURL = stagedPackages.appending(path: packageID, directoryHint: .isDirectory)
-        guard !fileManager.fileExists(atPath: packageURL.path(percentEncoded: false)) else {
-            throw WorkspaceLibraryError.alreadyExists(id)
-        }
-        // Fingerprinting the client's folder before copying is the symbolic
-        // link and size gate: it refuses exactly what the engine would refuse
-        // at execution, while the source is still only being inspected.
-        _ = try DirectoryFingerprint.sha256(
+        // Fingerprinting the client's folder before reading or copying is the
+        // symbolic link and size gate. The copied folder must match these
+        // bytes before a plan can offer it for review.
+        let sourceFingerprint = try DirectoryFingerprint.sha256(
             of: source,
             fileManager: fileManager,
             maximumItems: Self.maximumAdoptedSkillItems,
             maximumBytes: Self.maximumAdoptedSkillBytes
         )
-
+        let markdown = try BoundedFileAccess.readUTF8(
+            at: source.appending(path: "SKILL.md", directoryHint: .notDirectory),
+            allowSymbolicLink: false
+        )
+        let metadata = try SkillFrontmatter.parse(markdown)
+        let id = try Self.declaredIdentifier(metadata.name)
+        guard !reservedIdentifiers.contains(id) else { throw WorkspaceLibraryError.adoptionIdentifierTaken(id) }
+        let packageID = "local-\(id)"
+        let destination = packagesURL.appending(path: packageID, directoryHint: .isDirectory)
+        guard !fileManager.fileExists(atPath: destination.path(percentEncoded: false)) else {
+            throw WorkspaceLibraryError.alreadyExists(id)
+        }
+        let packageURL = stagedPackages.appending(path: packageID, directoryHint: .isDirectory)
+        guard !fileManager.fileExists(atPath: packageURL.path(percentEncoded: false)) else {
+            throw WorkspaceLibraryError.alreadyExists(id)
+        }
         var isStaged = false
         defer { if !isStaged { removeTransientItemIfPresent(packageURL) } }
         let skillURL =
@@ -371,6 +395,13 @@ public final class WorkspaceLibrary {
             .appending(path: id, directoryHint: .isDirectory)
         try fileManager.createDirectory(at: skillURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try fileManager.copyItem(at: source, to: skillURL)
+        let copiedFingerprint = try DirectoryFingerprint.sha256(
+            of: skillURL,
+            fileManager: fileManager,
+            maximumItems: Self.maximumAdoptedSkillItems,
+            maximumBytes: Self.maximumAdoptedSkillBytes
+        )
+        guard copiedFingerprint == sourceFingerprint else { throw WorkspaceLibraryError.adoptionSourceChanged }
         try writePortablePackageManifest(manifestName: id, displayName: displayName(for: id), packageURL: packageURL)
         try validateStagedPackage(packageURL, skillID: id)
         _ = try validateSkillDefinition(at: skillURL.appending(path: "SKILL.md", directoryHint: .notDirectory), id: id)
@@ -385,7 +416,7 @@ public final class WorkspaceLibrary {
             id: id,
             name: id,
             displayName: displayName(for: id),
-            summary: candidate.skill.summary,
+            summary: metadata.description,
             bundle: packageID,
             scope: ToolingScope.user.displayName,
             owned: true,
@@ -398,12 +429,13 @@ public final class WorkspaceLibrary {
         )
     }
 
-    /// A discovered skill can be namespaced by the plugin that provides it
-    /// (`plugin:skill`). The managed library is portable, so adoption keeps
-    /// only the skill's own portable name.
-    private func adoptedIdentifier(for skill: Skill) throws -> String {
-        let raw = skill.id.split(separator: ":").last.map(String.init) ?? skill.id
-        return try Self.normalizedIdentifier(raw)
+    /// The declaration is the portable identity. Unlike a new skill's display
+    /// name, an imported declaration cannot be normalized without also editing
+    /// the user's source, so it must already be a valid identifier.
+    private static func declaredIdentifier(_ name: String) throws -> String {
+        let identifier = try normalizedIdentifier(name)
+        guard identifier == name else { throw WorkspaceLibraryError.invalidIdentifier(name) }
+        return identifier
     }
 
     /// An adoption that was prepared but never approved leaves its staged copy
@@ -572,7 +604,7 @@ public final class WorkspaceLibrary {
         try validateStagedPackage(stagingURL, skillID: existing.id)
 
         var updated = existing
-        updated.summary = Self.frontmatterDescription(in: markdown) ?? existing.summary
+        updated.summary = try SkillFrontmatter.parse(markdown).description
         updated.files = try relativeFiles(in: stagedSkillURL)
         updated.validationCount = validationCount
         let rollbackPackageURL = try replacePackage(at: packageURL, with: stagingURL)
@@ -582,20 +614,6 @@ public final class WorkspaceLibrary {
             skillURL: originalSkillURL,
             rollbackPackageURL: rollbackPackageURL
         )
-    }
-
-    private static func frontmatterDescription(in markdown: String) -> String? {
-        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        guard lines.first?.trimmingCharacters(in: .whitespaces) == "---",
-            let closing = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "---" })
-        else { return nil }
-        for line in lines[1..<closing] {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("description:") else { continue }
-            let value = trimmed.dropFirst("description:".count).trimmingCharacters(in: .whitespaces)
-            return value.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-        }
-        return nil
     }
 
     /// Completes an update after the matching desired-state snapshot has been
@@ -714,7 +732,7 @@ public final class WorkspaceLibrary {
             projectRoot = nil
         }
         let selected = targets
-        let steps = selected.sorted { $0.rawValue < $1.rawValue }.flatMap { client -> [OperationStep] in
+        let steps = try selected.sorted { $0.rawValue < $1.rawValue }.flatMap { client -> [OperationStep] in
             [
                 OperationStep(
                     kind: .copyDirectory,
@@ -723,12 +741,12 @@ public final class WorkspaceLibrary {
                         "Copies the portable skill from Agent Tooling's managed library into \(scope == .project ? "the selected project's" : "this Mac's") native \(client.rawValue) skill folder.",
                     sourcePath: source.path(percentEncoded: false),
                     sourceFingerprint: sourceFingerprint,
-                    destinationPath: clientSkillURL(
-                        client,
+                    destinationPath: try NativeSkillDestination.skillURL(
+                        client: client,
                         skillID: skill.id,
+                        homeURL: homeURL,
                         scope: scope,
-                        projectRoot: projectRoot,
-                        homeURL: homeURL
+                        projectRoot: projectRoot
                     ).path(percentEncoded: false),
                     projectRootPath: projectRoot?.path(percentEncoded: false)
                 )
@@ -765,24 +783,6 @@ public final class WorkspaceLibrary {
             steps: planSteps,
             requiresConfirmation: true
         )
-    }
-
-    private func clientSkillURL(
-        _ client: ClientKind,
-        skillID: String,
-        scope: ToolingScope = .user,
-        projectRoot: URL? = nil,
-        homeURL: URL
-    ) -> URL {
-        let root = scope == .project ? (projectRoot ?? homeURL) : homeURL
-        switch client {
-        case .claude:
-            return root.appending(path: ".claude/skills/\(skillID)", directoryHint: .isDirectory)
-        case .codex:
-            return root.appending(path: ".agents/skills/\(skillID)", directoryHint: .isDirectory)
-        case .gemini:
-            return root.appending(path: ".gemini/skills/\(skillID)", directoryHint: .isDirectory)
-        }
     }
 
     public func importRepositorySource(at url: URL) throws -> ToolingSource {
@@ -831,20 +831,11 @@ public final class WorkspaceLibrary {
     /// a staged package can be held to the same rule before a plan offers it.
     private func validateSkillDefinition(at file: URL, id: String) throws -> Int {
         let contents = try BoundedFileAccess.readUTF8(at: file, allowSymbolicLink: false)
-        let lines = contents.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        guard lines.first?.trimmingCharacters(in: .whitespaces) == "---",
-            let closingDelimiter = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "---" }),
-            closingDelimiter > 1
-        else {
-            throw WorkspaceLibraryError.invalidSkillDefinition(id)
+        let metadata = try SkillFrontmatter.parse(contents)
+        let declaredName = try Self.declaredIdentifier(metadata.name)
+        guard declaredName == id else {
+            throw WorkspaceLibraryError.skillNameMismatch(expected: id, declared: declaredName)
         }
-        let frontmatter = lines[1..<closingDelimiter]
-        guard frontmatter.contains(where: { $0.trimmingCharacters(in: .whitespaces) == "name: \(id)" }),
-            frontmatter.contains(where: {
-                let line = $0.trimmingCharacters(in: .whitespaces)
-                return line.hasPrefix("description:") && line.dropFirst("description:".count).trimmingCharacters(in: .whitespaces).count > 2
-            })
-        else { throw WorkspaceLibraryError.invalidSkillDefinition(id) }
         return 3
     }
 
@@ -1134,6 +1125,7 @@ enum WorkspaceLibraryError: LocalizedError, Sendable {
     case missingSkillSource(String)
     case missingSource(String)
     case invalidSkillDefinition(String)
+    case skillNameMismatch(expected: String, declared: String)
     case notManaged(String)
     case cannotRename(String)
     case noInstallTargets
@@ -1156,10 +1148,12 @@ enum WorkspaceLibraryError: LocalizedError, Sendable {
     case adoptionSourceUnknown
     case adoptionSourceLinked(String)
     case adoptionSourceMissing(String)
+    case adoptionSourceChanged
     case adoptionAlreadyManaged(String)
     case adoptionIdentifierTaken(String)
     case adoptionBatchTooLarge(Int)
     case noAdoptableSkills(String)
+    case noAdoptableSkillCandidates([SkillAdoptionRejection])
 
     var errorDescription: String? {
         switch self {
@@ -1168,7 +1162,9 @@ enum WorkspaceLibraryError: LocalizedError, Sendable {
         case .alreadyExists(let identifier): "The local library already contains a skill named \(identifier)."
         case .missingSkillSource(let identifier): "The managed local source for \(identifier) is missing."
         case .missingSource(let path): "The source folder at \(path) no longer exists."
-        case .invalidSkillDefinition(let identifier): "The managed skill \(identifier) is missing required frontmatter."
+        case .invalidSkillDefinition(let identifier): "The managed skill \(identifier) does not have a valid SKILL.md definition."
+        case .skillNameMismatch(let expected, let declared):
+            "SKILL.md declares the name \(declared), but this managed skill is named \(expected). Keep its declared name as \(expected)."
         case .notManaged(let identifier): "\(identifier) is installed from another source and cannot be edited as a managed skill."
         case .cannotRename(let identifier): "Renaming \(identifier) is not supported. Create a new skill instead."
         case .noInstallTargets: "Choose at least one app before reviewing an installation."
@@ -1193,11 +1189,14 @@ enum WorkspaceLibraryError: LocalizedError, Sendable {
         case .adoptionSourceUnknown: "The last setup check did not record where its files are. Check setup again, then adopt it."
         case .adoptionSourceLinked(let path): "Its source at \(path) is a symbolic link. Adopt the folder it points to instead."
         case .adoptionSourceMissing(let path): "Its source folder at \(path) is no longer on this Mac."
+        case .adoptionSourceChanged: "Its source files changed while the skill was being copied. Check setup and review a fresh copy."
         case .adoptionAlreadyManaged(let identifier): "\(identifier) is already managed by Agent Tooling."
         case .adoptionIdentifierTaken(let identifier):
             "Another skill on this Mac already uses the portable name \(identifier). Adopt that one instead, or rename this one first."
         case .adoptionBatchTooLarge(let maximum): "Adopt at most \(maximum) skills at a time."
         case .noAdoptableSkills(let detail): "No selected skill could be adopted. \(detail)"
+        case .noAdoptableSkillCandidates(let rejections):
+            "No selected skill could be adopted. " + rejections.prefix(3).map { "\($0.displayName) — \($0.reason)" }.joined(separator: " ")
         }
     }
 }

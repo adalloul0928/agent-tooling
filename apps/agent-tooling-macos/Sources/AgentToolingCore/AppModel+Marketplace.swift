@@ -95,7 +95,13 @@ extension AppModel {
         for index in candidate.sources.indices {
             guard [.localFolder, .gitRepository].contains(candidate.sources[index].kind) else { continue }
             do {
-                let inspected = try marketplace.inspect(candidate.sources[index])
+                let source = candidate.sources[index]
+                // Local catalogs can contain hundreds of package manifests,
+                // skills and directory trees. Never inspect them on the UI actor.
+                let inspected = try await Task.detached(priority: .utility) {
+                    try MarketplaceService().inspect(source)
+                }.value
+                guard !Task.isCancelled else { return }
                 packages.append(contentsOf: inspected)
                 candidate.sources[index].lastRefreshedAt = .now
                 candidate.sources[index].trustSummary =
@@ -125,12 +131,15 @@ extension AppModel {
             }
         }
         let native = await MarketplaceService.discoverNativeCatalogs(runner: runner, clients: enabledClients)
+        packages.append(contentsOf: native.retainedCachedPackages(from: candidate.marketplacePackages))
         packages.append(contentsOf: native.packages)
-        updateNativeSource(.claudeMarketplace, detail: native.notes[.claude], in: &candidate.sources)
-        updateNativeSource(.openAIPluginDirectory, detail: native.notes[.codex], in: &candidate.sources)
+        updateNativeSource(.claudeMarketplace, detail: native.notes[.claude],
+            markRefreshed: native.outcomes[.claude] == .complete, in: &candidate.sources)
+        updateNativeSource(.openAIPluginDirectory, detail: native.notes[.codex],
+            markRefreshed: native.outcomes[.codex] == .complete, in: &candidate.sources)
         failures.append(
-            contentsOf: native.notes.compactMap { client, note in
-                note.localizedCaseInsensitiveContains("unavailable") ? "\(client.rawValue): \(note)" : nil
+            contentsOf: native.outcomes.compactMap { client, outcome in
+                outcome == .incomplete ? "\(client.rawValue): \(native.notes[client] ?? "Catalog incomplete")" : nil
             })
         if let index = candidate.sources.firstIndex(where: { $0.kind == .geminiExtensionGallery }) {
             candidate.sources[index].lastRefreshedAt = .now
@@ -231,9 +240,14 @@ extension AppModel {
         )
     }
 
-    private func updateNativeSource(_ kind: SourceKind, detail: String?, in sources: inout [ToolingSource]) {
+    private func updateNativeSource(
+        _ kind: SourceKind,
+        detail: String?,
+        markRefreshed: Bool = true,
+        in sources: inout [ToolingSource]
+    ) {
         guard let index = sources.firstIndex(where: { $0.kind == kind }) else { return }
-        sources[index].lastRefreshedAt = .now
+        if markRefreshed { sources[index].lastRefreshedAt = .now }
         if let detail { sources[index].trustSummary = detail }
     }
 }

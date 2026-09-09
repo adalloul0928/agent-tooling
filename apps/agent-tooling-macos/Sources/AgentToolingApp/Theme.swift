@@ -1,31 +1,32 @@
 import AppKit
 import SwiftUI
 
-/// Tahoe: the window is one sheet of glass. The sidebar shows the desktop
-/// through it; the content pane is an opaque "paper" inset with a concentric
-/// radius so rows stay crisp. Colour is reserved for identity (what a thing is)
-/// and for status glyphs beside labels; never for atmosphere.
+/// Page headings, filters, and content share one leading edge.
+enum WorkspaceLayout {
+    static let pageInset: CGFloat = 24
+    static let contentTopInset: CGFloat = 12
+    static let sectionSpacing: CGFloat = 24
+}
+
+/// Content uses neutral surfaces. NavigationSplitView owns the window's native
+/// Liquid Glass sidebar, geometry, and active/inactive material behavior.
 enum AgentTheme {
     static let blue = Color(nsColor: .systemBlue)
+    static let selection = dynamic(light: 0x0065D1, dark: 0x0A64CD)
 
-    static let paneCornerRadius: CGFloat = 14
     static let panelCornerRadius: CGFloat = 12
-    static let sidebarWidth: CGFloat = 226
-    static let collapsedSidebarWidth: CGFloat = 64
-    static let paperOpacity = 0.90
 
-    /// The paper pane and its cards use the design pass's cool-tinted surfaces
-    /// rather than AppKit's neutral greys, so pane and card keep real contrast.
-    static let contentBackground = dynamic(light: 0xF7F8FB, dark: 0x1A1C24)
-    static let controlBackground = dynamic(light: 0xFFFFFF, dark: 0x24262F)
+    /// Neutral content surfaces leave the desktop's color to the native glass.
+    static let contentBackground = dynamic(light: 0xF5F5F7, dark: 0x1C1C1E)
+    static let controlBackground = dynamic(light: 0xFFFFFF, dark: 0x2C2C2E)
     static let separator = Color(nsColor: .separatorColor)
 
-    // Identity tiles. These say what a thing is and are never used for status.
-    static let skill = dynamic(light: 0xFF8A1F, dark: 0xFF9D45)
-    static let plugin = dynamic(light: 0xB457F0, dark: 0xC77DFF)
-    static let mcpServer = dynamic(light: 0x22A6C9, dark: 0x4CC4E3)
-    static let profile = dynamic(light: 0x5E5CE6, dark: 0x7D7BFF)
-    static let graphite = dynamic(light: 0x4A5068, dark: 0x7A8098)
+    // Neutral symbols identify item types; color is reserved for actions and status.
+    static let graphite = dynamic(light: 0x6E6E73, dark: 0xAEAEB2)
+    static let skill = graphite
+    static let plugin = graphite
+    static let mcpServer = graphite
+    static let profile = graphite
 
     // Status. Only ever a small glyph next to words.
     static let ok = dynamic(light: 0x2EA44F, dark: 0x3BD160)
@@ -60,27 +61,19 @@ extension NSColor {
     }
 }
 
-/// The window itself is the one translucent surface. Everything operational
-/// sits on the paper pane above it, so the desktop never competes with rows.
-struct DesktopGlassBackground: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .sidebar
-
+/// Supplies the desktop backdrop underneath the entire split view. The native
+/// NSGlassEffectView remains above this view and owns the sidebar's contents.
+/// Keeping this outside the sidebar prevents legacy vibrancy from covering glass.
+struct WindowBackdropMaterial: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
-        configure(view)
+        view.material = .underWindowBackground
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
         return view
     }
 
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        configure(nsView)
-    }
-
-    private func configure(_ view: NSVisualEffectView) {
-        view.material = material
-        view.blendingMode = .behindWindow
-        view.state = .active
-        view.isEmphasized = false
-    }
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 struct WindowConfigurator: NSViewRepresentable {
@@ -102,12 +95,9 @@ private final class WindowConfigurationView: NSView {
     func configureWindow() {
         guard let window else { return }
         window.identifier = NSUserInterfaceItemIdentifier("agent-tooling-main")
+        // The scene supplies a clear backing. The native material, rather than
+        // an opaque window fill, determines the sidebar's appearance.
         window.isOpaque = false
-        window.backgroundColor = .clear
-        window.titlebarAppearsTransparent = true
-        window.styleMask.insert(.fullSizeContentView)
-        window.isMovableByWindowBackground = true
-        window.titleVisibility = .hidden
     }
 }
 
@@ -118,19 +108,13 @@ extension View {
         modifier(ControlSurfaceModifier(cornerRadius: cornerRadius))
     }
 
-    /// The content pane: a 90% paper inset from the glass window edge.
-    func paperPane() -> some View {
-        modifier(PaperPaneModifier())
-    }
-
     /// Collection rails inside a split view share the paper; a hairline is the
     /// only separation.
     func paneMaterial() -> some View {
         modifier(PaneMaterialModifier())
     }
 
-    /// Accent selection for collection rows: the same capsule-cornered fill as
-    /// the sidebar, so selection reads as one shape across the app.
+    /// Accent selection for collection rows, separate from the system sidebar.
     func rowSelection(_ selected: Bool, cornerRadius: CGFloat = 8) -> some View {
         modifier(RowSelectionModifier(selected: selected, cornerRadius: cornerRadius))
     }
@@ -144,32 +128,11 @@ private struct ControlSurfaceModifier: ViewModifier {
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(AgentTheme.controlBackground)
-                    .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(AgentTheme.separator.opacity(0.55), lineWidth: 0.5)
+                    .strokeBorder(AgentTheme.separator.opacity(0.35), lineWidth: 0.5)
             }
-    }
-}
-
-private struct PaperPaneModifier: ViewModifier {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.colorScheme) private var colorScheme
-
-    func body(content: Content) -> some View {
-        content
-            .background {
-                RoundedRectangle(cornerRadius: AgentTheme.paneCornerRadius, style: .continuous)
-                    .fill(AgentTheme.contentBackground.opacity(reduceTransparency ? 1 : AgentTheme.paperOpacity))
-            }
-            .clipShape(RoundedRectangle(cornerRadius: AgentTheme.paneCornerRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: AgentTheme.paneCornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.09 : 0.85), lineWidth: 0.5)
-            }
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.35 : 0.08), radius: 3, y: 1)
-            .padding(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 8))
     }
 }
 
@@ -191,7 +154,7 @@ private struct RowSelectionModifier: ViewModifier {
             .background {
                 if selected {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(AgentTheme.blue)
+                        .fill(AgentTheme.selection)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                 }

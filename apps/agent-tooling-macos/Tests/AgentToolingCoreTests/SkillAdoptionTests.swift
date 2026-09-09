@@ -106,13 +106,15 @@ struct SkillAdoptionTests {
             candidate(id: "unscanned", sourcePath: nil),
         ])
 
-        #expect(adoption.skills.map(\.id) == ["doc-review", "release-notes"])
-        #expect(adoption.rejections.map(\.id) == ["linked-skill", "renamed", "vanished", "unscanned"])
+        #expect(adoption.skills.map(\.id) == ["doc-review", "release-notes", "something-else"])
+        #expect(adoption.sourceSkillIDs == [
+            "doc-review": "doc-review", "reviews:release-notes": "release-notes", "renamed": "something-else",
+        ])
+        #expect(adoption.rejections.map(\.id) == ["linked-skill", "vanished", "unscanned"])
         #expect(adoption.rejections.first { $0.id == "linked-skill" }?.reason.contains("symbolic link") == true)
-        #expect(adoption.rejections.first { $0.id == "renamed" }?.reason.contains("required frontmatter") == true)
         #expect(adoption.rejections.first { $0.id == "vanished" }?.reason.contains("no longer on this Mac") == true)
         #expect(adoption.rejections.first { $0.id == "unscanned" }?.reason.contains("Check setup again") == true)
-        #expect(adoption.plan.summary.contains("Skipped 4 skills"))
+        #expect(adoption.plan.summary.contains("Skipped 3 skills"))
         library.discardAdoption(adoption)
     }
 
@@ -120,17 +122,19 @@ struct SkillAdoptionTests {
         let root = try temporaryDirectory()
         let store = try WorkspaceStore(rootURL: root.appending(path: "workspace", directoryHint: .isDirectory))
         let library = WorkspaceLibrary(store: store)
-        let claude = root.appending(path: "client/.claude/skills/doc-review", directoryHint: .isDirectory)
-        let codex = root.appending(path: "client/.agents/skills/doc-review", directoryHint: .isDirectory)
+        let claude = root.appending(path: "client/.claude/skills/first-folder", directoryHint: .isDirectory)
+        let codex = root.appending(path: "client/.agents/skills/second-folder", directoryHint: .isDirectory)
         try write(definition(name: "doc-review"), to: claude.appending(path: "SKILL.md"))
         try write(definition(name: "doc-review"), to: codex.appending(path: "SKILL.md"))
 
         let adoption = try library.adoptionPlan(for: [
-            candidate(id: "doc-review", sourcePath: claude.path(percentEncoded: false)),
-            candidate(id: "reviews:doc-review", sourcePath: codex.path(percentEncoded: false)),
+            candidate(id: "first-folder", sourcePath: claude.path(percentEncoded: false)),
+            candidate(id: "reviews:second-folder", sourcePath: codex.path(percentEncoded: false)),
         ])
 
         #expect(adoption.skills.map(\.id) == ["doc-review"])
+        #expect(adoption.sourceSkillIDs == ["first-folder": "doc-review"])
+        #expect(adoption.rejections.first?.id == "reviews:second-folder")
         #expect(adoption.rejections.first?.reason.contains("already uses the portable name doc-review") == true)
         library.discardAdoption(adoption)
 
@@ -225,6 +229,182 @@ struct SkillAdoptionTests {
 }
 
 extension SkillAdoptionTests {
+    @Test func adoptionUsesDeclaredIdentityAndPreservesTheWholeSourceFolder() throws {
+        let root = try temporaryDirectory()
+        let store = try WorkspaceStore(rootURL: root.appending(path: "workspace", directoryHint: .isDirectory))
+        let library = WorkspaceLibrary(store: store)
+        let source = root.appending(path: "client/plugin/skills/source-folder", directoryHint: .isDirectory)
+        let markdown = """
+            ---
+            name: "doc-review"
+            description: >-
+              Review a document before publication,
+              including its references and examples.
+            ---
+
+            # Document review
+
+            Read [the reference](references/guide.md).
+            """
+        try write(markdown, to: source.appending(path: "SKILL.md"))
+        try write("Read [the example](../assets/example.txt).\n", to: source.appending(path: "references/guide.md"))
+        try write("Example bytes\n", to: source.appending(path: "assets/example.txt"))
+        try write("#!/bin/sh\nexit 0\n", to: source.appending(path: "scripts/check.sh"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: source.appending(path: "scripts/check.sh").path)
+        let before = try DirectoryFingerprint.sha256(of: source)
+
+        let adoption = try library.adoptionPlan(for: [candidate(id: "reviews:source-folder", sourcePath: source.path)])
+        defer { library.discardAdoption(adoption) }
+
+        let adopted = try #require(adoption.skills.first)
+        #expect(adopted.id == "doc-review")
+        #expect(adopted.name == "doc-review")
+        #expect(adopted.bundle == "local-doc-review")
+        #expect(adopted.summary == "Review a document before publication, including its references and examples.")
+        #expect(adoption.sourceSkillIDs == ["reviews:source-folder": "doc-review"])
+        #expect(adoption.rejections.isEmpty)
+        #expect(adopted.files == ["SKILL.md", "assets/example.txt", "references/guide.md", "scripts/check.sh"])
+
+        let step = try #require(adoption.plan.steps.first)
+        let stagedPackage = URL(fileURLWithPath: try #require(step.sourcePath), isDirectory: true)
+        let stagedSkill = stagedPackage.appending(path: "skills/doc-review", directoryHint: .isDirectory)
+        #expect(try Data(contentsOf: stagedSkill.appending(path: "SKILL.md")) == Data(markdown.utf8))
+        #expect(try DirectoryFingerprint.sha256(of: stagedSkill) == before)
+        #expect(try DirectoryFingerprint.sha256(of: source) == before)
+        #expect(try DirectoryFingerprint.sha256(of: stagedPackage) == step.sourceFingerprint)
+        let manifest = try #require(
+            JSONSerialization.jsonObject(with: Data(contentsOf: stagedPackage.appending(path: "plugin.json"))) as? [String: Any]
+        )
+        #expect(manifest["name"] as? String == "doc-review")
+        #expect(!FileManager.default.fileExists(atPath: library.packagesURL.appending(path: "local-doc-review").path))
+    }
+
+    @Test(arguments: [">", ">-", "|", "|-", "plain"])
+    func adoptionReadsMultilineDescriptions(style: String) throws {
+        let root = try temporaryDirectory()
+        let store = try WorkspaceStore(rootURL: root.appending(path: "workspace", directoryHint: .isDirectory))
+        let library = WorkspaceLibrary(store: store)
+        let source = root.appending(path: "client/source-folder", directoryHint: .isDirectory)
+        let description = style == "plain"
+            ? "Review a document\n  before publication."
+            : "\(style)\n  Review a document\n  before publication."
+        try write("---\nname: 'doc-review'\ndescription: \(description)\n---\n\n# Review\n", to: source.appending(path: "SKILL.md"))
+
+        let adoption = try library.adoptionPlan(for: [candidate(id: "source-folder", sourcePath: source.path)])
+        defer { library.discardAdoption(adoption) }
+
+        let expected = style.hasPrefix("|") ? "Review a document\nbefore publication." : "Review a document before publication."
+        #expect(adoption.skills.first?.summary.trimmingCharacters(in: .whitespacesAndNewlines) == expected)
+        #expect(adoption.sourceSkillIDs == ["source-folder": "doc-review"])
+    }
+
+    @Test(arguments: ["Doc-Review", "doc review", "../doc-review", "doc--review"])
+    func adoptionDoesNotRewriteInvalidDeclaredNames(name: String) throws {
+        let root = try temporaryDirectory()
+        let store = try WorkspaceStore(rootURL: root.appending(path: "workspace", directoryHint: .isDirectory))
+        let library = WorkspaceLibrary(store: store)
+        let source = root.appending(path: "client/source-folder", directoryHint: .isDirectory)
+        let markdown = definition(name: name)
+        try write(markdown, to: source.appending(path: "SKILL.md"))
+
+        do {
+            _ = try library.adoptionPlan(for: [candidate(id: "source-folder", sourcePath: source.path)])
+            Issue.record("An invalid declared name was adopted.")
+        } catch WorkspaceLibraryError.noAdoptableSkillCandidates(let rejections) {
+            #expect(rejections.map(\.id) == ["source-folder"])
+            #expect(rejections.first?.reason.contains("not a valid skill identifier") == true)
+        }
+        #expect(try Data(contentsOf: source.appending(path: "SKILL.md")) == Data(markdown.utf8))
+    }
+
+    @Test func declaredIdentityCannotReplaceAnExistingManagedPackage() throws {
+        let root = try temporaryDirectory()
+        let store = try WorkspaceStore(rootURL: root.appending(path: "workspace", directoryHint: .isDirectory))
+        let library = WorkspaceLibrary(store: store)
+        let existing = try createManagedSkill(named: "doc-review", in: library)
+        let before = try DirectoryFingerprint.sha256(of: existing.packageURL)
+        let source = root.appending(path: "client/source-folder", directoryHint: .isDirectory)
+        try write(definition(name: "doc-review"), to: source.appending(path: "SKILL.md"))
+
+        do {
+            _ = try library.adoptionPlan(for: [candidate(id: "source-folder", sourcePath: source.path)])
+            Issue.record("A managed package collision was accepted.")
+        } catch WorkspaceLibraryError.noAdoptableSkillCandidates(let rejections) {
+            #expect(rejections.first?.reason.contains("already contains a skill named doc-review") == true)
+        }
+        #expect(try DirectoryFingerprint.sha256(of: existing.packageURL) == before)
+    }
+
+    @Test func declaringAnotherSelectedRecordsIDCannotReplaceARejectedSource() throws {
+        let root = try temporaryDirectory()
+        let store = try WorkspaceStore(rootURL: root.appending(path: "workspace", directoryHint: .isDirectory))
+        let library = WorkspaceLibrary(store: store)
+        let source = root.appending(path: "client/source-folder", directoryHint: .isDirectory)
+        try write(definition(name: "doc-review"), to: source.appending(path: "SKILL.md"))
+
+        do {
+            _ = try library.adoptionPlan(for: [
+                candidate(id: "source-folder", sourcePath: source.path),
+                candidate(id: "doc-review", sourcePath: nil),
+            ])
+            Issue.record("Adoption occupied another selected record's ID.")
+        } catch WorkspaceLibraryError.noAdoptableSkillCandidates(let rejections) {
+            #expect(rejections.map(\.id) == ["source-folder", "doc-review"])
+            #expect(rejections.first?.reason.contains("already uses the portable name doc-review") == true)
+        }
+    }
+
+    @Test func managedValidationDistinguishesNameMismatchFromMissingMetadata() throws {
+        let root = try temporaryDirectory()
+        let store = try WorkspaceStore(rootURL: root.appending(path: "workspace", directoryHint: .isDirectory))
+        let library = WorkspaceLibrary(store: store)
+        let existing = try createManagedSkill(named: "doc-review", in: library)
+        let definitionURL = existing.skillURL.appending(path: "SKILL.md")
+        try write(definition(name: "different-name"), to: definitionURL)
+
+        do {
+            _ = try library.validateSkill(existing.skill)
+            Issue.record("A different declared name passed managed validation.")
+        } catch WorkspaceLibraryError.skillNameMismatch(let expected, let declared) {
+            #expect(expected == "doc-review")
+            #expect(declared == "different-name")
+        }
+
+        try write("---\nname: doc-review\n---\n", to: definitionURL)
+        do {
+            _ = try library.validateSkill(existing.skill)
+            Issue.record("A missing description passed managed validation.")
+        } catch {
+            #expect(error.localizedDescription.localizedCaseInsensitiveContains("description"))
+            #expect(!error.localizedDescription.contains("different-name"))
+        }
+    }
+
+    @Test func sourceEditsUseTheSameMultilineMetadataAsAdoptionAndValidation() throws {
+        let root = try temporaryDirectory()
+        let store = try WorkspaceStore(rootURL: root.appending(path: "workspace", directoryHint: .isDirectory))
+        let library = WorkspaceLibrary(store: store)
+        let existing = try createManagedSkill(named: "doc-review", in: library)
+        let markdown = "---\nname: 'doc-review'\ndescription: >-\n  Review a document\n  before publication.\n---\n\n# Review\n"
+
+        let updated = try library.updateSkillSource(existing.skill, markdown: markdown)
+        #expect(updated.skill.summary == "Review a document before publication.")
+        #expect(updated.skill.validationCount == 3)
+        #expect(try library.validateSkill(updated.skill) == 3)
+        #expect(try Data(contentsOf: updated.skillURL.appending(path: "SKILL.md")) == Data(markdown.utf8))
+        #expect(library.commitUpdate(updated) == nil)
+    }
+
+    private func createManagedSkill(named name: String, in library: WorkspaceLibrary) throws -> CreatedSkill {
+        var draft = SkillDraft()
+        draft.name = name
+        draft.purpose = "Review a document."
+        draft.triggers = ["Review this document."]
+        draft.negativeTrigger = "Do not publish it."
+        draft.selectedTargets = [.claude]
+        return try library.createSkill(from: draft)
+    }
+
     /// A batch reviews as one step per skill. Adopting three skills must not
     /// read as a single rewrite of the whole managed library, and it must not
     /// restage packages the library already holds.

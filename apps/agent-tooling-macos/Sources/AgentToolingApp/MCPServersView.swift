@@ -27,13 +27,13 @@ struct DirectMCPServersView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Connections", context: toolbarContext) {
+            PageToolbar(title: "MCP servers", context: toolbarContext) {
                 Button {
                     activeSheet = .paste
                 } label: {
                     Label("Paste…", systemImage: "doc.on.clipboard")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .keyboardShortcut("v", modifiers: [.command, .shift])
                 .help("Read an mcp add command, a JSON block, a server URL, or a SKILL.md")
                 .disabled(model.isInteractionLocked)
@@ -43,7 +43,8 @@ struct DirectMCPServersView: View {
                 } label: {
                     Label("Add server…", systemImage: "plus")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
+                .tint(AgentTheme.selection)
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(model.isInteractionLocked)
             }
@@ -54,13 +55,7 @@ struct DirectMCPServersView: View {
                 HSplitView {
                     collectionPane.frame(minWidth: 320, idealWidth: 600)
                     VStack(spacing: 0) {
-                        HStack {
-                            Text("Connection details").font(.caption).foregroundStyle(.secondary)
-                            Spacer()
-                            Button { selection = [] } label: { Image(systemName: "xmark") }
-                                .buttonStyle(.plain).help("Close details")
-                        }.padding(16)
-                        Divider()
+                        InspectorHeader(title: "Server details") { selection = [] }
                         detailPane
                     }.frame(minWidth: 400, idealWidth: 600)
                 }
@@ -105,12 +100,87 @@ struct DirectMCPServersView: View {
         case .pasteImport: activeSheet = .paste
         case .selectMCPServer(let id):
             guard model.visibleMCPServers.contains(where: { $0.id == id }) else { break }
-            query = ""
-            filter = .all
+            clearFilters()
             selection = [id]
         case .selectPlugin, .selectProfile, .selectMarketplaceSource, .selectAccount, .selectReceipt: break
         }
         self.request = nil
+    }
+
+    private var statusSelector: some View {
+        WorkspaceSegmentedPicker("MCP server status", selection: $filter) {
+            ForEach(MCPFilter.allCases) { item in Text(item.rawValue).tag(item) }
+        }
+        .fixedSize()
+    }
+
+    private var hasServerFilters: Bool {
+        !sourceFilter.isEmpty || !pluginFilter.isEmpty || !marketplaceFilter.isEmpty || !transportFilter.isEmpty
+    }
+
+    private var serverFilterMenu: some View {
+        Menu {
+            Picker("Configured by", selection: $sourceFilter) {
+                Text("Any origin").tag("")
+                ForEach(Array(Set(model.visibleMCPServers.map { ConnectionSource(server: $0).source })).sorted(), id: \.self) {
+                    Text($0).tag($0)
+                }
+            }
+            Picker("Plugin", selection: $pluginFilter) {
+                Text("All plugins").tag("")
+                ForEach(
+                    Array(Set(model.visibleMCPServers.compactMap { ConnectionSource(server: $0).plugin })).sorted(), id: \.self
+                ) {
+                    Text(ConnectionSource.title($0)).tag($0)
+                }
+            }
+            Picker("Marketplace", selection: $marketplaceFilter) {
+                Text("All marketplaces").tag("")
+                ForEach(
+                    Array(Set(model.visibleMCPServers.compactMap { ConnectionSource(server: $0).marketplace })).sorted(),
+                    id: \.self
+                ) {
+                    Text(ConnectionSource.title($0)).tag($0)
+                }
+            }
+            Picker("Transport", selection: $transportFilter) {
+                Text("Any transport").tag("")
+                Text("HTTP").tag("HTTP")
+                Text("stdio").tag("stdio")
+            }
+        } label: {
+            Label("Filters", systemImage: "line.3.horizontal.decrease")
+        }.inventoryMenuStyle().fixedSize()
+    }
+
+    private var activeServerFilters: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                if !sourceFilter.isEmpty {
+                    ConnectionFilterPill(title: sourceFilter, color: ConnectionPillColors.color(for: sourceFilter), active: true) {
+                        sourceFilter = ""
+                    }
+                }
+                if !pluginFilter.isEmpty {
+                    ConnectionFilterPill(
+                        title: ConnectionSource.title(pluginFilter), color: ConnectionPillColors.color(for: pluginFilter),
+                        active: true
+                    ) { pluginFilter = "" }
+                }
+                if !marketplaceFilter.isEmpty {
+                    ConnectionFilterPill(
+                        title: ConnectionSource.title(marketplaceFilter), color: ConnectionPillColors.color(for: marketplaceFilter),
+                        active: true
+                    ) { marketplaceFilter = "" }
+                }
+                if !transportFilter.isEmpty {
+                    ConnectionFilterPill(
+                        title: transportFilter, color: ConnectionPillColors.color(for: transportFilter), active: true
+                    ) { transportFilter = "" }
+                }
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var collectionPane: some View {
@@ -119,43 +189,32 @@ struct DirectMCPServersView: View {
                 Picker("App", selection: $clientFilter) {
                     Text("All apps").tag("All apps")
                     ForEach(model.availableClients, id: \.self) { Text($0.rawValue).tag($0.rawValue) }
-                }.fixedSize()
+                }.inventoryMenuStyle().fixedSize()
                 Spacer()
-                TextField("Search servers", text: $query)
-                    .textFieldStyle(.roundedBorder)
+                InventorySearchField(placeholder: "Search servers", text: $query)
+                    .frame(maxWidth: 420)
                     .accessibilityLabel("Search MCP servers")
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-            HStack(spacing: 8) {
-                // Sized to its content: a fixed width clipped the control, so
-                // selecting a segment resized it over the search field.
-                Picker("Status", selection: $filter) {
-                    ForEach(MCPFilter.allCases) { item in Text(item.rawValue).tag(item) }
-                }
-                .labelsHidden()
-                .accessibilityLabel("MCP server status")
-                .pickerStyle(.segmented)
-                .fixedSize()
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        if !sourceFilter.isEmpty {
-                            ConnectionFilterPill(title: sourceFilter, color: ConnectionPillColors.color(for: sourceFilter), active: true) { sourceFilter = "" }
-                        }
-                        if !pluginFilter.isEmpty {
-                            ConnectionFilterPill(title: ConnectionSource.title(pluginFilter), color: ConnectionPillColors.color(for: pluginFilter), active: true) { pluginFilter = "" }
-                        }
-                        if !marketplaceFilter.isEmpty {
-                            ConnectionFilterPill(title: ConnectionSource.title(marketplaceFilter), color: ConnectionPillColors.color(for: marketplaceFilter), active: true) { marketplaceFilter = "" }
-                        }
-                        if !transportFilter.isEmpty {
-                            ConnectionFilterPill(title: transportFilter, color: ConnectionPillColors.color(for: transportFilter), active: true) { transportFilter = "" }
-                        }
+            .padding(.horizontal, 24)
+            .padding(.top, WorkspaceLayout.contentTopInset)
+            VStack(alignment: .leading, spacing: 9) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        statusSelector
+                        serverFilterMenu
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .leading, spacing: 9) {
+                        statusSelector
+                        serverFilterMenu
                     }
                 }
-                Spacer(minLength: 0)
+                if hasServerFilters {
+                    activeServerFilters
+                }
             }
-            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
             .padding(.bottom, 12)
             .padding(.top, 9)
 
@@ -169,48 +228,99 @@ struct DirectMCPServersView: View {
                     action: performEmptyStateAction
                 )
             } else {
-                Table(filteredServers, selection: $selection) {
-                    TableColumn("Name") { server in
-                        Label(server.name, systemImage: "network").font(.callout.weight(.medium))
-                    }.width(min: 170, ideal: 240)
-                    TableColumn("Source") { server in
-                        let source = ConnectionSource(server.endpoint).source
-                        ConnectionFilterPill(title: source, color: ConnectionPillColors.color(for: source), active: sourceFilter == source) {
-                            sourceFilter = sourceFilter == source ? "" : source
-                        }.help(server.endpoint)
-                    }.width(95)
-                    TableColumn("Plugin") { server in
-                        if let plugin = ConnectionSource(server.endpoint).plugin {
-                            ConnectionFilterPill(title: ConnectionSource.title(plugin), color: ConnectionPillColors.color(for: plugin), active: pluginFilter == plugin) {
-                                pluginFilter = pluginFilter == plugin ? "" : plugin
-                            }
-                        } else { Text("—").foregroundStyle(.tertiary) }
-                    }.width(min: 140, ideal: 180)
-                    TableColumn("Marketplace") { server in
-                        if let marketplace = ConnectionSource(server.endpoint).marketplace {
-                            ConnectionFilterPill(title: ConnectionSource.title(marketplace), color: ConnectionPillColors.color(for: marketplace), active: marketplaceFilter == marketplace) {
-                                marketplaceFilter = marketplaceFilter == marketplace ? "" : marketplace
-                            }
-                        } else { Text("—").foregroundStyle(.tertiary) }
-                    }.width(min: 110, ideal: 135)
-                    TableColumn("Transport") { server in
-                        let transport = server.transport.rawValue
-                        ConnectionFilterPill(title: transport, color: ConnectionPillColors.color(for: transport), active: transportFilter == transport) {
-                            transportFilter = transportFilter == transport ? "" : transport
-                        }
-                    }.width(90)
-                    TableColumn("Apps") { server in
-                        TableClientMarks(clients: model.availableClients, present: Set(server.clients.filter(\.reportsLocalPresence).map(\.client)))
-                    }.width(70)
-                    TableColumn("Tools") { server in
-                        Text(capabilities.summary(for: server.id) ?? "—")
-                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    }.width(100)
-                    TableColumn("Status") { server in
-                        StatusGlyph(state: server.aggregateState, size: 13)
-                    }.width(50)
-                }.tableStyle(.inset)
+                GeometryReader { geometry in
+                    if geometry.size.width < 1050 {
+                        Table(filteredServers, selection: $selection) {
+                            TableColumn("Server") { server in
+                                HStack(spacing: 12) {
+                                    KindTile(kind: .mcpServer, size: 30)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(server.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                                        Text(server.transport.rawValue + " · " + ConnectionSource(server: server).source)
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }.padding(.vertical, 8)
+                                    Spacer(minLength: 4)
+                                    StatusGlyph(state: server.aggregateState, size: 13)
+                                        .accessibilityHidden(false)
+                                        .accessibilityLabel(server.aggregateState.rawValue)
+                                }
+                            }.width(min: 150, ideal: 280)
+                            TableColumn("Apps") { server in
+                                TableClientMarks(
+                                    clients: model.availableClients,
+                                    present: Set(server.clients.filter(\.reportsLocalPresence).map(\.client)))
+                            }.width(70)
 
+                        }
+                        .tableStyle(.inset(alternatesRowBackgrounds: false))
+                        .scrollContentBackground(.hidden)
+                    } else {
+                        Table(filteredServers, selection: $selection) {
+                            TableColumn("Name") { server in
+                                HStack(spacing: 12) {
+                                    KindTile(kind: .mcpServer, size: 30)
+                                    Text(server.name).font(.callout.weight(.medium))
+                                }.padding(.vertical, 8)
+                            }.width(min: 170, ideal: 240)
+                            TableColumn("Configured by") { server in
+                                let source = ConnectionSource(server: server).source
+                                ConnectionFilterPill(
+                                    title: source, color: ConnectionPillColors.color(for: source), active: sourceFilter == source
+                                ) {
+                                    sourceFilter = sourceFilter == source ? "" : source
+                                }.help(server.endpoint)
+                            }.width(115)
+                            TableColumn("Plugin") { server in
+                                if let plugin = ConnectionSource(server: server).plugin {
+                                    ConnectionFilterPill(
+                                        title: ConnectionSource.title(plugin), color: ConnectionPillColors.color(for: plugin),
+                                        active: pluginFilter == plugin
+                                    ) {
+                                        pluginFilter = pluginFilter == plugin ? "" : plugin
+                                    }
+                                } else {
+                                    Text("—").foregroundStyle(.tertiary)
+                                }
+                            }.width(min: 140, ideal: 180)
+                            TableColumn("Marketplace") { server in
+                                if let marketplace = ConnectionSource(server: server).marketplace {
+                                    ConnectionFilterPill(
+                                        title: ConnectionSource.title(marketplace), color: ConnectionPillColors.color(for: marketplace),
+                                        active: marketplaceFilter == marketplace
+                                    ) {
+                                        marketplaceFilter = marketplaceFilter == marketplace ? "" : marketplace
+                                    }
+                                } else {
+                                    Text("—").foregroundStyle(.tertiary)
+                                }
+                            }.width(min: 110, ideal: 135)
+                            TableColumn("Transport") { server in
+                                let transport = server.transport.rawValue
+                                ConnectionFilterPill(
+                                    title: transport, color: ConnectionPillColors.color(for: transport),
+                                    active: transportFilter == transport
+                                ) {
+                                    transportFilter = transportFilter == transport ? "" : transport
+                                }
+                            }.width(90)
+                            TableColumn("Apps") { server in
+                                TableClientMarks(
+                                    clients: model.availableClients,
+                                    present: Set(server.clients.filter(\.reportsLocalPresence).map(\.client)))
+                            }.width(70)
+                            TableColumn("Tools") { server in
+                                Text(capabilities.summary(for: server.id) ?? "—")
+                                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            }.width(100)
+                            TableColumn("Status") { server in
+                                StatusGlyph(state: server.aggregateState, size: 13)
+                                    .accessibilityHidden(false)
+                                    .accessibilityLabel(server.aggregateState.rawValue)
+                            }.width(50)
+                        }.tableStyle(.inset(alternatesRowBackgrounds: false))
+                            .scrollContentBackground(.hidden)
+                    }
+                }
             }
         }
         .paneMaterial()
@@ -268,15 +378,19 @@ struct DirectMCPServersView: View {
 
     private var filteredServers: [MCPServer] {
         model.visibleMCPServers.filter { server in
-            let provenance = ConnectionSource(server.endpoint)
-            let matchesSource = (sourceFilter.isEmpty || sourceFilter == provenance.source)
+            let provenance = ConnectionSource(server: server)
+            let matchesSource =
+                (sourceFilter.isEmpty || sourceFilter == provenance.source)
                 && (pluginFilter.isEmpty || pluginFilter == provenance.plugin)
                 && (marketplaceFilter.isEmpty || marketplaceFilter == provenance.marketplace)
                 && (transportFilter.isEmpty || transportFilter == server.transport.rawValue)
             let matchesStatus =
                 filter == .all || (filter == .attention && server.aggregateState != .healthy)
                 || (filter == .connected && server.aggregateState == .healthy)
-            let searchable = [server.name, server.summary, server.endpoint, server.authentication].joined(separator: " ")
+            let searchable = [
+                server.name, server.summary, server.endpoint, server.authentication,
+                provenance.pluginTitle ?? "", provenance.marketplaceTitle ?? "",
+            ].joined(separator: " ")
             return (clientFilter == "All apps" || server.clients.contains { $0.client.rawValue == clientFilter && $0.reportsLocalPresence })
                 && matchesSource && matchesStatus && (query.isEmpty || searchable.localizedCaseInsensitiveContains(query))
         }
@@ -290,7 +404,7 @@ struct DirectMCPServersView: View {
 
     private var toolbarContext: String {
         let usable = model.visibleMCPServers.filter { $0.aggregateState == .healthy }.count
-        let base = "\(model.visibleMCPServers.count) configured · \(usable) usable"
+        let base = "\(model.visibleMCPServers.count) servers · \(usable) locally configured"
         return stackedServers.count > 1 ? "\(base) · \(stackedServers.count) selected" : base
     }
 
@@ -324,9 +438,18 @@ struct DirectMCPServersView: View {
         if model.visibleMCPServers.isEmpty {
             activeSheet = .add
         } else {
-            query = ""
-            filter = .all
+            clearFilters()
         }
+    }
+
+    private func clearFilters() {
+        query = ""
+        filter = .all
+        clientFilter = "All apps"
+        sourceFilter = ""
+        pluginFilter = ""
+        marketplaceFilter = ""
+        transportFilter = ""
     }
 }
 
@@ -368,6 +491,7 @@ private struct MCPStackPane: View {
                     Spacer()
                     Button("Review one plan", action: onReview)
                         .buttonStyle(.borderedProminent)
+                        .tint(AgentTheme.selection)
                         .disabled(targets.isEmpty || model.isInteractionLocked)
                 }
 
@@ -471,12 +595,14 @@ private struct MCPDetailView: View {
                     KindTile(kind: .mcpServer, size: 40, ghost: !server.isManagedDefinition)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(server.name).font(.title3.weight(.semibold))
-                        Text(server.summary).font(.callout).foregroundStyle(.secondary)
+                        Text(ConnectionSource(server: server).pluginTitle.map { "Provided by the \($0) plugin." } ?? server.summary)
+                            .font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
                     if setupCandidates.count == 1, let target = setupCandidates.first {
                         Button(actionTitle(for: target)) { performSetup(target) }
                             .buttonStyle(.borderedProminent)
+                            .tint(AgentTheme.selection)
                             .disabled(model.isInteractionLocked)
                     } else if !setupCandidates.isEmpty {
                         Menu("Set up…") {
@@ -485,6 +611,7 @@ private struct MCPDetailView: View {
                             }
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(AgentTheme.selection)
                         .disabled(model.isInteractionLocked)
                     } else {
                         Text(configuredSummary)
@@ -517,10 +644,27 @@ private struct MCPDetailView: View {
 
                 GroupBox("Configuration") {
                     VStack(spacing: 0) {
-                        LabeledValueRow(server.isManagedDefinition ? "Endpoint" : "Discovered from") {
-                            Text(server.endpoint)
-                                .font(.system(.caption, design: .monospaced))
-                                .textSelection(.enabled)
+                        if server.isManagedDefinition {
+                            LabeledValueRow(server.transport == .http ? "Endpoint" : "Command") {
+                                Text(server.endpoint)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .textSelection(.enabled)
+                            }
+                        } else {
+                            let origin = ConnectionSource(server: server)
+                            LabeledValueRow("Configured by") { Text(origin.source) }
+                            if let plugin = origin.pluginTitle {
+                                Divider()
+                                LabeledValueRow("Plugin") { Text(plugin) }
+                            }
+                            if let marketplace = origin.marketplaceTitle {
+                                Divider()
+                                LabeledValueRow("Marketplace") { Text(marketplace) }
+                            }
+                            if server.endpoint.hasPrefix("/") {
+                                Divider()
+                                LabeledValueRow("Configuration file") { LocationText(path: server.endpoint) }
+                            }
                         }
                         Divider()
                         LabeledValueRow("Transport") { Text(server.transport.rawValue) }
@@ -718,6 +862,7 @@ private struct AddMCPServerSheet: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(AgentTheme.selection)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canContinue || (step > 0 && model.isInteractionLocked))
             }

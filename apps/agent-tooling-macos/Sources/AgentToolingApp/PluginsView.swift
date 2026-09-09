@@ -5,12 +5,7 @@ struct PluginsView: View {
     @Environment(AppModel.self) private var model
     let navigate: (AppSection) -> Void
     @Binding var request: ScreenRequest?
-    @State private var query = ""
-    @State private var clientFilter = "All apps"
     @State private var connectorRecords: [DiscoveredConnectorRow] = []
-    @State private var selection: Set<String> = []
-    @State private var stackClient: ClientKind = .claude
-    @State private var stackError: String?
 
     init(navigate: @escaping (AppSection) -> Void, request: Binding<ScreenRequest?> = .constant(nil)) {
         self.navigate = navigate
@@ -18,6 +13,45 @@ struct PluginsView: View {
     }
 
     var body: some View {
+        let plugins = model.visiblePlugins
+        let scan = ConnectorInventoryRequest(
+            workspacePath: model.workspacePath, plugins: plugins,
+            scannedAt: model.visibleTargetObservations.map(\.lastScannedAt).max()
+        )
+        PluginsBrowser(
+            navigate: navigate, request: $request,
+            inventory: PluginInventoryIndex(
+                plugins: plugins, connectors: connectorRecords, sources: model.visibleSources,
+                packages: model.visibleMarketplacePackages
+            )
+        )
+        .task(id: scan) {
+            let records = await ConnectorInventoryCache.shared.records(for: scan)
+            guard !Task.isCancelled else { return }
+            connectorRecords = records
+        }
+    }
+}
+
+private struct PluginsBrowser: View {
+    @Environment(AppModel.self) private var model
+    let navigate: (AppSection) -> Void
+    @Binding var request: ScreenRequest?
+    let inventory: PluginInventoryIndex
+    @State private var query = ""
+    @State private var clientFilter = "All apps"
+    @State private var selection: Set<String> = []
+    @State private var stackClient: ClientKind = .claude
+    @State private var stackError: String?
+
+    init(navigate: @escaping (AppSection) -> Void, request: Binding<ScreenRequest?>, inventory: PluginInventoryIndex) {
+        self.navigate = navigate
+        _request = request
+        self.inventory = inventory
+    }
+
+    var body: some View {
+        let listedPlugins = filteredPlugins
         VStack(spacing: 0) {
             PageToolbar(title: "Plugins", context: toolbarContext) {
                 Button {
@@ -25,8 +59,10 @@ struct PluginsView: View {
                 } label: {
                     Label(model.isRefreshingMarketplace ? "Checking…" : "Check for updates", systemImage: "arrow.down.circle")
                 }
-                .buttonStyle(.bordered)
-                .help("Re-reads every reviewed catalog and source, then compares revisions")
+                .buttonStyle(.glass)
+                .help(
+                    "Refreshes catalog metadata and compares reported revisions. Use a plugin's update action to update it through its native app."
+                )
                 .disabled(model.isInteractionLocked)
 
                 Button {
@@ -34,23 +70,18 @@ struct PluginsView: View {
                 } label: {
                     Label(model.isRunningDoctor ? "Checking…" : "Check plugins", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
+                .tint(AgentTheme.selection)
                 .disabled(model.isInteractionLocked)
             }
 
             if selection.isEmpty {
-                collectionPane
+                collectionPane(plugins: listedPlugins)
             } else {
                 HSplitView {
-                    collectionPane.frame(minWidth: 320, idealWidth: 600)
+                    collectionPane(plugins: listedPlugins).frame(minWidth: 320, idealWidth: 600)
                     VStack(spacing: 0) {
-                        HStack {
-                            Text("Plugin details").font(.caption).foregroundStyle(.secondary)
-                            Spacer()
-                            Button { selection = [] } label: { Image(systemName: "xmark") }
-                                .buttonStyle(.plain).help("Close details")
-                        }.padding(16)
-                        Divider()
+                        InspectorHeader(title: "Plugin details") { selection = [] }
                         detailPane
                     }.frame(minWidth: 400, idealWidth: 600)
                 }
@@ -65,68 +96,111 @@ struct PluginsView: View {
             pruneSelection()
             consumeRequest()
         }
-        .onChange(of: model.visiblePlugins) { _, _ in pruneSelection() }
-        .onChange(of: filteredPlugins.map(\.id)) { _, _ in pruneSelection() }
+        .onChange(of: inventory.plugins) { _, _ in pruneSelection() }
+        .onChange(of: listedPlugins.map(\.id)) { _, _ in pruneSelection() }
         .onChange(of: request) { _, _ in consumeRequest() }
         .onExitCommand { selection = [] }
-        .task(id: model.visiblePlugins) { connectorRecords = ConnectorInventory.records(plugins: model.visiblePlugins) }
     }
 
     private func consumeRequest() {
         guard let request else { return }
-        if case .selectPlugin(let id) = request, model.visiblePlugins.contains(where: { $0.id == id }) {
+        if case .selectPlugin(let id) = request, inventory.plugins.contains(where: { $0.id == id }) {
             query = ""
+            clientFilter = "All apps"
             selection = [id]
         }
         self.request = nil
     }
 
-    private var collectionPane: some View {
+    private func collectionPane(plugins: [Plugin]) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Picker("App", selection: $clientFilter) {
                     Text("All apps").tag("All apps")
                     ForEach(model.availableClients, id: \.self) { Text($0.rawValue).tag($0.rawValue) }
-                }.fixedSize()
+                }.inventoryMenuStyle().fixedSize()
                 Spacer()
-                TextField("Search plugins", text: $query)
-                    .textFieldStyle(.roundedBorder)
+                InventorySearchField(placeholder: "Search plugins", text: $query)
+                    .frame(maxWidth: 420)
                     .accessibilityLabel("Search plugins")
             }
-            .padding(12)
+            .padding(.horizontal, WorkspaceLayout.pageInset)
+            .padding(.vertical, WorkspaceLayout.contentTopInset)
 
-            if filteredPlugins.isEmpty {
+            if plugins.isEmpty {
                 EmptyStateView(
                     symbol: "puzzlepiece.extension",
-                    title: query.isEmpty ? "No installed plugins" : "No matching plugins",
-                    message: query.isEmpty
-                        ? "Open Marketplace to browse native catalogs or add a reviewed local source."
-                        : "Try a different plugin name, source, or included skill.",
-                    actionTitle: query.isEmpty ? "Open Marketplace" : "Clear Search"
+                    title: hasFilters ? "No matching plugins" : "No installed plugins",
+                    message: !hasFilters
+                        ? "Open Discover to browse plugins from your marketplaces and folders."
+                        : "Try a different plugin, marketplace, or included skill.",
+                    actionTitle: hasFilters ? "Clear filters" : "Open Discover"
                 ) {
-                    if query.isEmpty { navigate(.marketplace) } else { query = "" }
+                    if hasFilters {
+                        query = ""
+                        clientFilter = "All apps"
+                    } else {
+                        navigate(.marketplace)
+                    }
                 }
             } else {
-                Table(filteredPlugins, selection: $selection) {
-                    TableColumn("Name") { plugin in
-                        Label(plugin.name, systemImage: "puzzlepiece.extension")
-                            .font(.callout.weight(.medium))
-                    }.width(min: 180, ideal: 250)
-                    TableColumn("Description") { plugin in
-                        Text(plugin.summary).foregroundStyle(.secondary).lineLimit(1).help(plugin.summary)
-                    }.width(min: 120, ideal: 360)
-                    TableColumn("Skills") { plugin in
-                        Text("\(plugin.skills.count)").monospacedDigit().foregroundStyle(.secondary)
-                    }.width(50)
-                    TableColumn("Apps") { plugin in
-                        TableClientMarks(clients: model.availableClients, present: Set(plugin.clients.filter(\.reportsLocalPresence).map(\.client)))
-                    }.width(70)
-                    TableColumn("Updates") { plugin in
-                        UpdateStateBadge(availability: availability(for: plugin))
-                    }.width(min: 110, ideal: 130)
+                GeometryReader { geometry in
+                    if geometry.size.width < 820 {
+                        Table(plugins, selection: $selection) {
+                            TableColumn("Plugin") { plugin in
+                                HStack(spacing: 12) {
+                                    ToolIdentityIcon(packageID: plugin.id, size: 30)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(plugin.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                                        Text(ConnectionSource(plugin.id).marketplaceTitle.map { "From \($0)" } ?? plugin.summary)
+                                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    }.padding(.vertical, 8)
+                                }
+                            }.width(min: 190, ideal: 350)
+                            TableColumn("Managed by") { plugin in
+                                TableClientMarks(
+                                    clients: model.availableClients,
+                                    present: Set(plugin.clients.filter(\.reportsLocalPresence).map(\.client)))
+                            }.width(90)
+                        }
+                        .tableStyle(.inset(alternatesRowBackgrounds: false))
+                        .scrollContentBackground(.hidden)
+                    } else {
+                        Table(plugins, selection: $selection) {
+                            TableColumn("Name") { plugin in
+                                HStack(spacing: 12) {
+                                    ToolIdentityIcon(packageID: plugin.id, size: 30)
+                                    Text(plugin.name).font(.callout.weight(.medium))
+                                }.padding(.vertical, 8)
+                            }.width(min: 180, ideal: 250)
+                            TableColumn("Description") { plugin in
+                                Text(plugin.summary).foregroundStyle(.secondary).lineLimit(1).help(plugin.summary)
+                            }.width(min: 120, ideal: 360)
+                            TableColumn("Marketplace") { plugin in
+                                Text(ConnectionSource(plugin.id).marketplaceTitle ?? "Not recorded")
+                                    .foregroundStyle(.secondary).lineLimit(1)
+                            }.width(min: 120, ideal: 150)
+                            TableColumn("Skills") { plugin in
+                                Text("\(plugin.skills.count)").monospacedDigit().foregroundStyle(.secondary)
+                            }.width(50)
+                            TableColumn("Managed by") { plugin in
+                                TableClientMarks(
+                                    clients: model.availableClients,
+                                    present: Set(plugin.clients.filter(\.reportsLocalPresence).map(\.client)))
+                            }.width(90)
+                            TableColumn("Updates") { plugin in
+                                let update = availability(for: plugin)
+                                if update.hasUpdate {
+                                    UpdateStateBadge(availability: update)
+                                } else {
+                                    Text(update.title).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }.width(min: 110, ideal: 130)
+                        }
+                        .tableStyle(.inset(alternatesRowBackgrounds: false))
+                        .scrollContentBackground(.hidden)
+                    }
                 }
-                .tableStyle(.inset)
-
             }
         }
         .paneMaterial()
@@ -152,17 +226,19 @@ struct PluginsView: View {
     }
 
     private func availability(for plugin: Plugin) -> UpdateAvailability {
-        UpdateAvailabilityEvaluator.evaluate(plugin: plugin, sources: model.visibleSources, packages: model.visibleMarketplacePackages)
+        inventory.availability[plugin.id] ?? .notChecked(reason: "Check for updates to compare this plugin.")
     }
 
     private var toolbarContext: String {
-        "\(model.visiblePlugins.count) plugins"
+        "\(inventory.plugins.count) plugins"
     }
+
+    private var hasFilters: Bool { !query.isEmpty || clientFilter != "All apps" }
 
     /// Several picks, one plan. Removing plugins one at a time means one review
     /// each; the stack makes it a single reviewed operation.
     private var stackedPlugins: [Plugin] {
-        model.visiblePlugins
+        inventory.plugins
             .filter { selection.contains($0.id) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -180,22 +256,16 @@ struct PluginsView: View {
         }
     }
 
-    private var displayPlugins: [Plugin] {
-        model.visiblePlugins.map { original in
-            var plugin = original
-            if let connector = connectorRecords.first(where: { $0.pluginID == plugin.id }) {
-                plugin.name = connector.name
-                plugin.summary = connector.summary
-            }
-            return plugin
-        }
-    }
+    private var displayPlugins: [Plugin] { inventory.plugins }
 
     private var filteredPlugins: [Plugin] {
         displayPlugins.filter { plugin in
             (clientFilter == "All apps" || plugin.clients.contains { $0.client.rawValue == clientFilter && $0.reportsLocalPresence })
                 && (query.isEmpty
-                || [plugin.name, plugin.summary, plugin.source, plugin.skills.joined(separator: " ")]
+                    || [
+                        plugin.name, plugin.summary, plugin.source, ConnectionSource(plugin.id).marketplaceTitle ?? "",
+                        plugin.skills.joined(separator: " "),
+                    ]
                     .joined(separator: " ")
                     .localizedCaseInsensitiveContains(query))
         }
@@ -214,32 +284,6 @@ struct PluginsView: View {
             selection = kept
         }
         stackError = nil
-    }
-}
-
-private struct PluginCollectionRow: View {
-    let plugin: Plugin
-    let availability: UpdateAvailability
-    let selected: Bool
-
-    var body: some View {
-        HStack(spacing: 11) {
-            KindTile(kind: .plugin, size: 28)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(plugin.name)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(selected ? Color.white : Color.primary)
-                    .lineLimit(1)
-                Text("\(plugin.skills.count) skills · \(plugin.scope)")
-                    .font(.caption)
-                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 12)
-            UpdateStateBadge(availability: availability)
-            ClientMarks(present: Set(plugin.clients.filter(\.reportsLocalPresence).map(\.client)))
-        }
-        .padding(.vertical, 6)
     }
 }
 
@@ -268,6 +312,7 @@ private struct PluginStackPane: View {
                     Spacer()
                     Button("Review removal plan", action: onReview)
                         .buttonStyle(.borderedProminent)
+                        .tint(AgentTheme.selection)
                         .disabled(model.isInteractionLocked)
                 }
 
@@ -280,11 +325,10 @@ private struct PluginStackPane: View {
                 }
 
                 GroupBox("Remove from") {
-                    Picker("App", selection: $client) {
+                    WorkspaceSegmentedPicker("App", selection: $client) {
                         ForEach(model.availableClients) { candidate in Text(candidate.rawValue).tag(candidate) }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
                     .padding(13)
                     .accessibilityLabel("App to remove from")
                 }
@@ -293,7 +337,7 @@ private struct PluginStackPane: View {
                     VStack(spacing: 0) {
                         ForEach(plugins) { plugin in
                             InfoRow(plugin.name, detail: "\(plugin.skills.count) skills · \(plugin.scope)") {
-                                KindTile(kind: .plugin, size: 26)
+                                ToolIdentityIcon(packageID: plugin.id, size: 26)
                             } trailing: {
                                 ClientMarks(present: Set(plugin.clients.filter(\.reportsLocalPresence).map(\.client)), size: 13)
                             }
@@ -316,59 +360,54 @@ private struct PluginDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 14) {
-                    KindTile(kind: .plugin, size: 40)
+                    ToolIdentityIcon(packageID: plugin.id, size: 44)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(plugin.name).font(.title3.weight(.semibold))
+                        Text(plugin.name).font(.system(size: 22, weight: .semibold))
                         Text(plugin.summary).font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    UpdateStateBadge(availability: availability, showsWhenCurrent: true)
+                    if availability.hasUpdate { UpdateStateBadge(availability: availability) }
                 }
 
-                GroupBox("Updates") {
-                    VStack(spacing: 0) {
-                        LabeledValueRow(availability.title) {
-                            HStack(spacing: 8) {
-                                StatusGlyph(state: availability.health, size: 14)
-                                Text(availability.detail)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        Divider()
-                        LabeledValueRow("Last checked") {
-                            HStack(spacing: 10) {
-                                Text(lastCheckedText).foregroundStyle(.secondary)
-                                Button(model.isRefreshingMarketplace ? "Checking…" : "Check again") {
-                                    Task { await model.refreshMarketplace() }
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                .disabled(model.isInteractionLocked)
-                            }
-                        }
-                    }
-                }
-
-                GroupBox("Installed in") {
+                GroupBox("Managed by") {
                     VStack(spacing: 0) {
                         ForEach(plugin.clients) { client in
-                            HStack(spacing: 12) {
-                                ClientDisc(client: client.client, size: 30)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(client.client.rawValue).font(.callout.weight(.medium))
-                                    Text(client.detail).font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                StatusGlyph(state: client.state, size: 14)
-                                if client.reportsLocalPresence {
-                                    Button("Remove…") {
-                                        Task { await model.planPluginRemoval(pluginID: plugin.id, client: client.client) }
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(spacing: 12) {
+                                    ClientDisc(client: client.client, size: 30)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(client.client.rawValue).font(.callout.weight(.medium))
+                                        Text(client.detail).font(.caption).foregroundStyle(.secondary)
                                     }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
-                                    .accessibilityLabel("Remove \(plugin.name) from \(client.client.rawValue)")
-                                    .disabled(model.isInteractionLocked)
+                                    Spacer()
+                                    StatusGlyph(state: client.state, size: 14)
+                                    if client.reportsLocalPresence {
+                                        Button("Remove…") {
+                                            Task { await model.planPluginRemoval(pluginID: plugin.id, client: client.client) }
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                        .accessibilityLabel("Remove \(plugin.name) from \(client.client.rawValue)")
+                                        .disabled(model.isInteractionLocked)
+                                    }
+                                }
+                                if let route = model.pluginUpdateRoute(pluginID: plugin.id, client: client.client) {
+                                    HStack(alignment: .top, spacing: 12) {
+                                        Text("Installation and updates stay in \(client.client.rawValue).")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        Spacer(minLength: 0)
+                                        Button(route.actionTitle) {
+                                            model.planPluginUpdate(pluginID: plugin.id, client: client.client)
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                        .help(route.detail)
+                                        .accessibilityLabel(
+                                            "\(route.canUpdateHere ? "Review update for" : "Update") \(plugin.name) in \(client.client.rawValue)"
+                                        )
+                                        .disabled(model.isInteractionLocked)
+                                    }
                                 }
                             }
                             .padding(12)
@@ -382,7 +421,7 @@ private struct PluginDetailView: View {
                 }
 
                 if !plugin.skills.isEmpty {
-                    GroupBox("Included skills") {
+                    GroupBox("Included skills · updated with this plugin") {
                         VStack(spacing: 0) {
                             ForEach(sortedSkills, id: \.self) { skill in
                                 HStack {
@@ -410,10 +449,43 @@ private struct PluginDetailView: View {
                     }
                 }
 
-                GroupBox("Source") {
+                DisclosureGroup("Updates and revision") {
                     VStack(spacing: 0) {
-                        LabeledValueRow("Location") {
-                            LocationText(path: plugin.source)
+                        LabeledValueRow(availability.title) {
+                            HStack(spacing: 8) {
+                                StatusGlyph(state: availability.health, size: 14)
+                                Text(availability.detail)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Divider()
+                        LabeledValueRow("Last checked") {
+                            HStack(spacing: 10) {
+                                Text(lastCheckedText).foregroundStyle(.secondary)
+                                Button(model.isRefreshingMarketplace ? "Checking…" : "Check again") {
+                                    Task { await model.refreshMarketplace() }
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .disabled(model.isInteractionLocked)
+                            }
+                        }
+                    }
+                }
+
+                GroupBox("Origin") {
+                    VStack(spacing: 0) {
+                        if let marketplace = ConnectionSource(plugin.id).marketplaceTitle {
+                            LabeledValueRow("Marketplace") { Text(marketplace).foregroundStyle(.secondary) }
+                            Divider()
+                        }
+                        LabeledValueRow("Found in") {
+                            if plugin.source.hasPrefix("/") || plugin.source.contains("://") {
+                                LocationText(path: plugin.source)
+                            } else {
+                                Text(plugin.source).foregroundStyle(.secondary)
+                            }
                         }
                         Divider()
                         LabeledValueRow("Scope") { Text(plugin.scope).foregroundStyle(.secondary) }

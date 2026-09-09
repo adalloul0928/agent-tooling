@@ -75,6 +75,48 @@ struct InstallSafetyTests {
 
     // MARK: - Ownership guard
 
+    @Test func linkedInstallationCanUpdateOnlyItsReviewedBytes() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        try fixture.writeSource(["SKILL.md": "new upstream content"])
+        try fixture.writeDestination(["SKILL.md": "original upstream content"])
+        var plan = try fixture.plan()
+        plan.steps[0].destinationFingerprint = try DirectoryFingerprint.sha256(of: fixture.destination)
+        let reviewer = OperationPlanSafetyReviewer(authority: .init(), managedRoots: [])
+        #expect(reviewer.review(plan).steps.first?.ownership == .linkedInstallation)
+        let receipt = await fixture.engine().execute(plan)
+        #expect(receipt.results.first?.status == .succeeded)
+        #expect(try fixture.destinationContents("SKILL.md") == "new upstream content")
+    }
+
+    @Test func localChangesBlockLinkedUpdateEvenWithPriorInstallAuthority() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        try fixture.writeSource(["SKILL.md": "upstream"])
+        try fixture.writeDestination(["SKILL.md": "baseline"])
+        var plan = try fixture.plan()
+        plan.steps[0].destinationFingerprint = try DirectoryFingerprint.sha256(of: fixture.destination)
+        try fixture.writeDestination(["SKILL.md": "my local changes"])
+        let reviewer = OperationPlanSafetyReviewer(authority: .init(ledger: fixture.ledgerProvingDestination()), managedRoots: [])
+        #expect(reviewer.review(plan).hasBlockedSteps)
+        let receipt = await fixture.engine().execute(plan)
+        #expect(receipt.results.first?.status == .failed)
+        #expect(try fixture.destinationContents("SKILL.md") == "my local changes")
+    }
+
+    @Test func destinationBaselineParticipatesInApprovalDigest() throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        try fixture.writeSource(["SKILL.md": "upstream"])
+        try fixture.writeDestination(["SKILL.md": "baseline"])
+        var plan = try fixture.plan()
+        let reviewed = try OperationPlanApproval.review(plan)
+        plan.steps[0].destinationFingerprint = try DirectoryFingerprint.sha256(of: fixture.destination)
+        #expect(throws: (any Error).self) {
+            try OperationPlanApproval.verify(plan, confirmedPlanID: reviewed.plan.id, confirmedDigest: reviewed.digest)
+        }
+    }
+
     @Test func anUnprovableDestinationIsBlockedInReviewAndRefusedByTheEngine() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }

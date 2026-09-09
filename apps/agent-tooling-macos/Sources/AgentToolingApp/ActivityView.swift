@@ -20,7 +20,7 @@ struct ActivityView: View {
                 } label: {
                     Label("Latest receipt", systemImage: "doc.text.magnifyingglass")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .disabled(displayedActivities.isEmpty)
             }
 
@@ -30,32 +30,32 @@ struct ActivityView: View {
                     .padding(.bottom, 10)
             }
 
-            GeometryReader { proxy in
+            if selectedID == nil {
+                activityList
+            } else {
                 HSplitView {
-                    activityList.frame(
-                        minWidth: 390, idealWidth: 470, maxWidth: 560, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                        alignment: .topLeading)
-                    activityDetail.frame(
-                        minWidth: 500, maxWidth: .infinity, minHeight: proxy.size.height, maxHeight: proxy.size.height,
-                        alignment: .topLeading)
+                    activityList.frame(minWidth: 320, idealWidth: 500)
+                    VStack(spacing: 0) {
+                        InspectorHeader(title: "Activity details") { selectedID = nil }
+                        activityDetail
+                    }.frame(minWidth: 400, idealWidth: 620)
                 }
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
-            selectFirstVisibleReceiptIfNeeded()
+            clearHiddenReceipt()
             consumeRequest()
         }
-        .onChange(of: displayedActivities.map(\.id)) { _, _ in selectFirstVisibleReceiptIfNeeded() }
+        .onChange(of: displayedActivities.map(\.id)) { _, _ in clearHiddenReceipt() }
         .onChange(of: request) { _, _ in consumeRequest() }
+        .onExitCommand { selectedID = nil }
     }
 
     private var activityList: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                TextField("Search activity", text: $query)
-                    .textFieldStyle(.roundedBorder)
+                InventorySearchField(placeholder: "Search activity", text: $query)
                     .accessibilityLabel("Search activity")
                 Picker("Filter", selection: $filter) {
                     ForEach(ActivityFilter.allCases) { item in Text(item.rawValue).tag(item) }
@@ -64,7 +64,8 @@ struct ActivityView: View {
                 .accessibilityLabel("Activity filter")
                 .frame(width: 142)
             }
-            .padding(12)
+            .padding(.horizontal, WorkspaceLayout.pageInset)
+            .padding(.vertical, 10)
 
             if displayedActivities.isEmpty {
                 EmptyStateView(
@@ -168,9 +169,9 @@ struct ActivityView: View {
         selectedID = id
     }
 
-    private func selectFirstVisibleReceiptIfNeeded() {
+    private func clearHiddenReceipt() {
         guard !displayedActivities.contains(where: { $0.id == selectedID }) else { return }
-        selectedID = displayedActivities.first?.id
+        selectedID = nil
     }
 }
 

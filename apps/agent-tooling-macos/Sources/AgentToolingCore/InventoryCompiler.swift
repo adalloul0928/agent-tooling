@@ -169,8 +169,9 @@ enum InventoryCompiler {
             let skillFile = root.appending(path: "SKILL.md")
             let content = (try? BoundedFileAccess.readUTF8(at: skillFile)) ?? ""
             let fallbackName = id.split(separator: ":").last.map(String.init) ?? id
-            let name = boundedText(frontmatterValue("name", from: content), maximum: 4_096, required: true) ?? fallbackName
-            let summary = boundedText(frontmatterValue("description", from: content), maximum: 65_536) ?? "Portable agent skill"
+            let frontmatter = try? SkillFrontmatter.parse(content)
+            let name = boundedText(frontmatter?.name, maximum: 4_096, required: true) ?? fallbackName
+            let summary = boundedText(frontmatter?.description, maximum: 65_536) ?? "Portable agent skill"
             return (
                 displayName(for: name), summary, observed.providerPluginID ?? observed.source, childFiles(root, fileManager: fileManager),
                 false
@@ -185,8 +186,9 @@ enum InventoryCompiler {
         for root in roots where fileManager.fileExists(atPath: root.path(percentEncoded: false)) {
             let skillFile = root.appending(path: "SKILL.md")
             let content = (try? BoundedFileAccess.readUTF8(at: skillFile)) ?? ""
-            let name = boundedText(frontmatterValue("name", from: content), maximum: 4_096, required: true) ?? id
-            let summary = boundedText(frontmatterValue("description", from: content), maximum: 65_536) ?? "Portable agent skill"
+            let frontmatter = try? SkillFrontmatter.parse(content)
+            let name = boundedText(frontmatter?.name, maximum: 4_096, required: true) ?? id
+            let summary = boundedText(frontmatter?.description, maximum: 65_536) ?? "Portable agent skill"
             let files = childFiles(root, fileManager: fileManager)
             return (displayName(for: name), summary, "Local installation", files, false)
         }
@@ -203,27 +205,6 @@ enum InventoryCompiler {
             if rhs == "SKILL.md" { return false }
             return lhs < rhs
         }
-    }
-
-    private static func frontmatterValue(_ key: String, from text: String) -> String? {
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-        guard lines.first?.trimmingCharacters(in: .whitespaces) == "---" else { return nil }
-        for line in lines.dropFirst() {
-            if line.trimmingCharacters(in: .whitespaces) == "---" { break }
-            guard let colon = line.firstIndex(of: ":") else { continue }
-            let candidate = line[..<colon].trimmingCharacters(in: .whitespaces)
-            if candidate == key {
-                let rawValue = line[line.index(after: colon)...].trimmingCharacters(in: .whitespacesAndNewlines)
-                if rawValue.hasPrefix("\""), rawValue.hasSuffix("\""),
-                    let data = rawValue.data(using: .utf8),
-                    let decoded = try? JSONDecoder().decode(String.self, from: data)
-                {
-                    return decoded
-                }
-                return rawValue.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-            }
-        }
-        return nil
     }
 
     private static func displayName(for value: String) -> String {

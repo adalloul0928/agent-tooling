@@ -35,13 +35,19 @@ struct ClientBrandIcon: View {
 }
 
 enum ClientBrandAssets {
-    static var hasCompiledCatalog: Bool {
+    static let hasCompiledCatalog: Bool = {
         Bundle.module.url(forResource: "Assets", withExtension: "car") != nil
-    }
+    }()
 
+    @MainActor private static let fallbackImages = NSCache<NSString, NSImage>()
+
+    @MainActor
     static func image(for client: ClientKind, colorScheme: ColorScheme) -> NSImage? {
-        guard let url = sourceURL(for: client, colorScheme: colorScheme) else { return nil }
-        return NSImage(contentsOf: url)
+        let key = "\(client.rawValue)/\(colorScheme == .dark ? "dark" : "light")" as NSString
+        if let cached = fallbackImages.object(forKey: key) { return cached }
+        guard let url = sourceURL(for: client, colorScheme: colorScheme), let image = NSImage(contentsOf: url) else { return nil }
+        fallbackImages.setObject(image, forKey: key)
+        return image
     }
 
     static func sourceURL(for client: ClientKind, colorScheme: ColorScheme) -> URL? {

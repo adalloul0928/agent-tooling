@@ -13,17 +13,23 @@ struct InsightsView: View {
     @State private var scanError: String?
     @State private var isPresentingClearConfirmation = false
     @State private var scanTask: Task<Void, Never>?
+    @State private var showingScanOptions = false
 
     var body: some View {
         VStack(spacing: 0) {
             PageToolbar(title: "Insights", context: toolbarContext) {
+                Button("Scan options", systemImage: "slider.horizontal.3") { showingScanOptions.toggle() }
+                    .buttonStyle(.glass)
+                    .popover(isPresented: $showingScanOptions) {
+                        ScrollView { scanConfiguration.padding(18) }.frame(width: 590, height: 520)
+                    }
                 if model.isScanningInsights {
                     Button(role: .cancel) {
                         scanTask?.cancel()
                     } label: {
                         Label("Cancel scan", systemImage: "xmark")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                     .keyboardShortcut(.cancelAction)
                     .accessibilityHint("Stops the scan before saving a new report")
                 } else {
@@ -32,7 +38,8 @@ struct InsightsView: View {
                     } label: {
                         Label("Scan recent work", systemImage: "magnifyingglass")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
+                    .tint(AgentTheme.selection)
                     .disabled(!canScan)
                     .keyboardShortcut(.return, modifiers: [.command])
                     .accessibilityHint("Reads selected local chat history and saves only aggregate findings")
@@ -41,8 +48,6 @@ struct InsightsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    scanConfiguration
-
                     if model.isScanningInsights {
                         scanningState
                     } else if let scanError {
@@ -56,9 +61,10 @@ struct InsightsView: View {
                     }
                 }
                 .frame(maxWidth: 1_100, alignment: .leading)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 22)
-                .frame(maxWidth: .infinity, alignment: .top)
+                .padding(.horizontal, WorkspaceLayout.pageInset)
+                .padding(.top, WorkspaceLayout.contentTopInset)
+                .padding(.bottom, WorkspaceLayout.pageInset)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -126,13 +132,12 @@ struct InsightsView: View {
                     Divider()
 
                     configurationRow("Review period", detail: "How far back to inspect") {
-                        Picker("Review period", selection: $lookbackDays) {
+                        WorkspaceSegmentedPicker("Review period", selection: $lookbackDays) {
                             Text("7 days").tag(7)
                             Text("30 days").tag(30)
                             Text("90 days").tag(90)
                         }
                         .labelsHidden()
-                        .pickerStyle(.segmented)
                         .frame(maxWidth: 330)
                         .accessibilityLabel("Review period")
                     }
@@ -140,13 +145,12 @@ struct InsightsView: View {
                     Divider()
 
                     configurationRow("Conversation limit", detail: "Per selected source") {
-                        Picker("Conversation limit", selection: $maximumConversations) {
+                        WorkspaceSegmentedPicker("Conversation limit", selection: $maximumConversations) {
                             Text("10 chats").tag(10)
                             Text("25 chats").tag(25)
                             Text("50 chats").tag(50)
                         }
                         .labelsHidden()
-                        .pickerStyle(.segmented)
                         .frame(maxWidth: 330)
                         .accessibilityLabel("Maximum conversations per source")
                     }
@@ -207,7 +211,7 @@ struct InsightsView: View {
         ContentUnavailableView {
             Label("No insights yet", systemImage: "doc.text.magnifyingglass")
         } description: {
-            Text("Choose the history sources above, then scan when you are ready. Nothing runs automatically.")
+            Text("Find repeated work and useful tools in your recent conversations. Choose your sources and review period in Scan options.")
         }
         .frame(maxWidth: .infinity, minHeight: 230)
     }
@@ -237,13 +241,6 @@ struct InsightsView: View {
     private func reportContent(_ report: InsightsReport) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             reportSummary(report)
-            coverageSection(report.coverage)
-            if let discovery = report.marketplaceDiscovery,
-                discovery.queriesAttempted > 0 || discovery.queriesFailed > 0 || discovery.wasCancelled
-            {
-                catalogDiscoverySection(discovery)
-            }
-
             HStack(spacing: 10) {
                 Text("View")
                     .font(.callout.weight(.medium))
@@ -263,6 +260,16 @@ struct InsightsView: View {
             case .skillHealth:
                 skillHealthSection(report)
             }
+
+            DisclosureGroup("Scan coverage · \(report.conversationsScanned) conversations") {
+                coverageSection(report.coverage).padding(.top, 10)
+                if let discovery = report.marketplaceDiscovery,
+                    discovery.queriesAttempted > 0 || discovery.queriesFailed > 0 || discovery.wasCancelled
+                {
+                    catalogDiscoverySection(discovery)
+                }
+            }
+            .font(.callout).foregroundStyle(.secondary)
         }
     }
 

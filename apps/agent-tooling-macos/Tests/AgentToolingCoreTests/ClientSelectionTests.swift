@@ -39,6 +39,40 @@ struct ClientSelectionTests {
         #expect(restarted.visibleSkills.count == 3)
     }
 
+    @Test func missingLinkedSkillStaysVisibleOnlyForItsRecordedEnabledClientAcrossRestart() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        let source = fixture.home.appending(path: ".claude/skills/linked-review")
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        try "---\nname: linked-review\ndescription: Review local changes.\n---\nReview the change.\n"
+            .write(to: source.appending(path: "SKILL.md"), atomically: true, encoding: .utf8)
+        let model = try fixture.model()
+        #expect(await model.runDoctor())
+        let index = try #require(model.skills.firstIndex { $0.id == "linked-review" })
+        let binding = try SkillRepositoryBinding(
+            repositoryURL: "https://github.com/example/skills",
+            installedFingerprints: [source.path: try DirectoryFingerprint.sha256(of: source)])
+        model.skills[index].repositoryBinding = binding
+        try FileManager.default.removeItem(at: source)
+        #expect(await model.runDoctor())
+        let missing = try #require(model.visibleSkills.first { $0.id == "linked-review" })
+        #expect(missing.repositoryBinding == binding)
+        #expect(!missing.owned && missing.clients.allSatisfy { !$0.reportsLocalPresence })
+
+        let restarted = try fixture.model()
+        #expect(restarted.visibleSkills.first { $0.id == "linked-review" }?.repositoryBinding == binding)
+        #expect(restarted.setClientEnabled(.claude, enabled: false))
+        #expect(restarted.enabledClients.contains(.codex), "An unrelated enabled client must not reveal this missing skill")
+        #expect(!restarted.visibleSkills.contains { $0.id == "linked-review" })
+        #expect(await restarted.runDoctor())
+        let hidden = try fixture.model()
+        #expect(hidden.skills.first { $0.id == "linked-review" }?.repositoryBinding == binding)
+        #expect(!hidden.visibleSkills.contains { $0.id == "linked-review" })
+        #expect(hidden.setClientEnabled(.claude, enabled: true))
+        #expect(hidden.visibleSkills.contains { $0.id == "linked-review" })
+        #expect(!FileManager.default.fileExists(atPath: source.path), "Visibility never restores or installs the source")
+    }
+
     @Test func disabledClientCannotBeTargetedAndSelectionCannotChangeDuringReview() throws {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }

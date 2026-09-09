@@ -7,6 +7,7 @@ import Foundation
 extension AppModel {
     @discardableResult
     public func exportDiagnostics(to destination: URL, appVersion: String) -> Bool {
+        guard ensureReadyForChange() else { return false }
         do {
             let exporter = DiagnosticBundleExporter(homeURL: homeURL)
             let manifest = exporter.manifest(
@@ -154,6 +155,7 @@ extension AppModel {
                     detail:
                         "\(remapped.count) managed profile\(remapped.count == 1 ? "" : "s") and \(policy.blockedPluginIDs.count) blocked plugin rule\(policy.blockedPluginIDs.count == 1 ? "" : "s") are active locally. The manifest source was explicitly selected.",
                     date: .now, state: .healthy, affectedPaths: [policy.sourcePath]), at: 0)
+            try requireWorkspaceMigrationReviewInactive()
             try WorkspaceSnapshotValidator.validate(candidate, mode: .localState)
             try store.saveWorkspaceSnapshot(candidate)
             applyPersisted(candidate)

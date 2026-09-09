@@ -41,6 +41,7 @@ struct AppNavigationStateTests {
     }
 
     @Test("Brand icons are available as a compiled catalog or source assets")
+    @MainActor
     func brandIconsAreAvailableAcrossSwiftToolchains() {
         if ClientBrandAssets.hasCompiledCatalog {
             return

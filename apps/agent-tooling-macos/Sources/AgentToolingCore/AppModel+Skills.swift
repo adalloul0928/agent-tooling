@@ -54,6 +54,7 @@ extension AppModel {
 
     @discardableResult
     public func saveCodexSkillDraftRequest(_ request: CodexSkillDraftRequest) -> Bool {
+        guard ensureReadyForChange() else { return false }
         do {
             try store.saveCodexSkillDraftRequest(request)
             return true
@@ -96,6 +97,8 @@ extension AppModel {
     public func adoptCodexSkillDraft(_ result: CodexSkillDraftResult) async -> Skill? {
         guard requireEnabledClients(Set(result.request.targets)) else { return nil }
         guard ensureReadyForChange() else { return nil }
+        isGeneratingSkill = true
+        defer { isGeneratingSkill = false }
         let previousSnapshot = currentSnapshot()
         var createdResult: CreatedSkill?
         do {
@@ -140,6 +143,9 @@ extension AppModel {
     }
 
     public func discardCodexSkillDraft(_ result: CodexSkillDraftResult) async {
+        guard ensureReadyForChange() else { return }
+        isGeneratingSkill = true
+        defer { isGeneratingSkill = false }
         do {
             try await codexSkillDraftService.discardDraft(result)
             try store.deleteCodexSkillDraftRequest(id: result.request.id)
@@ -149,6 +155,9 @@ extension AppModel {
     }
 
     public func discardCodexSkillDraftRequest(id: UUID) async {
+        guard ensureReadyForChange() else { return }
+        isGeneratingSkill = true
+        defer { isGeneratingSkill = false }
         var cleanupError: Error?
         do {
             try await codexSkillDraftService.discardRequest(id: id)
@@ -169,7 +178,7 @@ extension AppModel {
     /// files are. Without that path the app would have to guess a location, so
     /// the row is not offered for adoption until the next setup check.
     public func canAdoptSkill(id: String) -> Bool {
-        guard let skill = skills.first(where: { $0.id == id }), !skill.owned else { return false }
+        guard let skill = skills.first(where: { $0.id == id }), !skill.owned, skillPluginID(id) == nil else { return false }
         return observedSkillSourcePath(for: id) != nil
     }
 
@@ -178,6 +187,10 @@ extension AppModel {
     /// and the clients keep their own copies either way.
     public func planSkillAdoption(skillIDs: Set<String>) {
         guard ensureReadyForChange() else { return }
+        guard skillIDs.allSatisfy({ skillPluginID($0) == nil }) else {
+            presentError("Keep bundled skills with their plugin. Track or update the original plugin instead.")
+            return
+        }
         let sources = observedSkillSourcePaths()
         let candidates =
             skills
@@ -194,6 +207,9 @@ extension AppModel {
             )
             pendingSkillAdoption = adoption
             pendingPlan = adoption.plan
+        } catch WorkspaceLibraryError.noAdoptableSkillCandidates(let issues) {
+            onboardingCopyIssues = issues
+            lastError = WorkspaceLibraryError.noAdoptableSkillCandidates(issues).localizedDescription
         } catch {
             lastError = error.localizedDescription
         }
@@ -217,6 +233,9 @@ extension AppModel {
         let adoptedIDs = Set(adopted.map(\.id))
         skills.removeAll { adoptedIDs.contains($0.id) }
         skills.insert(contentsOf: adopted, at: 0)
+        for (sourceID, managedID) in adoption.sourceSkillIDs where adoptedIDs.contains(managedID) {
+            onboardingAdoptedSkillIDs[sourceID] = managedID
+        }
 
         var detail =
             "The managed library now owns \(adopted.count) portable package\(adopted.count == 1 ? "" : "s"). Each client keeps its own copy; installing from Agent Tooling replaces it with the managed source."
@@ -362,14 +381,22 @@ extension AppModel {
     }
 
     func mergeSkills(existing: [Skill], observed: [Skill]) -> [Skill] {
-        // Preserve only skills authored in the managed library. Vendor and
-        // standalone discoveries are rebuilt on every scan so removals and
-        // scope changes are reflected immediately.
+        // Authored skills and explicit upstream relationships are durable.
+        // Ordinary discoveries are rebuilt so removals and scope changes are reflected.
         var values: [String: Skill] = [:]
         for skill in existing where skill.owned { values[skill.id] = skill }
+        for skill in existing where !skill.owned && skill.repositoryBinding != nil {
+            var missing = skill
+            missing.clients = skill.clients.map {
+                ClientState(client: $0.client, state: .unavailable, detail: "Linked skill not found", isInstalled: false)
+            }
+            values[skill.id] = missing
+        }
         for item in observed {
             guard var local = values[item.id], local.owned else {
-                values[item.id] = item
+                var discovery = item
+                discovery.repositoryBinding = existing.first(where: { $0.id == item.id })?.repositoryBinding
+                values[item.id] = discovery
                 continue
             }
             local.clients = item.clients

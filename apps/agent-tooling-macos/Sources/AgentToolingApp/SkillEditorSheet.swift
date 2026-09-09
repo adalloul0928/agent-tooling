@@ -201,12 +201,11 @@ struct SkillEditorSheet: View {
                 }
                 .standardPanel(cornerRadius: 13)
             }
-            Picker("Scope", selection: $draft.scope) {
+            WorkspaceSegmentedPicker("Scope", selection: $draft.scope) {
                 ForEach([ToolingScope.user, .project]) { scope in
                     Text(scope.displayName).tag(scope)
                 }
             }
-            .pickerStyle(.segmented)
             .accessibilityLabel("Installation scope")
 
             if draft.scope == .project {

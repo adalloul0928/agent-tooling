@@ -9,7 +9,7 @@ private struct MCPRuntimeRunnerStub: CommandRunning {
 
     func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput {
         #expect(executable == "thv")
-        if arguments == ["version"] { return versionResult }
+        if arguments == ["version", "--format", "json"] { return versionResult }
         #expect(arguments == ["list", "--all", "--format", "json"])
         return listResult
     }
@@ -48,7 +48,9 @@ struct MCPRuntimeTests {
             """#
         let available = ToolHiveMCPRuntimeProvider(
             runner: MCPRuntimeRunnerStub(
-                versionResult: CommandOutput(status: 0, standardOutput: "ToolHive 0.34.0\n", standardError: ""),
+                versionResult: CommandOutput(status: 0,
+                    standardOutput: #"{"version":"0.34.0","commit":"abc","build_date":"fixture","go_version":"go1.25","platform":"darwin/arm64"}"#,
+                    standardError: ""),
                 listResult: CommandOutput(status: 0, standardOutput: workloadJSON, standardError: "")
             ))
 

@@ -4,16 +4,37 @@ import SwiftUI
 
 struct SkillsView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage("skills.sourceOwnership") private var sourceOwnership = "{}"
+    var navigate: ((AppSection) -> Void)?
+
+    var body: some View {
+        SkillsBrowser(
+            navigate: navigate,
+            sourceOwnership: $sourceOwnership,
+            inventory: SkillInventoryIndex(
+                skills: model.visibleSkills, plugins: model.visiblePlugins, observations: model.visibleTargetObservations,
+                tagAssignments: model.tagAssignments, collections: model.collections,
+                ownershipJSON: sourceOwnership, adoptableIDs: Set(model.adoptableSkillIDs)
+            )
+        )
+    }
+}
+
+private struct SkillsBrowser: View {
+    @Environment(AppModel.self) private var model
     @Environment(AppNavigationState.self) private var navigation
     var navigate: ((AppSection) -> Void)?
     @State private var query = ""
     @AppStorage("skills.collapsedGroups") private var collapsedGroupsJSON = "[]"
-    @AppStorage("skills.grouping") private var grouping = "Source"
+    @AppStorage("skills.grouping") private var grouping = "None"
+    @AppStorage("skills.groupingMigration") private var groupingMigration = false
     @AppStorage("skills.category") private var scope: SkillScope = .all
-    @AppStorage("skills.source") private var sourceFilter = ""
+    @AppStorage("skills.marketplace") private var marketplaceFilter = ""
+    @AppStorage("skills.plugin") private var pluginFilter = ""
     @AppStorage("skills.installation") private var installationFilter = "All installations"
     @AppStorage("skills.maintenance") private var maintenanceFilter = "All maintenance"
-    @AppStorage("skills.sourceOwnership") private var sourceOwnership = "{}"
+    @Binding var sourceOwnership: String
+    let inventory: SkillInventoryIndex
     @AppStorage("skills.client") private var clientFilter: SkillClientFilter = .all
     @State private var tagFilter: Set<String> = []
     @State private var untaggedOnly = false
@@ -26,68 +47,63 @@ struct SkillsView: View {
     @State private var installAfterCreator: CodexSkillInstallHandoff?
     @State private var isSelecting = false
     @State private var selection: Set<String> = []
+    @State private var copyConfirmationPresented = false
+    @State private var requestedCopies: Set<String> = []
 
-    init(navigate: ((AppSection) -> Void)? = nil) {
+    init(navigate: ((AppSection) -> Void)?, sourceOwnership: Binding<String>, inventory: SkillInventoryIndex) {
         self.navigate = navigate
+        _sourceOwnership = sourceOwnership
+        self.inventory = inventory
     }
 
     var body: some View {
+        let listedSkills = filteredSkills
         VStack(spacing: 0) {
             PageToolbar(title: "Skills", context: toolbarContext) {
                 if isSelecting {
                     Button("Select All") { selection = adoptableIDs.intersection(filteredSkills.map(\.id)) }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                         .accessibilityHint("Selects every discovered skill currently listed")
                 }
-                Button {
-                    setSelecting(!isSelecting)
-                } label: {
-                    Label(isSelecting ? "Done" : "Select", systemImage: isSelecting ? "checkmark.circle.fill" : "checkmark.circle")
+                if isSelecting {
+                    Button("Done", systemImage: "checkmark.circle") { setSelecting(false) }.buttonStyle(.glass)
+                } else {
+                    Menu {
+                        Button("Make personal copies…", systemImage: "doc.on.doc") { setSelecting(true) }
+                            .disabled(model.isInteractionLocked || adoptableIDs.isEmpty)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }.buttonStyle(.glass).accessibilityLabel("Skill actions")
                 }
-                .buttonStyle(.bordered)
-                .disabled(!isSelecting && (model.isInteractionLocked || adoptableIDs.isEmpty))
-                .accessibilityHint("Chooses several discovered skills to adopt into the managed library")
                 Button {
                     navigate?(.insights)
                 } label: {
                     Label("Find opportunities", systemImage: "magnifyingglass")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .accessibilityHint("Scans recent work for useful skills, plugins, and MCP servers")
                 Button {
                     openCodexCreator()
                 } label: {
                     Label(model.isClientEnabled(.codex) ? "New skill…" : "Import skill…", systemImage: "plus")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
+                .tint(AgentTheme.selection)
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(model.isInteractionLocked)
             }
 
-            filtersToolbar
+            filtersToolbar(skills: listedSkills)
             Divider()
             GeometryReader { proxy in
                 if selectedSkill != nil {
                     HSplitView {
-                        collectionPane
+                        collectionPane(skills: listedSkills)
                             .frame(
                                 minWidth: 320, idealWidth: proxy.size.width / 2, maxWidth: .infinity,
                                 maxHeight: .infinity, alignment: .topLeading)
                         VStack(spacing: 0) {
-                            HStack {
-                                Text("Skill details").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                                Spacer()
-                                Button {
-                                    selectedID = ""
-                                } label: {
-                                    Image(systemName: "xmark")
-                                }
-                                .buttonStyle(.plain)
-                                .help("Close skill details")
-                                .accessibilityLabel("Close skill details")
-                                .keyboardShortcut(.escape, modifiers: [])
-                            }.padding(.horizontal, 18).padding(.vertical, 12)
-                            Divider()
+                            InspectorHeader(title: "Skill details") { selectedID = "" }
                             detailPane
                         }
                         .frame(
@@ -95,15 +111,26 @@ struct SkillsView: View {
                             maxHeight: .infinity, alignment: .topLeading)
                     }
                 } else {
-                    collectionPane.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    collectionPane(skills: listedSkills).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
 
         }
         .sheet(isPresented: $pasteImportPresented) { PasteImportSheet { model.addMCPServer(from: $0) != nil } }
+        .confirmationDialog("Make personal copies?", isPresented: $copyConfirmationPresented, titleVisibility: .visible) {
+            Button("Review personal copies") {
+                model.planSkillAdoption(skillIDs: requestedCopies)
+                if model.pendingPlan != nil { setSelecting(false) }
+            }
+            Button("Cancel", role: .cancel) { requestedCopies = [] }
+        } message: {
+            Text(
+                "These will be independently maintained versions. To keep receiving upstream updates, link the original repository instead."
+            )
+        }
         .onChange(of: model.enabledClients) { _, _ in
             if !model.isClientEnabled(clientFilter.client) { clientFilter = .all }
-            if !sourceFilter.isEmpty && !sources.contains(sourceFilter) { sourceFilter = "" }
+            clearUnavailableSourceFilters()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .sheet(item: $skillBeingEdited) { skill in
@@ -147,75 +174,78 @@ struct SkillsView: View {
             .environment(model)
         }
         .onAppear {
-            if !sourceFilter.isEmpty && !sources.contains(sourceFilter) { sourceFilter = "" }
+            if !groupingMigration {
+                grouping = SkillGrouping.migratedValue(grouping).rawValue
+                groupingMigration = true
+            }
+            clearUnavailableSourceFilters()
             clearHiddenSelection()
             applyExternalNavigation()
         }
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
-        .onChange(of: model.visibleSkills) { _, _ in
+        .onChange(of: inventory.skills) { _, _ in
             clearHiddenSelection()
             // A scan or a completed adoption can take a row out of the batch.
             // The bar must never offer a count the plan would not honour.
             if isSelecting { selection.formIntersection(adoptableIDs) }
         }
-        .onChange(of: filteredSkills.map(\.id)) { _, _ in clearHiddenSelection() }
+        .onChange(of: listedSkills.map(\.id)) { _, _ in clearHiddenSelection() }
     }
 
     private var extraFilterCount: Int {
         (installationFilter == "All installations" ? 0 : 1)
             + (maintenanceFilter == "All maintenance" ? 0 : 1)
             + (tagFilter.isEmpty && !untaggedOnly ? 0 : 1)
+            + (pluginFilter.isEmpty ? 0 : 1)
     }
 
-    private var filtersToolbar: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 20) {
-                HStack(spacing: 18) {
-                    ForEach(SkillScope.allCases) { category in
-                        Button {
-                            scope = category
-                        } label: {
-                            VStack(spacing: 9) {
-                                Text(category.rawValue)
-                                    .font(.callout.weight(scope == category ? .semibold : .regular))
-                                    .foregroundStyle(scope == category ? Color.primary : Color.secondary)
-                                Rectangle().fill(scope == category ? Color.accentColor : .clear).frame(height: 2)
-                            }.fixedSize(horizontal: true, vertical: false)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(scope == category ? .isSelected : [])
-                    }
-                }
-                Spacer(minLength: 16)
-                HStack(spacing: 7) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search skills", text: $query).textFieldStyle(.plain)
-                        .accessibilityLabel("Search skills")
-                    if !query.isEmpty {
-                        Button {
-                            query = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                        }
-                        .buttonStyle(.plain).foregroundStyle(.secondary).help("Clear search")
-                    }
-                }
-                .padding(.horizontal, 10).padding(.vertical, 7)
-                .background(AgentTheme.controlBackground, in: RoundedRectangle(cornerRadius: 7))
-                .frame(minWidth: 180, idealWidth: 250, maxWidth: 300)
+    private var ownershipPicker: some View {
+        WorkspaceSegmentedPicker("Skill authorship", selection: $scope) {
+            ForEach(SkillScope.allCases) { category in
+                Text(category.rawValue).tag(category)
             }
-            HStack(spacing: 12) {
+        }
+        .fixedSize()
+        .help(
+            "OpenAI & Anthropic shows skills supplied directly by those providers. General marketplace listings are not proof of authorship."
+        )
+    }
+
+    private var searchField: some View {
+        InventorySearchField(placeholder: "Search skills", text: $query)
+            .frame(minWidth: 180, idealWidth: 300, maxWidth: 420)
+    }
+
+    private func filtersToolbar(skills: [Skill]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 20) {
+                    ownershipPicker
+                    Spacer(minLength: 16)
+                    searchField.frame(width: 220)
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    ownershipPicker
+                    searchField
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            FlowLayout(spacing: 12) {
                 Menu {
-                    Picker("Source", selection: $sourceFilter) {
-                        Text("All sources").tag("")
-                        ForEach(sources, id: \.self) { source in Text(displayName(for: source)).tag(source) }
+                    Picker("Marketplace", selection: $marketplaceFilter) {
+                        Text("All marketplaces").tag("")
+                        ForEach(marketplaces, id: \.id) { source in Text(source.title).tag(source.id) }
                     }
                     .pickerStyle(.inline)
                 } label: {
-                    Label(sourceFilter.isEmpty ? "All sources" : displayName(for: sourceFilter), systemImage: "shippingbox")
+                    Label(marketplaceFilterTitle, systemImage: "storefront")
                         .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: 220, alignment: .leading)
                 }
-                .fixedSize().help("Filter by source")
+                .fixedSize()
+                .help("Marketplace: \(marketplaceFilterTitle)")
                 Menu {
                     Picker("App", selection: $clientFilter) {
                         ForEach(SkillClientFilter.allCases.filter { model.isClientEnabled($0.client) }) { filter in
@@ -228,6 +258,12 @@ struct SkillsView: View {
                 }
                 .fixedSize()
                 Menu {
+                    Picker("Plugin", selection: $pluginFilter) {
+                        Text("All plugins").tag("")
+                        ForEach(plugins, id: \.id) { plugin in
+                            Text(plugin.title).tag(plugin.id)
+                        }
+                    }
                     Picker("Installation", selection: $installationFilter) {
                         ForEach(["All installations", "Standalone", "Plugin"], id: \.self) { Text($0).tag($0) }
                     }
@@ -255,44 +291,40 @@ struct SkillsView: View {
                 } label: {
                     Label(extraFilterCount == 0 ? "Filters" : "Filters (\(extraFilterCount))", systemImage: "line.3.horizontal.decrease")
                 }.fixedSize()
-                if !sourceFilter.isEmpty || clientFilter != .all || extraFilterCount > 0 {
-                    Button("Reset") {
-                        sourceFilter = ""
-                        clientFilter = .all
-                        installationFilter = "All installations"
-                        maintenanceFilter = "All maintenance"
-                        tagFilter = []
-                        untaggedOnly = false
-                    }.buttonStyle(.plain).foregroundStyle(.secondary)
-                }
                 Menu {
                     Picker("Group by", selection: $grouping) {
-                        Text("Source").tag("Source")
-                        Text("Maintenance").tag("Maintenance")
+                        ForEach(SkillGrouping.allCases) { group in Text(group.rawValue).tag(group.rawValue) }
                     }.pickerStyle(.inline)
-                    Divider()
-                    Button("Expand all") { saveCollapsedGroups([]) }
-                    Button("Collapse all") { saveCollapsedGroups(Set(groupedSkills.map { $0.0 })) }
+                    if resolvedGrouping != .none {
+                        Divider()
+                        Button("Expand all") { saveCollapsedGroups([]) }
+                        Button("Collapse all") { saveCollapsedGroups(Set(groupedSkills.map(\.id))) }
+                    }
                 } label: {
-                    Label("Group", systemImage: "rectangle.3.group")
+                    Label(resolvedGrouping == .none ? "Group" : "Group: \(resolvedGrouping.rawValue)", systemImage: "rectangle.3.group")
                 }
                 .fixedSize()
-                Spacer()
-                Text("\(filteredSkills.count) skills").font(.caption).foregroundStyle(.secondary)
+                if !marketplaceFilter.isEmpty || !pluginFilter.isEmpty || clientFilter != .all || extraFilterCount > 0 {
+                    Button("Reset") { resetFilters() }
+                        .buttonStyle(.plain).foregroundStyle(.secondary)
+                }
+                Text("\(skills.count) skills").font(.caption).foregroundStyle(.secondary).fixedSize()
             }
-            .controlSize(.small)
-            .menuStyle(.borderlessButton)
+            .inventoryMenuStyle()
         }
-        .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, 10)
     }
 
     /// Resolved once per layout pass. Asking the model per row would make the
     /// cost of drawing the list grow with the square of a 250-skill inventory.
-    private var collectionPane: some View {
+    private func collectionPane(skills: [Skill]) -> some View {
         let adoptable = adoptableIDs
+        let groups = SkillListPresentation.groups(skills: skills, grouping: resolvedGrouping, presentation: presentation(for:))
+        let collapsed = query.isEmpty ? collapsedGroups : []
         return VStack(spacing: 0) {
 
-            if filteredSkills.isEmpty {
+            if skills.isEmpty {
                 EmptyStateView(
                     symbol: query.isEmpty ? "doc.text" : "doc.text.magnifyingglass",
                     title: emptyStateTitle,
@@ -304,81 +336,63 @@ struct SkillsView: View {
                 }
             } else {
                 GeometryReader { geometry in
-                let columns = SkillTableColumns(width: geometry.size.width, selecting: isSelecting)
-                VStack(spacing: 0) {
-                    HStack(spacing: 12) {
-                        if isSelecting { Color.clear.frame(width: 20) }
-                        Text("Name").frame(width: columns.name, alignment: .leading)
-                        if columns.expanded {
-                            Text("Description").frame(maxWidth: .infinity, alignment: .leading)
-                            Text("Plugin").frame(width: columns.plugin, alignment: .leading)
-                        } else { Spacer(minLength: 0) }
-                        Text("Apps").frame(width: 72, alignment: .trailing)
-                    }
-                    .font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                    .padding(.horizontal, 16).frame(height: 30)
-                    .background(AgentTheme.controlBackground.opacity(0.3))
-                    Divider()
-                ScrollView {
-                    LazyVStack(spacing: 0, pinnedViews: .sectionHeaders) {
-                        ForEach(groupedSkills, id: \.0) { group, skills in
-                            Section {
-                                if !isCollapsed(group) {
-                                    ForEach(skills) { skill in
-                                        SkillCollectionRow(
-                                            skill: skill,
-                                            selected: isSelecting ? selection.contains(skill.id) : skill.id == selectedID,
-                                            selecting: isSelecting,
-                                            isAdoptable: adoptable.contains(skill.id),
-                                            tags: model.tags(for: reference(for: skill)),
-                                            collections: model.collections(containing: reference(for: skill)).map(\.name),
-                                            columns: columns,
-                                            activate: { activate(skill, isAdoptable: adoptable.contains(skill.id)) },
-                                            filterClient: { client in
-                                                clientFilter = SkillClientFilter.allCases.first { $0.client == client } ?? .all
-                                            }
-                                        )
-                                        .accessibilityValue(accessibilityValue(for: skill, isAdoptable: adoptable.contains(skill.id)))
-                                    }
-                                }
-                            } header: {
-                                HStack(spacing: 8) {
-                                    Button {
-                                        var collapsed = collapsedGroups
-                                        if collapsed.contains(group) { collapsed.remove(group) } else { collapsed.insert(group) }
-                                        saveCollapsedGroups(collapsed)
-                                    } label: {
-                                        HStack(spacing: 8) {
-                                            Image(systemName: isCollapsed(group) ? "chevron.right" : "chevron.down")
-                                                .font(.caption2.weight(.semibold)).frame(width: 10)
-                                            Text(group).lineLimit(1)
-                                            Text("\(skills.count)").foregroundStyle(.tertiary)
-                                            Spacer()
-                                        }.contentShape(Rectangle())
-                                    }.buttonStyle(.plain)
-                                        .accessibilityLabel("\(isCollapsed(group) ? "Expand" : "Collapse") \(group)")
-                                    Menu {
-                                        Button("Mark as My skills") { classify(skills, as: "mine") }
-                                        Button("Mark as Third-party") { classify(skills, as: "thirdParty") }
-                                        Button("Use automatic classification") { classify(skills, as: "automatic") }
-                                        Button("Mark as Unclassified") { classify(skills, as: "unknown") }
-                                    } label: {
-                                        Image(systemName: "ellipsis")
-                                    }
-                                    .menuStyle(.borderlessButton).fixedSize()
-                                    .help("Classify skills in this group without adopting them")
-                                }
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 13)
-                                .frame(height: 32)
-                                .background(AgentTheme.controlBackground.opacity(0.45))
+                    let columns = SkillTableColumns(width: geometry.size.width, selecting: isSelecting)
+                    VStack(spacing: 0) {
+                        HStack(spacing: 12) {
+                            if isSelecting { Color.clear.frame(width: 20) }
+                            Text("Name").frame(width: columns.name, alignment: .leading)
+                            if columns.expanded {
+                                Text("Description").frame(maxWidth: .infinity, alignment: .leading)
+                                Text("Plugin").frame(width: columns.plugin, alignment: .leading)
+                                Text("Marketplace").frame(width: columns.marketplace, alignment: .leading)
+                            } else {
+                                Spacer(minLength: 0)
                             }
+                            Text("Apps").frame(width: 72, alignment: .trailing)
+                        }
+                        .font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                        .padding(.horizontal, 16).frame(height: 30)
+                        .background(AgentTheme.controlBackground.opacity(0.3))
+                        Divider()
+                        ScrollView {
+                            LazyVStack(spacing: 0, pinnedViews: .sectionHeaders) {
+                                ForEach(groups) { group in
+                                    let isCollapsed = collapsed.contains(group.id)
+                                    Section {
+                                        if resolvedGrouping == .none || !isCollapsed {
+                                            ForEach(group.skills) { skill in
+                                                SkillCollectionRow(
+                                                    skill: skill,
+                                                    presentation: presentation(for: skill),
+                                                    selected: isSelecting ? selection.contains(skill.id) : skill.id == selectedID,
+                                                    selecting: isSelecting,
+                                                    isAdoptable: adoptable.contains(skill.id),
+                                                    tags: inventory.tags[skill.id] ?? [],
+                                                    collections: inventory.collectionNames[skill.id] ?? [],
+                                                    columns: columns,
+                                                    activate: { activate(skill, isAdoptable: adoptable.contains(skill.id)) },
+                                                    filterClient: { client in
+                                                        clientFilter = SkillClientFilter.allCases.first { $0.client == client } ?? .all
+                                                    }
+                                                )
+                                                .accessibilityValue(
+                                                    accessibilityValue(for: skill, isAdoptable: adoptable.contains(skill.id))
+                                                )
+                                                .contextMenu {
+                                                    classificationActions([skill])
+                                                }
+                                            }
+                                        }
+                                    } header: {
+                                        if resolvedGrouping != .none {
+                                            groupHeader(group, isCollapsed: isCollapsed)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.bottom, isSelecting && !selection.isEmpty ? 72 : 0)
                         }
                     }
-                    .padding(.bottom, isSelecting && !selection.isEmpty ? 72 : 0)
-                }
-                }
                 }
             }
         }
@@ -386,7 +400,7 @@ struct SkillsView: View {
             if isSelecting, !selection.isEmpty {
                 SelectionActionBar(
                     count: selection.count,
-                    actionTitle: "Adopt \(selection.count) skill\(selection.count == 1 ? "" : "s")…",
+                    actionTitle: "Make \(selection.count) personal \(selection.count == 1 ? "copy" : "copies")…",
                     isActionEnabled: !model.isInteractionLocked,
                     action: adoptSelection,
                     clear: { selection = [] }
@@ -402,12 +416,21 @@ struct SkillsView: View {
     private var detailPane: some View {
         if let skill = selectedSkill {
             VStack(spacing: 0) {
+                SkillDetailView(
+                    skill: skill,
+                    sourcePath: metadata(for: skill)?.path,
+                    onEdit: { skillBeingEdited = skill },
+                    onEditSource: { skillBeingSourceEdited = skill },
+                    onInstall: { model.planInstall(skillID: skill.id) },
+                    onAdopt: { requestCopies([skill.id]) }
+                )
+                Divider()
                 HStack {
                     Text(installation(for: skill)).font(.caption).foregroundStyle(.secondary)
                     SkillInfoButton(text: classification(for: skill).reason, label: "Classification information")
                     Spacer()
                     Picker(
-                        metadata(for: skill)?.providerPluginID == nil ? "Skill ownership" : "Source ownership",
+                        metadata(for: skill)?.providerPluginID == nil ? "Skill classification" : "Plugin classification",
                         selection: Binding(
                             get: { ownershipMap[ownershipKey(for: skill)] ?? "automatic" }, set: { setOwnership($0, for: skill) }
                         )
@@ -417,16 +440,9 @@ struct SkillsView: View {
                         Text("My skills").tag("mine")
                         Text("Third-party skills").tag("thirdParty")
                     }.labelsHidden().fixedSize().controlSize(.small).disabled(skill.owned)
-                        .accessibilityLabel("Source ownership")
+                        .accessibilityLabel(
+                            metadata(for: skill)?.providerPluginID == nil ? "Skill classification" : "Plugin classification")
                 }.padding(.horizontal, 22).padding(.vertical, 10)
-                SkillDetailView(
-                    skill: skill,
-                    sourcePath: metadata(for: skill)?.path,
-                    onEdit: { skillBeingEdited = skill },
-                    onEditSource: { skillBeingSourceEdited = skill },
-                    onInstall: { model.planInstall(skillID: skill.id) },
-                    onAdopt: { model.planSkillAdoption(skillIDs: [skill.id]) }
-                )
             }
         } else {
             EmptyStateView(
@@ -435,46 +451,47 @@ struct SkillsView: View {
         }
     }
 
-    /// Tagging is filtering only — it never changes what is installed.
-    private func reference(for skill: Skill) -> ToolingItemReference {
-        ToolingItemReference(kind: .skill, identifier: skill.id)
-    }
-
-    private var skillTags: [String] {
-        let used = Set(model.visibleSkills.flatMap { model.tags(for: reference(for: $0)) })
-        return used.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-    }
-
-    private var untaggedSkillCount: Int {
-        model.visibleSkills.filter { model.tags(for: reference(for: $0)).isEmpty }.count
-    }
+    private var skillTags: [String] { inventory.skillTags }
 
     private func matchesTagFilter(_ skill: Skill) -> Bool {
-        let assigned = model.tags(for: reference(for: skill))
+        let assigned = inventory.tags[skill.id] ?? []
         if untaggedOnly { return assigned.isEmpty }
         guard !tagFilter.isEmpty else { return true }
         return !tagFilter.isDisjoint(with: Set(assigned))
     }
 
     private var filteredSkills: [Skill] {
-        model.visibleSkills.filter { skill in
-            (scope == .all || (scope == .mine ? ownership(for: skill) == "mine" : ownership(for: skill) == "thirdParty"))
-                && (sourceFilter.isEmpty || skill.bundle == sourceFilter)
+        inventory.skills.filter { skill in
+            let origin = presentation(for: skill)
+            return scope.matches(owner: ownership(for: skill))
+                && origin.matches(marketplace: marketplaceFilter, plugin: pluginFilter)
                 && (installationFilter == "All installations" || installationFilter == installation(for: skill))
                 && (maintenanceFilter == "All maintenance" || (maintenanceFilter == "Maintained here") == skill.owned)
                 && matchesTagFilter(skill)
                 && clientFilter.matches(skill)
                 && (query.isEmpty
-                    || [skill.name, skill.displayName, skill.summary, skill.bundle].joined(separator: " ").localizedCaseInsensitiveContains(
-                        query))
+                    || [skill.name, skill.displayName, skill.summary, origin.pluginName ?? "", origin.marketplaceName ?? ""]
+                        .joined(separator: " ").localizedCaseInsensitiveContains(query))
         }
     }
 
-    private var sources: [String] { Set(model.visibleSkills.map(\.bundle)).sorted() }
-
-    private var ownershipMap: [String: String] {
-        (try? JSONDecoder().decode([String: String].self, from: Data(sourceOwnership.utf8))) ?? [:]
+    private func presentation(for skill: Skill) -> SkillPresentation {
+        inventory.presentations[skill.id] ?? SkillPresentation(pluginID: nil)
     }
+
+    private var marketplaces: [(id: String, title: String)] { inventory.marketplaces }
+    private var plugins: [(id: String, title: String)] { inventory.plugins }
+
+    private var marketplaceFilterTitle: String {
+        marketplaceFilter.isEmpty ? "All marketplaces" : ConnectionSource.title(marketplaceFilter)
+    }
+
+    private func clearUnavailableSourceFilters() {
+        if !marketplaceFilter.isEmpty && !marketplaces.contains(where: { $0.id == marketplaceFilter }) { marketplaceFilter = "" }
+        if !pluginFilter.isEmpty && !plugins.contains(where: { $0.id == pluginFilter }) { pluginFilter = "" }
+    }
+
+    private var ownershipMap: [String: String] { inventory.ownership }
 
     private func ownershipKey(for skill: Skill) -> String {
         SkillOrganization.ownershipKey(skillID: skill.id, pluginID: metadata(for: skill)?.providerPluginID)
@@ -485,14 +502,12 @@ struct SkillsView: View {
     }
 
     private func classification(for skill: Skill) -> SkillOrganization.Classification {
-        SkillOrganization.classify(
-            maintainedHere: skill.owned,
-            pluginID: metadata(for: skill)?.providerPluginID,
-            override: ownershipMap[ownershipKey(for: skill)])
+        inventory.classifications[skill.id]
+            ?? SkillOrganization.classify(maintainedHere: skill.owned, pluginID: nil, override: nil)
     }
 
     private func setOwnership(_ value: String, for skill: Skill) {
-        var values = ownershipMap
+        var values = (try? JSONDecoder().decode([String: String].self, from: Data(sourceOwnership.utf8))) ?? [:]
         values[ownershipKey(for: skill)] = value == "automatic" ? nil : value
         if let data = try? JSONEncoder().encode(values), let json = String(data: data, encoding: .utf8) {
             sourceOwnership = json
@@ -500,8 +515,7 @@ struct SkillsView: View {
     }
 
     private func metadata(for skill: Skill) -> ObservedSkillMetadata? {
-        model.visibleTargetObservations.sorted { $0.surface.displayName < $1.surface.displayName }
-            .compactMap { $0.skillMetadata[skill.id] }.first
+        inventory.metadata[skill.id]
     }
 
     private func installation(for skill: Skill) -> String {
@@ -518,35 +532,65 @@ struct SkillsView: View {
         }
     }
 
-    private func isCollapsed(_ group: String) -> Bool {
-        // Search results are always visible, without changing saved expansion choices.
-        query.isEmpty && collapsedGroups.contains(group)
-    }
-
     private func classify(_ skills: [Skill], as owner: String) {
-        var values = ownershipMap
+        var values = (try? JSONDecoder().decode([String: String].self, from: Data(sourceOwnership.utf8))) ?? [:]
         for skill in skills where !skill.owned { values[ownershipKey(for: skill)] = owner == "automatic" ? nil : owner }
         if let data = try? JSONEncoder().encode(values), let json = String(data: data, encoding: .utf8) {
             sourceOwnership = json
         }
     }
 
-    private var groupedSkills: [(String, [Skill])] {
-        var groups: [String: [Skill]] = [:]
-        for skill in filteredSkills {
-            groups[groupName(for: skill), default: []].append(skill)
-        }
-        return groups.map { group, skills in
-            (group, skills.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending })
-        }
-        .sorted { $0.0.localizedCaseInsensitiveCompare($1.0) == .orderedAscending }
+    private var resolvedGrouping: SkillGrouping { SkillGrouping.migratedValue(grouping) }
+
+    private var groupedSkills: [SkillListGroup] {
+        SkillListPresentation.groups(skills: filteredSkills, grouping: resolvedGrouping, presentation: presentation(for:))
     }
 
-    private var selectedSkill: Skill? { model.visibleSkills.first { $0.id == selectedID } }
+    private func groupHeader(_ group: SkillListGroup, isCollapsed: Bool) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                var collapsed = collapsedGroups
+                if collapsed.contains(group.id) { collapsed.remove(group.id) } else { collapsed.insert(group.id) }
+                saveCollapsedGroups(collapsed)
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                        .font(.caption2.weight(.semibold)).frame(width: 10)
+                    Text(group.title).lineLimit(1)
+                    if let subtitle = group.subtitle { Text(subtitle).foregroundStyle(.tertiary).lineLimit(1) }
+                    Text("\(group.skills.count)").foregroundStyle(.tertiary)
+                    Spacer()
+                }.contentShape(Rectangle())
+            }.buttonStyle(.plain)
+                .accessibilityLabel("\(isCollapsed ? "Expand" : "Collapse") \(group.title)")
+            Menu {
+                classificationActions(group.skills)
+            } label: {
+                Image(systemName: "ellipsis")
+            }
+            .menuStyle(.borderlessButton).fixedSize()
+            .help("Classify skills in this group without copying them")
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 13)
+        .frame(height: 32)
+        .background(AgentTheme.controlBackground.opacity(0.45))
+    }
+
+    @ViewBuilder
+    private func classificationActions(_ skills: [Skill]) -> some View {
+        Button("Mark as My skills") { classify(skills, as: "mine") }
+        Button("Mark as Third-party") { classify(skills, as: "thirdParty") }
+        Button("Use automatic classification") { classify(skills, as: "automatic") }
+        Button("Mark as Unclassified") { classify(skills, as: "unknown") }
+    }
+
+    private var selectedSkill: Skill? { inventory.skills.first { $0.id == selectedID } }
 
     /// Only a discovered skill the last setup check could place can be adopted,
     /// so selection mode never offers a row the plan would have to skip.
-    private var adoptableIDs: Set<String> { Set(model.adoptableSkillIDs) }
+    private var adoptableIDs: Set<String> { inventory.adoptableIDs }
 
     private func setSelecting(_ value: Bool) {
         isSelecting = value
@@ -571,21 +615,22 @@ struct SkillsView: View {
     private func adoptSelection() {
         let requested = selection.intersection(adoptableIDs)
         guard !requested.isEmpty else { return }
-        model.planSkillAdoption(skillIDs: requested)
-        guard model.pendingPlan != nil else { return }
-        setSelecting(false)
+        requestCopies(requested)
+    }
+
+    private func requestCopies(_ ids: Set<String>) {
+        requestedCopies = ids
+        copyConfirmationPresented = true
     }
 
     private func accessibilityValue(for skill: Skill, isAdoptable: Bool) -> String {
         guard isSelecting else { return skill.id == selectedID ? "Selected" : "" }
-        if !isAdoptable { return "Cannot be adopted" }
-        return selection.contains(skill.id) ? "Selected for adoption" : "Not selected"
+        if !isAdoptable { return "Cannot be copied" }
+        return selection.contains(skill.id) ? "Selected to copy" : "Not selected"
     }
 
     private var toolbarContext: String {
-        let mine = model.visibleSkills.filter { ownership(for: $0) == "mine" }.count
-        let unknown = model.visibleSkills.filter { ownership(for: $0) == "unknown" }.count
-        return "\(model.visibleSkills.count) discovered · \(mine) mine · \(unknown) unclassified"
+        "\(inventory.skills.count) discovered · \(inventory.mineCount) mine · \(inventory.unknownCount) unclassified"
     }
 
     private func clearHiddenSelection() {
@@ -593,35 +638,39 @@ struct SkillsView: View {
         selectedID = ""
     }
 
-    private func displayName(for value: String) -> String {
-        value.split(whereSeparator: { $0 == "-" || $0 == "_" }).map { $0.capitalized }.joined(separator: " ")
-    }
-
-    private func groupName(for skill: Skill) -> String {
-        let maintenance = skill.owned ? "Adopted" : "Not adopted"
-        if grouping == "Maintenance" { return maintenance }
-        if scope == .mine { return displayName(for: skill.bundle) }
-        let owner = ownership(for: skill) == "mine" ? "My skills" : ownership(for: skill) == "thirdParty" ? "Third-party" : "Unclassified"
-        return "\(owner) · \(displayName(for: skill.bundle))"
-    }
-
-    private var emptyStateTitle: String { model.visibleSkills.isEmpty ? "No skills yet" : "No matching skills" }
+    private var emptyStateTitle: String { inventory.skills.isEmpty ? "No skills yet" : "No matching skills" }
     private var emptyStateMessage: String {
-        scope == .mine
-            ? "No skills are classified as yours in this view. In All skills, use a group’s ••• menu to mark it as My skills. Adoption is not required."
-            : "Third-party skills appear after classification. In All skills, use a group’s ••• menu to mark it as Third-party. Adoption is not required. Check your filters if you already classified sources."
+        if inventory.skills.isEmpty { return "Create a skill or check your apps to find existing skills." }
+        switch scope {
+        case .provider:
+            return
+                "No matching skills supplied directly by OpenAI or Anthropic were found. Marketplace listings with an unknown publisher remain in All skills."
+        case .mine:
+            return
+                "No matching skills are classified as yours. Select a skill in All skills to change its classification. Copying it is not required."
+        case .thirdParty:
+            return "No matching third-party skills were found. Skills whose publisher is not established remain in All skills."
+        case .all:
+            return "Try a different search or clear your filters."
+        }
     }
     private var emptyStateActionTitle: String { "Clear filters" }
     private var isEmptyStateActionEnabled: Bool { true }
-    private func performEmptyStateAction() {
-        scope = .all
-        sourceFilter = ""
+
+    private func resetFilters() {
+        marketplaceFilter = ""
+        pluginFilter = ""
         installationFilter = "All installations"
         maintenanceFilter = "All maintenance"
         clientFilter = .all
-        query = ""
         tagFilter = []
         untaggedOnly = false
+    }
+
+    private func performEmptyStateAction() {
+        scope = .all
+        query = ""
+        resetFilters()
     }
 
     private func openCodexCreator(requestID: UUID? = nil) {
@@ -636,7 +685,7 @@ struct SkillsView: View {
 
     private func applyExternalNavigation() {
         if let skillID = navigation.requestedSkillID,
-            model.visibleSkills.contains(where: { $0.id == skillID })
+            inventory.skills.contains(where: { $0.id == skillID })
         {
             performEmptyStateAction()
             selectedID = skillID
@@ -651,13 +700,6 @@ struct SkillsView: View {
 private struct CodexSkillInstallHandoff {
     var skillID: String
     var targets: Set<ClientKind>
-}
-
-private enum SkillScope: String, CaseIterable, Identifiable {
-    case all = "All skills"
-    case mine = "My skills"
-    case thirdParty = "Third-party"
-    var id: String { rawValue }
 }
 
 private enum SkillClientFilter: String, CaseIterable, Identifiable {
@@ -686,13 +728,15 @@ private enum SkillClientFilter: String, CaseIterable, Identifiable {
 private struct SkillTableColumns {
     let width: CGFloat
     let selecting: Bool
-    var expanded: Bool { width >= 760 }
+    var expanded: Bool { width >= 880 }
     var name: CGFloat { expanded ? min(300, width * 0.24) : max(140, width - 144 - (selecting ? 32 : 0)) }
-    var plugin: CGFloat { min(240, width * 0.20) }
+    var plugin: CGFloat { min(200, width * 0.17) }
+    var marketplace: CGFloat { min(180, width * 0.15) }
 }
 
 private struct SkillCollectionRow: View {
     let skill: Skill
+    let presentation: SkillPresentation
     let selected: Bool
     var selecting = false
     var isAdoptable = false
@@ -722,6 +766,9 @@ private struct SkillCollectionRow: View {
                             Text(skill.displayName).font(.callout.weight(.medium)).lineLimit(1)
                             if !columns.expanded {
                                 Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                if let origin = presentation.compactDescription {
+                                    Text(origin).font(.caption).foregroundStyle(.secondary).lineLimit(1).help(origin)
+                                }
                             }
                             if !tags.isEmpty || !collections.isEmpty {
                                 HStack(spacing: 4) {
@@ -736,17 +783,26 @@ private struct SkillCollectionRow: View {
                         Text(summary).font(.callout).foregroundStyle(.secondary)
                             .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                             .help(summary)
-                        Text(skill.bundle.isEmpty ? "Standalone" : skill.bundle)
+                        Text(presentation.pluginName ?? "Standalone")
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                            .frame(width: columns.plugin, alignment: .leading).help(skill.bundle)
-                    } else { Spacer(minLength: 0) }
+                            .frame(width: columns.plugin, alignment: .leading)
+                            .help(presentation.pluginName ?? "Standalone skill")
+                        Text(presentation.marketplaceName ?? "—")
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            .frame(width: columns.marketplace, alignment: .leading)
+                            .help(presentation.marketplaceName ?? "No marketplace")
+                    } else {
+                        Spacer(minLength: 0)
+                    }
                 }
                 .frame(maxHeight: .infinity).contentShape(Rectangle())
             }
             .buttonStyle(.plain).accessibilityLabel(skill.displayName)
             HStack(spacing: 8) {
                 ForEach(skill.clients.filter(\.reportsLocalPresence), id: \.client) { state in
-                    Button { filterClient(state.client) } label: {
+                    Button {
+                        filterClient(state.client)
+                    } label: {
                         ClientBrandIcon(client: state.client, size: 16)
                             .frame(width: 24, height: 28).contentShape(Rectangle())
                     }
@@ -758,7 +814,7 @@ private struct SkillCollectionRow: View {
         }
         .foregroundStyle(selected ? Color.white : Color.primary)
         .padding(.horizontal, 16)
-        .frame(height: tags.isEmpty && collections.isEmpty ? (columns.expanded ? 40 : 48) : 60)
+        .frame(height: tags.isEmpty && collections.isEmpty ? (columns.expanded ? 44 : (presentation.pluginID == nil ? 48 : 64)) : 78)
         .rowSelection(selected)
         .overlay(alignment: .bottom) { Divider().opacity(0.25) }
     }
@@ -779,17 +835,23 @@ private struct SkillDetailView: View {
                 HStack(spacing: 13) {
                     KindTile(kind: .skill, size: 40, ghost: !skill.owned)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(skill.displayName).font(.title3.weight(.semibold))
+                        Text(skill.displayName).font(.system(size: 22, weight: .semibold))
                         HStack(spacing: 6) {
-                            Text(skill.owned ? "Adopted" : "Not adopted")
-                                .font(.caption2.weight(.medium))
-                                .padding(.horizontal, 7).padding(.vertical, 3)
-                                .background(.quaternary, in: Capsule())
+                            Text(
+                                skill.owned
+                                    ? "Managed by you"
+                                    : skill.repositoryBinding != nil
+                                        ? "Following repository"
+                                        : model.skillPluginID(skill.id) != nil ? "Managed with plugin" : "Source unknown"
+                            )
+                            .font(.caption2.weight(.medium))
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(.quaternary, in: Capsule())
                             SkillInfoButton(
                                 text: skill.owned
                                     ? "The source is maintained in this library. Save edits, then review updates to installed copies."
-                                    : "This skill is maintained at its original source. Adoption creates a separate copy in this library; it is not required to install or use the skill.",
-                                label: "About adoption")
+                                    : "This skill is maintained at its original source. Copying creates a separate version in this library; it is not required to install or use the skill.",
+                                label: "About maintenance")
                         }.foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -808,9 +870,10 @@ private struct SkillDetailView: View {
                     if skill.owned {
                         Button("Review Install…", systemImage: "arrow.down.circle") { onInstall() }
                             .buttonStyle(.borderedProminent)
+                            .tint(AgentTheme.selection)
                             .disabled(model.isInteractionLocked)
                     } else if model.canAdoptSkill(id: skill.id) {
-                        Button("Adopt…", systemImage: "tray.and.arrow.down") { onAdopt() }
+                        Button("Make personal copy…", systemImage: "doc.on.doc") { onAdopt() }
                             .buttonStyle(.bordered)
                             .disabled(model.isInteractionLocked)
                             .accessibilityHint("Creates a separately maintained copy after you review the plan")
@@ -820,6 +883,10 @@ private struct SkillDetailView: View {
                 Text(skill.summary)
                     .font(.callout)
                     .foregroundStyle(.secondary)
+
+                if !skill.owned {
+                    SkillRepositorySection(skill: skill)
+                }
 
                 GroupBox {
 

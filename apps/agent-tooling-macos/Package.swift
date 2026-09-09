@@ -13,9 +13,13 @@ let package = Package(
         .executable(name: "agent-tooling-mcp", targets: ["AgentToolingMCP"]),
         .library(name: "AgentToolingCore", targets: ["AgentToolingCore"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.2")
+    ],
     targets: [
         .target(
             name: "AgentToolingCore",
+            dependencies: [.product(name: "Yams", package: "Yams")],
             linkerSettings: [
                 .linkedLibrary("sqlite3"),
                 .linkedFramework("Security"),

@@ -31,6 +31,7 @@ extension AppModel {
 
     @discardableResult
     public func rejectPendingRequest(id: UUID, expectedFingerprint: String) -> Bool {
+        guard ensureReadyForChange() else { return false }
         do {
             guard
                 let request = try PendingRequestQueueService.resolve(

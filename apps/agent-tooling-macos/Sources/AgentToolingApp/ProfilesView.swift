@@ -21,14 +21,15 @@ struct ProfilesView: View {
                 } label: {
                     Label("Edit configuration…", systemImage: "slider.horizontal.3")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .disabled(model.isInteractionLocked || selectedProfile == nil || selectedProfile?.scope == .managed)
                 Button {
                     showingNewProfile = true
                 } label: {
                     Label("New configuration…", systemImage: "plus")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glassProminent)
+                .tint(AgentTheme.selection)
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(model.isInteractionLocked)
                 Button {
@@ -36,7 +37,7 @@ struct ProfilesView: View {
                 } label: {
                     Label(model.isRunningDoctor ? "Checking…" : "Check setup", systemImage: "stethoscope")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glass)
                 .disabled(model.isInteractionLocked)
             }
 
@@ -78,8 +79,8 @@ struct ProfilesView: View {
                 Spacer()
                 Text(model.profiles.count, format: .number).font(.caption2).foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 14)
-            .frame(height: 44)
+            .padding(.horizontal, WorkspaceLayout.pageInset)
+            .frame(height: 32)
             .background(AgentTheme.controlBackground.opacity(0.45))
 
             if orderedProfiles.isEmpty {
@@ -213,6 +214,7 @@ private struct ProfileDetailView: View {
                             Label("Make Current", systemImage: "checkmark.circle.fill")
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(AgentTheme.selection)
                         .disabled(model.isInteractionLocked)
                     } else {
                         Label("Current", systemImage: "checkmark")
@@ -419,6 +421,7 @@ private struct ProfileEditorSheet: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(AgentTheme.selection)
                     .keyboardShortcut(.defaultAction)
                     .disabled(validationMessage != nil || model.isInteractionLocked)
                 }
@@ -516,6 +519,7 @@ private struct NewProfileSheet: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(AgentTheme.selection)
                 .keyboardShortcut(.defaultAction)
                 .disabled(validationMessage != nil || model.isInteractionLocked)
             }

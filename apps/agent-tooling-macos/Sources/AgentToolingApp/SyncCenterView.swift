@@ -16,14 +16,14 @@ struct SyncCenterView: View {
     var body: some View {
         VStack(spacing: 0) {
             PageToolbar(title: "Clients", context: toolbarContext) {
-                Button("Choose Clients…") { showingClientSelection = true }
+                Button("Choose apps…") { showingClientSelection = true }
                     .popover(isPresented: $showingClientSelection) { ClientSelectionView().frame(width: 380) }
                 Button {
                     Task { await model.runDoctor() }
                 } label: {
                     Label(model.isRunningDoctor ? "Refreshing…" : refreshButtonTitle, systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .disabled(model.isInteractionLocked)
                 .help(refreshHelp)
                 .accessibilityLabel(refreshButtonTitle)
@@ -34,7 +34,8 @@ struct SyncCenterView: View {
                 } label: {
                     Label(model.isSyncing ? "Preparing…" : reviewButtonTitle, systemImage: "arrow.triangle.2.circlepath")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
+                .tint(AgentTheme.selection)
                 .disabled(model.isInteractionLocked)
                 .help(reviewHelp)
                 .accessibilityLabel(reviewButtonTitle)
@@ -62,9 +63,11 @@ struct SyncCenterView: View {
                         receiptsCard.frame(maxWidth: .infinity)
                     }
                 }
-                .padding(EdgeInsets(top: 4, leading: 22, bottom: 22, trailing: 22))
-                .frame(maxWidth: 1_060)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: 1_200, alignment: .leading)
+                .padding(.horizontal, WorkspaceLayout.pageInset)
+                .padding(.top, WorkspaceLayout.contentTopInset)
+                .padding(.bottom, WorkspaceLayout.pageInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.hidden)
         }
@@ -84,20 +87,21 @@ struct SyncCenterView: View {
         if !scopedPendingRequests.isEmpty {
             return "\(scopedPendingRequests.count) review request\(scopedPendingRequests.count == 1 ? "" : "s") waiting"
         }
+        if sortedTargets.isEmpty { return "Refresh to discover your local apps" }
         return model.attentionCount == 0
-            ? "Clients match the desired configuration"
+            ? "Local apps match your configuration"
             : "\(model.attentionCount) \(model.attentionCount == 1 ? "item needs" : "items need") attention"
     }
 
     private var clientsCard: some View {
-        TitledCard(client?.rawValue ?? "Clients", count: "read-only check") {
+        TitledCard(client?.rawValue ?? "Apps", count: "read-only check") {
             if sortedTargets.isEmpty {
                 EmptyStateView(
                     symbol: "arrow.clockwise",
-                    title: client.map { "\($0.rawValue) has not been checked" } ?? "Clients have not been checked",
+                    title: client.map { "\($0.rawValue) has not been checked" } ?? "Apps have not been checked",
                     message: client.map {
                         "Refresh checks to inspect \($0.rawValue)'s known configuration paths and command-line tools."
-                    } ?? "Check clients to inspect known configuration paths and command-line tools."
+                    } ?? "Check apps to inspect known configuration paths and command-line tools."
                 )
                 .frame(height: 210)
             } else {
@@ -264,7 +268,7 @@ struct SyncCenterView: View {
         return "Compare local state first. Review the exact plan before Agent Tooling changes a client."
     }
 
-    private var refreshButtonTitle: String { client == nil ? "Check Clients" : "Refresh Checks" }
+    private var refreshButtonTitle: String { client == nil ? "Check apps" : "Refresh Checks" }
 
     private var refreshHelp: String {
         client.map {
