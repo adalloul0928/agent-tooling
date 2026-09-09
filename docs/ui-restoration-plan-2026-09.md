@@ -25,11 +25,12 @@ bindings are not.
 Three facts decide the shape of the work.
 
 **1. Every deleted view is one command away.** Nothing was rewritten in place;
-the files were removed. The last commit that contains them is the parent of the
-commit that removed them.
+the files were removed. `ba6e098` is the last commit that contains them — the
+parent of `bb20246`, which removed them.
 
 ```
-git show <parent>:apps/agent-tooling-macos/Sources/AgentToolingApp/SkillsView.swift
+git show ba6e098:apps/agent-tooling-macos/Sources/AgentToolingApp/SkillsView.swift
+git ls-tree --name-only ba6e098 -- apps/agent-tooling-macos/Sources/AgentToolingApp/
 ```
 
 Read the original before porting a screen. The layout, spacing, empty states and
