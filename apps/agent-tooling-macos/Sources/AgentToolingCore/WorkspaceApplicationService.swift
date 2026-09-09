@@ -131,6 +131,115 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
 
     /// Changes the library label only. The declared package name, aliases,
     /// content, native route and physical destinations remain intact.
+    /// What would change on this device for the committed intent, with the
+    /// content this workspace can actually supply. Nothing is assumed already
+    /// present: without fresh observations every requirement is proposed, and
+    /// the existing reviewed operation path still checks each destination.
+    ///
+    /// This returns a request for that path. It installs nothing and proves
+    /// nothing about whether an adapter will accept an item.
+    public func deploymentPlan(
+        targets: [ResolvedAssignmentTarget],
+        observations: [WorkspaceDeploymentObservation] = [],
+        provenInstalls: Set<WorkspaceDeploymentInstallKey> = [],
+        nativeInstallRoutes: Set<NativePackageRoute> = []
+    ) async throws -> WorkspaceDeploymentPlan {
+        guard let snapshot = try store.snapshot() else {
+            throw WorkspaceRevisionStoreError.notInitialized
+        }
+        var available: [AssignmentContentEvidence] = []
+        if let contentStore {
+            for artifact in snapshot.document.artifacts {
+                guard let digest = artifact.contentDigest else { continue }
+                // Only content this store can actually read counts as held.
+                guard (try? await contentStore.read(digest)) != nil else { continue }
+                available.append(.init(artifactID: artifact.identity.id, digest: digest))
+            }
+        }
+        return WorkspaceDeploymentPlanner.plan(
+            document: snapshot.document, device: snapshot.device, targets: targets,
+            availableContent: available, observations: observations,
+            provenInstalls: provenInstalls, nativeInstallRoutes: nativeInstallRoutes)
+    }
+
+    /// Registers a folder this person already authors in. The folder is not
+    /// copied, not rewritten and stays the only editable version; this workspace
+    /// records that it exists and where it is on this Mac.
+    public func attachAuthoringRoot(_ command: AttachedAuthoringIntakeCommand) throws -> WorkspaceCommandReceipt {
+        try store.commitMetadata(
+            expectedRevisionID: command.expectedRevisionID,
+            idempotencyKey: command.idempotencyKey,
+            inputDigest: command.inputDigest(),
+            writerID: writerID,
+            deviceMutation: { try command.bind(&$0) },
+            mutation: { try command.apply(to: &$0) })
+    }
+
+    /// Stops managing an attached item. Nothing in the folder is changed.
+    public func detachAuthoringRoot(_ command: AttachedAuthoringDetachCommand) throws -> WorkspaceCommandReceipt {
+        var removedSourceID: WorkspaceObjectID?
+        return try store.commitMetadata(
+            expectedRevisionID: command.expectedRevisionID,
+            idempotencyKey: command.idempotencyKey,
+            inputDigest: command.inputDigest(),
+            writerID: writerID,
+            deviceMutation: { device in
+                guard let removedSourceID else { return }
+                device.sourceLocations.removeAll { $0.sourceRootID == removedSourceID }
+            },
+            mutation: { document in
+                let result = try command.apply(to: &document)
+                // Only unbind the folder when the document no longer names it.
+                removedSourceID = document.sources.contains(where: { $0.id == result.sourceID })
+                    ? nil : result.sourceID
+                return result.affected
+            })
+    }
+
+    /// Applies exactly the changes a linked preset's reviewed catch-up named.
+    ///
+    /// The digest covers every change that was shown, so an update computed
+    /// against a different membership cannot be replayed under the same key as
+    /// one the person actually saw.
+    public func applyLinkedPresetUpdate(
+        _ update: LinkedPresetUpdate,
+        expectedRevisionID: WorkspaceObjectID,
+        idempotencyKey: WorkspaceObjectID = WorkspaceObjectID()
+    ) throws -> WorkspaceCommandReceipt {
+        try store.commitMetadata(
+            expectedRevisionID: expectedRevisionID,
+            idempotencyKey: idempotencyKey,
+            inputDigest: WorkspaceLinkedPresetResolver.inputDigest(update),
+            writerID: writerID
+        ) { document in
+            WorkspaceLinkedPresetResolver.apply(update, to: &document)
+        }
+    }
+
+    /// Records a change to this device's own state, with the portable document
+    /// left exactly as it is.
+    ///
+    /// Device state is where paths live — checkouts, project folders, the
+    /// destinations this Mac writes somewhere else — and none of it belongs in
+    /// portable bytes. Going through a command keeps the change in the same
+    /// transaction and under the same head check as everything else, so it
+    /// cannot be applied against a workspace that moved.
+    @discardableResult
+    public func commitDeviceChange(
+        expectedRevisionID: WorkspaceObjectID,
+        idempotencyKey: WorkspaceObjectID = WorkspaceObjectID(),
+        inputDigest: String = String(repeating: "0", count: 64),
+        _ mutation: @escaping @Sendable (inout DeviceWorkspaceState) throws -> Void
+    ) throws -> WorkspaceCommandReceipt {
+        try store.commitMetadata(
+            expectedRevisionID: expectedRevisionID,
+            idempotencyKey: idempotencyKey,
+            inputDigest: inputDigest,
+            writerID: writerID,
+            deviceMutation: mutation,
+            mutation: { _ in [] })
+    }
+
     public func renameArtifact(_ command: RenameArtifactCommand) throws -> WorkspaceCommandReceipt {
         let digest = try command.inputDigest()
         return try store.commitMetadata(

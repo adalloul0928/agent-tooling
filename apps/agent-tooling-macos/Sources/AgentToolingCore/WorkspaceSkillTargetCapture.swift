@@ -35,11 +35,15 @@ public enum WorkspaceSkillTargetCapture {
         deviceID: WorkspaceObjectID,
         selectors: [ResolvedAssignmentSelector],
         projectRoots: [DeviceProjectRootBinding] = [],
-        observations: [TargetObservation]
+        observations: [TargetObservation],
+        /// What this Mac recorded each client can accept. Empty means a target
+        /// carries skills only, which is what it did before this existed.
+        capabilityEvidence: [TargetCapabilityEvidence] = []
     ) async throws -> [CapturedSkillAssignmentTarget] {
         let task = Task.detached(priority: .utility) {
             try captureSynchronously(homeURL: homeURL, deviceID: deviceID, selectors: selectors,
-                projectRoots: projectRoots, observations: observations)
+                projectRoots: projectRoots, observations: observations,
+                capabilityEvidence: capabilityEvidence)
         }
         return try await withTaskCancellationHandler {
             let result = try await task.value
@@ -48,9 +52,36 @@ public enum WorkspaceSkillTargetCapture {
         } onCancel: { task.cancel() }
     }
 
+    /// What this target can carry, from what this Mac actually observed.
+    ///
+    /// Skills are always here: a captured skill destination is what this type
+    /// is for, and the resolver's own rules decide whether one may be placed.
+    /// Anything else appears only where there is supported evidence for that
+    /// component, at that scope, from the version that was observed. Listing a
+    /// component with no evidence behind it would let a plan form for something
+    /// this Mac never saw a client accept.
+    static func componentContexts(
+        surface: TargetSurface, scope: ToolingScope, version: String?,
+        evidence: [TargetCapabilityEvidence]
+    ) -> [ResolvedTargetComponentContext] {
+        var contexts: [ResolvedTargetComponentContext] = [.init(component: .skill)]
+        for entry in evidence
+        where entry.surface == surface
+            && entry.component != .skill
+            && entry.scopes.contains(scope)
+            && entry.installedClientVersion == version
+            && entry.support == .supported {
+            let context = ResolvedTargetComponentContext(component: entry.component,
+                                                         transport: entry.transport)
+            if !contexts.contains(context) { contexts.append(context) }
+        }
+        return contexts
+    }
+
     private static func captureSynchronously(
         homeURL: URL, deviceID: WorkspaceObjectID, selectors: [ResolvedAssignmentSelector],
-        projectRoots: [DeviceProjectRootBinding], observations: [TargetObservation]
+        projectRoots: [DeviceProjectRootBinding], observations: [TargetObservation],
+        capabilityEvidence: [TargetCapabilityEvidence]
     ) throws -> [CapturedSkillAssignmentTarget] {
         try Task.checkCancellation()
         guard selectors.count <= 1_024, Set(selectors).count == selectors.count,
@@ -101,7 +132,9 @@ public enum WorkspaceSkillTargetCapture {
             results.append(.init(target: .init(selector: selector,
                 physicalDestinationID: identity(deviceID: deviceID, directory: binding.canonicalDirectory),
                 installedClientVersion: observation.version, adapterContractVersion: adapterContractVersion,
-                componentContexts: [.init(component: .skill)]),
+                componentContexts: componentContexts(
+                    surface: selector.surface, scope: selector.scope,
+                    version: observation.version, evidence: capabilityEvidence)),
                 plannedDirectory: directory, canonicalDirectory: binding.canonicalDirectory))
         }
         // Detect ordinary replacement and newly-created missing suffixes across

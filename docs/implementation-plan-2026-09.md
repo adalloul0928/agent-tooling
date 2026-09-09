@@ -421,3 +421,59 @@ Useful follow-ups are full-folder export with a target compatibility report; pub
 Defer a public account/sync service, a new model-provider proxy, our own MCP container runtime, universal agent/hook translation and simultaneous multi-transport synchronization. Defer broad automatic native deployment policies until scope, review, conflict and recovery behavior are established.
 
 This planning pass changes documentation only. Product code, local libraries, client settings, repository ownership and device synchronization have not been migrated or enabled by this document.
+
+## 14. Implementation status
+
+Added after implementation began. Section 11's table states what each phase must
+deliver; this states what exists. Detail for every batch is in
+[the progress ledger](implementation-progress-2026-09.md); this is the summary a
+reader of the plan needs.
+
+Measured on 2026-09-09: **1,519 tests pass** (Core 1,268, App 203, MCP 48), plus
+opt-in suites that read this machine's own clients and library.
+
+| Phase | Built | Acceptance gate |
+| --- | --- | --- |
+| 0. Contracts and baseline | Contracts recorded for every implemented area; Release interaction timings now measured | **Partly met.** Timings measured; Instruments frame/hang tracks not run — see below |
+| 1. Identity and storage | Authority/ID/portable/device models, revision store, migration intake with a review path for every recorded blocker, packaged pilots for activation, rollback, projects, upstream folders, native placement, managed MCP and native catalogs | **Partly met.** A read-only intake now runs over this Mac's real 176-skill library and produces 138 choices with zero blockers; nothing has been staged or activated from it |
+| 2. Central library and sources | Source resolver, versioned lock readers, central personal/upstream content, attached authoring roots with a Library surface and a migration option, whole-package export with a compatibility report | **Partly met.** Fixture-tested; no source-review UI |
+| 3. Assignment and projects | Shared browser and sheet, Projects, onboarding, and an Install surface running content install, update, removal, linked external destinations, native packages and managed connections through the reviewed operation path | **Partly met.** Verified against a disposable home; no command has run against a real client |
+| 4. Revisions and Git sync | Merge engine, revision store merge/fast-forward, real-Git transport, sync coordinator, enrollment, conflict decisions, a scheduler driven on a timer, restore points with a History view, and an encrypted folder transport over the same coordinator | **Not met.** Two isolated stores converge over a real local repository and over one encrypted folder; the two-Mac pilot has not run |
+| 5. Effective settings | Versioned adapters, resolver, layer reader, App settings with editing for recorded writable settings, an enforced compatibility register, a combined-settings breakdown, and the vendor-recorded managed-policy path | **Partly met.** Adapters are checked against this Mac's real settings files and drop nothing; no running client has been observed using those layers |
+| 6. ToolHive | Typed read-only status and on-demand logs in Settings; reviewed start/stop/restart with postcondition verification | **Not met.** Everything has run against a scripted runtime; `thv` is not installed on this machine |
+| 7. Native editing and advanced setup | Narrow verified settings editor, linked-preset subscriptions with a Presets surface, hooks shown as a combined setting, standing-instruction and agent inventories from each vendor's recorded locations, and an additive project declaration/lock writer with read-back reconciliation | **Partly met.** The inventory is checked against the files really on this Mac; only `/context` in a running session shows what a session actually loaded |
+| 8. Additional delivery surfaces | Whole-package export with a Library surface, a read-only effective-settings MCP tool, versioned inventory answers once authority moves, encrypted-folder sync, and AP5 portable MCP mapping with conformance fixtures | **Partly met.** No mapped MCP route has reached a real client; Mini access is not built |
+
+### Measured Release interaction latency
+
+Against the targets in section 12, on this machine, Release build, median of
+repeated runs after a warm-up:
+
+| Interaction | 500 items | 5,000 items | Target |
+| --- | --- | --- | --- |
+| Build the library index | 13.9 ms | **133.6 ms** | 100 ms routine feedback |
+| Filter a warm library | 0.5 ms | 5.5 ms | 150 ms p95 warm response |
+
+Filtering is comfortably inside its target at both sizes. Building the index for
+the 5,000-item fixture is **over** the routine-feedback target by about a third.
+This is a real miss against the plan's own fixture and is recorded as such. It
+does not describe this machine's actual library, which holds 176 items and builds
+in well under the target; it describes the largest fixture the plan asks to
+qualify against.
+
+Section 12 says these are goals to calibrate on supported hardware and must not
+become brittle CI assertions, so the measurement runs opt-in and asserts only a
+far-off regression ceiling.
+
+### What no amount of local work can supply
+
+| Gate | What is needed |
+| --- | --- |
+| Two-Mac convergence and recovery | A second Mac and a private test remote. Two isolated stores already converge over a real local repository and over one encrypted folder |
+| A lock that reproduces a checkout | A second machine to check a project out against a committed `project-lock.json` |
+| Native client consumption | Install a reviewed assignment into a real Claude Code or Codex and confirm explicit and implicit invocation |
+| Native package and connection commands, run for real | Run one of the built commands against a real client. Nothing here is evidence a package installs or that an agent then finds it |
+| Instructions as a session loads them | `/context` in a running Claude Code session, compared against the on-disk inventory |
+| Adapter precedence under a running client | Launching a client and observing what it does with the layers, which is a different claim from parsing its files |
+| ToolHive lifecycle qualification | A locally installed `thv` with a real workload |
+| Instruments frame and hang tracks | Instruments on a quiet machine. The end-to-end timing half of this gate is measured above |

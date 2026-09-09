@@ -8,7 +8,20 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
     public let presets: [WorkspaceLibraryPresetReadModel]
     public let projects: [WorkspaceLibraryProjectReadModel]
 
+    /// Tools that reach the library inside a plugin rather than on their own,
+    /// and so are folded into a row instead of being one.
+    public var nestedToolCount: Int { rows.reduce(0) { $0 + $1.childCount } }
+
+    /// Every tool the library holds. `rows.count` is the number of entries a
+    /// list can show, which is a smaller number whenever plugins carry skills
+    /// or servers of their own; anything reporting a library size to a person
+    /// wants this one.
+    public var toolCount: Int { rows.count + nestedToolCount }
+
     private let searchableRows: [ArtifactID: String]
+    /// Precomputed so a project view never scans every row's assignments.
+    private let rowIDsByProject: [ArtifactID: [ArtifactID]]
+    private let globalRowIDs: [ArtifactID]
 
     public init(snapshot: WorkspaceApplicationSnapshot) throws {
         try snapshot.document.validateStructure()
@@ -81,6 +94,40 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
         self.searchableRows = Dictionary(uniqueKeysWithValues: rows.map {
             ($0.artifactID, Self.searchText(for: $0))
         })
+        var byProject: [ArtifactID: [ArtifactID]] = [:]
+        var global: [ArtifactID] = []
+        let known = Set(projects.map(\.id))
+        for row in rows {
+            var seen = Set<ArtifactID>()
+            var isGlobal = false
+            for assignment in row.requestedAssignments {
+                guard let projectID = assignment.destination.logicalProjectID else { isGlobal = true; continue }
+                guard known.contains(projectID), seen.insert(projectID).inserted else { continue }
+                byProject[projectID, default: []].append(row.artifactID)
+            }
+            if isGlobal { global.append(row.artifactID) }
+        }
+        self.rowIDsByProject = byProject
+        self.globalRowIDs = global
+    }
+
+    /// Rows with at least one saved assignment for this project, in row order.
+    /// Assignments recorded for another device are included: they are shared
+    /// intent, and this Mac's installation is reported separately.
+    public func rows(inProject projectID: ArtifactID) -> [WorkspaceLibraryReadModelRow] {
+        let ids = Set(rowIDsByProject[projectID] ?? [])
+        return rows.filter { ids.contains($0.artifactID) }
+    }
+
+    /// Rows assigned without a project, which every project also inherits from
+    /// the apps themselves. Presence in a client is verified separately.
+    public var globallyAssignedRows: [WorkspaceLibraryReadModelRow] {
+        let ids = Set(globalRowIDs)
+        return rows.filter { ids.contains($0.artifactID) }
+    }
+
+    public func assignedItemCount(inProject projectID: ArtifactID) -> Int {
+        rowIDsByProject[projectID]?.count ?? 0
     }
 
     public func filteredRows(matching query: String) -> [WorkspaceLibraryReadModelRow] {

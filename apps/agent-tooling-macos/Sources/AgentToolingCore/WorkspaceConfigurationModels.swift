@@ -30,7 +30,7 @@ public struct AccountSurface: Identifiable, Codable, Hashable, Sendable {
 
 /// Connector metadata is intentionally separate from credentials. The record
 /// says which product owns authorization and where it is expected to appear;
-/// passwords, OAuth refresh tokens, and secret values never enter WorkspaceStore.
+/// passwords, OAuth refresh tokens and secret values never enter the workspace.
 public enum ConnectionOwner: String, Codable, CaseIterable, Identifiable, Sendable {
     case localClient
     case account
@@ -193,21 +193,5 @@ public struct BackupConflict: Identifiable, Codable, Hashable, Sendable {
         self.identifier = identifier
         self.localSummary = localSummary
         self.backupSummary = backupSummary
-    }
-}
-
-public struct BackupImportPreview: Sendable {
-    public var backupURL: URL
-    public var snapshot: WorkspaceSnapshot
-    public var lock: BackupLock
-    public var conflicts: [BackupConflict]
-    public var plan: OperationPlan
-
-    public init(backupURL: URL, snapshot: WorkspaceSnapshot, lock: BackupLock, conflicts: [BackupConflict], plan: OperationPlan) {
-        self.backupURL = backupURL
-        self.snapshot = snapshot
-        self.lock = lock
-        self.conflicts = conflicts
-        self.plan = plan
     }
 }

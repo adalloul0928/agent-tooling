@@ -1,11 +1,15 @@
 import AgentToolingCore
 import SwiftUI
 
-/// Shared Library/Project browser for an explicitly supplied versioned session.
-/// Legacy AppModel ownership is deliberately not reconstructed from this view.
+/// The Library, and the same browser a project uses. One session, one read
+/// model; a project only prefills its own context.
 struct WorkspaceLibraryView: View {
     let session: WorkspaceLibrarySession
     var initialProjectID: ArtifactID? = nil
+    var authoring: WorkspaceAuthoringSession?
+    var export: WorkspacePackageExportSession?
+    @State private var isAttaching = false
+    @State private var exporting: ExportPresentation?
     @State private var query = ""
     @State private var kind: LibraryKind = .all
     @State private var selection: Set<ArtifactID> = []
@@ -31,6 +35,12 @@ struct WorkspaceLibraryView: View {
                 }
                 .buttonStyle(.glass)
                 .disabled(session.isBusy || session.state?.library.presets.isEmpty != false)
+                if authoring != nil {
+                    Button("Attach folder…", systemImage: "folder.badge.plus") { isAttaching = true }
+                        .buttonStyle(.glass)
+                        .disabled(session.isBusy || session.access != .writable)
+                        .help("Register a folder you already author in as the editable copy for a skill.")
+                }
             }
             HStack(spacing: 16) {
                 WorkspaceSegmentedPicker("Item type", selection: $kind) {
@@ -93,6 +103,17 @@ struct WorkspaceLibraryView: View {
                         .accessibilityElement(children: .contain)
                         .contextMenu {
                             Button("Show details", systemImage: "info.circle") { detailID = row.id }
+                            if export != nil {
+                                Button("Export…", systemImage: "square.and.arrow.up") {
+                                    exporting = .init(artifactID: row.id, name: row.displayName)
+                                }
+                            }
+                            if let authoring, row.ownership == .attachedAuthoring,
+                               session.access == .writable {
+                                Button("Stop managing this folder", systemImage: "folder.badge.minus") {
+                                    Task { await authoring.detach(row.id, named: row.displayName) }
+                                }
+                            }
                         }
                     }
                     .listStyle(.plain)
@@ -135,6 +156,15 @@ struct WorkspaceLibraryView: View {
                 WorkspaceLibraryItemDetails(row: row)
             }
         }
+        .sheet(isPresented: $isAttaching) {
+            if let authoring { WorkspaceAttachFolderSheet(session: authoring) }
+        }
+        .sheet(item: $exporting) { presentation in
+            if let export {
+                WorkspacePackageExportSheet(session: export, itemName: presentation.name)
+                    .task { await export.prepare(presentation.artifactID) }
+            }
+        }
     }
 
     private var context: String {
@@ -143,6 +173,12 @@ struct WorkspaceLibraryView: View {
             return "\(prefix) · Choose items for \(project.name)"
         }
         return prefix
+    }
+
+    private struct ExportPresentation: Identifiable {
+        let id = UUID()
+        let artifactID: ArtifactID
+        let name: String
     }
 
     private struct AssignmentPresentation: Identifiable {

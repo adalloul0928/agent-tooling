@@ -20,12 +20,22 @@ struct ToolCallContext {
     var arguments: ToolArguments
     /// Self-reported and unverified. Display only — never a permission input.
     var client: UntrustedClientIdentity
-    var store: WorkspaceStore
+    /// The one workspace this server can reach. There is no second store to
+    /// fall back to and no argument that names a different one.
+    var store: WorkspaceRevisionStore
+    /// This Mac's home, for reading a client's own configuration files. Reads
+    /// only; this server never writes a native file.
+    var homeRoot: URL
     var now: Date
     var identifierFactory: () -> UUID
 
+    /// One workspace, read fresh.
+    ///
+    /// Items, this Mac's client observations and its operation receipts all come
+    /// from the same store. A failure to read travels as an error — never as an
+    /// empty result, which would read to a caller as "there is nothing".
     func snapshot() throws -> WorkspaceSnapshot {
-        try store.loadWorkspaceSnapshot() ?? WorkspaceSnapshot()
+        try VersionedInventorySource(store: store).workspaceSnapshot()
     }
 }
 

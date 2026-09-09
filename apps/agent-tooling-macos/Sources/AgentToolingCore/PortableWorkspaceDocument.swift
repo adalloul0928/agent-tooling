@@ -23,7 +23,7 @@ public struct WorkspaceRevision: Codable, Hashable, Sendable {
 }
 
 public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
-    public static let currentSchemaVersion: UInt = 4
+    public static let currentSchemaVersion: UInt = 5
 
     public var schemaVersion: UInt
     public var minimumReaderVersion: UInt
@@ -295,14 +295,21 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
                 throw WorkspaceDomainValidationError.missingReference("artifact parent package")
             }
             if artifact.packageRelativePath == nil {
-                guard schemaVersion >= 4,
-                      artifact.identity.kind == .mcpServer,
-                      artifact.authority == .nativeOwned,
+                // A native MCP declaration has no file of its own, and a package
+                // recorded without usable client evidence has no located member
+                // files at all. Both keep membership without claiming a path.
+                let nativeMCPDeclaration = schemaVersion >= 4
+                    && artifact.identity.kind == .mcpServer
+                    && artifact.authority == .nativeOwned
+                    && parent.authority == .nativeOwned
+                let recordedPackageMember = schemaVersion >= 5
+                    && artifact.authority == .trackedOnly
+                    && parent.authority == .trackedOnly
+                guard nativeMCPDeclaration || recordedPackageMember,
                       artifact.declaredName != nil,
                       artifact.contentDigest == nil,
                       artifact.nativeRoutes.isEmpty,
-                      parent.identity.kind == .nativePlugin,
-                      parent.authority == .nativeOwned else {
+                      parent.identity.kind == .nativePlugin else {
                     throw WorkspaceDomainValidationError.missingReference("artifact parent package path")
                 }
             }

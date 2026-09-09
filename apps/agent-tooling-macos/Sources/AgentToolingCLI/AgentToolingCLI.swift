@@ -83,9 +83,25 @@ struct AgentToolingCLI {
         } else {
             limit = IntegrationResponseLimits.searchDefaultLimit
         }
-        let store = try WorkspaceStore(rootURL: options.fileURL(for: "--workspace"))
-        let snapshot = try store.loadWorkspaceSnapshot() ?? WorkspaceSnapshot()
+        let snapshot = try Self.workspaceSnapshot(root: options.fileURL(for: "--workspace"))
         try writeJSON(IntegrationSearchIndex.response(for: snapshot, query: query, limit: limit))
+    }
+
+    /// Opens the workspace this Mac uses.
+    ///
+    /// `--workspace` names the app's support folder, not the store inside it,
+    /// so a test can point the CLI at a scratch copy without knowing how the
+    /// store is laid out. Nothing is created: a CLI that made a workspace by
+    /// being run would make one nobody chose to have.
+    private static func openWorkspace(root: URL?) throws -> WorkspaceRevisionStore {
+        let locator = try WorkspaceLocator(root: root?.standardizedFileURL
+            ?? (try WorkspaceLocator.defaultRoot()))
+        guard let store = try locator.open() else { throw CLIError.noWorkspace }
+        return store
+    }
+
+    private static func workspaceSnapshot(root: URL?) throws -> WorkspaceSnapshot {
+        try VersionedInventorySource(store: try openWorkspace(root: root)).workspaceSnapshot()
     }
 
     private static func request(_ arguments: [String]) throws {
@@ -156,7 +172,7 @@ struct AgentToolingCLI {
             throw CLIError.invalidValue("--project")
         }
 
-        let store = try WorkspaceStore(rootURL: options.fileURL(for: "--workspace"))
+        let store = try Self.openWorkspace(root: options.fileURL(for: "--workspace"))
         let outcome = try PendingRequestQueueService.enqueue(
             kind: .createSkill,
             title: "Create the skill '\(proposedName ?? "(unnamed)")'",
@@ -183,7 +199,7 @@ struct AgentToolingCLI {
             targets: targets
         )
         do {
-            try store.saveCodexSkillDraftRequest(draftRequest)
+            try store.saveRequestDraft(draftRequest.id, draftRequest)
         } catch {
             if !outcome.collapsed {
                 _ = try? PendingRequestQueueService.resolve(
@@ -206,8 +222,7 @@ struct AgentToolingCLI {
         let destinationPath = try options.requireOnePositional(label: "destination file")
         let workspaceURL = options.fileURL(for: "--workspace")
         let homeURL = options.fileURL(for: "--home") ?? FileManager.default.homeDirectoryForCurrentUser
-        let store = try WorkspaceStore(rootURL: workspaceURL)
-        let snapshot = try store.loadWorkspaceSnapshot() ?? WorkspaceSnapshot()
+        let snapshot = try Self.workspaceSnapshot(root: workspaceURL)
         let exporter = DiagnosticBundleExporter(homeURL: homeURL)
         let manifest = exporter.manifest(
             snapshot: snapshot,
@@ -304,6 +319,7 @@ private enum CLIError: LocalizedError {
     case invalidProvider
     case invalidInstruction
     case unknownRequest(String)
+    case noWorkspace
 
     var errorDescription: String? {
         switch self {
@@ -317,6 +333,8 @@ private enum CLIError: LocalizedError {
         case .invalidProvider: "Only the authenticated local Codex provider is supported for skill creation."
         case .invalidInstruction: "Provide a non-empty UTF-8 instruction no larger than 64 KB."
         case .unknownRequest(let request): "Unknown request type '\(request)'."
+        case .noWorkspace:
+            "This Mac has no Agent Tooling workspace yet. Open Agent Tooling once to set one up."
         }
     }
 }

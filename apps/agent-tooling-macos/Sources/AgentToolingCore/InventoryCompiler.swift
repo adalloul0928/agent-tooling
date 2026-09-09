@@ -1,14 +1,14 @@
 import Foundation
 
-struct ScannedInventory: Sendable {
-    var skills: [Skill]
-    var mcpServers: [MCPServer]
-    var plugins: [Plugin]
+public struct ScannedInventory: Sendable {
+    public var skills: [Skill]
+    public var mcpServers: [MCPServer]
+    public var plugins: [Plugin]
 
 }
 
-enum InventoryCompiler {
-    static func compile(observations: [TargetObservation], homeURL: URL, fileManager: FileManager = .default) -> ScannedInventory {
+public enum InventoryCompiler {
+    public static func compile(observations: [TargetObservation], homeURL: URL, fileManager: FileManager = .default) -> ScannedInventory {
         var byClient: [ClientKind: [TargetObservation]] = [:]
         for observation in observations {
             if let client = observation.surface.client { byClient[client, default: []].append(observation) }
@@ -207,24 +207,7 @@ enum InventoryCompiler {
         }
     }
 
-    private static func displayName(for value: String) -> String {
-        value.split(whereSeparator: { $0 == "-" || $0 == "_" }).map(preferredToken).joined(separator: " ")
-    }
-
-    private static func preferredToken(_ token: Substring) -> String {
-        switch token.lowercased() {
-        case "mcp": return "MCP"
-        case "cli": return "CLI"
-        case "api": return "API"
-        case "ios": return "iOS"
-        case "pdf": return "PDF"
-        case "github": return "GitHub"
-        case "oauth": return "OAuth"
-        case "repl": return "REPL"
-        case "heroui": return "HeroUI"
-        default: return token.capitalized
-        }
-    }
+    private static func displayName(for value: String) -> String { ToolDisplayName.derived(from: value) }
 
     private static func boundedText(_ value: String?, maximum: Int, required: Bool = false) -> String? {
         guard let value else { return nil }
@@ -608,19 +591,44 @@ enum LocalTargetScan {
     }
 
     private static func displayName(forPluginID id: String) -> String {
-        let name = id.split(separator: "@").first.map(String.init) ?? id
-        return name.split(whereSeparator: { $0 == "-" || $0 == "_" }).map { token in
-            switch token.lowercased() {
-            case "mcp": return "MCP"
-            case "cli": return "CLI"
-            case "api": return "API"
-            case "ios": return "iOS"
-            case "pdf": return "PDF"
-            case "github": return "GitHub"
-            case "oauth": return "OAuth"
-            case "heroui": return "HeroUI"
-            default: return token.capitalized
-            }
-        }.joined(separator: " ")
+        ToolDisplayName.derived(from: id.split(separator: "@").first.map(String.init) ?? id)
+    }
+}
+
+/// The one place an identifier becomes something to read.
+///
+/// Skills and plugins are discovered under two different scanners, and each
+/// used to carry its own copy of this, which is how they drifted apart.
+enum ToolDisplayName {
+    static func derived(from value: String) -> String {
+        value.split(whereSeparator: { $0 == "-" || $0 == "_" }).map(preferredToken).joined(separator: " ")
+    }
+
+    private static func preferredToken(_ token: Substring) -> String {
+        switch token.lowercased() {
+        case "mcp": return "MCP"
+        case "cli": return "CLI"
+        case "api": return "API"
+        case "ios": return "iOS"
+        case "pdf": return "PDF"
+        case "github": return "GitHub"
+        case "oauth": return "OAuth"
+        case "repl": return "REPL"
+        case "heroui": return "HeroUI"
+        default: return leadingCapital(token)
+        }
+    }
+
+    /// Raise the first character and leave the rest of the token alone.
+    ///
+    /// `String.capitalized` starts a new word at every digit-to-letter
+    /// boundary, so an opaque identifier such as
+    /// `68de829bf7648191acd70a907364c67c` came back as
+    /// `68De829Bf7648191Acd70A907364C67C` — a name the vendor never used and
+    /// that no search for the real identifier matches. It also flattens casing
+    /// an author chose deliberately. Neither is ours to invent.
+    private static func leadingCapital(_ token: Substring) -> String {
+        guard let first = token.first else { return "" }
+        return first.uppercased() + token.dropFirst()
     }
 }

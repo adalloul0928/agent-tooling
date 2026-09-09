@@ -183,6 +183,26 @@ enum ToolCatalog {
             inputSchema: ToolSchema.object(properties: [:])
         ),
         ToolDefinition(
+            name: "get_effective_settings",
+            tier: .readOnly,
+            title: "Get effective app settings",
+            description: """
+                Report what an installed coding agent will actually use on this Mac: each setting's value, which file defines it, \
+                which files it overrides, whether the values combine, whether a new session is required, and whether a higher \
+                layer fixes it so a change lower down would not take effect. Reads the agent's own configuration files and writes \
+                nothing. Settings this build does not interpret are listed separately and never presented as effective.
+                """,
+            inputSchema: ToolSchema.object(
+                properties: [
+                    "client": ToolSchema.string("Which agent to report: 'claude-code' or 'codex'.",
+                                                maximumLength: 32),
+                    "project_path": ToolSchema.string("Optional absolute path to a project whose files also apply.",
+                                                      maximumLength: 4_096),
+                ],
+                required: ["client"]
+            )
+        ),
+        ToolDefinition(
             name: "list_receipts",
             tier: .readOnly,
             title: "List operation receipts",

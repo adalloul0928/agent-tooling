@@ -29,6 +29,24 @@ struct WorkspaceLibraryReadModelTests {
         #expect(tracked.assignmentExplanation == "Tracked in this library. Choose how to manage it before assigning.")
     }
 
+    @Test func theLibrarySizeCountsToolsCarriedInsidePluginsNotJustTheRowsAListCanShow() throws {
+        let fixture = try Fixture()
+        let model = try WorkspaceLibraryReadModel(snapshot: fixture.snapshot)
+
+        // Four entries, one of which carries a skill of its own. Reporting
+        // `rows.count` would tell the owner of five tools that they have four.
+        #expect(model.rows.count == 4)
+        #expect(model.nestedToolCount == 1)
+        #expect(model.toolCount == 5)
+        // Every tool is counted once and nothing else is: the preset and the
+        // project in this document are not tools and must not inflate it.
+        let tools = fixture.document.artifacts.filter {
+            [.package, .skill, .mcpServer, .nativePlugin].contains($0.identity.kind)
+        }
+        #expect(model.toolCount == tools.count)
+        #expect(fixture.document.artifacts.count == tools.count + 2)
+    }
+
     @Test func requestedAssignmentsRetainForeignDeviceIntentWithoutClaimingInstallation() throws {
         let fixture = try Fixture()
         let model = try WorkspaceLibraryReadModel(snapshot: fixture.snapshot)

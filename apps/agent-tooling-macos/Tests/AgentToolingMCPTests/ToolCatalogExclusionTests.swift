@@ -45,8 +45,8 @@ struct ToolCatalogExclusionTests {
     }
 
     @Test func everyToolIsInOneOfExactlyTwoTiers() {
-        #expect(ToolCatalog.tools.count == 13)
-        #expect(ToolCatalog.readOnlyTools.count == 8)
+        #expect(ToolCatalog.tools.count == 14)
+        #expect(ToolCatalog.readOnlyTools.count == 9)
         #expect(ToolCatalog.reviewQueueTools.count == 5)
         #expect(ToolCatalog.readOnlyTools.allSatisfy { $0.tier == .readOnly })
         #expect(ToolCatalog.reviewQueueTools.allSatisfy { $0.tier == .queuesReview })

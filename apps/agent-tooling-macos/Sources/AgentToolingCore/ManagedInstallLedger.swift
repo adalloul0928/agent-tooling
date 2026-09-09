@@ -71,15 +71,19 @@ public struct ManagedInstallLedger: Codable, Hashable, Sendable {
         if records.count > Self.maximumRecords { records = Array(records.prefix(Self.maximumRecords)) }
     }
 
-    /// A missing or unreadable ledger is treated as an empty one. Failing to
-    /// read it must never be mistaken for proof that a destination is owned.
-    public static func load(from store: WorkspaceStore) -> ManagedInstallLedger {
-        ((try? store.load(storageKey, as: ManagedInstallLedger.self)) ?? nil) ?? ManagedInstallLedger()
+    /// Forgets one destination, for a removal this app performed itself.
+    public mutating func remove(destinationPath: String) {
+        records.removeAll { ManagedInstallPath.sameLocation($0.destinationPath, destinationPath) }
     }
 
-    public func save(to store: WorkspaceStore) throws {
-        try store.save(self, for: Self.storageKey)
+    public static func load(from store: WorkspaceRevisionStore) -> ManagedInstallLedger {
+        (try? store.managedInstallLedger()) ?? ManagedInstallLedger()
     }
+
+    public func save(to store: WorkspaceRevisionStore) throws {
+        try store.saveManagedInstallLedger(self)
+    }
+
 }
 
 /// Where a proof of ownership came from. Both sources are equally strong; they
@@ -111,8 +115,16 @@ public struct ManagedInstallAuthority: Sendable {
         self.receiptRecords = receiptRecords
     }
 
-    public static func fromStore(_ store: WorkspaceStore) -> ManagedInstallAuthority {
-        ManagedInstallAuthority(ledger: .load(from: store), receiptRecords: recordedInstalls(in: store))
+    /// Ownership proof read from the versioned store.
+    ///
+    /// The ledger alone, and deliberately. The executor writes a ledger entry
+    /// every time it installs something, so in a workspace that started empty
+    /// the ledger is the complete record. Rebuilding records from approved plans
+    /// and their receipts exists for installs that predate the ledger, and a
+    /// versioned workspace has none — offering that path here would be
+    /// reconstructing evidence for events that cannot exist.
+    public static func fromStore(_ store: WorkspaceRevisionStore) -> ManagedInstallAuthority {
+        .init(ledger: ManagedInstallLedger.load(from: store))
     }
 
     public func proof(forDestination path: String) -> ManagedInstallProof? {
@@ -143,39 +155,6 @@ public struct ManagedInstallAuthority: Sendable {
         var stepID: UUID
     }
 
-    /// Rebuilds install records from approved plans whose matching receipt says
-    /// the copy step actually succeeded. A plan alone proves nothing, and a
-    /// receipt alone does not name a destination, so both halves are required —
-    /// and they have to be halves of the same operation.
-    static func recordedInstalls(in store: WorkspaceStore) -> [ManagedInstallRecord] {
-        let plans = (try? store.listEntities(domain: .plans, as: OperationPlan.self)) ?? []
-        let receipts = (try? store.listEntities(domain: .receipts, as: OperationReceipt.self)) ?? []
-        var succeededAt: [PlanStepIdentity: Date] = [:]
-        for receipt in receipts {
-            for result in receipt.results where result.status == .succeeded {
-                succeededAt[PlanStepIdentity(planID: receipt.planID, stepID: result.stepID)] = result.finishedAt
-            }
-        }
-        var records: [ManagedInstallRecord] = []
-        for plan in plans {
-            for step in plan.steps where step.kind == .copyDirectory {
-                guard let destinationPath = step.destinationPath,
-                    let sourcePath = step.sourcePath,
-                    let fingerprint = step.sourceFingerprint,
-                    let finishedAt = succeededAt[PlanStepIdentity(planID: plan.id, stepID: step.id)]
-                else { continue }
-                records.append(
-                    ManagedInstallRecord(
-                        destinationPath: destinationPath,
-                        sourcePath: sourcePath,
-                        reviewedFingerprint: fingerprint,
-                        reviewedAt: finishedAt,
-                        planStepID: step.id
-                    ))
-            }
-        }
-        return records.sorted { $0.reviewedAt > $1.reviewedAt }
-    }
 }
 
 /// Honest states for an installed copy, compared against the tree the operator
@@ -257,7 +236,7 @@ enum InstalledPackageDriftInspector {
     /// the caller's actor. Comparing many packages is file-system work, and the
     /// setup check should not make the window wait on it.
     static func inspect(
-        store: WorkspaceStore,
+        store: WorkspaceRevisionStore,
         maximumRecords: Int = ManagedInstallLedger.maximumRecords,
         clients: Set<ClientKind> = Set(ClientKind.allCases)
     ) async -> [InstalledPackageDrift] {
@@ -323,5 +302,73 @@ enum InstalledPackageDriftInspector {
             )
         }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
+}
+
+/// The managed locations an operation writes into, and where its receipt goes.
+///
+/// A seam rather than a concrete store, so the executor's containment rules —
+/// which are the thing that stops a deployment writing outside this app's own
+/// folders — are written once against a shape, not twice against two stores.
+public protocol ManagedOperationStore: Sendable {
+    /// This app's own record of what it installed and where.
+    func managedInstallLedger() throws -> ManagedInstallLedger
+    func saveManagedInstallLedger(_ ledger: ManagedInstallLedger) throws
+    /// Ownership proof, however this store establishes it.
+    func installAuthority() -> ManagedInstallAuthority
+
+    /// The root every managed destination must stay inside.
+    var rootURL: URL { get }
+    /// Where this app keeps content it owns. The executor refuses to copy from
+    /// anywhere else.
+    var libraryURL: URL { get }
+    /// Where receipts and their rollback material live.
+    var receiptsURL: URL { get }
+    func recordOperationReceipt(_ receipt: OperationReceipt) throws
+}
+
+extension WorkspaceRevisionStore: ManagedOperationStore {
+    public var rootURL: URL { managedRootURL }
+    public func installAuthority() -> ManagedInstallAuthority { .fromStore(self) }
+}
+
+/// Which client a destination folder belongs to, read from the path itself.
+///
+/// Path-shaped rather than recorded, because a folder this app installed into
+/// carries the client's own directory name and nothing else identifies it. A
+/// path under none of them is not attributed to one: `nil` means unknown, and
+/// callers treat unknown as "include", never as a guess.
+enum ClientSelection {
+    static func includes(path: String, clients: Set<ClientKind>) -> Bool {
+        client(for: path).map(clients.contains) ?? true
+    }
+
+    static func client(for path: String) -> ClientKind? {
+        let parts = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
+        if parts.contains(".claude") { return .claude }
+        if parts.contains(".codex") || parts.contains(".agents") { return .codex }
+        if parts.contains(".gemini") { return .gemini }
+        return nil
+    }
+}
+
+/// One file inside an archive the executor restores a managed library from.
+///
+/// Kept beside the executor rather than beside a transport, because what the
+/// executor guarantees about it — that every path stays inside the library and
+/// that a missing execute bit restores as non-executable — is a property of
+/// restoring, not of however the archive arrived.
+struct EncryptedLibraryFile: Codable, Hashable, Sendable {
+    var relativePath: String
+    var data: Data
+    /// Optional for archives written before execution metadata was retained. A
+    /// missing value restores conservatively as a non-executable file, because
+    /// guessing the other way makes something runnable that may not have been.
+    var isExecutable: Bool?
+
+    init(relativePath: String, data: Data, isExecutable: Bool? = nil) {
+        self.relativePath = relativePath
+        self.data = data
+        self.isExecutable = isExecutable
     }
 }

@@ -1,25 +1,37 @@
 import Foundation
 
 public actor OperationExecutor {
-    private let store: WorkspaceStore
+    private let store: any ManagedOperationStore
     private let runner: any CommandRunning
     private let fileManager: FileManager
     private let homeURL: URL
+    private let linkedDestinationRoots: [URL]
     private let commandPolicy: OperationCommandPolicy
     /// Proof of which destinations this app installed, refreshed once per plan
     /// so every step in a batch is judged against the same recorded history.
     private var installAuthority = ManagedInstallAuthority()
 
+    /// `linkedDestinationRoots` are folders this device has explicitly
+    /// registered as somewhere reviewed content may be written.
+    ///
+    /// Nothing widens on its own: a caller has to name each folder, and every
+    /// other rule still applies inside it — the folder must exist, must not be
+    /// a symlink, the item's own folder name is still checked, and the copy is
+    /// still bound to the fingerprint that was reviewed. This is what lets a
+    /// person install into a folder of their own without the executor becoming
+    /// something that writes anywhere it is pointed.
     public init(
-        store: WorkspaceStore,
+        store: any ManagedOperationStore,
         runner: any CommandRunning = ProcessCommandRunner(),
         fileManager: FileManager = .default,
-        homeURL: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeURL: URL = FileManager.default.homeDirectoryForCurrentUser,
+        linkedDestinationRoots: [URL] = []
     ) {
         self.store = store
         self.runner = runner
         self.fileManager = fileManager
         self.homeURL = homeURL
+        self.linkedDestinationRoots = linkedDestinationRoots.map(\.standardizedFileURL)
         self.commandPolicy = OperationCommandPolicy(
             libraryURL: store.libraryURL,
             gitBackupRoot: store.rootURL.appending(path: "exports/git-backup", directoryHint: .isDirectory).standardizedFileURL
@@ -29,7 +41,7 @@ public actor OperationExecutor {
     /// Executes a plan built by an adapter. Steps intentionally continue after
     /// a failure so multi-agent installs retain useful partial success.
     public func execute(_ plan: OperationPlan) async -> OperationReceipt {
-        installAuthority = .fromStore(store)
+        installAuthority = store.installAuthority()
         var results: [OperationStepResult] = []
         for (index, step) in plan.steps.enumerated() {
             let startedAt = Date.now
@@ -104,7 +116,7 @@ public actor OperationExecutor {
         )
         receipt.verificationSummary = Self.persistableOutput(Self.verificationSummary(for: receipt, guidance: guidance))
         do {
-            try store.saveEntity(receipt, id: receipt.id.uuidString, domain: .receipts)
+            try store.recordOperationReceipt(receipt)
         } catch {
             receipt.state = .attention
             receipt.verificationSummary += " The operation completed, but its receipt could not be saved: \(error.localizedDescription)"
@@ -296,6 +308,31 @@ public actor OperationExecutor {
             }
             return (.succeeded, "Installed local package at \(destination.path(percentEncoded: false)).\(removalNote)\(ledgerNote)")
 
+        case .removeManagedDirectory:
+            guard let destinationPath = step.destinationPath,
+                let expected = step.destinationFingerprint
+            else { throw OperationEngineError.malformedStep(step.title) }
+            let destination = try copyDestination(
+                destinationPath, projectRootPath: step.projectRootPath, linkedUpdate: true)
+            // Removal is only ever offered for something this app installed,
+            // and only while it still matches what was approved. A folder
+            // someone edited is left alone and reported instead.
+            try requireProvenOwnership(of: destination, expectedFingerprint: expected)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: destination.path, isDirectory: &isDirectory),
+                isDirectory.boolValue
+            else {
+                return (.skipped, "Nothing to remove at \(destination.path(percentEncoded: false)).")
+            }
+            let current = try DirectoryFingerprint.sha256(of: destination)
+            guard current == expected else {
+                return (.skipped, "This folder no longer matches what was approved, so it was left alone.")
+            }
+            do { try fileManager.removeItem(at: destination) }
+            catch { throw OperationEngineError.unsafeDestination(destination.path(percentEncoded: false)) }
+            let note = forgetManagedInstall(destination: destination)
+            return (.succeeded, "Removed \(destination.path(percentEncoded: false)).\(note)")
+
         case .replaceManagedLibrary:
             guard let destinationPath = step.destinationPath, let contents = step.contents else {
                 throw OperationEngineError.malformedStep(step.title)
@@ -356,6 +393,21 @@ public actor OperationExecutor {
         }
     }
 
+    /// Drops the ledger record, so a later check does not report a folder this
+    /// app removed as still installed.
+    private func forgetManagedInstall(destination: URL) -> String {
+        var ledger = ((try? store.managedInstallLedger()) ?? ManagedInstallLedger())
+        ledger.remove(destinationPath: destination.path(percentEncoded: false))
+        do {
+            try store.saveManagedInstallLedger(ledger)
+            installAuthority = ManagedInstallAuthority(ledger: ledger,
+                                                       receiptRecords: installAuthority.receiptRecords)
+            return ""
+        } catch {
+            return " The folder is gone, but this app's own record of it could not be updated."
+        }
+    }
+
     private var managedRoots: [URL] {
         [store.libraryURL.standardizedFileURL, gitBackupRoot.appending(path: "library", directoryHint: .isDirectory).standardizedFileURL]
     }
@@ -369,7 +421,7 @@ public actor OperationExecutor {
         reviewedFingerprint: String,
         planStepID: UUID
     ) -> String {
-        var ledger = ManagedInstallLedger.load(from: store)
+        var ledger = ((try? store.managedInstallLedger()) ?? ManagedInstallLedger())
         ledger.upsert(
             ManagedInstallRecord(
                 destinationPath: destination.path(percentEncoded: false),
@@ -379,7 +431,7 @@ public actor OperationExecutor {
                 planStepID: planStepID
             ))
         do {
-            try ledger.save(to: store)
+            try store.saveManagedInstallLedger(ledger)
             installAuthority = ManagedInstallAuthority(ledger: ledger, receiptRecords: installAuthority.receiptRecords)
             return ""
         } catch {
@@ -477,6 +529,11 @@ public actor OperationExecutor {
             (homeURL.appending(path: ".gemini/skills", directoryHint: .isDirectory), homeURL),
         ].map { ($0.0.standardizedFileURL, $0.1.standardizedFileURL) }
 
+        // Folders this device registered. Each is its own anchor, so the item
+        // still lands directly inside the folder that was named and cannot walk
+        // out of it.
+        permittedSkillRoots += linkedDestinationRoots.map { ($0, $0) }
+
         if linkedUpdate {
             permittedSkillRoots.append((homeURL.appending(path: ".codex/skills").standardizedFileURL, homeURL.standardizedFileURL))
         }
@@ -533,11 +590,16 @@ public actor OperationExecutor {
         return workingDirectory
     }
 
+    /// The one file name an encrypted library archive may have. Fixed rather
+    /// than supplied, so a plan cannot name some other file and have it treated
+    /// as an archive worth restoring from.
+    static let encryptedArchiveFileName = "library.agent-tooling-archive"
+
     private func encryptedArchiveDestination(_ rawPath: String) throws -> URL {
         let destination = URL(fileURLWithPath: rawPath).standardizedFileURL
         let parent = destination.deletingLastPathComponent()
         let parentValues = try parent.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-        guard destination.lastPathComponent == EncryptedSyncService.archiveFileName,
+        guard destination.lastPathComponent == Self.encryptedArchiveFileName,
             parentValues.isDirectory == true,
             parentValues.isSymbolicLink != true
         else {

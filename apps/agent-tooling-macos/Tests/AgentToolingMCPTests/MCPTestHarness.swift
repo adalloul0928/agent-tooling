@@ -1,7 +1,7 @@
-import AgentToolingCore
 import Foundation
 import Testing
 
+@testable import AgentToolingCore
 @testable import AgentToolingMCP
 
 /// Drives a `ToolingMCPService` over an in-memory transport against a scratch
@@ -11,17 +11,33 @@ import Testing
 /// tool argument or a process flag: that distinction is the whole point of
 /// excluding `--home` and `--workspace` from the tool surface.
 final class MCPTestHarness {
-    let store: WorkspaceStore
+    let store: WorkspaceRevisionStore
     let service: ToolingMCPService
     private let rootURL: URL
     private var nextID = 0
     private var issuedIdentifiers: [UUID] = []
 
-    init(snapshot: WorkspaceSnapshot? = nil, now: Date = Date(timeIntervalSince1970: 1_756_000_000)) throws {
+    /// One workspace, built from the items and assignments a test needs.
+    /// `observations` and `receipts` are this device's own records.
+    init(
+        artifacts: [ArtifactRecord] = [],
+        assignments: [AssignmentContribution] = [],
+        observations: [TargetObservation] = [],
+        receipts: [OperationReceipt] = [],
+        now: Date = Date(timeIntervalSince1970: 1_756_000_000)
+    ) throws {
         rootURL = FileManager.default.temporaryDirectory
             .appending(path: "AgentToolingMCPTests-\(UUID().uuidString)", directoryHint: .isDirectory)
-        store = try WorkspaceStore(rootURL: rootURL)
-        if let snapshot { try store.saveWorkspaceSnapshot(snapshot) }
+        let document = try WorkspaceDocumentCoding.seal(.init(
+            workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
+            artifacts: artifacts, assignments: assignments))
+        var device = DeviceWorkspaceState(workspaceID: document.workspaceID)
+        device.observations = observations
+        store = try WorkspaceRevisionStore(
+            containerRoot: rootURL.appending(path: "workspaces-v1", directoryHint: .isDirectory),
+            workspaceID: document.workspaceID, deviceID: device.deviceID)
+        try store.initialize(document: document, device: device)
+        for receipt in receipts { try store.recordOperationReceipt(receipt) }
         service = ToolingMCPService(store: store, clock: { now })
     }
 
@@ -83,8 +99,16 @@ final class MCPTestHarness {
         rawSend(method: "tools/call", params: .object(["name": .string(name), "arguments": .object(arguments)]))
     }
 
+    /// The projected identifier for an item, by the name it declares. The
+    /// projection uses workspace identifiers, which a test does not mint itself.
+    func identifier(of declaredName: String) -> String {
+        let artifacts = (try? store.snapshot())?.document.artifacts ?? []
+        return artifacts.first { $0.declaredName == declaredName }?
+            .identity.id.rawValue.uuidString.lowercased() ?? ""
+    }
+
     func pendingRequests() throws -> [PendingAgentRequest] {
-        try store.loadPendingAgentRequestQueue().requests
+        try store.pendingRequestQueue().requests
     }
 
     private func require(_ value: [String: JSONValue]?) throws -> [String: JSONValue] {

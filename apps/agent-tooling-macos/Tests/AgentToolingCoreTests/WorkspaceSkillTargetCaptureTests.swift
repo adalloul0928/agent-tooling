@@ -5,44 +5,6 @@ import Testing
 @testable import AgentToolingCore
 
 struct WorkspaceSkillTargetCaptureTests {
-    @Test func userAndProjectRoutesMatchWorkspaceLibraryPlansForAllClients() async throws {
-        let fixture = try Fixture()
-        defer { fixture.remove() }
-        let deviceID = Self.object("00000000-0000-0000-0000-000000000001")
-        let projectID = Self.artifactID("00000000-0000-0000-0000-000000000002")
-        let userSkill = try fixture.skill(name: "user-route", scope: .user)
-        let projectSkill = try fixture.skill(name: "project-route", scope: .project)
-        let clients = Set(ClientKind.allCases)
-
-        let userPlan = try fixture.library.installPlan(for: userSkill, targets: clients, homeURL: fixture.home)
-        let userCapture = try await WorkspaceSkillTargetCapture.capture(
-            homeURL: fixture.home, deviceID: deviceID,
-            selectors: Self.selectors(scope: .user), observations: Self.observations())
-        #expect(Set(userCapture.map(\.plannedDirectory.path)) == Set(userPlan.steps.compactMap {
-            $0.destinationPath.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
-        }))
-        #expect(Set(userCapture.map(\.plannedDirectory.path)) == Set([
-            fixture.home.appending(path: ".claude/skills").path,
-            fixture.home.appending(path: ".agents/skills").path,
-            fixture.home.appending(path: ".gemini/skills").path,
-        ]))
-
-        let projectPlan = try fixture.library.installPlan(for: projectSkill, targets: clients, homeURL: fixture.home)
-        let projectCapture = try await WorkspaceSkillTargetCapture.capture(
-            homeURL: fixture.home, deviceID: deviceID,
-            selectors: Self.selectors(scope: .project, projectID: projectID),
-            projectRoots: [.init(projectID: projectID, rootPath: fixture.project.path)],
-            observations: Self.observations())
-        #expect(Set(projectCapture.map(\.plannedDirectory.path)) == Set(projectPlan.steps.compactMap {
-            $0.destinationPath.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
-        }))
-        #expect(Set(projectCapture.map(\.plannedDirectory.path)) == Set([
-            fixture.project.appending(path: ".claude/skills").path,
-            fixture.project.appending(path: ".agents/skills").path,
-            fixture.project.appending(path: ".gemini/skills").path,
-        ]))
-    }
-
     @Test func aliasedClientDirectoriesSharePhysicalIdentityAndResolverCoalesces() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -231,7 +193,6 @@ struct WorkspaceSkillTargetCaptureTests {
         let container: URL
         let home: URL
         let project: URL
-        let library: WorkspaceLibrary
 
         init() throws {
             container = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
@@ -240,20 +201,8 @@ struct WorkspaceSkillTargetCaptureTests {
             project = container.appending(path: "project")
             try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: project, withIntermediateDirectories: false)
-            library = WorkspaceLibrary(store: try WorkspaceStore(rootURL: container.appending(path: "workspace")))
         }
 
-        func skill(name: String, scope: ToolingScope) throws -> Skill {
-            var draft = SkillDraft()
-            draft.name = name
-            draft.purpose = "Test route"
-            draft.triggers = ["Use the route"]
-            draft.negativeTrigger = "Do not use elsewhere"
-            draft.scope = scope
-            draft.projectRoot = scope == .project ? project.path : ""
-            draft.syncClients = false
-            return try library.createSkill(from: draft).skill
-        }
 
         func remove() { try? FileManager.default.removeItem(at: container) }
     }

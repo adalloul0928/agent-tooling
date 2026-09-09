@@ -1,114 +1,70 @@
-import AgentToolingCore
 import Foundation
 import Testing
 
+@testable import AgentToolingCore
 @testable import AgentToolingMCP
 
 /// A workspace deliberately stuffed with the things that must not come back
-/// out: a live token in an endpoint, home directories in configuration paths
-/// and bundle names, and a project root.
-private func compromisingSnapshot() -> WorkspaceSnapshot {
-    let clients = [ClientState(client: .claude, state: .healthy, detail: "Installed", isInstalled: true)]
-    return WorkspaceSnapshot(
-        skills: [
-            Skill(
-                id: "release-summary",
-                name: "release-summary",
-                displayName: "Release summary",
-                summary: "Summarize a release branch before tagging.",
-                bundle: "/Users/testperson/Library/Application Support/Agent Tooling/library/release-summary",
-                scope: "This Mac",
-                owned: true,
-                triggers: ["release", "tag"],
-                negativeTrigger: "",
-                files: ["SKILL.md"],
-                clients: clients,
-                validationCount: 2,
-                projectRoot: "/Users/testperson/Projects/secret-product"
-            )
-        ],
-        mcpServers: [
-            MCPServer(
-                id: "weather",
-                name: "Weather",
-                summary: "Forecast lookups",
-                endpoint: "https://weather.example.com/mcp?api_key=sk-live-SUPERSECRET",
-                transport: .http,
-                authentication: "API key",
-                scope: "This Mac",
-                clients: clients,
-                repairCommand: "/Users/testperson/.local/bin/weather-mcp --repair",
-                secretNames: ["WEATHER_API_KEY"]
+/// out: secret-looking text in the names people choose, home directories in the
+/// paths this Mac observed, and a project root in a receipt.
+///
+/// The versioned library carries no endpoint, no file path and no project root
+/// at all — there is nowhere in it to put one. That is a stronger guarantee than
+/// redaction and is asserted as such. What still needs redacting is what people
+/// type and what this device observed, and those are what this exercises.
+private func compromisingArtifacts() -> [ArtifactRecord] {
+    [
+        .init(identity: .init(id: ArtifactID(), kind: .skill,
+                              displayName: "Release summary /Users/testperson/Projects/secret-product"),
+              authority: .centralPersonal, declaredName: "release-summary",
+              contentDigest: .init(value: String(repeating: "a", count: 64))),
+        .init(identity: .init(id: ArtifactID(), kind: .mcpServer,
+                              displayName: "Weather sk-live-SUPERSECRET"),
+              authority: .trackedOnly, declaredName: "weather"),
+        .init(identity: .init(id: ArtifactID(), kind: .nativePlugin,
+                              displayName: "Developer workflows"),
+              authority: .trackedOnly, declaredName: "developer-workflows"),
+    ]
+}
+
+private func compromisingObservations() -> [TargetObservation] {
+    [
+        TargetObservation(
+            surface: .claudeCode,
+            installed: true,
+            commandAvailable: true,
+            version: "2.0.1",
+            configurationPaths: ["/Users/testperson/.claude/settings.json", "/Users/testperson/.claude.json"],
+            discoveredSkills: ["release-summary"],
+            discoveredPlugins: ["developer-workflows"],
+            discoveredMCPServers: ["weather"],
+            capabilities: TargetCapabilities(
+                supportsPluginInstall: true,
+                supportsProjectScope: true,
+                supportsLocalMarketplace: true,
+                supportsMCPAuthentication: true,
+                supportsConnectorDiscovery: true,
+                requiresNewSession: false,
+                requiresRestart: false,
+                supportsMachineReadableOutput: true
             ),
-            MCPServer(
-                id: "local-notes",
-                name: "Local notes",
-                summary: "Notes over stdio",
-                endpoint: "/Users/testperson/.local/bin/notes-mcp --token sk-live-ANOTHERSECRET",
-                transport: .stdio,
-                authentication: "None",
-                scope: "This Mac",
-                clients: clients,
-                secretNames: ["NOTES_TOKEN"]
-            ),
-        ],
-        plugins: [
-            Plugin(
-                id: "developer-workflows",
-                name: "Developer workflows",
-                summary: "Shared workflows",
-                source: "/Users/testperson/ws/agent-tooling",
-                scope: "This Mac",
-                revision: "abc1234",
-                skills: ["release-summary"],
-                profiles: [],
-                clients: clients,
-                installed: true
-            )
-        ],
-        operationReceipts: [
-            OperationReceipt(
-                planID: UUID(),
-                kind: .configureMCP,
-                title: "Add weather",
-                state: .healthy,
-                targetSurfaces: [.claudeCode],
-                results: [
-                    OperationStepResult(
-                        stepID: UUID(),
-                        status: .succeeded,
-                        output: "Wrote /Users/testperson/.claude/settings.json",
-                        startedAt: .now,
-                        finishedAt: .now
-                    )
-                ],
-                verificationSummary: "Verified against /Users/testperson/.claude/settings.json"
-            )
-        ],
-        targetObservations: [
-            TargetObservation(
-                surface: .claudeCode,
-                installed: true,
-                commandAvailable: true,
-                version: "2.0.1",
-                configurationPaths: ["/Users/testperson/.claude/settings.json", "/Users/testperson/.claude.json"],
-                discoveredSkills: ["release-summary"],
-                discoveredPlugins: ["developer-workflows"],
-                discoveredMCPServers: ["weather"],
-                capabilities: TargetCapabilities(
-                    supportsPluginInstall: true,
-                    supportsProjectScope: true,
-                    supportsLocalMarketplace: true,
-                    supportsMCPAuthentication: true,
-                    supportsConnectorDiscovery: true,
-                    requiresNewSession: false,
-                    requiresRestart: false,
-                    supportsMachineReadableOutput: true
-                ),
-                notes: ["Read /Users/testperson/.claude/settings.json"]
-            )
-        ]
-    )
+            notes: ["Read /Users/testperson/.claude/settings.json"]
+        )
+    ]
+}
+
+private func compromisingReceipts() -> [OperationReceipt] {
+    [
+        OperationReceipt(
+            planID: UUID(), kind: .installSkill, title: "Installed a skill",
+            state: .healthy, targetSurfaces: [.claudeCode],
+            results: [.init(stepID: UUID(), status: .succeeded,
+                            output: "Copied into /Users/testperson/.claude/skills/release-summary",
+                            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+                            finishedAt: Date(timeIntervalSince1970: 1_700_000_001))],
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            verificationSummary: "Verified against /Users/testperson/.claude/settings.json")
+    ]
 }
 
 private let forbiddenSubstrings = [
@@ -131,43 +87,48 @@ struct ReadOnlyDisclosureTests {
     }
 
     @Test func searchResultsCarryNoSecretValueAndNoHomeDirectory() throws {
-        let harness = try MCPTestHarness(snapshot: compromisingSnapshot())
+        let harness = try MCPTestHarness(artifacts: compromisingArtifacts())
         try harness.initialize()
 
         let payload = try harness.callTool("search_inventory")
-        let results = try #require(payload["results"]?.arrayValue)
-        #expect(results.count == 4)
+        #expect(payload["results"]?.arrayValue?.count == 3)
+        // The names are what people type, so they are what still needs
+        // redacting on the way out.
         assertNothingSensitive(payload, tool: "search_inventory")
     }
 
-    @Test func componentDetailReturnsSecretNamesButNeverSecretValues() throws {
-        let harness = try MCPTestHarness(snapshot: compromisingSnapshot())
+    @Test func theLibraryHasNowhereToPutAnEndpointOrAPath() throws {
+        let harness = try MCPTestHarness(artifacts: compromisingArtifacts())
         try harness.initialize()
 
-        let http = try harness.callTool("get_component", arguments: ["kind": .string("mcp-server"), "id": .string("weather")])
-        // The reference name is useful. The value behind it is not offered by
-        // any tool on this server.
-        #expect(http["secretReferenceNames"]?.arrayValue?.first?.stringValue == "WEATHER_API_KEY")
-        // An http endpoint collapses to scheme and host, so the query-string
-        // token has nothing to ride out on.
-        #expect(http["endpointSummary"]?.stringValue == "https://weather.example.com")
-        assertNothingSensitive(http, tool: "get_component(http)")
+        let server = try harness.callTool("get_component", arguments: [
+            "kind": .string("mcp-server"), "id": .string(harness.identifier(of: "weather")),
+        ])
 
-        let stdio = try harness.callTool("get_component", arguments: ["kind": .string("mcp-server"), "id": .string("local-notes")])
-        // A stdio endpoint collapses to the executable's base name.
-        #expect(stdio["endpointSummary"]?.stringValue == "notes-mcp")
-        assertNothingSensitive(stdio, tool: "get_component(stdio)")
-
-        let skill = try harness.callTool("get_component", arguments: ["kind": .string("skill"), "id": .string("release-summary")])
-        #expect(skill["isProjectScoped"]?.boolValue == true)
+        // Stronger than redaction: an address lives in this Mac's own client
+        // files, and the library has no field for one. There is nothing to
+        // strip because there is nothing to carry.
+        #expect(server["endpointSummary"]?.stringValue?.isEmpty != false)
+        let skill = try harness.callTool("get_component", arguments: [
+            "kind": .string("skill"), "id": .string(harness.identifier(of: "release-summary")),
+        ])
+        #expect(skill["isProjectScoped"]?.boolValue == false)
+        assertNothingSensitive(server, tool: "get_component(mcp-server)")
         assertNothingSensitive(skill, tool: "get_component(skill)")
+    }
 
-        let plugin = try harness.callTool("get_component", arguments: ["kind": .string("plugin"), "id": .string("developer-workflows")])
+    @Test func aNameSomebodyTypedIsRedactedOnTheWayOut() throws {
+        let harness = try MCPTestHarness(artifacts: compromisingArtifacts())
+        try harness.initialize()
+
+        let plugin = try harness.callTool("get_component", arguments: [
+            "kind": .string("plugin"), "id": .string(harness.identifier(of: "developer-workflows")),
+        ])
         assertNothingSensitive(plugin, tool: "get_component(plugin)")
     }
 
     @Test func clientStatusOmitsConfigurationPathsAndCountsThemInstead() throws {
-        let harness = try MCPTestHarness(snapshot: compromisingSnapshot())
+        let harness = try MCPTestHarness(observations: compromisingObservations())
         try harness.initialize()
 
         let payload = try harness.callTool("get_client_status")
@@ -182,7 +143,7 @@ struct ReadOnlyDisclosureTests {
     }
 
     @Test func receiptOutputIsStrippedOfPaths() throws {
-        let harness = try MCPTestHarness(snapshot: compromisingSnapshot())
+        let harness = try MCPTestHarness(receipts: compromisingReceipts())
         try harness.initialize()
 
         let list = try harness.callTool("list_receipts")
@@ -205,6 +166,7 @@ struct ReadOnlyDisclosureTests {
                 arguments = ["kind": .string("skill"), "id": .string("nothing")]
             }
             if tool.name == "open_review_screen" { arguments = ["screen": .string("overview")] }
+            if tool.name == "get_effective_settings" { arguments = ["client": .string("claude-code")] }
             let response = harness.rawCallTool(tool.name, arguments: arguments)
             #expect(response?["error"] == nil, "\(tool.name) failed on an empty workspace.")
         }

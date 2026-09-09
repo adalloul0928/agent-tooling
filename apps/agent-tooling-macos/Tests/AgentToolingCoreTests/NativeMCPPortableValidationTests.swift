@@ -8,7 +8,8 @@ struct NativeMCPPortableValidationTests {
         let document = try WorkspaceDocumentCoding.seal(Self.document())
         let decoded = try WorkspaceDocumentCoding.decode(WorkspaceDocumentCoding.encode(document))
 
-        #expect(document.schemaVersion == 4)
+        // The pathless native declaration is admitted from schema 4 onward.
+        #expect(document.schemaVersion >= 4)
         #expect(decoded == document.canonicalized())
         #expect(decoded.artifacts.first { $0.identity.kind == .mcpServer }?.packageRelativePath == nil)
     }

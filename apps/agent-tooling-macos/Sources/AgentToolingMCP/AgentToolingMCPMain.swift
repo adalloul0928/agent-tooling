@@ -40,7 +40,17 @@ struct AgentToolingMCPMain {
         }
 
         do {
-            let store = try WorkspaceStore()
+            // One workspace, found by this Mac's own record of where it is.
+            // This server never creates one: a workspace appearing because an
+            // agent connected would be a workspace nobody chose to have.
+            guard let store = try WorkspaceLocator(root: try WorkspaceLocator.defaultRoot()).open() else {
+                writeError("""
+                    agent-tooling-mcp: this Mac has no Agent Tooling workspace yet.
+
+                    Open Agent Tooling once to set one up, then start this server again.
+                    """)
+                Darwin.exit(69)
+            }
             let service = ToolingMCPService(store: store)
             // Nothing may be written to standard output except protocol
             // frames; a stray log line would corrupt the stream. Diagnostics

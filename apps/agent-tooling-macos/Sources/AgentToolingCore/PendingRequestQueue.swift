@@ -99,18 +99,6 @@ public struct PendingRequestOutcome: Sendable {
     public var collapsed: Bool
 }
 
-extension WorkspaceStore {
-    private static var pendingAgentRequestQueueKey: String { "agent-mcp.request-queue.v1" }
-
-    public func loadPendingAgentRequestQueue() throws -> PendingAgentRequestQueue {
-        try load(Self.pendingAgentRequestQueueKey, as: PendingAgentRequestQueue.self) ?? PendingAgentRequestQueue()
-    }
-
-    public func savePendingAgentRequestQueue(_ queue: PendingAgentRequestQueue) throws {
-        try save(queue, for: Self.pendingAgentRequestQueueKey)
-    }
-}
-
 public enum PendingRequestQueueService {
     public static func enqueue(
         kind: PendingRequestKind,
@@ -123,12 +111,12 @@ public enum PendingRequestQueueService {
         reviewDetails: PendingRequestReviewDetails,
         fingerprintInputs: [String],
         clientLabel: String,
-        store: WorkspaceStore,
+        store: WorkspaceRevisionStore,
         now: Date = .now,
         identifier: UUID = UUID()
     ) throws -> PendingRequestOutcome {
         let fingerprint = self.fingerprint(kind: kind, inputs: fingerprintInputs, scope: scope, targets: targets)
-        let result: (PendingRequestOutcome, [UUID]) = try store.updatePendingAgentRequestQueue { queue in
+        let result: (PendingRequestOutcome, [UUID]) = try store.updatePendingRequestQueue { queue in
             let expired = queue.requests.filter {
                 now.timeIntervalSince($0.createdAt) > PendingAgentRequestQueue.maximumPendingAge
             }
@@ -168,7 +156,9 @@ public enum PendingRequestQueueService {
             queue.requests.append(request)
             return (PendingRequestOutcome(request: request, collapsed: false), expired.filter { $0.kind == .createSkill }.map(\.id))
         }
-        for id in result.1 { try? store.deleteCodexSkillDraftRequest(id: id) }
+        // A request whose review window closed takes its draft with it: a
+        // draft with no row is a payload nothing can ever open.
+        for id in result.1 { try? store.deleteRequestDraft(id) }
         return result.0
     }
 
@@ -178,9 +168,9 @@ public enum PendingRequestQueueService {
     public static func resolve(
         id: UUID,
         expectedFingerprint: String,
-        store: WorkspaceStore
+        store: WorkspaceRevisionStore
     ) throws -> PendingAgentRequest? {
-        try store.updatePendingAgentRequestQueue { queue in
+        try store.updatePendingRequestQueue { queue in
             guard let index = queue.requests.firstIndex(where: { $0.id == id }) else { return nil }
             guard queue.requests[index].fingerprint == expectedFingerprint else {
                 throw PendingRequestQueueError.requestConflict
@@ -193,8 +183,8 @@ public enum PendingRequestQueueService {
     /// fails. The same admission limits still apply, so this cannot be used as
     /// an unbounded side door into the queue.
     @discardableResult
-    public static func restore(_ request: PendingAgentRequest, store: WorkspaceStore) throws -> PendingAgentRequest {
-        try store.updatePendingAgentRequestQueue { queue in
+    public static func restore(_ request: PendingAgentRequest, store: WorkspaceRevisionStore) throws -> PendingAgentRequest {
+        try store.updatePendingRequestQueue { queue in
             if let existing = queue.requests.first(where: { $0.id == request.id }) {
                 guard existing.fingerprint == request.fingerprint else {
                     throw PendingRequestQueueError.requestConflict
@@ -213,7 +203,7 @@ public enum PendingRequestQueueService {
         }
     }
 
-    public static func request(id: UUID, store: WorkspaceStore) throws -> PendingAgentRequest? {
+    public static func request(id: UUID, store: WorkspaceRevisionStore) throws -> PendingAgentRequest? {
         try pendingRequests(store: store).first { $0.id == id }
     }
 
@@ -221,10 +211,10 @@ public enum PendingRequestQueueService {
     /// original review window has expired. This gives the app and read-only MCP
     /// surface the same lifecycle view even when no new request is arriving.
     public static func pendingRequests(
-        store: WorkspaceStore,
+        store: WorkspaceRevisionStore,
         now: Date = .now
     ) throws -> [PendingAgentRequest] {
-        let result: ([PendingAgentRequest], [UUID]) = try store.updatePendingAgentRequestQueue { queue in
+        let result: ([PendingAgentRequest], [UUID]) = try store.updatePendingRequestQueue { queue in
             let expired = queue.requests.filter {
                 now.timeIntervalSince($0.createdAt) > PendingAgentRequestQueue.maximumPendingAge
             }
@@ -235,7 +225,9 @@ public enum PendingRequestQueueService {
             }
             return (queue.requests, expired.filter { $0.kind == .createSkill }.map(\.id))
         }
-        for id in result.1 { try? store.deleteCodexSkillDraftRequest(id: id) }
+        // A request whose review window closed takes its draft with it: a
+        // draft with no row is a payload nothing can ever open.
+        for id in result.1 { try? store.deleteRequestDraft(id) }
         return result.0
     }
 

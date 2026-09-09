@@ -98,14 +98,20 @@ struct LinkedInstallSafetyTests {
 
     private struct Fixture {
         let root: URL
-        let store: WorkspaceStore
+        let store: WorkspaceRevisionStore
         let home: URL
         let source: URL
         let destination: URL
 
         init() throws {
             root = FileManager.default.temporaryDirectory.appending(path: "linked-install-safety-\(UUID().uuidString)")
-            store = try WorkspaceStore(rootURL: root.appending(path: "workspace"))
+            let document = try WorkspaceDocumentCoding.seal(.init(
+                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+            let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
+            store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "workspace"),
+                workspaceID: document.workspaceID, deviceID: device.deviceID)
+            try store.initialize(document: document, device: device)
+            try store.prepareManagedDirectories()
             home = root.appending(path: "home", directoryHint: .isDirectory)
             source = store.libraryURL.appending(path: "packages/example/skills/example", directoryHint: .isDirectory)
             destination = home.appending(path: ".codex/skills/example", directoryHint: .isDirectory)

@@ -69,7 +69,10 @@ public struct ToolHiveRuntimeInspection: Sendable {
         try Task.checkCancellation()
 
         guard output.status == 0 else {
-            return .commandFailed(diagnostic: diagnostic(output.standardError))
+            // An absent ToolHive is not a failing command; saying so lets the
+            // caller offer installation instead of an error.
+            let detail = diagnostic(output.standardError)
+            return output.status == 127 ? .unavailable(diagnostic: detail) : .commandFailed(diagnostic: detail)
         }
         guard let data = boundedJSONData(output.standardOutput) else {
             return .unsupportedResponse(diagnostic: "ToolHive status output exceeded the inspection limit.")
