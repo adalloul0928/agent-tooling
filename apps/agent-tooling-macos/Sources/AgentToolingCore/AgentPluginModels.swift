@@ -88,7 +88,7 @@ public struct AgentPluginManifest: Codable, Hashable, Sendable {
         self.license = license
         self.keywords = keywords
         self.extensions = extensions
-        try validate()
+        try validateForAuthoring()
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -96,31 +96,23 @@ public struct AgentPluginManifest: Codable, Hashable, Sendable {
         case name, version, description, author, homepage, repository, license, keywords, extensions
     }
 
+    public init(from decoder: any Decoder) throws {
+        self = try AgentPluginManifestLoader.manifest(from: decoder, ingestionPolicy: nil).manifest
+    }
+
     public static func decodeAndValidate(_ data: Data) throws -> AgentPluginManifest {
-        let manifest = try AgentToolingCoding.decoder().decode(AgentPluginManifest.self, from: data)
-        try manifest.validate()
-        return manifest
+        try load(data).manifest
     }
 
     public func validate() throws {
         guard schema == Self.schemaIdentifier else { throw AgentPluginValidationError.unsupportedSchema(schema) }
         guard Self.isValidName(name) else { throw AgentPluginValidationError.invalidName(name) }
-        try Self.validateText(version, field: "version", maximumCharacters: 8_192)
-        try Self.validateText(description, field: "description", maximumCharacters: 8_192, allowsLineBreaks: true)
-        try Self.validateText(homepage, field: "homepage", maximumCharacters: 8_192)
-        try Self.validateText(repository, field: "repository", maximumCharacters: 8_192)
-        try Self.validateText(license, field: "license", maximumCharacters: 8_192)
-        if let author {
-            try Self.validateText(author.name, field: "author.name", maximumCharacters: 1_024)
-            try Self.validateText(author.email, field: "author.email", maximumCharacters: 1_024)
-            try Self.validateText(author.url, field: "author.url", maximumCharacters: 1_024)
-        }
-        if let keywords,
-            keywords.count > 256
-                || keywords.contains(where: { $0.isEmpty || $0.count > 128 || Self.containsControlCharacters($0, allowsLineBreaks: false) })
-        {
-            throw AgentPluginValidationError.invalidField("keywords")
-        }
+    }
+
+    /// Applies the stricter local authoring rules used by the programmatic
+    /// initializer. Client loading keeps unimplemented extension namespaces opaque.
+    public func validateForAuthoring() throws {
+        try validate()
         if let extensions {
             for namespace in extensions.keys where !Self.isValidExtensionNamespace(namespace) {
                 throw AgentPluginValidationError.invalidExtensionNamespace(namespace)
@@ -156,20 +148,58 @@ public struct AgentPluginManifest: Codable, Hashable, Sendable {
         }
     }
 
-    private static func validateText(
-        _ value: String?, field: String, maximumCharacters: Int, allowsLineBreaks: Bool = false
-    ) throws {
-        guard let value else { return }
-        guard value.count <= maximumCharacters, !containsControlCharacters(value, allowsLineBreaks: allowsLineBreaks) else {
-            throw AgentPluginValidationError.invalidField(field)
-        }
+    /// Loads a manifest using the Agent Plugins 1.0 loading contract and
+    /// returns the two non-fatal schema exceptions as diagnostics.
+    public static func load(
+        _ data: Data,
+        ingestionPolicy: AgentPluginManifestIngestionPolicy? = nil
+    ) throws -> AgentPluginManifestLoadResult {
+        try AgentPluginManifestLoader.load(data, ingestionPolicy: ingestionPolicy)
     }
 
-    private static func containsControlCharacters(_ value: String, allowsLineBreaks: Bool) -> Bool {
-        value.unicodeScalars.contains { scalar in
-            guard CharacterSet.controlCharacters.contains(scalar) else { return false }
-            return !allowsLineBreaks || ![0x09, 0x0A, 0x0D].contains(scalar.value)
-        }
+    /// Builds a manifest that has already been validated by the AP1 loader.
+    /// This bypasses legacy programmatic construction checks for opaque extensions.
+    static func loadedManifest(
+        schema: String,
+        name: String,
+        version: String?,
+        description: String?,
+        author: AgentPluginAuthor?,
+        homepage: String?,
+        repository: String?,
+        license: String?,
+        keywords: [String]?,
+        extensions: [String: JSONValue]?
+    ) -> AgentPluginManifest {
+        AgentPluginManifest(
+            uncheckedSchema: schema, name: name, version: version, description: description,
+            author: author, homepage: homepage, repository: repository, license: license,
+            keywords: keywords, extensions: extensions
+        )
+    }
+
+    private init(
+        uncheckedSchema schema: String,
+        name: String,
+        version: String?,
+        description: String?,
+        author: AgentPluginAuthor?,
+        homepage: String?,
+        repository: String?,
+        license: String?,
+        keywords: [String]?,
+        extensions: [String: JSONValue]?
+    ) {
+        self.schema = schema
+        self.name = name
+        self.version = version
+        self.description = description
+        self.author = author
+        self.homepage = homepage
+        self.repository = repository
+        self.license = license
+        self.keywords = keywords
+        self.extensions = extensions
     }
 }
 

@@ -5,7 +5,7 @@ set -euo pipefail
 script_directory=$(cd "$(dirname "$0")" && pwd -P)
 app_root=$(dirname "$script_directory")
 scratch_path=${AGENT_TOOLING_BUILD_PATH:-"$app_root/.build/native"}
-configuration=${AGENT_TOOLING_CONFIGURATION:-debug}
+configuration=${AGENT_TOOLING_CONFIGURATION:-release}
 bundle_path=${1:-"$app_root/.build/Agent Tooling.app"}
 signing_identity=${AGENT_TOOLING_CODE_SIGN_IDENTITY:--}
 release_version=${AGENT_TOOLING_VERSION:-}

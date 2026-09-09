@@ -144,12 +144,11 @@ struct CodexSkillCreatorSheet: View {
                         title: "Install scope",
                         detail: "This controls the destination, not where Codex runs."
                     ) {
-                        Picker("Install scope", selection: $scope) {
+                        WorkspaceSegmentedPicker("Install scope", selection: $scope) {
                             Text(ToolingScope.user.displayName).tag(ToolingScope.user)
                             Text(ToolingScope.project.displayName).tag(ToolingScope.project)
                         }
                         .labelsHidden()
-                        .pickerStyle(.segmented)
                     }
 
                     if scope == .project {

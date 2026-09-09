@@ -1,9 +1,10 @@
+import AppKit
 import SwiftUI
 import Testing
 
 @testable import AgentToolingApp
 
-@Suite("Motion component layout")
+@Suite("Native selector layout")
 @MainActor
 struct MotionComponentsRenderTests {
     private enum Segment: String, CaseIterable, Hashable {
@@ -12,53 +13,52 @@ struct MotionComponentsRenderTests {
         case policy = "Policy & Safety"
     }
 
-    @Test("Sliding selection keeps identical geometry for every segment")
-    func slidingSelectionKeepsStableGeometry() {
-        let sizes = Segment.allCases.compactMap { selection in
-            ImageRenderer(
-                content: control(selection: selection)
-                    .environment(\.colorScheme, .dark)
-            ).nsImage?.size
+    @Test("Changing the selected segment does not resize the control")
+    func selectionKeepsStableGeometry() {
+        let sizes = Segment.allCases.map { selection in
+            measuredSize(control(selection: selection).environment(\.colorScheme, .dark))
         }
 
-        #expect(sizes.count == Segment.allCases.count)
         #expect(Set(sizes.map(\.width)).count == 1)
         #expect(Set(sizes.map(\.height)).count == 1)
-        #expect(sizes.first?.width == 346)
-        #expect(sizes.first?.height == 34)
+        #expect(sizes.allSatisfy { $0.width > 0 && $0.height > 0 })
     }
 
-    @Test("Flexible segments render at a constrained marketplace width")
-    func flexibleSegmentsRenderAtConstrainedWidth() {
-        let renderer = ImageRenderer(
-            content: control(selection: .general, segmentWidth: nil)
-                .frame(width: 206)
-        )
+    @Test("Package labels fit the narrow inspector browser")
+    func packageSegmentsFitNarrowBrowser() {
+        let selector = WorkspaceSegmentedPicker("Package component", selection: .constant("All")) {
+            ForEach(["All", "Skills", "Plugins", "MCP"], id: \.self) { Text($0).tag($0) }
+        }
+        // The 340-point browser reserves 24 points of padding on each side.
+        let availableWidth: CGFloat = 292
+        let naturalSize = measuredSize(selector.fixedSize())
+        let constrainedSize = measuredSize(selector.frame(width: availableWidth))
 
-        #expect(renderer.nsImage?.size.width == 206)
-        #expect(renderer.nsImage?.size.height == 34)
+        #expect(naturalSize.width <= availableWidth)
+        #expect(constrainedSize.width == availableWidth)
+        #expect(constrainedSize.height > 0)
     }
 
-    @Test("Segment labels can grow beyond their default minimum width")
-    func segmentLabelsGrowBeyondDefaultMinimumWidth() {
+    @Test("Long labels retain their intrinsic width")
+    func longLabelsCanGrow() {
         let longTitle = "A deliberately long settings category"
-        let renderer = ImageRenderer(
-            content: SlidingSegmentedControl<String>(
-                selection: .constant(longTitle),
-                items: ["General", longTitle, "Policy"].map { .init(value: $0, title: $0) },
-                accessibilityLabel: "Fixture category"
-            )
-        )
+        let longSelector = WorkspaceSegmentedPicker("Fixture category", selection: .constant(longTitle)) {
+            ForEach(["General", longTitle, "Policy"], id: \.self) { Text($0).tag($0) }
+        }
 
-        #expect((renderer.nsImage?.size.width ?? 0) > 346)
+        #expect(measuredSize(longSelector.fixedSize()).width > measuredSize(control(selection: .general)).width)
     }
 
-    private func control(selection: Segment, segmentWidth: CGFloat? = 112) -> some View {
-        SlidingSegmentedControl<Segment>(
-            selection: .constant(selection),
-            items: Segment.allCases.map { .init(value: $0, title: $0.rawValue) },
-            accessibilityLabel: "Fixture category",
-            segmentWidth: segmentWidth
-        )
+    private func control(selection: Segment) -> some View {
+        WorkspaceSegmentedPicker("Fixture category", selection: .constant(selection)) {
+            ForEach(Segment.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        }
+        .fixedSize()
+    }
+
+    private func measuredSize(_ content: some View) -> NSSize {
+        let host = NSHostingView(rootView: content)
+        host.layoutSubtreeIfNeeded()
+        return host.fittingSize
     }
 }

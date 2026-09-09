@@ -29,8 +29,10 @@ extension AppModel {
 
     /// The plugin verdicts this app is prepared to stand behind, in list order.
     func pluginUpdateAvailability() -> [(plugin: Plugin, availability: UpdateAvailability)] {
-        visiblePlugins.map { plugin in
-            (plugin, UpdateAvailabilityEvaluator.evaluate(plugin: plugin, sources: visibleSources, packages: visibleMarketplacePackages))
+        let sources = visibleSources
+        let packages = visibleMarketplacePackages
+        return visiblePlugins.map { plugin in
+            (plugin, UpdateAvailabilityEvaluator.evaluate(plugin: plugin, sources: sources, packages: packages))
         }
     }
 

@@ -26,10 +26,9 @@ struct CollectionsView: View {
     var body: some View {
         VStack(spacing: 0) {
             PageToolbar(title: "Collections", context: toolbarContext) {
-                Picker("View", selection: $mode) {
+                WorkspaceSegmentedPicker("View", selection: $mode) {
                     ForEach(Mode.allCases) { mode in Text(mode.rawValue).tag(mode) }
                 }
-                .pickerStyle(.segmented)
                 .labelsHidden()
                 .fixedSize()
                 .accessibilityLabel("Collections or tags")
@@ -40,7 +39,7 @@ struct CollectionsView: View {
                     } label: {
                         Label("Edit collection…", systemImage: ToolingKind.collection.symbol)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                     .disabled(model.isInteractionLocked || selectedCollection == nil)
 
                     Button {
@@ -48,7 +47,7 @@ struct CollectionsView: View {
                     } label: {
                         Label("New collection…", systemImage: "plus")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                     .disabled(model.isInteractionLocked)
                 }
             }
@@ -101,8 +100,8 @@ struct CollectionsView: View {
                 Spacer()
                 Text(model.collections.count, format: .number).font(.caption2).foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 14)
-            .frame(height: 44)
+            .padding(.horizontal, WorkspaceLayout.pageInset)
+            .frame(height: 32)
             .background(AgentTheme.controlBackground.opacity(0.45))
 
             if orderedCollections.isEmpty {

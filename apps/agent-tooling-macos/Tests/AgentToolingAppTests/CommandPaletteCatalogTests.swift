@@ -71,6 +71,16 @@ struct CommandPaletteCatalogTests {
         #expect(items.contains { $0.outcome == .screenRequest(.selectAccount(account.id)) })
     }
 
+    @Test("New workspace names remain searchable alongside established route names")
+    func workspaceNamesAndLegacyRoutesRemainSearchable() throws {
+        let items = CommandPaletteCatalog.items(for: try makeModel())
+        for (route, title) in [(AppSection.overview, "Home"), (.skills, "Library"), (.marketplace, "Discover"), (.syncCenter, "Apps")] {
+            let item = try #require(items.first { $0.id == "section.\(route.id)" })
+            #expect(item.title == title)
+            #expect(item.keywords.contains(route.rawValue))
+        }
+    }
+
     @Test("Receipt results deep-link to the exact saved receipt")
     func receiptResultsTargetExactObjects() throws {
         let receipt = ActivityReceipt(

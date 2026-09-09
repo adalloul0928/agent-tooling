@@ -71,7 +71,7 @@ struct AgentPluginMCPLoadResult: Hashable, Sendable {
 enum AgentPluginMCPConfigurationLoader {
     static let schemaIdentifier = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
 
-    static func load(_ data: Data) throws -> AgentPluginMCPLoadResult {
+    static func load(_ data: Data, packageRoot: URL? = nil) throws -> AgentPluginMCPLoadResult {
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw AgentPluginMCPValidationError.invalidTopLevel("The file must contain one JSON object.")
         }
@@ -92,7 +92,7 @@ enum AgentPluginMCPConfigurationLoader {
                 guard isValidServerName(name), let rawServer = rawServers[name] as? [String: Any] else {
                     throw AgentPluginMCPValidationError.invalidServer("The server name or value is invalid.")
                 }
-                servers[name] = try decodeServer(rawServer)
+                servers[name] = try decodeServer(rawServer, packageRoot: packageRoot)
             } catch {
                 issues.append(
                     AgentPluginMCPValidationIssue(
@@ -104,7 +104,7 @@ enum AgentPluginMCPConfigurationLoader {
         return AgentPluginMCPLoadResult(servers: servers, issues: issues)
     }
 
-    private static func decodeServer(_ object: [String: Any]) throws -> AgentPluginMCPServer {
+    private static func decodeServer(_ object: [String: Any], packageRoot: URL?) throws -> AgentPluginMCPServer {
         guard let transport = object["type"] as? String else {
             throw AgentPluginMCPValidationError.invalidServer("A supported transport type is required.")
         }
@@ -123,6 +123,13 @@ enum AgentPluginMCPConfigurationLoader {
             if object["cwd"] != nil {
                 guard let currentDirectory, isValidCurrentDirectory(currentDirectory) else {
                     throw AgentPluginMCPValidationError.invalidServer("cwd must stay within PLUGIN_ROOT or PLUGIN_DATA.")
+                }
+            }
+            if let packageRoot {
+                guard pluginPathStaysWithinRoot(command, packageRoot: packageRoot, isCurrentDirectory: false),
+                    pluginPathStaysWithinRoot(currentDirectory, packageRoot: packageRoot, isCurrentDirectory: true)
+                else {
+                    throw AgentPluginMCPValidationError.invalidServer("command or cwd resolves outside the plugin package.")
                 }
             }
             return .stdio(
@@ -222,6 +229,36 @@ enum AgentPluginMCPConfigurationLoader {
     private static func isContainedSuffix(_ value: String) -> Bool {
         let components = value.split(separator: "/", omittingEmptySubsequences: false)
         return !components.isEmpty && components.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
+    }
+
+    /// Discovery validates only paths rooted in the package. Bare commands use
+    /// platform PATH rules, while PLUGIN_DATA is a client-managed AP5 concern.
+    private static func pluginPathStaysWithinRoot(
+        _ value: String?, packageRoot: URL, isCurrentDirectory: Bool
+    ) -> Bool {
+        guard let value else { return true }
+        let relative: String?
+        if value.hasPrefix("./") {
+            relative = String(value.dropFirst(2))
+        } else if isCurrentDirectory, value == "${PLUGIN_ROOT}" {
+            relative = ""
+        } else if isCurrentDirectory, value.hasPrefix("${PLUGIN_ROOT}/") {
+            relative = String(value.dropFirst("${PLUGIN_ROOT}/".count))
+        } else {
+            return true
+        }
+        guard let relative else { return true }
+        let root = packageRoot.resolvingSymlinksInPath().standardizedFileURL
+        let candidate = root.appending(path: relative).resolvingSymlinksInPath().standardizedFileURL
+        let rootPath = normalizedPath(root)
+        let candidatePath = normalizedPath(candidate)
+        return candidatePath == rootPath || candidatePath.hasPrefix(rootPath + "/")
+    }
+
+    private static func normalizedPath(_ url: URL) -> String {
+        var path = url.path(percentEncoded: false)
+        while path.count > 1, path.hasSuffix("/") { path.removeLast() }
+        return path
     }
 
     private static func isValidRemoteURL(_ value: String) -> Bool {

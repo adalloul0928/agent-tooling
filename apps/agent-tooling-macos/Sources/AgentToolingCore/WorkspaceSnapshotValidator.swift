@@ -108,6 +108,7 @@ enum WorkspaceSnapshotValidator {
     }
 
     private static func validate(_ skill: Skill, mode: WorkspaceSnapshotValidationMode) throws {
+        try skill.repositoryBinding?.validate()
         try validateIdentifier(skill.id, field: "skill identifier", strictPortableName: skill.owned)
         try validateText(skill.name, field: "skill name", maximum: Limit.shortTextCharacters, required: true)
         try validateText(skill.displayName, field: "skill display name", maximum: Limit.shortTextCharacters, required: true)
@@ -215,13 +216,20 @@ enum WorkspaceSnapshotValidator {
                 profile.enabledPlugins.count <= Limit.childRecords,
                 profile.requiredMCPs.count <= Limit.childRecords,
                 profile.requiredSkills.count <= Limit.childRecords,
-                profile.includedCollections.count <= Limit.childRecords
+                profile.includedCollections.count <= Limit.childRecords,
+                (profile.targetBindings?.count ?? 0) <= Limit.childRecords * ClientKind.allCases.count
             else { throw WorkspaceSnapshotValidationError.tooManyRecords }
             try requireUnique(profile.checks.map(\.id), field: "configuration checks")
             try requireUnique(profile.enabledPlugins, field: "enabled plugin identifiers")
             try requireUnique(profile.requiredMCPs, field: "required MCP identifiers")
             try requireUnique(profile.requiredSkills, field: "required skill identifiers")
             try requireUnique(profile.includedCollections, field: "included collection identifiers")
+            if let bindings = profile.targetBindings {
+                try requireUnique(bindings.map(\.id), field: "configuration target bindings")
+                for binding in bindings {
+                    try validateText(binding.item.identifier, field: "target binding identifier", maximum: Limit.identifierCharacters, required: true)
+                }
+            }
             for check in profile.checks {
                 try validateIdentifier(check.id, field: "check identifier", strictPortableName: true)
                 try validateText(check.name, field: "check name", maximum: Limit.shortTextCharacters, required: true)

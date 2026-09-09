@@ -1,0 +1,248 @@
+{
+  "note": "Unmodified identity artwork supplied by the referenced installed plugin packages. Trademarks belong to their respective owners. Displaying an icon does not imply publisher verification, installation, authorization, or compatibility. Runtime matching uses exact qualified package identifiers and never downloads artwork.",
+  "assets": [
+    {
+      "asset": "ToolTemplates",
+      "packageID": "openai-templates@openai-curated-remote",
+      "version": "0.1.1",
+      "path": "./assets/icon.svg",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.svg"
+      ]
+    },
+    {
+      "asset": "ToolVercel",
+      "packageID": "vercel@openai-curated-remote",
+      "version": "0.21.4",
+      "path": "./assets/logo.png",
+      "website": "https://vercel.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolLinear",
+      "packageID": "linear@openai-curated-remote",
+      "version": "5.0.1",
+      "path": "./assets/logo.png",
+      "website": "https://linear.app/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolTwilio",
+      "packageID": "twilio-developer-kit@openai-curated-remote",
+      "version": "0.2.2",
+      "path": "./assets/logo.svg",
+      "website": "https://www.twilio.com",
+      "files": [
+        "icon.svg"
+      ]
+    },
+    {
+      "asset": "ToolPluginManagement",
+      "packageID": "plugin-management@openai-curated-remote",
+      "version": "0.1.0",
+      "path": "./assets/plugin-management.svg",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.svg"
+      ]
+    },
+    {
+      "asset": "ToolGitHub",
+      "packageID": "github@openai-curated-remote",
+      "version": "0.1.12-5f7cd798dc99",
+      "path": "./assets/github.png",
+      "website": "https://github.com/",
+      "files": [
+        "icon.png",
+        "icon-dark.png"
+      ]
+    },
+    {
+      "asset": "ToolCodexSecurity",
+      "packageID": "codex-security@openai-curated-remote",
+      "version": "0.1.23",
+      "path": "./assets/logo.png",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolFinances",
+      "packageID": "finances@openai-curated-remote",
+      "version": "0.1.0",
+      "path": "./assets/logo.png",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolSentry",
+      "packageID": "sentry@openai-curated-remote",
+      "version": "0.1.2",
+      "path": "./assets/sentry.png",
+      "website": "https://sentry.io/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolDeepResearch",
+      "packageID": "deep-research-work@openai-curated-remote",
+      "version": "0.1.14",
+      "path": "./assets/logo.svg",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.svg",
+        "icon-dark.svg"
+      ]
+    },
+    {
+      "asset": "ToolVisualize",
+      "packageID": "visualize@openai-bundled",
+      "version": "1.0.29",
+      "path": "./assets/visualize.svg",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.svg",
+        "icon-dark.svg"
+      ]
+    },
+    {
+      "asset": "ToolSites",
+      "packageID": "sites@openai-bundled",
+      "version": "0.1.57",
+      "path": "./assets/logo.svg",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.svg"
+      ]
+    },
+    {
+      "asset": "ToolBrowser",
+      "packageID": "browser@openai-bundled",
+      "version": "26.901.51231",
+      "path": "./assets/browser.png",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolChrome",
+      "packageID": "chrome@openai-bundled",
+      "version": "26.901.51231",
+      "path": "./assets/google-chrome.png",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolComputerHistory",
+      "packageID": "computer-history@openai-bundled",
+      "version": "1.0.1000926",
+      "path": "./assets/app-icon.png",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolComputerUse",
+      "packageID": "computer-use@openai-bundled",
+      "version": "1.0.1000926",
+      "path": "./assets/app-icon.png",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolTemplateCreator",
+      "packageID": "template-creator@openai-primary-runtime",
+      "version": "26.905.11957",
+      "path": "./assets/logo.png",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolSpreadsheets",
+      "packageID": "spreadsheets@openai-primary-runtime",
+      "version": "26.905.11957",
+      "path": "./assets/logo.png",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolPDF",
+      "packageID": "pdf@openai-primary-runtime",
+      "version": "26.905.11957",
+      "path": "./assets/logo.png",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolPresentations",
+      "packageID": "presentations@openai-primary-runtime",
+      "version": "26.905.11957",
+      "path": "./assets/logo.png",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolDocuments",
+      "packageID": "documents@openai-primary-runtime",
+      "version": "26.905.11957",
+      "path": "./assets/logo.png",
+      "website": "https://openai.com/",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolSimView",
+      "packageID": "simview@toolingtools",
+      "version": "0.4.3",
+      "path": "./assets/icon-512.png",
+      "website": "https://github.com/toolingtools/SimView",
+      "files": [
+        "icon.png"
+      ]
+    },
+    {
+      "asset": "ToolSupabase",
+      "packageID": "supabase@claude-plugins-official",
+      "version": "0.1.15",
+      "path": "./assets/logo.svg",
+      "website": "https://github.com/supabase-community/supabase-plugin",
+      "files": [
+        "icon.svg"
+      ]
+    },
+    {
+      "asset": "ToolShopify",
+      "packageID": "shopify-ai-toolkit@claude-plugins-official",
+      "version": "1.5.2",
+      "path": "./assets/shopify_glyph.svg",
+      "website": "https://shopify.dev",
+      "files": [
+        "icon.svg"
+      ]
+    }
+  ]
+}

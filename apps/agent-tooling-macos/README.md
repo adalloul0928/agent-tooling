@@ -47,6 +47,77 @@ engine has a fixed executable allowlist, restricts file writes to managed or
 supported locations, moves replaced files to a rollback area, redacts receipts,
 and records partial per-target outcomes.
 
+## Set up your existing tools
+
+Open **Home → Set up your library** or **Settings → General → Open setup…**.
+New empty workspaces show the wizard once automatically; existing workspaces
+keep their current view and can start it from Home. Deferring setup never
+deletes tools, and the wizard can be run again from Settings.
+
+The sequence is **Apps → Plugins → Skills → Connections → Review → Ready**:
+
+- Choose the local clients to scan. This saves Agent Tooling's client visibility
+  preference, then reads the selected apps' current configuration. Scan details
+  show coverage notes and the files inspected.
+- Choose whole plugins first. Their discovered bundled skills and MCP servers
+  are included automatically. Then choose standalone skills and connections;
+  bundled items are never presented as a second checklist. Each step offers
+  search and bulk selection in a compact native list with fixed controls.
+  Selecting a standalone skill, including **Select all**, tracks its existing
+  installation. It never requests a personal copy. Native plugins and MCP
+  servers retain their ownership and update routes.
+- Name the configuration in Review and check each choice and its existing
+  per-client placement. Any skill
+  copies use the ordinary operation-plan sheet before the configuration can be
+  saved. The original client files remain in place. Disabled tools are recorded
+  as disabled, and a skill found in only one client is not silently assigned to
+  another. Later library sync honors this configuration's selected skills and
+  client assignments, including inherited configurations.
+- Skill metadata supports standard YAML, including multiline descriptions and
+  quoted names. Managed copies use the name declared in `SKILL.md`, even when
+  the source folder has a different name; source files are preserved. Import
+  issues appear in an expandable summary. **Track without copying** retains
+  affected tools in the setup while removing their copy requests. Name
+  collisions and genuinely invalid metadata still
+  require review.
+- Finish with links to review app changes, backups/encrypted folder exchange,
+  and optional Insights. Setup does not automatically scan conversation history,
+  enable continuous sync, connect cloud accounts, or rewrite native MCP secrets.
+
+**Make personal copy** is a separate opt-in for a standalone skill that you
+want to maintain independently. Bundled skills stay with their plugin. The
+normal review action is **Save setup**; only explicit copies require a file
+operation review first.
+
+### Repository-linked skills and native plugin updates
+
+In a standalone skill's details (or its setup row menu), choose **Link
+repository** to record its public HTTPS GitHub repository, branch/tag/commit,
+and skill subdirectory. An unknown source remains unknown until linked.
+Linking records the existing files without moving, editing, or adopting them.
+**Check for updates** fetches into an isolated temporary Git cache, compares
+the skill bytes, and reports what was checked. **Review update** prepares a
+fingerprinted plan for the existing installations. Local edits, changed
+installation locations, unsupported links/nested reference folders, and
+incomplete content reviews block replacement. A completed update keeps the
+repository relationship and native availability settings. Stop following
+removes only the relationship; it does not uninstall the skill.
+Adding a linked skill to another supported client also keeps the new
+installation on that repository's reviewed update path. Shared folders are
+updated once, with every affected client named in the plan.
+
+Public GitHub sources are supported in this version; private-repository
+authentication and automatic background updates are not configured by setup.
+Claude plugins with a confirmed user scope can be updated through a reviewed
+native `claude plugin update` operation. Codex and unsupported native scopes
+show client-owned update guidance; the app does not emulate updating by
+reinstalling or extracting their skills.
+
+This is local setup capture and reviewed source management. Claude Desktop-only
+configuration is not yet fully inventoried. Hook/agent editors and broader
+configuration management are documented as follow-up work in the
+[feature roadmap](../../docs/onboarding-feature-roadmap.md).
+
 ## Choose clients
 
 Open **Clients → Choose Clients…** or **Settings → General → Clients you use**
@@ -143,7 +214,7 @@ it will not execute policy-provided scripts or fetch a policy in the background.
 ## Build and open the app
 
 The packaging script compiles the executable and wraps it in a normal macOS
-application bundle. Its default output is ignored under
+application bundle using the optimized release configuration. Its default output is ignored under
 `.build/Agent Tooling.app`.
 
 ```sh
@@ -157,11 +228,31 @@ Pass a destination as the first argument when you want the bundle elsewhere:
 ./scripts/package-app.sh '/Applications/Agent Tooling.app'
 ```
 
+Set `AGENT_TOOLING_CONFIGURATION=debug` when packaging for debugging.
+
 ## Verify
 
 ```sh
 swift test --disable-sandbox
 ```
+
+The opt-in inventory benchmark uses an isolated synthetic workspace with 500
+skills, 100 plugins, and 100 MCP servers. Run it alone, with no concurrent builds
+or tests, and compare the same configuration and machine:
+
+```sh
+AGENT_TOOLING_BENCHMARK=1 AGENT_TOOLING_BENCHMARK_LABEL=release \
+  swift test --disable-sandbox --configuration release --filter WorkspacePerformanceTests
+```
+
+It reports first-run and warm median timings for snapshot validation, encoding,
+persistence, model loading, and screen rendering. Metrics named `settle60`
+include a fixed 60 ms run-loop window and are not response latency; synchronous
+layout and bitmap drawing are reported separately. The fixture does not measure
+network activity, real client scans, or filesystem-backed connector discovery.
+Add `AGENT_TOOLING_CATALOG_BENCHMARK=1` to include a separate plugin workload
+with 500 marketplace listings, or select `WorkspacePerformanceTests/catalogHeavyPlugins`
+to run that workload alone.
 
 ## Verification contract
 

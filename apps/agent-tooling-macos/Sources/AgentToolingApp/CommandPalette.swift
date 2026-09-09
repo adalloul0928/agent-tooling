@@ -150,12 +150,12 @@ enum CommandPaletteCatalog {
         AppSection.allCases.map { section in
             CommandPaletteItem(
                 id: "section.\(section.id)",
-                title: section.rawValue,
+                title: section.navigationTitle,
                 subtitle: "Screen",
                 contextLabel: "Go to",
                 kind: nil,
                 symbol: section.symbol,
-                keywords: [],
+                keywords: [section.rawValue, section.workspaceTitle ?? ""],
                 priority: 60,
                 outcome: .navigate(section)
             )

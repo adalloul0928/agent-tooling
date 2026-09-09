@@ -4,6 +4,9 @@ import SwiftUI
 @main
 struct AgentToolingApplication: App {
     @State private var model: AppModel?
+    @State private var workspacePreview: WorkspaceLibrarySession?
+    @State private var migrationPilot: WorkspaceMigrationReviewSession?
+    @State private var migrationPilotHome: URL?
     @State private var startupError: String?
     @AppStorage("appearance") private var appearance = "System"
     @AppStorage("showMenuBarItem") private var showMenuBarItem = true
@@ -12,17 +15,40 @@ struct AgentToolingApplication: App {
 
     init() {
         do {
+            if let pilot = try WorkspaceMigrationPilotLaunch.parse(arguments: ProcessInfo.processInfo.arguments) {
+                _migrationPilot = State(initialValue: try pilot.openSession())
+                _migrationPilotHome = State(initialValue: pilot.homeRoot)
+                _model = State(initialValue: nil)
+                _startupError = State(initialValue: nil)
+                return
+            }
+            if let preview = try WorkspacePreviewLaunch.parse(arguments: ProcessInfo.processInfo.arguments) {
+                _workspacePreview = State(initialValue: try preview.openSession())
+                _model = State(initialValue: nil)
+                _startupError = State(initialValue: nil)
+                return
+            }
             let launchContext = LaunchContext.current
+            if let selected = try WorkspaceAuthorityLaunch.openWritableSession(
+                legacyRoot: launchContext.workspaceRoot ?? WorkspaceStore.defaultRootURL()
+            ) {
+                _workspacePreview = State(initialValue: selected)
+                _model = State(initialValue: nil)
+                _startupError = State(initialValue: nil)
+                return
+            }
             if let workspaceRoot = launchContext.workspaceRoot {
                 _model = State(
                     initialValue: try AppModel(
                         store: WorkspaceStore(rootURL: workspaceRoot),
+                        runner: ProcessCommandRunner(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser),
                         homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser
                     )
                 )
             } else {
                 _model = State(
-                    initialValue: try AppModel.live(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser))
+                    initialValue: try AppModel.live(runner: ProcessCommandRunner(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser),
+                        homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser))
             }
             _startupError = State(initialValue: nil)
         } catch {
@@ -34,8 +60,12 @@ struct AgentToolingApplication: App {
     var body: some Scene {
         Window("Agent Tooling", id: "main") {
             Group {
-                if let model {
-                    AppShellView(initialSelection: launchSelection)
+                if let migrationPilot, let migrationPilotHome {
+                    WorkspaceMigrationPilotHost(session: migrationPilot, homeRoot: migrationPilotHome)
+                } else if let workspacePreview {
+                    WorkspaceLibraryView(session: workspacePreview)
+                } else if let model {
+                    AppShellView(initialSelection: launchSelection, onWorkspaceAuthorityChanged: loadModel)
                         .environment(model)
                         .environment(navigation)
                 } else {
@@ -49,6 +79,7 @@ struct AgentToolingApplication: App {
             .background(WindowConfigurator())
             .preferredColorScheme(colorScheme)
             .onOpenURL { url in
+                guard workspacePreview == nil, migrationPilot == nil else { return }
                 guard navigation.open(url: url) else {
                     model?.presentError("Agent Tooling rejected an invalid or unsupported link.")
                     return
@@ -58,6 +89,7 @@ struct AgentToolingApplication: App {
         }
         .defaultSize(width: 1_440, height: 900)
         .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandGroup(after: .newItem) {
                 Button("Sync Agent Tooling") {
@@ -83,7 +115,13 @@ struct AgentToolingApplication: App {
         }
 
         MenuBarExtra("Agent Tooling", systemImage: "slider.horizontal.3", isInserted: $showMenuBarItem) {
-            if let model {
+            if migrationPilot != nil {
+                Text("Migration review")
+                Button("Quit Agent Tooling") { NSApp.terminate(nil) }
+            } else if let workspacePreview {
+                Text(workspacePreview.access == .readOnly ? "Workspace preview · Read only" : "Workspace library")
+                Button("Quit Agent Tooling") { NSApp.terminate(nil) }
+            } else if let model {
                 MenuBarContent()
                     .environment(model)
             } else {
@@ -114,18 +152,46 @@ struct AgentToolingApplication: App {
     }
 
     private func loadModel() {
+        migrationPilot = nil
+        migrationPilotHome = nil
+        workspacePreview = nil
+        model = nil
         do {
+            if let pilot = try WorkspaceMigrationPilotLaunch.parse(arguments: ProcessInfo.processInfo.arguments) {
+                migrationPilot = try pilot.openSession()
+                migrationPilotHome = pilot.homeRoot
+                startupError = nil
+                return
+            }
+            if let preview = try WorkspacePreviewLaunch.parse(arguments: ProcessInfo.processInfo.arguments) {
+                workspacePreview = try preview.openSession()
+                model = nil
+                startupError = nil
+                return
+            }
             let launchContext = LaunchContext.current
+            if let selected = try WorkspaceAuthorityLaunch.openWritableSession(
+                legacyRoot: launchContext.workspaceRoot ?? WorkspaceStore.defaultRootURL()
+            ) {
+                workspacePreview = selected
+                model = nil
+                startupError = nil
+                return
+            }
+            workspacePreview = nil
             if let workspaceRoot = launchContext.workspaceRoot {
                 model = try AppModel(
                     store: WorkspaceStore(rootURL: workspaceRoot),
+                    runner: ProcessCommandRunner(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser),
                     homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser
                 )
             } else {
-                model = try AppModel.live(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
+                model = try AppModel.live(runner: ProcessCommandRunner(homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser),
+                    homeURL: launchContext.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
             }
             startupError = nil
         } catch {
+            workspacePreview = nil
             model = nil
             startupError = error.localizedDescription
         }

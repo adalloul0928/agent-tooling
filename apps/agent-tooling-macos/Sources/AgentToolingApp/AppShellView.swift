@@ -5,8 +5,10 @@ struct AppShellView: View {
     @Environment(AppModel.self) private var model
     @Environment(AppNavigationState.self) private var navigation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
+    @AppStorage("onboarding.completed.v1") private var onboardingCompleted = false
+    @AppStorage("onboarding.presented.v1") private var onboardingPresented = false
+    @State private var showingOnboarding = false
     @State private var selection: AppSection
     @State private var paletteVisible = false
     @State private var screenRequest: ScreenRequest?
@@ -14,60 +16,89 @@ struct AppShellView: View {
     @State private var pendingRequestContinuation: PendingRequestContinuation?
     @State private var presentedPendingRequestID: UUID?
     @State private var requestPresentationActive = false
+    @State private var workspaceMigration: WorkspaceMigrationSetupSession?
+    let onWorkspaceAuthorityChanged: () -> Void
 
-    init(initialSelection: AppSection = .overview) {
+    init(initialSelection: AppSection = .overview, onWorkspaceAuthorityChanged: @escaping () -> Void = {}) {
         _selection = State(initialValue: initialSelection)
+        self.onWorkspaceAuthorityChanged = onWorkspaceAuthorityChanged
     }
 
     var body: some View {
-        ZStack {
-            // The window's own material, and nothing painted over it behind the
-            // sidebar: like the Dock, the sidebar is a blurred view of whatever
-            // is actually behind the window.
-            if reduceTransparency {
-                AgentTheme.contentBackground.ignoresSafeArea()
-            } else {
-                DesktopGlassBackground().ignoresSafeArea()
-            }
-
-            HStack(spacing: 0) {
-                SidebarView(
-                    selection: $selection,
-                    isCollapsed: $sidebarCollapsed,
-                    openPalette: { paletteVisible = true }
+        NavigationSplitView(columnVisibility: sidebarVisibility) {
+            SidebarView(
+                selection: $selection,
+                isCollapsed: $sidebarCollapsed,
+                openPalette: { paletteVisible = true }
+            )
+            .navigationSplitViewColumnWidth(min: 210, ideal: 230, max: 300)
+        } detail: {
+            destination
+                .environment(\.startOnboarding, presentOnboarding)
+                .environment(\.reviewWorkspaceMigration, presentWorkspaceMigration)
+                .environment(\.workspaceSelection, selection)
+                .environment(
+                    \.workspaceNavigate,
+                    { section in
+                        if section == .syncCenter { navigation.showAllClients() }
+                        selection = section
+                    }
                 )
-
-                // Swap heavy screens immediately. Navigation feedback lives in
-                // the sidebar selection pill, so changing sections never keeps
-                // two list/detail hierarchies alive for a crossfade.
-                destination
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .paperPane()
-            }
-            // The title bar is hidden, so its safe area would otherwise inset
-            // the content pane at the top and nowhere else. The sidebar keeps
-            // its own inset for the traffic lights.
-            .ignoresSafeArea(edges: .top)
-            .sheet(isPresented: $paletteVisible) {
-                CommandPaletteView(
-                    onActivate: { outcome in
-                        paletteVisible = false
-                        DispatchQueue.main.async { activate(outcome) }
-                    },
-                    onClose: { paletteVisible = false }
-                )
-                .environment(model)
-            }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AgentTheme.contentBackground, ignoresSafeAreaEdges: [.top, .bottom, .trailing])
+        }
+        .navigationSplitViewStyle(.balanced)
+        .background(WindowBackdropMaterial().ignoresSafeArea())
+        .sheet(isPresented: $paletteVisible) {
+            CommandPaletteView(
+                onActivate: { outcome in
+                    paletteVisible = false
+                    DispatchQueue.main.async { activate(outcome) }
+                },
+                onClose: { paletteVisible = false }
+            )
+            .environment(model)
         }
         .foregroundStyle(.primary)
-        .tint(AgentTheme.blue)
-        .buttonBorderShape(.capsule)
         .animation(reduceMotion ? nil : AgentMotion.selection, value: sidebarCollapsed)
         .groupBoxStyle(ControlGroupBoxStyle())
         .task {
+            let hasExistingSetup = !model.skills.isEmpty || !model.plugins.isEmpty || !model.mcpServers.isEmpty
             await model.bootstrap()
+            if OnboardingPresentationPolicy.shouldPresent(
+                completed: onboardingCompleted, presented: onboardingPresented,
+                hasExistingSetup: hasExistingSetup,
+                anotherPresentationActive: paletteVisible || requestPresentationActive || model.isInteractionLocked
+                    || navigation.requestedSection != nil || navigation.requestedPendingRequestID != nil
+            ) {
+                presentOnboarding()
+            }
+        }
+        .sheet(isPresented: $showingOnboarding, onDismiss: applyExternalNavigation) {
+            OnboardingWizard(onNavigate: { section in
+                if section == .syncCenter { navigation.showAllClients() }
+                selection = section
+            })
+            .environment(model)
+        }
+        .sheet(item: $workspaceMigration) { session in
+            WorkspaceMigrationSetupView(session: session, onCancel: {
+                let returnedToLegacy = model.endWorkspaceMigrationReview()
+                workspaceMigration = nil
+                if !returnedToLegacy { onWorkspaceAuthorityChanged() }
+            }, onAuthorityChanged: {
+                workspaceMigration = nil
+                // Keep the retired model gated until the root opens the saved
+                // authority through its normal, validated startup path.
+                onWorkspaceAuthorityChanged()
+            })
         }
         .onAppear { applyExternalNavigation() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // Client settings may have changed outside the app. Refresh their
+            // cached status off the main thread when returning to this window.
+            Task { await model.refreshSkillAvailability() }
+        }
         .onChange(of: model.enabledClients) { _, _ in
             if let client = navigation.selectedClient, !model.isClientEnabled(client) { navigation.showAllClients() }
         }
@@ -116,7 +147,14 @@ struct AppShellView: View {
     @ViewBuilder
     private var destination: some View {
         switch selection {
-        case .overview: OverviewView(navigate: { selection = $0 })
+        case .overview:
+            OverviewView(
+                navigate: { selection = $0 },
+                onOpenPlugin: { id in
+                    selection = .plugins
+                    screenRequest = .selectPlugin(id)
+                }
+            )
         case .marketplace: MarketplaceView(request: $screenRequest)
         case .skills: SkillsView(navigate: { selection = $0 })
         case .insights: InsightsView()
@@ -143,14 +181,34 @@ struct AppShellView: View {
         )
     }
 
-    private var pendingPlanBinding: Binding<OperationPlan?> {
+    private var sidebarVisibility: Binding<NavigationSplitViewVisibility> {
         Binding(
-            get: { requestPresentationActive ? nil : model.pendingPlan },
-            set: { if $0 == nil { model.discardPendingPlan() } }
+            get: { sidebarCollapsed ? .detailOnly : .all },
+            set: { sidebarCollapsed = $0 == .detailOnly }
         )
     }
 
+    private var pendingPlanBinding: Binding<OperationPlan?> {
+        Binding(
+            get: { requestPresentationActive || showingOnboarding ? nil : model.pendingPlan },
+            set: { if $0 == nil && !showingOnboarding { model.discardPendingPlan() } }
+        )
+    }
+
+    private func presentOnboarding() {
+        guard !model.isInteractionLocked, !requestPresentationActive else { return }
+        onboardingPresented = true
+        showingOnboarding = true
+    }
+
+    private func presentWorkspaceMigration() {
+        guard !showingOnboarding, !paletteVisible, !requestPresentationActive,
+              workspaceMigration == nil, let location = model.beginWorkspaceMigrationReview() else { return }
+        workspaceMigration = WorkspaceMigrationSetupSession(location: location)
+    }
+
     private func applyExternalNavigation() {
+        guard !showingOnboarding, workspaceMigration == nil else { return }
         if let requestedSection = navigation.requestedSection {
             selection = requestedSection
             navigation.consumeRequestedSection(requestedSection)

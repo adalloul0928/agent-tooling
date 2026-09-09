@@ -5,6 +5,7 @@ struct PlanReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     let plan: OperationPlan
+    var onReviewBlockedCopies: ((OperationPlanSafetyReview) -> Void)? = nil
     @State private var isSubmitting = false
     @State private var executionTask: Task<Void, Never>?
     /// Computed before approval, never during execution. A person cannot
@@ -108,6 +109,18 @@ struct PlanReviewSheet: View {
                 .buttonStyle(.bordered)
                 .keyboardShortcut(.cancelAction)
                 Spacer()
+                if let review = safetyReview, review.hasBlockedSteps, let onReviewBlockedCopies {
+                    Button("Back to setup") {
+                        guard !isSubmitting, !model.isExecutingPlan else { return }
+                        // The wizard needs the pending adoption's source IDs
+                        // before discarding its temporary reviewed copies.
+                        onReviewBlockedCopies(review)
+                        model.discardPendingPlan()
+                        dismiss()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isSubmitting || model.isExecutingPlan)
+                }
                 Button {
                     guard !isSubmitting, let reviewedPlan, safetyReview?.hasBlockedSteps == false else { return }
                     isSubmitting = true

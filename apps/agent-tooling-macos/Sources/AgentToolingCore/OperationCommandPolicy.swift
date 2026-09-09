@@ -43,7 +43,7 @@ struct OperationCommandPolicy: Sendable {
 
     private func validateClaude(_ arguments: [String]) throws {
         if arguments.count == 5,
-            ["install", "uninstall"].contains(arguments[1]),
+            ["install", "uninstall", "update"].contains(arguments[1]),
             arguments[0] == "plugin",
             arguments[3] == "--scope",
             arguments[4] == "user",

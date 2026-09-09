@@ -4,28 +4,75 @@ import Observation
 @MainActor
 @Observable
 public final class AppModel {
-    public internal(set) var skills: [Skill]
-    public internal(set) var mcpServers: [MCPServer]
-    public internal(set) var plugins: [Plugin]
+    public internal(set) var skills: [Skill] {
+        didSet {
+            visibleInventoryCache.skills = nil
+            if skills != oldValue { invalidateSkillAvailability() }
+        }
+    }
+    public internal(set) var mcpServers: [MCPServer] {
+        didSet {
+            visibleInventoryCache.mcpServers = nil
+        }
+    }
+    public internal(set) var plugins: [Plugin] {
+        didSet {
+            visibleInventoryCache.plugins = nil
+        }
+    }
     public internal(set) var profiles: [ToolingProfile]
     /// Reusable shelves. There is deliberately no "current" collection: being
     /// active belongs to a configuration, not to the material it is built from.
     public internal(set) var collections: [ToolingCollection]
     /// Tags filter. They never change what is installed.
     public internal(set) var tagAssignments: [TagAssignment]
-    public internal(set) var activities: [ActivityReceipt]
+    public internal(set) var activities: [ActivityReceipt] {
+        didSet {
+            visibleInventoryCache.activities = nil
+        }
+    }
     public internal(set) var syncStages: [SyncStage]
-    public internal(set) var targetObservations: [TargetObservation]
-    public internal(set) var sources: [ToolingSource]
-    public internal(set) var marketplacePackages: [MarketplacePackage]
-    public internal(set) var accountSurfaces: [AccountSurface]
-    public internal(set) var connectors: [ConnectorRecord]
-    public internal(set) var operationReceipts: [OperationReceipt]
+    public internal(set) var targetObservations: [TargetObservation] {
+        didSet {
+            visibleInventoryCache.targetObservations = nil
+            if targetObservations != oldValue { invalidateSkillAvailability() }
+        }
+    }
+    public internal(set) var sources: [ToolingSource] {
+        didSet {
+            visibleInventoryCache.sources = nil
+        }
+    }
+    public internal(set) var marketplacePackages: [MarketplacePackage] {
+        didSet {
+            visibleInventoryCache.marketplacePackages = nil
+        }
+    }
+    public internal(set) var accountSurfaces: [AccountSurface] {
+        didSet {
+            visibleInventoryCache.accountSurfaces = nil
+        }
+    }
+    public internal(set) var connectors: [ConnectorRecord] {
+        didSet {
+            visibleInventoryCache.connectors = nil
+        }
+    }
+    public internal(set) var operationReceipts: [OperationReceipt] {
+        didSet {
+            visibleInventoryCache.operationReceipts = nil
+            visibleInventoryCache.activities = nil
+        }
+    }
     /// Installed copies compared against the fingerprint recorded when they
     /// were reviewed. Refreshed by `runDoctor()`.
     public internal(set) var installDrift: [InstalledPackageDrift] = []
     public internal(set) var mcpRuntimeStatuses: [MCPRuntimeStatus] = []
     public internal(set) var mcpRuntimeServers: [MCPRuntimeServer] = []
+    public internal(set) var isRefreshingMCPRuntimes = false
+    /// Legacy writes are held while an explicit versioned migration review is open.
+    public internal(set) var isWorkspaceMigrationReviewActive = false
+    public internal(set) var mcpRuntimeError: String?
     public internal(set) var pendingAgentRequests: [PendingAgentRequest] = []
     public internal(set) var pendingPlan: OperationPlan?
     public internal(set) var backupImportPreview: BackupImportPreview?
@@ -35,7 +82,12 @@ public final class AppModel {
     /// A Git repository can be imported as a source or backup. It is not the
     /// database or a prerequisite for using the app.
     public internal(set) var repositoryPath: String
-    public internal(set) var enabledClients = Set(ClientKind.allCases)
+    public internal(set) var enabledClients = Set(ClientKind.allCases) {
+        didSet {
+            visibleInventoryCache = VisibleInventoryCache()
+            if enabledClients != oldValue { invalidateSkillAvailability() }
+        }
+    }
     public internal(set) var automaticallyCheckHealth = true
     public internal(set) var skillAvailabilityRevision = 0
     public internal(set) var isSyncing = false
@@ -43,12 +95,25 @@ public final class AppModel {
     public internal(set) var isExecutingPlan = false
     public internal(set) var isRefreshingMarketplace = false
     public internal(set) var isGeneratingSkill = false
+    public internal(set) var isCheckingSkillRepository = false
+    /// Detached safety reviews are still reading current package trees. Migration
+    /// review begins only after every in-flight review has finished.
+    var activeSafetyReviewCount = 0
+    var isReviewingPlanSafety: Bool { activeSafetyReviewCount > 0 }
+    /// Short-lived native plugin catalog probes are tracked so they cannot cross
+    /// an exclusive migration-review boundary.
+    var isInstallingSkillPlugin = false
     public internal(set) var isScanningInsights = false
     public internal(set) var lastError: String?
     public internal(set) var workspacePath: String
     public internal(set) var backupConfiguration: BackupConfiguration
     public internal(set) var encryptedSyncConfiguration: EncryptedSyncConfiguration
     public internal(set) var managedPolicies: [ManagedPolicy]
+
+    /// Projections are rebuilt only when their source inventory or client
+    /// selection changes, never for each row/body read. Getters still read the
+    /// observed source so SwiftUI tracks the same dependencies on cache hits.
+    @ObservationIgnored var visibleInventoryCache = VisibleInventoryCache()
 
     // Collaborators and persistence helpers are module-internal rather than
     // private so the per-feature extensions in the AppModel+*.swift files can
@@ -67,9 +132,19 @@ public final class AppModel {
     let policyService: PolicyService
     let codexSkillDraftService: CodexSkillDraftService
     let toolingInsightsService: ToolingInsightsService
+    @ObservationIgnored var skillAvailabilityCache = SkillAvailabilitySnapshot()
+    @ObservationIgnored var skillAvailabilityGeneration = 0
+    @ObservationIgnored var skillAvailabilityRequestedInputs: [SkillAvailabilityInput]?
     var pendingRestoreSnapshot: WorkspaceSnapshot?
     var pendingEncryptedSyncSnapshot: WorkspaceSnapshot?
     var pendingSkillAdoption: SkillAdoption?
+    var pendingSkillRepositoryUpdate: SkillRepositoryUpdate?
+    var pendingDiscoveredSkillInstall: DiscoveredSkillInstall?
+    public internal(set) var onboardingCopyIssues: [SkillAdoptionRejection] = []
+    /// Original discovery ID -> declared portable name, only after a reviewed
+    /// copy has completed. Keep native discovery records untouched.
+    public internal(set) var onboardingAdoptedSkillIDs: [String: String] = [:]
+    var onboardingCopyIssuePreviewID: UUID?
     public internal(set) var encryptedSyncImportPreview: EncryptedSyncImportPreview?
     var hasBootstrapped = false
 
@@ -153,7 +228,8 @@ public final class AppModel {
 
     public var isBusy: Bool {
         isSyncing || isRunningDoctor || isExecutingPlan || isRefreshingMarketplace || isGeneratingSkill
-            || isScanningInsights || isDiscoveringProjects
+            || isScanningInsights || isDiscoveringProjects || isCheckingSkillRepository
+            || isRefreshingMCPRuntimes || isReviewingPlanSafety || isInstallingSkillPlugin
     }
 
     /// Disables competing commands while a change is running or awaiting
@@ -161,7 +237,7 @@ public final class AppModel {
     /// allowing another action to replace or invalidate it would make the
     /// review sheet misleading.
     public var isInteractionLocked: Bool {
-        isBusy || pendingPlan != nil
+        isWorkspaceMigrationReviewActive || isBusy || pendingPlan != nil
     }
 
     public var attentionCount: Int {
@@ -184,6 +260,8 @@ public final class AppModel {
         refreshPendingRequests()
         if automaticallyCheckHealth {
             await runDoctor()
+        } else {
+            await refreshSkillAvailability()
         }
         await refreshMCPRuntimes()
         await refreshMarketplace()
@@ -193,17 +271,36 @@ public final class AppModel {
     /// native client configuration remains available even when ToolHive is not
     /// installed.
     public func refreshMCPRuntimes() async {
+        guard !isWorkspaceMigrationReviewActive, !isRefreshingMCPRuntimes else { return }
+        isRefreshingMCPRuntimes = true
+        defer { isRefreshingMCPRuntimes = false }
         let direct = DirectMCPRuntimeProvider()
         let toolHive = ToolHiveMCPRuntimeProvider(runner: runner)
         async let directStatus = direct.status()
         async let toolHiveStatus = toolHive.status()
         let statuses = await (directStatus, toolHiveStatus)
+        guard !Task.isCancelled else { return }
         mcpRuntimeStatuses = [statuses.0, statuses.1]
         do {
-            mcpRuntimeServers = try await toolHive.servers()
+            let servers = try await toolHive.servers(after: statuses.1)
+            try Task.checkCancellation()
+            mcpRuntimeServers = servers
+            mcpRuntimeError = nil
+        } catch is CancellationError {
+            return
         } catch {
+            guard !Task.isCancelled else { return }
             mcpRuntimeServers = []
+            mcpRuntimeError = SensitiveValueRedactor.redact(error.localizedDescription)
         }
+    }
+
+    public func inspectToolHiveWorkload(_ name: String) async throws -> ToolHiveInspectionResult<ToolHiveWorkloadStatus> {
+        try await ToolHiveRuntimeInspection(runner: runner).status(workloadName: name)
+    }
+
+    public func toolHiveLogs(_ name: String, proxy: Bool) async throws -> ToolHiveLogSnapshot {
+        try await ToolHiveRuntimeInspection(runner: runner).logs(workloadName: name, proxy: proxy)
     }
 
     /// Reviews bounded, recent local conversation history on explicit request.
@@ -263,7 +360,7 @@ public final class AppModel {
     }
 
     public func clearInsightsReport() {
-        guard !isScanningInsights else { return }
+        guard ensureReadyForChange() else { return }
         do {
             try store.removeInsightsReport()
             insightsReport = nil
@@ -281,7 +378,10 @@ public final class AppModel {
         let start = Date.now
         let scanned = await adapters.scanAll(homeURL: homeURL, runner: runner, clients: enabledClients)
         let observations = scanned + targetObservations.filter { !isClientEnabled($0.surface.client) }
-        var compiled = InventoryCompiler.compile(observations: scanned, homeURL: homeURL)
+        let scanHomeURL = homeURL
+        var compiled = await Task.detached(priority: .userInitiated) {
+            InventoryCompiler.compile(observations: scanned, homeURL: scanHomeURL)
+        }.value
         compiled.skills = retainingExcludedClients(compiled.skills, existing: skills, clients: \.clients)
         compiled.mcpServers = retainingExcludedClients(compiled.mcpServers, existing: mcpServers, clients: \.clients)
         compiled.plugins = retainingExcludedClients(compiled.plugins, existing: plugins, clients: \.clients)
@@ -318,7 +418,9 @@ public final class AppModel {
             at: 0
         )
         candidate.activities = Array(candidate.activities.prefix(200))
-        return commit(candidate)
+        let persisted = commit(candidate)
+        await refreshSkillAvailability()
+        return persisted
     }
 
     /// Builds a reviewable plan. It does not perform changes until the user
@@ -332,7 +434,10 @@ public final class AppModel {
         var selectedClients = Set<ClientKind>()
         var scopes = Set<ToolingScope>()
         for skill in installable {
-            let configuredTargets = Set(skill.clients.map(\.client)).intersection(enabledClients)
+            let configuredTargets =
+                onboardingSyncTargets(for: skill)
+                ?? Set(skill.clients.map(\.client)).intersection(enabledClients)
+            guard !configuredTargets.isEmpty else { continue }
             do {
                 let plan = try library.installPlan(for: skill, targets: configuredTargets, homeURL: homeURL)
                 steps.append(contentsOf: plan.steps)
@@ -344,6 +449,21 @@ public final class AppModel {
             }
         }
         guard !steps.isEmpty else {
+            if onboardingTargetBindings != nil {
+                pendingPlan = OperationPlan(
+                    kind: .installSkill, title: "Review setup",
+                    summary: "No managed skill updates to apply for this configuration's recorded app assignments.",
+                    steps: [
+                        OperationStep(
+                            kind: .manual, title: "Your setup is recorded",
+                            detail:
+                                "Native plugins and MCP servers remain tracked in your configuration. Review their native installation from Library when you want to change an app. Disabled or unverified skill assignments are excluded from sync.",
+                            requiresUserAction: true
+                        )
+                    ], requiresConfirmation: false
+                )
+                return
+            }
             pendingPlan = OperationPlan(
                 kind: .installSkill,
                 title: "Sync local library",
@@ -403,7 +523,7 @@ public final class AppModel {
             return false
         }
         let latestSafetyReview = await safetyReviewAsync(for: pendingPlan)
-        guard !Task.isCancelled, self.pendingPlan?.id == pendingPlan.id else { return false }
+        guard !Task.isCancelled, !isWorkspaceMigrationReviewActive, self.pendingPlan?.id == pendingPlan.id else { return false }
         guard latestSafetyReview.planID == pendingPlan.id, !latestSafetyReview.hasBlockedSteps else {
             presentError(
                 latestSafetyReview.blockedSteps.first?.blockReason
@@ -457,6 +577,8 @@ public final class AppModel {
             library.discardAdoption(adoption)
             pendingSkillAdoption = nil
         }
+        completeSkillRepositoryUpdate(plan: pendingPlan, receipt: receipt)
+        completeDiscoveredSkillInstall(plan: pendingPlan, receipt: receipt)
         isExecutingPlan = false
         if !Task.isCancelled {
             let postOperationScanPersisted = await runDoctor()
@@ -520,10 +642,12 @@ public final class AppModel {
     }
 
     public func discardPendingPlan() {
-        guard !isExecutingPlan else { return }
+        guard !isWorkspaceMigrationReviewActive, !isExecutingPlan else { return }
         pendingPlan = nil
         pendingRestoreSnapshot = nil
         pendingEncryptedSyncSnapshot = nil
+        discardSkillRepositoryUpdate()
+        discardDiscoveredSkillInstall()
         if let adoption = pendingSkillAdoption {
             library.discardAdoption(adoption)
             pendingSkillAdoption = nil
@@ -559,7 +683,11 @@ public final class AppModel {
     /// with a few hundred rows on screen, so it must not be quadratic.
     public var adoptableSkillIDs: [String] {
         let sources = observedSkillSourcePaths()
-        return skills.filter { !$0.owned && sources[$0.id] != nil }.map(\.id)
+        let bundledIDs = Set(
+            targetObservations.flatMap { observation in
+                observation.skillMetadata.compactMap { $0.value.providerPluginID == nil ? nil : $0.key }
+            })
+        return skills.filter { !$0.owned && !bundledIDs.contains($0.id) && sources[$0.id] != nil }.map(\.id)
     }
 
     public func planInstall(
@@ -755,6 +883,7 @@ public final class AppModel {
         guard requireEnabledClients([client]) else { return }
         guard ensureReadyForChange() else { return }
         if marketplacePackages.isEmpty { await refreshMarketplace() }
+        guard ensureReadyForChange() else { return }
         let catalogPrefix = client == .claude ? "claude" : client == .codex ? "codex" : "gemini"
         guard
             let package = marketplacePackages.first(where: {
@@ -1204,6 +1333,10 @@ public final class AppModel {
     }
 
     func ensureReadyForChange() -> Bool {
+        guard !isWorkspaceMigrationReviewActive else {
+            lastError = "Migration review is active. Finish or cancel it before changing this workspace."
+            return false
+        }
         guard !isBusy else {
             lastError = "Wait for the current operation to finish before starting another action."
             return false
@@ -1245,27 +1378,29 @@ public final class AppModel {
     }
 
     func applyPersisted(_ snapshot: WorkspaceSnapshot) {
-        skills = snapshot.skills
-        mcpServers = snapshot.mcpServers
-        plugins = snapshot.plugins
-        profiles = snapshot.profiles
-        collections = snapshot.collections
-        tagAssignments = snapshot.tagAssignments
-        activities = snapshot.activities
-        operationReceipts = snapshot.operationReceipts
-        targetObservations = snapshot.targetObservations
-        sources = snapshot.sources
-        marketplacePackages = snapshot.marketplacePackages
-        accountSurfaces = snapshot.accountSurfaces
-        connectors = snapshot.connectors
-        activeProfileID = snapshot.activeProfileID
-        repositoryPath = snapshot.importedRepositoryPath ?? workspacePath
-        backupConfiguration = snapshot.backupConfiguration
-        encryptedSyncConfiguration = snapshot.encryptedSyncConfiguration
-        enabledClients = snapshot.preferences.enabledClients
-        automaticallyCheckHealth = snapshot.preferences.automaticallyCheckHealth
-        managedPolicies = snapshot.managedPolicies
-        syncStages = Self.syncStages(from: snapshot.targetObservations)
+        if skills != snapshot.skills { skills = snapshot.skills }
+        if mcpServers != snapshot.mcpServers { mcpServers = snapshot.mcpServers }
+        if plugins != snapshot.plugins { plugins = snapshot.plugins }
+        if profiles != snapshot.profiles { profiles = snapshot.profiles }
+        if collections != snapshot.collections { collections = snapshot.collections }
+        if tagAssignments != snapshot.tagAssignments { tagAssignments = snapshot.tagAssignments }
+        if activities != snapshot.activities { activities = snapshot.activities }
+        if operationReceipts != snapshot.operationReceipts { operationReceipts = snapshot.operationReceipts }
+        if targetObservations != snapshot.targetObservations { targetObservations = snapshot.targetObservations }
+        if sources != snapshot.sources { sources = snapshot.sources }
+        if marketplacePackages != snapshot.marketplacePackages { marketplacePackages = snapshot.marketplacePackages }
+        if accountSurfaces != snapshot.accountSurfaces { accountSurfaces = snapshot.accountSurfaces }
+        if connectors != snapshot.connectors { connectors = snapshot.connectors }
+        if activeProfileID != snapshot.activeProfileID { activeProfileID = snapshot.activeProfileID }
+        let nextRepositoryPath = snapshot.importedRepositoryPath ?? workspacePath
+        if repositoryPath != nextRepositoryPath { repositoryPath = nextRepositoryPath }
+        if backupConfiguration != snapshot.backupConfiguration { backupConfiguration = snapshot.backupConfiguration }
+        if encryptedSyncConfiguration != snapshot.encryptedSyncConfiguration { encryptedSyncConfiguration = snapshot.encryptedSyncConfiguration }
+        if enabledClients != snapshot.preferences.enabledClients { enabledClients = snapshot.preferences.enabledClients }
+        if automaticallyCheckHealth != snapshot.preferences.automaticallyCheckHealth { automaticallyCheckHealth = snapshot.preferences.automaticallyCheckHealth }
+        if managedPolicies != snapshot.managedPolicies { managedPolicies = snapshot.managedPolicies }
+        let nextSyncStages = Self.syncStages(from: snapshot.targetObservations)
+        if syncStages != nextSyncStages { syncStages = nextSyncStages }
     }
 
     private func mergeMCPServers(existing: [MCPServer], observed: [MCPServer]) -> [MCPServer] {
@@ -1319,6 +1454,20 @@ public final class AppModel {
     /// sheet remains responsive while bounded filesystem and content checks
     /// run. The caller must still compare the result to its current plan.
     public func safetyReviewAsync(for plan: OperationPlan) async -> OperationPlanSafetyReview {
+        guard !isWorkspaceMigrationReviewActive else {
+            return OperationPlanSafetyReview(
+                planID: plan.id,
+                steps: plan.steps.map {
+                    OperationStepSafetyReview(
+                        stepID: $0.id,
+                        stepTitle: $0.title,
+                        ownership: .unprovable("Migration review is active. Finish or cancel it before running this safety review.")
+                    )
+                }
+            )
+        }
+        activeSafetyReviewCount += 1
+        defer { activeSafetyReviewCount -= 1 }
         let store = self.store
         let task = Task.detached(priority: .userInitiated) {
             OperationPlanSafetyReviewer.fromStore(store).review(plan)
@@ -1392,6 +1541,7 @@ public final class AppModel {
     }
 
     func persistOrThrow() throws {
+        try requireWorkspaceMigrationReviewInactive()
         let snapshot = currentSnapshot()
         try WorkspaceSnapshotValidator.validate(snapshot, mode: .localState)
         try store.saveWorkspaceSnapshot(snapshot)
@@ -1401,6 +1551,7 @@ public final class AppModel {
     @discardableResult
     func commit(_ candidate: WorkspaceSnapshot) -> Bool {
         do {
+            try requireWorkspaceMigrationReviewInactive()
             try WorkspaceSnapshotValidator.validate(candidate, mode: .localState)
             try store.saveWorkspaceSnapshot(candidate)
             applyPersisted(candidate)

@@ -37,9 +37,11 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
     private static let maximumStandardInputBytes = 1_048_576
     private static let readChunkBytes = 65_536
     private let timeout: Duration
+    private let homeURL: URL
 
-    public init(timeout: Duration = .seconds(60)) {
+    public init(timeout: Duration = .seconds(60), homeURL: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.timeout = timeout
+        self.homeURL = homeURL
     }
 
     public func run(executable: String, arguments: [String], currentDirectory: URL? = nil) async throws -> CommandOutput {
@@ -98,6 +100,7 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
                             arguments: arguments,
                             standardInput: standardInput,
                             currentDirectory: currentDirectory,
+                            homeURL: homeURL,
                             controller: controller
                         )
                     }
@@ -141,11 +144,11 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         arguments: [String],
         standardInput: Data?,
         currentDirectory: URL?,
+        homeURL: URL,
         controller: RunningProcessController
     ) async throws -> CommandOutput {
         let process = Process()
         process.currentDirectoryURL = currentDirectory
-        let homeURL = FileManager.default.homeDirectoryForCurrentUser
         let environment = childEnvironment(
             inheriting: ProcessInfo.processInfo.environment,
             homeURL: homeURL

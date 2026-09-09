@@ -45,21 +45,28 @@ public enum MCPDefinitionValidator {
 
         case .stdio:
             let arguments = try parseCommandLine(trimmed)
-            guard arguments.first?.isEmpty == false else {
-                throw MCPDefinitionValidationError.emptyCommand
-            }
-            guard arguments.count <= maximumArgumentCount,
-                arguments.allSatisfy({
-                    $0.count <= maximumDestinationLength
-                        && !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
-                })
-            else {
+            try validateCommandArguments(arguments)
+            return ValidatedMCPDestination(endpoint: trimmed, command: arguments)
+        }
+    }
+
+    /// Validates an already parsed argv without shell interpretation or lossy
+    /// quote reconstruction. Device bindings preserve this vector exactly.
+    public static func validateCommandArguments(_ arguments: [String]) throws {
+        guard arguments.first?.isEmpty == false else { throw MCPDefinitionValidationError.emptyCommand }
+        guard arguments.count <= maximumArgumentCount else { throw MCPDefinitionValidationError.destinationTooLong }
+        var total = 0
+        for argument in arguments {
+            guard argument.utf8.count <= maximumDestinationLength,
+                  !argument.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
                 throw MCPDefinitionValidationError.destinationTooLong
             }
-            guard !containsInlineSecret(arguments) else {
-                throw MCPDefinitionValidationError.inlineSecret
-            }
-            return ValidatedMCPDestination(endpoint: trimmed, command: arguments)
+            total += argument.utf8.count
+            guard total <= maximumDestinationLength else { throw MCPDefinitionValidationError.destinationTooLong }
+        }
+        guard !containsInlineSecret(arguments),
+              !arguments.contains(where: { SensitiveValueRedactor.containsCredentialValue(in: $0) }) else {
+            throw MCPDefinitionValidationError.inlineSecret
         }
     }
 

@@ -65,6 +65,7 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
     /// Older snapshots omit this field. Generated packages use it to avoid
     /// passing rich source through the lossy template editor.
     public var authoringOrigin: SkillAuthoringOrigin?
+    public var repositoryBinding: SkillRepositoryBinding?
 
     public init(
         id: String,
@@ -80,7 +81,8 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
         clients: [ClientState],
         validationCount: Int,
         projectRoot: String? = nil,
-        authoringOrigin: SkillAuthoringOrigin? = nil
+        authoringOrigin: SkillAuthoringOrigin? = nil,
+        repositoryBinding: SkillRepositoryBinding? = nil
     ) {
         self.id = id
         self.name = name
@@ -96,6 +98,7 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
         self.clients = clients
         self.validationCount = validationCount
         self.authoringOrigin = authoringOrigin
+        self.repositoryBinding = repositoryBinding
     }
 }
 
@@ -236,6 +239,9 @@ public struct ToolingProfile: Identifiable, Codable, Hashable, Sendable {
     /// not a contract: including one widens the required list below, and
     /// changes desired state only until a plan is reviewed and synced.
     public var includedCollections: [String]
+    /// An onboarding configuration retains the placements the user reviewed.
+    /// Nil preserves the behavior of configurations created before this field.
+    public var targetBindings: [OnboardingTargetBinding]?
 
     public init(
         id: String,
@@ -248,7 +254,8 @@ public struct ToolingProfile: Identifiable, Codable, Hashable, Sendable {
         enabledPlugins: [String],
         requiredMCPs: [String],
         requiredSkills: [String] = [],
-        includedCollections: [String] = []
+        includedCollections: [String] = [],
+        targetBindings: [OnboardingTargetBinding]? = nil
     ) {
         self.id = id
         self.name = name
@@ -261,13 +268,14 @@ public struct ToolingProfile: Identifiable, Codable, Hashable, Sendable {
         self.requiredMCPs = requiredMCPs
         self.requiredSkills = requiredSkills
         self.includedCollections = includedCollections
+        self.targetBindings = targetBindings
     }
 
     public var passingChecks: Int { checks.filter { $0.state == .healthy }.count }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, summary, inheritedFrom, scope, projectRoot, checks, enabledPlugins, requiredMCPs, requiredSkills,
-            includedCollections
+            includedCollections, targetBindings
     }
 
     public init(from decoder: any Decoder) throws {
@@ -283,6 +291,7 @@ public struct ToolingProfile: Identifiable, Codable, Hashable, Sendable {
         requiredMCPs = try container.decodeIfPresent([String].self, forKey: .requiredMCPs) ?? []
         requiredSkills = try container.decodeIfPresent([String].self, forKey: .requiredSkills) ?? []
         includedCollections = try container.decodeIfPresent([String].self, forKey: .includedCollections) ?? []
+        targetBindings = try container.decodeIfPresent([OnboardingTargetBinding].self, forKey: .targetBindings)
     }
 }
 

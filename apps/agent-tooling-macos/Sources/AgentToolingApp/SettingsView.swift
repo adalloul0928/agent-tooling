@@ -5,10 +5,13 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.startOnboarding) private var startOnboarding
+    @Environment(\.reviewWorkspaceMigration) private var reviewWorkspaceMigration
     @AppStorage("showMenuBarItem") private var showMenuBarItem = true
     @AppStorage("appearance") private var appearance = "System"
     @State private var showingRecoveryImport = false
     @State private var recoveryKeyCopied = false
+    @State private var inspectedToolHiveWorkload: MCPRuntimeServer?
     @SceneStorage("agentTooling.settings.category") private var category: SettingsCategory = .general
 
     var body: some View {
@@ -64,6 +67,7 @@ struct SettingsView: View {
                                             model.acceptInspectedBackup()
                                         }
                                         .buttonStyle(.borderedProminent)
+                                        .tint(AgentTheme.selection)
                                         .controlSize(.small)
                                         .disabled(model.isInteractionLocked)
                                     }
@@ -123,6 +127,7 @@ struct SettingsView: View {
                                     .disabled(model.isInteractionLocked)
                                 Button(recoveryKeyCopied ? "Copied" : "Copy key") { copyRecoveryKey() }
                                     .buttonStyle(.borderedProminent)
+                                    .tint(AgentTheme.selection)
                                     .controlSize(.small)
                                     .disabled(model.isInteractionLocked || recoveryKeyCopied)
                             }
@@ -141,6 +146,7 @@ struct SettingsView: View {
                                     Spacer()
                                     Button("Review restore…") { model.reviewInspectedEncryptedSyncRestore() }
                                         .buttonStyle(.borderedProminent)
+                                        .tint(AgentTheme.selection)
                                         .controlSize(.small)
                                         .disabled(model.isInteractionLocked)
                                 }
@@ -182,6 +188,22 @@ struct SettingsView: View {
                     }
 
                     if category == .general {
+                        SettingsGroup(title: "Setup", symbol: "tray.and.arrow.down") {
+                            SettingsActionRow(
+                                title: "Bring in your existing tools",
+                                detail:
+                                    "Scan your apps, choose tools, and review a configuration. You can run setup again whenever your setup changes.",
+                                actionTitle: "Open setup…"
+                            ) { startOnboarding() }
+                            .disabled(model.isInteractionLocked)
+                            Divider()
+                            SettingsActionRow(
+                                title: "Central library migration",
+                                detail: "Review ownership, sources, and existing assignments before switching your workspace.",
+                                actionTitle: "Review migration…"
+                            ) { reviewWorkspaceMigration() }
+                            .disabled(model.isInteractionLocked)
+                        }
                         SettingsGroup(title: "Apps", symbol: "macbook.and.iphone") {
                             ClientSelectionView()
                         }
@@ -203,7 +225,7 @@ struct SettingsView: View {
                                     title: runtime.displayName,
                                     detail: runtime.version.map { "\(runtime.detail) Version \($0)." } ?? runtime.detail
                                 ) {
-                                    Text(runtime.isAvailable ? "Available" : "Not installed")
+                                    Text(runtimeAvailabilityLabel(for: runtime))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -220,11 +242,45 @@ struct SettingsView: View {
                                 Divider()
                                 SettingsActionRow(
                                     title: "ToolHive workloads",
-                                    detail:
-                                        "\(model.mcpRuntimeServers.count) workload\(model.mcpRuntimeServers.count == 1 ? "" : "s") observed in the optional host. Existing client configurations stay where they are.",
+                                    detail: model.mcpRuntimeError == nil
+                                        ? "Inspect workloads observed in the optional host. Existing client configurations stay where they are."
+                                        : "The last ToolHive refresh did not complete, so the workload list is not authoritative.",
                                     actionTitle: "Refresh"
                                 ) {
                                     Task { await model.refreshMCPRuntimes() }
+                                }
+                                .disabled(model.isRefreshingMCPRuntimes)
+
+                                if let error = model.mcpRuntimeError {
+                                    Divider()
+                                    Label(error, systemImage: "exclamationmark.triangle")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .padding(14)
+                                } else if model.mcpRuntimeStatuses.first(where: { $0.id == "toolhive" })?.isAvailable != true {
+                                    Divider()
+                                    Text("ToolHive is unavailable, so no workload count is shown.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .padding(14)
+                                } else if model.mcpRuntimeServers.isEmpty {
+                                    Divider()
+                                    Text("No ToolHive workloads were reported by the last successful refresh.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .padding(14)
+                                } else {
+                                    ForEach(model.mcpRuntimeServers) { workload in
+                                        Divider()
+                                        SettingsValueRow(
+                                            title: workload.name,
+                                            detail: "\(workload.status) · \(workload.package)"
+                                        ) {
+                                            Button("Inspect") { inspectedToolHiveWorkload = workload }
+                                                .buttonStyle(.bordered)
+                                                .controlSize(.small)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -285,11 +341,10 @@ struct SettingsView: View {
                                         ).foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Picker("Appearance", selection: $appearance) {
+                                WorkspaceSegmentedPicker("Appearance", selection: $appearance) {
                                     ForEach(["System", "Light", "Dark"], id: \.self) { Text($0).tag($0) }
                                 }
                                 .labelsHidden()
-                                .pickerStyle(.segmented)
                                 .frame(width: 190)
                             }
                             .padding(14)
@@ -320,15 +375,28 @@ struct SettingsView: View {
                         .padding(.horizontal, 4)
                     }
                 }
-                .frame(maxWidth: 850)
-                .padding(28)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: 1_000, alignment: .leading)
+                .padding(.horizontal, WorkspaceLayout.pageInset)
+                .padding(.top, WorkspaceLayout.contentTopInset)
+                .padding(.bottom, WorkspaceLayout.pageInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .sheet(isPresented: $showingRecoveryImport) {
             RecoveryKeyImportSheet()
                 .environment(model)
         }
+        .sheet(item: $inspectedToolHiveWorkload) { workload in
+            ToolHiveWorkloadInspector(workload: workload)
+                .environment(model)
+        }
+    }
+
+    private func runtimeAvailabilityLabel(for runtime: MCPRuntimeStatus) -> String {
+        if runtime.id == "toolhive", runtime.isAvailable, runtime.capabilities.isEmpty {
+            return "Needs attention"
+        }
+        return runtime.isAvailable ? "Available" : "Not available"
     }
 
     private var launchAtLoginBinding: Binding<Bool> {
@@ -472,30 +540,21 @@ private struct SettingsToolbar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
-            HStack {
-                Text("Settings")
-                    .font(.system(size: 15, weight: .semibold))
-                Spacer()
-                Button(action: revealWorkspace) {
-                    Label("Reveal workspace", systemImage: "folder")
+        VStack(alignment: .leading, spacing: 0) {
+            PageToolbar(title: "Settings", context: "Make this workspace yours") {
+                if category == .library {
+                    Button(action: revealWorkspace) {
+                        Label("Reveal workspace", systemImage: "folder")
+                    }.buttonStyle(.glass)
                 }
-                .buttonStyle(.bordered)
-                .opacity(category == .library ? 1 : 0)
-                .disabled(category != .library)
-                .allowsHitTesting(category == .library)
-                .accessibilityHidden(category != .library)
-                .animation(reduceMotion ? nil : AgentMotion.quick, value: category == .library)
             }
-
-            SlidingSegmentedControl<SettingsCategory>(
-                selection: $category,
-                items: SettingsCategory.allCases.map { .init(value: $0, title: $0.rawValue) },
-                accessibilityLabel: "Settings category"
-            )
+            WorkspaceSegmentedPicker("Settings category", selection: $category) {
+                ForEach(SettingsCategory.allCases) { category in Text(category.rawValue).tag(category) }
+            }
+            .fixedSize()
+            .padding(.horizontal, WorkspaceLayout.pageInset)
+            .padding(.bottom, 10)
         }
-        .padding(.horizontal, 18)
-        .frame(height: 54)
     }
 }
 
@@ -524,6 +583,7 @@ private struct RecoveryKeyImportSheet: View {
                 Spacer()
                 Button("Review Replacement…") { showingConfirmation = true }
                     .buttonStyle(.borderedProminent)
+                    .tint(AgentTheme.selection)
                     .keyboardShortcut(.defaultAction)
                     .disabled(recoveryKey.isEmpty || validationMessage != nil || model.isInteractionLocked)
             }
@@ -641,6 +701,7 @@ private struct SettingsGroup<Content: View>: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
             VStack(spacing: 0) { content }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .standardPanel()
         }
     }

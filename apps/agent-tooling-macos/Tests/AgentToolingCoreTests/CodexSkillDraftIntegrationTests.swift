@@ -104,12 +104,12 @@ struct CodexSkillDraftIntegrationTests {
             targets: [.codex]
         )
         // WorkspaceLibrary adopts this structurally valid package, then its
-        // stricter skill validation rejects the one-character description.
+        // stricter YAML validation rejects a boolean used as a description.
         // That puts AppModel's post-copy rollback path under test.
         let result = try stageDraft(
             request: request,
             name: "rollback-draft",
-            description: "A",
+            description: "true",
             store: fixture.store
         )
         try fixture.store.saveCodexSkillDraftRequest(request)
