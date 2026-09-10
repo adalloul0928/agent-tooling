@@ -112,6 +112,35 @@ struct WorkspaceFirstRunTests {
         #expect(!String(decoding: portable, as: UTF8.self).contains("lastScannedAt"))
     }
 
+    @Test func whatEachClientCanCarryIsRecordedFromTheSameScan() throws {
+        let observations = [Self.observation(.codexCLI, skills: ["reviewer"], plugins: [])]
+        let result = try WorkspaceFirstRun.prepare(
+            observations: observations,
+            inventory: .init(skills: [Self.skill("reviewer")], mcpServers: [], plugins: []))
+
+        // Without this a brand-new workspace could record an assignment and then
+        // refuse to plan it, because the check that admits a destination would
+        // have nothing to read.
+        #expect(!result.device.capabilityEvidence.isEmpty)
+        #expect(
+            result.device.capabilityEvidence
+                == TargetCapabilityEvidence.derive(from: observations))
+        #expect(result.device.capabilityEvidence.allSatisfy { $0.surface == .codexCLI })
+        #expect(result.device.capabilityEvidence.allSatisfy { $0.installedClientVersion == "1.0.0" })
+        // It is this Mac's record of this Mac, and nothing about it is portable.
+        let portable = try WorkspaceDocumentCoding.encode(result.document)
+        #expect(!String(decoding: portable, as: UTF8.self).contains("capabilityEvidence"))
+    }
+
+    @Test func aClientThatDidNotAnswerIsRecordedAsNothingRatherThanAsCapable() throws {
+        let result = try WorkspaceFirstRun.prepare(
+            observations: [Self.unavailable(.geminiCLI)],
+            inventory: .init(skills: [], mcpServers: [], plugins: []))
+
+        #expect(result.device.observations.count == 1)
+        #expect(result.device.capabilityEvidence.isEmpty)
+    }
+
     @Test func anEmptyMacProducesAnEmptyButValidWorkspace() throws {
         let result = try WorkspaceFirstRun.prepare(
             observations: [], inventory: .init(skills: [], mcpServers: [], plugins: []))
@@ -138,6 +167,19 @@ struct WorkspaceFirstRunTests {
         #expect(throws: WorkspaceRevisionStoreError.alreadyInitialized) {
             try store.initialize(document: prepared.document, device: prepared.device)
         }
+    }
+
+    /// Files on disk but no command that answers, which is not the same as a
+    /// client nobody looked for.
+    private static func unavailable(_ surface: TargetSurface) -> TargetObservation {
+        .init(
+            surface: surface, installed: true, commandAvailable: false, version: nil,
+            capabilities: .init(
+                supportsPluginInstall: true, supportsProjectScope: true,
+                supportsLocalMarketplace: false, supportsMCPAuthentication: false,
+                supportsConnectorDiscovery: false, requiresNewSession: true, requiresRestart: false,
+                supportsMachineReadableOutput: true),
+            lastScannedAt: Date(timeIntervalSince1970: 1_700_000_000))
     }
 
     private static func skill(_ id: String) -> Skill {

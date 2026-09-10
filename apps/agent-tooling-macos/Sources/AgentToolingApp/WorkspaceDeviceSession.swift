@@ -185,18 +185,53 @@ final class WorkspaceDeviceSession {
         isChecking = true
         defer { isChecking = false }
         errorMessage = nil
+        let observed: [TargetObservation]
         do {
-            let observed = try await observer.observe(homeRoot: homeRoot)
-            observations = observed
-            lastCheckedAt = .now
+            observed = try await observer.observe(homeRoot: homeRoot)
         } catch {
             // The last check is still the truest thing known about this Mac,
-            // so it stays on screen rather than being replaced by nothing.
+            // so it stays on screen rather than being replaced by nothing. A
+            // check that did not happen writes nothing down either.
             errorMessage =
                 observations.isEmpty
                 ? "This Mac's apps could not be checked."
                 : "This Mac's apps could not be checked again. What is shown is the last check."
+            return
         }
+        observations = observed
+        lastCheckedAt = .now
+        await record(observed)
+    }
+
+    /// Keeps what the check found, so the rest of the app reads this check
+    /// rather than the one a first run did.
+    ///
+    /// Both halves are written together: what was seen, and what each client
+    /// that answered can be asked to carry. The second is what admits a
+    /// destination into an install plan, and deriving it anywhere else would
+    /// leave a workspace able to record an assignment it could never plan.
+    ///
+    /// Recorded the way `setEnabled` records which apps this Mac manages: one
+    /// device-only change under the same head check as everything else, with
+    /// the portable document untouched. What was found stays on screen either
+    /// way — a scan that ran is not undone by a store that would not take it.
+    private func record(_ observed: [TargetObservation]) async {
+        let evidence = TargetCapabilityEvidence.derive(from: observed)
+        do {
+            guard let head = try await service.snapshot()?.document.revision.id else {
+                throw WorkspaceRevisionStoreError.notInitialized
+            }
+            _ = try await service.commitDeviceChange(expectedRevisionID: head) { device in
+                device.observations = observed
+                device.capabilityEvidence = evidence
+            }
+        } catch {
+            errorMessage = "This Mac's apps were checked, but what was found could not be saved."
+            return
+        }
+        // Recording it advances the workspace, so the library is read again
+        // rather than left holding an older head.
+        await library.refresh()
     }
 
     /// What the last check found for one client, in the words a person reads.
