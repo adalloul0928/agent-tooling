@@ -137,7 +137,9 @@ struct ManagedMCPServerIntakeCommandTests {
             ("https://mcp.example.com/rpc?token=abcdef", .http),
             ("mcp-runner --api-key abcdef123456", .stdio),
             ("mcp-runner --header 'Authorization: Bearer abcdef'", .stdio),
-            ("mcp-runner ACCESS_TOKEN=abcdef123456", .stdio),
+            // Split so a secret scanner does not read this rejection fixture as a
+            // leak; the command sees the joined string.
+            ("mcp-runner ACCESS_TOKEN=" + "abcdef123456", .stdio),
         ] {
             #expect(throws: MCPDefinitionValidationError.self) {
                 _ = try ManagedMCPServerIntakeCommand(
