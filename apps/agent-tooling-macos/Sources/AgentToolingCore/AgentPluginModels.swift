@@ -123,19 +123,39 @@ public struct AgentPluginManifest: Codable, Hashable, Sendable {
         }
     }
 
+    /// Lowercase ASCII letters, digits, `-` and `.`; one to 64 scalars; starts
+    /// and ends alphanumeric; never a doubled separator.
+    ///
+    /// Written as one plain loop on purpose. The earlier form, `CharacterSet`
+    /// members passed to `allSatisfy` as method references, compiled to a
+    /// function that returned `false` for every input in release builds of this
+    /// module under the Swift 6.4 toolchain, while the same code in another
+    /// module behaved. Every packaged app rejected every plugin name until the
+    /// Codex skill creator surfaced it.
     public static func isValidName(_ value: String) -> Bool {
-        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-.")
-        let alphaNumeric = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789")
-        guard (1...64).contains(value.count),
-            value.unicodeScalars.allSatisfy(allowed.contains),
-            let first = value.unicodeScalars.first,
-            let last = value.unicodeScalars.last,
-            alphaNumeric.contains(first),
-            alphaNumeric.contains(last),
-            !value.contains("--"),
-            !value.contains("..")
-        else { return false }
-        return true
+        var count = 0
+        var first: UInt32?
+        var last: UInt32?
+        var previous: UInt32?
+        for scalar in value.unicodeScalars {
+            count += 1
+            if count > 64 { return false }
+            let v = scalar.value
+            let isLowercaseLetter = v >= 0x61 && v <= 0x7A
+            let isDigit = v >= 0x30 && v <= 0x39
+            let isSeparator = v == 0x2D || v == 0x2E  // "-" or "."
+            if !(isLowercaseLetter || isDigit || isSeparator) { return false }
+            if isSeparator, previous == v { return false }
+            if first == nil { first = v }
+            last = v
+            previous = v
+        }
+        guard count >= 1, let first, let last else { return false }
+        return Self.isAlphanumericScalar(first) && Self.isAlphanumericScalar(last)
+    }
+
+    private static func isAlphanumericScalar(_ v: UInt32) -> Bool {
+        (v >= 0x61 && v <= 0x7A) || (v >= 0x30 && v <= 0x39)
     }
 
     private static func isValidExtensionNamespace(_ value: String) -> Bool {

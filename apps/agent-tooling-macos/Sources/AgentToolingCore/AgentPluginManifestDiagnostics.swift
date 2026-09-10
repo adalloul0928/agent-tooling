@@ -187,7 +187,7 @@ enum AgentPluginManifestLoader {
                 throw AgentPluginValidationError.invalidField("author")
             }
             let allowed = Set(["name", "email", "url"])
-            guard author.allKeys.map(\.stringValue).allSatisfy(allowed.contains) else {
+            guard allowed.isSuperset(of: author.allKeys.map(\.stringValue)) else {
                 throw AgentPluginValidationError.invalidField("author")
             }
             return AgentPluginAuthor(

@@ -52,6 +52,10 @@ jobs:
           swift test --disable-sandbox
           swift test --disable-sandbox --sanitize=thread
           swift build --configuration release -Xswiftc -warnings-as-errors
+          # The packaged app is a release build. A validator once compiled to a
+          # function that refused every input only in release, so the suite runs
+          # there too.
+          swift test --disable-sandbox --configuration release
 
       - name: Smoke test Raycast CLI contract
         run: |
