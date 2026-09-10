@@ -16,6 +16,9 @@ struct WorkspaceLaunch {
         let sync: WorkspaceSyncSession?
         let settings: WorkspaceSettingsSession
         let deployment: WorkspaceDeploymentSession
+        /// This Mac's own apps: what the last check found, and which of them
+        /// this Mac manages. It has checked nothing until something asks it to.
+        let device: WorkspaceDeviceSession
         let history: WorkspaceHistorySession
         let authoring: WorkspaceAuthoringSession
         let export: WorkspacePackageExportSession
@@ -29,22 +32,24 @@ struct WorkspaceLaunch {
 
     static func open(
         supportRoot: URL? = nil,
-        homeRoot: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeRoot: URL = FileManager.default.homeDirectoryForCurrentUser,
+        deviceObserver: any DeviceObserving = LiveDeviceObserver()
     ) async throws -> Workspace {
         let locator = try WorkspaceLocator(
             root: supportRoot?.standardizedFileURL ?? (try WorkspaceLocator.defaultRoot()))
         if let existing = try locator.open() {
-            return sessions(store: existing, homeRoot: homeRoot, isFirstRun: false)
+            return sessions(store: existing, homeRoot: homeRoot, isFirstRun: false, deviceObserver: deviceObserver)
         }
         let created = try await locator.openOrCreate(
             homeURL: homeRoot, runner: ProcessCommandRunner(homeURL: homeRoot))
-        return sessions(store: created, homeRoot: homeRoot, isFirstRun: true)
+        return sessions(store: created, homeRoot: homeRoot, isFirstRun: true, deviceObserver: deviceObserver)
     }
 
     static func sessions(
         store: WorkspaceRevisionStore,
         homeRoot: URL,
-        isFirstRun: Bool
+        isFirstRun: Bool,
+        deviceObserver: any DeviceObserving = LiveDeviceObserver()
     ) -> Workspace {
         let container = store.databaseURL.deletingLastPathComponent()
         let writerID = WorkspaceObjectID()
@@ -68,6 +73,9 @@ struct WorkspaceLaunch {
             deployment: WorkspaceDeploymentSession(
                 service: service, library: library, store: store,
                 homeRoot: homeRoot, contentStore: contentStore),
+            device: WorkspaceDeviceSession(
+                service: service, library: library, store: store,
+                homeRoot: homeRoot, observer: deviceObserver),
             history: WorkspaceHistorySession(store: store, library: library,
                                              writerID: writerID, access: .writable),
             authoring: WorkspaceAuthoringSession(service: service, library: library),
