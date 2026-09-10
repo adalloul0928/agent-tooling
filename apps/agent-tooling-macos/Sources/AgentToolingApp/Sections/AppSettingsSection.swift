@@ -6,6 +6,6 @@ struct AppSettingsSection: View {
     let workspace: WorkspaceLaunch.Workspace
 
     var body: some View {
-        WorkspaceSettingsView(session: workspace.settings)
+        EffectiveSettingsView(session: workspace.settings)
     }
 }

@@ -8,7 +8,7 @@ struct PresetsSection: View {
 
     var body: some View {
         if let presets = workspace.presets {
-            WorkspacePresetsView(session: presets, library: workspace.library)
+            PresetsView(session: presets, library: workspace.library, export: workspace.export)
         } else {
             VStack(spacing: 0) {
                 PageToolbar(title: AppSection.presets.navigationTitle, context: "Unavailable on this Mac") {}

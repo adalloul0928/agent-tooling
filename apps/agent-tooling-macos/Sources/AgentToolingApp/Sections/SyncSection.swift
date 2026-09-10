@@ -7,7 +7,7 @@ struct SyncSection: View {
 
     var body: some View {
         if let sync = workspace.sync {
-            WorkspaceSyncView(session: sync)
+            SyncSettingsView(session: sync)
         } else {
             VStack(spacing: 0) {
                 PageToolbar(title: AppSection.sync.navigationTitle, context: "Unavailable on this Mac") {}
