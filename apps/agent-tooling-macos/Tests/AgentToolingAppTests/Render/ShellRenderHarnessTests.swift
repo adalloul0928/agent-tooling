@@ -25,7 +25,13 @@ struct ShellRenderHarnessTests {
     @Test func firstRunDrawsBeforeAnythingIsAssigned() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        try expectDrawn(WorkspaceOnboardingView(session: fixture.workspace.library) {})
+        // The wizard's primary action is enabled from the first frame, and a
+        // bare `NSHostingView` with no window does not finish compositing an
+        // enabled `.glassProminent` control before this reads it back; see
+        // `rasterizeWarmed` in `Fixture+Onboarding.swift`.
+        try expectDrawnWarmed(
+            OnboardingWizard(workspace: fixture.workspace) {}
+                .environment(AppNavigationState()))
     }
 
     /// The fixture is the app's own wiring, so what a screen is handed here is

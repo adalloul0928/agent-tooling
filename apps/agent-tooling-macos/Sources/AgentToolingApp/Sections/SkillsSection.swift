@@ -14,7 +14,7 @@ struct SkillsSection: View {
 
     var body: some View {
         if showsOnboarding {
-            WorkspaceOnboardingView(session: workspace.library) { onboardingSkipped = true }
+            OnboardingWizard(workspace: workspace) { onboardingSkipped = true }
         } else if let content {
             SkillsView(workspace: workspace, content: content)
         } else {
@@ -34,9 +34,8 @@ struct SkillsSection: View {
     /// Only for a writable workspace that holds items and has no assignments at
     /// all. A read-only preview and an already-used workspace go straight in.
     private var showsOnboarding: Bool {
-        guard !onboardingSkipped, workspace.library.access == .writable,
-            let library = workspace.library.state?.library
-        else { return false }
-        return !library.rows.isEmpty && library.rows.allSatisfy { $0.requestedAssignments.isEmpty }
+        OnboardingPresentationPolicy.shouldPresent(
+            skipped: onboardingSkipped, access: workspace.library.access,
+            rows: workspace.library.state?.library.rows)
     }
 }
