@@ -144,10 +144,39 @@ private extension WorkspaceConflictResolver {
                 ancestor.assignments.append(losing)
             }
 
-        case .destinationCollision, .unsupportedVersion, .invalidResult:
+        case .catalogSource:
+            guard let id = resolution.objectID else { return }
+            var state = ancestor.configurationState ?? .init()
+            let losing = loser.configurationState?.catalogSources.first { $0.id == id }
+            // A catalog the losing side removed has to disappear from the
+            // ancestor too, or the merge would read the chosen side's record as
+            // untouched rather than as the addition it now is.
+            if let losing {
+                if let index = state.catalogSources.firstIndex(where: { $0.id == id }) {
+                    state.catalogSources[index] = losing
+                } else {
+                    state.catalogSources.append(losing)
+                }
+                let allocated = state.identityMap.contains {
+                    $0.legacy.domain == .catalogSource && $0.objectID == id
+                }
+                let losingAllocation = loser.configurationState.flatMap {
+                    WorkspaceCatalogSourceIdentity.entry(for: id, in: $0)
+                }
+                if !allocated, let losingAllocation {
+                    state.identityMap.append(losingAllocation)
+                }
+            } else {
+                state.catalogSources.removeAll { $0.id == id }
+                state.identityMap.removeAll { $0.legacy.domain == .catalogSource && $0.objectID == id }
+            }
+            ancestor.configurationState = state
+
+        case .destinationCollision, .nativeRouteCollision, .unsupportedVersion, .invalidResult:
             // These are not "pick a side" conflicts. A colliding destination
-            // needs different intent, and an unreadable or invalid document
-            // cannot be fixed by choosing one of two Macs.
+            // needs different intent, two records of one app package need one
+            // of them removed, and an unreadable or invalid document cannot be
+            // fixed by choosing one of two Macs.
             break
         }
     }

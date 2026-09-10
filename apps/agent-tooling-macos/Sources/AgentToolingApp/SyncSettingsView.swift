@@ -316,6 +316,8 @@ struct SyncSettingsView: View {
         case .assignmentEnablement: "Two different on or off requests"
         case .assignmentField: "Two different destinations for one request"
         case .destinationCollision: "Two items would share one place"
+        case .nativeRouteCollision: "The same app package added twice"
+        case .catalogSource: "Two different catalogs recorded as one"
         case .projectField: "Two different project names"
         case .unsupportedVersion: "A newer format than this app can read"
         case .invalidResult: "The combined setup did not pass its own checks"
