@@ -62,8 +62,14 @@ struct WorkspaceLaunch {
     ) -> Workspace {
         let container = store.databaseURL.deletingLastPathComponent()
         let writerID = WorkspaceObjectID()
-        let contentStore = try? CentralPackageContentStore(
-            directory: container.appending(path: "content"))
+        // The content store requires its private directory to exist, and a
+        // first launch has not made one. Without it every skill intake reports
+        // that the workspace cannot reach its stored content.
+        let contentDirectory = container.appending(path: "content")
+        try? FileManager.default.createDirectory(
+            at: contentDirectory, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        let contentStore = try? CentralPackageContentStore(directory: contentDirectory)
         let service = WorkspaceApplicationService(store: store, writerID: writerID,
                                                   contentStore: contentStore)
         let library = WorkspaceLibrarySession(
