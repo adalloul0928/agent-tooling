@@ -109,6 +109,44 @@ struct WorkspaceInsightsSessionTests {
         #expect(session.queuedDraftIDs.isEmpty)
         #expect(try PendingRequestQueueService.pendingRequests(store: fixture.store).isEmpty)
     }
+
+    /// Catalog suggestions are offered only where there is a catalog to ask.
+    ///
+    /// The live services reach the catalogs this build ships, so the switch on
+    /// the scan options can be turned on; a build handed none says so, and the
+    /// switch stays off rather than promising a question with nowhere to go.
+    @Test func catalogSuggestionsAreOfferedOnlyWhenACatalogCanBeAsked() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+
+        let withCatalogs = LiveInsightsServices(container: fixture.root)
+        let withNone = LiveInsightsServices(container: fixture.root, providers: [])
+
+        #expect(withCatalogs.canReachCatalog == !MarketplaceProviderRegistry.builtIn().isEmpty)
+        #expect(withNone.canReachCatalog == false)
+        // A stub that says nothing about catalogs is treated as reaching none.
+        #expect(fixture.insightsSession(StubInsightsServices(answer: ShellRenderFixture.insightsReport())).canReachCatalog == false)
+    }
+
+    /// A scan sends its question to the catalogs the services were built with,
+    /// and to nothing else. The stub answers from memory, so this never leaves
+    /// the machine running it.
+    @Test func aScanAsksTheCatalogsItWasGivenWhenSuggestionsAreOn() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let catalog = StubMarketplaceProvider()
+        let services = LiveInsightsServices(container: fixture.root, providers: [catalog])
+        let session = fixture.insightsSession(services)
+
+        #expect(services.canReachCatalog)
+        await session.scan(
+            options: .init(clients: [], lookbackDays: 1, includeMarketplaceRecommendations: true))
+
+        // The scan finished over an empty history without touching a client,
+        // and the report it saved is the one on screen.
+        #expect(session.report != nil)
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+    }
 }
 
 extension ShellRenderFixture {

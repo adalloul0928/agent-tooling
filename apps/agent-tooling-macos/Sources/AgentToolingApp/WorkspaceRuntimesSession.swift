@@ -23,9 +23,17 @@ enum WorkspaceRuntimesError: Error, Sendable {
     case invalidResponse
 }
 
-/// The real check: the same read-only `thv` inspection ToolHive's own docs
-/// describe, over a bounded, non-interactive process.
+/// The real check: `AgentToolingCore`'s own runtime providers, which are the
+/// same read-only `thv` inspection ToolHive's own docs describe, over a
+/// bounded, non-interactive process.
+///
+/// Nothing about either runtime is decided here. Asking two different parts of
+/// this app about the same Mac and being told two different things would be a
+/// bug nobody could see, so both answers come from the one place that knows how
+/// to ask.
 struct LiveMCPRuntimeObserver: MCPRuntimeObserving {
+    /// What `DirectMCPRuntimeProvider` reports, spelled out so a test can name
+    /// the value without awaiting a provider it is not testing.
     static let direct = MCPRuntimeStatus(
         id: "direct",
         displayName: "Direct client configuration",
@@ -33,80 +41,25 @@ struct LiveMCPRuntimeObserver: MCPRuntimeObserving {
         capabilities: [.directConfiguration],
         detail: "Uses each client's native MCP configuration without a separate runtime.")
 
-    private let runner: any CommandRunning
+    private let toolHive: ToolHiveMCPRuntimeProvider
 
     init(runner: any CommandRunning = ProcessCommandRunner(timeout: .seconds(15))) {
-        self.runner = runner
+        toolHive = ToolHiveMCPRuntimeProvider(runner: runner)
     }
 
     func statuses() async -> [MCPRuntimeStatus] {
-        [Self.direct, await toolHiveStatus()]
+        [await DirectMCPRuntimeProvider().status(), await toolHive.status()]
     }
 
     func servers(after toolHiveStatus: MCPRuntimeStatus) async throws -> [MCPRuntimeServer] {
-        try Task.checkCancellation()
-        guard toolHiveStatus.isAvailable, toolHiveStatus.capabilities.contains(.health) else { return [] }
-        let result = try await runner.run(
-            executable: "thv", arguments: ["list", "--all", "--format", "json"], currentDirectory: nil)
-        try Task.checkCancellation()
-        guard result.status == 0 else { throw WorkspaceRuntimesError.commandFailed }
-        guard let data = result.standardOutput.data(using: .utf8), data.count <= 1_048_576 else {
-            throw WorkspaceRuntimesError.invalidResponse
-        }
-        let workloads: [ToolHiveWorkloadEntry]
         do {
-            workloads = try AgentToolingCoding.decoder().decode([ToolHiveWorkloadEntry].self, from: data)
-        } catch {
-            throw WorkspaceRuntimesError.invalidResponse
-        }
-        return workloads.map {
-            MCPRuntimeServer(
-                name: String($0.name.prefix(256)), package: String($0.package.prefix(1_024)),
-                status: String($0.status.prefix(128)), url: $0.url.map { String($0.prefix(2_048)) },
-                transport: $0.transport.map { String($0.prefix(128)) },
-                group: $0.group.map { String($0.prefix(256)) }, isRemote: $0.remote ?? false)
-        }.sorted { $0.name < $1.name }
-    }
-
-    private func toolHiveStatus() async -> MCPRuntimeStatus {
-        do {
-            switch try await ToolHiveRuntimeInspection(runner: runner).version() {
-            case .available(let version, let diagnostic):
-                return MCPRuntimeStatus(
-                    id: "toolhive", displayName: "ToolHive", isAvailable: true, version: version.version,
-                    capabilities: [.health, .logs],
-                    detail: diagnostic ?? "Read-only workload status and log inspection available.")
-            case .unavailable(let diagnostic):
-                return unavailable(detail: diagnostic)
-            case .unsupportedResponse(let diagnostic), .commandFailed(let diagnostic):
-                return MCPRuntimeStatus(
-                    id: "toolhive", displayName: "ToolHive", isAvailable: true, capabilities: [],
-                    detail: diagnostic.isEmpty ? "ToolHive could not be inspected." : diagnostic)
+            return try await toolHive.servers(after: toolHiveStatus)
+        } catch let error as MCPRuntimeError {
+            switch error {
+            case .commandFailed: throw WorkspaceRuntimesError.commandFailed
+            case .invalidResponse: throw WorkspaceRuntimesError.invalidResponse
             }
-        } catch {
-            return unavailable(detail: "ToolHive is not installed.")
         }
-    }
-
-    private func unavailable(detail: String) -> MCPRuntimeStatus {
-        MCPRuntimeStatus(
-            id: "toolhive", displayName: "ToolHive", isAvailable: false, capabilities: [],
-            detail: detail.isEmpty ? "ToolHive is not installed." : detail)
-    }
-}
-
-private struct ToolHiveWorkloadEntry: Decodable {
-    var name: String
-    var package: String
-    var url: String?
-    var transport: String?
-    var status: String
-    var group: String?
-    var remote: Bool?
-
-    private enum CodingKeys: String, CodingKey {
-        case name, package, url, status, group, remote
-        case transport = "transport_type"
     }
 }
 

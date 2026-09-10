@@ -20,7 +20,7 @@ struct DiscoverSectionRenderTests {
 
         try expectDrawn(
             renderShell(.marketplace, fixture: fixture)
-                .environment(\.marketplaceProviders, [StubMarketplaceProvider()]))
+                .environment(\.marketplaceProviders, { _ in [StubMarketplaceProvider()] }))
     }
 
     /// The catalog has answered before this frame, so the packages, their

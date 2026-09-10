@@ -47,4 +47,20 @@ struct InsightsSectionRenderTests {
             withReport.tiffRepresentation != withoutReport.tiffRepresentation,
             "the kept report changed nothing on screen")
     }
+
+    /// The scan options draw whether or not a catalog can be asked, and the
+    /// switch that decides it is the only thing that differs between them.
+    @Test func theScanOptionsDrawWithAndWithoutACatalogToAsk() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let report = ShellRenderFixture.insightsReport()
+
+        for reachable in [true, false] {
+            let services = StubInsightsServices(answer: report, reachesCatalog: reachable)
+            try expectDrawn(
+                renderShell(.insights, fixture: fixture)
+                    .environment(\.insightsServices, { _ in services }))
+            #expect(services.canReachCatalog == reachable)
+        }
+    }
 }

@@ -9,12 +9,15 @@ import SwiftUI
 /// screen never reaches the network to be drawn.
 struct DiscoverSection: View {
     let workspace: WorkspaceLaunch.Workspace
-    @Environment(\.marketplaceProviders) private var providers
+    @Environment(\.marketplaceProviders) private var catalogs
 
     var body: some View {
         // Split so the session can be `@State` built from an environment value:
         // a `View` cannot read the environment before its own initializer runs.
-        DiscoverSectionBody(workspace: workspace, providers: providers)
+        DiscoverSectionBody(
+            workspace: workspace,
+            providers: catalogs(
+                MarketplaceCatalogContext(homeRoot: workspace.homeRoot, store: workspace.store)))
     }
 }
 

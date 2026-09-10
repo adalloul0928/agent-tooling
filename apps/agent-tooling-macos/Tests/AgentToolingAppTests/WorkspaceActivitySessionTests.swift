@@ -86,13 +86,11 @@ struct WorkspaceActivitySessionTests {
         #expect(session.drift.isEmpty)
     }
 
-    /// The live reader can honestly tell a removed install apart from a
-    /// present one with only `FileManager`, so it reports that much even
-    /// though it cannot yet recompute a fingerprint to tell a present install
-    /// apart from a modified one (see `LiveInstallDriftReader`'s own
-    /// documentation for why). Both paths stay inside the fixture's own
-    /// scratch directory, never a real install location.
-    @Test func theLiveDefaultReaderReportsARemovedInstallAndLeavesAPresentOneOut() async throws {
+    /// The live reader reports the whole comparison, not half of it: an install
+    /// that is gone, and one that is still there but no longer matches the
+    /// fingerprint recorded when it was approved. Both paths stay inside the
+    /// fixture's own scratch directory, never a real install location.
+    @Test func theLiveDefaultReaderReportsBothRemovedAndModifiedInstalls() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
         let stillThere = fixture.root.appending(path: "still-there", directoryHint: .isDirectory)
@@ -115,7 +113,11 @@ struct WorkspaceActivitySessionTests {
 
         await session.refresh()
 
-        #expect(session.drift.map(\.packageName) == ["gone"])
-        #expect(session.drift.first?.state == .removed)
+        let states = Dictionary(
+            uniqueKeysWithValues: session.drift.map { ($0.packageName, $0.state) })
+        #expect(states["gone"] == .removed)
+        // "def" is not this folder's fingerprint, so the copy on disk no longer
+        // matches what was approved — which is drift, and is now reported.
+        #expect(states["still-there"] == .modifiedSinceReview)
     }
 }

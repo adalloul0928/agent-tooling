@@ -1,8 +1,8 @@
 import CryptoKit
 import Foundation
 
-enum DirectoryFingerprint {
-    static func sha256(
+public enum DirectoryFingerprint {
+    public static func sha256(
         of root: URL,
         fileManager: FileManager = .default,
         maximumItems: Int = 10_000,

@@ -13,10 +13,21 @@ protocol InsightsServicing: Sendable {
     /// Reads local conversation history and returns aggregate findings only.
     /// Never installs, never writes to a client, and never keeps message text.
     func scan(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> InsightsReport
+    /// Whether there is a catalog to ask at all.
+    ///
+    /// The scan options offer catalog suggestions only when this is true, so
+    /// the switch never promises a question this build cannot send anywhere.
+    var canReachCatalog: Bool { get }
     /// The last report this Mac kept, if there is one.
     func lastReport() -> InsightsReport?
     func keep(_ report: InsightsReport) throws
     func forget() throws
+}
+
+extension InsightsServicing {
+    /// Reaching no catalog is the safe answer: a scan that cannot ask one still
+    /// works, and a screen told so offers nothing it cannot do.
+    var canReachCatalog: Bool { false }
 }
 
 /// The real scan, and the file the last report is kept in.
@@ -32,15 +43,31 @@ struct LiveInsightsServices: InsightsServicing {
 
     private let service = ToolingInsightsService()
     private let file: URL
+    private let providers: [any MarketplaceProvider]
+    private let cachedPackages: [MarketplacePackage]
 
-    init(container: URL) {
+    /// The catalogs default to the ones this build ships, so a scan that was
+    /// asked for catalog suggestions has somewhere to ask. They are still a
+    /// parameter: a test hands in none, and reaches no registry.
+    init(
+        container: URL,
+        providers: [any MarketplaceProvider] = MarketplaceProviderRegistry.builtIn(),
+        cachedPackages: [MarketplacePackage] = []
+    ) {
         file = container.appending(path: "insights-report.json")
+        self.providers = providers
+        self.cachedPackages = cachedPackages
     }
 
-    /// No catalog providers and no cached catalog: Discover has no session yet,
-    /// so a scan answers from this Mac's own library and history alone.
+    /// Whether a catalog can be reached at all. The scan options offer catalog
+    /// suggestions only when this is true, so the switch never promises a
+    /// network call this build cannot make.
+    var canReachCatalog: Bool { !providers.isEmpty }
+
     func scan(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> InsightsReport {
-        await service.scan(options: options, skills: skills, marketplacePackages: [], homeURL: homeURL)
+        await service.scan(
+            options: options, skills: skills, marketplacePackages: cachedPackages, homeURL: homeURL,
+            marketplaceProviders: providers)
     }
 
     func lastReport() -> InsightsReport? {
@@ -112,6 +139,10 @@ final class WorkspaceInsightsSession {
         self.services = services
         report = services.lastReport()
     }
+
+    /// Whether a scan can ask a catalog as well as read this Mac. The screen
+    /// enables its catalog-suggestions switch on this and nothing else.
+    var canReachCatalog: Bool { services.canReachCatalog }
 
     /// Reviews recent work against the skills this workspace holds.
     ///

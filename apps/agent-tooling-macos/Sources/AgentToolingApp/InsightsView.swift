@@ -16,6 +16,9 @@ struct InsightsView: View {
     @State private var includeCodex = true
     @State private var lookbackDays = 30
     @State private var maximumConversations = 25
+    /// Off unless somebody turns it on: a local scan must never start reaching
+    /// a network because a screen remembered a switch for them.
+    @State private var includeCatalogSuggestions = false
     @State private var selection: InsightSelection = .opportunities
     @State private var isPresentingClearConfirmation = false
     @State private var showingScanOptions = false
@@ -184,17 +187,22 @@ struct InsightsView: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Toggle(
                                 "Include established plugins, skills, and MCP servers from connected catalogs",
-                                isOn: .constant(false)
+                                isOn: $includeCatalogSuggestions
                             )
                             .toggleStyle(.checkbox)
-                            .disabled(true)
+                            .disabled(!session.canReachCatalog)
                             .fixedSize(horizontal: false, vertical: true)
                             // Offering a switch that reaches nothing would be a
-                            // claim this build cannot keep.
-                            Text("Discover has no connected catalogs on this Mac yet, so a scan answers from local history alone.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            // claim this build cannot keep, so it stays off
+                            // until a catalog exists to ask.
+                            Text(
+                                session.canReachCatalog
+                                    ? "Leave this off to keep the scan entirely local. Turning it on sends up to four search terms to the catalogs Discover lists — chosen from a fixed vocabulary this app ships, never words taken from your conversations."
+                                    : "This Mac has no catalog to ask, so a scan answers from local history alone."
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
@@ -514,7 +522,7 @@ struct InsightsView: View {
             clients: scannableClients,
             lookbackDays: lookbackDays,
             maximumConversationsPerClient: maximumConversations,
-            includeMarketplaceRecommendations: false
+            includeMarketplaceRecommendations: includeCatalogSuggestions && session.canReachCatalog
         )
         Task { await session.scan(options: options) }
     }

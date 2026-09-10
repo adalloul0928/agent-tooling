@@ -5,18 +5,19 @@ import SwiftUI
 
 /// The catalogs this build can ask, handed in rather than reached for.
 ///
-/// Every provider is a network call, so nothing on the Discover screen is
-/// allowed to construct one: a render test sets this key to a stub that answers
-/// from memory, and never opens a socket.
+/// Every provider reaches something outside this app — a registry over the
+/// network, a client's own CLI, a folder on disk — so nothing on the Discover
+/// screen is allowed to construct one. A render test replaces this key with a
+/// catalog that answers from memory, and by replacing it replaces all of them:
+/// there is no second door left open.
 ///
-/// The live value is empty. `MarketplaceProvider` is public, but the one
-/// concrete provider in this build — the official MCP registry — is internal to
-/// `AgentToolingCore`, and the public factory that used to hand it out
-/// (`AppModel.builtInMarketplaceProviders()`) went with `AppModel`. Until core
-/// exposes one again, this is the honest value: no catalog can be asked, and
-/// the screen says so rather than pretending a refresh did something.
+/// A factory rather than a list, because which catalogs exist depends on this
+/// Mac: whose home directory the client CLIs belong to, which clients this
+/// workspace manages, and which folders it records.
 extension EnvironmentValues {
-    @Entry var marketplaceProviders: [any MarketplaceProvider] = []
+    @Entry var marketplaceProviders: (MarketplaceCatalogContext) -> [any MarketplaceProvider] = {
+        MarketplaceCatalogs.live(in: $0)
+    }
 }
 
 /// What the catalogs published, what this Mac has kept from them, and where
@@ -127,12 +128,19 @@ final class WorkspaceMarketplaceSession {
     /// Sources are two halves of one record: the portable half carries the name
     /// and kind that travel between Macs, and this Mac's half carries where the
     /// folder actually is and what the last look at it found.
+    ///
+    /// The catalogs every build knows about join them. They are reference rows
+    /// rather than records — nobody added them and nobody can remove them — but
+    /// leaving them out made a workspace that had recorded nothing look like a
+    /// Mac with no catalogs at all, when in fact three of them are the ones this
+    /// app reads on every refresh. A recorded source of the same kind is the
+    /// authority and replaces its reference row.
     private func reload() {
         guard let snapshot = try? store.snapshot() else { return }
         let deviceSources = Dictionary(
             (snapshot.device.configurationState?.catalogSources ?? []).map { ($0.catalogSourceID, $0) },
             uniquingKeysWith: { first, _ in first })
-        sources = (snapshot.document.configurationState?.catalogSources ?? []).map { record in
+        let recorded = (snapshot.document.configurationState?.catalogSources ?? []).map { record in
             let local = deviceSources[record.id]
             return ToolingSource(
                 id: record.id.rawValue, name: record.name, kind: record.kind,
@@ -140,6 +148,20 @@ final class WorkspaceMarketplaceSession {
                 isOptionalBackup: record.isOptionalBackup, lastRefreshedAt: local?.lastRefreshedAt,
                 lastRevision: local?.lastRevision, trustSummary: local?.trustSummary ?? "Not reviewed")
         }
+        let recordedKinds = Set(recorded.map(\.kind))
+        // What a refresh in this session already learned about a reference row
+        // survives the redraw that follows it.
+        let known = Dictionary(sources.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let references = MarketplaceService().defaultSources()
+            .filter { !recordedKinds.contains($0.kind) }
+            .map { reference -> ToolingSource in
+                var row = reference
+                row.id = MarketplaceCatalogs.builtInSourceID(for: reference.kind)
+                row.trustSummary = known[row.id]?.trustSummary ?? reference.trustSummary
+                row.lastRefreshedAt = known[row.id]?.lastRefreshedAt
+                return row
+            }
+        sources = references + recorded
         installedRoutes = Dictionary(
             snapshot.document.artifacts
                 .filter { $0.identity.parentPackageID == nil }
@@ -152,8 +174,8 @@ final class WorkspaceMarketplaceSession {
         // Only on the first read: a refresh that reached a catalog must not be
         // overwritten by what this Mac kept from the one before it.
         if packages.isEmpty {
-            packages = Self.ordered(
-                (snapshot.device.applicationState?.marketplacePackages ?? []).map(Self.unobserved))
+            packages = MarketplaceSorting.sorted(
+                (snapshot.device.applicationState?.marketplacePackages ?? []).map(Self.unobserved), by: .name)
         }
     }
 
@@ -165,28 +187,77 @@ final class WorkspaceMarketplaceSession {
         reload()
         guard !providers.isEmpty else { return }
 
+        let retained = packages
         var collected: [MarketplacePackage] = []
         var failures: [String] = []
+        var learned = MarketplaceSourceReport()
+        var answered = 0
+
         for provider in providers {
+            var refused: String?
             do {
                 let page = try await provider.search(query)
                 collected.append(contentsOf: page.packages.map(Self.unobserved))
+                answered += 1
+            } catch let partial as RecordedFolderCatalogError {
+                // Some folders were read and some were not. Both halves count.
+                collected.append(contentsOf: partial.packages.map(Self.unobserved))
+                answered += 1
+                refused = SensitiveValueRedactor.redact(partial.localizedDescription)
             } catch {
-                // The provider's own words, not this app's guess at them: a
-                // catalog that refused says why, and a name says which one.
-                failures.append("\(provider.displayName): \(error.localizedDescription)")
+                // The catalog's own words, not this app's guess at them, with
+                // anything that looks like a credential taken out first: a
+                // provider that refused says why, and a name says which one.
+                refused = SensitiveValueRedactor.redact(error.localizedDescription)
+            }
+            if let refused { failures.append("\(provider.displayName): \(refused)") }
+            guard let reporting = provider as? any CatalogSourceReporting else { continue }
+            let report = await reporting.lastReport()
+            learned.summaries.merge(report.summaries) { _, latest in latest }
+            learned.folderSummaries.merge(report.folderSummaries) { _, latest in latest }
+            learned.refreshedKinds.formUnion(report.refreshedKinds)
+            learned.refreshedFolders.formUnion(report.refreshedFolders)
+            learned.incompletePackagePrefixes.formUnion(report.incompletePackagePrefixes)
+            // A catalog that refused outright says so on its own row, since its
+            // report has nothing newer to put there.
+            if let refused {
+                for kind in reporting.sourceKinds where report.summaries[kind] == nil {
+                    learned.summaries[kind] = "Unavailable: \(refused)"
+                    learned.refreshedKinds.remove(kind)
+                }
             }
         }
 
         // A refresh where every catalog failed keeps what was already on
         // screen. Replacing it with nothing would read as an empty catalog
         // rather than as a refresh that did not happen.
-        if !collected.isEmpty || failures.count < providers.count {
-            packages = Self.ordered(Self.deduplicated(collected))
+        if answered > 0 {
+            packages = await Self.merged(
+                collected, keeping: retained, whenIncomplete: learned.incompletePackagePrefixes)
             lastRefreshedAt = .now
             await retain(packages)
         }
+        annotate(learned)
         errorMessage = failures.isEmpty ? nil : failures.joined(separator: " · ")
+    }
+
+    /// Writes what the refresh learned onto the rows it learned it about.
+    ///
+    /// Only a row whose catalog answered completely is dated. The date on a row
+    /// is a claim that what it lists is current, and a refusal or a partial
+    /// answer cannot support one — the clause still changes, so the row says
+    /// what happened without pretending it was a successful read.
+    private func annotate(_ report: MarketplaceSourceReport) {
+        sources = sources.map { source in
+            var row = source
+            guard let summary = report.folderSummaries[source.id] ?? report.summaries[source.kind]
+            else { return row }
+            row.trustSummary = summary
+            if report.refreshedFolders.contains(source.id) || report.refreshedKinds.contains(source.kind) {
+                row.lastRefreshedAt = .now
+            }
+            return row
+        }
     }
 
     /// Keeps the last page in this Mac's own record, so the next launch has
@@ -232,16 +303,28 @@ final class WorkspaceMarketplaceSession {
         return value
     }
 
-    /// One row per catalog identity, first occurrence winning, so two providers
-    /// publishing the same server do not double it.
-    private static func deduplicated(_ packages: [MarketplacePackage]) -> [MarketplacePackage] {
-        var seen = Set<String>()
-        return packages.filter { seen.insert($0.id).inserted }
-    }
-
-    /// A stable order to arrive in, so a list nobody has sorted yet is not in
-    /// whatever order the network answered.
-    private static func ordered(_ packages: [MarketplacePackage]) -> [MarketplacePackage] {
-        MarketplaceSorting.sorted(packages, by: .name)
+    /// One row per catalog identity, in a stable order, off this actor.
+    ///
+    /// Merging is `MarketplaceService`'s own: two catalogs publishing the same
+    /// server are folded into one row that keeps the richer half of each,
+    /// rather than whichever happened to answer first. It sorts and compares
+    /// every listing on this Mac, which is not work the window should wait on.
+    ///
+    /// Listings kept from an earlier refresh survive only where this one could
+    /// not supersede them — a client catalog that answered partially — because
+    /// a list that quietly shrank reads as a catalog that lost packages.
+    private static func merged(
+        _ collected: [MarketplacePackage],
+        keeping retained: [MarketplacePackage],
+        whenIncomplete incomplete: Set<String>
+    ) async -> [MarketplacePackage] {
+        await Task.detached(priority: .utility) {
+            let listed = Set(collected.map(\.id))
+            let kept = retained.filter { package in
+                !listed.contains(package.id) && incomplete.contains { package.id.hasPrefix($0) }
+            }
+            return MarketplaceSorting.sorted(
+                MarketplaceService().deduplicatedPackages(collected + kept), by: .name)
+        }.value
     }
 }

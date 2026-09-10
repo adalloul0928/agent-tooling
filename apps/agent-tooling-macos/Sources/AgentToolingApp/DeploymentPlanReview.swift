@@ -204,10 +204,12 @@ enum DeploymentPlanReviewer {
                         into: &coverageNotes)
                     continue
                 }
-                findings.append(
-                    contentsOf: ContentRiskScanner.findings(
-                        inText: text, relativePath: entry.relativePath, limits: limits))
-                if isTruncated(text, limits: limits) {
+                // One call answers both halves: what the scanner found, and
+                // whether a bound stopped it short of the whole text.
+                let inspected = ContentRiskScanner.inspect(
+                    text: text, relativePath: entry.relativePath, limits: limits)
+                findings.append(contentsOf: inspected.findings)
+                if inspected.wasTruncated {
                     reachedLimit = true
                     note(
                         "\(entry.relativePath) exceeded a line or line-length review limit.",
@@ -223,27 +225,6 @@ enum DeploymentPlanReviewer {
             coverageNotes: coverageNotes,
             reachedScanLimit: reachedLimit || bounded.count < findings.count)
     }
-
-    /// Whether the scanner's pattern rules saw the whole of this text.
-    ///
-    /// The scanner reads a bounded number of lines and a bounded number of
-    /// characters per line, and padding past either bound is enough to push an
-    /// instruction out of range — so a report that then said "no content risks
-    /// found" would be wrong rather than merely partial. The line bound is the
-    /// scanner's own published limit; the per-line bound mirrors its internal
-    /// one, and erring high here can only make this review refuse more, never
-    /// less.
-    private static func isTruncated(_ text: String, limits: ContentRiskScanner.Limits) -> Bool {
-        var lines = 0
-        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            lines += 1
-            if lines > limits.maximumLines { return true }
-            if line.count > maximumScannedLineCharacters { return true }
-        }
-        return false
-    }
-
-    private static let maximumScannedLineCharacters = 8_000
 
     private static func note(_ value: String, into notes: inout [String]) {
         guard notes.count < 32, !notes.contains(value) else { return }

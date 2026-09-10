@@ -88,6 +88,10 @@ final class StubInsightsServices: InsightsServicing, @unchecked Sendable {
     private var scans = 0
     private let holdFor: Duration?
     private let keepFails: Bool
+    /// Whether the screen may offer catalog suggestions. False by default: a
+    /// stub reaches nothing, and saying otherwise would let a test pass while
+    /// the real screen offered a question with nowhere to send it.
+    let canReachCatalog: Bool
 
     /// `restored` is what this Mac had kept before the screen opened;
     /// `holdFor` makes a scan long enough to be stopped halfway.
@@ -95,11 +99,13 @@ final class StubInsightsServices: InsightsServicing, @unchecked Sendable {
         answer: InsightsReport,
         restored: InsightsReport? = nil,
         holdFor: Duration? = nil,
-        keepFails: Bool = false
+        keepFails: Bool = false,
+        reachesCatalog: Bool = false
     ) {
         self.answer = answer
         self.holdFor = holdFor
         self.keepFails = keepFails
+        canReachCatalog = reachesCatalog
         kept = restored
     }
 

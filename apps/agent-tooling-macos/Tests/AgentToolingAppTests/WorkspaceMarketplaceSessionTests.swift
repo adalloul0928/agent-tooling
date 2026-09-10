@@ -19,16 +19,65 @@ struct WorkspaceMarketplaceSessionTests {
         let session = fixture.session()
         await session.refresh()
 
-        let source = try #require(session.sources.first)
-        #expect(session.sources.count == 1)
+        let source = try #require(session.sources.first { $0.id == Fixture.sourceID.rawValue })
         // The portable half.
-        #expect(source.id == Fixture.sourceID.rawValue)
         #expect(source.name == "Vendor catalog")
         #expect(source.kind == .claudeMarketplace)
         // This Mac's half: where it actually is, and what the last look found.
         #expect(source.location == "/tmp/vendor-catalog")
         #expect(source.trustSummary == "3 packages discovered; review before installing")
         #expect(source.lastRefreshedAt != nil)
+    }
+
+    /// The catalogs every build reads join the ones this workspace recorded,
+    /// and a recorded source is the authority over its own kind: the fixture
+    /// records a Claude marketplace, so the built-in Claude row is not shown
+    /// beside it claiming to be a second one.
+    @Test func theCatalogsEveryBuildKnowsAreListedBesideTheRecordedOnes() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+
+        let session = fixture.session()
+        await session.refresh()
+
+        #expect(session.sources.count { $0.kind == .claudeMarketplace } == 1)
+        #expect(session.sources.first { $0.kind == .claudeMarketplace }?.name == "Vendor catalog")
+        #expect(
+            Set(session.sources.map(\.kind))
+                == [.claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .agentPlugins, .mcpRegistry])
+        // A reference row keeps the same identity across refreshes, so
+        // selecting one on the Sources list survives asking the catalogs again.
+        let before = session.sources.first { $0.kind == .mcpRegistry }?.id
+        await session.refresh()
+        #expect(session.sources.first { $0.kind == .mcpRegistry }?.id == before)
+    }
+
+    /// A catalog that answers says so on its own row, so the grading that reads
+    /// a row's freshness has something true to read.
+    @Test func aCatalogThatAnsweredSaysSoOnItsOwnRow() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+
+        let session = fixture.session(providers: [MCPRegistryCatalog(asking: StubMarketplaceProvider())])
+        await session.refresh()
+
+        let registry = try #require(session.sources.first { $0.kind == .mcpRegistry })
+        #expect(registry.lastRefreshedAt != nil)
+        #expect(registry.trustSummary.contains("2 servers loaded"))
+    }
+
+    /// A catalog that refuses says why on its own row rather than leaving the
+    /// last successful summary standing as if it were still true.
+    @Test func aCatalogThatRefusedSaysSoOnItsOwnRow() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+
+        let session = fixture.session(providers: [MCPRegistryCatalog(asking: StubMarketplaceProvider(fails: true))])
+        await session.refresh()
+
+        let registry = try #require(session.sources.first { $0.kind == .mcpRegistry })
+        #expect(registry.trustSummary.hasPrefix("Unavailable: "))
+        #expect(registry.lastRefreshedAt == nil)
     }
 
     @Test func whatThisMacKeptIsShownWhenNoCatalogCanBeAsked() async throws {

@@ -14,34 +14,17 @@ protocol InstallDriftReading: Sendable {
     func drift(in store: WorkspaceRevisionStore) async -> [InstalledPackageDrift]
 }
 
-/// The real check this target can make without a change to `AgentToolingCore`.
+/// The real check: the same comparison the setup check makes.
 ///
 /// Telling a removed install apart from a present one needs only
-/// `FileManager`. Telling a present install apart from a modified one needs
-/// recomputing its reviewed fingerprint, which needs `DirectoryFingerprint` —
-/// and that, like `InstalledPackageDriftInspector` (the type that already does
-/// this exact comparison for the setup check), is internal to
-/// `AgentToolingCore` and not visible outside it. Duplicating that hashing
-/// here would drift from Core's own algorithm over time, which is worse than
-/// the honest gap this leaves: a present install is left out of drift
-/// entirely here rather than guessed at. See the port report's "Needs a
-/// shared change" — exposing either type as `public` closes this.
+/// `FileManager`; telling a present install apart from a *modified* one means
+/// recomputing the fingerprint recorded when somebody approved it. Both are
+/// `InstalledPackageDriftInspector`'s job, and it hashes off the caller's actor
+/// itself, so Activity reports exactly what the setup check reports rather than
+/// a second opinion that could drift from it.
 struct LiveInstallDriftReader: InstallDriftReading {
     func drift(in store: WorkspaceRevisionStore) async -> [InstalledPackageDrift] {
-        await Task.detached {
-            let fileManager = FileManager.default
-            return ManagedInstallAuthority.fromStore(store).provenInstalls.compactMap {
-                record -> InstalledPackageDrift? in
-                let path = URL(fileURLWithPath: record.destinationPath).standardizedFileURL.path(percentEncoded: false)
-                guard !fileManager.fileExists(atPath: path) else { return nil }
-                return InstalledPackageDrift(
-                    destinationPath: record.destinationPath,
-                    packageName: record.packageName,
-                    state: .removed,
-                    reviewedFingerprint: record.reviewedFingerprint,
-                    reviewedAt: record.reviewedAt)
-            }
-        }.value
+        await InstalledPackageDriftInspector.inspect(store: store)
     }
 }
 

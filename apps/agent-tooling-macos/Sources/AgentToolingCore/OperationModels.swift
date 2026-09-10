@@ -115,7 +115,7 @@ public struct OperationStep: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-enum SensitiveValueRedactor {
+public enum SensitiveValueRedactor {
     private static let credentialExpressions: [NSRegularExpression] = [
         "(?i)https?://[^/@\\s]+@",
         "(?i)https?://[^\\s?#]+\\?[^\\s#]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|token|secret|password)=[^&\\s#]+",
@@ -125,7 +125,7 @@ enum SensitiveValueRedactor {
         "sk-[A-Za-z0-9_-]{16,}",
     ].compactMap { try? NSRegularExpression(pattern: $0) }
 
-    static func containsCredentialValue(in text: String) -> Bool {
+    public static func containsCredentialValue(in text: String) -> Bool {
         let range = NSRange(text.startIndex..., in: text)
         return credentialExpressions.contains { expression in
             expression.firstMatch(in: text, range: range) != nil
@@ -157,7 +157,7 @@ enum SensitiveValueRedactor {
         }
     }()
 
-    static func redact(_ text: String) -> String {
+    public static func redact(_ text: String) -> String {
         var value = text
         for replacement in replacements {
             let range = NSRange(value.startIndex..., in: value)

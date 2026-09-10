@@ -219,8 +219,8 @@ public struct InstalledPackageDrift: Identifiable, Codable, Hashable, Sendable {
 }
 
 /// Compares each proven install against its recorded review fingerprint.
-enum InstalledPackageDriftInspector {
-    static func inspect(
+public enum InstalledPackageDriftInspector {
+    public static func inspect(
         _ authority: ManagedInstallAuthority,
         fileManager: FileManager = .default,
         maximumRecords: Int = ManagedInstallLedger.maximumRecords,
@@ -235,7 +235,7 @@ enum InstalledPackageDriftInspector {
     /// Reads the recorded installs and re-hashes each installed tree away from
     /// the caller's actor. Comparing many packages is file-system work, and the
     /// setup check should not make the window wait on it.
-    static func inspect(
+    public static func inspect(
         store: WorkspaceRevisionStore,
         maximumRecords: Int = ManagedInstallLedger.maximumRecords,
         clients: Set<ClientKind> = Set(ClientKind.allCases)
@@ -243,7 +243,7 @@ enum InstalledPackageDriftInspector {
         await Task.detached { inspect(.fromStore(store), maximumRecords: maximumRecords, clients: clients) }.value
     }
 
-    static func drift(for record: ManagedInstallRecord, fileManager: FileManager = .default) -> InstalledPackageDrift {
+    public static func drift(for record: ManagedInstallRecord, fileManager: FileManager = .default) -> InstalledPackageDrift {
         let destination = URL(fileURLWithPath: record.destinationPath).standardizedFileURL
         guard fileManager.fileExists(atPath: destination.path(percentEncoded: false)) else {
             return InstalledPackageDrift(
@@ -279,7 +279,7 @@ enum InstalledPackageDriftInspector {
     /// would be the most useful outcome for anyone tampering with an installed
     /// copy: a single symlink inside the folder makes the fingerprint
     /// unreadable, and "no news" would then read as "unchanged".
-    static func summary(for reports: [InstalledPackageDrift]) -> String? {
+    public static func summary(for reports: [InstalledPackageDrift]) -> String? {
         let drifted = reports.filter(\.hasDrifted)
         let removed = reports.filter { $0.state == .removed }
         let unreadable = reports.filter { $0.state == .unreadable }

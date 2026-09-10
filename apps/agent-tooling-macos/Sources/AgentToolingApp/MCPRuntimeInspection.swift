@@ -28,27 +28,33 @@ struct MCPRuntimeReading: Sendable, Equatable {
 ///
 /// Direct client configuration is always available: it is what every client
 /// does without a separate runtime, so it is stated rather than probed. Only
-/// ToolHive is asked, through the same read-only inspection the rest of the app
-/// uses, and only when somebody opens the runtimes sheet.
+/// ToolHive is asked, and only when somebody opens the runtimes sheet.
+///
+/// Neither probe is written here. Both are `AgentToolingCore`'s own runtime
+/// providers — the same version check and the same `thv list` reading the rest
+/// of the app uses — so this screen cannot come to a different conclusion about
+/// this Mac than any other caller of the same command.
 struct LiveMCPRuntimeInspector: MCPRuntimeInspecting {
-    /// The `thv list` payload is small; anything larger is a different program
-    /// answering and is refused rather than parsed.
-    static let maximumWorkloadListBytes = 1_048_576
     private let runner: any CommandRunning
+    private let toolHive: ToolHiveMCPRuntimeProvider
 
     init(runner: any CommandRunning = ProcessCommandRunner(timeout: .seconds(15))) {
         self.runner = runner
+        toolHive = ToolHiveMCPRuntimeProvider(runner: runner)
     }
 
     func inspect() async throws -> MCPRuntimeReading {
-        let direct = MCPRuntimeStatus(
-            id: "direct", displayName: "Direct client configuration", isAvailable: true,
-            capabilities: [.directConfiguration],
-            detail: "Uses each client's native MCP configuration without a separate runtime.")
-        let toolHive = await toolHiveStatus()
-        var reading = MCPRuntimeReading(statuses: [direct, toolHive])
-        guard toolHive.isAvailable, toolHive.capabilities.contains(.health) else { return reading }
-        reading.workloads = try await workloads()
+        let direct = await DirectMCPRuntimeProvider().status()
+        let toolHiveStatus = await toolHive.status()
+        var reading = MCPRuntimeReading(statuses: [direct, toolHiveStatus])
+        guard toolHiveStatus.isAvailable, toolHiveStatus.capabilities.contains(.health) else { return reading }
+        do {
+            // The status this refresh already found is handed back, so listing
+            // the workloads does not probe ToolHive's version a second time.
+            reading.workloads = try await toolHive.servers(after: toolHiveStatus)
+        } catch let error as MCPRuntimeError {
+            throw MCPRuntimeReadingError(error)
+        }
         return reading
     }
 
@@ -59,75 +65,20 @@ struct LiveMCPRuntimeInspector: MCPRuntimeInspecting {
     func workloadLogs(_ name: String, proxy: Bool) async throws -> ToolHiveLogSnapshot {
         try await ToolHiveRuntimeInspection(runner: runner).logs(workloadName: name, proxy: proxy)
     }
-
-    private func toolHiveStatus() async -> MCPRuntimeStatus {
-        do {
-            switch try await ToolHiveRuntimeInspection(runner: runner).version() {
-            case .available(let version, let diagnostic):
-                return MCPRuntimeStatus(
-                    id: "toolhive", displayName: "ToolHive", isAvailable: true, version: version.version,
-                    capabilities: [.health, .logs],
-                    detail: diagnostic ?? "Read-only workload status and log inspection available.")
-            case .unavailable(let diagnostic):
-                return MCPRuntimeStatus(
-                    id: "toolhive", displayName: "ToolHive", isAvailable: false, capabilities: [],
-                    detail: bounded(diagnostic).isEmpty ? "ToolHive is not installed." : bounded(diagnostic))
-            case .unsupportedResponse(let diagnostic), .commandFailed(let diagnostic):
-                return MCPRuntimeStatus(
-                    id: "toolhive", displayName: "ToolHive", isAvailable: true, capabilities: [],
-                    detail: bounded(diagnostic).isEmpty ? "ToolHive could not be inspected." : bounded(diagnostic))
-            }
-        } catch {
-            return MCPRuntimeStatus(
-                id: "toolhive", displayName: "ToolHive", isAvailable: false, capabilities: [],
-                detail: bounded(error.localizedDescription))
-        }
-    }
-
-    private func workloads() async throws -> [MCPRuntimeServer] {
-        try Task.checkCancellation()
-        let result = try await runner.run(
-            executable: "thv", arguments: ["list", "--all", "--format", "json"], currentDirectory: nil)
-        try Task.checkCancellation()
-        guard result.status == 0 else {
-            throw MCPRuntimeReadingError.listFailed(bounded(result.standardError))
-        }
-        guard let data = result.standardOutput.data(using: .utf8),
-            data.count <= Self.maximumWorkloadListBytes,
-            let decoded = try? AgentToolingCoding.decoder().decode([ListedWorkload].self, from: data)
-        else { throw MCPRuntimeReadingError.unsupportedList }
-        return decoded.map {
-            MCPRuntimeServer(
-                name: bounded($0.name, limit: 256), package: bounded($0.package),
-                status: bounded($0.status, limit: 128), url: $0.url.map { bounded($0, limit: 2_048) },
-                transport: $0.transport.map { bounded($0, limit: 128) },
-                group: $0.group.map { bounded($0, limit: 256) }, isRemote: $0.remote ?? false)
-        }.sorted { $0.name < $1.name }
-    }
-
-    private func bounded(_ value: String, limit: Int = 1_024) -> String { String(value.prefix(limit)) }
-
-    /// The subset of `thv list` this screen shows. Anything else in the payload
-    /// is ignored rather than surfaced.
-    private struct ListedWorkload: Decodable {
-        var name: String
-        var package: String
-        var url: String?
-        var transport: String?
-        var status: String
-        var group: String?
-        var remote: Bool?
-
-        private enum CodingKeys: String, CodingKey {
-            case name, package, url, status, group, remote
-            case transport = "transport_type"
-        }
-    }
 }
 
 enum MCPRuntimeReadingError: LocalizedError, Sendable, Equatable {
     case listFailed(String)
     case unsupportedList
+
+    /// The runtime provider's refusal, in this screen's own words. The reason
+    /// is the provider's; only the sentence around it belongs to the sheet.
+    init(_ error: MCPRuntimeError) {
+        switch error {
+        case .commandFailed(let detail): self = .listFailed(detail)
+        case .invalidResponse: self = .unsupportedList
+        }
+    }
 
     var errorDescription: String? {
         switch self {
