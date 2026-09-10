@@ -73,25 +73,46 @@ public enum VersionedInventoryProjection {
     }
 
     private static func server(_ row: WorkspaceLibraryReadModelRow) -> MCPServer {
-        // A connection's endpoint lives in this Mac's own client files, not in
-        // the portable workspace, so there is nothing here to report as one.
-        // An empty string is the honest answer; a placeholder would read as a
-        // real address.
-        .init(
+        // Only a connection this workspace holds a definition for has an
+        // address to report. For everything else the endpoint stays empty: a
+        // server the workspace merely observed lives in this Mac's own client
+        // files, and a placeholder would read as a real address.
+        let connection = row.connection
+        return .init(
             id: row.artifactID.rawValue.uuidString.lowercased(), name: row.displayName,
-            summary: row.observedDescription ?? "", endpoint: "", transport: .stdio,
-            authentication: "", scope: scope(row.requestedAssignments),
+            summary: row.observedDescription ?? "", endpoint: connection?.endpoint ?? "",
+            transport: connection?.transport ?? .stdio,
+            authentication: authentication(connection), scope: scope(row.requestedAssignments),
+            projectRoot: connection?.workspaceRootPath,
             clients: states(row.requestedAssignments),
+            secretNames: connection?.credentialRequirementNames ?? [],
             definitionOrigin: owns(row.ownership) ? .managed : .observed)
     }
 
     private static func server(_ item: WorkspaceLibraryIncludedItem, parentLabel: String) -> MCPServer {
-        .init(
+        let connection = item.connection
+        return .init(
             id: item.artifactID.rawValue.uuidString.lowercased(), name: item.displayName,
-            summary: item.observedDescription ?? "", endpoint: "", transport: .stdio,
-            authentication: "", scope: scope(item.requestedAssignments),
+            summary: item.observedDescription ?? "", endpoint: connection?.endpoint ?? "",
+            transport: connection?.transport ?? .stdio,
+            authentication: authentication(connection), scope: scope(item.requestedAssignments),
+            projectRoot: connection?.workspaceRootPath,
             clients: states(item.requestedAssignments),
+            secretNames: connection?.credentialRequirementNames ?? [],
             definitionOrigin: owns(item.ownership) ? .managed : .observed)
+    }
+
+    /// What setting the connection up needs, in the words the older surfaces
+    /// already use. It says what is required, never that it is satisfied.
+    private static func authentication(_ connection: WorkspaceLibraryMCPConnection?) -> String {
+        guard let connection else { return "" }
+        switch connection.authenticationRequirement {
+        case .none: return ""
+        case .oauth: return "OAuth"
+        case .apiKey: return "API key"
+        case .doppler: return "Doppler"
+        case .environment: return "Environment"
+        }
     }
 
     private static func plugin(_ row: WorkspaceLibraryReadModelRow) -> Plugin {

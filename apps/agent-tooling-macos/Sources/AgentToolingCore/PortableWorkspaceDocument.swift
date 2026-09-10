@@ -134,6 +134,7 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
             }
         }
         try validateParentGraph(artifactsByID)
+        try validateNativeRouteUniqueness(artifacts)
         if let mcpDefinitions {
             try WorkspaceMCPDefinitionValidation.validatePortable(mcpDefinitions, artifacts: artifacts)
         }
@@ -360,6 +361,24 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         case .user, .workspace, .managed, .account, .session:
             guard destination.logicalProjectID == nil else {
                 throw WorkspaceDomainValidationError.invalidField("non-project destination logical project")
+            }
+        }
+    }
+
+    /// A native package identifier belongs to at most one live artifact, the
+    /// same way an alias does: `(namespace, value)` identifies one item, and a
+    /// `(client, externalPluginID)` route is that identity in the client's own
+    /// vocabulary. Without this, two records of one package can exist, and a
+    /// deployment would ask the client to install it twice.
+    private func validateNativeRouteUniqueness(_ artifacts: [ArtifactRecord]) throws {
+        var seen: [NativePackageRoute: ArtifactID] = [:]
+        for artifact in artifacts {
+            for route in artifact.nativeRoutes {
+                if let existing = seen[route], existing != artifact.identity.id {
+                    throw WorkspaceDomainValidationError.duplicate(
+                        "native package route \(route.client.rawValue):\(route.externalPluginID)")
+                }
+                seen[route] = artifact.identity.id
             }
         }
     }

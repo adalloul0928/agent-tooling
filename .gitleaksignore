@@ -1,0 +1,4 @@
+# Known false positives for gitleaks, by fingerprint (commit:path:rule:line).
+# A test fixture that proves the MCP intake refuses an inline ACCESS_TOKEN; the literal
+# was split in a later commit, but the scan reads every commit in a pull request.
+2335145f530f76ff93f90c7a87d3451afea623bc:apps/agent-tooling-macos/Tests/AgentToolingCoreTests/ManagedMCPServerIntakeCommandTests.swift:generic-api-key:140

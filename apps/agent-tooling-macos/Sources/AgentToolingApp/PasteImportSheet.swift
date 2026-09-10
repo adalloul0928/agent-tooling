@@ -6,16 +6,21 @@ import SwiftUI
 /// block, a bare server URL, or a SKILL.md — and see exactly what was
 /// understood before anything is saved. Every field stays editable.
 ///
-/// A SKILL.md lands in the library through the workspace's own skill intake. A
-/// server definition has nowhere to land yet: the versioned workspace records
-/// that a server exists and where it was asked for, and has no command for
-/// admitting how to reach one. The sheet still reads it and shows what it
-/// understood, and says plainly that it cannot save it, rather than pretending
-/// with a button that would fail.
+/// Both shapes land in the library through the workspace's own commands: a
+/// SKILL.md through skill intake, a server definition through connection
+/// intake. Neither is an installation. Saving a connection writes down how it
+/// is reached; choosing which apps use it is a separate reviewed step, and
+/// putting it in one is another.
+///
+/// The same sheet opens with nothing pasted, for somebody who would rather type
+/// a connection in than paste one.
 struct PasteImportSheet: View {
+    enum Mode: Sendable { case paste, newConnection }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.availableClients) private var availableClients
     let workspace: WorkspaceLaunch.Workspace
+    var mode: Mode = .paste
 
     @State private var text = ""
     @State private var shape: PastedShape?
@@ -28,6 +33,7 @@ struct PasteImportSheet: View {
     @State private var failure: String?
     @State private var isSaving = false
     @State private var savedSkillName: String?
+    @State private var savedServerName: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,9 +43,21 @@ struct PasteImportSheet: View {
             Divider()
             footer
         }
-        .onAppear { skillDraft.selectedTargets.formIntersection(Set(availableClients)) }
+        .onAppear {
+            skillDraft.selectedTargets.formIntersection(Set(availableClients))
+            startNewConnectionIfNeeded()
+        }
         .frame(width: 680, height: 620)
         .background(AgentTheme.contentBackground)
+    }
+
+    /// An empty draft, so the same review form is the one somebody types a
+    /// connection into. Nothing is read from the clipboard on this path.
+    private func startNewConnectionIfNeeded() {
+        guard mode == .newConnection, servers.isEmpty, savedServerName == nil else { return }
+        servers = [PastedMCPServerDraft(draft: MCPDraft())]
+        serverDraft = MCPDraft()
+        selectedServer = 0
     }
 
     // MARK: - Chrome
@@ -48,7 +66,8 @@ struct PasteImportSheet: View {
         HStack(spacing: 12) {
             KindTile(kind: shape == .skillMarkdown ? .skill : .mcpServer, size: 40)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Paste to import").font(.title3.weight(.semibold))
+                Text(mode == .newConnection ? "Add a connection" : "Paste to import")
+                    .font(.title3.weight(.semibold))
                 Text(subtitle).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
@@ -65,9 +84,10 @@ struct PasteImportSheet: View {
     }
 
     private var subtitle: String {
-        if savedSkillName != nil { return "Saved to your library" }
+        if savedSkillName != nil || savedServerName != nil { return "Saved to your library" }
         if shape == .skillMarkdown { return "Check the skill this frontmatter describes" }
         if shape != nil { return "Check what was read before it is saved" }
+        if mode == .newConnection { return "Write down how this connection is reached" }
         return "An mcp add command, a JSON block, a server URL, or a SKILL.md"
     }
 
@@ -80,6 +100,13 @@ struct PasteImportSheet: View {
                 message:
                     "The skill was created in the managed library. Choosing where it is used is a separate reviewed "
                     + "step, and installing it in an app is another one on the Apps screen.")
+        } else if let savedServerName {
+            EmptyStateView(
+                symbol: "checkmark.circle",
+                title: "\(savedServerName) is in your library",
+                message:
+                    "The connection was recorded. Nothing was started, signed in to, or contacted. Choosing which "
+                    + "apps use it is a separate reviewed step, and putting it in one is another on the Apps screen.")
         } else if shape == .skillMarkdown {
             skillReview
         } else if !servers.isEmpty {
@@ -91,13 +118,13 @@ struct PasteImportSheet: View {
 
     private var footer: some View {
         HStack {
-            if shape != nil, savedSkillName == nil {
+            if shape != nil, !isSaved {
                 Button("Start over") { reset() }
                     .buttonStyle(.bordered)
             }
             Spacer()
             if isSaving { ProgressView().controlSize(.small) }
-            if savedSkillName == nil {
+            if !isSaved {
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.bordered)
                     .keyboardShortcut(.cancelAction)
@@ -124,30 +151,40 @@ struct PasteImportSheet: View {
     }
 
     private var primaryHelp: String {
-        servers.isEmpty ? "" : Self.noServerIntakeExplanation
+        guard !servers.isEmpty else { return "" }
+        if !canWrite { return Self.readOnlyExplanation }
+        return serverError ?? Self.serverIntakeExplanation
     }
 
     private var isPrimaryDisabled: Bool {
         if isSaving { return true }
         if shape == .skillMarkdown { return !skillIsComplete || !canWrite }
-        // No versioned command admits a server definition, so this never enables.
-        if !servers.isEmpty { return true }
+        if !servers.isEmpty { return serverError != nil || !canWrite }
         return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func performPrimaryAction() {
         if shape == .skillMarkdown {
             Task { await createSkill() }
-        } else if servers.isEmpty {
+        } else if !servers.isEmpty {
+            Task { await addServer() }
+        } else {
             read(text)
         }
     }
 
     private var canWrite: Bool { workspace.library.access == .writable }
 
-    static let noServerIntakeExplanation =
-        "This workspace records that a server exists and where it was asked for. It has no command for recording "
-        + "how to reach one, so there is nothing here to save it into yet."
+    private var isSaved: Bool { savedSkillName != nil || savedServerName != nil }
+
+    /// What saving a connection does, and — just as importantly — what it does
+    /// not. The button is live now, so this is the promise it keeps.
+    static let serverIntakeExplanation =
+        "Saving records how this connection is reached. Nothing is started, signed in to, or contacted, and it is "
+        + "not put in an app: choosing where it is used is a separate reviewed step."
+
+    static let readOnlyExplanation =
+        "This workspace is open for review, so nothing can be saved into it."
 
     // MARK: - Input
 
@@ -198,15 +235,19 @@ struct PasteImportSheet: View {
     private var serverReview: some View {
         Form {
             Section {
-                Label(Self.noServerIntakeExplanation, systemImage: "tray.slash")
+                Label(Self.serverIntakeExplanation, systemImage: "tray.and.arrow.down")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Text(
-                    "Add it in the app itself, then check this Mac from the Apps screen: the server will appear "
-                        + "here as one this workspace knows about."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                if let placementClause {
+                    Label(placementClause, systemImage: "arrow.triangle.2.circlepath")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !canWrite {
+                    Label(Self.readOnlyExplanation, systemImage: "lock")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if servers.count > 1 {
@@ -223,11 +264,13 @@ struct PasteImportSheet: View {
                 }
             }
 
-            Section("What was understood") {
-                ForEach(currentNotes, id: \.self) { note in
-                    Label(note, systemImage: "text.magnifyingglass")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            if !currentNotes.isEmpty {
+                Section("What was understood") {
+                    ForEach(currentNotes, id: \.self) { note in
+                        Label(note, systemImage: "text.magnifyingglass")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -255,16 +298,24 @@ struct PasteImportSheet: View {
                         Button("Choose…") { chooseProjectFolder() }
                     }
                 }
+                if !credentialNames.isEmpty {
+                    LabeledContent("Credential names", value: credentialNames.joined(separator: ", "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Credential names recorded")
+                }
                 Button {
                     copyDefinition()
                 } label: {
-                    Label("Copy what was read", systemImage: "doc.on.doc")
+                    Label(
+                        mode == .newConnection ? "Copy this definition" : "Copy what was read",
+                        systemImage: "doc.on.doc")
                 }
             }
 
-            if let serverError {
+            if let message = serverError ?? failure {
                 Section {
-                    Label(serverError, systemImage: "exclamationmark.triangle")
+                    Label(message, systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
@@ -282,11 +333,41 @@ struct PasteImportSheet: View {
         return importNotes + notes
     }
 
+    /// The environment and header names the paste kept. Values were dropped on
+    /// the way in; only these names are ever recorded. The parse hands them
+    /// over sorted and without repeats, so nothing is tidied again here.
+    private var credentialNames: [String] {
+        guard servers.indices.contains(selectedServer) else { return [] }
+        return servers[selectedServer].secretNames
+    }
+
+    /// Which half of the workspace this connection lands in, decided by the
+    /// same command that will record it rather than restated here.
+    private var placementClause: String? {
+        guard serverError == nil,
+            let command = try? ManagedMCPServerIntakeCommand(
+                expectedRevisionID: WorkspaceObjectID(), draft: serverDraft,
+                credentialRequirementNames: credentialNames)
+        else { return nil }
+        switch command.connection {
+        case .remoteHTTPS:
+            return "This address is the same everywhere, so your other Macs get it too."
+        case .deviceBound:
+            return "This address is resolved on each Mac, so it stays on this one. Another Mac sees the "
+                + "connection and sets up its own."
+        }
+    }
+
     /// What is wrong with the definition as read, whether or not it could be
     /// saved. A person checking a paste still deserves to be told.
     private var serverError: String? {
         let rawName = serverDraft.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !rawName.isEmpty else { return "The paste named no server." }
+        guard !rawName.isEmpty else {
+            return mode == .newConnection ? "Name this connection." : "The paste named no server."
+        }
+        guard (try? WorkspaceLibrary.normalizedIdentifier(rawName)) != nil else {
+            return ManagedMCPServerIntakeError.invalidConnectionName(rawName).errorDescription
+        }
         do {
             _ = try MCPDefinitionValidator.validate(serverDraft.endpoint, transport: serverDraft.transport)
         } catch {
@@ -381,6 +462,32 @@ struct PasteImportSheet: View {
     }
 
     // MARK: - Saving
+
+    /// Records the reviewed connection: the artifact, the shared definition and
+    /// this Mac's own binding, in one transaction. Nothing is started and no
+    /// client file is touched — this is a declaration.
+    private func addServer() async {
+        guard canWrite, !isSaving, servers.indices.contains(selectedServer) else { return }
+        isSaving = true
+        failure = nil
+        defer { isSaving = false }
+        do {
+            guard let head = try await workspace.service.snapshot()?.document.revision.id else {
+                failure = "This workspace could not be read. Nothing was saved."
+                return
+            }
+            let command = try ManagedMCPServerIntakeCommand(
+                expectedRevisionID: head, draft: serverDraft, credentialRequirementNames: credentialNames)
+            _ = try await workspace.service.intakeManagedMCPServer(command)
+            await workspace.library.refresh()
+            savedServerName = command.displayName
+        } catch {
+            // Every refusal here already carries the words a person needs:
+            // the definition validator's for a malformed or credential-bearing
+            // destination, and the command's for a name already in the library.
+            failure = error.localizedDescription
+        }
+    }
 
     /// Writes the reviewed frontmatter into a scratch folder, captures it as
     /// immutable content, and admits it. The scratch folder is removed either
@@ -515,6 +622,7 @@ struct PasteImportSheet: View {
         importNotes = []
         failure = nil
         selectedServer = 0
+        startNewConnectionIfNeeded()
     }
 
     private func copyDefinition() {

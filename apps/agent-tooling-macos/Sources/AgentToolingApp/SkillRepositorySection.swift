@@ -13,6 +13,12 @@ struct SkillRepositorySection: View {
     let approvedRevision: SourceRevision?
     let authoringPath: String?
     let session: SkillContentSession
+    /// The one store and the one service linking writes through. Following a
+    /// repository is a command no session on this screen exposes.
+    let workspace: WorkspaceLaunch.Workspace
+
+    @Environment(\.skillUpstreamLinker) private var linker
+    @State private var linking: SkillUpstreamLinkSession?
 
     var body: some View {
         GroupBox("Updates") {
@@ -29,6 +35,7 @@ struct SkillRepositorySection: View {
             }
             .padding(6).frame(maxWidth: .infinity, alignment: .leading)
         }
+        .sheet(item: $linking) { SkillUpstreamLinkSheet(skill: skill, session: $0) }
     }
 
     @ViewBuilder private var upstream: some View {
@@ -97,12 +104,32 @@ struct SkillRepositorySection: View {
         }
     }
 
+    /// A skill this library holds can also start following the repository that
+    /// publishes it — but only while the version here is that repository's
+    /// version, so the approved lock never describes bytes nobody has. A skill
+    /// with local edits is told so rather than being offered a button that
+    /// would refuse, and its edits are never touched.
     @ViewBuilder private var personal: some View {
         Label("Maintained in this library", systemImage: "books.vertical")
             .font(.system(size: 14, weight: .medium))
         Text("You hold this skill's source. Edit it here, then review where the change should be used.")
             .font(.system(size: 13)).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+        if skill.hasCentralContent {
+            HStack {
+                Button("Follow a repository…", systemImage: "arrow.triangle.branch") {
+                    linking = SkillUpstreamLinkSession(workspace: workspace, linker: linker)
+                }
+                .buttonStyle(.glass)
+                .disabled(workspace.library.isBusy || workspace.library.access != .writable)
+                .help("Records where this skill's next version comes from. Nothing is installed and nothing is fetched until you ask.")
+                Spacer(minLength: 0)
+            }
+        } else {
+            Text(LinkSkillUpstreamRefusal.missingContent.reason)
+                .font(.system(size: 13)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     @ViewBuilder private var elsewhere: some View {

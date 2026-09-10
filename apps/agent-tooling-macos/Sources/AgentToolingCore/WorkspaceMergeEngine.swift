@@ -19,6 +19,17 @@ public enum WorkspaceMergeConflictKind: String, Hashable, Sendable, CaseIterable
     case assignmentField
     /// Two items would materialize to the same place at one destination.
     case destinationCollision
+    /// Both Macs recorded the same app package as separate library items.
+    case nativeRouteCollision
+    /// Both Macs made the same item follow a repository, each through its own
+    /// subscription, and the merged item can name only one of them.
+    case subscriptionOwnerCollision
+    /// One Mac made an item follow a repository while the other changed the
+    /// item's content, so the approved lock no longer describes what is held.
+    case subscriptionContentMismatch
+    /// Both Macs changed the same catalog source differently, or one removed a
+    /// catalog source the other changed.
+    case catalogSource
     /// Both sides renamed or re-rooted the same logical project.
     case projectField
     /// A document version this build cannot merge.
@@ -168,6 +179,22 @@ public enum WorkspaceMergeEngine {
         assignments = assignments.filter { liveArtifacts.contains($0.artifactID) }
 
         reportDestinationCollisions(artifacts: artifacts, assignments: assignments, report: conflict)
+        // Two Macs adding the same app package produce two records of one
+        // thing. Naming that is far more use than the whole merge failing
+        // validation with nothing to say about which item caused it.
+        if reportNativeRouteCollisions(artifacts: artifacts, report: conflict) {
+            return .init(document: nil, conflicts: sorted(conflicts))
+        }
+        // Two Macs that each linked one item allocated a subscription each, and
+        // the merged item's authority names only one of them. Saying which item
+        // that happened to beats a validation failure with nothing to say.
+        let liveSubscriptions = reportSubscriptionOwnerCollisions(
+            artifacts: artifacts, subscriptions: subscriptions, report: conflict)
+        // A lock approves bytes. When the other Mac moved the bytes, only one
+        // side moved each fact, so the ordinary rules take both and the result
+        // claims a publisher published what a person wrote here.
+        reportSubscriptionContentMismatches(
+            artifacts: &artifacts, subscriptions: liveSubscriptions, report: conflict)
 
         let definitions: [PortableMCPDefinitionRecord]? = schemaVersion >= 3
             ? mergeCollection(
@@ -192,13 +219,16 @@ public enum WorkspaceMergeEngine {
                             writerID: writerID),
             artifacts: artifacts,
             sources: sources,
-            subscriptions: subscriptions,
+            subscriptions: liveSubscriptions,
             logicalProjects: projects,
             assignments: assignments,
             presets: presets,
             tombstones: candidateTombstones.filter { !contested.contains($0.artifactID) },
             configurationState: schemaVersion >= 2
-                ? (local.configurationState ?? remote.configurationState ?? .init()) : nil,
+                ? mergeConfigurationState(
+                    base: base?.configurationState, local: local.configurationState,
+                    remote: remote.configurationState, report: conflict)
+                : nil,
             mcpDefinitions: definitions
         )
         document = document.canonicalized()
@@ -211,7 +241,10 @@ public enum WorkspaceMergeEngine {
     }
 }
 
-private extension WorkspaceMergeEngine {
+// Internal rather than private so the configuration-state half can live in
+// its own file: four commands are being built at once and must not queue
+// behind one 500-line file.
+extension WorkspaceMergeEngine {
     typealias Report = (WorkspaceMergeConflictKind, ArtifactID?, WorkspaceObjectID?, String) -> Void
 
     /// Field-wise so an independent rename and content edit combine, while two

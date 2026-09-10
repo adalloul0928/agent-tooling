@@ -275,10 +275,12 @@ final class WorkspaceDeploymentSession {
     /// that does not pass is simply absent from the result, because a command a
     /// person is asked to approve must be one that can actually run.
     ///
-    /// The install command itself is read from the retained marketplace record —
-    /// where the person's own workspace wrote it when they added that catalog.
-    /// It is never constructed from a route: `<client> plugin install <id>` is
-    /// exactly the inference the route contract forbids.
+    /// The install command itself is read from `NativePluginInstallRegister`,
+    /// which is the one place a client's install command is written down, with
+    /// the release it was checked against and where it was read. It is never
+    /// constructed from a route: `<client> plugin install <id>` is exactly the
+    /// inference the route contract forbids, and a client with no recorded
+    /// command yields nothing here rather than a plausible guess.
     nonisolated static func commandPlans(
         plan: WorkspaceDeploymentPlan,
         snapshot: WorkspaceApplicationSnapshot,

@@ -37,15 +37,7 @@ struct MarketplaceView: View {
                     .buttonStyle(.glass)
                     .help("Look at the catalogs, registries, and folders shown in Discover")
                     .popover(isPresented: $showingSources) { sourcePane.frame(width: 340, height: 500) }
-                Button {
-                    // Unreachable: the button never enables. Kept so the control
-                    // is the same object it will be once the command exists.
-                } label: {
-                    Label("Add source…", systemImage: "plus")
-                }
-                .buttonStyle(.glass)
-                .disabled(true)
-                .help(Self.addSourceUnavailable)
+                AddCatalogSourceButton(workspace: workspace, catalogs: session)
                 Button {
                     Task { await session.refresh() }
                 } label: {
@@ -102,10 +94,11 @@ struct MarketplaceView: View {
         }
     }
 
-    /// Adding a catalog is not a command this build has. Stated in one place so
-    /// the toolbar and the source list cannot disagree about why.
-    private static let addSourceUnavailable =
-        "Adding or removing a catalog source is not available in this build. The sources shown are the ones this workspace already records."
+    /// What an empty Sources list means. The catalogs every build knows about
+    /// are listed even when this workspace has recorded none of its own, so an
+    /// empty list means something specific and worth saying once.
+    private static let noRecordedSources =
+        "This workspace records no catalogs of its own. Add a folder of packages, or a Git checkout of one, for Discover to read."
 
     private var toolbarContext: String {
         let packageCount = session.packages.count
@@ -144,8 +137,7 @@ struct MarketplaceView: View {
             if session.sources.isEmpty {
                 EmptyStateView(
                     symbol: "shippingbox", title: "No catalogs recorded",
-                    message:
-                        "This workspace records no catalog sources. \(Self.addSourceUnavailable)")
+                    message: Self.noRecordedSources)
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
@@ -154,7 +146,11 @@ struct MarketplaceView: View {
                                 source: source,
                                 symbol: symbol(for: source.kind),
                                 contents: contentsSummary(for: source),
-                                selected: selectedSourceID == source.id
+                                selected: selectedSourceID == source.id,
+                                removal: isRecorded(source)
+                                    ? RemoveCatalogSourceButton(
+                                        workspace: workspace, catalogs: session, source: source)
+                                    : nil
                             ) {
                                 selectedSourceID = selectedSourceID == source.id ? nil : source.id
                             }
@@ -576,13 +572,19 @@ struct MarketplaceView: View {
         }
     }
 
-    /// Install routes state the scope they would use in Claude's own words, and
-    /// then say plainly that this build cannot run them.
+    /// Install routes state the scope the client would use in its own words,
+    /// and offer the one act this screen performs: adding the package to the
+    /// library.
     ///
-    /// The routes stay on screen rather than being hidden behind the refusal:
-    /// what a catalog would run, and with what scope, is exactly the thing a
-    /// person came here to read. What is missing is the command that would put
-    /// the package in the library, and only that is disabled.
+    /// Adding is not installing, and the control says so rather than leaving a
+    /// person to find out afterwards. A row that lands here is a library item
+    /// with no assignment and no destination; what a client is asked to run is
+    /// decided on Apps, from a reviewed plan, and nowhere else.
+    ///
+    /// A route this build cannot act on keeps its button, disabled, with the
+    /// command's own sentence explaining why — a Gemini listing, because
+    /// nothing has read that client's install command and inventing one is the
+    /// thing the register exists to avoid.
     @ViewBuilder
     private func installRoutes(for package: MarketplacePackage) -> some View {
         let scopes = Set(package.nativeInstalls.map(\.scope))
@@ -600,20 +602,22 @@ struct MarketplaceView: View {
             }
             FlowLayout(spacing: 8) {
                 ForEach(package.nativeInstalls) { route in
+                    let refusal = session.adoptionRefusal(for: package, client: route.client)
                     Button {
-                        // Unreachable: the button never enables.
+                        Task { await session.adopt(package, client: route.client) }
                     } label: {
                         HStack(spacing: 7) {
                             ClientBrandIcon(client: route.client, size: 14)
-                            Text("Install in \(route.client.rawValue)")
+                            Text("Add to Library for \(route.client.rawValue)")
                         }
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(AgentTheme.selection)
-                    .disabled(true)
+                    .disabled(refusal != nil || !session.canAdopt || session.isAdopting)
                     .help(
-                        "\(route.detail) Scope: \(route.scope.marketplaceInstallTitle). "
-                            + WorkspaceMarketplaceSession.installUnavailable)
+                        refusal ?? (session.canAdopt ? nil : WorkspaceMarketplaceSession.readOnlyNote)
+                            ?? ("\(route.detail) Scope: \(route.scope.marketplaceInstallTitle). "
+                                + WorkspaceMarketplaceSession.adoptionNote))
                 }
             }
             if scopes.count > 1 {
@@ -628,10 +632,17 @@ struct MarketplaceView: View {
                     }
                 }
             }
-            Text(WorkspaceMarketplaceSession.installUnavailable)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            // What the last attempt on this listing said, in the command's own
+            // words, and otherwise what pressing the button would do. A message
+            // left by another package is never shown here.
+            Text(
+                session.adoption?.packageID == package.id
+                    ? (session.adoption?.message ?? WorkspaceMarketplaceSession.adoptionNote)
+                    : WorkspaceMarketplaceSession.adoptionNote
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -756,6 +767,16 @@ struct MarketplaceView: View {
         ]
         let parts = counts.filter { $0.1 > 0 }.map { "\($0.1) \($0.0)\($0.1 == 1 ? "" : "s")" }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Whether this workspace recorded the row, or the row is one of the
+    /// catalogs every build knows about.
+    ///
+    /// A reference row's identity is derived from its kind, so it is exactly
+    /// the one `MarketplaceCatalogs` would derive; anything else came from a
+    /// record somebody added, and only those can be taken away.
+    private func isRecorded(_ source: ToolingSource) -> Bool {
+        source.id != MarketplaceCatalogs.builtInSourceID(for: source.kind)
     }
 
     private var sortedSources: [ToolingSource] {
@@ -952,6 +973,9 @@ private struct MarketplaceSourceRow: View {
     let symbol: String
     var contents: String?
     var selected = false
+    /// Present only on a catalog this workspace recorded. The rows every build
+    /// knows about are references, so there is nothing there to remove.
+    var removal: RemoveCatalogSourceButton?
     var onSelect: (() -> Void)?
 
     var body: some View {
@@ -996,11 +1020,13 @@ private struct MarketplaceSourceRow: View {
             .accessibilityAddTraits(selected ? .isSelected : [])
             .accessibilityHint(selected ? "Shows every source again" : "Shows only packages from this source")
 
-            // Where the source is, and nothing that changes it: removing a
-            // source is not a command this build has.
+            // Where the source is, and — for a catalog this workspace recorded
+            // rather than one every build knows — the one control that forgets
+            // it.
             if !source.location.isEmpty {
                 PathInfoButton(path: source.location)
             }
+            if let removal { removal }
         }
         .padding(12)
         .background(

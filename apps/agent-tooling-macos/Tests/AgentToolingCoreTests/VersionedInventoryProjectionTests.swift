@@ -90,19 +90,6 @@ struct VersionedInventoryProjectionTests {
         #expect(clients.first?.detail.contains("2 places") == true)
     }
 
-    @Test func aConnectionsAddressIsNotInventedForTheAnswer() throws {
-        let inventory = try Self.inventory(
-            artifacts: [Self.artifact(Self.beta, "Beta", kind: .mcpServer, authority: .centralPersonal)],
-            definitions: [.init(artifactID: Self.beta,
-                                connection: .remoteHTTPS(url: "https://example.com/mcp"))])
-
-        // The address lives in this Mac's own client files, not in the portable
-        // workspace, so an empty string is the truthful answer.
-        #expect(inventory.mcpServers.first?.endpoint.isEmpty == true)
-        #expect(inventory.mcpServers.first?.authentication.isEmpty == true)
-        #expect(inventory.mcpServers.first?.definitionOrigin == .managed)
-    }
-
     @Test func presetsAndProjectsAreNotThingsAnAgentCanInstall() throws {
         let inventory = try Self.inventory(artifacts: [
             .init(identity: .init(id: Self.alpha, kind: .preset, displayName: "Starter"),

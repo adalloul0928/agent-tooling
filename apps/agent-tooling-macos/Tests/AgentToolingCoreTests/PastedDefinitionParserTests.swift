@@ -101,6 +101,45 @@ struct PastedDefinitionParserTests {
         #expect(!server.draft.endpoint.contains("not-a-real-token-value"))
     }
 
+    /// The names are the thing a later command needs, so they are handed over
+    /// as a list rather than as a sentence somebody has to take apart again —
+    /// sorted, without repeats, and with no value anywhere in the draft.
+    @Test("Hands the dropped credential names over as data, from a command and from JSON")
+    func carriesCredentialNamesAsData() throws {
+        let command = try mcpImport(
+            """
+            claude mcp add tenant --transport http --url https://mcp.example.com/rpc \
+            -e SECOND=second-secret-value -e API_KEY=first-secret-value -H X-Tenant=tenant-secret-value
+            """
+        )
+        let fromCommand = try #require(command.servers.first)
+        #expect(fromCommand.secretNames == ["API_KEY", "SECOND", "X-Tenant"])
+
+        let json = try mcpImport(
+            """
+            {
+              "mcpServers": {
+                "tenant": {
+                  "url": "https://mcp.example.com/rpc",
+                  "env": { "SECOND": "second-secret-value", "API_KEY": "first-secret-value" },
+                  "headers": { "X-Tenant": "tenant-secret-value" }
+                }
+              }
+            }
+            """
+        )
+        let fromJSON = try #require(json.servers.first)
+        #expect(fromJSON.secretNames == ["API_KEY", "SECOND", "X-Tenant"])
+
+        for server in [fromCommand, fromJSON] {
+            let everything = ([server.draft.endpoint, server.draft.name] + server.notes + server.secretNames)
+                .joined(separator: "\n")
+            for value in ["first-secret-value", "second-secret-value", "tenant-secret-value"] {
+                #expect(!everything.contains(value))
+            }
+        }
+    }
+
     @Test("Reads a client mcpServers JSON block")
     func readsJSONBlock() throws {
         let result = try mcpImport(

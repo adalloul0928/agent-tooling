@@ -22,6 +22,9 @@ ancestry, never by absence and never by which Mac wrote last.
 | Delete agreed by both | Item and its contributions removed; tombstone retained |
 | Ownership, source locator, ref or role changed on both | `ownership` / `sourcePolicy` conflict |
 | Approved upstream revision or content changed on both | `subscriptionLock` conflict |
+| Both Macs made one item follow a repository, each through its own subscription | `subscriptionOwnerCollision` conflict; the subscription the merged authority cannot name is set aside, and each side's repository is kept |
+| One Mac made an item follow a repository while the other changed its content | `subscriptionContentMismatch` conflict; the lock's approved digest is put back, so the result never claims a publisher published a personal edit |
+| An item that no longer follows anything still has a subscription | The subscription is dropped, like a contribution for an item nobody kept |
 | Different desired enable/disable, or presence versus removal | `assignmentEnablement` conflict |
 | Two items colliding case- or Unicode-equivalently at one destination | `destinationCollision` conflict |
 | Project renamed on both | `projectField` conflict |

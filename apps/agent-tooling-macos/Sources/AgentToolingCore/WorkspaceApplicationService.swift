@@ -16,9 +16,14 @@ public struct WorkspaceApplicationSnapshot: Sendable, Equatable {
 /// is not an authorization boundary: MCP must continue to submit review
 /// requests, not acquire an instance of the operator service.
 public actor WorkspaceApplicationService: WorkspaceLibraryServing {
-    private let store: WorkspaceRevisionStore
-    private let writerID: WorkspaceObjectID
-    private let contentStore: CentralPackageContentStore?
+    // Readable inside this module so each command can live in its own
+    // `WorkspaceApplicationService+<Command>.swift` extension. Four commands
+    // built at once must not queue behind one file. Nothing here is public:
+    // the store, the writer identity and the content store stay inside the
+    // module that owns the writing rules.
+    let store: WorkspaceRevisionStore
+    let writerID: WorkspaceObjectID
+    let contentStore: CentralPackageContentStore?
 
     public init(store: WorkspaceRevisionStore, writerID: WorkspaceObjectID, contentStore: CentralPackageContentStore? = nil) {
         self.store = store
