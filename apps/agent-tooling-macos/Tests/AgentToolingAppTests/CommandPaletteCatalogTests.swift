@@ -107,10 +107,58 @@ struct CommandPaletteCatalogTests {
         #expect(ScreenRequest.pasteImport.section == .mcpServers)
         #expect(ScreenRequest.selectMCPServer("linear").section == .mcpServers)
         #expect(ScreenRequest.selectPlugin("release-tools").section == .plugins)
+        #expect(ScreenRequest.selectReceipt("a-receipt-id").section == .activity)
         #expect(ScreenRequest.selectMCPServer("linear").itemID == "linear")
         #expect(ScreenRequest.selectPlugin("release-tools").itemID == "release-tools")
+        #expect(ScreenRequest.selectReceipt("a-receipt-id").itemID == "a-receipt-id")
         #expect(ScreenRequest.addMCPServer.itemID == nil)
         #expect(ScreenRequest.pasteImport.itemID == nil)
+    }
+
+    @Test("Open Activity and Open History are both in the catalog")
+    func activityAndHistoryAreSearchableSections() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let items = CommandPaletteCatalog.items(for: fixture.workspace)
+
+        let activity = try #require(items.first { $0.id == "section.\(AppSection.activity.id)" })
+        #expect(activity.title == "Activity")
+        #expect(activity.outcome == .navigate(.activity))
+
+        let history = try #require(items.first { $0.id == "section.\(AppSection.history.id)" })
+        #expect(history.title == "History")
+        #expect(history.outcome == .navigate(.history))
+    }
+
+    /// A receipt is searchable by name and opens Activity on exactly the
+    /// receipt it names, the same way a plugin or server row opens its screen.
+    @Test("A receipt is searchable and names Activity as its screen")
+    func receiptsAreSearchableAndNameActivity() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let receipt = try fixture.seedActivity()
+
+        let items = CommandPaletteCatalog.items(for: fixture.workspace)
+        let identifier = receipt.id.uuidString.lowercased()
+        let item = try #require(items.first { $0.id == "receipt.\(identifier)" })
+
+        #expect(item.title == receipt.title)
+        #expect(item.contextLabel == "Activity")
+        #expect(item.outcome == .screenRequest(.selectReceipt(identifier)))
+
+        let byName = CommandPaletteMatcher.rank(items, query: receipt.title)
+        #expect(byName.contains { $0.id == item.id })
+    }
+
+    /// A workspace that never recorded a receipt offers none — the palette
+    /// never invents one, the same way it never invents a tag or a connector.
+    @Test("No receipts, no receipt results")
+    func noReceiptsMeansNoReceiptResults() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let items = CommandPaletteCatalog.items(for: fixture.workspace)
+
+        #expect(!items.contains { $0.id.hasPrefix("receipt.") })
     }
 
     /// A screen with nothing to report carries no sidebar glyph. The sidebar

@@ -25,18 +25,20 @@ enum ScreenRequest: Equatable {
     case pasteImport
     case selectMCPServer(String)
     case selectPlugin(String)
+    case selectReceipt(String)
 
     var section: AppSection {
         switch self {
         case .addMCPServer, .pasteImport, .selectMCPServer: .mcpServers
         case .selectPlugin: .plugins
+        case .selectReceipt: .activity
         }
     }
 
     /// The one row this request is about, when it is about a row at all.
     var itemID: String? {
         switch self {
-        case .selectMCPServer(let id), .selectPlugin(let id): id
+        case .selectMCPServer(let id), .selectPlugin(let id), .selectReceipt(let id): id
         case .addMCPServer, .pasteImport: nil
         }
     }
@@ -75,6 +77,7 @@ enum CommandPaletteCatalog {
             + rows(library?.filteredRows(matching: "") ?? [])
             + presets(library?.presets ?? [])
             + projects(library?.projects ?? [])
+            + receipts(workspace)
     }
 
     private static func actions() -> [CommandPaletteItem] {
@@ -210,6 +213,26 @@ enum CommandPaletteCatalog {
                 keywords: ["project"] + project.repositoryHints,
                 priority: 30,
                 outcome: .navigate(.projects))
+        }
+    }
+
+    /// The most recent receipts, so a reviewed operation is one search away.
+    /// Bounded, so the palette does not fill with a workspace's entire
+    /// history — the Activity screen itself is where the rest live.
+    @MainActor
+    private static func receipts(_ workspace: WorkspaceLaunch.Workspace) -> [CommandPaletteItem] {
+        let receipts = (try? workspace.store.operationReceipts(limit: 20)) ?? []
+        return receipts.map { receipt in
+            CommandPaletteItem(
+                id: "receipt.\(receipt.id.uuidString.lowercased())",
+                title: receipt.title,
+                subtitle: "\(receipt.outcomeTally) · Activity",
+                contextLabel: "Activity",
+                kind: .activity,
+                symbol: AppSection.activity.symbol,
+                keywords: ["receipt", "activity", receipt.verificationSummary],
+                priority: 30,
+                outcome: .screenRequest(.selectReceipt(receipt.id.uuidString.lowercased())))
         }
     }
 }
