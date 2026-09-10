@@ -402,13 +402,13 @@ struct LinkSkillUpstreamCommandTests {
     }
 
     /// Both Macs linking the same skill separately. Each allocated its own
-    /// subscription, only one of which the merged artifact can point at, so the
-    /// combined graph is not one the workspace contract admits.
+    /// subscription, only one of which the merged artifact can point at.
     ///
-    /// This is the shape command 1 gave a name to. Here it still arrives as
-    /// `invalidResult` beside the ownership conflict, which is recorded rather
-    /// than asserted to be good: see the report accompanying this unit.
-    @Test func bothMacsLinkingTheSameSkillIsAnOwnershipDecisionTheMergeCannotMake() throws {
+    /// The merge says which item that happened to rather than failing whole
+    /// with nothing to name: the unnamed subscription is set aside, the rest of
+    /// the merge is still readable, and the conflict stands until the person
+    /// drops one side on the Mac that made it.
+    @Test func bothMacsLinkingTheSameSkillIsNamedRatherThanLeftAsAnInvalidResult() throws {
         let tree = try Self.tree()
         let base = try Self.held(digest: tree.digest)
         let mine = StandaloneSkillUpstreamIDs()
@@ -419,29 +419,123 @@ struct LinkSkillUpstreamCommandTests {
         let merged = WorkspaceMergeEngine.merge(
             base: base, local: local, remote: remote, writerID: WorkspaceObjectID())
         #expect(merged.conflicts.contains { $0.kind == .ownership })
-        #expect(merged.conflicts.contains { $0.kind == .invalidResult })
-        #expect(merged.document == nil)
+        let named = try #require(merged.conflicts.first { $0.kind == .subscriptionOwnerCollision })
+        #expect(named.detail == "Both Macs made this skill follow a repository separately.")
+        #expect(named.artifactID == Self.skillID)
+        #expect(named.objectID == theirs.subscriptionID)
+        #expect(!merged.conflicts.contains { $0.kind == .invalidResult })
+        // Everything else still combined, and the result is a document the
+        // contract admits — it just must not be applied while this stands.
+        let result = try #require(merged.document)
+        #expect(!merged.isResolved)
+        try result.validateStructure()
+        #expect(result.artifacts[0].authority == .centralUpstream(subscriptionID: mine.subscriptionID))
+        #expect(result.subscriptions.map(\.id) == [mine.subscriptionID])
+        // The other Mac's repository is still recorded; only the subscription
+        // nothing could name was set aside.
+        #expect(Set(result.sources.map(\.id)) == [mine.sourceID, theirs.sourceID])
         // Neither Mac lost anything: both revisions still describe their own.
         #expect(local.subscriptions.map(\.id) == [mine.subscriptionID])
         #expect(remote.subscriptions.map(\.id) == [theirs.subscriptionID])
     }
 
-    /// One Mac links while the other edits the content. The lock approves the
-    /// bytes that were held when it was written, and the other Mac's edit moved
-    /// them, so the combined graph is refused rather than deploying content
-    /// nobody approved.
-    @Test func linkingWhileTheOtherMacEditsTheContentIsNotCombined() throws {
+    /// Both Macs made the same skill follow a repository, and there is no
+    /// answer this Mac can give: dropping the other Mac's link is that Mac's
+    /// act. The resolver declines it by name rather than pretending.
+    @Test func theResolverDeclinesTwoSeparateLinksToOneSkill() throws {
         let tree = try Self.tree()
         let base = try Self.held(digest: tree.digest)
-        let local = try Self.linked(base, ids: .init(), tree: tree)
-        var edited = base
-        edited.artifacts[0].contentDigest = try Self.tree(body: "Edited on the other Mac").digest
-        let remote = try WorkspaceDocumentCoding.seal(edited)
+        let mine = StandaloneSkillUpstreamIDs()
+        let theirs = StandaloneSkillUpstreamIDs()
+        let local = try Self.linked(base, ids: mine, tree: tree)
+        let remote = try Self.linked(base, ids: theirs, tree: tree, repository: "https://github.com/another/skills")
+        let merged = WorkspaceMergeEngine.merge(
+            base: base, local: local, remote: remote, writerID: WorkspaceObjectID())
+
+        let resolved = WorkspaceConflictResolver.resolve(
+            base: base, local: local, remote: remote, conflicts: merged.conflicts,
+            resolutions: merged.conflicts.map {
+                .init(kind: $0.kind, artifactID: $0.artifactID, objectID: $0.objectID, choice: .keepLocal)
+            }, writerID: WorkspaceObjectID())
+        #expect(!resolved.isResolved)
+        #expect(resolved.remaining.map(\.kind) == [.subscriptionOwnerCollision])
+        // And a screen must not offer a picker that cannot settle it.
+        #expect(!WorkspaceMergeConflictKind.subscriptionOwnerCollision.isSettledByChoosingASide)
+    }
+
+    /// One Mac links while the other edits the content. Each side moved one
+    /// fact only, so the ordinary rules would take the new authority and the
+    /// new bytes together and leave the lock approving a version nobody holds.
+    @Test func linkingWhileTheOtherMacEditsTheContentIsNamedRatherThanLeftAsAnInvalidResult() throws {
+        let tree = try Self.tree()
+        let base = try Self.held(digest: tree.digest)
+        let ids = StandaloneSkillUpstreamIDs()
+        let local = try Self.linked(base, ids: ids, tree: tree)
+        let remote = try Self.edited(base)
 
         let merged = WorkspaceMergeEngine.merge(
             base: base, local: local, remote: remote, writerID: WorkspaceObjectID())
-        #expect(merged.document == nil)
-        #expect(merged.conflicts.map(\.kind) == [.invalidResult])
+        let named = try #require(merged.conflicts.first { $0.kind == .subscriptionContentMismatch })
+        #expect(named.detail == "One Mac made this skill follow a repository while the other changed its files.")
+        #expect(named.artifactID == Self.skillID)
+        #expect(named.objectID == ids.subscriptionID)
+        #expect(!merged.conflicts.contains { $0.kind == .invalidResult })
+        let result = try #require(merged.document)
+        #expect(!merged.isResolved)
+        try result.validateStructure()
+        // The approved digest is put back rather than the lock being rewritten
+        // to claim the publisher published the person's own edit.
+        #expect(result.artifacts[0].contentDigest == tree.digest)
+        #expect(result.subscriptions[0].lock.approvedContent == tree.digest)
+    }
+
+    /// Keeping the followed version: the approved bytes come back and the skill
+    /// still follows the repository.
+    @Test func resolvingALinkAgainstAnEditCanKeepTheFollowedVersion() throws {
+        let tree = try Self.tree()
+        let base = try Self.held(digest: tree.digest)
+        let ids = StandaloneSkillUpstreamIDs()
+        let local = try Self.linked(base, ids: ids, tree: tree)
+        let remote = try Self.edited(base)
+        let merged = WorkspaceMergeEngine.merge(
+            base: base, local: local, remote: remote, writerID: WorkspaceObjectID())
+
+        let resolved = WorkspaceConflictResolver.resolve(
+            base: base, local: local, remote: remote, conflicts: merged.conflicts,
+            resolutions: merged.conflicts.map {
+                .init(kind: $0.kind, artifactID: $0.artifactID, objectID: $0.objectID, choice: .keepLocal)
+            }, writerID: WorkspaceObjectID())
+        let document = try #require(resolved.document)
+        #expect(resolved.isResolved)
+        #expect(document.artifacts[0].authority == .centralUpstream(subscriptionID: ids.subscriptionID))
+        #expect(document.artifacts[0].contentDigest == tree.digest)
+        #expect(document.subscriptions.map(\.id) == [ids.subscriptionID])
+        #expect(WorkspaceMergeConflictKind.subscriptionContentMismatch.isSettledByChoosingASide)
+    }
+
+    /// Keeping the edit: the skill goes back to being the person's own, and the
+    /// subscription goes with the authority that named it. The edited bytes are
+    /// the ones the library holds afterwards.
+    @Test func resolvingALinkAgainstAnEditCanKeepThePersonalEdit() throws {
+        let tree = try Self.tree()
+        let edit = try Self.tree(body: "Edited on the other Mac")
+        let base = try Self.held(digest: tree.digest)
+        let ids = StandaloneSkillUpstreamIDs()
+        let local = try Self.linked(base, ids: ids, tree: tree)
+        let remote = try Self.edited(base)
+        let merged = WorkspaceMergeEngine.merge(
+            base: base, local: local, remote: remote, writerID: WorkspaceObjectID())
+
+        let resolved = WorkspaceConflictResolver.resolve(
+            base: base, local: local, remote: remote, conflicts: merged.conflicts,
+            resolutions: merged.conflicts.map {
+                .init(kind: $0.kind, artifactID: $0.artifactID, objectID: $0.objectID, choice: .takeRemote)
+            }, writerID: WorkspaceObjectID())
+        let document = try #require(resolved.document)
+        #expect(resolved.isResolved)
+        #expect(document.artifacts[0].authority == .centralPersonal)
+        #expect(document.artifacts[0].contentDigest == edit.digest)
+        #expect(document.subscriptions.isEmpty)
     }
 
     // MARK: - Fixtures
@@ -511,6 +605,16 @@ struct LinkSkillUpstreamCommandTests {
             upstreamIDs: ids)
         _ = try command.apply(to: &linked)
         return try WorkspaceDocumentCoding.seal(linked)
+    }
+
+    /// The other Mac's version of the same held skill, with its files changed
+    /// and nothing else touched.
+    private static func edited(
+        _ document: PortableWorkspaceDocument, body: String = "Edited on the other Mac"
+    ) throws -> PortableWorkspaceDocument {
+        var edited = document
+        edited.artifacts[0].contentDigest = try Self.tree(body: body).digest
+        return try WorkspaceDocumentCoding.seal(edited)
     }
 
     /// A command that never went through the initializer, which is the only way

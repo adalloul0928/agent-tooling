@@ -99,7 +99,7 @@ struct PasteImportServerIntakeTests {
         #expect(snapshot.document.assignments.first?.destination.surface == .claudeCode)
     }
 
-    @Test func theSheetRecoversTheNamesAPasteDroppedTheValuesOf() throws {
+    @Test func theSheetReadsTheDroppedCredentialNamesStraightOffTheDraft() throws {
         let pasted = """
             claude mcp add tenant --transport http --url https://mcp.example.com/rpc \
             -e API_KEY=super-secret-value -H X-Tenant=acme-secret
@@ -111,7 +111,7 @@ struct PasteImportServerIntakeTests {
             return
         }
 
-        #expect(PastedMCPCredentialNames.recovered(from: server).sorted() == ["API_KEY", "X-Tenant"])
+        #expect(server.secretNames == ["API_KEY", "X-Tenant"])
         // The values the parser dropped are nowhere in what it handed back.
         for note in server.notes {
             #expect(!note.contains("super-secret-value"))

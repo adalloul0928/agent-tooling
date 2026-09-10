@@ -8,6 +8,31 @@ public enum WorkspaceConflictChoice: String, Hashable, Sendable, CaseIterable {
     case takeRemote
 }
 
+extension WorkspaceMergeConflictKind {
+    /// Whether "keep this Mac's version" or "take the other Mac's version" is
+    /// an answer to this conflict at all.
+    ///
+    /// The rest need a different act rather than a choice between two Macs: a
+    /// colliding destination needs different intent, two records of one app
+    /// package need one of them removed, two separate links to one skill need
+    /// one of them dropped on the Mac that made it, and an unreadable or
+    /// invalid document cannot be fixed by picking a side. A screen that offers
+    /// a picker for one of those offers something that cannot work, so it asks
+    /// here rather than keeping its own list — `WorkspaceConflictResolver`
+    /// sets aside exactly these, and one list cannot drift from itself.
+    public var isSettledByChoosingASide: Bool {
+        switch self {
+        case .destinationCollision, .nativeRouteCollision, .subscriptionOwnerCollision,
+            .unsupportedVersion, .invalidResult:
+            false
+        case .artifactField, .artifactContent, .deleteVersusEdit, .ownership, .sourcePolicy,
+            .subscriptionLock, .subscriptionContentMismatch, .assignmentEnablement, .assignmentField,
+            .catalogSource, .projectField:
+            true
+        }
+    }
+}
+
 /// One decision, bound to the exact conflict it answers.
 public struct WorkspaceConflictResolution: Hashable, Sendable {
     public let kind: WorkspaceMergeConflictKind
@@ -89,7 +114,11 @@ private extension WorkspaceConflictResolver {
         resolution: WorkspaceConflictResolution
     ) {
         switch resolution.kind {
-        case .artifactField, .artifactContent, .ownership, .projectField:
+        // A content mismatch against a lock is decided on the artifact record:
+        // choosing the linked side puts the approved digest back, and choosing
+        // the edited side moves the authority off the subscription, which the
+        // merge then drops because nothing names it any more.
+        case .artifactField, .artifactContent, .ownership, .projectField, .subscriptionContentMismatch:
             guard let id = resolution.artifactID,
                   let losing = loser.artifacts.first(where: { $0.identity.id == id }) else { return }
             if let index = ancestor.artifacts.firstIndex(where: { $0.identity.id == id }) {
@@ -172,11 +201,14 @@ private extension WorkspaceConflictResolver {
             }
             ancestor.configurationState = state
 
-        case .destinationCollision, .nativeRouteCollision, .unsupportedVersion, .invalidResult:
+        case .destinationCollision, .nativeRouteCollision, .subscriptionOwnerCollision,
+            .unsupportedVersion, .invalidResult:
             // These are not "pick a side" conflicts. A colliding destination
             // needs different intent, two records of one app package need one
-            // of them removed, and an unreadable or invalid document cannot be
-            // fixed by choosing one of two Macs.
+            // of them removed, two separate links to one skill need one of them
+            // dropped on the Mac that made it — this side cannot un-link what
+            // the other Mac asked for — and an unreadable or invalid document
+            // cannot be fixed by choosing one of two Macs.
             break
         }
     }

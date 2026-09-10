@@ -27,13 +27,31 @@ public enum PastedShape: String, Codable, Hashable, Sendable {
 public struct PastedMCPServerDraft: Identifiable, Equatable, Sendable {
     public var draft: MCPDraft
     public var notes: [String]
+    /// The environment and header **names** whose values this parse dropped,
+    /// sorted and without repeats. A value is never carried here, and never
+    /// anywhere else either: the parse keeps the names so the command that
+    /// records the connection can say which credentials it needs, and drops
+    /// every value on the way in.
+    ///
+    /// It is data rather than a sentence because a caller that needs the names
+    /// should not have to read prose back apart to find them.
+    public private(set) var secretNames: [String]
 
-    public init(draft: MCPDraft, notes: [String] = []) {
+    public init(draft: MCPDraft, notes: [String] = [], secretNames: [String] = []) {
         self.draft = draft
         self.notes = notes
+        self.secretNames = Self.tidied(secretNames)
     }
 
     public var id: String { draft.name }
+
+    mutating func recordSecretNames(_ names: [String]) {
+        secretNames = Self.tidied(secretNames + names)
+    }
+
+    private static func tidied(_ names: [String]) -> [String] {
+        Array(Set(names)).sorted()
+    }
 }
 
 public struct PastedMCPImport: Equatable, Sendable {
@@ -208,6 +226,9 @@ public enum PastedDefinitionParser {
             server.draft.addToCodex = client == .codex
             server.draft.addToGemini = client == .gemini
             server.notes = notes + parsed.notes + server.notes
+            // Names can arrive twice here: from the flags of the command and
+            // from the JSON it carries.
+            server.recordSecretNames(parsed.secretNames)
             appendScopeNoteIfNeeded(server.draft, notes: &server.notes)
             return PastedMCPImport(shape: shape, servers: [server])
         }
@@ -247,7 +268,8 @@ public enum PastedDefinitionParser {
         draft.addToGemini = client == .gemini
         try validateDestination(&draft)
         appendScopeNoteIfNeeded(draft, notes: &notes)
-        return PastedMCPImport(shape: shape, servers: [PastedMCPServerDraft(draft: draft, notes: notes)])
+        return PastedMCPImport(
+            shape: shape, servers: [PastedMCPServerDraft(draft: draft, notes: notes, secretNames: parsed.secretNames)])
     }
 
     private struct ParsedFlags {
@@ -492,7 +514,7 @@ public enum PastedDefinitionParser {
         draft.transport = transport
         draft.authentication = suggestedAuthentication(transport: transport, secretNames: secretNames)
         try validateDestination(&draft)
-        return PastedMCPServerDraft(draft: draft, notes: notes)
+        return PastedMCPServerDraft(draft: draft, notes: notes, secretNames: secretNames)
     }
 
     // MARK: - Bare URL

@@ -176,8 +176,8 @@ struct ManagedMCPServerIntakeCommandTests {
             Issue.record("the paste did not read as an MCP server")
             return
         }
-        let names = PastedMCPCredentialNames.recovered(from: server)
-        #expect(names.sorted() == ["API_KEY", "SECOND_NAME", "X-Tenant"])
+        let names = server.secretNames
+        #expect(names == ["API_KEY", "SECOND_NAME", "X-Tenant"])
 
         let command = try ManagedMCPServerIntakeCommand(
             expectedRevisionID: fixture.head(), draft: server.draft, credentialRequirementNames: names)

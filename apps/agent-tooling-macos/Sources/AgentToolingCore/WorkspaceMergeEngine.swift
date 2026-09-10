@@ -21,6 +21,12 @@ public enum WorkspaceMergeConflictKind: String, Hashable, Sendable, CaseIterable
     case destinationCollision
     /// Both Macs recorded the same app package as separate library items.
     case nativeRouteCollision
+    /// Both Macs made the same item follow a repository, each through its own
+    /// subscription, and the merged item can name only one of them.
+    case subscriptionOwnerCollision
+    /// One Mac made an item follow a repository while the other changed the
+    /// item's content, so the approved lock no longer describes what is held.
+    case subscriptionContentMismatch
     /// Both Macs changed the same catalog source differently, or one removed a
     /// catalog source the other changed.
     case catalogSource
@@ -179,6 +185,16 @@ public enum WorkspaceMergeEngine {
         if reportNativeRouteCollisions(artifacts: artifacts, report: conflict) {
             return .init(document: nil, conflicts: sorted(conflicts))
         }
+        // Two Macs that each linked one item allocated a subscription each, and
+        // the merged item's authority names only one of them. Saying which item
+        // that happened to beats a validation failure with nothing to say.
+        let liveSubscriptions = reportSubscriptionOwnerCollisions(
+            artifacts: artifacts, subscriptions: subscriptions, report: conflict)
+        // A lock approves bytes. When the other Mac moved the bytes, only one
+        // side moved each fact, so the ordinary rules take both and the result
+        // claims a publisher published what a person wrote here.
+        reportSubscriptionContentMismatches(
+            artifacts: &artifacts, subscriptions: liveSubscriptions, report: conflict)
 
         let definitions: [PortableMCPDefinitionRecord]? = schemaVersion >= 3
             ? mergeCollection(
@@ -203,7 +219,7 @@ public enum WorkspaceMergeEngine {
                             writerID: writerID),
             artifacts: artifacts,
             sources: sources,
-            subscriptions: subscriptions,
+            subscriptions: liveSubscriptions,
             logicalProjects: projects,
             assignments: assignments,
             presets: presets,

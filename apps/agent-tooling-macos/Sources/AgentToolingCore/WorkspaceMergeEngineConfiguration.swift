@@ -1,8 +1,9 @@
 import Foundation
 
 /// The parts of a merge that this packet made writable: the catalog list inside
-/// the configuration supplement, and the check that two Macs did not each record
-/// the same app package as a separate library item.
+/// the configuration supplement, the check that two Macs did not each record
+/// the same app package as a separate library item, and the two checks that
+/// name what happens when both Macs act on one item's upstream link.
 ///
 /// It lives beside the engine rather than inside it so that four commands being
 /// built at once do not queue behind one file. The rules are the engine's own:
@@ -30,6 +31,70 @@ extension WorkspaceMergeEngine {
             }
         }
         return reported
+    }
+
+    /// A subscription is a statement about one item: the item's authority names
+    /// it, and its lock approves the bytes that item holds. Two Macs that each
+    /// linked the same item wrote two subscriptions for it, and the merged
+    /// authority — kept local, like every other contested value — names one.
+    ///
+    /// The unnamed one is set aside instead of being carried into a document
+    /// that cannot be validated. Nothing is lost by that: the Mac that wrote it
+    /// still holds its own revision, and the conflict names the item so the
+    /// person can drop one side there. Returns the subscriptions that survive.
+    static func reportSubscriptionOwnerCollisions(
+        artifacts: [ArtifactRecord],
+        subscriptions: [UpstreamSubscription],
+        report: Report
+    ) -> [UpstreamSubscription] {
+        let owners = index(artifacts, key: { $0.identity.id })
+        return subscriptions.filter { subscription in
+            // An item nobody kept is not this check's business; the contract's
+            // own validation still has the last word on that.
+            guard let owner = owners[subscription.artifactID] else { return true }
+            switch owner.authority {
+            case .centralUpstream(let subscriptionID) where subscriptionID == subscription.id:
+                return true
+            case .centralUpstream:
+                report(
+                    .subscriptionOwnerCollision, subscription.artifactID, subscription.id,
+                    "Both Macs made this skill follow a repository separately.")
+                return false
+            default:
+                // The item follows nothing now, so this has nothing left to
+                // approve — the rule that drops a contribution for an item
+                // nobody kept, applied to the record that says where an item's
+                // next version comes from.
+                return false
+            }
+        }
+    }
+
+    /// One Mac linked an item while the other edited it. Each side moved one
+    /// fact only, so the ordinary rules take the new authority *and* the new
+    /// bytes, and the lock is left approving a version nobody holds — which
+    /// would deploy content nobody reviewed.
+    ///
+    /// The approved digest is put back, because it is the one value already
+    /// present in the inputs and it keeps the record honest about where the
+    /// content came from. The conflict says what happened, and nothing is
+    /// applied while it stands: resolving it keeps either the followed version
+    /// or the edit, and choosing the edit takes the subscription with it.
+    static func reportSubscriptionContentMismatches(
+        artifacts: inout [ArtifactRecord],
+        subscriptions: [UpstreamSubscription],
+        report: Report
+    ) {
+        for subscription in subscriptions {
+            guard let position = artifacts.firstIndex(where: { $0.identity.id == subscription.artifactID }),
+                let held = artifacts[position].contentDigest,
+                held != subscription.lock.approvedContent
+            else { continue }
+            report(
+                .subscriptionContentMismatch, subscription.artifactID, subscription.id,
+                "One Mac made this skill follow a repository while the other changed its files.")
+            artifacts[position].contentDigest = subscription.lock.approvedContent
+        }
     }
 
     /// Only the catalog list is combined. Every other part of the configuration

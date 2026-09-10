@@ -317,8 +317,11 @@ and already rejects the rest.
 
 Secrets never enter either record, and three independent things enforce it.
 `PastedDefinitionParser` drops every environment and header **value** on the way
-in and keeps only names, saying so in a note the sheet shows
-(`PastedDefinitionParser.swift:445-450`, `:316-323`).
+in and keeps only names. It carries those names as data, on
+`PastedMCPServerDraft.secretNames` — sorted, without repeats, values never
+included — and *also* says so in a note the sheet shows. The note is for the
+person; the list is what a caller reads. Neither the sheet nor the intake
+command parses that sentence back apart to find the names.
 `MCPDefinitionValidator.containsInlineSecret` refuses credential flags,
 `authorization: bearer`, secret-shaped `KEY=value` arguments and URLs with a
 user, password or query. `DeviceMCPDefinitionBinding.validate` refuses any
@@ -687,14 +690,27 @@ is not a claim that the repository is reachable now.
 
 ### Merge and sync
 
-The artifact's `authority` moves, so the merge engine's `ownership` conflict is
-the one that fires: two Macs linking the same skill to different repositories
-produce `ownership` plus `sourcePolicy` or `subscriptionLock`, and the local
-value is kept so nothing is lost. One Mac linking while the other edits the
-content produces `ownership` plus `artifactContent`. Linking on one Mac and
-nothing on the other fast-forwards, and the other Mac needs no device state at
-all: a publisher source is fetched into a cache and has no `SourceRootBinding`
-requirement, unlike an attached authoring root.
+Linking on one Mac and nothing on the other fast-forwards, and the other Mac
+needs no device state at all: a publisher source is fetched into a cache and has
+no `SourceRootBinding` requirement, unlike an attached authoring root.
+
+The two concurrent cases are not the ordinary field conflicts this section first
+claimed. Each writes a *new* subscription with a *new* identity, so nothing
+scalar collides — the records simply combine into a graph the workspace contract
+does not admit. Each therefore has its own named conflict, reported before the
+merged document is validated so a person is told which skill it happened to
+rather than only that the whole merge failed its checks:
+
+| Concurrent change | Result |
+| --- | --- |
+| Both Macs link the same skill | `ownership`, because the artifact's authority moved on both sides and the local value is kept, plus `subscriptionOwnerCollision` — "Both Macs made this skill follow a repository separately." The subscription the merged authority cannot name is set aside; the repository each side recorded stays. Not a pick-a-side conflict: this Mac cannot un-link what the other one asked for, so `WorkspaceConflictResolver` declines it and the person drops one side on the Mac that made it. |
+| One Mac links while the other edits the content | `subscriptionContentMismatch` — "One Mac made this skill follow a repository while the other changed its files." Only one side moved each fact, so the ordinary rules take the new authority *and* the new bytes and leave the lock approving a version nobody holds. The approved digest is put back — the one value already in the inputs — and the conflict stands. It is resolvable both ways: keeping the followed version restores the locked digest, and keeping the personal edit moves the authority back to `centralPersonal`, which drops the subscription with it. |
+| Both Macs link the same skill to *different* repositories | The two above, plus nothing else: the sources have different identities, so `sourcePolicy` and `subscriptionLock` do not fire. Both repositories are still recorded. |
+
+A subscription whose artifact no longer follows anything is dropped rather than
+carried, for the same reason a contribution for an item nobody kept is: it has
+nothing left to approve. That is what lets the second row be resolved in the
+direction that keeps the edit.
 
 ### Call site
 

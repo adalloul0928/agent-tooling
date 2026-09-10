@@ -334,10 +334,11 @@ struct PasteImportSheet: View {
     }
 
     /// The environment and header names the paste kept. Values were dropped on
-    /// the way in; only these names are ever recorded.
+    /// the way in; only these names are ever recorded. The parse hands them
+    /// over sorted and without repeats, so nothing is tidied again here.
     private var credentialNames: [String] {
         guard servers.indices.contains(selectedServer) else { return [] }
-        return PastedMCPCredentialNames.recovered(from: servers[selectedServer]).sorted()
+        return servers[selectedServer].secretNames
     }
 
     /// Which half of the workspace this connection lands in, decided by the
@@ -476,8 +477,7 @@ struct PasteImportSheet: View {
                 return
             }
             let command = try ManagedMCPServerIntakeCommand(
-                expectedRevisionID: head, draft: serverDraft,
-                credentialRequirementNames: PastedMCPCredentialNames.recovered(from: servers[selectedServer]))
+                expectedRevisionID: head, draft: serverDraft, credentialRequirementNames: credentialNames)
             _ = try await workspace.service.intakeManagedMCPServer(command)
             await workspace.library.refresh()
             savedServerName = command.displayName

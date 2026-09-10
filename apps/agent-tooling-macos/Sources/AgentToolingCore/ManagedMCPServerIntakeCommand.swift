@@ -269,38 +269,3 @@ public struct ManagedMCPServerIntakeCommand: Sendable {
                 workspaceRootPath: workspaceRootPath))
     }
 }
-
-/// The environment and header names a paste dropped the values of.
-///
-/// `PastedDefinitionParser` keeps those names only in the plain-language notes
-/// it shows the person, so this reads them back out of exactly the two
-/// sentences it writes. It is a bridge, not a design: the names belong on
-/// `PastedMCPServerDraft` itself, and this type should go away when they are
-/// carried there.
-public enum PastedMCPCredentialNames {
-    static let environmentPrefix = "Environment values were not copied: "
-    static let headerPrefix = "Header values were not copied: "
-
-    /// Names only, in the order the sheet showed them. Anything that is not a
-    /// plausible name is left out here so the command refuses on the person's
-    /// own text rather than on a fragment of a sentence.
-    public static func recovered(from server: PastedMCPServerDraft) -> [String] {
-        var result: [String] = []
-        for note in server.notes {
-            for prefix in [environmentPrefix, headerPrefix] where note.hasPrefix(prefix) {
-                result += names(in: String(note.dropFirst(prefix.count)))
-            }
-        }
-        return result
-    }
-
-    private static func names(in list: String) -> [String] {
-        // The list runs to the end of its own sentence; anything after it is
-        // advice for the reader, not a name.
-        let sentence = list.components(separatedBy: ". ").first ?? list
-        return sentence.components(separatedBy: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .map { $0.hasSuffix(".") ? String($0.dropLast()) : $0 }
-            .filter { $0.range(of: "^[A-Za-z_][A-Za-z0-9_.-]*$", options: .regularExpression) != nil }
-    }
-}

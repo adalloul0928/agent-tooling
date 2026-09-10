@@ -317,6 +317,8 @@ struct SyncSettingsView: View {
         case .assignmentField: "Two different destinations for one request"
         case .destinationCollision: "Two items would share one place"
         case .nativeRouteCollision: "The same app package added twice"
+        case .subscriptionOwnerCollision: "The same skill linked to a repository twice"
+        case .subscriptionContentMismatch: "Linked on one Mac, edited on another"
         case .catalogSource: "Two different catalogs recorded as one"
         case .projectField: "Two different project names"
         case .unsupportedVersion: "A newer format than this app can read"
