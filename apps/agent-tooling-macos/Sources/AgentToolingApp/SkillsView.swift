@@ -922,7 +922,7 @@ private struct SkillDetailView: View {
                 }
                 SkillRepositorySection(
                     skill: skill, binding: upstream?.binding, approvedRevision: upstream?.approvedRevision,
-                    authoringPath: inventory.authoringPaths[skill.id], session: content)
+                    authoringPath: inventory.authoringPaths[skill.id], session: content, workspace: workspace)
                 apps
                 sourceFiles
             }
