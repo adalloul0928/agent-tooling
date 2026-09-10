@@ -576,13 +576,19 @@ struct MarketplaceView: View {
         }
     }
 
-    /// Install routes state the scope they would use in Claude's own words, and
-    /// then say plainly that this build cannot run them.
+    /// Install routes state the scope the client would use in its own words,
+    /// and offer the one act this screen performs: adding the package to the
+    /// library.
     ///
-    /// The routes stay on screen rather than being hidden behind the refusal:
-    /// what a catalog would run, and with what scope, is exactly the thing a
-    /// person came here to read. What is missing is the command that would put
-    /// the package in the library, and only that is disabled.
+    /// Adding is not installing, and the control says so rather than leaving a
+    /// person to find out afterwards. A row that lands here is a library item
+    /// with no assignment and no destination; what a client is asked to run is
+    /// decided on Apps, from a reviewed plan, and nowhere else.
+    ///
+    /// A route this build cannot act on keeps its button, disabled, with the
+    /// command's own sentence explaining why — a Gemini listing, because
+    /// nothing has read that client's install command and inventing one is the
+    /// thing the register exists to avoid.
     @ViewBuilder
     private func installRoutes(for package: MarketplacePackage) -> some View {
         let scopes = Set(package.nativeInstalls.map(\.scope))
@@ -600,20 +606,22 @@ struct MarketplaceView: View {
             }
             FlowLayout(spacing: 8) {
                 ForEach(package.nativeInstalls) { route in
+                    let refusal = session.adoptionRefusal(for: package, client: route.client)
                     Button {
-                        // Unreachable: the button never enables.
+                        Task { await session.adopt(package, client: route.client) }
                     } label: {
                         HStack(spacing: 7) {
                             ClientBrandIcon(client: route.client, size: 14)
-                            Text("Install in \(route.client.rawValue)")
+                            Text("Add to Library for \(route.client.rawValue)")
                         }
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(AgentTheme.selection)
-                    .disabled(true)
+                    .disabled(refusal != nil || !session.canAdopt || session.isAdopting)
                     .help(
-                        "\(route.detail) Scope: \(route.scope.marketplaceInstallTitle). "
-                            + WorkspaceMarketplaceSession.installUnavailable)
+                        refusal ?? (session.canAdopt ? nil : WorkspaceMarketplaceSession.readOnlyNote)
+                            ?? ("\(route.detail) Scope: \(route.scope.marketplaceInstallTitle). "
+                                + WorkspaceMarketplaceSession.adoptionNote))
                 }
             }
             if scopes.count > 1 {
@@ -628,10 +636,17 @@ struct MarketplaceView: View {
                     }
                 }
             }
-            Text(WorkspaceMarketplaceSession.installUnavailable)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            // What the last attempt on this listing said, in the command's own
+            // words, and otherwise what pressing the button would do. A message
+            // left by another package is never shown here.
+            Text(
+                session.adoption?.packageID == package.id
+                    ? (session.adoption?.message ?? WorkspaceMarketplaceSession.adoptionNote)
+                    : WorkspaceMarketplaceSession.adoptionNote
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 

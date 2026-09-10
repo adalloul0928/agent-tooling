@@ -45,6 +45,10 @@ final class WorkspaceMarketplaceSession {
     /// name, so a namesake is never mistaken for the package you already have.
     private(set) var installedRoutes: [NativePackageRoute: LibraryMatch] = [:]
 
+    /// What adding the last listing did, or why it was refused.
+    private(set) var adoption: AdoptionOutcome?
+    private(set) var isAdopting = false
+
     /// One library row a catalog listing turned out to be.
     struct LibraryMatch: Equatable {
         let artifactID: ArtifactID
@@ -53,9 +57,24 @@ final class WorkspaceMarketplaceSession {
         var itemID: String { artifactID.rawValue.uuidString.lowercased() }
     }
 
-    /// Nothing in this build can add a catalog package to the library. Stated
-    /// once here so every disabled control on the screen says the same thing.
-    static let installUnavailable = "Adding catalog packages to the library is not available in this build."
+    /// What adding a listing does, and what it deliberately does not do.
+    /// Stated once here so the button and the line under it cannot disagree.
+    static let adoptionNote =
+        "Adding a package puts it in your library. Where it is installed is decided on the Apps screen."
+
+    /// Said when the workspace itself cannot be written to, so a disabled
+    /// control is never disabled without a reason. The words the rest of the
+    /// app already uses for the same fact.
+    static let readOnlyNote = "This workspace is open for reading only."
+
+    /// The last refusal or result, and the listing it belongs to.
+    ///
+    /// Carrying the package's own identifier means a message about one listing
+    /// is never left standing under another after the selection moves.
+    struct AdoptionOutcome: Equatable {
+        let packageID: String
+        let message: String
+    }
 
     /// Said wherever the screen would otherwise imply a catalog could be asked.
     static let noProviderNote =
@@ -96,6 +115,60 @@ final class WorkspaceMarketplaceSession {
         guard let identity = NativeCatalogPackageIdentity.recognize(package) else { return nil }
         return installedRoutes[
             NativePackageRoute(client: identity.client, externalPluginID: identity.externalPluginID)]
+    }
+
+    // MARK: - Adding a listing to the library
+
+    /// Whether this workspace may be written to at all.
+    var canAdopt: Bool { library.access == .writable }
+
+    /// Why this listing cannot be added for this client, or `nil` when it can.
+    ///
+    /// The command's own answer, asked before the control is offered, so a
+    /// button that is offered is one the command will accept and a button that
+    /// is not says why in the same words the command would have used.
+    func adoptionRefusal(for package: MarketplacePackage, client: ClientKind) -> String? {
+        NativePackageAdoptionCommand.refusal(adding: package, for: client)?.localizedDescription
+    }
+
+    /// Records the listing as a library item, and nothing else.
+    ///
+    /// This installs nothing, asks for nothing anywhere, and writes no file a
+    /// client owns: it adds one row whose next step is assignment. Afterwards
+    /// the library is read again so `libraryMatch(for:)` finds the new row and
+    /// the screen shows it as held rather than as offered.
+    func adopt(_ package: MarketplacePackage, client: ClientKind) async {
+        guard canAdopt, !isAdopting else { return }
+        isAdopting = true
+        adoption = nil
+        defer { isAdopting = false }
+        do {
+            guard let head = try await service.snapshot()?.document.revision.id else {
+                adoption = .init(
+                    packageID: package.id,
+                    message: "This workspace could not be read. Nothing was added.")
+                return
+            }
+            _ = try await service.adoptNativePackage(
+                .init(expectedRevisionID: head, package: package, client: client))
+            adoption = .init(
+                packageID: package.id,
+                message: "Added to your library. Choose where it goes on the Apps screen.")
+        } catch {
+            adoption = .init(packageID: package.id, message: Self.message(for: error))
+        }
+        await library.refresh()
+        reload()
+    }
+
+    /// A refusal carries the sentence it wants shown; anything else is named
+    /// without pretending to know more about it than that it stopped the write.
+    private static func message(for error: any Error) -> String {
+        if let refusal = error as? NativePackageAdoptionError { return refusal.localizedDescription }
+        if case WorkspaceRevisionStoreError.staleRevision = error {
+            return "This workspace changed while you were reading. Try again."
+        }
+        return "That package could not be added to your library. Nothing was changed."
     }
 
     /// Re-reads this Mac's record, then asks every catalog it has.
