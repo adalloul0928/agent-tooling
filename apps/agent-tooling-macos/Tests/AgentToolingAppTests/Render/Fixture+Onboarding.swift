@@ -9,56 +9,22 @@ import Testing
 /// The shapes the onboarding wizard reaches for, added to the shared fixture
 /// rather than to the harness every screen uses.
 
-/// `rasterize` in `ShellRenderHarness.swift` hosts a view in a bare
-/// `NSHostingView` with no backing window. Every other section's primary
-/// action happens to be disabled in its fixture's default state, so nothing
-/// exposed this: an *enabled* `.buttonStyle(.glassProminent)` control — the
-/// wizard's "Continue" is enabled from the first frame — does not finish
-/// compositing before a synchronous `cacheDisplay` reads it back on this
-/// toolchain, and the whole frame reads back as one flat colour, not just the
-/// button. A disabled glass-prominent control, and every other primitive this
-/// suite renders, is unaffected.
-///
-/// This is a gap in the shared harness, not in the screen: the same view
-/// inside a real (if offscreen) window, given one run-loop turn to settle,
-/// composites correctly — proved below before this was written as a
-/// workaround rather than a guess. `ShellRenderHarness.swift` is frozen for
-/// this scope, so the fix lives here instead of there; see the report's
-/// "Needs a shared change" for lifting it into the shared helper.
+/// The wizard's "Continue" is enabled from the first frame, which is what
+/// first showed that a bare hosting view cannot composite an enabled glass
+/// control before a synchronous read-back. The shared harness now rasterizes
+/// inside a real window; these two names remain for the wizard tests.
 @MainActor
 func rasterizeWarmed(
     _ view: some View, _ location: SourceLocation = #_sourceLocation
 ) throws -> NSBitmapImageRep {
-    let size = shellWindowSize
-    let host = NSHostingView(rootView: AnyView(view.frame(width: size.width, height: size.height)))
-    host.frame = CGRect(origin: .zero, size: size)
-    let window = NSWindow(
-        contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-    window.isReleasedWhenClosed = false
-    window.contentView = host
-    window.orderFrontRegardless()
-    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-    host.layoutSubtreeIfNeeded()
-
-    #expect(host.fittingSize.width > 0, "the screen laid out to no width", sourceLocation: location)
-    #expect(host.fittingSize.height > 0, "the screen laid out to no height", sourceLocation: location)
-
-    let bitmap = try #require(
-        host.bitmapImageRepForCachingDisplay(in: host.bounds),
-        "the screen produced no drawable area", sourceLocation: location)
-    host.cacheDisplay(in: host.bounds, to: bitmap)
-    window.orderOut(nil)
-    return bitmap
+    try rasterize(view, location)
 }
 
 @MainActor
 func expectDrawnWarmed(
     _ view: some View, _ location: SourceLocation = #_sourceLocation
 ) throws {
-    let bitmap = try rasterizeWarmed(view, location)
-    #expect(
-        distinctColours(in: bitmap) > 4, "the screen drew a blank frame",
-        sourceLocation: location)
+    try expectDrawn(view, location)
 }
 
 extension ShellRenderFixture {

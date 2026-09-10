@@ -52,6 +52,15 @@ func rasterize(
     let size = shellWindowSize
     let host = NSHostingView(rootView: AnyView(view.frame(width: size.width, height: size.height)))
     host.frame = CGRect(origin: .zero, size: size)
+    // A bare hosting view never finishes compositing an enabled glass control
+    // before a synchronous read-back, and the whole frame comes back flat. A
+    // real, borderless window given one run-loop turn settles it.
+    let window = NSWindow(
+        contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    window.orderFrontRegardless()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     host.layoutSubtreeIfNeeded()
 
     #expect(host.fittingSize.width > 0, "the screen laid out to no width", sourceLocation: location)
@@ -61,6 +70,7 @@ func rasterize(
         host.bitmapImageRepForCachingDisplay(in: host.bounds),
         "the screen produced no drawable area", sourceLocation: location)
     host.cacheDisplay(in: host.bounds, to: bitmap)
+    window.orderOut(nil)
     return bitmap
 }
 
