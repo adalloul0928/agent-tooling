@@ -44,6 +44,8 @@ struct CommandPaletteCatalogTests {
         }
         #expect(items.contains { $0.outcome == .checkSetup })
         #expect(items.contains { $0.outcome == .reviewSync })
+        #expect(items.contains { $0.outcome == .screenRequest(.addMCPServer) })
+        #expect(items.contains { $0.outcome == .screenRequest(.pasteImport) })
         #expect(items.contains { $0.outcome == .openSkill(Self.identifier(ShellRenderFixture.skill)) })
         #expect(
             items.contains {

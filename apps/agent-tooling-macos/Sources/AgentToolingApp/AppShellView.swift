@@ -127,7 +127,7 @@ struct AppShellView: View {
             if let itemID = request.itemID {
                 navigation.openItem(itemID, in: request.section)
             } else {
-                selection = request.section
+                navigation.openScreenRequest(request)
             }
         case .checkSetup:
             Task { await workspace.device.refresh() }

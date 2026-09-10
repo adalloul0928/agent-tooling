@@ -30,6 +30,21 @@ struct ClientsSectionRenderTests {
                     receipts: [ShellRenderFixture.receipt()]))
     }
 
+    /// The affordance moved here from the dead `WorkspaceDeploymentView`: a
+    /// destination this Mac points somewhere other than its app's own folder
+    /// still draws, with the folder behind `LocationText` rather than in the
+    /// row itself.
+    @Test func theScreenDrawsALinkedDestination() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        await fixture.workspace.deployment.linkDestination(
+            surface: .claudeCode, scope: .user, projectID: nil,
+            to: fixture.root.appending(path: "external-destination", directoryHint: .isDirectory))
+        #expect(fixture.workspace.deployment.linkedDestinations.count == 1)
+
+        try expectDrawn(renderShell(.syncCenter, fixture: fixture).clientsStubs())
+    }
+
     /// Scoped to one client, the screen keeps its scope bar and its verdict.
     @Test func theScreenDrawsOneClientOnItsOwn() async throws {
         let fixture = try await ShellRenderFixture()

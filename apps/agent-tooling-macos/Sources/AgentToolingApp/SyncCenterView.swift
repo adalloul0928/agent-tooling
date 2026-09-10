@@ -1,4 +1,5 @@
 import AgentToolingCore
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -41,6 +42,7 @@ struct SyncCenterView: View {
     @Environment(\.workspaceNavigate) private var navigate
     @Environment(\.operationReceiptReader) private var receiptReader
     @State private var showingClientSelection = false
+    @State private var isChoosingDestination = false
     @State private var receipts: [OperationReceipt] = []
 
     var body: some View {
@@ -113,6 +115,8 @@ struct SyncCenterView: View {
                         clientsCard.frame(maxWidth: .infinity)
                         receiptsCard.frame(maxWidth: .infinity)
                     }
+
+                    linkedDestinationsCard
                 }
                 .frame(maxWidth: 1_200, alignment: .leading)
                 .padding(.horizontal, WorkspaceLayout.pageInset)
@@ -123,6 +127,9 @@ struct SyncCenterView: View {
             .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(isPresented: $isChoosingDestination) {
+            WorkspaceLinkDestinationSheet(session: workspace.deployment)
+        }
         .task {
             // The shell opens the workspace without reading its library, so a
             // screen that arrives first has to read it or it would report a
@@ -345,6 +352,48 @@ struct SyncCenterView: View {
         }
     }
 
+    /// Where each app's tools go on this Mac, when that is not the app's own
+    /// folder. Registering one moves nothing; it only says where a later
+    /// install would write.
+    private var linkedDestinationsCard: some View {
+        TitledCard("Where these go on this Mac") {
+            Button("Choose a folder…", systemImage: "folder.badge.plus") { isChoosingDestination = true }
+                .buttonStyle(.borderless)
+                .disabled(workspace.deployment.isBusy)
+        } content: {
+            if workspace.deployment.linkedDestinations.isEmpty {
+                Text(
+                    "Everything goes into each app's own folder. You can point one somewhere else — a shared drive, or a folder you keep in step yourself."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ForEach(workspace.deployment.linkedDestinations) { destination in
+                    InfoRow(
+                        "\(destination.surface.displayName) · \(destination.projectName ?? destination.scope.displayName)"
+                    ) {
+                        SymbolTile(symbol: "folder", size: 30)
+                    } trailing: {
+                        HStack(spacing: 10) {
+                            LocationText(path: destination.path)
+                            Button("Use the app's own folder") {
+                                Task { await workspace.deployment.unlinkDestination(destination.id) }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(workspace.deployment.isBusy)
+                        }
+                    }
+                    if destination.id != workspace.deployment.linkedDestinations.last?.id {
+                        Divider().opacity(0.35)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Data
 
     private var libraryModel: WorkspaceLibraryReadModel? { workspace.library.state?.library }
@@ -561,5 +610,80 @@ private struct ManagedClientsPopover: View {
             }
         }
         .padding(16)
+    }
+}
+
+/// Choosing which destination goes somewhere other than its app's own folder.
+private struct WorkspaceLinkDestinationSheet: View {
+    let session: WorkspaceDeploymentSession
+    @Environment(\.dismiss) private var dismiss
+    @State private var client: ClientKind = .codex
+    @State private var folder: URL?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Send an app's tools somewhere else").font(.title3.weight(.semibold))
+                Spacer()
+                Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
+            }.padding(20)
+            Divider()
+            VStack(alignment: .leading, spacing: 18) {
+                Text(
+                    "Agent Tooling normally writes into each app's own folder. Point one somewhere else and it writes there instead — into the folder you name, under each tool's own name."
+                )
+                .foregroundStyle(.secondary)
+                Text(
+                    "Nothing already in that folder is replaced. If a tool's name is already taken there, the install stops and says so rather than writing over it."
+                )
+                .font(.callout).foregroundStyle(.secondary)
+                Picker("App", selection: $client) {
+                    ForEach(ClientKind.allCases) { value in Text(value.rawValue).tag(value) }
+                }.frame(maxWidth: 280)
+                HStack(spacing: 12) {
+                    Button("Choose folder…") { choose() }
+                    Text(folder?.path ?? "No folder chosen").foregroundStyle(.secondary).lineLimit(2)
+                }
+                Spacer(minLength: 0)
+            }.padding(20)
+            Divider()
+            HStack {
+                Text("This records where a later install would write. Nothing moves now.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Button("Use this folder") {
+                    guard let folder else { return }
+                    Task {
+                        await session.linkDestination(
+                            surface: surface, scope: .user,
+                            projectID: nil, to: folder)
+                        dismiss()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(folder == nil || session.isBusy)
+            }.padding(20)
+        }
+        .frame(width: 580, height: 420)
+        .background(AgentTheme.contentBackground)
+    }
+
+    private var surface: TargetSurface {
+        switch client {
+        case .claude: .claudeCode
+        case .codex: .codexCLI
+        case .gemini: .geminiCLI
+        }
+    }
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Use Folder"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        folder = url.standardizedFileURL
     }
 }

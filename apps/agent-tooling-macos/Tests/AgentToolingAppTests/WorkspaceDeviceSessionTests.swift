@@ -157,6 +157,41 @@ struct WorkspaceDeviceSessionTests {
                 == [.claude, .codex, .gemini])
     }
 
+    @Test func automaticHealthChecksDefaultOnAndAreRememberedOnThisMacOnly() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        #expect(session.automaticallyCheckHealth)
+
+        await session.setAutomaticallyCheckHealth(false)
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        #expect(session.automaticallyCheckHealth == false)
+
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.automaticallyCheckHealth == false)
+        // The choice is this Mac's. Nothing about it goes into portable bytes.
+        #expect(snapshot.document.artifacts.map(\.identity.id) == [Fixture.skill])
+        #expect(snapshot.document.assignments.isEmpty)
+
+        // A session opened over the same store reads the choice back.
+        let reopened = await fixture.session()
+        #expect(reopened.automaticallyCheckHealth == false)
+    }
+
+    @Test func turningAutomaticHealthChecksBackOnIsRememberedTheSameWay() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        await session.setAutomaticallyCheckHealth(false)
+
+        await session.setAutomaticallyCheckHealth(true)
+
+        #expect(session.automaticallyCheckHealth)
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.automaticallyCheckHealth == true)
+    }
+
     @Test func anOverlappingCheckJoinsTheOneAlreadyRunning() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

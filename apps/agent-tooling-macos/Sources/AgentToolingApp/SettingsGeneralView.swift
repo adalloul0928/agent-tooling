@@ -19,6 +19,7 @@ struct SettingsGeneralView: View {
                 VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                     appearanceCard
                     runtimesCard
+                    behaviorCard
                     managedPolicyCard
                 }
                 .padding(WorkspaceLayout.pageInset)
@@ -119,11 +120,51 @@ struct SettingsGeneralView: View {
             : runtimes.servers.count == 1 ? "1 ToolHive workload" : "\(runtimes.servers.count) ToolHive workloads"
     }
 
+    private var behaviorCard: some View {
+        TitledCard("Behavior") {
+            VStack(alignment: .leading, spacing: 0) {
+                InfoRow(
+                    "Check health automatically",
+                    detail: "Check this Mac's apps when Agent Tooling opens, instead of waiting for a manual refresh."
+                ) {
+                    Image(systemName: "switch.2").foregroundStyle(.secondary).frame(width: 20)
+                } trailing: {
+                    Toggle(
+                        "Check health automatically",
+                        isOn: Binding(
+                            get: { workspace.device.automaticallyCheckHealth },
+                            set: { value in Task { await workspace.device.setAutomaticallyCheckHealth(value) } })
+                    )
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .disabled(workspace.device.isChecking)
+                }
+                Divider()
+                Text(
+                    "Recorded for this Mac now. The check Agent Tooling runs when it opens does not read this choice yet, so switching it off does not change that check today."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
     @ViewBuilder
     private var managedPolicyCard: some View {
         TitledCard("Managed policy") {
             VStack(alignment: .leading, spacing: 0) {
-                if workspace.settings.managedPolicyUnknown {
+                if let policyPath = workspace.settings.managedPolicyPath {
+                    InfoRow(
+                        "Location checked on this Mac",
+                        detail: "Agent Tooling knows where to look for an organization policy on this Mac."
+                    ) {
+                        Image(systemName: "building.2.crop.circle").foregroundStyle(.secondary).frame(width: 20)
+                    } trailing: {
+                        PathInfoButton(path: policyPath.path(percentEncoded: false))
+                    }
+                } else {
                     Text(
                         "Agent Tooling was not told where an organization policy file would be on this Mac, so it cannot rule one out. If your organization sets one, it may decide a setting shown elsewhere as changeable."
                     )
@@ -131,19 +172,6 @@ struct SettingsGeneralView: View {
                     .foregroundStyle(.secondary)
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    // `WorkspaceSettingsSession` only exposes whether a policy
-                    // location is known, not the location itself; see the
-                    // report's "Needs a shared change" for the accessor this
-                    // row wants.
-                    InfoRow(
-                        "Location checked on this Mac",
-                        detail: "Agent Tooling knows where to look for an organization policy on this Mac."
-                    ) {
-                        Image(systemName: "building.2.crop.circle").foregroundStyle(.secondary).frame(width: 20)
-                    } trailing: {
-                        EmptyView()
-                    }
                 }
                 Divider()
                 Text("Importing a policy file from here is being restored; nothing on this Mac is affected by that yet.")

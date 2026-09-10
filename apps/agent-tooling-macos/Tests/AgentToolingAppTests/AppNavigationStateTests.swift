@@ -29,6 +29,43 @@ struct AppNavigationStateTests {
         #expect(navigation.selectedClient == nil)
     }
 
+    /// A palette action with no row of its own — "Add MCP server" or "Paste to
+    /// import" — has to land somewhere a screen can answer it, the same way a
+    /// row-scoped one lands as `requestedItemID`.
+    @Test("A screen request with no row lands on its section and waits to be answered")
+    @MainActor
+    func screenRequestLandsOnItsSectionAndWaitsToBeAnswered() {
+        let navigation = AppNavigationState()
+
+        navigation.openScreenRequest(.pasteImport)
+
+        #expect(navigation.requestedSection == .mcpServers)
+        #expect(navigation.requestedScreenRequest == .pasteImport)
+
+        // Consuming a different request than the one waiting changes nothing:
+        // the screen that has not answered yet still gets its turn.
+        navigation.consumeScreenRequest(.addMCPServer)
+        #expect(navigation.requestedScreenRequest == .pasteImport)
+
+        navigation.consumeScreenRequest(.pasteImport)
+        #expect(navigation.requestedScreenRequest == nil)
+    }
+
+    /// Every other route is one-shot and exclusive: landing somewhere new must
+    /// not leave a stale screen request for a section nobody is looking at
+    /// answered later by mistake.
+    @Test("Navigating away clears a screen request nobody has answered yet")
+    @MainActor
+    func navigatingAwayClearsAnUnansweredScreenRequest() {
+        let navigation = AppNavigationState()
+        navigation.openScreenRequest(.addMCPServer)
+
+        navigation.open(.section(.activity))
+
+        #expect(navigation.requestedSection == .activity)
+        #expect(navigation.requestedScreenRequest == nil)
+    }
+
     @Test("A general Sync route means All Clients")
     @MainActor
     func generalSyncRouteClearsClientScope() {

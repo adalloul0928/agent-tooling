@@ -94,6 +94,8 @@ struct MCPServersView: View {
         .task { capabilities.activate(workspaceRoot: workspaceRoot) }
         .onAppear(perform: consumeRequestedItem)
         .onChange(of: navigation.requestedItemID) { _, _ in consumeRequestedItem() }
+        .onAppear(perform: consumeRequestedScreenRequest)
+        .onChange(of: navigation.requestedScreenRequest) { _, _ in consumeRequestedScreenRequest() }
         .onChange(of: entries.map(\.id)) { _, _ in pruneSelection() }
         .onExitCommand { selection = [] }
         .environment(capabilities)
@@ -459,6 +461,20 @@ struct MCPServersView: View {
         navigation.consumeRequestedItem(requested)
     }
 
+    /// Answers a palette request that names no row of its own. Both "Add MCP
+    /// server" and "Paste to import" land here on the same sheet: there is no
+    /// separate manual-entry form to send one of them to instead.
+    private func consumeRequestedScreenRequest() {
+        guard let requested = navigation.requestedScreenRequest, requested.section == .mcpServers else {
+            return
+        }
+        switch requested {
+        case .addMCPServer, .pasteImport: activeSheet = .paste
+        case .selectMCPServer, .selectPlugin, .selectReceipt: break
+        }
+        navigation.consumeScreenRequest(requested)
+    }
+
     private var emptyStateTitle: String {
         entries.isEmpty ? "No connections yet" : "No matching servers"
     }
@@ -557,6 +573,45 @@ extension WorkspaceLibraryOwnership {
         switch self {
         case .centralPersonal, .centralUpstream, .attachedAuthoring: true
         case .nativeOwned, .trackedOnly: false
+        }
+    }
+
+    /// What a row's clause calls this authority. Restored from the dead-view
+    /// sweep: `WorkspaceLibraryView.swift` had no caller left and was deleted,
+    /// but Skills, Plugins, Projects, the command palette catalog and Getting
+    /// Started all still read this label, so it stays module-wide rather than
+    /// going down with the screen it was declared beside.
+    var libraryLabel: String {
+        switch self {
+        case .centralPersonal: "Personal library"
+        case .centralUpstream: "From a repository"
+        case .nativeOwned: "Managed by its app"
+        case .attachedAuthoring: "Linked authoring folder"
+        case .trackedOnly: "Tracked only"
+        }
+    }
+}
+
+extension WorkspaceLibraryReadModelRow {
+    /// Same provenance as `WorkspaceLibraryOwnership.libraryLabel`, one row
+    /// exception and all: a personal MCP server this workspace itself keeps
+    /// configured is a connection, not a library entry, so its row says so.
+    var ownershipLabel: String {
+        kind == .mcpServer && ownership == .centralPersonal
+            ? "Managed connection" : ownership.libraryLabel
+    }
+}
+
+extension ArtifactKind {
+    /// Same provenance as `WorkspaceLibraryOwnership.libraryLabel`; Getting
+    /// Started still reads it for a row it draws before any screen owns one.
+    var librarySymbol: String {
+        switch self {
+        case .skill: "doc.text"
+        case .package, .nativePlugin: "puzzlepiece.extension"
+        case .mcpServer: "server.rack"
+        case .preset: "square.stack"
+        case .logicalProject: "folder"
         }
     }
 }

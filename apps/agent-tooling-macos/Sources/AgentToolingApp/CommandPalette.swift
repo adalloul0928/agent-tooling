@@ -102,6 +102,26 @@ enum CommandPaletteCatalog {
                 keywords: ["sync", "install", "plan", "reconcile", "apps"],
                 priority: 100,
                 outcome: .reviewSync),
+            CommandPaletteItem(
+                id: "action.addServer",
+                title: "Add MCP server",
+                subtitle: "Paste a definition to see what it describes",
+                contextLabel: "Action",
+                kind: .mcpServer,
+                symbol: "plus",
+                keywords: ["mcp", "new", "server", "add", "connection"],
+                priority: 100,
+                outcome: .screenRequest(.addMCPServer)),
+            CommandPaletteItem(
+                id: "action.paste",
+                title: "Paste to import",
+                subtitle: "Read an mcp add command, a JSON block, a server URL, or a SKILL.md",
+                contextLabel: "Action",
+                kind: nil,
+                symbol: "doc.on.clipboard",
+                keywords: ["paste", "clipboard", "json", "import", "skill.md"],
+                priority: 100,
+                outcome: .screenRequest(.pasteImport)),
         ]
     }
 

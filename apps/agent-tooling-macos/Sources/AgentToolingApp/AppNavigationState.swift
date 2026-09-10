@@ -15,6 +15,11 @@ final class AppNavigationState {
     /// no route of their own. Revealing is not acting on it: a screen that reads
     /// this scrolls to a row and selects it, and does nothing else.
     private(set) var requestedItemID: String?
+    /// A screen-specific instruction that names no row of its own — opening a
+    /// sheet, say — for the one screen that owns it. Arriving is not acting:
+    /// the screen decides what answering it means, the same way revealing
+    /// `requestedItemID` is not selecting an action for that row.
+    private(set) var requestedScreenRequest: ScreenRequest?
     private(set) var requestedMarketplacePackageID: String?
     private(set) var selectedClient: ClientKind?
     private var pendingRequestQueue: [UUID] = []
@@ -39,6 +44,7 @@ final class AppNavigationState {
             }
             requestedSkillID = nil
             requestedItemID = nil
+            requestedScreenRequest = nil
             requestedMarketplacePackageID = nil
             pendingRequestQueue.removeAll()
             skillCreationQueue.removeAll()
@@ -46,12 +52,14 @@ final class AppNavigationState {
             requestedSection = .skills
             requestedSkillID = id
             requestedItemID = nil
+            requestedScreenRequest = nil
             requestedMarketplacePackageID = nil
             pendingRequestQueue.removeAll()
             skillCreationQueue.removeAll()
         case .pendingRequest(let id):
             requestedSkillID = nil
             requestedItemID = nil
+            requestedScreenRequest = nil
             requestedMarketplacePackageID = nil
             if !pendingRequestQueue.contains(id) {
                 pendingRequestQueue.append(id)
@@ -67,6 +75,7 @@ final class AppNavigationState {
         requestedSection = .marketplace
         requestedSkillID = nil
         requestedItemID = nil
+        requestedScreenRequest = nil
         requestedMarketplacePackageID = id
         pendingRequestQueue.removeAll()
         revision += 1
@@ -79,6 +88,7 @@ final class AppNavigationState {
         requestedSection = section
         requestedSkillID = nil
         requestedItemID = id
+        requestedScreenRequest = nil
         requestedMarketplacePackageID = nil
         pendingRequestQueue.removeAll()
         skillCreationQueue.removeAll()
@@ -90,6 +100,26 @@ final class AppNavigationState {
         requestedItemID = nil
     }
 
+    /// Opens the screen a request with no row of its own belongs to, and hands
+    /// it the request. Landing on the screen is the shell's job, the same as
+    /// every other route here; answering the request — opening a sheet, say —
+    /// is the screen's, once it consumes it.
+    func openScreenRequest(_ request: ScreenRequest) {
+        requestedSection = request.section
+        requestedSkillID = nil
+        requestedItemID = nil
+        requestedScreenRequest = request
+        requestedMarketplacePackageID = nil
+        pendingRequestQueue.removeAll()
+        skillCreationQueue.removeAll()
+        revision += 1
+    }
+
+    func consumeScreenRequest(_ request: ScreenRequest) {
+        guard requestedScreenRequest == request else { return }
+        requestedScreenRequest = nil
+    }
+
     /// Opens the client-facing pane with one durable, exact client scope.
     /// The scope survives navigation until the user explicitly returns to all
     /// clients, while the section request itself remains one-shot.
@@ -98,6 +128,7 @@ final class AppNavigationState {
         requestedSection = .syncCenter
         requestedSkillID = nil
         requestedItemID = nil
+        requestedScreenRequest = nil
         requestedMarketplacePackageID = nil
         pendingRequestQueue.removeAll()
         skillCreationQueue.removeAll()
@@ -109,6 +140,7 @@ final class AppNavigationState {
         requestedSection = .syncCenter
         requestedSkillID = nil
         requestedItemID = nil
+        requestedScreenRequest = nil
         requestedMarketplacePackageID = nil
         pendingRequestQueue.removeAll()
         skillCreationQueue.removeAll()
@@ -134,6 +166,7 @@ final class AppNavigationState {
         requestedSection = .skills
         requestedSkillID = nil
         requestedItemID = nil
+        requestedScreenRequest = nil
         requestedMarketplacePackageID = nil
         if !skillCreationQueue.contains(id) { skillCreationQueue.append(id) }
         revision += 1

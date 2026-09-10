@@ -62,6 +62,10 @@ final class WorkspaceDeviceSession {
     private(set) var errorMessage: String?
     /// Which apps this Mac manages. Local to this Mac, never portable bytes.
     private(set) var enabledClients: Set<ClientKind>
+    /// Whether this Mac checks its apps on its own. Device-local, the same as
+    /// `enabledClients`, and just as inert to read: nothing here starts a
+    /// check by itself.
+    private(set) var automaticallyCheckHealth: Bool
 
     /// Every app this build knows how to speak to, in the registry's own order,
     /// so every list and picker offers them the same way round.
@@ -90,11 +94,9 @@ final class WorkspaceDeviceSession {
         self.library = library
         self.homeRoot = homeRoot
         self.observer = observer
-        if let recorded = (try? store.snapshot())?.device.applicationState?.preferences.enabledClients {
-            enabledClients = Set(recorded)
-        } else {
-            enabledClients = Set(ClientKind.allCases)
-        }
+        let preferences = (try? store.snapshot())?.device.applicationState?.preferences
+        enabledClients = preferences.map { Set($0.enabledClients) } ?? Set(ClientKind.allCases)
+        automaticallyCheckHealth = preferences?.automaticallyCheckHealth ?? true
     }
 
     /// A surface with no client of its own is never hidden by the choice.
@@ -137,6 +139,39 @@ final class WorkspaceDeviceSession {
         }
         // The choice is device state, but recording it advances the workspace,
         // so the library is read again rather than left holding an older head.
+        await library.refresh()
+    }
+
+    /// Turns this Mac's own automatic check on or off.
+    ///
+    /// Recorded the same way `setEnabled` records which apps this Mac manages:
+    /// device-local, read fresh inside the commit rather than overwritten from
+    /// what this session last saw, so a choice made elsewhere between reading
+    /// and writing is not quietly lost. The one difference is the shape of what
+    /// changes — one flag rather than a set — not the care taken over it.
+    func setAutomaticallyCheckHealth(_ enabled: Bool) async {
+        guard automaticallyCheckHealth != enabled else { return }
+        let previous = automaticallyCheckHealth
+        automaticallyCheckHealth = enabled
+        errorMessage = nil
+        do {
+            guard let head = try await service.snapshot()?.document.revision.id else {
+                throw WorkspaceRevisionStoreError.notInitialized
+            }
+            _ = try await service.commitDeviceChange(expectedRevisionID: head) { device in
+                guard var application = device.applicationState else {
+                    throw WorkspaceRevisionStoreError.notInitialized
+                }
+                application.preferences.automaticallyCheckHealth = enabled
+                device.applicationState = application
+            }
+        } catch {
+            // Showing a toggle that did not save would be a lie about what
+            // this Mac will do next.
+            automaticallyCheckHealth = previous
+            errorMessage = "This Mac could not record that choice. Nothing was changed."
+            return
+        }
         await library.refresh()
     }
 
