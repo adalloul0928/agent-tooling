@@ -31,6 +31,7 @@ private struct SkillsBrowser: View {
     @Environment(AppNavigationState.self) private var navigation
     @Environment(\.workspaceNavigate) private var navigate
     @Environment(\.availableClients) private var availableClients
+    @Environment(\.codexSkillDrafting) private var codexDrafting
     @Binding var sourceOwnership: String
     let inventory: SkillInventoryIndex
 
@@ -49,6 +50,11 @@ private struct SkillsBrowser: View {
     @State private var selection: Set<ArtifactID> = []
     @State private var creating = false
     @State private var attaching = false
+    @State private var codexCreator: CodexCreatorPresentation?
+    /// The skill the creator just admitted, held until its sheet has closed:
+    /// choosing where a new skill is used is a second sheet, and two of them
+    /// cannot be on screen at once.
+    @State private var createdByCodex: ArtifactID?
     @State private var editingSource: SkillEntry?
     @State private var assignment: AssignmentPresentation?
     @State private var exporting: ExportPresentation?
@@ -67,6 +73,9 @@ private struct SkillsBrowser: View {
                     Menu {
                         Button("Choose several…", systemImage: "checkmark.circle") { setSelecting(true) }
                             .disabled(workspace.library.isBusy || assignableIDs.isEmpty)
+                        Button("New skill with Codex…", systemImage: "sparkles") { openCodexCreator() }
+                            .disabled(workspace.library.isBusy || !canWrite || !workspace.device.isEnabled(.codex))
+                            .help("Asks your signed-in Codex to write a skill you review before anything is saved")
                         Button("Attach a folder you author…", systemImage: "folder.badge.plus") { attaching = true }
                             .disabled(workspace.library.isBusy || !canWrite)
                         Divider()
@@ -144,6 +153,18 @@ private struct SkillsBrowser: View {
         }
         .sheet(isPresented: $attaching) {
             WorkspaceAttachFolderSheet(session: workspace.authoring)
+        }
+        // Codex writes only into an isolated draft folder. Nothing reaches the
+        // library until the draft is accepted, and where a saved skill is used
+        // is still asked separately, once this sheet has closed.
+        .sheet(item: $codexCreator, onDismiss: finishCodexCreation) { presentation in
+            CodexSkillCreatorSheet(
+                workspace: workspace,
+                drafting: codexDrafting(workspace.skillDraftStagingRoot),
+                pendingRequestID: presentation.requestID
+            ) { artifactID, _ in
+                createdByCodex = artifactID
+            }
         }
         .sheet(item: $exporting) { presentation in
             WorkspacePackageExportSheet(session: workspace.export, itemName: presentation.name)
@@ -672,6 +693,10 @@ private struct SkillsBrowser: View {
     }
 
     private func applyExternalNavigation() {
+        if codexCreator == nil, let requestID = navigation.requestedSkillCreationID {
+            navigation.consumeSkillCreationRequest(requestID)
+            openCodexCreator(requestID: requestID)
+        }
         let requested = navigation.requestedSkillID ?? navigation.requestedItemID
         guard let requested,
             let match = inventory.skills.first(where: { $0.id.rawValue.uuidString.lowercased() == requested })
@@ -681,6 +706,28 @@ private struct SkillsBrowser: View {
         resetFilters()
         selectedID = match.id
         navigation.consumeRequestedItem(requested)
+    }
+
+    /// Opens the creator, for a request somebody queued or for a blank one.
+    private func openCodexCreator(requestID: UUID? = nil) {
+        createdByCodex = nil
+        codexCreator = .init(requestID: requestID)
+    }
+
+    /// The creator has closed. A skill it admitted is revealed and offered a
+    /// destination; nothing is assigned until that second sheet is saved.
+    private func finishCodexCreation() {
+        guard let created = createdByCodex else { return }
+        createdByCodex = nil
+        selectedID = created
+        workspace.library.discardReview()
+        assignment = .init(artifactIDs: [created])
+    }
+
+    private struct CodexCreatorPresentation: Identifiable {
+        let id = UUID()
+        /// The queued request this creator was opened for, when there was one.
+        let requestID: UUID?
     }
 
     private struct AssignmentPresentation: Identifiable {

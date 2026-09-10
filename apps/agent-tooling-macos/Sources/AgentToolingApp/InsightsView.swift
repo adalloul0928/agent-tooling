@@ -19,6 +19,10 @@ struct InsightsView: View {
     @State private var selection: InsightSelection = .opportunities
     @State private var isPresentingClearConfirmation = false
     @State private var showingScanOptions = false
+    /// Why the last "create with Codex" could not be handed to the creator.
+    /// Shown beside the report rather than as an alert, because nothing was
+    /// changed and there is nothing to acknowledge.
+    @State private var routeError: String?
 
     /// The session is built here from the services the section resolved, so it
     /// survives every redraw and a test can hand in a scan of its own.
@@ -71,7 +75,7 @@ struct InsightsView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         if session.isScanning {
                             scanningState
-                        } else if let message = session.errorMessage {
+                        } else if let message = routeError ?? session.errorMessage {
                             errorState(message)
                         }
 
@@ -515,12 +519,13 @@ struct InsightsView: View {
         Task { await session.scan(options: options) }
     }
 
-    /// A recommendation opens a screen or queues a review. Nothing here
-    /// installs, and nothing here writes to a client.
+    /// A recommendation opens a screen. Nothing here installs, nothing here
+    /// writes to a client, and asking for a skill only hands the creator an
+    /// instruction to draft — the draft is reviewed before it is saved.
     private func open(_ recommendation: ToolRecommendation) {
         switch recommendation.kind {
         case .createCustomSkill:
-            Task { await session.requestSkillDraft(from: recommendation, targets: enabledClients) }
+            draftWithCodex(recommendation)
         case .useExistingSkill:
             if let skillID = recommendation.skillID {
                 navigation.open(.skill(skillID))
@@ -531,6 +536,26 @@ struct InsightsView: View {
             } else {
                 navigation.open(.section(.marketplace))
             }
+        }
+    }
+
+    /// Writes down what this recommendation would ask Codex for and opens the
+    /// creator on it. Nothing is generated here and nothing is saved: the
+    /// creator shows every generated file before anything reaches the library.
+    private func draftWithCodex(_ recommendation: ToolRecommendation) {
+        let instruction = recommendation.draftInstruction ?? recommendation.summary
+        guard !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        routeError = nil
+        let request = CodexSkillDraftRequest(
+            instruction: instruction,
+            targets: enabledClients.isEmpty ? [.codex] : enabledClients)
+        let store = workspace.store
+        Task {
+            guard await WorkspaceSkillDraftSeed.save(request, in: store) else {
+                routeError = "This Mac could not record what to ask Codex for. Nothing was changed."
+                return
+            }
+            navigation.openSkillCreationRequest(request.id)
         }
     }
 
@@ -734,7 +759,7 @@ private struct RecommendationRow: View {
     private var actionTitle: String {
         switch recommendation.kind {
         case .useExistingSkill: "Open skill"
-        case .createCustomSkill: "Request a draft"
+        case .createCustomSkill: "Create with Codex"
         case .marketplaceSkill, .mcpServer, .plugin:
             recommendation.marketplacePackageID == nil ? "Browse Discover" : "Review in Discover"
         }
@@ -743,7 +768,7 @@ private struct RecommendationRow: View {
     private var actionHint: String {
         switch recommendation.kind {
         case .useExistingSkill: "Opens the installed skill details"
-        case .createCustomSkill: "Queues a request for review. Nothing is created and nothing is installed"
+        case .createCustomSkill: "Opens a Codex draft you review file by file. Nothing is created and nothing is installed"
         case .marketplaceSkill, .mcpServer, .plugin: "Opens Discover without installing anything"
         }
     }

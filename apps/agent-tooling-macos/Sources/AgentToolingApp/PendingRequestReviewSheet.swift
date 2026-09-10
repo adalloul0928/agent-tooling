@@ -5,6 +5,10 @@ import SwiftUI
 /// managed desired state or an immutable operation plan. This sheet never
 /// executes the requested change.
 struct PendingRequestReviewSheet: View {
+    /// Optional so this sheet can be laid out on its own. Only the skill-draft
+    /// route reads it, and only when somebody presses that button.
+    @Environment(AppNavigationState.self) private var navigation: AppNavigationState?
+
     let request: PendingAgentRequest
     /// What the last attempt to approve this request said, when it said no.
     /// Shown here rather than as an alert, so the reason sits beside the fields
@@ -50,6 +54,14 @@ struct PendingRequestReviewSheet: View {
                         message:
                             "Client identity and request text are self-reported. Continuing only asks Agent Tooling to build its own reviewable draft or plan; it does not approve or run the change."
                     )
+
+                    if isSkillDraft {
+                        AttentionBanner(
+                            title: "This asks for a skill that does not exist yet",
+                            message:
+                                "Opening the creator runs Codex in an isolated draft folder. Your library is unchanged until you have read the generated files and saved them, and this request stays in the queue until you do."
+                        )
+                    }
 
                     if let refusal {
                         AttentionBanner(title: "Nothing was approved", message: refusal)
@@ -124,11 +136,23 @@ struct PendingRequestReviewSheet: View {
                     .disabled(isBusy)
                     .help("Remove this request without changing any client")
                 Spacer()
-                Button("Continue to App Review", action: onContinue)
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(isBusy)
-                    .help("Build an app-owned draft or plan; no change runs yet")
+                if isSkillDraft {
+                    // A skill nobody has written yet cannot be assigned, so
+                    // this request has no approval to give. It opens the
+                    // creator instead, and stays in the queue until a draft
+                    // made from it is accepted.
+                    Button("Create with Codex…", action: openCreator)
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(isBusy)
+                        .help("Opens the Codex creator on this request; nothing is created until you accept the draft")
+                } else {
+                    Button("Continue to App Review", action: onContinue)
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(isBusy)
+                        .help("Build an app-owned draft or plan; no change runs yet")
+                }
             }
             .padding(.horizontal, 24)
             .frame(height: 76)
@@ -138,6 +162,24 @@ struct PendingRequestReviewSheet: View {
         .interactiveDismissDisabled(isBusy)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Review \(request.kind.displayName) request")
+    }
+
+    /// A request to write a skill that does not exist yet. Approving one would
+    /// have nothing to assign, so it is routed to the creator rather than to
+    /// the assignment path every other request kind takes.
+    private var isSkillDraft: Bool { request.kind == .createSkill }
+
+    /// Closes this review first, then asks the window for the creator on the
+    /// next turn, so the queued route is handed back exactly once before the
+    /// new one is made.
+    private func openCreator() {
+        guard let navigation else { return }
+        let id = request.id
+        // A route that opened this review is handed back before the new one is
+        // made, so asking for the creator cannot reopen the review behind it.
+        navigation.consumePendingRequest(id)
+        onDefer()
+        Task { @MainActor in navigation.openSkillCreationRequest(id) }
     }
 
     private var hasSensitiveDetails: Bool {
