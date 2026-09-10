@@ -132,7 +132,7 @@ struct OnboardingWizardTests {
     private func row(requestedAssignments: [WorkspaceLibraryRequestedAssignment]) -> WorkspaceLibraryReadModelRow {
         .init(
             artifactID: ArtifactID(), displayName: "Example", kind: .skill, ownership: .trackedOnly,
-            parentPluginLabel: nil, sourceLabel: nil, observedDescription: nil, includedChildren: [],
+            parentPluginLabel: nil, declaredName: nil, sourceLabel: nil, observedDescription: nil, includedChildren: [],
             requestedAssignments: requestedAssignments, isAssignable: requestedAssignments.isEmpty,
             assignmentExplanation: nil, assignableReasons: [], nativeRoutes: [])
     }
