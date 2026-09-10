@@ -1,7 +1,6 @@
 import AgentToolingCore
 import Foundation
 import Observation
-import SwiftUI
 
 /// The persisted review queue, behind a protocol.
 ///
@@ -34,12 +33,12 @@ struct LivePendingRequestQueue: PendingRequestQueuing {
     }
 }
 
-extension EnvironmentValues {
-    @Entry var pendingRequestQueue: any PendingRequestQueuing = LivePendingRequestQueue()
-}
-
 /// What a local integration asked Agent Tooling to do, and what happens when
 /// somebody says yes.
+///
+/// There is one of these per launch, built by `WorkspaceLaunch` and read by
+/// both Home and Apps, so a request decided on one screen is gone from the
+/// other without either going back to the store to find out.
 ///
 /// Every row here is untrusted local input. Nothing in the queue has changed a
 /// client, and accepting one still changes no client: it turns a wish into

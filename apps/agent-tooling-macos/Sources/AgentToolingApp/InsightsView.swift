@@ -6,12 +6,14 @@ import SwiftUI
 /// Everything on this screen is a reading, never a change: the scan reads chat
 /// history that already exists, the report keeps counts and recommendations
 /// rather than anything anybody said, and the only thing an action here can do
-/// is open a screen or queue something for a person to review.
+/// is open a screen.
 struct InsightsView: View {
     let workspace: WorkspaceLaunch.Workspace
+    /// The workspace's one insights session, so a scan started here is the
+    /// report Home shows.
+    let session: WorkspaceInsightsSession
     @Environment(AppNavigationState.self) private var navigation
     @Environment(\.availableClients) private var enabledClients
-    @State private var session: WorkspaceInsightsSession
     @State private var includeClaude = true
     @State private var includeCodex = true
     @State private var lookbackDays = 30
@@ -26,16 +28,6 @@ struct InsightsView: View {
     /// Shown beside the report rather than as an alert, because nothing was
     /// changed and there is nothing to acknowledge.
     @State private var routeError: String?
-
-    /// The session is built here from the services the section resolved, so it
-    /// survives every redraw and a test can hand in a scan of its own.
-    init(workspace: WorkspaceLaunch.Workspace, services: any InsightsServicing) {
-        self.workspace = workspace
-        _session = State(
-            initialValue: WorkspaceInsightsSession(
-                library: workspace.library, store: workspace.store,
-                homeRoot: workspace.homeRoot, services: services))
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -364,10 +356,7 @@ struct InsightsView: View {
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(recommendations.enumerated()), id: \.element.id) { index, recommendation in
-                        RecommendationRow(
-                            recommendation: recommendation,
-                            isQueued: session.queuedDraftIDs.contains(recommendation.id)
-                        ) {
+                        RecommendationRow(recommendation: recommendation) {
                             open(recommendation)
                         }
                         if index < recommendations.count - 1 {
@@ -714,9 +703,6 @@ private struct CoverageRow: View {
 
 private struct RecommendationRow: View {
     let recommendation: ToolRecommendation
-    /// A draft already asked for is waiting on a person, so the row says that
-    /// rather than offering to ask again.
-    let isQueued: Bool
     let action: () -> Void
 
     var body: some View {
@@ -740,17 +726,10 @@ private struct RecommendationRow: View {
 
             Spacer(minLength: 20)
 
-            if isQueued {
-                Label("Waiting for review", systemImage: "clock")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Waiting for review. Nothing has been created.")
-            } else {
-                Button(actionTitle, action: action)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .accessibilityHint(actionHint)
-            }
+            Button(actionTitle, action: action)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityHint(actionHint)
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 13)

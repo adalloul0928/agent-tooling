@@ -1,7 +1,6 @@
 import AgentToolingCore
 import Foundation
 import Observation
-import SwiftUI
 
 /// Everything Insights reaches for outside the app, behind one protocol.
 ///
@@ -87,17 +86,15 @@ struct LiveInsightsServices: InsightsServicing {
     }
 }
 
-extension EnvironmentValues {
-    /// How Insights gets its scan and its saved report, given this Mac's own
-    /// workspace folder. A test replaces the whole factory.
-    @Entry var insightsServices: (URL) -> any InsightsServicing = { LiveInsightsServices(container: $0) }
-}
-
 /// What this Mac's own recent work suggests, and nothing it does about it.
 ///
 /// The scan is read-only in both directions: it reads chat history that already
-/// exists and it installs nothing. The one thing this session can write is a
-/// request for somebody to review later, which is not an install either.
+/// exists and it installs nothing. Every action a report offers opens a screen;
+/// none of them writes anywhere.
+///
+/// There is one of these per launch, built by `WorkspaceLaunch` and handed to
+/// both screens that read a report, so a scan started on Insights is the scan
+/// Home reports and neither screen has its own idea of what was last found.
 ///
 /// Scanning never blocks the screen. The work runs off this actor, a scan can
 /// be stopped before it replaces what is on screen, and a stopped or superseded
@@ -112,12 +109,8 @@ final class WorkspaceInsightsSession {
     /// When a scan in this session last finished. A restored report carries its
     /// own `generatedAt`, which is older and says so.
     private(set) var lastScannedAt: Date?
-    /// Recommendations this session has already asked somebody to review, so a
-    /// row says it is waiting rather than offering to ask twice.
-    private(set) var queuedDraftIDs: Set<String> = []
 
     @ObservationIgnored private let library: WorkspaceLibrarySession
-    @ObservationIgnored private let store: WorkspaceRevisionStore
     @ObservationIgnored private let services: any InsightsServicing
     @ObservationIgnored private let homeRoot: URL
     @ObservationIgnored private var scanTask: Task<InsightsReport, Never>?
@@ -129,12 +122,10 @@ final class WorkspaceInsightsSession {
     /// scan rather than an empty screen somebody has to scan again to fill.
     init(
         library: WorkspaceLibrarySession,
-        store: WorkspaceRevisionStore,
         homeRoot: URL,
         services: any InsightsServicing
     ) {
         self.library = library
-        self.store = store
         self.homeRoot = homeRoot
         self.services = services
         report = services.lastReport()
@@ -197,60 +188,10 @@ final class WorkspaceInsightsSession {
         report = nil
         lastScannedAt = nil
         errorMessage = nil
-        queuedDraftIDs.removeAll()
         do {
             try services.forget()
         } catch {
             errorMessage = "The saved report could not be removed, so it may come back the next time Agent Tooling opens."
-        }
-    }
-
-    /// Asks for a skill to be drafted from one recommendation.
-    ///
-    /// This queues a request for review and does nothing else: no skill is
-    /// created, nothing is written to a client, and the person still decides.
-    /// The draft payload is kept beside the queued row, so the review can open
-    /// what was actually asked for rather than a row with nothing behind it.
-    func requestSkillDraft(from recommendation: ToolRecommendation, targets: [ClientKind]) async {
-        guard recommendation.kind == .createCustomSkill, !queuedDraftIDs.contains(recommendation.id) else { return }
-        let instruction = recommendation.draftInstruction ?? recommendation.summary
-        guard !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        errorMessage = nil
-        let store = self.store
-        let requested = targets.isEmpty ? [ClientKind.codex] : targets
-        do {
-            try await Task.detached(priority: .userInitiated) {
-                let outcome = try PendingRequestQueueService.enqueue(
-                    kind: .createSkill,
-                    title: "Create a skill for \(recommendation.title)",
-                    summary: recommendation.summary,
-                    componentID: nil,
-                    scope: .user,
-                    targets: requested,
-                    reason: recommendation.rationale,
-                    reviewDetails: PendingRequestReviewDetails(instruction: instruction),
-                    fingerprintInputs: [recommendation.id, instruction],
-                    clientLabel: "Insights",
-                    store: store)
-                // Bound to the queued row even when this collapsed into an
-                // identical earlier ask, so a review can always be opened.
-                let draft = CodexSkillDraftRequest(
-                    id: outcome.request.id, instruction: instruction, scope: .user, targets: requested)
-                do {
-                    try store.saveRequestDraft(outcome.request.id, draft)
-                } catch {
-                    if !outcome.collapsed {
-                        _ = try? PendingRequestQueueService.resolve(
-                            id: outcome.request.id, expectedFingerprint: outcome.request.fingerprint, store: store)
-                    }
-                    throw error
-                }
-            }.value
-            queuedDraftIDs.insert(recommendation.id)
-        } catch let error as PendingRequestQueueError {
-            errorMessage = error.errorDescription
-        } catch {
-            errorMessage = "That request could not be queued for review. Nothing was changed."
         }
     }
 }

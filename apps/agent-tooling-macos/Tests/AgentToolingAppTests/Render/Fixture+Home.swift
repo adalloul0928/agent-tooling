@@ -43,7 +43,7 @@ extension ShellRenderFixture {
         let insightsService = StubInsightsServices(
             answer: keptReport ?? ShellRenderFixture.insightsReport(), restored: keptReport)
         let insights = WorkspaceInsightsSession(
-            library: workspace.library, store: store, homeRoot: home, services: insightsService)
+            library: workspace.library, homeRoot: home, services: insightsService)
         let requests = WorkspaceRequestSession(
             store: store, library: workspace.library, device: workspace.device,
             queue: StubPendingRequestQueue(requests: queued))

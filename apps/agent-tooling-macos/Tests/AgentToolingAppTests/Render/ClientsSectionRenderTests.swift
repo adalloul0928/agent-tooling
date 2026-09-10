@@ -13,21 +13,20 @@ struct ClientsSectionRenderTests {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
 
-        try expectDrawn(renderShell(.syncCenter, fixture: fixture).clientsStubs())
+        try expectDrawn(renderShell(.syncCenter, fixture: fixture).scriptedReceipts())
     }
 
     /// The screen with something on it: a checked Mac, a request nobody has
     /// decided, and a receipt from a run that already happened.
     @Test func theScreenDrawsAQueueAndTheLastRun() async throws {
-        let fixture = try await ShellRenderFixture()
+        let fixture = try await ShellRenderFixture(
+            requestQueue: StubPendingRequestQueue(requests: [ShellRenderFixture.pendingRequest()]))
         defer { fixture.remove() }
         await fixture.workspace.device.refresh()
 
         try expectDrawn(
             renderShell(.syncCenter, fixture: fixture)
-                .clientsStubs(
-                    requests: [ShellRenderFixture.pendingRequest()],
-                    receipts: [ShellRenderFixture.receipt()]))
+                .scriptedReceipts([ShellRenderFixture.receipt()]))
     }
 
     /// The affordance moved here from the dead `WorkspaceDeploymentView`: a
@@ -42,7 +41,7 @@ struct ClientsSectionRenderTests {
             to: fixture.root.appending(path: "external-destination", directoryHint: .isDirectory))
         #expect(fixture.workspace.deployment.linkedDestinations.count == 1)
 
-        try expectDrawn(renderShell(.syncCenter, fixture: fixture).clientsStubs())
+        try expectDrawn(renderShell(.syncCenter, fixture: fixture).scriptedReceipts())
     }
 
     /// Scoped to one client, the screen keeps its scope bar and its verdict.
@@ -58,7 +57,7 @@ struct ClientsSectionRenderTests {
                 workspace: fixture.workspace, initialSection: .syncCenter, navigation: navigation
             )
             .frame(width: shellWindowSize.width, height: shellWindowSize.height)
-            .clientsStubs())
+            .scriptedReceipts())
     }
 
     /// The review sheets draw on their own; the shell never opens one by itself,
@@ -84,13 +83,9 @@ struct ClientsSectionRenderTests {
 }
 
 extension View {
-    /// Every service this screen reads, scripted. Without these the render
-    /// would open this Mac's own request queue and receipts.
-    fileprivate func clientsStubs(
-        requests: [PendingAgentRequest] = [],
-        receipts: [OperationReceipt] = []
-    ) -> some View {
-        environment(\.pendingRequestQueue, StubPendingRequestQueue(requests: requests))
-            .environment(\.operationReceiptReader, StubOperationReceiptReader(receipts: receipts))
+    /// This Mac's own receipts, scripted. The review queue is scripted where
+    /// the workspace is opened; receipts are still the screen's own read.
+    fileprivate func scriptedReceipts(_ receipts: [OperationReceipt] = []) -> some View {
+        environment(\.operationReceiptReader, StubOperationReceiptReader(receipts: receipts))
     }
 }

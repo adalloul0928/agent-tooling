@@ -5,6 +5,9 @@ import SwiftUI
 /// changes it. Requested assignment is never rendered here as installation;
 /// installing stays the separate decision this screen asks for.
 ///
+/// The review queue is the workspace's, not this screen's, so a request Home
+/// counted is the request decided here and deciding it changes both.
+///
 /// The screen itself draws; this file only decides what is on top of it. Two
 /// things can be: one untrusted request somebody is reading, and one prepared
 /// plan somebody is approving. Neither opens itself.
@@ -12,8 +15,6 @@ struct ClientsSection: View {
     let workspace: WorkspaceLaunch.Workspace
 
     @Environment(AppNavigationState.self) private var navigation
-    @Environment(\.pendingRequestQueue) private var queue
-    @State private var requests: WorkspaceRequestSession?
     @State private var reviewedRequest: PendingAgentRequest?
     @State private var refusal: String?
     @State private var isReviewingPlan = false
@@ -23,28 +24,15 @@ struct ClientsSection: View {
     @State private var presentedRequestID: UUID?
 
     var body: some View {
-        Group {
-            if let requests {
-                SyncCenterView(
-                    workspace: workspace,
-                    requests: requests,
-                    client: scopedClient,
-                    onShowAllClients: { navigation.showAllClients() },
-                    onReviewChanges: { isPreparing = true },
-                    onReviewRequest: { present($0) })
-            } else {
-                ProgressView("Opening your apps…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
+        SyncCenterView(
+            workspace: workspace,
+            requests: workspace.requests,
+            client: scopedClient,
+            onShowAllClients: { navigation.showAllClients() },
+            onReviewChanges: { isPreparing = true },
+            onReviewRequest: { present($0) }
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            if requests == nil {
-                requests = WorkspaceRequestSession(
-                    store: workspace.store, library: workspace.library,
-                    device: workspace.device, queue: queue)
-            }
-        }
         // Preparing reads; it writes nothing. The sheet opens on what it found,
         // and approving it is still a separate decision inside the sheet.
         .task(id: isPreparing) {
@@ -59,12 +47,12 @@ struct ClientsSection: View {
             PendingRequestReviewSheet(
                 request: request,
                 refusal: refusal,
-                isBusy: requests?.isBusy == true,
+                isBusy: workspace.requests.isBusy,
                 onDefer: { reviewedRequest = nil },
                 onReject: {
                     Task {
-                        guard let requests, await requests.reject(request) else {
-                            refusal = requests?.errorMessage
+                        guard await workspace.requests.reject(request) else {
+                            refusal = workspace.requests.errorMessage
                             return
                         }
                         reviewedRequest = nil
@@ -72,8 +60,7 @@ struct ClientsSection: View {
                 },
                 onContinue: {
                     Task {
-                        guard let requests else { return }
-                        switch await requests.accept(request) {
+                        switch await workspace.requests.accept(request) {
                         case .assignmentSaved:
                             reviewedRequest = nil
                             // What was asked for is now recorded. Installing it
@@ -117,8 +104,7 @@ struct ClientsSection: View {
     private func applyRequestedRoute() {
         guard reviewedRequest == nil, let id = navigation.requestedPendingRequestID else { return }
         Task {
-            guard let requests else { return }
-            guard let request = await requests.request(id: id) else {
+            guard let request = await workspace.requests.request(id: id) else {
                 navigation.consumePendingRequest(id)
                 return
             }

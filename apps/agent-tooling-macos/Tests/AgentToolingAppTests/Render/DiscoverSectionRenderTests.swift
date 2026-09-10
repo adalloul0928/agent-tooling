@@ -7,10 +7,10 @@ import Testing
 
 /// Discover draws its catalogs, and draws nothing from the network.
 ///
-/// Both tests hand the screen a stub catalog through the same environment key
-/// the app uses, so a screen that reached past it — to the registry, to
-/// `~/.claude`, to a client's own tool — would be reaching somewhere this suite
-/// deliberately does not go.
+/// The workspace is opened with a stub catalog through the same parameter the
+/// app's own launch takes, so a screen that reached past it — to the registry,
+/// to `~/.claude`, to a client's own tool — would be reaching somewhere this
+/// suite deliberately does not go.
 @Suite("Discover renders")
 @MainActor
 struct DiscoverSectionRenderTests {
@@ -18,9 +18,7 @@ struct DiscoverSectionRenderTests {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
 
-        try expectDrawn(
-            renderShell(.marketplace, fixture: fixture)
-                .environment(\.marketplaceProviders, { _ in [StubMarketplaceProvider()] }))
+        try expectDrawn(renderShell(.marketplace, fixture: fixture))
     }
 
     /// The catalog has answered before this frame, so the packages, their
@@ -29,9 +27,9 @@ struct DiscoverSectionRenderTests {
     @Test func discoverDrawsTheListingsACatalogAnswered() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        let session = WorkspaceMarketplaceSession(
-            providers: [StubMarketplaceProvider()], service: fixture.workspace.service,
-            library: fixture.workspace.library, store: fixture.store)
+        // The workspace's own session, which is the one the screen draws: a
+        // catalog answered once is what Discover and Home both read.
+        let session = fixture.workspace.marketplace
         await session.refresh()
         #expect(session.packages.count == 2)
 

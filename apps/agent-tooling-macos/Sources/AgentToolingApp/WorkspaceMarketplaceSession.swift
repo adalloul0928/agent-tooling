@@ -1,27 +1,17 @@
 import AgentToolingCore
 import Foundation
 import Observation
-import SwiftUI
-
-/// The catalogs this build can ask, handed in rather than reached for.
-///
-/// Every provider reaches something outside this app — a registry over the
-/// network, a client's own CLI, a folder on disk — so nothing on the Discover
-/// screen is allowed to construct one. A render test replaces this key with a
-/// catalog that answers from memory, and by replacing it replaces all of them:
-/// there is no second door left open.
-///
-/// A factory rather than a list, because which catalogs exist depends on this
-/// Mac: whose home directory the client CLIs belong to, which clients this
-/// workspace manages, and which folders it records.
-extension EnvironmentValues {
-    @Entry var marketplaceProviders: (MarketplaceCatalogContext) -> [any MarketplaceProvider] = {
-        MarketplaceCatalogs.live(in: $0)
-    }
-}
 
 /// What the catalogs published, what this Mac has kept from them, and where
 /// both came from.
+///
+/// There is one of these per launch. `WorkspaceLaunch` builds it from the
+/// catalogs this build was handed and gives the same one to Discover and to
+/// Home, so asking a registry once is what the whole app has asked it and no
+/// screen can reach a catalog of its own. Every provider reaches something
+/// outside this app — a registry over the network, a client's own CLI, a folder
+/// on disk — and a test that hands `WorkspaceLaunch` one catalog that answers
+/// from memory has replaced all of them: there is no second door left open.
 ///
 /// Three rules shape everything here.
 ///
@@ -78,9 +68,9 @@ final class WorkspaceMarketplaceSession {
     private let library: WorkspaceLibrarySession
     private let store: WorkspaceRevisionStore
 
-    /// Deliberately does no work. A section rebuilds its view whenever the
-    /// shell redraws, so anything read here would be read again every time the
-    /// window changed. The first `refresh()` reads the store instead.
+    /// Deliberately does no work. This is built while the workspace is being
+    /// opened, so anything read here would be read before the window existed.
+    /// The first `refresh()` reads the store instead.
     init(
         providers: [any MarketplaceProvider],
         service: WorkspaceApplicationService,

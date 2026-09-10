@@ -9,19 +9,23 @@ import Testing
 /// Home draws the page it composes, and composes it from nothing it went and
 /// fetched itself.
 ///
-/// Every service behind this screen is stubbed through the same environment
-/// keys the app uses, so a render that reached a catalog, this Mac's chat
-/// history or its real review queue would be reaching somewhere this suite
-/// deliberately does not go.
+/// Every service behind this screen is stubbed where the app's own launch
+/// settles it, so a render that reached a catalog, this Mac's chat history or
+/// its real review queue would be reaching somewhere this suite deliberately
+/// does not go.
 @Suite("Home renders")
 @MainActor
 struct HomeSectionRenderTests {
     @Test func theShellDrawsHome() async throws {
-        let fixture = try await ShellRenderFixture()
-        defer { fixture.remove() }
         let insights = StubInsightsServices(answer: ShellRenderFixture.insightsReport())
+        let fixture = try await ShellRenderFixture(
+            marketplaceProviders: [
+                StubMarketplaceProvider(packages: [ShellRenderFixture.heldPackageAwaitingUpdate])
+            ],
+            insightsServices: insights)
+        defer { fixture.remove() }
 
-        try expectDrawn(renderShell(.overview, fixture: fixture).homeStubs(insights: insights))
+        try expectDrawn(renderShell(.overview, fixture: fixture))
 
         // Opening Home is not a scan: nothing reads history until asked, and
         // asking stays a decision made on Insights.
@@ -48,6 +52,42 @@ struct HomeSectionRenderTests {
         #expect(
             composed.tiffRepresentation != bare.tiffRepresentation,
             "what the other screens produced changed nothing on Home")
+    }
+
+    /// One session each, so what another screen learned is what Home shows.
+    ///
+    /// Nothing here renders Insights, Discover or Apps. Their work is done on
+    /// the workspace's own sessions — a scan, a catalog refresh, a read of the
+    /// review queue — and Home is drawn afterwards through the shell, with no
+    /// session of its own to fetch a second answer into. A Home that built its
+    /// own three would draw the same page before and after.
+    @Test func whatAnotherScreenLearnedIsWhatHomeShows() async throws {
+        let untouched = try await ShellRenderFixture(
+            marketplaceProviders: [
+                StubMarketplaceProvider(packages: [ShellRenderFixture.heldPackageAwaitingUpdate])
+            ],
+            requestQueue: StubPendingRequestQueue(requests: [ShellRenderFixture.pendingRequest()]))
+        defer { untouched.remove() }
+        let quiet = try rasterize(renderShell(.overview, fixture: untouched))
+
+        let fixture = try await ShellRenderFixture(
+            marketplaceProviders: [
+                StubMarketplaceProvider(packages: [ShellRenderFixture.heldPackageAwaitingUpdate])
+            ],
+            requestQueue: StubPendingRequestQueue(requests: [ShellRenderFixture.pendingRequest()]))
+        defer { fixture.remove() }
+        await fixture.workspace.device.refresh()
+        await fixture.workspace.insights.scan(options: .init(clients: [.claude]))
+        await fixture.workspace.marketplace.refresh()
+        await fixture.workspace.requests.refresh()
+        #expect(fixture.workspace.insights.report != nil)
+        #expect(fixture.workspace.marketplace.packages.isEmpty == false)
+        #expect(fixture.workspace.requests.requests.count == 1)
+
+        let composed = try rasterize(renderShell(.overview, fixture: fixture))
+        #expect(
+            composed.tiffRepresentation != quiet.tiffRepresentation,
+            "what the other screens produced never reached Home")
     }
 
     /// An empty workspace on an unchecked Mac still has to be a page: the
@@ -190,20 +230,6 @@ extension ShellRenderFixture {
         )
         .frame(width: shellWindowSize.width, height: height)
         .environment(AppNavigationState())
-    }
-}
-
-extension View {
-    /// Every service Home reads, scripted. Without these the shell would open
-    /// this Mac's own review queue, read its kept report and ask a catalog.
-    fileprivate func homeStubs(
-        insights: StubInsightsServices,
-        packages: [MarketplacePackage] = [ShellRenderFixture.heldPackageAwaitingUpdate],
-        queued: [PendingAgentRequest] = []
-    ) -> some View {
-        environment(\.insightsServices, { _ in insights })
-            .environment(\.marketplaceProviders, { _ in [StubMarketplaceProvider(packages: packages)] })
-            .environment(\.pendingRequestQueue, StubPendingRequestQueue(requests: queued))
     }
 }
 

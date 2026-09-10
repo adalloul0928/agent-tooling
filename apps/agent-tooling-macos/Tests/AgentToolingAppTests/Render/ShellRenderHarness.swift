@@ -104,6 +104,12 @@ struct StubDeviceObserver: DeviceObserving {
 /// The store is real and lives in a temporary folder, and the sessions come from
 /// the app's own launch wiring, so a screen that outgrows what launch hands it
 /// fails here rather than only on a real Mac.
+///
+/// Every service that reaches outside the app is scripted here rather than in a
+/// test's own environment, because launch is where the app itself settles them:
+/// the catalog answers from memory, the scan is a canned report and the review
+/// queue is a list. A test that wants different answers hands them to this
+/// initializer, and no screen can reach past what it was given.
 @MainActor struct ShellRenderFixture {
     static let plugin = ArtifactID()
     static let child = ArtifactID()
@@ -116,7 +122,13 @@ struct StubDeviceObserver: DeviceObserving {
     let store: WorkspaceRevisionStore
     let workspace: WorkspaceLaunch.Workspace
 
-    init(deviceObserver: any DeviceObserving = StubDeviceObserver()) async throws {
+    init(
+        deviceObserver: any DeviceObserving = StubDeviceObserver(),
+        marketplaceProviders: [any MarketplaceProvider] = [StubMarketplaceProvider()],
+        insightsServices: any InsightsServicing = StubInsightsServices(
+            answer: ShellRenderFixture.insightsReport()),
+        requestQueue: any PendingRequestQueuing = StubPendingRequestQueue()
+    ) async throws {
         root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
             .appending(path: "shell-render-\(UUID())", directoryHint: .isDirectory)
         let container = root.appending(path: "store", directoryHint: .isDirectory)
@@ -172,7 +184,9 @@ struct StubDeviceObserver: DeviceObserving {
         // The app's own wiring, so a screen that outgrows what launch hands it
         // fails here rather than only on a real Mac.
         workspace = WorkspaceLaunch.sessions(
-            store: store, homeRoot: home, isFirstRun: true, deviceObserver: deviceObserver)
+            store: store, homeRoot: home, isFirstRun: true, deviceObserver: deviceObserver,
+            marketplaceProviders: { _ in marketplaceProviders },
+            insightsServices: { _ in insightsServices }, requestQueue: requestQueue)
         await workspace.library.refresh()
     }
 

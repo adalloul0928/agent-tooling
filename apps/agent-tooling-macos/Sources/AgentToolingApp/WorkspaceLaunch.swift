@@ -22,6 +22,16 @@ struct WorkspaceLaunch {
         let history: WorkspaceHistorySession
         let authoring: WorkspaceAuthoringSession
         let export: WorkspacePackageExportSession
+        /// What the catalogs published. Home, Discover and every plugin update
+        /// verdict read the same answer, so asking a registry once is what the
+        /// whole app has asked it.
+        let marketplace: WorkspaceMarketplaceSession
+        /// The report the last scan kept. Home reports it and Insights produces
+        /// it; a scan started on one is finished on both.
+        let insights: WorkspaceInsightsSession
+        /// The review queue. Home counts it and Apps decides it, and a request
+        /// decided on one is gone from the other without a second read.
+        let requests: WorkspaceRequestSession
         /// Absent when this Mac's linked-preset file could not be prepared. The
         /// workspace still opens; only following a preset is unavailable.
         let presets: WorkspacePresetsSession?
@@ -42,23 +52,42 @@ struct WorkspaceLaunch {
     static func open(
         supportRoot: URL? = nil,
         homeRoot: URL = FileManager.default.homeDirectoryForCurrentUser,
-        deviceObserver: any DeviceObserving = LiveDeviceObserver()
+        deviceObserver: any DeviceObserving = LiveDeviceObserver(),
+        marketplaceProviders: (MarketplaceCatalogContext) -> [any MarketplaceProvider] =
+            MarketplaceCatalogs.live,
+        insightsServices: (URL) -> any InsightsServicing = { LiveInsightsServices(container: $0) },
+        requestQueue: any PendingRequestQueuing = LivePendingRequestQueue()
     ) async throws -> Workspace {
         let locator = try WorkspaceLocator(
             root: supportRoot?.standardizedFileURL ?? (try WorkspaceLocator.defaultRoot()))
         if let existing = try locator.open() {
-            return sessions(store: existing, homeRoot: homeRoot, isFirstRun: false, deviceObserver: deviceObserver)
+            return sessions(
+                store: existing, homeRoot: homeRoot, isFirstRun: false, deviceObserver: deviceObserver,
+                marketplaceProviders: marketplaceProviders, insightsServices: insightsServices,
+                requestQueue: requestQueue)
         }
         let created = try await locator.openOrCreate(
             homeURL: homeRoot, runner: ProcessCommandRunner(homeURL: homeRoot))
-        return sessions(store: created, homeRoot: homeRoot, isFirstRun: true, deviceObserver: deviceObserver)
+        return sessions(
+            store: created, homeRoot: homeRoot, isFirstRun: true, deviceObserver: deviceObserver,
+            marketplaceProviders: marketplaceProviders, insightsServices: insightsServices,
+            requestQueue: requestQueue)
     }
 
+    /// Everything that reaches outside this app is a parameter with a live
+    /// default, so a test opens the same wiring the app does while a catalog is
+    /// a list in memory, a scan is a canned report and the review queue is an
+    /// array. There is no second door: a screen cannot reach past what is
+    /// handed in here, because no screen builds one of these itself any more.
     static func sessions(
         store: WorkspaceRevisionStore,
         homeRoot: URL,
         isFirstRun: Bool,
-        deviceObserver: any DeviceObserving = LiveDeviceObserver()
+        deviceObserver: any DeviceObserving = LiveDeviceObserver(),
+        marketplaceProviders: (MarketplaceCatalogContext) -> [any MarketplaceProvider] =
+            MarketplaceCatalogs.live,
+        insightsServices: (URL) -> any InsightsServicing = { LiveInsightsServices(container: $0) },
+        requestQueue: any PendingRequestQueuing = LivePendingRequestQueue()
     ) -> Workspace {
         let container = store.databaseURL.deletingLastPathComponent()
         let writerID = WorkspaceObjectID()
@@ -82,19 +111,31 @@ struct WorkspaceLaunch {
                                  workspaceID: store.workspaceID, writerID: writerID,
                                  keyStore: try? WorkspaceFolderKeyStore(containerRoot: container))
         }
+        // Named rather than built in place: the review queue refuses a request
+        // naming an app this Mac does not manage, and the answer to that has to
+        // be the same one the sidebar and every screen is reading.
+        let device = WorkspaceDeviceSession(
+            service: service, library: library, store: store,
+            homeRoot: homeRoot, observer: deviceObserver)
         return .init(
             library: library, sync: sync,
             settings: WorkspaceSettingsSession(homeRoot: homeRoot, library: library),
             deployment: WorkspaceDeploymentSession(
                 service: service, library: library, store: store,
                 homeRoot: homeRoot, contentStore: contentStore),
-            device: WorkspaceDeviceSession(
-                service: service, library: library, store: store,
-                homeRoot: homeRoot, observer: deviceObserver),
+            device: device,
             history: WorkspaceHistorySession(store: store, library: library,
                                              writerID: writerID, access: .writable),
             authoring: WorkspaceAuthoringSession(service: service, library: library),
             export: WorkspacePackageExportSession(library: library, contentStore: contentStore),
+            marketplace: WorkspaceMarketplaceSession(
+                providers: marketplaceProviders(
+                    MarketplaceCatalogContext(homeRoot: homeRoot, store: store)),
+                service: service, library: library, store: store),
+            insights: WorkspaceInsightsSession(
+                library: library, homeRoot: homeRoot, services: insightsServices(container)),
+            requests: WorkspaceRequestSession(
+                store: store, library: library, device: device, queue: requestQueue),
             presets: (try? WorkspaceLinkedPresetStore(containerRoot: container)).map {
                 WorkspacePresetsSession(service: service, library: library, store: $0)
             },
