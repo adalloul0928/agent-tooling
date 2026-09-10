@@ -28,6 +28,15 @@ struct WorkspaceLaunch {
         let declarations: WorkspaceProjectDeclarationSession
         /// True when this launch created the workspace by scanning.
         let isFirstRun: Bool
+        /// The one store and the one application service every session writes
+        /// through. A screen that needs a command no session exposes goes through
+        /// these rather than opening the store a second time.
+        let store: WorkspaceRevisionStore
+        let service: WorkspaceApplicationService
+        let contentStore: CentralPackageContentStore?
+        /// The home directory this workspace was opened against; tests point it
+        /// at a scratch folder so nothing reads the real one.
+        let homeRoot: URL
     }
 
     static func open(
@@ -84,6 +93,7 @@ struct WorkspaceLaunch {
                 WorkspacePresetsSession(service: service, library: library, store: $0)
             },
             declarations: WorkspaceProjectDeclarationSession(library: library),
-            isFirstRun: isFirstRun)
+            isFirstRun: isFirstRun,
+            store: store, service: service, contentStore: contentStore, homeRoot: homeRoot)
     }
 }
