@@ -90,13 +90,15 @@ struct MCPServersSectionRenderTests {
             named: "stack")
     }
 
-    @Test func thePasteSheetDrawsAndExplainsWhereAServerDefinitionCannotGo() async throws {
+    @Test func thePasteSheetDrawsAndSaysWhatSavingAConnectionDoesNotDo() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
 
-        // The explanation is the whole point of the server branch, so it is
-        // asserted rather than left to the pixels.
-        #expect(PasteImportSheet.noServerIntakeExplanation.contains("no command"))
+        // Saving records a declaration. The sheet's promise that it starts,
+        // signs into and installs nothing is asserted rather than left to the
+        // pixels.
+        #expect(PasteImportSheet.serverIntakeExplanation.contains("Nothing is started"))
+        #expect(PasteImportSheet.serverIntakeExplanation.contains("separate reviewed step"))
 
         try captureMCPPane(PasteImportSheet(workspace: fixture.workspace), named: "paste")
     }

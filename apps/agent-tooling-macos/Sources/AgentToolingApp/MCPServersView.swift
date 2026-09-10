@@ -59,6 +59,15 @@ struct MCPServersView: View {
                 .buttonStyle(.glass)
                 .keyboardShortcut("v", modifiers: [.command, .shift])
                 .help("Read an mcp add command, a JSON block, a server URL, or a SKILL.md")
+
+                Button {
+                    activeSheet = .addConnection
+                } label: {
+                    Label("Add connection…", systemImage: "plus")
+                }
+                .buttonStyle(.glass)
+                .disabled(workspace.library.access != .writable)
+                .help(PasteImportSheet.serverIntakeExplanation)
             }
             .environment(\.connectionCategory, $category)
 
@@ -80,6 +89,8 @@ struct MCPServersView: View {
             switch sheet {
             case .paste:
                 PasteImportSheet(workspace: workspace)
+            case .addConnection:
+                PasteImportSheet(workspace: workspace, mode: .newConnection)
             case .runtimes:
                 MCPRuntimesSheet(inspector: runtimeInspector)
             }
@@ -481,18 +492,19 @@ struct MCPServersView: View {
 
     private var emptyStateMessage: String {
         entries.isEmpty
-            ? "This workspace records the MCP servers your apps already have and the ones a plugin brings with it. "
-                + "Check this Mac's apps from the Apps screen, or paste a definition to see exactly what it says."
+            ? "This workspace records the MCP servers your apps already have, the ones a plugin brings with it, "
+                + "and the ones you write down here. Add a connection, paste a definition, or check this Mac's "
+                + "apps from the Apps screen."
             : "Clear the search or change the filters."
     }
 
     private var emptyStateActionTitle: String {
-        entries.isEmpty ? "Paste…" : "Clear Filters"
+        entries.isEmpty ? "Add connection…" : "Clear Filters"
     }
 
     private func performEmptyStateAction() {
         if entries.isEmpty {
-            activeSheet = .paste
+            activeSheet = .addConnection
         } else {
             clearFilters()
         }
@@ -620,6 +632,7 @@ extension ArtifactKind {
 
 private enum MCPSheet: String, Identifiable {
     case paste
+    case addConnection
     case runtimes
     var id: String { rawValue }
 }
