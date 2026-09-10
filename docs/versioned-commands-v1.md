@@ -1,7 +1,10 @@
 # Versioned workspace commands v1
 
-Status: contract proposed 2026-09-09, with its shared model landed in code and
-fixture-tested. No command in this document is implemented. Nothing here
+Status: contract proposed 2026-09-09; all four commands implemented 2026-09-10
+(`NativePackageAdoptionCommand`, `ManagedMCPServerIntakeCommand`,
+`WorkspaceCatalogSourceCommand`, `LinkSkillUpstreamCommand`, each with its
+`WorkspaceApplicationService+…` extension and tests) and wired into Discover,
+Connections and Skills. Section 5's second tier remains unbuilt. Nothing here
 installs a tool, writes a client file, contacts a catalog, or reports a native
 result: every command below changes workspace metadata and returns a metadata
 receipt.
