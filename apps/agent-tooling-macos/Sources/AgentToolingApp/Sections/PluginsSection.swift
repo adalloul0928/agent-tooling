@@ -1,15 +1,12 @@
 import SwiftUI
 
-/// The Library's plugins tab. Until the plugin screen is restored it shows the
-/// same library the other tabs do, unfiltered, rather than an empty pane that
-/// would read as a workspace with no plugins in it.
+/// The Library's Plugins tab. Layout and interaction live in `PluginsView`,
+/// restored to the original screen's visual; this file only keeps the
+/// section's identity, per the port map.
 struct PluginsSection: View {
     let workspace: WorkspaceLaunch.Workspace
 
     var body: some View {
-        WorkspaceLibraryView(
-            session: workspace.library, authoring: workspace.authoring, export: workspace.export,
-            initialKind: .plugins
-        )
+        PluginsView(workspace: workspace)
     }
 }
