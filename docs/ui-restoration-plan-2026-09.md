@@ -1,8 +1,9 @@
 # UI restoration on the versioned store
 
-Status: planned, not started. Revised 2026-09-09 after a verification pass
-against `main` at `9272c5e`: every commit, line count, file and type named
-below was checked against that tree. Nothing in it has been built.
+Status: **built** (see the implementation record at the end). Revised 2026-09-09
+after a verification pass against `main` at `9272c5e`; the sections below are
+the specification as it stood before the work, corrected where the build
+proved it wrong.
 
 ## What happened
 
@@ -308,8 +309,8 @@ shell file never changes again.
 restores and the one `Sections/<Name>.swift` it fills in, nothing else. The
 split below is largest first; pairs share list patterns:
 
-1. Skills, its editor sheets, paste import, organisation, the repository section
-2. MCP servers, the test console, capability toggles, the ToolHive inspector
+1. Skills, its editor sheets, organisation, the repository section
+2. MCP servers, the test console, capability toggles, the ToolHive inspector, paste import
 3. Apps: `SyncCenterView`, the conduit, plan review, pending requests, `WorkspaceRequestSession`
 4. Discover, the signal views, `WorkspaceMarketplaceSession`
 5. Insights, `WorkspaceInsightsSession`
@@ -358,3 +359,87 @@ Beyond that, per screen, the gates CI runs (`.github/workflows/macos-app.yml`):
 - No screen may present requested assignment as installation.
 - No primary row shows a file path; paths live behind `PathInfoButton` or
   `LocationText`. Rows are tile · name · one clause · marks · verdict.
+
+## Implementation record (2026-09-09)
+
+Status: **built.** Everything above was carried out in one day on the
+integration branch `claude/ui-restoration-plan-review-27a170`, as fifteen
+agent tasks over three phases plus coordinator fix-ups, exactly in the order
+this plan set out: Phase 0 (components and section identity; the device
+session; the shell with one socket per section), Phase 1 (eight screen ports
+in parallel worktrees), Phase 2 (Home, onboarding, the Codex creator, the core
+visibility sweep, shell hooks and the dead-view sweep, the read-model join key,
+shared sessions). The branch carries 26 commits over `main`, 145 files, +27,112/−2,686 lines. The app target is 82 source files and 23,578 lines; its test bundle went from 71 tests at #65 to 277, and the whole suite from 910 to 1,122 (MCP 47, core 798, app 277), past the 1,000 this plan asked for. Every section is in the render suite over a real workspace, and every one was launched and looked at against this Mac's real library. The nine restorable test files the plan named are all back.
+
+### What the build corrected in this plan
+
+- `PasteImportSheet` belongs with Connections, whose `ScreenRequest.pasteImport`
+  it served, not with Skills.
+- `SectionHealth` was an `AppModel` extension, not a view. It is a struct keyed
+  by `AppSection`, fed from device observations, because the read model alone
+  reports every client state as `pending` and can never fire a glyph.
+- `ClientMarks` did read `AppModel` (fact 2 said none of the cut components
+  did); it reads `EnvironmentValues.availableClients` now. `FlowLayout` lived in
+  `SkillsView.swift` and moved into `Components.swift`.
+- `PlanReviewSheet` presents `WorkspaceDeploymentPlan` with `ContentRiskScanner`
+  over the exact library bytes. The `OperationPlan`s exist only inside
+  `apply()` and are built from a staging step, so reviewing them first would
+  mean staging untrusted bytes to decide whether to stage them.
+- Onboarding is the Library section's content behind
+  `@AppStorage("onboarding.skipped.v2")`, reconciled into one `OnboardingWizard`
+  over `WorkspaceFirstRun`; the old copy-issue and adoption steps had nothing
+  left to do, so they were not restored.
+- `ScreenRequest`s travel through `AppNavigationState` (`openItem`,
+  `openScreenRequest`), since the shell file is frozen after Phase 0.
+- `ClientSelectionView` (Group D) came back as a popover inside
+  `SyncCenterView`: `WorkspaceDeviceSession.setEnabled` was live with no caller.
+- `MarketplaceService().defaultSources()` yields nothing to inspect; the
+  defaults are the five reference rows on the Sources list. Every catalog
+  reader in core was `internal` because `AppModel` had been its only caller;
+  Phase 2 made them public and Discover shows real catalogs.
+- `CodexSkillDraftIntegrationTests` was not opt-in and was written against
+  `AppModel`; `WorkspaceSkillDraftSessionTests` carries its two claims.
+- `WorkspaceLibraryView`, `WorkspaceDeploymentView`, `WorkspacePresetsView`,
+  `WorkspaceSyncView`, `WorkspaceSettingsView`, `WorkspaceHistoryView` and
+  `WorkspaceOnboardingView` were deleted once the ports replaced them.
+
+### Two defects found by launching, not by testing
+
+- Nothing created the content store's directory, so `contentStore` was nil on
+  every real Mac and every standalone-skill intake failed. `WorkspaceLaunch`
+  creates it now, with a test that fails without the fix.
+- The shell never read the library on launch; sections were each refreshing the
+  read model defensively. The shell reads it once, alongside the device check.
+
+### Follow-ups: commands the versioned model does not have
+
+Each of these is a schema or command decision, not UI work, and each screen
+says so in one clause rather than pretending:
+
+- Add or remove a catalog source (`WorkspaceCatalogSourceRecord` has no writer;
+  a source also needs an `identityMap` entry).
+- Turn a `MarketplacePackage` into a library artifact. The deployment side
+  exists (`NativeCatalogPackageIdentity.recognize` → `NativePackageRoute` →
+  `NativePluginInstallRegister.reviewedInstall`); the artifact-writing command
+  does not, so Discover's install buttons stay disabled.
+- Record an MCP server definition (endpoint, transport) as a library item.
+  The projection emits `endpoint: ""`, so the restored test console refuses
+  every projected server and the paste sheet's "Add server" never enables.
+- Link an existing skill to an upstream repository ("Check for updates" and
+  "Review update…" work for `centralUpstream` rows; linking does not).
+- Create, rename or edit a preset's membership; add or forget a project; scan
+  roots and pinning; a reviewed removal for a native plugin never assigned;
+  MCP sign-in; managed-policy import; diagnostics export.
+- No versioned home, deliberately not invented: tags, connector inventory and
+  account verification (`AccountsView`, `ConnectionsView` stay deferred),
+  authoring origin, skill triggers and validation counts, the project
+  "Configuration" tab, Configurations as a screen.
+
+### Repository hygiene
+
+- CI `validate.yml` has been red on `main` since #63 at
+  `swift format lint --strict` (about 4,500 pre-existing findings). Every file
+  this work created lints clean; the sweep over old files belongs in its own
+  change.
+- The default SwiftPM build system fails the release warnings-as-errors build
+  on the Yams dependency; `--build-system native` passes.
