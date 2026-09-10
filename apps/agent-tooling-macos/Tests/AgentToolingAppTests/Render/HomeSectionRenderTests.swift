@@ -202,7 +202,7 @@ extension View {
         queued: [PendingAgentRequest] = []
     ) -> some View {
         environment(\.insightsServices, { _ in insights })
-            .environment(\.marketplaceProviders, [StubMarketplaceProvider(packages: packages)])
+            .environment(\.marketplaceProviders, { _ in [StubMarketplaceProvider(packages: packages)] })
             .environment(\.pendingRequestQueue, StubPendingRequestQueue(requests: queued))
     }
 }

@@ -19,7 +19,9 @@ struct HomeSection: View {
         // Split so the sessions can be `@State` built from environment values:
         // a `View` cannot read the environment before its own initializer runs.
         HomeSectionBody(
-            workspace: workspace, providers: providers,
+            workspace: workspace,
+            providers: providers(
+                MarketplaceCatalogContext(homeRoot: workspace.homeRoot, store: workspace.store)),
             insightsServices: insightsServices, queue: queue)
     }
 }
