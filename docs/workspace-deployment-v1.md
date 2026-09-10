@@ -28,6 +28,48 @@ missing native route, unsupported adapter, needs review, already present.
 counts only content the central store can actually read as held. Planning
 changes no revision, assignment or receipt.
 
+### Where capability evidence comes from
+
+A destination is admitted only when this device holds exactly one supported
+`TargetCapabilityEvidence` record matching its surface, installed client
+version, adapter contract version, component, transport and scope. That record
+is **derived from this Mac's own scan** by `TargetCapabilityEvidence.derive`,
+and it is written in exactly two places: `WorkspaceFirstRun.prepare` writes it
+alongside the first observations, and every "Check this Mac's apps" writes both
+the fresh observations and the freshly derived evidence as one device-only
+change. A workspace whose evidence is empty is therefore repaired by its next
+check rather than by a migration.
+
+Nothing is probed for it. Each record restates the scan (the client answered
+its own `--version`; the adapter declares what it accepts) or something already
+written down (the install register's recorded commands, the shapes the two
+command planners can express):
+
+- **Skill** — one record, no transport, scopes `user` plus `project` when the
+  adapter declares project scope. Supported: placing a skill is a file copy the
+  capture layer already resolves a destination for.
+- **Package** — one record, no transport, scope `user`, because
+  `WorkspaceNativePluginCommandPlanning` builds only the user-scoped command.
+  Supported only when the adapter says the client installs packages of its own
+  **and** `NativePluginInstallRegister` holds a command for it; otherwise
+  unsupported with a reason a screen can show. Gemini is unsupported today: its
+  adapter is willing, but nobody has read an install command out of its help.
+- **Connection** — one record per transport
+  `WorkspaceManagedMCPCommandPlanning` can actually spell for that client, at
+  the scopes that client honours. Both `HTTP` and `stdio` for Claude Code,
+  Codex CLI and Gemini CLI; scopes `user`, `project`, `local project` and
+  `workspace` for Claude and Gemini, and `user` alone for Codex, whose MCP
+  command has no scope flag. Managed, account and session appear nowhere: the
+  planner produces no working directory for them.
+- **Connector** — no record. Nothing here installs one.
+
+A client whose command did not answer, or answered without a version, produces
+no record at all. The planner's existing "no dependable record of what the
+installed app supports" exclusion is the honest outcome there; inventing a
+record would turn "nobody knows" into an install claim. Two reports about one
+client produce none either, since choosing between them would be a guess.
+Derivation is pure and sorted, so one scan always yields one device record.
+
 ## Staging and applying
 
 `WorkspaceDeploymentOperations.stage` writes the approved trees into a staging

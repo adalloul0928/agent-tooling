@@ -256,6 +256,87 @@ struct WorkspaceDeviceSessionTests {
         #expect(session.observations.count == 1)
     }
 
+    @Test func aCheckKeepsWhatItFoundAndWhatEachAppCanCarry() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let scannedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let observed = [
+            Fixture.claudeCode(commandAvailable: true, version: "2.1.263", scannedAt: scannedAt)
+        ]
+        let session = await fixture.session(observer: ScriptedObserver(results: [.success(observed)]))
+
+        await session.refresh()
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        let snapshot = try #require(try fixture.store.snapshot())
+        // Before this, the persisted observations were the first run's forever,
+        // so checking this Mac's apps changed nothing the planner reads.
+        #expect(snapshot.device.observations == observed)
+        #expect(
+            snapshot.device.capabilityEvidence
+                == TargetCapabilityEvidence.derive(from: observed))
+        #expect(!snapshot.device.capabilityEvidence.isEmpty)
+        #expect(snapshot.device.capabilityEvidence.allSatisfy { $0.installedClientVersion == "2.1.263" })
+        // This Mac's record of this Mac. Nothing about it is portable.
+        #expect(snapshot.document.artifacts.map(\.identity.id) == [Fixture.skill])
+    }
+
+    @Test func checkingAgainWithTheSameAnswerLeavesTheSameRecord() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let scannedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let session = await fixture.session(
+            observer: ScriptedObserver(results: [
+                .success([
+                    Fixture.claudeCode(commandAvailable: true, version: "2.1.263", scannedAt: scannedAt)
+                ])
+            ]))
+
+        await session.refresh()
+        let first = try #require(try fixture.store.snapshot()).device
+        await session.refresh()
+        let second = try #require(try fixture.store.snapshot()).device
+
+        #expect(second.observations == first.observations)
+        #expect(second.capabilityEvidence == first.capabilityEvidence)
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+    }
+
+    @Test func aCheckThatFailedLeavesWhatWasRecordedExactlyAsItWas() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let observed = [Fixture.claudeCode(commandAvailable: true, version: "2.1.263")]
+        let observer = ScriptedObserver(results: [.success(observed), .failure(ScanFailure())])
+        let session = await fixture.session(observer: observer)
+        await session.refresh()
+        let recorded = try #require(try fixture.store.snapshot()).device
+
+        await session.refresh()
+
+        #expect(session.errorMessage != nil)
+        let after = try #require(try fixture.store.snapshot()).device
+        // A check that did not happen writes nothing down.
+        #expect(after.observations == recorded.observations)
+        #expect(after.capabilityEvidence == recorded.capabilityEvidence)
+    }
+
+    @Test func aClientThatDidNotAnswerIsRecordedAsSeenAndNotAsCapable() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let observed = [
+            Fixture.claudeCode(
+                commandAvailable: false, scannedAt: Date(timeIntervalSince1970: 1_700_000_000))
+        ]
+        let session = await fixture.session(observer: ScriptedObserver(results: [.success(observed)]))
+
+        await session.refresh()
+
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.observations == observed)
+        // Unknown never becomes an actionable install claim.
+        #expect(snapshot.device.capabilityEvidence.isEmpty)
+    }
+
     private struct ScanFailure: Error {}
 
     /// A scan the test drives: it counts how many times it ran, can be held
@@ -349,10 +430,11 @@ struct WorkspaceDeviceSessionTests {
 
         static func observation(
             _ surface: TargetSurface, installed: Bool, commandAvailable: Bool,
-            scannedAt: Date = .now
+            version: String? = nil, scannedAt: Date = .now
         ) -> TargetObservation {
             .init(
                 surface: surface, installed: installed, commandAvailable: commandAvailable,
+                version: version,
                 capabilities: .init(
                     supportsPluginInstall: false, supportsProjectScope: false,
                     supportsLocalMarketplace: false, supportsMCPAuthentication: false,
@@ -361,9 +443,11 @@ struct WorkspaceDeviceSessionTests {
                 lastScannedAt: scannedAt)
         }
 
-        static func claudeCode(commandAvailable: Bool, scannedAt: Date = .now) -> TargetObservation {
+        static func claudeCode(
+            commandAvailable: Bool, version: String? = nil, scannedAt: Date = .now
+        ) -> TargetObservation {
             observation(
-                .claudeCode, installed: true, commandAvailable: commandAvailable,
+                .claudeCode, installed: true, commandAvailable: commandAvailable, version: version,
                 scannedAt: scannedAt)
         }
 

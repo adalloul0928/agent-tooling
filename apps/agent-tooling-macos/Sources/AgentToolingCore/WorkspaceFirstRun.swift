@@ -107,6 +107,11 @@ public enum WorkspaceFirstRun {
             workspaceID: workspaceID, revision: .init(writerID: writerID), artifacts: artifacts))
         var device = DeviceWorkspaceState(workspaceID: workspaceID, deviceID: deviceID)
         device.observations = observations.sorted { $0.surface.rawValue < $1.surface.rawValue }
+        // What each client that answered can be asked to carry, from the same
+        // scan. Without it a brand-new workspace could record an assignment and
+        // then refuse to plan it, because the check that admits a destination
+        // would have nothing to read.
+        device.capabilityEvidence = TargetCapabilityEvidence.derive(from: observations)
         try document.validateStructure()
         try device.validateStructure(against: document)
 
