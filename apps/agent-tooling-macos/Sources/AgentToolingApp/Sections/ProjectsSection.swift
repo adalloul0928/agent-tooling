@@ -1,116 +1,28 @@
 import AgentToolingCore
 import SwiftUI
 
-/// Library and Projects over one versioned session. Both destinations use the
-/// same read model and the same assignment sheet; a project only prefills its
-/// own context, so nothing about the flow changes with the entry point.
-struct WorkspaceShellView: View {
-    let session: WorkspaceLibrarySession
-    var syncSession: WorkspaceSyncSession?
-    var settingsSession: WorkspaceSettingsSession?
-    var deploymentSession: WorkspaceDeploymentSession?
-    var historySession: WorkspaceHistorySession?
-    var authoringSession: WorkspaceAuthoringSession?
-    var exportSession: WorkspacePackageExportSession?
-    var presetsSession: WorkspacePresetsSession?
-    var declarationSession: WorkspaceProjectDeclarationSession?
-    @State private var destination: Destination = .library
+/// Projects: the list, and one project opened.
+///
+/// Which of the two is showing is this pane's own business, so the shell never
+/// learns that a project can be opened and the back button has nowhere else to
+/// report to.
+struct ProjectsSection: View {
+    let workspace: WorkspaceLaunch.Workspace
     @State private var openProjectID: ArtifactID?
-    /// Shown once, only while a writable workspace has nothing assigned. It is
-    /// dismissed by choosing tools or skipping; it never blocks the library.
-    @State private var hasLeftOnboarding = false
-
-    enum Destination: Hashable { case library, projects, presets, install, appSettings, sync, history }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $destination) {
-                Label("Library", systemImage: "books.vertical").tag(Destination.library)
-                Label("Projects", systemImage: "folder").tag(Destination.projects)
-                if presetsSession != nil {
-                    Label("Presets", systemImage: "square.stack").tag(Destination.presets)
-                }
-                if deploymentSession != nil {
-                    Label("Install", systemImage: "arrow.down.circle").tag(Destination.install)
-                }
-                if settingsSession != nil {
-                    Label("App settings", systemImage: "slider.horizontal.3").tag(Destination.appSettings)
-                }
-                if syncSession != nil {
-                    Label("Sync", systemImage: "arrow.triangle.2.circlepath").tag(Destination.sync)
-                }
-                if historySession != nil {
-                    Label("History", systemImage: "clock.arrow.circlepath").tag(Destination.history)
-                }
+        if let openProjectID,
+            let project = workspace.library.state?.library.projects.first(where: { $0.id == openProjectID })
+        {
+            WorkspaceProjectDetailView(
+                session: workspace.library, project: project,
+                declarations: workspace.declarations
+            ) {
+                self.openProjectID = nil
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 260)
-            .listStyle(.sidebar)
-        } detail: {
-            switch destination {
-            case .library:
-                if showsOnboarding {
-                    WorkspaceOnboardingView(session: session) { hasLeftOnboarding = true }
-                } else {
-                    WorkspaceLibraryView(session: session, authoring: authoringSession,
-                                         export: exportSession)
-                }
-            case .projects:
-                if let openProjectID,
-                   let project = session.state?.library.projects.first(where: { $0.id == openProjectID }) {
-                    WorkspaceProjectDetailView(session: session, project: project,
-                                               declarations: declarationSession) {
-                        self.openProjectID = nil
-                    }
-                } else {
-                    WorkspaceProjectsView(session: session) { openProjectID = $0 }
-                }
-            case .presets:
-                if let presetsSession {
-                    WorkspacePresetsView(session: presetsSession, library: session)
-                } else {
-                    ContentUnavailableView("Presets unavailable", systemImage: "square.stack",
-                        description: Text("This Mac's linked presets could not be opened."))
-                }
-            case .install:
-                if let deploymentSession {
-                    WorkspaceDeploymentView(session: deploymentSession)
-                } else {
-                    ContentUnavailableView("Install unavailable", systemImage: "arrow.down.circle",
-                        description: Text("This workspace cannot reach your apps from here."))
-                }
-            case .appSettings:
-                if let settingsSession {
-                    WorkspaceSettingsView(session: settingsSession)
-                } else {
-                    ContentUnavailableView("Settings unavailable", systemImage: "slider.horizontal.3",
-                        description: Text("This Mac's app settings could not be located."))
-                }
-            case .sync:
-                if let syncSession {
-                    WorkspaceSyncView(session: syncSession)
-                } else {
-                    ContentUnavailableView("Sync unavailable", systemImage: "arrow.triangle.2.circlepath",
-                        description: Text("This workspace has no sync setup on this Mac."))
-                }
-            case .history:
-                if let historySession {
-                    WorkspaceHistoryView(session: historySession)
-                } else {
-                    ContentUnavailableView("History unavailable", systemImage: "clock.arrow.circlepath",
-                        description: Text("This workspace's earlier versions are not readable here."))
-                }
-            }
+        } else {
+            WorkspaceProjectsView(session: workspace.library) { openProjectID = $0 }
         }
-        .background(AgentTheme.contentBackground)
-    }
-
-    /// Only for a writable workspace that holds items and has no assignments at
-    /// all. A read-only preview and an already-used workspace go straight in.
-    private var showsOnboarding: Bool {
-        guard !hasLeftOnboarding, session.access == .writable,
-              let library = session.state?.library else { return false }
-        return !library.rows.isEmpty
-            && library.rows.allSatisfy { $0.requestedAssignments.isEmpty }
     }
 }
 
@@ -132,7 +44,8 @@ struct WorkspaceProjectsView: View {
             if let state = session.state {
                 let projects = state.library.projects
                 if projects.isEmpty {
-                    ContentUnavailableView("No projects yet", systemImage: "folder",
+                    ContentUnavailableView(
+                        "No projects yet", systemImage: "folder",
                         description: Text("Projects appear here once a tool is assigned to one."))
                 } else {
                     List(projects) { project in
@@ -168,7 +81,8 @@ struct WorkspaceProjectsView: View {
             } else if session.isBusy {
                 ProgressView("Loading projects…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView("Projects unavailable", systemImage: "folder",
+                ContentUnavailableView(
+                    "Projects unavailable", systemImage: "folder",
                     description: Text("Refresh to read this workspace again."))
             }
         }
@@ -182,7 +96,6 @@ struct WorkspaceProjectsView: View {
         session.access == .readOnly ? "Workspace preview" : "Assign tools per project"
     }
 }
-
 
 /// One project: what it already has, what every project inherits, and one way
 /// to add more. Adding uses the shared browser and sheet with this project
@@ -219,7 +132,8 @@ struct WorkspaceProjectDetailView: View {
                 let assigned = library.rows(inProject: project.id)
                 let inherited = library.globallyAssignedRows
                 if assigned.isEmpty, inherited.isEmpty {
-                    ContentUnavailableView("Nothing assigned yet", systemImage: "folder",
+                    ContentUnavailableView(
+                        "Nothing assigned yet", systemImage: "folder",
                         description: Text("Add tools to make them available in this project."))
                 } else {
                     List {
@@ -243,7 +157,8 @@ struct WorkspaceProjectDetailView: View {
             } else if session.isBusy {
                 ProgressView("Loading project…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView("Project unavailable", systemImage: "folder",
+                ContentUnavailableView(
+                    "Project unavailable", systemImage: "folder",
                     description: Text("Refresh to read this workspace again."))
             }
         }
@@ -255,8 +170,9 @@ struct WorkspaceProjectDetailView: View {
         }
         .sheet(isPresented: $isDeclaring) {
             if let declarations, let root = projectRoot {
-                WorkspaceProjectDeclarationSheet(session: declarations, projectRoot: root,
-                                                 projectName: project.name)
+                WorkspaceProjectDeclarationSheet(
+                    session: declarations, projectRoot: root,
+                    projectName: project.name)
             }
         }
     }
@@ -270,8 +186,10 @@ struct WorkspaceProjectDetailView: View {
     }
 
     private var context: String {
-        guard let root = session.state?.snapshot.device.projectRoots?
-            .first(where: { $0.projectID == project.id }) else {
+        guard
+            let root = session.state?.snapshot.device.projectRoots?
+                .first(where: { $0.projectID == project.id })
+        else {
             return "This project has no folder on this Mac"
         }
         return "Folder on this Mac · \(root.rootPath)"
@@ -329,10 +247,12 @@ private struct WorkspaceProjectAddSheet: View {
             if let library = session.state?.library {
                 let rows = library.filteredRows(matching: query)
                 List(rows) { row in
-                    Toggle(isOn: Binding(
-                        get: { selection.contains(row.artifactID) },
-                        set: { if $0 { selection.insert(row.artifactID) } else { selection.remove(row.artifactID) } }
-                    )) {
+                    Toggle(
+                        isOn: Binding(
+                            get: { selection.contains(row.artifactID) },
+                            set: { if $0 { selection.insert(row.artifactID) } else { selection.remove(row.artifactID) } }
+                        )
+                    ) {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(row.displayName).lineLimit(1)
                             Text(row.ownershipLabel).font(.system(size: 13)).foregroundStyle(.secondary)
@@ -361,10 +281,13 @@ private struct WorkspaceProjectAddSheet: View {
             }.padding(20)
         }
         .frame(width: 720, height: 560)
-        .sheet(isPresented: $isReviewing, onDismiss: { dismiss() }) {
-            WorkspaceAssignmentSheet(session: session, artifactIDs: selection.sorted(),
-                initialProjectID: project.id)
-        }
+        .sheet(
+            isPresented: $isReviewing, onDismiss: { dismiss() },
+            content: {
+                WorkspaceAssignmentSheet(
+                    session: session, artifactIDs: selection.sorted(),
+                    initialProjectID: project.id)
+            })
     }
 }
 
@@ -388,8 +311,10 @@ private struct WorkspaceProjectDeclarationSheet: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Two files, written into this project's folder for you to commit. `project.json` says what this project asks for. `project-lock.json` pins what those resolved to, so a checkout later gets the same versions.")
-                        .foregroundStyle(.secondary)
+                    Text(
+                        "Two files, written into this project's folder for you to commit. `project.json` says what this project asks for. `project-lock.json` pins what those resolved to, so a checkout later gets the same versions."
+                    )
+                    .foregroundStyle(.secondary)
                     if let message = session.errorMessage {
                         AttentionBanner(title: "Nothing was written", message: message)
                     }
@@ -403,8 +328,9 @@ private struct WorkspaceProjectDeclarationSheet: View {
                             }
                         }
                     }
-                    if let result = session.committed { committedSummary(result) }
-                    else if let message = session.committedMessage {
+                    if let result = session.committed {
+                        committedSummary(result)
+                    } else if let message = session.committedMessage {
                         Text(message).font(.callout).foregroundStyle(.secondary)
                     }
                     if let preview = session.preview {
@@ -439,8 +365,10 @@ private struct WorkspaceProjectDeclarationSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("What this project already asks for").font(.system(size: 15, weight: .medium))
             if result.isFullySatisfied {
-                Label("You have all of it, at the versions this project pins.",
-                      systemImage: "checkmark.circle").foregroundStyle(.secondary)
+                Label(
+                    "You have all of it, at the versions this project pins.",
+                    systemImage: "checkmark.circle"
+                ).foregroundStyle(.secondary)
             }
             ForEach(result.items, id: \.name) { item in
                 HStack(spacing: 10) {
@@ -480,22 +408,27 @@ private struct WorkspaceProjectDeclarationSheet: View {
     private func summary(_ preview: WorkspaceProjectDeclarationSession.Preview) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             LabeledContent("Asked for") {
-                Text(preview.declaration.entries.isEmpty
-                     ? "Nothing yet"
-                     : preview.declaration.entries.map(\.name).formatted(.list(type: .and)))
-                    .multilineTextAlignment(.trailing)
+                Text(
+                    preview.declaration.entries.isEmpty
+                        ? "Nothing yet"
+                        : preview.declaration.entries.map(\.name).formatted(.list(type: .and))
+                )
+                .multilineTextAlignment(.trailing)
             }
             LabeledContent("Pinned") {
-                Text(preview.lock.map { $0.entries.count == 1 ? "1 version" : "\($0.entries.count) versions" }
-                     ?? "None")
+                Text(
+                    preview.lock.map { $0.entries.count == 1 ? "1 version" : "\($0.entries.count) versions" }
+                        ?? "None")
             }
             if !preview.unlocked.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Asked for, but not pinned", systemImage: "questionmark.circle")
                         .font(.system(size: 14, weight: .medium))
                     Text(preview.unlocked.formatted(.list(type: .and))).foregroundStyle(.secondary)
-                    Text("These have no exact version behind them, so a lock line for one could not bring back the same files. They are in the declaration and left out of the lock.")
-                        .font(.callout).foregroundStyle(.secondary)
+                    Text(
+                        "These have no exact version behind them, so a lock line for one could not bring back the same files. They are in the declaration and left out of the lock."
+                    )
+                    .font(.callout).foregroundStyle(.secondary)
                 }
             }
         }

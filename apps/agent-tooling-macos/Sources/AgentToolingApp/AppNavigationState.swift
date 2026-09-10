@@ -11,6 +11,10 @@ import Observation
 final class AppNavigationState {
     private(set) var requestedSection: AppSection?
     private(set) var requestedSkillID: String?
+    /// One row a screen should reveal when it opens, for the screens that have
+    /// no route of their own. Revealing is not acting on it: a screen that reads
+    /// this scrolls to a row and selects it, and does nothing else.
+    private(set) var requestedItemID: String?
     private(set) var requestedMarketplacePackageID: String?
     private(set) var selectedClient: ClientKind?
     private var pendingRequestQueue: [UUID] = []
@@ -34,17 +38,20 @@ final class AppNavigationState {
                 selectedClient = nil
             }
             requestedSkillID = nil
+            requestedItemID = nil
             requestedMarketplacePackageID = nil
             pendingRequestQueue.removeAll()
             skillCreationQueue.removeAll()
         case .skill(let id):
             requestedSection = .skills
             requestedSkillID = id
+            requestedItemID = nil
             requestedMarketplacePackageID = nil
             pendingRequestQueue.removeAll()
             skillCreationQueue.removeAll()
         case .pendingRequest(let id):
             requestedSkillID = nil
+            requestedItemID = nil
             requestedMarketplacePackageID = nil
             if !pendingRequestQueue.contains(id) {
                 pendingRequestQueue.append(id)
@@ -59,9 +66,28 @@ final class AppNavigationState {
         guard !id.isEmpty else { return }
         requestedSection = .marketplace
         requestedSkillID = nil
+        requestedItemID = nil
         requestedMarketplacePackageID = id
         pendingRequestQueue.removeAll()
         revision += 1
+    }
+
+    /// Opens one screen with one of its rows named, for the screens that have no
+    /// external route of their own. Naming a row reveals it and nothing more.
+    func openItem(_ id: String, in section: AppSection) {
+        guard !id.isEmpty else { return }
+        requestedSection = section
+        requestedSkillID = nil
+        requestedItemID = id
+        requestedMarketplacePackageID = nil
+        pendingRequestQueue.removeAll()
+        skillCreationQueue.removeAll()
+        revision += 1
+    }
+
+    func consumeRequestedItem(_ id: String) {
+        guard requestedItemID == id else { return }
+        requestedItemID = nil
     }
 
     /// Opens the client-facing pane with one durable, exact client scope.
@@ -71,6 +97,7 @@ final class AppNavigationState {
         selectedClient = client
         requestedSection = .syncCenter
         requestedSkillID = nil
+        requestedItemID = nil
         requestedMarketplacePackageID = nil
         pendingRequestQueue.removeAll()
         skillCreationQueue.removeAll()
@@ -81,6 +108,7 @@ final class AppNavigationState {
         selectedClient = nil
         requestedSection = .syncCenter
         requestedSkillID = nil
+        requestedItemID = nil
         requestedMarketplacePackageID = nil
         pendingRequestQueue.removeAll()
         skillCreationQueue.removeAll()
@@ -105,6 +133,7 @@ final class AppNavigationState {
     func openSkillCreationRequest(_ id: UUID) {
         requestedSection = .skills
         requestedSkillID = nil
+        requestedItemID = nil
         requestedMarketplacePackageID = nil
         if !skillCreationQueue.contains(id) { skillCreationQueue.append(id) }
         revision += 1
