@@ -207,10 +207,10 @@ final class WorkspaceSyncSession {
     /// Only a conflict that has two sides to pick from can be decided here.
     func canDecide(_ index: Int) -> Bool {
         guard conflicts.indices.contains(index) else { return false }
-        switch conflicts[index].kind {
-        case .destinationCollision, .unsupportedVersion, .invalidResult: return false
-        default: return true
-        }
+        // The kind itself says whether picking a side settles it, so this screen
+        // cannot offer a chooser for a collision that only a person on the other
+        // Mac can undo.
+        return conflicts[index].kind.isSettledByChoosingASide
     }
 
     func choose(_ choice: WorkspaceConflictChoice, at index: Int) {
