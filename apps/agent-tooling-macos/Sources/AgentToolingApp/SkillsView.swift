@@ -54,7 +54,7 @@ private struct SkillsBrowser: View {
     /// The skill the creator just admitted, held until its sheet has closed:
     /// choosing where a new skill is used is a second sheet, and two of them
     /// cannot be on screen at once.
-    @State private var createdByCodex: ArtifactID?
+    @State private var createdByCodex: CodexAdoption?
     @State private var editingSource: SkillEntry?
     @State private var assignment: AssignmentPresentation?
     @State private var exporting: ExportPresentation?
@@ -149,7 +149,9 @@ private struct SkillsBrowser: View {
             SkillSourceEditorSheet(skill: skill, session: content)
         }
         .sheet(item: $assignment) { presentation in
-            WorkspaceAssignmentSheet(session: workspace.library, artifactIDs: presentation.artifactIDs)
+            WorkspaceAssignmentSheet(
+                session: workspace.library, artifactIDs: presentation.artifactIDs,
+                initialClients: presentation.initialClients)
         }
         .sheet(isPresented: $attaching) {
             WorkspaceAttachFolderSheet(session: workspace.authoring)
@@ -162,8 +164,8 @@ private struct SkillsBrowser: View {
                 workspace: workspace,
                 drafting: codexDrafting(workspace.skillDraftStagingRoot),
                 pendingRequestID: presentation.requestID
-            ) { artifactID, _ in
-                createdByCodex = artifactID
+            ) { artifactID, clients in
+                createdByCodex = CodexAdoption(artifactID: artifactID, clients: clients)
             }
         }
         .sheet(item: $exporting) { presentation in
@@ -719,9 +721,17 @@ private struct SkillsBrowser: View {
     private func finishCodexCreation() {
         guard let created = createdByCodex else { return }
         createdByCodex = nil
-        selectedID = created
+        selectedID = created.artifactID
         workspace.library.discardReview()
-        assignment = .init(artifactIDs: [created])
+        assignment = .init(artifactIDs: [created.artifactID], initialClients: created.clients)
+    }
+
+    /// A skill the creator admitted, and the apps it was ticked for in "Use
+    /// after review" — held until the creator's own sheet has closed, so the
+    /// hand-off can offer the same apps again instead of a blank sheet.
+    private struct CodexAdoption {
+        let artifactID: ArtifactID
+        let clients: Set<ClientKind>
     }
 
     private struct CodexCreatorPresentation: Identifiable {
@@ -733,6 +743,7 @@ private struct SkillsBrowser: View {
     private struct AssignmentPresentation: Identifiable {
         let id = UUID()
         let artifactIDs: [ArtifactID]
+        var initialClients: Set<ClientKind> = []
     }
 
     private struct ExportPresentation: Identifiable {

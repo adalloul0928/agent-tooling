@@ -7,9 +7,13 @@ struct WorkspaceAssignmentSheet: View {
     let artifactIDs: [ArtifactID]
     var presetID: ArtifactID?
     var initialProjectID: ArtifactID?
+    /// Apps to tick before anyone touches a toggle. Defaults to none, which is
+    /// today's behaviour: a caller that says nothing gets the blank sheet it
+    /// always got.
+    var initialClients: Set<ClientKind> = []
 
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedClients: Set<ClientKind> = []
+    @State private var selectedClients: Set<ClientKind>
     @State private var scope: ToolingScope
     @State private var selectedProjectID: ArtifactID?
     @State private var request: Request?
@@ -19,14 +23,17 @@ struct WorkspaceAssignmentSheet: View {
         session: WorkspaceLibrarySession,
         artifactIDs: [ArtifactID],
         presetID: ArtifactID? = nil,
-        initialProjectID: ArtifactID? = nil
+        initialProjectID: ArtifactID? = nil,
+        initialClients: Set<ClientKind> = []
     ) {
         self.session = session
         self.artifactIDs = artifactIDs
         self.presetID = presetID
         self.initialProjectID = initialProjectID
+        self.initialClients = initialClients
         _scope = State(initialValue: initialProjectID == nil ? .user : .project)
         _selectedProjectID = State(initialValue: initialProjectID)
+        _selectedClients = State(initialValue: initialClients)
     }
 
     var body: some View {

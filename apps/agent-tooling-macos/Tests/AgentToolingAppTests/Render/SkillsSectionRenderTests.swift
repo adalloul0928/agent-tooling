@@ -64,4 +64,34 @@ struct SkillsSectionRenderTests {
                 .environment(\.skillContentService, StubSkillContentService())
                 .defaultAppStorage(preferences.defaults))
     }
+
+    /// A device check speaks in the name a skill declared, never its display
+    /// name, so the row and the observation only meet if both carry it. This
+    /// is `declaredName` doing that job: `WorkspaceLibraryReadModelRow` carries
+    /// it straight from the artifact now, rather than a screen re-reading the
+    /// document to recover it.
+    @Test func theJoinLightsAClientMarkFromADeclaredName() async throws {
+        var observation = ShellRenderFixture.observation(.claudeCode, installed: true, commandAvailable: true)
+        observation.skillMetadata = [
+            "standalone-skill": .init(
+                path: "/Users/example/.claude/skills/standalone-skill", source: "Claude Code skill")
+        ]
+        let fixture = try await ShellRenderFixture(deviceObserver: StubDeviceObserver(observations: [observation]))
+        defer { fixture.remove() }
+        let preferences = try ShellRenderFixture.preferences()
+        defer { preferences.remove() }
+        await fixture.workspace.device.refresh()
+
+        let index = SkillInventoryIndex(
+            library: fixture.workspace.library.state?.library,
+            snapshot: fixture.workspace.library.state?.snapshot,
+            observations: fixture.workspace.device.observations,
+            ownershipJSON: "{}")
+        #expect(index.observedClients[ShellRenderFixture.skill] == [.claude])
+
+        try expectDrawn(
+            renderShell(.skills, fixture: fixture)
+                .environment(\.skillContentService, StubSkillContentService())
+                .defaultAppStorage(preferences.defaults))
+    }
 }

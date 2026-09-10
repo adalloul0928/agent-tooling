@@ -107,7 +107,7 @@ struct SkillInventoryIndex: Equatable {
             case .nativePlugin, .package:
                 // A plugin's own skills are things a person searches for by
                 // name, so they are listed rather than hidden inside it.
-                let provider = artifacts[row.artifactID]?.declaredName ?? row.nativeRoutes.first?.externalPluginID
+                let provider = row.declaredName ?? row.nativeRoutes.first?.externalPluginID
                 for child in row.includedChildren where child.kind == .skill {
                     entries.append(
                         Self.entry(
@@ -206,7 +206,7 @@ struct SkillInventoryIndex: Equatable {
 
     private static func entry(row: WorkspaceLibraryReadModelRow, artifact: ArtifactRecord?) -> SkillEntry {
         SkillEntry(
-            id: row.artifactID, displayName: row.displayName, declaredName: artifact?.declaredName,
+            id: row.artifactID, displayName: row.displayName, declaredName: row.declaredName,
             summary: row.observedDescription ?? "", ownership: row.ownership, authority: artifact?.authority,
             contentDigest: artifact?.contentDigest, parentID: nil, parentPluginLabel: nil,
             providerPluginID: nil, sourceLabel: row.sourceLabel,
@@ -219,7 +219,7 @@ struct SkillInventoryIndex: Equatable {
         provider: String?, artifact: ArtifactRecord?
     ) -> SkillEntry {
         SkillEntry(
-            id: child.artifactID, displayName: child.displayName, declaredName: artifact?.declaredName,
+            id: child.artifactID, displayName: child.displayName, declaredName: child.declaredName,
             summary: child.observedDescription ?? "", ownership: child.ownership, authority: artifact?.authority,
             contentDigest: artifact?.contentDigest, parentID: parent.artifactID,
             parentPluginLabel: child.parentPluginLabel ?? parent.displayName, providerPluginID: provider,

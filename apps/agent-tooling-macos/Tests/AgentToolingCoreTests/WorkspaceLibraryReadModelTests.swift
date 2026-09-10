@@ -84,6 +84,50 @@ struct WorkspaceLibraryReadModelTests {
     }
 
 
+    /// `declaredName` is the only key that joins a row to a device
+    /// observation, on both shapes the model hands out: a root row and a
+    /// child folded into one. An artifact that never declared a name joins
+    /// nothing, so it stays `nil` rather than falling back to a guess.
+    @Test func declaredNameCarriesFromTheArtifactToBothRowShapes() throws {
+        let workspaceID = WorkspaceObjectID()
+        let writerID = WorkspaceObjectID()
+        let pluginID = ArtifactID()
+        let childID = ArtifactID()
+        let namedID = ArtifactID()
+        let unnamedID = ArtifactID()
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: workspaceID,
+                revision: .init(writerID: writerID),
+                artifacts: [
+                    .init(
+                        identity: .init(id: pluginID, kind: .nativePlugin, displayName: "Plugin"),
+                        authority: .nativeOwned, declaredName: "vendor-plugin"),
+                    .init(
+                        identity: .init(
+                            id: childID, kind: .skill, displayName: "Child Skill", parentPackageID: pluginID),
+                        authority: .nativeOwned, declaredName: "child-skill", packageRelativePath: "skills/child"),
+                    .init(
+                        identity: .init(id: namedID, kind: .skill, displayName: "Named Skill"),
+                        authority: .centralPersonal, declaredName: "named-skill"),
+                    .init(
+                        identity: .init(id: unnamedID, kind: .skill, displayName: "Unnamed Skill"),
+                        authority: .centralPersonal),
+                ]))
+        let device = DeviceWorkspaceState(workspaceID: workspaceID)
+        let model = try WorkspaceLibraryReadModel(snapshot: .init(document: document, device: device))
+
+        let plugin = try #require(model.rows.first { $0.artifactID == pluginID })
+        #expect(plugin.declaredName == "vendor-plugin")
+        let child = try #require(plugin.includedChildren.first { $0.artifactID == childID })
+        #expect(child.declaredName == "child-skill")
+
+        let named = try #require(model.rows.first { $0.artifactID == namedID })
+        #expect(named.declaredName == "named-skill")
+        let unnamed = try #require(model.rows.first { $0.artifactID == unnamedID })
+        #expect(unnamed.declaredName == nil)
+    }
+
     @Test func buildsAParentIndexForDenseStandaloneRoots() throws {
         let workspaceID = WorkspaceObjectID()
         let writerID = WorkspaceObjectID()

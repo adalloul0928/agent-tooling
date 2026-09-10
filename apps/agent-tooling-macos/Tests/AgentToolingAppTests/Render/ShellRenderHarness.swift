@@ -146,6 +146,7 @@ struct StubDeviceObserver: DeviceObserving {
                     .init(
                         identity: .init(id: Self.plugin, kind: .nativePlugin, displayName: "Example Plugin"),
                         authority: .nativeOwned,
+                        declaredName: "example-plugin",
                         nativeRoutes: [.init(client: .claude, externalPluginID: "example@vendor")]),
                     // A native-owned skill member has a file of its own, so the
                     // document requires it to say where inside the package. It
@@ -155,13 +156,14 @@ struct StubDeviceObserver: DeviceObserving {
                             id: Self.child, kind: .skill, displayName: "Bundled Skill",
                             parentPackageID: Self.plugin),
                         authority: .nativeOwned,
+                        declaredName: "bundled-skill",
                         packageRelativePath: "skills/bundled"),
                     .init(
                         identity: .init(id: Self.skill, kind: .skill, displayName: "Standalone Skill"),
-                        authority: .centralPersonal),
+                        authority: .centralPersonal, declaredName: "standalone-skill"),
                     .init(
                         identity: .init(id: Self.server, kind: .mcpServer, displayName: "Example Server"),
-                        authority: .trackedOnly),
+                        authority: .trackedOnly, declaredName: "example-server"),
                     .init(
                         identity: .init(id: Self.presetID, kind: .preset, displayName: "Starter"),
                         authority: .centralPersonal),
