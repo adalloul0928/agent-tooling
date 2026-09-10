@@ -8,16 +8,26 @@ import SwiftUI
 /// choosing tools or skipping puts it away for good.
 struct SkillsSection: View {
     let workspace: WorkspaceLaunch.Workspace
+    @Environment(\.skillContentService) private var skillContentService
     @AppStorage("onboarding.skipped.v2") private var onboardingSkipped = false
+    @State private var content: SkillContentSession?
 
     var body: some View {
         if showsOnboarding {
             WorkspaceOnboardingView(session: workspace.library) { onboardingSkipped = true }
+        } else if let content {
+            SkillsView(workspace: workspace, content: content)
         } else {
-            WorkspaceLibraryView(
-                session: workspace.library, authoring: workspace.authoring, export: workspace.export,
-                initialKind: .skills
-            )
+            // One session per workspace, made once. Building it in `body` would
+            // hand the screen a new one on every layout pass and lose whatever
+            // the last one had read.
+            Color.clear.onAppear {
+                content = SkillContentSession(
+                    service: workspace.service, library: workspace.library,
+                    cacheRoot: workspace.store.databaseURL.deletingLastPathComponent()
+                        .appending(path: "cache", directoryHint: .isDirectory),
+                    content: skillContentService)
+            }
         }
     }
 
