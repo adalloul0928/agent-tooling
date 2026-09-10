@@ -329,7 +329,7 @@ public enum ContentRiskScanner {
     /// `maximumLines` lines, so padding is enough to push an instruction out of
     /// range. A report that then says "no content risks found" is wrong, not
     /// merely incomplete.
-    static func inspect(
+    public static func inspect(
         text: String,
         relativePath: String,
         limits: Limits = Limits()
@@ -627,7 +627,7 @@ public enum ContentRiskScanner {
     /// How much of a single line the pattern rules read. Regex cost grows with
     /// line length, so a bound is necessary — but `inspect` reports when one is
     /// hit, because everything past it is unexamined rather than clean.
-    static let maximumScannedLineCharacters = 8_000
+    public static let maximumScannedLineCharacters = 8_000
 
     private static func patternFindings(in line: String, relativePath: String, line number: Int) -> [ContentRiskFinding] {
         let bounded =

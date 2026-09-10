@@ -2,7 +2,7 @@ import Foundation
 
 /// Federates packages from sources the user has explicitly added. The app never
 /// treats a catalog listing as a trusted or authenticated installation.
-final class MarketplaceService {
+public final class MarketplaceService {
     private enum Limit {
         static let catalogBytes = 2_097_152
         static let manifestBytes = 262_144
@@ -34,11 +34,11 @@ final class MarketplaceService {
 
     private let fileManager: FileManager
 
-    init(fileManager: FileManager = .default) {
+    public init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
     }
 
-    func inspect(_ source: ToolingSource) throws -> [MarketplacePackage] {
+    public func inspect(_ source: ToolingSource) throws -> [MarketplacePackage] {
         switch source.kind {
         case .localFolder, .gitRepository:
             return try inspectFolder(source)
@@ -49,7 +49,7 @@ final class MarketplaceService {
         }
     }
 
-    func defaultSources() -> [ToolingSource] {
+    public func defaultSources() -> [ToolingSource] {
         [
             ToolingSource(
                 name: "Agent Plugins format", kind: .agentPlugins, location: "https://agent-plugins.org",
@@ -74,7 +74,7 @@ final class MarketplaceService {
     /// as an installer. Gemini's gallery has no equivalent local JSON catalog,
     /// so it remains a source link while installed extensions are discovered by
     /// the target scanner.
-    static func discoverNativeCatalogs(
+    public static func discoverNativeCatalogs(
         runner: any CommandRunning, clients: Set<ClientKind> = Set(ClientKind.allCases)
     ) async -> NativeCatalogDiscovery {
         let service = MarketplaceService()
@@ -417,7 +417,7 @@ final class MarketplaceService {
         return value
     }
 
-    func deduplicatedPackages(_ packages: [MarketplacePackage]) -> [MarketplacePackage] {
+    public func deduplicatedPackages(_ packages: [MarketplacePackage]) -> [MarketplacePackage] {
         var packagesByID: [String: MarketplacePackage] = [:]
         for package in packages.sorted(by: Self.packageSort) {
             guard let current = packagesByID[package.id] else {
@@ -989,18 +989,18 @@ final class MarketplaceService {
     }
 }
 
-enum NativeCatalogClientOutcome: String, Equatable, Sendable {
+public enum NativeCatalogClientOutcome: String, Equatable, Sendable {
     case excluded
     case complete
     case incomplete
 }
 
-struct NativeCatalogDiscovery: Sendable {
-    var packages: [MarketplacePackage]
-    var notes: [ClientKind: String]
-    var outcomes: [ClientKind: NativeCatalogClientOutcome]
+public struct NativeCatalogDiscovery: Sendable {
+    public var packages: [MarketplacePackage]
+    public var notes: [ClientKind: String]
+    public var outcomes: [ClientKind: NativeCatalogClientOutcome]
 
-    func retainedCachedPackages(from cached: [MarketplacePackage]) -> [MarketplacePackage] {
+    public func retainedCachedPackages(from cached: [MarketplacePackage]) -> [MarketplacePackage] {
         let discoveredIDs = Set(packages.map(\.id))
         return cached.filter { package in
             guard !discoveredIDs.contains(package.id), let client = Self.client(for: package.id) else { return false }

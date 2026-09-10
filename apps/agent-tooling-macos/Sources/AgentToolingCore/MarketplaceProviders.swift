@@ -48,9 +48,9 @@ actor URLSessionHTTPDataLoader: HTTPDataLoading {
     }
 }
 
-struct OfficialMCPRegistryProvider: MarketplaceProvider {
+public struct OfficialMCPRegistryProvider: MarketplaceProvider {
     public let id = "mcp.official-registry"
-    let displayName = "Official MCP Registry"
+    public let displayName = "Official MCP Registry"
 
     private enum Limit {
         static let responseBytes = 4_194_304
@@ -64,6 +64,15 @@ struct OfficialMCPRegistryProvider: MarketplaceProvider {
 
     private let baseURL: URL
     private let loader: any HTTPDataLoading
+
+    /// The catalog anything outside this package asks for.
+    ///
+    /// The loader stays internal: how the registry is reached is this package's
+    /// business, and a caller that could substitute one could point the
+    /// "official" registry at anything it liked.
+    public init(baseURL: URL? = nil) throws {
+        try self.init(baseURL: baseURL, loader: URLSessionHTTPDataLoader())
+    }
 
     init(
         baseURL: URL? = nil,
@@ -82,7 +91,7 @@ struct OfficialMCPRegistryProvider: MarketplaceProvider {
         self.loader = loader
     }
 
-    func search(_ query: MarketplaceQuery) async throws -> MarketplacePage {
+    public func search(_ query: MarketplaceQuery) async throws -> MarketplacePage {
         let endpoint = baseURL.appending(path: "v0.1/servers")
         guard let urlComponents = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else {
             throw MarketplaceProviderError.invalidRequest
@@ -424,7 +433,7 @@ struct OfficialMCPRegistryProvider: MarketplaceProvider {
     }
 }
 
-enum MarketplaceProviderError: LocalizedError, Sendable {
+public enum MarketplaceProviderError: LocalizedError, Sendable {
     case insecureBaseURL
     case invalidRequest
     case invalidResponse
@@ -432,7 +441,7 @@ enum MarketplaceProviderError: LocalizedError, Sendable {
     case responseTooLarge
     case invalidPayload
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .insecureBaseURL: "Marketplace providers require an HTTPS base URL."
         case .invalidRequest: "The marketplace request could not be created."

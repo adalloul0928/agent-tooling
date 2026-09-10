@@ -54,7 +54,10 @@ final class WorkspaceSettingsSession {
     /// setting as editable that a policy actually decides. `nil` means no
     /// location is recorded for this platform, and the screen says so rather
     /// than implying the absence was checked.
-    private let managedPolicyPath: URL?
+    ///
+    /// Internal rather than private so a screen can show the exact location
+    /// behind a `PathInfoButton` instead of stopping at `managedPolicyUnknown`.
+    let managedPolicyPath: URL?
 
     /// `managedPolicyPath` defaults to the location the vendor documents. A
     /// test passes its own; passing `.some(nil)` says this Mac's policy location

@@ -65,18 +65,18 @@ public struct MCPRuntimeServer: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-protocol MCPRuntimeProvider: Sendable {
+public protocol MCPRuntimeProvider: Sendable {
     var id: String { get }
     func status() async -> MCPRuntimeStatus
     func servers() async throws -> [MCPRuntimeServer]
 }
 
-struct DirectMCPRuntimeProvider: MCPRuntimeProvider {
-    let id = "direct"
+public struct DirectMCPRuntimeProvider: MCPRuntimeProvider {
+    public let id = "direct"
 
-    init() {}
+    public init() {}
 
-    func status() async -> MCPRuntimeStatus {
+    public func status() async -> MCPRuntimeStatus {
         MCPRuntimeStatus(
             id: id,
             displayName: "Direct client configuration",
@@ -86,18 +86,18 @@ struct DirectMCPRuntimeProvider: MCPRuntimeProvider {
         )
     }
 
-    func servers() async throws -> [MCPRuntimeServer] { [] }
+    public func servers() async throws -> [MCPRuntimeServer] { [] }
 }
 
-struct ToolHiveMCPRuntimeProvider: MCPRuntimeProvider {
-    let id = "toolhive"
+public struct ToolHiveMCPRuntimeProvider: MCPRuntimeProvider {
+    public let id = "toolhive"
     private let runner: any CommandRunning
 
-    init(runner: any CommandRunning = ProcessCommandRunner(timeout: .seconds(15))) {
+    public init(runner: any CommandRunning = ProcessCommandRunner(timeout: .seconds(15))) {
         self.runner = runner
     }
 
-    func status() async -> MCPRuntimeStatus {
+    public func status() async -> MCPRuntimeStatus {
         do {
             switch try await ToolHiveRuntimeInspection(runner: runner).version() {
             case .available(let version, let diagnostic):
@@ -115,13 +115,13 @@ struct ToolHiveMCPRuntimeProvider: MCPRuntimeProvider {
         }
     }
 
-    func servers() async throws -> [MCPRuntimeServer] {
+    public func servers() async throws -> [MCPRuntimeServer] {
         let runtimeStatus = await status()
         return try await servers(after: runtimeStatus)
     }
 
     /// Reuses a refresh's version probe instead of launching the CLI twice.
-    func servers(after runtimeStatus: MCPRuntimeStatus) async throws -> [MCPRuntimeServer] {
+    public func servers(after runtimeStatus: MCPRuntimeStatus) async throws -> [MCPRuntimeServer] {
         try Task.checkCancellation()
         guard runtimeStatus.isAvailable else { return [] }
         guard runtimeStatus.capabilities.contains(.health) else { throw MCPRuntimeError.invalidResponse }
@@ -172,11 +172,11 @@ struct ToolHiveMCPRuntimeProvider: MCPRuntimeProvider {
     }
 }
 
-enum MCPRuntimeError: LocalizedError, Sendable {
+public enum MCPRuntimeError: LocalizedError, Sendable {
     case commandFailed(String)
     case invalidResponse
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .commandFailed(let detail): "ToolHive could not list managed servers. \(detail)"
         case .invalidResponse: "ToolHive returned an unsupported server list."

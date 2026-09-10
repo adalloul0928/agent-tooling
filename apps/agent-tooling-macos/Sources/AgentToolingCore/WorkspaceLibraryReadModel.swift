@@ -49,6 +49,7 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
                         kind: child.identity.kind,
                         ownership: Self.ownership(child.authority),
                         parentPluginLabel: artifacts[parentID]?.identity.displayName,
+                        declaredName: child.declaredName,
                         observedDescription: observations[child.identity.id],
                         requestedAssignments: Self.requestedAssignments(
                             assignments[child.identity.id] ?? [], deviceID: snapshot.device.deviceID
@@ -64,6 +65,7 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
                 kind: artifact.identity.kind,
                 ownership: authority,
                 parentPluginLabel: nil,
+                declaredName: artifact.declaredName,
                 sourceLabel: Self.sourceLabel(
                     authority: artifact.authority,
                     sources: sources,
@@ -300,6 +302,10 @@ public struct WorkspaceLibraryIncludedItem: Sendable, Equatable, Identifiable {
     public let kind: ArtifactKind
     public let ownership: WorkspaceLibraryOwnership
     public let parentPluginLabel: String?
+    /// The name recorded when this artifact was declared. This is the only key
+    /// that joins a row to a device observation: `nil` means nothing declared
+    /// one, so nothing observed on this Mac can be matched to it either.
+    public let declaredName: String?
     /// Device-captured legacy description only; nil means no observation exists.
     public let observedDescription: String?
     public let requestedAssignments: [WorkspaceLibraryRequestedAssignment]
@@ -313,6 +319,10 @@ public struct WorkspaceLibraryReadModelRow: Sendable, Equatable, Identifiable {
     public let kind: ArtifactKind
     public let ownership: WorkspaceLibraryOwnership
     public let parentPluginLabel: String?
+    /// The name recorded when this artifact was declared. This is the only key
+    /// that joins a row to a device observation: `nil` means nothing declared
+    /// one, so nothing observed on this Mac can be matched to it either.
+    public let declaredName: String?
     public let sourceLabel: String?
     /// Device-captured legacy description only; nil means no observation exists.
     public let observedDescription: String?
