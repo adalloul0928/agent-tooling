@@ -67,7 +67,13 @@ struct AppShellView: View {
         }
         // Checking this Mac's apps is a scan, so it starts after the window is
         // up and off this actor. Nothing on screen waits for it.
-        .task { await workspace.device.refresh() }
+        .task {
+            // Read the library once for every section, and check this Mac's apps
+            // alongside it; neither waits for the other and neither blocks the shell.
+            async let library: Void = workspace.library.refresh()
+            async let device: Void = workspace.device.refresh()
+            _ = await (library, device)
+        }
         .onAppear(perform: applyExternalNavigation)
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
         .onChange(of: workspace.device.enabledClients) { _, _ in
