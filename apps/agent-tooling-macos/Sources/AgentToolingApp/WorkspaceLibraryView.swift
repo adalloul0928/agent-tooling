@@ -8,14 +8,30 @@ struct WorkspaceLibraryView: View {
     var initialProjectID: ArtifactID? = nil
     var authoring: WorkspaceAuthoringSession?
     var export: WorkspacePackageExportSession?
+    /// The kind a Library tab opens on. Anything but `.all` hides the in-pane
+    /// kind picker, because the tab already made that choice.
+    var initialKind: LibraryKind = .all
     @State private var isAttaching = false
     @State private var exporting: ExportPresentation?
     @State private var query = ""
-    @State private var kind: LibraryKind = .all
+    @State private var kind: LibraryKind
     @State private var selection: Set<ArtifactID> = []
     @State private var detailID: ArtifactID?
     @State private var assignment: AssignmentPresentation?
     @State private var refreshID = UUID()
+
+    init(
+        session: WorkspaceLibrarySession, initialProjectID: ArtifactID? = nil,
+        authoring: WorkspaceAuthoringSession? = nil, export: WorkspacePackageExportSession? = nil,
+        initialKind: LibraryKind = .all
+    ) {
+        self.session = session
+        self.initialProjectID = initialProjectID
+        self.authoring = authoring
+        self.export = export
+        self.initialKind = initialKind
+        _kind = State(initialValue: initialKind)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,9 +59,11 @@ struct WorkspaceLibraryView: View {
                 }
             }
             HStack(spacing: 16) {
-                WorkspaceSegmentedPicker("Item type", selection: $kind) {
-                    ForEach(LibraryKind.allCases) { value in Text(value.rawValue).tag(value) }
-                }.fixedSize()
+                if initialKind == .all {
+                    WorkspaceSegmentedPicker("Item type", selection: $kind) {
+                        ForEach(LibraryKind.allCases) { value in Text(value.rawValue).tag(value) }
+                    }.fixedSize()
+                }
                 Spacer(minLength: 12)
                 InventorySearchField(placeholder: "Search library", text: $query)
                     .frame(minWidth: 180, idealWidth: 260, maxWidth: 340)
@@ -62,17 +80,23 @@ struct WorkspaceLibraryView: View {
             if let library = session.state?.library {
                 let rows = library.filteredRows(matching: query).filter { kind.includes($0.kind) }
                 if rows.isEmpty {
-                    ContentUnavailableView(query.isEmpty ? "No items yet" : "No matching items",
-                        systemImage: "books.vertical", description: Text(query.isEmpty
-                            ? "Items in this workspace will appear here."
-                            : "Try a name, plugin, or repository."))
+                    ContentUnavailableView(
+                        query.isEmpty ? "No items yet" : "No matching items",
+                        systemImage: "books.vertical",
+                        description: Text(
+                            query.isEmpty
+                                ? "Items in this workspace will appear here."
+                                : "Try a name, plugin, or repository."))
                 } else {
                     List(rows) { row in
                         HStack(spacing: 14) {
-                            Toggle("Select \(row.displayName)", isOn: Binding(
-                                get: { selection.contains(row.id) },
-                                set: { if $0 { selection.insert(row.id) } else { selection.remove(row.id) } }
-                            ))
+                            Toggle(
+                                "Select \(row.displayName)",
+                                isOn: Binding(
+                                    get: { selection.contains(row.id) },
+                                    set: { if $0 { selection.insert(row.id) } else { selection.remove(row.id) } }
+                                )
+                            )
                             .labelsHidden().toggleStyle(.checkbox)
                             .disabled(!row.isAssignable || session.isBusy)
                             Image(systemName: row.kind.librarySymbol)
@@ -109,7 +133,8 @@ struct WorkspaceLibraryView: View {
                                 }
                             }
                             if let authoring, row.ownership == .attachedAuthoring,
-                               session.access == .writable {
+                                session.access == .writable
+                            {
                                 Button("Stop managing this folder", systemImage: "folder.badge.minus") {
                                     Task { await authoring.detach(row.id, named: row.displayName) }
                                 }
@@ -121,7 +146,8 @@ struct WorkspaceLibraryView: View {
             } else if session.isBusy {
                 ProgressView("Loading library…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView("Library unavailable", systemImage: "books.vertical",
+                ContentUnavailableView(
+                    "Library unavailable", systemImage: "books.vertical",
                     description: Text("Refresh to read this workspace again."))
             }
             Divider()
@@ -148,7 +174,8 @@ struct WorkspaceLibraryView: View {
             selection.formIntersection(session.state?.library.rows.filter(\.isAssignable).map(\.id) ?? [])
         }
         .sheet(item: $assignment) { presentation in
-            WorkspaceAssignmentSheet(session: session, artifactIDs: presentation.artifactIDs,
+            WorkspaceAssignmentSheet(
+                session: session, artifactIDs: presentation.artifactIDs,
                 presetID: presentation.presetID, initialProjectID: initialProjectID)
         }
         .sheet(isPresented: Binding(get: { detailID != nil }, set: { if !$0 { detailID = nil } })) {
@@ -187,8 +214,11 @@ struct WorkspaceLibraryView: View {
         var presetID: ArtifactID? = nil
     }
 
-    private enum LibraryKind: String, CaseIterable, Identifiable {
-        case all = "All", skills = "Skills", plugins = "Plugins", mcp = "MCP"
+    enum LibraryKind: String, CaseIterable, Identifiable {
+        case all = "All"
+        case skills = "Skills"
+        case plugins = "Plugins"
+        case mcp = "MCP"
         var id: String { rawValue }
         func includes(_ kind: ArtifactKind) -> Bool {
             switch self {

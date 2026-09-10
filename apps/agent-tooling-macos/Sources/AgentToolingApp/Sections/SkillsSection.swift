@@ -15,7 +15,9 @@ struct SkillsSection: View {
             WorkspaceOnboardingView(session: workspace.library) { onboardingSkipped = true }
         } else {
             WorkspaceLibraryView(
-                session: workspace.library, authoring: workspace.authoring, export: workspace.export)
+                session: workspace.library, authoring: workspace.authoring, export: workspace.export,
+                initialKind: .skills
+            )
         }
     }
 

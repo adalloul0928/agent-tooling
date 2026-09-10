@@ -8,6 +8,8 @@ struct MCPServersSection: View {
 
     var body: some View {
         WorkspaceLibraryView(
-            session: workspace.library, authoring: workspace.authoring, export: workspace.export)
+            session: workspace.library, authoring: workspace.authoring, export: workspace.export,
+            initialKind: .mcp
+        )
     }
 }
