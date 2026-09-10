@@ -32,7 +32,8 @@ final class WorkspaceMarketplaceSession {
     /// One entry per package a catalog published, most recent refresh wins.
     private(set) var packages: [MarketplacePackage] = []
     /// The catalogs and folders this workspace records, in the document's own
-    /// order. Read-only: adding one is not a command this build has.
+    /// order, joined with the ones every build knows about. Written through the
+    /// catalog-source command rather than here, and re-read afterwards.
     private(set) var sources: [ToolingSource] = []
     private(set) var isRefreshing = false
     private(set) var errorMessage: String?
@@ -241,6 +242,11 @@ final class WorkspaceMarketplaceSession {
                 (snapshot.device.applicationState?.marketplacePackages ?? []).map(Self.unobserved), by: .name)
         }
     }
+
+    /// Re-reads the recorded catalogs after a command changed which ones there
+    /// are. No catalog is asked anything: what changed is where this app will
+    /// look, and a date claiming a fresh answer would be an invention.
+    func reloadSources() { reload() }
 
     private func fetch(_ query: MarketplaceQuery) async {
         guard !isRefreshing else { return }
