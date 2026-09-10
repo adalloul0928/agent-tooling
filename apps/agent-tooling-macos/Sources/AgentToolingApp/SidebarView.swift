@@ -62,13 +62,14 @@ struct SidebarView: View {
         .accessibilityLabel("Navigation sidebar")
     }
 
-    /// What the app has already read, turned into at most one glyph per row.
+    /// What the app has already read and already checked, turned into at most
+    /// one glyph per row.
     ///
-    /// Reading the library the sidebar is drawn beside cannot start a scan, so a
-    /// screen with nothing to report simply carries nothing.
+    /// Reading the library the sidebar is drawn beside cannot start a scan, and
+    /// neither can reading the last check, so a screen with nothing to report
+    /// simply carries nothing.
     private var health: SectionHealth {
-        guard let library = workspace.library.state?.library else { return SectionHealth() }
-        return SectionHealth(inventory: VersionedInventoryProjection.inventory(library))
+        .observed(library: workspace.library.state?.library, device: workspace.device)
     }
 
     private var sidebarSelection: Binding<AppSection?> {

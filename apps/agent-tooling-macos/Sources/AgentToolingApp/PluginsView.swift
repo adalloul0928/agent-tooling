@@ -4,11 +4,12 @@ import SwiftUI
 /// The Library's Plugins tab: native plugins and centrally tracked plugin
 /// packages, in the same master-detail shape the original screen used.
 ///
-/// Update comparison waits for Discover's marketplace session, which a
-/// different port is building; until then every plugin reports "not checked"
-/// rather than a stale or invented answer. Removing a plugin from an app is a
-/// reviewed change to this workspace's saved intent, never a write to the app
-/// itself — that stays the Install screen's job.
+/// Update comparison is `PluginUpdateEvaluation`, the same reading Home does,
+/// over the catalog this Mac last kept — so the two screens cannot disagree
+/// about a plugin, and before any catalog has been asked every row reports
+/// "not checked" rather than a stale or invented answer. Removing a plugin from
+/// an app is a reviewed change to this workspace's saved intent, never a write
+/// to the app itself — that stays the Install screen's job.
 struct PluginsView: View {
     let workspace: WorkspaceLaunch.Workspace
     @Environment(AppNavigationState.self) private var navigation
@@ -21,6 +22,7 @@ struct PluginsView: View {
 
     var body: some View {
         let inventory = PluginInventoryIndex(rows: libraryRows)
+        let updates = PluginUpdateEvaluation(state: workspace.library.state)
         let listed = filtered(inventory.rows)
 
         VStack(spacing: 0) {
@@ -36,13 +38,14 @@ struct PluginsView: View {
             }
 
             if selection.isEmpty {
-                collectionPane(rows: listed, inventory: inventory)
+                collectionPane(rows: listed, inventory: inventory, updates: updates)
             } else {
                 HSplitView {
-                    collectionPane(rows: listed, inventory: inventory).frame(minWidth: 320, idealWidth: 600)
+                    collectionPane(rows: listed, inventory: inventory, updates: updates)
+                        .frame(minWidth: 320, idealWidth: 600)
                     VStack(spacing: 0) {
                         InspectorHeader(title: "Plugin details") { selection = [] }
-                        detailPane(inventory: inventory)
+                        detailPane(inventory: inventory, updates: updates)
                     }.frame(minWidth: 400, idealWidth: 600)
                 }
             }
@@ -61,7 +64,10 @@ struct PluginsView: View {
 
     // MARK: Collection
 
-    private func collectionPane(rows: [WorkspaceLibraryReadModelRow], inventory: PluginInventoryIndex) -> some View {
+    private func collectionPane(
+        rows: [WorkspaceLibraryReadModelRow], inventory: PluginInventoryIndex,
+        updates: PluginUpdateEvaluation
+    ) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Picker("App", selection: $clientFilter) {
@@ -97,7 +103,7 @@ struct PluginsView: View {
                     if geometry.size.width < 820 {
                         narrowTable(rows: rows)
                     } else {
-                        wideTable(rows: rows, inventory: inventory)
+                        wideTable(rows: rows, updates: updates)
                     }
                 }
             }
@@ -125,7 +131,7 @@ struct PluginsView: View {
         .scrollContentBackground(.hidden)
     }
 
-    private func wideTable(rows: [WorkspaceLibraryReadModelRow], inventory: PluginInventoryIndex) -> some View {
+    private func wideTable(rows: [WorkspaceLibraryReadModelRow], updates: PluginUpdateEvaluation) -> some View {
         Table(rows, selection: $selection) {
             TableColumn("Name") { row in
                 HStack(spacing: 12) {
@@ -147,7 +153,7 @@ struct PluginsView: View {
                 TableClientMarks(clients: availableClients, present: Set(row.nativeRoutes.map(\.client)))
             }.width(90)
             TableColumn("Updates") { row in
-                let update = inventory.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet.")
+                let update = updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet.")
                 if update.hasUpdate {
                     UpdateStateBadge(availability: update)
                 } else {
@@ -160,7 +166,7 @@ struct PluginsView: View {
     }
 
     @ViewBuilder
-    private func detailPane(inventory: PluginInventoryIndex) -> some View {
+    private func detailPane(inventory: PluginInventoryIndex, updates: PluginUpdateEvaluation) -> some View {
         let stack = stackedRows(in: inventory.rows)
         if stack.count > 1 {
             PluginStackPane(
@@ -173,7 +179,7 @@ struct PluginsView: View {
         } else if let row = selectedRow(in: inventory.rows) {
             PluginDetailView(
                 row: row,
-                availability: inventory.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet."),
+                availability: updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet."),
                 library: workspace.library
             )
         } else {
