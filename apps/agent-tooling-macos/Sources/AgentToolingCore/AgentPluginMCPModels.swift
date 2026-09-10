@@ -184,7 +184,7 @@ enum AgentPluginMCPConfigurationLoader {
         let tokenCharacters = CharacterSet(charactersIn: "!#$%&'*+-.^_`|~0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
         var names: Set<String> = []
         for (name, value) in headers {
-            guard !name.isEmpty, name.unicodeScalars.allSatisfy(tokenCharacters.contains), isSafeText(value) else {
+            guard !name.isEmpty, name.unicodeScalars.allSatisfy({ tokenCharacters.contains($0) }), isSafeText(value) else {
                 throw AgentPluginMCPValidationError.invalidServer("headers contain an invalid HTTP field.")
             }
             let normalized = name.lowercased()
