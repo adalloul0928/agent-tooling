@@ -13,6 +13,9 @@ struct WorkspaceAssignmentSheet: View {
     var initialClients: Set<ClientKind> = []
 
     @Environment(\.dismiss) private var dismiss
+    /// Present when the sheet is shown inside the shell; a sheet drawn on its
+    /// own (tests, previews) has nowhere to send a person, so it offers nothing.
+    @Environment(AppNavigationState.self) private var navigation: AppNavigationState?
     @State private var selectedClients: Set<ClientKind>
     @State private var scope: ToolingScope
     @State private var selectedProjectID: ArtifactID?
@@ -126,7 +129,14 @@ struct WorkspaceAssignmentSheet: View {
                         destinationEditor(library)
                     }
                     if let error = session.errorMessage {
-                        AttentionBanner(title: "Couldn’t prepare assignments", message: error)
+                        if session.lastRefusal == .contributionConflict, navigation != nil {
+                            AttentionBanner(title: "Already asked for", message: error) {
+                                Button("Install now…", action: installNow).buttonStyle(.glassProminent)
+                                    .tint(AgentTheme.selection)
+                            }
+                        } else {
+                            AttentionBanner(title: "Couldn’t prepare assignments", message: error)
+                        }
                     }
                 }
                 .padding(24)
@@ -288,12 +298,27 @@ struct WorkspaceAssignmentSheet: View {
     }
 
     private var success: some View {
-        ContentUnavailableView {
-            Label("Assignments saved", systemImage: "checkmark.circle")
-        } description: {
-            Text("Your assignments are saved. Review installation changes to make them available in your apps.")
+        VStack(spacing: 14) {
+            ContentUnavailableView {
+                Label("Assignments saved", systemImage: "checkmark.circle")
+            } description: {
+                Text("Saved to your workspace. Nothing is installed until you review it on the Apps screen.")
+            }
+            if navigation != nil {
+                Button("Install now…", systemImage: "arrow.down.circle", action: installNow)
+                    .buttonStyle(.glassProminent).tint(AgentTheme.selection)
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityLabel("Install now")
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Closes this sheet and opens Apps with the install plan being prepared,
+    /// which is the same thing Review Changes does there.
+    private func installNow() {
+        dismiss()
+        navigation?.openScreenRequest(.reviewChanges)
     }
 
     private var footer: some View {

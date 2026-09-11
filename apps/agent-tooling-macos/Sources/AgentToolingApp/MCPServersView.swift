@@ -481,7 +481,7 @@ struct MCPServersView: View {
         }
         switch requested {
         case .addMCPServer, .pasteImport: activeSheet = .paste
-        case .selectMCPServer, .selectPlugin, .selectReceipt: break
+        case .selectMCPServer, .selectPlugin, .selectReceipt, .reviewChanges: break
         }
         navigation.consumeScreenRequest(requested)
     }

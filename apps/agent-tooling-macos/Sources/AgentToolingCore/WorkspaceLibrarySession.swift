@@ -40,8 +40,16 @@ public final class WorkspaceLibrarySession {
     public private(set) var review: WorkspaceAssignmentReview?
     public private(set) var lastReceipt: WorkspaceCommandReceipt?
     public private(set) var errorMessage: String?
+    /// The assignment refusal behind `errorMessage`, when there was one, so a
+    /// screen can offer the right next step instead of only the words.
+    public private(set) var lastRefusal: WorkspaceAssignmentCommandError?
     public private(set) var isBusy = false
     @ObservationIgnored private let service: any WorkspaceLibraryServing
+    /// Callers waiting for the work in flight to finish, and how many reads
+    /// have landed, so a waiter can tell a read newer than its call from the
+    /// one it already had.
+    @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
+    @ObservationIgnored private var readsLanded = 0
 
     public init(service: any WorkspaceLibraryServing, workspaceID: WorkspaceObjectID,
                 deviceID: WorkspaceObjectID, access: WorkspaceLibraryAccess = .readOnly) {
@@ -51,12 +59,25 @@ public final class WorkspaceLibrarySession {
         self.access = access
     }
 
+    /// Reads the library. When this returns, a read newer than the call has
+    /// landed, or an error says why not, or the caller was cancelled.
+    ///
+    /// Work already in flight is shared rather than skipped: the shell starts
+    /// reading the moment the window is up, and a screen asking during that read
+    /// must get its answer, not an early return that leaves "no library yet"
+    /// looking like the answer. A command in flight re-reads before it finishes,
+    /// so waiting for it is the same read.
     public func refresh() async {
-        guard !isBusy else { return }
+        let asked = readsLanded
+        while isBusy {
+            await withCheckedContinuation { waiters.append($0) }
+            if Task.isCancelled || readsLanded > asked { return }
+        }
         isBusy = true
-        defer { isBusy = false }
+        defer { settle() }
         review = nil
         errorMessage = nil
+        lastRefusal = nil
         do {
             let next = try await service.libraryState()
             try Task.checkCancellation()
@@ -91,6 +112,7 @@ public final class WorkspaceLibrarySession {
         review = nil
         lastReceipt = nil
         errorMessage = nil
+        lastRefusal = nil
     }
 
     /// The success receipt records desired intent only. Native deployment is a
@@ -103,8 +125,9 @@ public final class WorkspaceLibrarySession {
         }
         guard let reviewed = review else { return }
         isBusy = true
-        defer { isBusy = false }
+        defer { settle() }
         errorMessage = nil
+        lastRefusal = nil
         do {
             try Task.checkCancellation()
             let receipt = try await service.applyAssignmentBatch(reviewed.command)
@@ -133,10 +156,11 @@ public final class WorkspaceLibrarySession {
     private func prepare(_ makeCommand: (WorkspaceApplicationSnapshot) throws -> WorkspaceAssignmentBatchCommand) async {
         guard !isBusy else { return }
         isBusy = true
-        defer { isBusy = false }
+        defer { settle() }
         review = nil
         lastReceipt = nil
         errorMessage = nil
+        lastRefusal = nil
         do {
             // Re-read before reviewing: choices are IDs, not authority to replay
             // a view's stale document or silently replace another writer's edit.
@@ -160,16 +184,29 @@ public final class WorkspaceLibrarySession {
             throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice
         }
         state = next
+        readsLanded += 1
+    }
+
+    /// Ends a busy span and wakes whoever was waiting for it, so they can look
+    /// at what it left behind.
+    private func settle() {
+        isBusy = false
+        let waiting = waiters
+        waiters.removeAll()
+        for waiter in waiting { waiter.resume() }
     }
 
     private func message(for error: any Error) -> String {
+        lastRefusal = error as? WorkspaceAssignmentCommandError
         if let error = error as? WorkspaceAssignmentCommandError {
             switch error {
             case .emptyBatch: return "Choose at least one item and one destination."
             case .duplicateSelection: return "Some choices are repeated. Review your selection."
             case .unsupportedArtifact: return "Some items are tracked only or cannot be assigned. Review their ownership first."
             case .nativeChild: return "Choose the whole plugin to include its skills and tools."
-            case .contributionConflict: return "An assignment already exists for these choices. Refresh and review the current assignments."
+            case .contributionConflict:
+                return "These items are already asked for in those apps. "
+                    + "Installing them is the next step, on the Apps screen."
             case .missingContribution: return "An assignment was already removed. Refresh the library."
             case .presetChanged, .invalidPresetReview: return "The preset changed. Review its current items before continuing."
             case .unsupportedReason: return "This assignment belongs to another workflow. Open its configuration to change it."

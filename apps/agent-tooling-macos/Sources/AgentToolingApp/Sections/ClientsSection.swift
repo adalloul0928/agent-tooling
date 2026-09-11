@@ -39,10 +39,19 @@ struct ClientsSection: View {
             guard isPreparing else { return }
             await workspace.deployment.prepare()
             isPreparing = false
+            // The route that asked for this is answered now, plan or not. It
+            // stayed asked until here so a task restarted mid-way (SwiftUI does
+            // that at launch) found it waiting and joined the same preparation.
+            navigation.consumeScreenRequest(.reviewChanges)
             if workspace.deployment.plan != nil { isReviewingPlan = true }
         }
         .onAppear(perform: applyRequestedRoute)
         .onChange(of: navigation.revision) { _, _ in applyRequestedRoute() }
+        // An install changed what the apps hold, so the next thing every screen
+        // says about "found" should come from a fresh check, not the last one.
+        .onChange(of: workspace.deployment.results.count) { _, _ in
+            Task { await workspace.device.refresh() }
+        }
         .sheet(item: $reviewedRequest, onDismiss: finishRequestPresentation) { request in
             PendingRequestReviewSheet(
                 request: request,
@@ -102,6 +111,11 @@ struct ClientsSection: View {
 
     /// A route that names one request opens it, once. Opening is not approving.
     private func applyRequestedRoute() {
+        // Arriving here from "Install now" elsewhere: prepare the plan and open
+        // it, exactly as pressing Review Changes on this screen does.
+        if navigation.requestedScreenRequest == .reviewChanges {
+            isPreparing = true
+        }
         guard reviewedRequest == nil, let id = navigation.requestedPendingRequestID else { return }
         Task {
             guard let request = await workspace.requests.request(id: id) else {

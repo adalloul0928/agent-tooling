@@ -17,7 +17,8 @@ struct AgentToolingApplication: App {
             Group {
                 if let workspace {
                     AppShellView(
-                        workspace: workspace, initialSection: LaunchContext.current.section ?? .overview,
+                        workspace: workspace,
+                        initialSection: LaunchContext.current.request?.section ?? LaunchContext.current.section ?? .overview,
                         navigation: navigation)
                 } else if let startupError {
                     StartupFailureView(message: startupError) { Task { await load() } }
@@ -96,6 +97,9 @@ struct AgentToolingApplication: App {
                 supportRoot: context.workspaceRoot,
                 homeRoot: context.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
             startupError = nil
+            // A launch that names a screen request arrives with it already asked
+            // for, so the section it opens on consumes it as it would from the palette.
+            if let request = context.request { navigation.openScreenRequest(request) }
         } catch {
             workspace = nil
             startupError = error.localizedDescription
@@ -191,6 +195,8 @@ struct LaunchContext {
     var homeRoot: URL?
     /// The screen this launch opens on. Absent means Home.
     var section: AppSection?
+    /// A screen request to open on, such as `reviewChanges`; its section wins.
+    var request: ScreenRequest?
 
     static var current: LaunchContext {
         var context = LaunchContext()
@@ -203,6 +209,8 @@ struct LaunchContext {
                 context.homeRoot = arguments.next().map { URL(fileURLWithPath: $0).standardizedFileURL }
             case "--section":
                 context.section = arguments.next().flatMap(AppSection.named)
+            case "--request":
+                context.request = arguments.next().flatMap(ScreenRequest.named)
             default: continue
             }
         }
