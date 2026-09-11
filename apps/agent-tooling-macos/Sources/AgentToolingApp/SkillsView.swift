@@ -892,6 +892,7 @@ private struct SkillCollectionRow: View {
 }
 
 private struct SkillDetailView: View {
+    @Environment(AppNavigationState.self) private var navigation: AppNavigationState?
     let skill: SkillEntry
     let workspace: WorkspaceLaunch.Workspace
     let content: SkillContentSession
@@ -1006,6 +1007,20 @@ private struct SkillDetailView: View {
                     .padding(.horizontal, 6).padding(.vertical, 9)
                     if index < availableClients.count - 1 { Divider() }
                 }
+                if navigation != nil, availableClients.contains(where: isAskedForButAbsent) {
+                    Divider()
+                    HStack(spacing: 10) {
+                        Text("Asked for, but not installed yet.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Install…", systemImage: "arrow.down.circle") {
+                            navigation?.openScreenRequest(.reviewChanges)
+                        }
+                        .buttonStyle(.glassProminent).tint(AgentTheme.selection)
+                        .accessibilityLabel("Install this skill from the Apps screen")
+                    }
+                    .padding(.horizontal, 6).padding(.vertical, 9)
+                }
                 if availableClients.isEmpty {
                     Text("This Mac is not managing any apps.")
                         .font(.callout).foregroundStyle(.secondary)
@@ -1030,6 +1045,10 @@ private struct SkillDetailView: View {
     private func state(for client: ClientKind) -> HealthState? {
         if inventory.observedClients[skill.id]?.contains(client) == true { return .healthy }
         return skill.requestedClients.contains(client) ? .pending : nil
+    }
+
+    private func isAskedForButAbsent(_ client: ClientKind) -> Bool {
+        inventory.observedClients[skill.id]?.contains(client) != true && skill.requestedClients.contains(client)
     }
 
     private func detail(for client: ClientKind) -> String {

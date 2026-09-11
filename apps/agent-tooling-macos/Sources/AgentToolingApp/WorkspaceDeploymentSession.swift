@@ -33,6 +33,12 @@ final class WorkspaceDeploymentSession {
     private(set) var isBusy = false
     private(set) var errorMessage: String?
 
+    /// The preparation in flight, if one is. It runs as its own task, so a
+    /// screen whose task is cancelled and restarted while it waits (SwiftUI
+    /// does that to the Apps screen's task at launch) neither cancels the read
+    /// nor starts a second one: the restarted task waits for the same plan.
+    @ObservationIgnored private var preparation: Task<Void, Never>?
+
     private let service: WorkspaceApplicationService
     private let library: WorkspaceLibrarySession
     private let store: WorkspaceRevisionStore
@@ -112,7 +118,18 @@ final class WorkspaceDeploymentSession {
     }
 
     func prepare() async {
+        if let preparation {
+            await preparation.value
+            return
+        }
         guard !isBusy else { return }
+        let preparation = Task { await self.prepareNow() }
+        self.preparation = preparation
+        defer { self.preparation = nil }
+        await preparation.value
+    }
+
+    private func prepareNow() async {
         isBusy = true
         errorMessage = nil
         results = []
@@ -124,8 +141,13 @@ final class WorkspaceDeploymentSession {
     /// flag and leaving a stale plan on screen.
     private func performPrepare() async {
         do {
+            // A plan is over the library as read. With no read yet, which is
+            // what a cold launch landing here looks like, read first rather
+            // than planning over nothing and calling that a checked plan.
+            if library.state == nil { await library.refresh() }
             guard let snapshot = library.state?.snapshot else {
                 plan = nil
+                errorMessage = library.errorMessage ?? "The library could not be read. Nothing was changed."
                 return
             }
             // Every place this Mac could hold something: where things are asked

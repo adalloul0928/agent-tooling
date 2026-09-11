@@ -26,12 +26,27 @@ enum ScreenRequest: Equatable {
     case selectMCPServer(String)
     case selectPlugin(String)
     case selectReceipt(String)
+    /// Open Apps and prepare the install plan, so a person who just asked for
+    /// something lands on the one step that actually puts it in an app.
+    case reviewChanges
 
     var section: AppSection {
         switch self {
         case .addMCPServer, .pasteImport, .selectMCPServer: .mcpServers
         case .selectPlugin: .plugins
         case .selectReceipt: .activity
+        case .reviewChanges: .syncCenter
+        }
+    }
+
+    /// The requests a launch argument can name; the ones that carry an id have
+    /// no launch form.
+    static func named(_ value: String) -> ScreenRequest? {
+        switch value.lowercased() {
+        case "reviewchanges", "review-changes": .reviewChanges
+        case "addmcpserver", "add-mcp-server": .addMCPServer
+        case "pasteimport", "paste-import": .pasteImport
+        default: nil
         }
     }
 
@@ -39,7 +54,7 @@ enum ScreenRequest: Equatable {
     var itemID: String? {
         switch self {
         case .selectMCPServer(let id), .selectPlugin(let id), .selectReceipt(let id): id
-        case .addMCPServer, .pasteImport: nil
+        case .addMCPServer, .pasteImport, .reviewChanges: nil
         }
     }
 }

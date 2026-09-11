@@ -94,7 +94,11 @@ struct WorkspaceLibrarySessionTests {
         #expect(try await fixture.service.snapshot()?.document == before.document)
     }
 
-    @Test func overlappingRefreshesCoalesceWhileLibraryLoadIsHeld() async throws {
+    /// The shell starts reading the library the moment the window is up. A screen
+    /// that asks for the library while that read is still in flight must get the
+    /// read's answer when it lands, not an early return with no state behind it:
+    /// a plan prepared over "no library yet" is nothing, silently.
+    @Test func overlappingRefreshesShareOneReadAndBothReturnWithItsState() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let state = try await fixture.service.libraryState()
@@ -103,11 +107,16 @@ struct WorkspaceLibrarySessionTests {
             deviceID: fixture.device.deviceID)
         let first = Task { @MainActor in await session.refresh() }
         await stub.waitForLoadStart()
-        await session.refresh()
+        #expect(session.state == nil)
+        let second = Task { @MainActor in
+            await session.refresh()
+            return session.state != nil
+        }
+        await Task.yield()
         await stub.releaseLoad()
+        #expect(await second.value, "the second caller returned before any state existed")
         await first.value
         #expect(await stub.loadCount == 1)
-        #expect(session.state != nil)
         #expect(session.isBusy == false)
     }
 

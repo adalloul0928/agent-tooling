@@ -137,7 +137,8 @@ struct StubDeviceObserver: DeviceObserving {
         marketplaceProviders: [any MarketplaceProvider] = [StubMarketplaceProvider()],
         insightsServices: any InsightsServicing = StubInsightsServices(
             answer: ShellRenderFixture.insightsReport()),
-        requestQueue: any PendingRequestQueuing = StubPendingRequestQueue()
+        requestQueue: any PendingRequestQueuing = StubPendingRequestQueue(),
+        readsLibrary: Bool = true
     ) async throws {
         root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
             .appending(path: "shell-render-\(UUID())", directoryHint: .isDirectory)
@@ -199,7 +200,8 @@ struct StubDeviceObserver: DeviceObserving {
             store: store, homeRoot: home, isFirstRun: true, deviceObserver: deviceObserver,
             marketplaceProviders: { _ in marketplaceProviders },
             insightsServices: { _ in insightsServices }, requestQueue: requestQueue)
-        await workspace.library.refresh()
+        // A test of the cold launch itself wants the library still unread.
+        if readsLibrary { await workspace.library.refresh() }
     }
 
     /// One scripted client answer, in the shape a scan reports. Built off the
