@@ -227,7 +227,7 @@ private struct ActivityCollectionRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 12)
-            Text(receipt.date, style: .relative)
+            Text(SnapshotTime.standalone(receipt.date))
                 .font(.caption2)
                 .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
         }

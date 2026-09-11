@@ -1,12 +1,6 @@
 import AgentToolingCore
-import AppKit
-import Foundation
 import SwiftUI
 
-/// This Mac's own receipts, behind a protocol.
-///
-/// Reading them opens the store, which a render test must be able to answer
-/// without doing.
 protocol OperationReceiptReading: Sendable {
     func recentReceipts(store: WorkspaceRevisionStore, limit: Int) throws -> [OperationReceipt]
 }
@@ -26,12 +20,17 @@ extension EnvironmentValues {
 ///
 /// Two claims are kept apart everywhere on this screen. What somebody asked for
 /// lives in the library and is never drawn as an installation; what a client
-/// actually holds comes from the last read-only check and is the only thing the
-/// app columns count.
+/// actually holds comes from the last read-only check and is the only thing a
+/// tile counts.
+///
+/// One row of tiles is the whole cast: each app this Mac manages, once. Picking
+/// a tile narrows the lists under it to that app and nothing else changes: no
+/// second toolbar, no other page. Times are the moment something happened, not
+/// a clock running against it.
 struct SyncCenterView: View {
     let workspace: WorkspaceLaunch.Workspace
     let requests: WorkspaceRequestSession
-    /// The one client this visit is scoped to, or every client.
+    /// The one client this visit is narrowed to, or every client.
     let client: ClientKind?
     let onShowAllClients: () -> Void
     let onReviewChanges: () -> Void
@@ -47,7 +46,7 @@ struct SyncCenterView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Clients", context: toolbarContext) {
+            PageToolbar(title: "Apps", context: statusLine) {
                 Button("Choose apps…") { showingClientSelection = true }
                     .buttonStyle(.glass)
                     .popover(isPresented: $showingClientSelection) {
@@ -57,64 +56,42 @@ struct SyncCenterView: View {
                     Task { await workspace.device.refresh() }
                 } label: {
                     Label(
-                        workspace.device.isChecking ? "Refreshing…" : refreshButtonTitle,
+                        workspace.device.isChecking ? "Checking…" : "Check apps",
                         systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.glass)
                 .disabled(workspace.device.isChecking)
-                .help(refreshHelp)
-                .accessibilityLabel(refreshButtonTitle)
+                .help("Read what each app holds on this Mac. Nothing is changed.")
+                .accessibilityLabel("Check apps")
 
-                Button {
-                    if client != nil { onShowAllClients() }
-                    onReviewChanges()
-                } label: {
+                Button(action: onReviewChanges) {
                     Label(
-                        workspace.deployment.isBusy ? "Preparing…" : reviewButtonTitle,
-                        systemImage: "arrow.triangle.2.circlepath")
+                        workspace.deployment.isBusy ? "Preparing…" : reviewTitle,
+                        systemImage: "arrow.down.circle")
                 }
                 .buttonStyle(.glassProminent)
                 .tint(AgentTheme.selection)
                 .disabled(workspace.deployment.isBusy)
-                .help(reviewHelp)
-                .accessibilityLabel(reviewButtonTitle)
-            }
-
-            if let client {
-                clientScopeBar(client)
+                .help("See exactly what would change in each app before anything is written.")
+                .accessibilityLabel(reviewTitle)
             }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(introText)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 2)
-
+                VStack(alignment: .leading, spacing: 18) {
                     ForEach(Array(problems.enumerated()), id: \.offset) { _, problem in
                         AttentionBanner(title: "Apps need attention", message: problem)
                     }
 
-                    if let plan = workspace.deployment.plan, !plan.items.isEmpty {
-                        preparedPlanBanner(plan)
+                    appTiles
+
+                    if let plan = workspace.deployment.plan {
+                        let items = scoped(plan.items)
+                        if !items.isEmpty { changesCard(items) }
                     }
 
-                    if !workspace.deployment.results.isEmpty { resultsCard }
+                    if !scopedRequests.isEmpty { pendingRequestsCard }
 
-                    if !scopedRequests.isEmpty {
-                        pendingRequestsCard
-                    }
-
-                    conduit
-
-                    ToolingMatrixView(rows: matrixRows, clients: visibleClients) { section in
-                        navigate(section)
-                    }
-
-                    HStack(alignment: .top, spacing: 16) {
-                        clientsCard.frame(maxWidth: .infinity)
-                        receiptsCard.frame(maxWidth: .infinity)
-                    }
+                    receiptsCard
 
                     linkedDestinationsCard
                 }
@@ -141,6 +118,14 @@ struct SyncCenterView: View {
         // Re-read after a run, so "Recent changes" is what just happened rather
         // than what happened before it.
         .task(id: workspace.deployment.results.count) { await loadReceipts() }
+        // What would change is a read, so it is worked out as soon as a check
+        // has landed in the library, and again after every later check, rather
+        // than waiting for somebody to ask. Asking opens the review; this only
+        // fills the tiles and the line under the title.
+        .task(id: scanStamp) {
+            guard scanStamp != nil else { return }
+            await workspace.deployment.prepare()
+        }
         .onChange(of: workspace.device.enabledClients) { _, _ in
             if let client, !workspace.device.isEnabled(client) { onShowAllClients() }
         }
@@ -148,100 +133,91 @@ struct SyncCenterView: View {
 
     // MARK: - Header
 
-    private var toolbarContext: String {
-        if let client {
-            let verdict = workspace.device.verdict(for: client)
-            let pending = scopedRequests.count
-            return "\(client.rawValue) · \(verdict.text)"
-                + (pending == 0 ? "" : " · \(pending) request\(pending == 1 ? "" : "s") waiting")
+    /// One line under the title. It says the most useful true thing and nothing
+    /// else: what is waiting, or that nothing is, and when this Mac last looked.
+    private var statusLine: String {
+        if workspace.device.observations.isEmpty { return "Check your apps to see what they hold" }
+        guard let plan = workspace.deployment.plan else {
+            if workspace.deployment.isBusy { return "Working out what would change…" }
+            return lastChecked.map { "Checked \(SnapshotTime.compact($0))" } ?? "Checked"
         }
+        let waiting = scoped(plan.items).count
+        if waiting > 0 { return "\(waiting) change\(waiting == 1 ? "" : "s") ready to install" }
         if !scopedRequests.isEmpty {
-            return
-                "\(scopedRequests.count) review request\(scopedRequests.count == 1 ? "" : "s") waiting"
+            return "\(scopedRequests.count) request\(scopedRequests.count == 1 ? "" : "s") waiting for review"
         }
-        if sortedTargets.isEmpty { return "Refresh to discover your local apps" }
         let attention = workspace.device.attentionCount
-        return attention == 0
-            ? "Local apps match your configuration"
-            : "\(attention) \(attention == 1 ? "item needs" : "items need") attention"
+        if attention > 0 { return "\(attention) app\(attention == 1 ? " needs" : "s need") attention" }
+        return lastChecked.map { "Up to date · checked \(SnapshotTime.compact($0))" } ?? "Up to date"
     }
 
-    private func clientScopeBar(_ client: ClientKind) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                onShowAllClients()
-            } label: {
-                Label("All Clients", systemImage: "chevron.backward")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .help("Back to all clients")
-            .accessibilityLabel("Back to All Clients")
+    private var reviewTitle: String {
+        let count = workspace.deployment.plan?.items.count ?? 0
+        return count == 0 ? "Review changes" : "Review \(count) change\(count == 1 ? "" : "s")"
+    }
 
-            Divider().frame(height: 20)
-            ClientDisc(client: client, size: 24)
-            Text("Showing \(client.rawValue) only")
-                .font(.callout.weight(.semibold))
-            Spacer()
-            let verdict = workspace.device.verdict(for: client)
-            StatusBadge(state: verdict.state, text: verdict.text)
+    // MARK: - Tiles
+
+    /// Each app this Mac manages, once. The tile is the app's whole verdict:
+    /// whether its tool answered, when, what it holds, and what is waiting for
+    /// it. Choosing one narrows the rest of the screen to it.
+    private var appTiles: some View {
+        Group {
+            if enabledClients.isEmpty {
+                EmptyStateView(
+                    symbol: "macwindow.badge.plus",
+                    title: "No apps chosen",
+                    message: "Choose which apps this Mac looks after. Their software and configuration stay as they are.",
+                    actionTitle: "Choose apps…",
+                    action: { showingClientSelection = true }
+                )
+                .frame(height: 180)
+            } else {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(enabledClients) { app in
+                        AppTile(
+                            client: app,
+                            verdict: workspace.device.verdict(for: app),
+                            version: version(for: app),
+                            held: held(for: app),
+                            waiting: (workspace.deployment.plan?.items ?? []).count { $0.surface.client == app },
+                            selected: client == app
+                        ) {
+                            if client == app { onShowAllClients() } else { navigation.openClient(app) }
+                        }
+                    }
+                }
+            }
         }
-        .padding(.horizontal, 18)
-        .frame(minHeight: 44)
-        .background(AgentTheme.controlBackground.opacity(0.62))
-        .overlay(alignment: .bottom) { Divider().opacity(0.45) }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Client scope: \(client.rawValue) only")
     }
 
     // MARK: - Cards
 
-    /// The signature path: library → what is asked for → each app's own verdict.
-    private var conduit: some View {
-        SyncConduitView(
-            managedCount: managedCount,
-            discoveredCount: discoveredCount,
-            profileName: "Assignments",
-            desiredCount: desiredCount,
-            pendingCount: attentionCount,
-            terminals: visibleClients.map { client in
-                let verdict = workspace.device.verdict(for: client)
-                return ConduitTerminal(client: client, state: verdict.state, text: verdict.text)
-            },
-            // A terminal scopes this screen to one app. It never starts a check
-            // and never writes anything.
-            onLibrary: { navigate(.skills) },
-            onProfile: { navigate(.projects) },
-            onClient: { navigation.openClient($0) })
-    }
-
-    private func preparedPlanBanner(_ plan: WorkspaceDeploymentPlan) -> some View {
-        AttentionBanner(
-            title: plan.items.count == 1 ? "1 change ready" : "\(plan.items.count) changes ready",
-            message:
-                "Nothing has been written yet. Open the review to see each step, and what is not being installed."
-        ) {
-            Button("Review changes", action: onReviewChanges)
-                .buttonStyle(.borderedProminent)
-                .tint(AgentTheme.selection)
+    /// What a prepared plan would put where, by app. Reading, not doing: the
+    /// review is where each step is approved.
+    private func changesCard(_ items: [WorkspaceDeploymentItem]) -> some View {
+        TitledCard("Ready to install", count: "\(items.count)") {
+            Button("Review…", action: onReviewChanges)
+                .buttonStyle(.borderless)
                 .disabled(workspace.deployment.isBusy)
-        }
-    }
-
-    /// What the last run actually did. Only a step that succeeded counts, so a
-    /// saved assignment never turns up here as an installation.
-    private var resultsCard: some View {
-        TitledCard("What just happened", count: "last run") {
-            ForEach(workspace.deployment.results) { result in
-                InfoRow(result.title, detail: resultSummary(result)) {
-                    StatusGlyph(state: result.failed == 0 ? .healthy : .attention, size: 16)
+        } content: {
+            let groups = grouped(items)
+            ForEach(groups) { group in
+                InfoRow(group.client.rawValue, detail: summary(of: group.items)) {
+                    ClientDisc(client: group.client, size: 30)
                 } trailing: {
-                    Text("\(result.succeeded) installed")
+                    Text("\(group.items.count)")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.tertiary)
                 }
-                if result.id != workspace.deployment.results.last?.id { Divider().opacity(0.35) }
+                if group.id != groups.last?.id { Divider().opacity(0.35) }
             }
+            Text("Nothing has been written. The review shows each step, and what is not being installed.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 12)
+                .padding(.top, 4)
         }
     }
 
@@ -251,18 +227,15 @@ struct SyncCenterView: View {
             "Waiting for review",
             count: "\(scopedRequests.count) request\(scopedRequests.count == 1 ? "" : "s")"
         ) {
-            Text(
-                "These are untrusted local requests. Review or reject each one in Agent Tooling; none has changed a client."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
+            Text("Local requests nobody has decided yet. None has changed an app.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
             ForEach(visible) { request in
                 InfoRow(
                     request.title,
-                    detail:
-                        "\(request.kind.displayName) · \(request.createdAt.formatted(.relative(presentation: .named)))"
+                    detail: "\(request.kind.displayName) · \(SnapshotTime.compact(request.createdAt))"
                 ) {
                     SymbolTile(symbol: "tray.and.arrow.down", size: 30)
                 } trailing: {
@@ -274,75 +247,34 @@ struct SyncCenterView: View {
                 if request.id != visible.last?.id { Divider().opacity(0.35) }
             }
             if scopedRequests.count > visible.count {
-                Text(
-                    "\(scopedRequests.count - visible.count) more requests are waiting. Review these to reveal the rest."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(14)
-            }
-        }
-    }
-
-    private var clientsCard: some View {
-        TitledCard(client?.rawValue ?? "Apps", count: "read-only check") {
-            if sortedTargets.isEmpty {
-                EmptyStateView(
-                    symbol: "arrow.clockwise",
-                    title: client.map { "\($0.rawValue) has not been checked" }
-                        ?? "Apps have not been checked",
-                    message: client.map {
-                        "Refresh checks to inspect \($0.rawValue)'s known configuration paths and command-line tools."
-                    } ?? "Check apps to inspect known configuration paths and command-line tools."
-                )
-                .frame(height: 210)
-            } else {
-                ForEach(sortedTargets) { target in
-                    InfoRow(
-                        target.surface.displayName,
-                        detail: target.version ?? "Command-line tool not found"
-                    ) {
-                        if let client = target.surface.client {
-                            ClientDisc(client: client, size: 28)
-                        } else {
-                            SymbolTile(symbol: "app", size: 28)
-                        }
-                    } trailing: {
-                        StatusBadge(
-                            state: target.isCommandAvailable ? .healthy : .attention,
-                            text: target.isCommandAvailable
-                                ? "Available" : (target.installed ? "Configuration only" : "Not found")
-                        )
-                    }
-                    if target.id != sortedTargets.last?.id { Divider().opacity(0.35) }
-                }
+                Text("\(scopedRequests.count - visible.count) more are waiting. Review these to reveal the rest.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(14)
             }
         }
     }
 
     private var receiptsCard: some View {
-        TitledCard(
-            "Recent changes",
-            count: scopedReceipts.count > 4
-                ? "showing 4 of \(scopedReceipts.count)" : "\(scopedReceipts.count) saved"
-        ) {
+        TitledCard("Recent changes", count: scopedReceipts.isEmpty ? nil : "\(scopedReceipts.count)") {
+            if scopedReceipts.count > recentReceipts.count {
+                Button("See all", systemImage: "chevron.right") { navigate(.activity) }
+                    .buttonStyle(.borderless)
+                    .labelStyle(.titleAndIcon)
+            }
+        } content: {
             if scopedReceipts.isEmpty {
-                Text(
-                    client.map {
-                        "No saved change targets \($0.rawValue). Review All Changes returns to the complete client view before preparing a plan."
-                    }
-                        ?? "No files have been changed. Review changes creates a plan before anything is written."
-                )
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(client.map { "Nothing has been changed in \($0.rawValue) yet." } ?? "Nothing has been changed yet.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 ForEach(recentReceipts) { receipt in
                     InfoRow(receipt.title, detail: receipt.verificationSummary) {
                         StatusGlyph(state: receipt.state, size: 16)
                     } trailing: {
-                        Text(receipt.createdAt, style: .relative)
+                        Text(SnapshotTime.standalone(receipt.createdAt))
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
@@ -356,19 +288,17 @@ struct SyncCenterView: View {
     /// folder. Registering one moves nothing; it only says where a later
     /// install would write.
     private var linkedDestinationsCard: some View {
-        TitledCard("Where these go on this Mac") {
+        TitledCard("Folders") {
             Button("Choose a folder…", systemImage: "folder.badge.plus") { isChoosingDestination = true }
                 .buttonStyle(.borderless)
                 .disabled(workspace.deployment.isBusy)
         } content: {
             if workspace.deployment.linkedDestinations.isEmpty {
-                Text(
-                    "Everything goes into each app's own folder. You can point one somewhere else — a shared drive, or a folder you keep in step yourself."
-                )
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text("Each app uses its own folder. Point one somewhere else if you keep a folder in step yourself.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 ForEach(workspace.deployment.linkedDestinations) { destination in
                     InfoRow(
@@ -396,26 +326,49 @@ struct SyncCenterView: View {
 
     // MARK: - Data
 
-    private var libraryModel: WorkspaceLibraryReadModel? { workspace.library.state?.library }
-
-    /// The library in the shape the surviving services already speak. Absent
-    /// until the library has been read once; there is no empty one to stand in
-    /// for it, and pretending otherwise would report a real library as empty.
-    private var inventory: VersionedInventoryProjection.Inventory? {
-        libraryModel.map(VersionedInventoryProjection.inventory)
+    /// What the last check found in one app, counted by name across every
+    /// surface the app has. Found, not asked for.
+    private func held(for app: ClientKind) -> AppTile.Held? {
+        let mine = workspace.device.observations.filter { $0.surface.client == app }
+        guard !mine.isEmpty else { return nil }
+        return AppTile.Held(
+            skills: Set(mine.flatMap(\.discoveredSkills)).count,
+            servers: Set(mine.flatMap(\.discoveredMCPServers)).count,
+            plugins: Set(mine.flatMap(\.discoveredPlugins)).count)
     }
 
-    private var sortedTargets: [TargetObservation] {
-        workspace.device.observations
-            .filter { client == nil || $0.surface.client == client }
-            .sorted {
-                $0.surface.displayName.localizedStandardCompare($1.surface.displayName)
-                    == .orderedAscending
-            }
+    private func version(for app: ClientKind) -> String? {
+        workspace.device.observations.first { $0.surface.client == app && $0.version?.isEmpty == false }?.version
     }
 
-    private var visibleClients: [ClientKind] {
-        client.map { workspace.device.isEnabled($0) ? [$0] : [] } ?? enabledClients
+    private var lastChecked: Date? {
+        workspace.device.observations.map(\.lastScannedAt).max()
+    }
+
+    /// When the check the library currently holds was made. It moves only once
+    /// a check has been recorded and read back, which is the moment a plan over
+    /// it means anything.
+    private var scanStamp: Date? {
+        workspace.library.state?.snapshot.device.observations.map(\.lastScannedAt).max()
+    }
+
+    private func scoped(_ items: [WorkspaceDeploymentItem]) -> [WorkspaceDeploymentItem] {
+        items.filter { client == nil || $0.surface.client == client }
+    }
+
+    private func grouped(_ items: [WorkspaceDeploymentItem]) -> [ClientGroup] {
+        enabledClients.compactMap { app in
+            let mine = items.filter { $0.surface.client == app }
+            return mine.isEmpty ? nil : ClientGroup(client: app, items: mine)
+        }
+    }
+
+    /// The names, up to a few, and how many more there are.
+    private func summary(of items: [WorkspaceDeploymentItem]) -> String {
+        let names = items.map(\.displayName)
+        let shown = names.prefix(4).joined(separator: ", ")
+        let more = names.count - min(names.count, 4)
+        return more == 0 ? shown : "\(shown) and \(more) more"
     }
 
     private var scopedRequests: [PendingAgentRequest] {
@@ -440,12 +393,6 @@ struct SyncCenterView: View {
             }.prefix(4))
     }
 
-    /// Everything worth looking at: the changes a plan is holding, and the
-    /// requests nobody has decided yet.
-    private var attentionCount: Int {
-        (workspace.deployment.plan?.items.count ?? 0) + scopedRequests.count
-    }
-
     private var problems: [String] {
         [
             workspace.deployment.errorMessage, workspace.device.errorMessage, requests.errorMessage,
@@ -453,121 +400,91 @@ struct SyncCenterView: View {
         .compactMap { $0 }
     }
 
-    /// What this Mac is looking after, and what it has merely noticed.
-    private var managedCount: Int {
-        guard let libraryModel else { return 0 }
-        return libraryModel.rows
-            .filter { $0.ownership != .trackedOnly }
-            .reduce(0) { $0 + 1 + $1.childCount }
-    }
-
-    private var discoveredCount: Int {
-        libraryModel?.rows.count { $0.ownership == .trackedOnly } ?? 0
-    }
-
-    /// How many library items are asked for anywhere this scope can see. Asked
-    /// for, not installed.
-    private var desiredCount: Int {
-        guard let libraryModel else { return 0 }
-        return libraryModel.rows.count { row in
-            row.requestedAssignments.contains { assignment in
-                guard let client else { return true }
-                return assignment.destination.surface.client == client
-            }
-        }
-    }
-
-    private var matrixRows: [ToolingMatrixRow] {
-        [
-            ToolingMatrixRow(
-                id: .skills, title: "Skills", symbol: "doc.text",
-                libraryCount: libraryCount(.skill),
-                installedCounts: installedCounts(\.discoveredSkills), kind: .skill),
-            ToolingMatrixRow(
-                id: .mcpServers, title: "MCP servers", symbol: "server.rack",
-                libraryCount: libraryCount(.mcpServer),
-                installedCounts: installedCounts(\.discoveredMCPServers), kind: .mcpServer),
-            ToolingMatrixRow(
-                id: .plugins, title: "Plugins", symbol: "puzzlepiece.extension",
-                libraryCount: libraryCount(.plugin),
-                installedCounts: installedCounts(\.discoveredPlugins), kind: .plugin),
-        ]
-    }
-
-    /// What the library knows about, scoped to one client by where its items
-    /// are asked for. A requested destination is what makes an item belong to a
-    /// client's column here; it never makes it installed.
-    private func libraryCount(_ kind: LibraryColumn) -> Int {
-        guard let inventory else { return 0 }
-        switch kind {
-        case .skill: return scopedCount(inventory.skills.map(\.clients))
-        case .mcpServer: return scopedCount(inventory.mcpServers.map(\.clients))
-        case .plugin: return scopedCount(inventory.plugins.map(\.clients))
-        }
-    }
-
-    private func scopedCount(_ clientLists: [[ClientState]]) -> Int {
-        guard let client else { return clientLists.count }
-        return clientLists.count { states in states.contains { $0.client == client } }
-    }
-
-    /// What the last check actually found in each app, by name.
-    ///
-    /// This is the only honest source for these columns: the read model records
-    /// what somebody asked for, and asking is not installing.
-    private func installedCounts(_ discovered: KeyPath<TargetObservation, [String]>)
-        -> [ClientKind: Int]
-    {
-        Dictionary(
-            uniqueKeysWithValues: visibleClients.map { client in
-                let names = workspace.device.observations
-                    .filter { $0.surface.client == client }
-                    .flatMap { $0[keyPath: discovered] }
-                return (client, Set(names).count)
-            })
-    }
-
-    private enum LibraryColumn { case skill, mcpServer, plugin }
-
     private func loadReceipts() async {
         let store = workspace.store
         let reader = receiptReader
         receipts =
             (try? await Task.detached { try reader.recentReceipts(store: store, limit: 50) }.value) ?? []
     }
+}
 
-    // MARK: - Copy
+private struct ClientGroup: Identifiable {
+    let client: ClientKind
+    let items: [WorkspaceDeploymentItem]
+    var id: ClientKind { client }
+}
 
-    private var introText: String {
-        if let client {
-            return
-                "Showing only \(client.rawValue)'s local state and saved changes. Refresh Checks scans local apps and keeps this scope."
+/// One app, once: its mark, its name, one clause, its verdict, and what is
+/// waiting for it. The whole tile is the way to narrow the screen to it.
+private struct AppTile: View {
+    struct Held: Equatable {
+        let skills: Int
+        let servers: Int
+        let plugins: Int
+    }
+
+    let client: ClientKind
+    let verdict: ClientVerdict
+    let version: String?
+    let held: Held?
+    let waiting: Int
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 10) {
+                    ClientDisc(client: client, size: 34)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(client.rawValue)
+                            .font(.callout.weight(.semibold))
+                            .lineLimit(1)
+                        Text(clause)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    StatusGlyph(state: verdict.state, size: 14)
+                        .padding(.top, 2)
+                }
+                HStack(spacing: 8) {
+                    Text(heldText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 6)
+                    if waiting > 0 {
+                        Text("\(waiting) to install")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AgentTheme.selection)
+                    }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        return "Compare local state first. Review the exact plan before Agent Tooling changes a client."
-    }
-
-    private var refreshButtonTitle: String { client == nil ? "Check apps" : "Refresh Checks" }
-
-    private var refreshHelp: String {
-        client.map {
-            "Re-scan local apps, then continue showing only \($0.rawValue)."
-        } ?? "Scan this Mac for each client's command and configuration state."
-    }
-
-    private var reviewButtonTitle: String { client == nil ? "Review Changes" : "Review All Changes" }
-
-    private var reviewHelp: String {
-        client == nil
-            ? "Prepare one reviewable plan for client changes."
-            : "Return to All Clients and prepare one reviewable plan for every client change."
-    }
-
-    private func resultSummary(_ result: WorkspaceDeploymentSession.Result) -> String {
-        if result.failed == 0 {
-            return result.succeeded == 1 ? "1 installed." : "\(result.succeeded) installed."
+        .buttonStyle(.plain)
+        .standardPanel()
+        .overlay {
+            RoundedRectangle(cornerRadius: AgentTheme.panelCornerRadius, style: .continuous)
+                .stroke(selected ? AgentTheme.selection : Color.clear, lineWidth: 1.5)
         }
-        return
-            "\(result.succeeded) installed, \(result.failed) could not be. Nothing partial was left behind."
+        .help(selected ? "Show every app again" : "Show only \(client.rawValue)")
+        .accessibilityLabel("\(client.rawValue), \(clause)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// The tool's version and when it was last read, or why it could not be.
+    private var clause: String {
+        [version, verdict.text].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private var heldText: String {
+        guard let held else { return "Not checked yet" }
+        return "\(held.skills) skills · \(held.servers) servers · \(held.plugins) plugins"
     }
 }
 
