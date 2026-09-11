@@ -31,11 +31,16 @@ public enum ClientExecutableLocator {
         }
     }
 
-    /// The first candidate that is a runnable file, or `nil`.
+    /// The first candidate whose file is runnable, or `nil`.
     ///
-    /// A symlink is resolved before the check, and the result is the resolved
-    /// path — the command that runs is the file that was tested, not a link that
-    /// might point somewhere else by the time it runs.
+    /// A link is followed to test what it leads to, because that is the file
+    /// that will run. The path returned is the candidate itself, by the tool's
+    /// own name, because the file behind it need not carry that name at all:
+    /// Claude Code's installer keeps the binary as
+    /// `~/.local/share/claude/versions/2.1.268` and points `~/.local/bin/claude`
+    /// at it, renaming the file on every update, and the ChatGPT app's `codex`
+    /// lives inside its bundle. The launch path follows the link again at the
+    /// moment of running, and the executor's policy accepts exactly this path.
     public static func locate(
         _ client: ClientKind,
         homeURL: URL,
@@ -47,11 +52,8 @@ public enum ClientExecutableLocator {
             guard fileManager.fileExists(atPath: resolved.path, isDirectory: &isDirectory),
                   !isDirectory.boolValue,
                   fileManager.isExecutableFile(atPath: resolved.path),
-                  NativeSkillDestination.isValidRoot(resolved),
-                  // The bridges require the tool's own name, so a link that
-                  // resolves to something else entirely is not this client's.
-                  resolved.lastPathComponent == executableName(for: client) else { continue }
-            return resolved
+                  NativeSkillDestination.isValidRoot(candidate) else { continue }
+            return candidate
         }
         return nil
     }

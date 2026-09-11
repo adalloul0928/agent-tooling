@@ -35,38 +35,53 @@ struct ClientExecutableLocatorTests {
         #expect(ClientExecutableLocator.locate(.claude, homeURL: fixture.home) == nil)
     }
 
-    @Test func aLinkIsFollowedAndTheFileItLeadsToIsWhatRuns() throws {
+    @Test func aLinkIsTestedAtWhatItLeadsToAndOfferedByItsOwnName() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let real = fixture.root.appending(path: "elsewhere/codex")
-        try FileManager.default.createDirectory(at: real.deletingLastPathComponent(),
-                                                withIntermediateDirectories: true)
-        try Data("#!/bin/sh\n".utf8).write(to: real)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: real.path)
-        try FileManager.default.createDirectory(at: fixture.binary(named: "codex").deletingLastPathComponent(),
-                                                withIntermediateDirectories: true)
-        try FileManager.default.createSymbolicLink(at: fixture.binary(named: "codex"),
-                                                   withDestinationURL: real)
+        try fixture.installRunnableFile(at: real)
+        try fixture.link(named: "codex", to: real)
 
         let found = ClientExecutableLocator.locate(.codex, homeURL: fixture.home)
 
-        // The command that runs is the file that was tested, not a link that
-        // might point somewhere else by the time it runs.
-        #expect(found?.path == real.resolvingSymlinksInPath().standardizedFileURL.path)
+        // What was tested is the file the link leads to; what is offered is the
+        // link, which is the path a person recognises and the name every
+        // command check looks for. Launching follows the link again.
+        #expect(found?.path == fixture.binary(named: "codex").path)
     }
 
-    @Test func aLinkThatLeadsToSomethingElseEntirelyIsNotThisClientsTool() throws {
+    /// Claude Code's installer keeps the binary under a version number and
+    /// points `~/.local/bin/claude` at it. Insisting the file behind the link
+    /// carry the tool's name refused the real installation on every Mac that
+    /// used the installer.
+    @Test func aLinkToAVersionNamedFileIsStillThisClientsTool() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let other = fixture.root.appending(path: "elsewhere/something-else")
-        try FileManager.default.createDirectory(at: other.deletingLastPathComponent(),
+        let versioned = fixture.home.appending(path: ".local/share/claude/versions/2.1.268")
+        try fixture.installRunnableFile(at: versioned)
+        try fixture.link(named: "claude", to: versioned)
+
+        let found = ClientExecutableLocator.locate(.claude, homeURL: fixture.home)
+
+        #expect(found?.path == fixture.binary(named: "claude").path)
+    }
+
+    @Test func aLinkToSomethingThatCannotRunIsNotOffered() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let plain = fixture.root.appending(path: "elsewhere/codex")
+        try FileManager.default.createDirectory(at: plain.deletingLastPathComponent(),
                                                 withIntermediateDirectories: true)
-        try Data("#!/bin/sh\n".utf8).write(to: other)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: other.path)
-        try FileManager.default.createDirectory(at: fixture.binary(named: "codex").deletingLastPathComponent(),
-                                                withIntermediateDirectories: true)
-        try FileManager.default.createSymbolicLink(at: fixture.binary(named: "codex"),
-                                                   withDestinationURL: other)
+        try Data("not a program\n".utf8).write(to: plain)
+        try fixture.link(named: "codex", to: plain)
+
+        #expect(ClientExecutableLocator.locate(.codex, homeURL: fixture.home) == nil)
+    }
+
+    @Test func aDanglingLinkIsNotOffered() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.link(named: "codex", to: fixture.root.appending(path: "elsewhere/gone"))
 
         #expect(ClientExecutableLocator.locate(.codex, homeURL: fixture.home) == nil)
     }
@@ -115,6 +130,22 @@ struct ClientExecutableLocatorTests {
             try Data("#!/bin/sh\n".utf8).write(to: url)
             try FileManager.default.setAttributes([.posixPermissions: executable ? 0o755 : 0o644],
                                                   ofItemAtPath: url.path)
+        }
+
+        /// A runnable file at any path, for a link to lead to.
+        func installRunnableFile(at url: URL) throws {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try Data("#!/bin/sh\n".utf8).write(to: url)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        }
+
+        /// The candidate by the tool's own name, as a link to `destination`.
+        func link(named name: String, to destination: URL) throws {
+            let url = binary(named: name)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try FileManager.default.createSymbolicLink(at: url, withDestinationURL: destination)
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }

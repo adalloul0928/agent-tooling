@@ -10,13 +10,19 @@ import Foundation
 struct DeploymentPlanReview: Sendable {
     private let contentRisks: [WorkspaceDeploymentInstallKey: ContentRiskReport]
     private let commands: [WorkspaceDeploymentInstallKey: String]
+    /// Steps that would ask an app to run a command, for which no command
+    /// could be built, and why. They are still listed, marked as not running,
+    /// so the count on the Install button is the count of things that happen.
+    private let withoutCommand: [WorkspaceDeploymentInstallKey: String]
 
     init(
         contentRisks: [WorkspaceDeploymentInstallKey: ContentRiskReport] = [:],
-        commands: [WorkspaceDeploymentInstallKey: String] = [:]
+        commands: [WorkspaceDeploymentInstallKey: String] = [:],
+        withoutCommand: [WorkspaceDeploymentInstallKey: String] = [:]
     ) {
         self.contentRisks = contentRisks
         self.commands = commands
+        self.withoutCommand = withoutCommand
     }
 
     func contentRisk(for item: WorkspaceDeploymentItem) -> ContentRiskReport? {
@@ -26,6 +32,13 @@ struct DeploymentPlanReview: Sendable {
     func command(for item: WorkspaceDeploymentItem) -> String? {
         commands[key(item)]
     }
+
+    /// Why this step will do nothing when Install is pressed, if it will not.
+    func reasonNothingRuns(for item: WorkspaceDeploymentItem) -> String? {
+        withoutCommand[key(item)]
+    }
+
+    var stepsWithoutCommand: Int { withoutCommand.count }
 
     /// Content that could not be read completely blocks its step.
     ///
@@ -51,6 +64,10 @@ struct DeploymentPlanReview: Sendable {
         if risky > 0 { parts.append("\(risky) risky content finding\(risky == 1 ? "" : "s")") }
         if !commands.isEmpty {
             parts.append("\(commands.count) step\(commands.count == 1 ? "" : "s") run a command")
+        }
+        if !withoutCommand.isEmpty {
+            parts.append(
+                "\(withoutCommand.count) step\(withoutCommand.count == 1 ? "" : "s") cannot run yet")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -119,7 +136,8 @@ enum DeploymentPlanReviewer {
                 .init(artifactID: step.artifactID, physicalDestinationID: step.physicalDestinationID)
             ] = rendered(step.executableURL, step.arguments)
         }
-        return DeploymentPlanReview(contentRisks: contentRisks, commands: commands)
+        return DeploymentPlanReview(
+            contentRisks: contentRisks, commands: commands, withoutCommand: planned.withoutCommand)
     }
 
     /// One command, in the words a shell would read, for looking at only.
