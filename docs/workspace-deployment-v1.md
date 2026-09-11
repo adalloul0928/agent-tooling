@@ -70,6 +70,41 @@ record would turn "nobody knows" into an install claim. Two reports about one
 client produce none either, since choosing between them would be a guess.
 Derivation is pure and sorted, so one scan always yields one device record.
 
+### Where "already there" comes from
+
+Presence is measured, never assumed, and it is measured differently for the two
+kinds of thing a plan can hold:
+
+- **Copied content** (skills and the like) — the destination folder is read and
+  its digest compared with the approved version, by `measure`.
+- **A client's own packages** — the client's own report from the last check,
+  `TargetObservation.pluginMetadata`, matched by the route's external plugin ID
+  and the scope the client recorded. Claude Code writes `User`, `Project` or
+  `Local`; Codex records no scope of its own and the scan writes `This Mac`,
+  which is the account. A package installed for one project does not satisfy an
+  account-wide assignment. Until this existed every package a client already
+  held was planned as an install, forever: the folder check found nothing under
+  a skill root and called that absent.
+
+A client that was never checked has said nothing, and "not observed" stays
+distinct from "observed absent".
+
+### Which executable the executor runs
+
+`ClientExecutableLocator` looks in the recorded install locations only, tests
+that what a candidate leads to is a runnable file, and returns the candidate by
+the tool's own name (`~/.local/bin/claude`, say) rather than the file behind it,
+which Claude Code's installer names by version and the ChatGPT app keeps inside
+its bundle. Plans carry that located path, so an app launched outside a login
+shell still reaches the tool. `OperationCommandPolicy` accepts a bare name from
+its allowlist or exactly the path the locator returns for that client, and
+nothing else; the process runner follows the link again at launch.
+
+A plan step no command can be built for — the client's tool was not found, no
+command is recorded for that client, or its records do not line up — stays on
+the review sheet marked as not running, and the Install button counts only the
+steps that will.
+
 ## Staging and applying
 
 `WorkspaceDeploymentOperations.stage` writes the approved trees into a staging

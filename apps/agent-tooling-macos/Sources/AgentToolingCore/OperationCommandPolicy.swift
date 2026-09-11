@@ -6,11 +6,21 @@ import Foundation
 struct OperationCommandPolicy: Sendable {
     let libraryURL: URL
     let gitBackupRoot: URL
+    /// Where a client's own tool is looked for. An absolute path is accepted
+    /// only when it is exactly what that lookup returns.
+    let homeURL: URL
+
+    init(
+        libraryURL: URL, gitBackupRoot: URL,
+        homeURL: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) {
+        self.libraryURL = libraryURL
+        self.gitBackupRoot = gitBackupRoot
+        self.homeURL = homeURL
+    }
 
     func validate(executable: String, arguments: [String]) throws {
-        guard Self.allowedCommands.contains(executable) else {
-            throw OperationEngineError.commandNotAllowed(executable)
-        }
+        let command = try commandName(for: executable)
         guard arguments.count <= 64,
             arguments.allSatisfy({
                 $0.count <= 8_192 && !$0.contains("\0") && !$0.contains("\n") && !$0.contains("\r")
@@ -19,7 +29,7 @@ struct OperationCommandPolicy: Sendable {
             throw OperationEngineError.commandArgumentsNotAllowed(executable)
         }
 
-        switch executable {
+        switch command {
         case "git":
             let target = gitBackupRoot.path(percentEncoded: false)
             guard arguments == ["-C", target, "init"] || arguments == ["-C", target, "status", "--short"] else {
@@ -30,6 +40,30 @@ struct OperationCommandPolicy: Sendable {
         case "gemini": try validateGemini(arguments)
         default: throw OperationEngineError.commandNotAllowed(executable)
         }
+    }
+
+    /// The name a command is checked under.
+    ///
+    /// A bare name is one of the four this app runs. An absolute path is a
+    /// client's own tool at the one place `ClientExecutableLocator` found it,
+    /// and nothing else: plans carry the located path so that an app launched
+    /// outside a login shell still reaches the tool, and a path that is not the
+    /// locator's answer is somebody else's file with a familiar name. `git` has
+    /// no locator and is only ever named.
+    private func commandName(for executable: String) throws -> String {
+        if Self.allowedCommands.contains(executable) { return executable }
+        guard executable.hasPrefix("/") else { throw OperationEngineError.commandNotAllowed(executable) }
+        let url = URL(fileURLWithPath: executable).standardizedFileURL
+        guard
+            let client = ClientKind.allCases.first(where: {
+                ClientExecutableLocator.executableName(for: $0) == url.lastPathComponent
+            }),
+            let located = ClientExecutableLocator.locate(client, homeURL: homeURL),
+            located.standardizedFileURL.path == url.path
+        else {
+            throw OperationEngineError.commandNotAllowed(executable)
+        }
+        return url.lastPathComponent
     }
 
     static func isSafeMCPIdentifier(_ value: String) -> Bool {

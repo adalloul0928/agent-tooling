@@ -208,10 +208,11 @@ struct StubDeviceObserver: DeviceObserving {
     /// main actor so a stub observer can script one before there is a fixture.
     nonisolated static func observation(
         _ surface: TargetSurface, installed: Bool, commandAvailable: Bool,
-        scannedAt: Date = .now
+        version: String? = nil, scannedAt: Date = .now
     ) -> TargetObservation {
         .init(
             surface: surface, installed: installed, commandAvailable: commandAvailable,
+            version: version,
             capabilities: .init(
                 supportsPluginInstall: false, supportsProjectScope: false,
                 supportsLocalMarketplace: false, supportsMCPAuthentication: false,

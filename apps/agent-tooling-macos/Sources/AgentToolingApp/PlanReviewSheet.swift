@@ -87,6 +87,7 @@ struct PlanReviewSheet: View {
                                     item: item,
                                     linkedPath: linkedPath(for: item),
                                     command: review?.command(for: item),
+                                    nothingRuns: review?.reasonNothingRuns(for: item),
                                     contentRisk: review?.contentRisk(for: item))
                                 if index < plan.items.count - 1 { Divider().opacity(0.25) }
                             }
@@ -142,7 +143,7 @@ struct PlanReviewSheet: View {
                             .controlSize(.small)
                             .accessibilityLabel("Installing")
                     } else {
-                        Text("Install \(plan.items.count) change\(plan.items.count == 1 ? "" : "s")")
+                        Text(installLabel)
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -240,8 +241,20 @@ struct PlanReviewSheet: View {
 
     private var canInstall: Bool {
         guard case .ready(let reviewed) = reviewState else { return false }
-        return workspace.deployment.canApply && !isRunning && !plan.items.isEmpty
+        return workspace.deployment.canApply && !isRunning && runnableCount > 0
             && !reviewed.hasBlockedItems
+    }
+
+    /// Steps that will do something when Install is pressed. Until the review
+    /// has looked, every listed step is taken at its word.
+    private var runnableCount: Int {
+        plan.items.count - (review?.stepsWithoutCommand ?? 0)
+    }
+
+    private var installLabel: String {
+        runnableCount == 0 && !plan.items.isEmpty
+            ? "Nothing can run yet"
+            : "Install \(runnableCount) change\(runnableCount == 1 ? "" : "s")"
     }
 
     private var review: DeploymentPlanReview? {
@@ -250,9 +263,7 @@ struct PlanReviewSheet: View {
     }
 
     private var title: String {
-        plan.items.isEmpty
-            ? "Nothing to install"
-            : "Install \(plan.items.count) change\(plan.items.count == 1 ? "" : "s")"
+        plan.items.isEmpty ? "Nothing to install" : installLabel
     }
 
     private var summary: String {
@@ -327,6 +338,8 @@ private struct PlanStepRow: View {
     let item: WorkspaceDeploymentItem
     var linkedPath: String?
     var command: String?
+    /// Why pressing Install does nothing for this step, when it does nothing.
+    var nothingRuns: String?
     var contentRisk: ContentRiskReport?
 
     var body: some View {
@@ -344,10 +357,19 @@ private struct PlanStepRow: View {
                     if contentRisk?.isComplete == false {
                         StatusBadge(state: .attention, text: "Blocked", tint: AgentTheme.failure)
                     }
+                    if nothingRuns != nil {
+                        StatusBadge(state: .attention, text: "Will not run", tint: AgentTheme.warning)
+                    }
                 }
                 Text("\(clause) · \(item.surface.displayName)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let nothingRuns {
+                    Text(nothingRuns)
+                        .font(.caption)
+                        .foregroundStyle(AgentTheme.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let command {
                     Text(command)
                         .font(.system(.caption, design: .monospaced))

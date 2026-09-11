@@ -97,19 +97,25 @@ public enum WorkspaceManagedMCPCommandPlanning {
             capabilityEvidence: device.capabilityEvidence,
             portableMCPDefinitions: document.mcpDefinitions ?? [],
             deviceMCPBindings: device.mcpBindings ?? [])
-        if assignmentResolution.issues.contains(where: {
+        // Only this destination's issues count, plus any the resolver could not
+        // pin to a destination; a connection asked for elsewhere too is judged
+        // there. See the same rule in `WorkspaceNativePluginCommandPlanning`.
+        let issues = assignmentResolution.issues.filter {
+            $0.physicalDestinationID == nil || $0.physicalDestinationID == target.physicalDestinationID
+        }
+        if issues.contains(where: {
             $0.kind == .unsupportedCapability || $0.kind == .unknownCapability
         }) {
             throw WorkspaceManagedMCPCommandPlanningError.unsupportedCapability
         }
-        if assignmentResolution.issues.contains(where: {
+        if issues.contains(where: {
             $0.kind == .missingCapabilityEvidence
                 || $0.kind == .contradictoryCapabilityEvidence
                 || $0.kind == .invalidResolvedTarget
         }) {
             throw WorkspaceManagedMCPCommandPlanningError.invalidCapability
         }
-        guard assignmentResolution.issues.isEmpty,
+        guard issues.isEmpty,
               assignmentResolution.requirements.filter({ $0 == requirement }).count == 1 else {
             throw WorkspaceManagedMCPCommandPlanningError.invalidRequirement
         }

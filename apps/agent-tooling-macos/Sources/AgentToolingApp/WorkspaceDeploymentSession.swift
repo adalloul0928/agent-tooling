@@ -180,8 +180,9 @@ final class WorkspaceDeploymentSession {
             // for removal; anything else is somebody else's.
             let proven = Self.provenInstalls(snapshot: snapshot, targets: captured,
                                              store: store)
-            let observations = await Self.measure(
-                snapshot: snapshot, targets: captured, alsoMeasuring: proven)
+            let observations =
+                await Self.measure(snapshot: snapshot, targets: captured, alsoMeasuring: proven)
+                + Self.reportedNativePackages(snapshot: snapshot, targets: captured)
             // A native package is only offered where the person's own retained
             // record holds an install command for that exact client and package.
             // Without one there is nothing to run, and offering it anyway would
@@ -230,8 +231,12 @@ final class WorkspaceDeploymentSession {
         var results: [WorkspaceDeploymentObservation] = []
         for pair in pairs.sorted(by: { $0.artifactID.rawValue.uuidString < $1.artifactID.rawValue.uuidString }) {
             guard let captured = byDestination[pair.physicalDestinationID],
-                  let artifact = artifacts[pair.artifactID],
-                  let name = artifact.declaredName, !name.isEmpty else { continue }
+                let artifact = artifacts[pair.artifactID],
+                // A client's own package is not a folder under a skill root;
+                // the client reports it, in `reportedNativePackages`.
+                artifact.identity.kind != .nativePlugin,
+                let name = artifact.declaredName, !name.isEmpty
+            else { continue }
             let folder = captured.plannedDirectory.appending(path: name, directoryHint: .isDirectory)
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory),
@@ -247,6 +252,65 @@ final class WorkspaceDeploymentSession {
                                  isPresent: true, contentDigest: digest))
         }
         return results
+    }
+
+    /// Native packages as the client itself reports them.
+    ///
+    /// A client's own package is not a folder this app can read; the client
+    /// says what it holds, in the scan this Mac already ran. Without this every
+    /// package a client already had was planned as an install, forever: the
+    /// folder check found nothing under a skill root and called that absent.
+    ///
+    /// Scope is part of the answer. Claude Code records a package installed for
+    /// one project separately from one installed for the account, and the
+    /// account-wide request is not met by the project one. A client that was
+    /// never scanned has said nothing, and "not observed" is left as that.
+    private nonisolated static func reportedNativePackages(
+        snapshot: WorkspaceApplicationSnapshot,
+        targets: [CapturedSkillAssignmentTarget]
+    ) -> [WorkspaceDeploymentObservation] {
+        let artifacts = Dictionary(
+            snapshot.document.artifacts.map { ($0.identity.id, $0) },
+            uniquingKeysWith: { first, _ in first })
+        let reports = Dictionary(
+            snapshot.device.observations.map { ($0.surface, $0) },
+            uniquingKeysWith: { first, _ in first })
+        var results: [WorkspaceDeploymentObservation] = []
+        var seen = Set<WorkspaceDeploymentInstallKey>()
+        for assignment in snapshot.document.assignments {
+            let selector = ResolvedAssignmentSelector(destination: assignment.destination)
+            guard let captured = targets.first(where: { $0.target.selector == selector }),
+                let artifact = artifacts[assignment.artifactID],
+                artifact.identity.kind == .nativePlugin,
+                let client = selector.surface.client,
+                let route = artifact.nativeRoutes.first(where: { $0.client == client }),
+                let report = reports[selector.surface]
+            else { continue }
+            let key = WorkspaceDeploymentInstallKey(
+                artifactID: artifact.identity.id,
+                physicalDestinationID: captured.target.physicalDestinationID)
+            guard seen.insert(key).inserted else { continue }
+            let metadata = report.pluginMetadata[route.externalPluginID]
+            let present = metadata.map { Self.reportedScope($0.scope, covers: selector.scope) } ?? false
+            results.append(
+                .init(
+                    artifactID: key.artifactID, physicalDestinationID: key.physicalDestinationID,
+                    isPresent: present, isEnabled: metadata?.enabled))
+        }
+        return results
+    }
+
+    /// Whether a client's record of an installed package covers a destination's
+    /// scope. Claude Code writes "User", "Project" or "Local"; Codex keeps no
+    /// scope of its own and the scan writes "This Mac", which is the account.
+    /// A word this build does not know is taken as covering: re-installing what
+    /// a client already reports is the wrong direction to be wrong in.
+    private nonisolated static func reportedScope(_ scope: String, covers destination: ToolingScope) -> Bool {
+        switch scope.lowercased() {
+        case "user", "this mac": destination == .user
+        case "project", "local": destination == .project
+        default: true
+        }
     }
 
     /// Destinations this app's own ledger or receipts show it installed.
@@ -288,14 +352,27 @@ final class WorkspaceDeploymentSession {
         })
     }
 
+    /// What `commandPlans` found: the commands it could build, and the steps
+    /// it could not build one for, with the reason in a person's words.
+    struct CommandPlans {
+        var plugins: [WorkspaceNativePluginCommandPlan] = []
+        var connections: [WorkspaceManagedMCPCommandPlan] = []
+        /// A step the plan lists that no command could be built for. It stays
+        /// a step on the sheet, and the sheet says it will not run. Leaving it
+        /// out would let "Install 59 changes" mean seven.
+        var withoutCommand: [WorkspaceDeploymentInstallKey: String] = [:]
+    }
+
     /// The reviewed command plans for the two routes that are not folder copies.
     ///
     /// Each bridge does its own checking and refuses far more than it accepts —
     /// it re-resolves the requirement against the document, insists the recorded
     /// install command matches the exact command it expects, and requires the
     /// client's own tool to be a runnable file at a path it can name. Anything
-    /// that does not pass is simply absent from the result, because a command a
-    /// person is asked to approve must be one that can actually run.
+    /// that does not pass yields no command, because a command a person is
+    /// asked to approve must be one that can actually run; the step is reported
+    /// in `withoutCommand` with the reason, so the sheet can say so rather than
+    /// count it as a change.
     ///
     /// The install command itself is read from `NativePluginInstallRegister`,
     /// which is the one place a client's install command is written down, with
@@ -307,7 +384,7 @@ final class WorkspaceDeploymentSession {
         plan: WorkspaceDeploymentPlan,
         snapshot: WorkspaceApplicationSnapshot,
         homeRoot: URL
-    ) -> (plugins: [WorkspaceNativePluginCommandPlan], connections: [WorkspaceManagedMCPCommandPlan]) {
+    ) -> CommandPlans {
         var executables: [ClientKind: URL] = [:]
         func executable(_ client: ClientKind) -> URL? {
             if let found = executables[client] { return found }
@@ -316,55 +393,114 @@ final class WorkspaceDeploymentSession {
             return found
         }
 
-        let targetsByID = Dictionary(plan.resolvedTargets.map { ($0.physicalDestinationID, $0) },
-                                     uniquingKeysWith: { first, _ in first })
-        var plugins: [WorkspaceNativePluginCommandPlan] = []
-        var connections: [WorkspaceManagedMCPCommandPlan] = []
+        let targetsByID = Dictionary(
+            plan.resolvedTargets.map { ($0.physicalDestinationID, $0) },
+            uniquingKeysWith: { first, _ in first })
+        var result = CommandPlans()
         for item in plan.items {
-            guard let requirement = plan.requirements.first(where: {
-                      $0.artifactID == item.artifactID
-                          && $0.physicalDestinationID == item.physicalDestinationID
-                  }),
-                  let target = targetsByID[item.physicalDestinationID],
-                  let client = target.selector.surface.client,
-                  let executableURL = executable(client) else { continue }
+            switch item.action {
+            case .installContent, .updateContent, .removeContent: continue
+            case .installNativePackage, .configureManagedConnection: break
+            }
+            let key = WorkspaceDeploymentInstallKey(
+                artifactID: item.artifactID, physicalDestinationID: item.physicalDestinationID)
+            guard
+                let requirement = plan.requirements.first(where: {
+                    $0.artifactID == item.artifactID
+                        && $0.physicalDestinationID == item.physicalDestinationID
+                }),
+                let target = targetsByID[item.physicalDestinationID],
+                let client = target.selector.surface.client
+            else {
+                result.withoutCommand[key] = "This step no longer matches a destination on this Mac."
+                continue
+            }
+            guard let executableURL = executable(client) else {
+                result.withoutCommand[key] =
+                    "\(client.rawValue)'s command-line tool was not found in any place this app looks, "
+                    + "so it cannot be asked to do this."
+                continue
+            }
+            let capabilities = snapshot.device.capabilityEvidence.filter { $0.surface == target.selector.surface }
+            var built = false
+            var refusal: (any Error)?
             switch item.action {
             case .installNativePackage(let route):
-                guard let install = NativePluginInstallRegister.reviewedInstall(
-                    for: route.client, externalPluginID: route.externalPluginID) else { continue }
-                for capability in snapshot.device.capabilityEvidence
-                where capability.surface == target.selector.surface && capability.component == .plugin {
-                    guard let built = try? WorkspaceNativePluginCommandPlanning.plan(
-                        document: snapshot.document, device: snapshot.device,
-                        requirement: requirement, resolvedTargets: plan.resolvedTargets,
-                        target: target, capability: capability, reviewedInstall: install,
-                        executableURL: executableURL) else { continue }
-                    plugins.append(built)
-                    break
+                guard
+                    let install = NativePluginInstallRegister.reviewedInstall(
+                        for: route.client, externalPluginID: route.externalPluginID)
+                else {
+                    result.withoutCommand[key] =
+                        "No install command is recorded for \(client.rawValue), so nothing will run."
+                    continue
+                }
+                for capability in capabilities where capability.component == .plugin {
+                    do {
+                        result.plugins.append(
+                            try WorkspaceNativePluginCommandPlanning.plan(
+                                document: snapshot.document, device: snapshot.device,
+                                requirement: requirement, resolvedTargets: plan.resolvedTargets,
+                                target: target, capability: capability, reviewedInstall: install,
+                                executableURL: executableURL))
+                        built = true
+                        break
+                    } catch {
+                        refusal = error
+                    }
                 }
             case .configureManagedConnection:
                 // The name the connection goes by in the client's own config is
                 // the one the workspace already declared for it. Inventing a
                 // second name would leave two records of one connection.
-                guard let name = snapshot.document.artifacts.first(where: {
-                    $0.identity.id == item.artifactID
-                })?.declaredName, !name.isEmpty else { continue }
-                for capability in snapshot.device.capabilityEvidence
-                where capability.surface == target.selector.surface && capability.component == .mcpServer {
-                    guard let built = try? WorkspaceManagedMCPCommandPlanning.plan(
-                        document: snapshot.document, device: snapshot.device,
-                        requirement: requirement, resolvedTargets: plan.resolvedTargets,
-                        target: target, capability: capability,
-                        nativeServerIdentifier: name,
-                        executableURL: executableURL) else { continue }
-                    connections.append(built)
-                    break
+                guard
+                    let name = snapshot.document.artifacts.first(where: {
+                        $0.identity.id == item.artifactID
+                    })?.declaredName, !name.isEmpty
+                else {
+                    result.withoutCommand[key] =
+                        "This connection has no name in the library, so \(client.rawValue) cannot be asked to set it up."
+                    continue
+                }
+                for capability in capabilities where capability.component == .mcpServer {
+                    do {
+                        result.connections.append(
+                            try WorkspaceManagedMCPCommandPlanning.plan(
+                                document: snapshot.document, device: snapshot.device,
+                                requirement: requirement, resolvedTargets: plan.resolvedTargets,
+                                target: target, capability: capability,
+                                nativeServerIdentifier: name,
+                                executableURL: executableURL))
+                        built = true
+                        break
+                    } catch {
+                        refusal = error
+                    }
                 }
             case .installContent, .updateContent, .removeContent:
                 continue
             }
+            if !built { result.withoutCommand[key] = Self.describe(refusal, client: client) }
         }
-        return (plugins, connections)
+        return result
+    }
+
+    /// Why no command could be built, in a person's words. The bridges' own
+    /// reasons are about records lining up; a person needs to know what to do.
+    private nonisolated static func describe(_ refusal: (any Error)?, client: ClientKind) -> String {
+        guard let refusal else {
+            return "This Mac has no record of what \(client.rawValue) can be asked to carry. Check your apps again."
+        }
+        if let refusal = refusal as? WorkspaceNativePluginCommandPlanningError {
+            switch refusal {
+            case .blockedByManagedPolicy, .unresolvedManagedPolicy:
+                return "A managed policy on this Mac blocks this package in \(client.rawValue)."
+            case .unsupportedScope, .unsupportedSurface, .unsupportedEnablement:
+                return "\(client.rawValue) cannot be asked to do this here."
+            default:
+                break
+            }
+        }
+        return "\(client.rawValue) could not be asked to do this: its record on this Mac does not line up with the library's."
     }
 
     /// Folders at redirected destinations that this app's own ledger proves it

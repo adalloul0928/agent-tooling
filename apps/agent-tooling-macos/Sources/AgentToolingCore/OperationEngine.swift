@@ -34,7 +34,8 @@ public actor OperationExecutor {
         self.linkedDestinationRoots = linkedDestinationRoots.map(\.standardizedFileURL)
         self.commandPolicy = OperationCommandPolicy(
             libraryURL: store.libraryURL,
-            gitBackupRoot: store.rootURL.appending(path: "exports/git-backup", directoryHint: .isDirectory).standardizedFileURL
+            gitBackupRoot: store.rootURL.appending(path: "exports/git-backup", directoryHint: .isDirectory).standardizedFileURL,
+            homeURL: homeURL
         )
     }
 

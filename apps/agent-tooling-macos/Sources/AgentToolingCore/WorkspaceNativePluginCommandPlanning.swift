@@ -95,19 +95,28 @@ public enum WorkspaceNativePluginCommandPlanning {
             currentDeviceID: device.deviceID,
             targets: resolvedTargets,
             capabilityEvidence: device.capabilityEvidence)
-        if resolution.issues.contains(where: {
+        // Only this destination's issues count, plus any the resolver could not
+        // pin to a destination. The package may be asked for elsewhere too, and
+        // a destination with no route for it (a Claude Code package asked for
+        // in Codex, say) is that destination's exclusion, not a reason to
+        // refuse the command here. Judging every destination at once left every
+        // package with a foreign-client assignment without a command.
+        let issues = resolution.issues.filter {
+            $0.physicalDestinationID == nil || $0.physicalDestinationID == target.physicalDestinationID
+        }
+        if issues.contains(where: {
             $0.kind == .unsupportedCapability || $0.kind == .unknownCapability
         }) {
             throw WorkspaceNativePluginCommandPlanningError.unsupportedCapability
         }
-        if resolution.issues.contains(where: {
+        if issues.contains(where: {
             $0.kind == .missingCapabilityEvidence
                 || $0.kind == .contradictoryCapabilityEvidence
                 || $0.kind == .invalidResolvedTarget
         }) {
             throw WorkspaceNativePluginCommandPlanningError.invalidCapability
         }
-        guard resolution.issues.isEmpty,
+        guard issues.isEmpty,
               resolution.requirements.filter({ $0 == requirement }).count == 1 else {
             throw WorkspaceNativePluginCommandPlanningError.invalidRequirement
         }
