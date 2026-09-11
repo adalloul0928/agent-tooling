@@ -243,11 +243,7 @@ final class WorkspaceDeviceSession {
         let matching = observations.filter { $0.surface.client == client }
         guard !matching.isEmpty else { return ClientVerdict(state: .pending, text: "Not checked yet") }
         if matching.contains(where: \.isCommandAvailable) {
-            let checked = matching.map(\.lastScannedAt).max().map { date in
-                Calendar.current.isDateInToday(date)
-                    ? "Checked \(date.formatted(date: .omitted, time: .shortened))"
-                    : "Checked \(date.formatted(.dateTime.month(.abbreviated).day()))"
-            }
+            let checked = matching.map(\.lastScannedAt).max().map { "Checked \(SnapshotTime.compact($0))" }
             return ClientVerdict(state: .healthy, text: checked ?? "Available")
         }
         return ClientVerdict(

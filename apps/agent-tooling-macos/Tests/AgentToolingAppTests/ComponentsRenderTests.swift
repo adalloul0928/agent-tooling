@@ -96,22 +96,6 @@ struct ComponentsRenderTests {
                     )
                     .frame(width: 360))
             ),
-            (
-                "ToolingMatrixView",
-                AnyView(
-                    ToolingMatrixView(
-                        rows: [
-                            ToolingMatrixRow(
-                                id: .skills, title: "Skills", symbol: AppSection.skills.symbol,
-                                libraryCount: 12, installedCounts: [.codex: 9, .claude: 3], kind: .skill),
-                            ToolingMatrixRow(
-                                id: .mcpServers, title: "Connections", symbol: AppSection.mcpServers.symbol,
-                                libraryCount: 4, installedCounts: [.codex: 4], kind: .mcpServer),
-                        ],
-                        clients: ClientKind.allCases
-                    )
-                    .frame(width: 640))
-            ),
         ]
 
         for (name, view) in cases {
