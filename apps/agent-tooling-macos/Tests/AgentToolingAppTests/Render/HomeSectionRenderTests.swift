@@ -101,17 +101,17 @@ struct HomeSectionRenderTests {
         try expectDrawn(fixture.overview(sessions))
     }
 
-    /// Home is taller than the window it opens in, so a window-sized render
-    /// leaves its last sections below the fold and a screenshot of the running
-    /// app cannot reach them. This lays the page out at its full height and
-    /// checks the part a person has to scroll to, on its own.
-    @Test func thePartOfHomeBelowTheFoldDrawsToo() async throws {
+    /// The bento Home is a dashboard, not a scroll: with this fixture's data
+    /// the whole page fits one window. What that must not hide is a bottom
+    /// row that laid out to nothing — the minis and the last cards live in
+    /// the lower band, so that band is rendered and checked on its own.
+    @Test func theBottomBandOfHomeDrawsToo() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
         await fixture.workspace.device.refresh()
         let sessions = await fixture.homeSessions()
 
-        try expectDrawnBelowTheFold(fixture.overview(sessions, height: 1_900))
+        try expectDrawnInBottomBand(fixture.overview(sessions))
     }
 
     // MARK: - What the page says
@@ -233,11 +233,11 @@ extension ShellRenderFixture {
     }
 }
 
-/// The harness's blank-frame check, applied only to what is below one window's
-/// worth of the page — so a section that lays out to nothing where nobody can
-/// see it fails here rather than being reported by whoever scrolls down.
+/// The harness's blank-frame check, applied only to the lowest quarter of the
+/// page — so a bottom row that lays out to nothing where nobody looks first
+/// fails here rather than being reported by whoever glances down.
 @MainActor
-private func expectDrawnBelowTheFold(
+private func expectDrawnInBottomBand(
     _ view: some View,
     _ location: SourceLocation = #_sourceLocation
 ) throws {
@@ -245,18 +245,18 @@ private func expectDrawnBelowTheFold(
     host.frame = CGRect(origin: .zero, size: host.fittingSize)
     host.layoutSubtreeIfNeeded()
 
-    let fold = shellWindowSize.height
-    #expect(host.bounds.height > fold, "the page was not laid out taller than a window", sourceLocation: location)
+    let bandHeight = (host.bounds.height / 4).rounded(.down)
+    #expect(bandHeight > 0, "the page laid out to no height at all", sourceLocation: location)
     // A hosting view draws top-down, but an unflipped one would put the last
     // section at the origin, so the rectangle is chosen rather than assumed.
-    let below = CGRect(
-        x: 0, y: host.isFlipped ? fold : 0, width: host.bounds.width,
-        height: host.bounds.height - fold)
+    let band = CGRect(
+        x: 0, y: host.isFlipped ? host.bounds.height - bandHeight : 0, width: host.bounds.width,
+        height: bandHeight)
     let bitmap = try #require(
-        host.bitmapImageRepForCachingDisplay(in: below),
-        "the page produced no drawable area below the fold", sourceLocation: location)
-    host.cacheDisplay(in: below, to: bitmap)
+        host.bitmapImageRepForCachingDisplay(in: band),
+        "the page produced no drawable area in its bottom band", sourceLocation: location)
+    host.cacheDisplay(in: band, to: bitmap)
     #expect(
-        distinctColours(in: bitmap) > 4, "the part of the page below the fold drew a blank frame",
+        distinctColours(in: bitmap) > 4, "the bottom band of the page drew a blank frame",
         sourceLocation: location)
 }
