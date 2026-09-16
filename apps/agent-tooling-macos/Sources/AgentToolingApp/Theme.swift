@@ -21,12 +21,29 @@ enum AgentTheme {
     static let controlBackground = dynamic(light: 0xFFFFFF, dark: 0x2C2C2E)
     static let separator = Color(nsColor: .separatorColor)
 
-    // Neutral symbols identify item types; color is reserved for actions and status.
+    // Neutral graphite remains for objects outside the identity vocabulary.
     static let graphite = dynamic(light: 0x6E6E73, dark: 0xAEAEB2)
-    static let skill = graphite
-    static let plugin = graphite
-    static let mcpServer = graphite
-    static let profile = graphite
+
+    // The identity palette: each tooling kind owns one hue, used as a filled
+    // tile behind a white symbol. Rows across every screen share this language,
+    // so a person can tell a skill from a server before reading a word.
+    static let skill = dynamic(light: 0x16A34A, dark: 0x28C063)
+    static let plugin = dynamic(light: 0xA21CAF, dark: 0xC33ED1)
+    static let mcpServer = dynamic(light: 0x4F46E5, dark: 0x6C64F2)
+    static let profile = dynamic(light: 0x7C3AED, dark: 0x9B67F5)
+
+    /// The bento canvas: a quiet blush-to-lavender wash behind Home's cards.
+    /// Content screens keep the neutral background; only the dashboard, which
+    /// is made of floating cards, earns the colored ground beneath them.
+    static var canvasGradient: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: dynamic(light: 0xF9E4EF, dark: 0x261B2E), location: 0),
+                .init(color: dynamic(light: 0xEDE2F8, dark: 0x201D31), location: 0.45),
+                .init(color: dynamic(light: 0xE3E8FB, dark: 0x1B2030), location: 1),
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
 
     // Status. Only ever a small glyph next to words.
     static let ok = dynamic(light: 0x2EA44F, dark: 0x3BD160)

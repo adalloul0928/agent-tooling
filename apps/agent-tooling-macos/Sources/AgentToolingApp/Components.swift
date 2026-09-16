@@ -62,13 +62,17 @@ struct KindTile: View {
     var ghost = false
 
     var body: some View {
-        Image(systemName: kind.symbol)
-            .symbolRenderingMode(.hierarchical)
-            .font(.system(size: size * 0.64, weight: .regular))
-            .foregroundStyle(kind.color)
-            .frame(width: size, height: size)
-            .opacity(ghost ? 0.7 : 1)
-            .accessibilityHidden(true)
+        ZStack {
+            RoundedRectangle(cornerRadius: max(6, size * 0.28), style: .continuous)
+                .fill(kind.color.gradient)
+            Image(systemName: kind.symbol)
+                .font(.system(size: size * 0.5, weight: .medium))
+                .foregroundStyle(.white)
+        }
+        .frame(width: size, height: size)
+        .opacity(ghost ? 0.45 : 1)
+        .saturation(ghost ? 0.35 : 1)
+        .accessibilityHidden(true)
     }
 }
 

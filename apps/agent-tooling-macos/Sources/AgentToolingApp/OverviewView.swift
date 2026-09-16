@@ -75,25 +75,36 @@ struct OverviewView: View {
             }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
+                VStack(alignment: .leading, spacing: 16) {
                     if showsOnboarding { onboardingCard }
-                    recommendationsSection
-                    librarySection
-                    if !enabledClients.isEmpty { conduit }
-                    if !attention.isEmpty || !updates.isEmpty {
-                        attentionSection(items: attention, updates: updates)
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(spacing: 16) {
+                            reviewQueueCard(items: attention, updates: updates)
+                            recommendedCard
+                        }
+                        .frame(maxWidth: .infinity)
+                        VStack(spacing: 16) {
+                            libraryCard
+                            appsCard
+                            HStack(alignment: .top, spacing: 16) {
+                                readyMiniCard
+                                lastCheckMiniCard
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    appFooter
                 }
                 .padding(.horizontal, WorkspaceLayout.pageInset)
                 .padding(.top, WorkspaceLayout.contentTopInset)
                 .padding(.bottom, WorkspaceLayout.pageInset)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: 1280, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
             .font(.system(size: 15))
             .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AgentTheme.canvasGradient, ignoresSafeAreaEdges: .all)
     }
 
     // MARK: - Getting started
@@ -132,63 +143,35 @@ struct OverviewView: View {
 
     // MARK: - Recommended for you
 
-    private var recommendationsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline, spacing: 24) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Recommended for you")
-                        .font(.system(size: 20, weight: .semibold))
-                    Text(
-                        recommendations.isEmpty
-                            ? "Find useful tools for the work you do."
-                            : "Useful tools based on your recent work."
-                    )
-                    .font(.system(size: 15))
-                    .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                if !recommendations.isEmpty {
-                    Button("All suggestions") { navigate(.insights) }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 15))
-                        .foregroundStyle(AgentTheme.blue)
-                }
-            }
-
+    private var recommendedCard: some View {
+        BentoCard(
+            symbol: "sparkles", title: "Recommended",
+            action: recommendations.isEmpty ? nil : ("All suggestions", { navigate(.insights) })
+        ) {
             if recommendations.isEmpty {
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack(alignment: .top, spacing: 18) {
-                        Image(systemName: "sparkle.magnifyingglass")
-                            .font(.system(size: 32, weight: .regular))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 48, height: 48)
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Explore what your apps can do")
-                                .font(.system(size: 18, weight: .semibold))
-                            Text("Browse skills, plugins, and connections, or review recent work in Insights.")
-                                .font(.system(size: 15))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Explore what your apps can do")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Browse skills, plugins, and connections, or review recent work in Insights.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 10) {
                         Button("Browse Discover") { navigate(.marketplace) }
                             .buttonStyle(.glassProminent)
                         Button("Open Insights") { navigate(.insights) }
                             .buttonStyle(.glass)
                     }
-                    .controlSize(.large)
                 }
-                .padding(24)
+                .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .standardPanel(cornerRadius: 18)
             } else {
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: 16, alignment: .top), GridItem(.flexible(), alignment: .top)],
-                    alignment: .leading, spacing: 12
-                ) {
+                VStack(spacing: 0) {
                     ForEach(recommendations) { recommendation in
                         recommendationRow(recommendation)
+                        if recommendation.id != recommendations.last?.id {
+                            Divider().padding(.leading, 60)
+                        }
                     }
                 }
             }
@@ -199,33 +182,29 @@ struct OverviewView: View {
         Button {
             open(recommendation)
         } label: {
-            HStack(alignment: .top, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
                 ToolIdentityIcon(
                     packageID: recommendationPackageID(recommendation) ?? "",
-                    fallback: recommendationKind(recommendation), size: 40
-                )
-                .padding(.top, 2)
-                VStack(alignment: .leading, spacing: 6) {
+                    fallback: recommendationKind(recommendation), size: 32)
+                VStack(alignment: .leading, spacing: 3) {
                     Text(recommendationTitle(recommendation))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 14.5, weight: .semibold))
                         .foregroundStyle(.primary)
-                        .lineLimit(2)
+                        .lineLimit(1)
                     Text(recommendationSummary(recommendation))
-                        .font(.system(size: 15))
+                        .font(.system(size: 13.5))
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    Text(recommendationAction(recommendation))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AgentTheme.blue)
-                        .padding(.top, 2)
+                        .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                Text(recommendationAction(recommendation))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AgentTheme.blue)
+                    .lineLimit(1)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
-            .standardPanel(cornerRadius: 12)
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
         }
         .buttonStyle(LibraryDestinationStyle())
         .accessibilityHint(recommendationAction(recommendation))
@@ -233,199 +212,160 @@ struct OverviewView: View {
 
     // MARK: - Your library
 
-    private var librarySection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 24) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Your library").font(.system(size: 20, weight: .semibold))
-                    Text(librarySummary)
-                        .font(.system(size: 15))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Button("Discover more", systemImage: "arrow.right") { navigate(.marketplace) }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 15))
-                    .foregroundStyle(AgentTheme.blue)
+    private var libraryCard: some View {
+        BentoCard(
+            symbol: "books.vertical",
+            title: libraryModel.map { "Library · \($0.toolCount)" } ?? "Library",
+            action: ("Open", { navigate(.skills) })
+        ) {
+            HStack(alignment: .top, spacing: 8) {
+                libraryKindCell("Skills", count: inventory?.skills.count ?? 0, kind: .skill, section: .skills)
+                libraryKindCell("Plugins", count: inventory?.plugins.count ?? 0, kind: .plugin, section: .plugins)
+                libraryKindCell("Servers", count: inventory?.mcpServers.count ?? 0, kind: .mcpServer, section: .mcpServers)
             }
-            HStack(spacing: 0) {
-                libraryDestination("Skills", count: inventory?.skills.count ?? 0, kind: .skill, section: .skills)
-                Divider().frame(height: 28).opacity(0.5)
-                libraryDestination("Plugins", count: inventory?.plugins.count ?? 0, kind: .plugin, section: .plugins)
-                Divider().frame(height: 28).opacity(0.5)
-                libraryDestination(
-                    "MCP servers", count: inventory?.mcpServers.count ?? 0, kind: .mcpServer, section: .mcpServers)
-            }
-            .padding(4)
-            .standardPanel(cornerRadius: 16)
-
-            if !featuredPlugins.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        ForEach(featuredPlugins) { row in
-                            Button {
-                                openPlugin(row)
-                            } label: {
-                                ToolIdentityIcon(packageID: row.nativeRoutes.first?.externalPluginID ?? "", size: 40)
-                            }
-                            .buttonStyle(.plain)
-                            .help(row.displayName)
-                            .accessibilityLabel("Open \(row.displayName)")
-                            .accessibilityHint("Show plugin details")
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 16)
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("Plugins your apps registered")
-            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 16)
         }
     }
 
-    /// What the library holds, counted the way the read model counts it: every
-    /// tool, and how many of them arrived inside a plugin rather than on their
-    /// own. Nothing here says any of them is installed.
-    private var librarySummary: String {
-        guard let library = libraryModel else { return "Reading your library…" }
-        guard library.toolCount > 0 else { return "Nothing here yet." }
-        let tools = "\(library.toolCount) \(library.toolCount == 1 ? "tool" : "tools")"
-        guard library.nestedToolCount > 0 else { return tools }
-        return "\(tools) · \(library.nestedToolCount) inside plugins"
-    }
-
-    /// Plugins an app's own registry named, with artwork this build ships, one
-    /// per distinct mark. A row without a native route has no catalog identity
-    /// to resolve, so it is not shown here rather than shown as a blank tile.
-    private var featuredPlugins: [WorkspaceLibraryReadModelRow] {
-        var seenArtwork = Set<String>()
-        return Array(
-            (libraryModel?.rows ?? [])
-                .filter { $0.kind == .nativePlugin || $0.kind == .package }
-                .sorted {
-                    let order = $0.displayName.localizedStandardCompare($1.displayName)
-                    return order == .orderedSame
-                        ? $0.artifactID.rawValue.uuidString < $1.artifactID.rawValue.uuidString
-                        : order == .orderedAscending
-                }
-                .filter { row in
-                    guard let route = row.nativeRoutes.first,
-                        let artwork = ToolIdentityAssets.asset(for: route.externalPluginID)
-                    else { return false }
-                    return seenArtwork.insert(artwork.asset).inserted
-                }
-                .prefix(10))
-    }
-
-    private func libraryDestination(_ title: String, count: Int, kind: ToolingKind, section: AppSection) -> some View {
+    private func libraryKindCell(_ title: String, count: Int, kind: ToolingKind, section: AppSection) -> some View {
         Button {
             navigate(section)
         } label: {
-            HStack(spacing: 10) {
-                KindTile(kind: kind, size: 26)
-                Text(title).font(.system(size: 16, weight: .medium)).lineLimit(1)
-                Spacer(minLength: 4)
+            VStack(spacing: 8) {
+                KindTile(kind: kind, size: 40)
                 Text(count, format: .number)
-                    .font(.system(size: 15)).monospacedDigit()
+                    .font(.system(size: 19, weight: .bold)).monospacedDigit()
+                Text(title)
+                    .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(.secondary)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, minHeight: 64)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(LibraryDestinationStyle())
         .accessibilityLabel("Open \(title), \(count) items")
     }
 
-    // MARK: - The path to your apps
+    // MARK: - Mini cards
 
-    /// The product's signature path, drawn from the same three facts the Apps
-    /// screen draws it from: what the library holds, what is asked for, and
-    /// what the last check found in each app. Configurations are gone, so the
-    /// middle node states the asks rather than naming a profile.
-    private var conduit: some View {
-        SyncConduitView(
-            managedCount: managedCount,
-            discoveredCount: discoveredCount,
-            profileName: "Assignments",
-            desiredCount: desiredCount,
-            pendingCount: pendingCount,
-            terminals: enabledClients.map { client in
-                let verdict = workspace.device.verdict(for: client)
-                return ConduitTerminal(client: client, state: verdict.state, text: verdict.text)
-            },
-            onLibrary: { navigate(.skills) },
-            onProfile: { navigate(.projects) },
-            onClient: { navigation.openClient($0) })
+    /// The steps a prepared plan is holding. A plan that has been applied has
+    /// already re-read itself, so what shows here is what is still outstanding.
+    private var readyMiniCard: some View {
+        BentoCard(symbol: "arrow.down.circle", title: "Ready to install") {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(workspace.deployment.plan?.items.count ?? 0, format: .number)
+                    .font(.system(size: 30, weight: .bold)).monospacedDigit()
+                    .foregroundStyle(
+                        (workspace.deployment.plan?.items.isEmpty ?? true) ? Color.secondary : AgentTheme.blue)
+                HStack(spacing: 8) {
+                    Text((workspace.deployment.plan?.items.count ?? 0) == 1 ? "change waiting" : "changes waiting")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 4)
+                    Button(workspace.deployment.isBusy ? "Preparing…" : "Review…") { reviewChanges() }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                        .disabled(workspace.deployment.isBusy)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 14)
+            .padding(.top, 2)
+        }
     }
 
-    /// What this Mac is looking after, and what it has merely noticed.
-    private var managedCount: Int {
-        (libraryModel?.rows ?? [])
-            .filter { $0.ownership != .trackedOnly }
-            .reduce(0) { $0 + 1 + $1.childCount }
+    private var lastCheckMiniCard: some View {
+        BentoCard(symbol: "arrow.clockwise", title: "Last check") {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(lastScanText)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Text("read-only scan")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 4)
+                    Button(workspace.device.isChecking ? "Checking…" : "Check") {
+                        Task { await workspace.device.refresh() }
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+                    .disabled(workspace.device.isChecking)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 14)
+            .padding(.top, 2)
+        }
     }
 
-    private var discoveredCount: Int {
-        libraryModel?.rows.count { $0.ownership == .trackedOnly } ?? 0
-    }
+    // MARK: - Waiting for your review
 
-    /// How many library items are asked for anywhere. Asked for, not installed.
-    private var desiredCount: Int {
-        libraryModel?.rows.count { !$0.requestedAssignments.isEmpty } ?? 0
-    }
-
-    /// Everything waiting on a person: the steps a prepared plan is holding, and
-    /// the requests nobody has decided. A plan that has been applied has already
-    /// re-read itself, so what is left here is what is still outstanding.
-    private var pendingCount: Int {
-        (workspace.deployment.plan?.items.count ?? 0) + requests.requests.count
-    }
-
-    // MARK: - Needs your attention
-
-    private func attentionSection(
+    private func reviewQueueCard(
         items attentionItems: [OverviewAttention],
         updates updateItems: [(row: WorkspaceLibraryReadModelRow, availability: UpdateAvailability)]
     ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Needs your attention").font(.system(size: 20, weight: .semibold))
+        BentoCard(
+            symbol: "eye", title: "Waiting for your review",
+            action: ("Open queue", { navigate(.syncCenter) })
+        ) {
             VStack(spacing: 0) {
-                ForEach(attentionItems) { item in
-                    HStack(alignment: .top, spacing: 14) {
-                        StatusGlyph(state: item.state, size: 18).padding(.top, 2)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(item.title).font(.system(size: 16, weight: .medium))
-                            Text(item.detail).font(.system(size: 15)).foregroundStyle(.secondary).lineLimit(2)
-                        }
+                if attentionItems.isEmpty && updateItems.isEmpty {
+                    Text("Nothing is waiting on you.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        Button("Review") { navigate(item.destination) }.buttonStyle(.glass)
-                    }
-                    .padding(18)
-                    if item.id != attentionItems.last?.id || !updateItems.isEmpty { Divider().padding(.horizontal, 18) }
-                }
-                ForEach(updateItems, id: \.row.artifactID) { item in
-                    HStack(alignment: .top, spacing: 14) {
-                        ToolIdentityIcon(
-                            packageID: item.row.nativeRoutes.first?.externalPluginID ?? "",
-                            fallback: .plugin, size: 36)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Update available for \(item.row.displayName)").font(.system(size: 16, weight: .medium))
-                            Text(item.availability.detail).font(.system(size: 15)).foregroundStyle(.secondary).lineLimit(2)
+                } else {
+                    ForEach(attentionItems) { item in
+                        HStack(alignment: .center, spacing: 12) {
+                            StatusGlyph(state: item.state, size: 17)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.title).font(.system(size: 14.5, weight: .semibold)).lineLimit(1)
+                                Text(item.detail).font(.system(size: 13.5)).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Button("Review") { navigate(item.destination) }
+                                .buttonStyle(.glass).controlSize(.small)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        Button("Review") { openPlugin(item.row) }
-                            .buttonStyle(.glass)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 11)
+                        if item.id != attentionItems.last?.id || !updateItems.isEmpty {
+                            Divider().padding(.leading, 47)
+                        }
                     }
-                    .padding(18)
-                    if item.row.artifactID != updateItems.last?.row.artifactID { Divider().padding(.horizontal, 18) }
+                    ForEach(updateItems, id: \.row.artifactID) { item in
+                        HStack(alignment: .center, spacing: 12) {
+                            ToolIdentityIcon(
+                                packageID: item.row.nativeRoutes.first?.externalPluginID ?? "",
+                                fallback: .plugin, size: 30)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Update available for \(item.row.displayName)")
+                                    .font(.system(size: 14.5, weight: .semibold)).lineLimit(1)
+                                Text(item.availability.detail).font(.system(size: 13.5)).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Button("Review") { openPlugin(item.row) }
+                                .buttonStyle(.glass).controlSize(.small)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 11)
+                        if item.row.artifactID != updateItems.last?.row.artifactID {
+                            Divider().padding(.leading, 47)
+                        }
+                    }
                 }
+                Divider()
+                Label("Nothing installs until you approve it here.", systemImage: "checkmark.shield")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .standardPanel(cornerRadius: 16)
         }
     }
 
@@ -477,39 +417,74 @@ struct OverviewView: View {
             sources: catalog.sources.isEmpty ? nil : catalog.sources)
     }
 
-    // MARK: - On this Mac
+    // MARK: - Apps
 
-    private var appFooter: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Divider()
-            HStack {
-                Text("On this Mac").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
-                Spacer()
-                Button("Manage apps") { navigation.showAllClients() }
-                    .buttonStyle(.plain).font(.system(size: 14)).foregroundStyle(AgentTheme.blue)
-            }
-            FlowLayout(spacing: 24) {
-                ForEach(enabledClients) { client in
-                    Button {
-                        navigation.openClient(client)
-                    } label: {
-                        HStack(spacing: 10) {
-                            ClientBrandIcon(client: client, size: 22)
-                            Text(client.rawValue).font(.system(size: 15, weight: .medium))
-                            let verdict = workspace.device.verdict(for: client)
-                            Text(verdict.state == .healthy ? "Found locally" : verdict.text)
-                                .font(.system(size: 14)).foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+    private var appsCard: some View {
+        BentoCard(
+            symbol: "square.grid.2x2", title: "Apps",
+            action: ("Manage", { navigation.showAllClients() })
+        ) {
             if enabledClients.isEmpty {
                 Text("Choose your apps to see their local setup here.")
-                    .font(.system(size: 15)).foregroundStyle(.secondary)
+                    .font(.system(size: 14)).foregroundStyle(.secondary)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(alignment: .top, spacing: 6) {
+                    ForEach(enabledClients) { client in
+                        appBadge(client)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity)
             }
+        }
+    }
+
+    /// One app: its mark on a tile, its health as a dot on the tile's corner,
+    /// its name beneath. The verdict text lives in the help tag so the row of
+    /// icons stays scannable.
+    private func appBadge(_ client: ClientKind) -> some View {
+        let verdict = workspace.device.verdict(for: client)
+        return Button {
+            navigation.openClient(client)
+        } label: {
+            VStack(spacing: 8) {
+                ZStack(alignment: .bottomTrailing) {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(AgentTheme.controlBackground)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                .strokeBorder(AgentTheme.separator.opacity(0.35), lineWidth: 0.5)
+                        }
+                        .frame(width: 44, height: 44)
+                        .overlay { ClientBrandIcon(client: client, size: 24) }
+                    Circle()
+                        .fill(statusDotColor(verdict.state))
+                        .frame(width: 10, height: 10)
+                        .overlay { Circle().strokeBorder(AgentTheme.controlBackground, lineWidth: 2) }
+                        .offset(x: 3, y: 3)
+                }
+                Text(client.rawValue)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(client.rawValue): \(verdict.text)")
+        .accessibilityLabel("\(client.rawValue), \(verdict.text)")
+    }
+
+    private func statusDotColor(_ state: HealthState) -> Color {
+        switch state {
+        case .healthy: AgentTheme.ok
+        case .attention: AgentTheme.warning
+        case .pending: AgentTheme.blue
+        case .unavailable: AgentTheme.failure
         }
     }
 
@@ -637,6 +612,53 @@ struct OverviewView: View {
     private func skill(_ id: String?) -> Skill? {
         guard let id else { return nil }
         return inventory?.skills.first { $0.id == id }
+    }
+}
+
+/// One bento card: an eyebrow — small symbol, tracked-out label, optional
+/// trailing action — above the card's own rows. The eyebrow is part of the
+/// card, unlike `TitledCard`, because the dashboard reads as a set of labeled
+/// tiles rather than as sections of a page.
+private struct BentoCard<Content: View>: View {
+    let symbol: String
+    let title: String
+    var action: (String, () -> Void)?
+    @ViewBuilder var content: Content
+
+    init(symbol: String, title: String, action: (String, () -> Void)? = nil, @ViewBuilder content: () -> Content) {
+        self.symbol = symbol
+        self.title = title
+        self.action = action
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 7) {
+                Image(systemName: symbol)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(title.uppercased())
+                    .font(.system(size: 11, weight: .bold))
+                    .kerning(0.7)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if let action {
+                    Button(action.0, action: action.1)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AgentTheme.blue)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 13)
+            .padding(.bottom, 9)
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .standardPanel(cornerRadius: 16)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
     }
 }
 
