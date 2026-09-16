@@ -272,7 +272,7 @@ struct InsightsView: View {
                 Text("View")
                     .font(.callout.weight(.medium))
                 Picker("View", selection: $selection) {
-                    Text("Opportunities").tag(InsightSelection.opportunities)
+                    Text("Worth adding").tag(InsightSelection.opportunities)
                     Text("Skill health").tag(InsightSelection.skillHealth)
                 }
                 .labelsHidden()
@@ -301,27 +301,47 @@ struct InsightsView: View {
     }
 
     private func reportSummary(_ report: InsightsReport) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("Last scan")
-                .font(.headline)
-            Text(report.generatedAt, format: .relative(presentation: .named))
-                .foregroundStyle(.secondary)
-            Text("·")
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
-            Text(
-                "\(report.conversationsScanned) \(report.conversationsScanned == 1 ? "conversation" : "conversations") reviewed"
-            )
-            .foregroundStyle(.secondary)
-            Spacer()
-            Button("Clear results") {
-                isPresentingClearConfirmation = true
+        HStack(alignment: .center, spacing: 0) {
+            summaryStat(
+                report.conversationsScanned, "Conversations scanned", tint: .primary)
+            Divider().frame(height: 34).padding(.horizontal, 4)
+            summaryStat(
+                report.recommendations.count, "Worth adding",
+                tint: report.recommendations.isEmpty ? .secondary : AgentTheme.blue)
+            Divider().frame(height: 34).padding(.horizontal, 4)
+            summaryStat(
+                report.qualityFindings.count, "Skill findings",
+                tint: report.qualityFindings.isEmpty ? .secondary : AgentTheme.warning)
+            Spacer(minLength: 16)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("Last scan \(report.generatedAt, format: .relative(presentation: .named))")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Button("Clear results") {
+                    isPresentingClearConfirmation = true
+                }
+                .buttonStyle(.link)
+                .font(.callout)
+                .accessibilityHint("Removes the saved aggregate report after confirmation")
             }
-            .buttonStyle(.link)
-            .accessibilityHint("Removes the saved aggregate report after confirmation")
+            .padding(.trailing, 16)
         }
-        .font(.callout)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 12)
+        .standardPanel(cornerRadius: 14)
+    }
+
+    private func summaryStat(_ count: Int, _ label: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(count, format: .number)
+                .font(.system(size: 22, weight: .bold)).monospacedDigit()
+                .foregroundStyle(tint)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(count)")
     }
 
     private func coverageSection(_ coverage: [ConversationScanCoverage]) -> some View {
@@ -345,11 +365,11 @@ struct InsightsView: View {
     }
 
     private func opportunitiesSection(_ recommendations: [ToolRecommendation]) -> some View {
-        InsightPanel("Opportunities") {
+        InsightPanel("Worth adding — from your real sessions") {
             if recommendations.isEmpty {
                 EmptyStateView(
                     symbol: "checkmark.circle",
-                    title: "No clear opportunities found",
+                    title: "Nothing worth adding right now",
                     message: "The scan did not find a repeated workflow or catalog match strong enough to recommend."
                 )
                 .frame(maxWidth: .infinity, minHeight: 190)
