@@ -228,6 +228,7 @@ public enum InventoryCompiler {
 enum LocalTargetScan {
     static func perform(
         surface: TargetSurface,
+        homeURL: URL,
         executable: String,
         configurationURLs: [URL],
         skillRoots: [URL],
@@ -236,8 +237,15 @@ enum LocalTargetScan {
         runner: any CommandRunning
     ) async -> TargetObservation {
         let fileManager = FileManager.default
-        async let commandProbe = probe(executable: executable, runner: runner)
-        async let nativeInventory = nativeInventory(executable: executable, runner: runner)
+        // The tool is probed where the locator actually found it. A bare name
+        // would go through the PATH this app inherited, which is not the
+        // shell's — exactly how an installed tool reads as "unavailable".
+        let resolvedExecutable =
+            surface.client
+            .flatMap { ClientExecutableLocator.locate($0, homeURL: homeURL)?.path(percentEncoded: false) }
+            ?? executable
+        async let commandProbe = probe(executable: resolvedExecutable, runner: runner)
+        async let nativeInventory = nativeInventory(executable: resolvedExecutable, runner: runner)
         let existingConfig = configurationURLs.filter { fileManager.fileExists(atPath: $0.path(percentEncoded: false)) }
         var configurationDocuments: [String] = []
         var notes: [String] = []

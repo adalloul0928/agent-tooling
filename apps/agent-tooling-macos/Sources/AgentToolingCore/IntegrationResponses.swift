@@ -151,6 +151,7 @@ public enum IntegrationTextSanitizer {
         case .codex: "codex"
         case .claude: "claude-code"
         case .gemini: "gemini"
+        case .kiro: "kiro"
         }
     }
 
@@ -167,6 +168,7 @@ public enum IntegrationTextSanitizer {
             case "codex": targets.insert(.codex)
             case "claude", "claude-code": targets.insert(.claude)
             case "gemini", "gemini-cli": targets.insert(.gemini)
+            case "kiro", "kiro-cli": targets.insert(.kiro)
             default: return nil
             }
         }

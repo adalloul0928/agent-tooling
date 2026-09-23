@@ -193,6 +193,7 @@ public enum StackedPlanBuilder {
         case .claude: "claude"
         case .codex: "codex"
         case .gemini: "gemini"
+        case .kiro: "kiro"
         }
     }
 
@@ -205,6 +206,7 @@ public enum StackedPlanBuilder {
         case .claude: .claudeCode
         case .codex: .codexCLI
         case .gemini: .geminiCLI
+        case .kiro: .kiroCLI
         }
     }
 }

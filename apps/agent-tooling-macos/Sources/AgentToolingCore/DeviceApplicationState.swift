@@ -9,10 +9,27 @@ public struct DeviceProjectRootBinding: Codable, Hashable, Sendable {
 public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
     public var automaticallyCheckHealth: Bool
     public var enabledClients: [ClientKind]
+    /// The clients somebody explicitly chose on this Mac, or `nil` when nobody
+    /// has chosen yet. Distinct from `enabledClients` (kept for older builds):
+    /// with no explicit choice the app shows the clients its scan actually
+    /// found, and an undetected client stays out of the way until it is either
+    /// installed or deliberately turned on.
+    public var chosenClients: [ClientKind]?
+    /// Folders somebody explicitly recorded as holding client tools, on top of
+    /// the fixed install roots the locator always checks. Absolute paths only;
+    /// recorded through a reviewed action, never inferred from `PATH` silently.
+    public var customToolDirectories: [String]?
 
-    public init(automaticallyCheckHealth: Bool = true, enabledClients: [ClientKind] = ClientKind.allCases) {
+    public init(
+        automaticallyCheckHealth: Bool = true,
+        enabledClients: [ClientKind] = ClientKind.allCases,
+        chosenClients: [ClientKind]? = nil,
+        customToolDirectories: [String]? = nil
+    ) {
         self.automaticallyCheckHealth = automaticallyCheckHealth
         self.enabledClients = enabledClients.sorted { $0.rawValue < $1.rawValue }
+        self.chosenClients = chosenClients?.sorted { $0.rawValue < $1.rawValue }
+        self.customToolDirectories = customToolDirectories
     }
 
     public init(_ value: WorkspacePreferences) {
@@ -21,6 +38,32 @@ public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
 
     public var workspacePreferences: WorkspacePreferences {
         .init(automaticallyCheckHealth: automaticallyCheckHealth, enabledClients: Set(enabledClients))
+    }
+}
+
+/// Which clients this Mac shows and manages, from what was chosen and what was
+/// observed. One rule, stated once, so every reader agrees:
+///
+/// 1. An explicit choice wins, exactly as recorded.
+/// 2. An older build's recorded choice (a trimmed `enabledClients`) still wins.
+/// 3. Otherwise the clients whose tool the last scan could actually run are the
+///    ones shown. Leftover configuration files do not count as set up: a
+///    client that cannot be spoken to is not hooked up, however many files it
+///    once wrote.
+/// 4. Before any scan, or when a scan could run nothing at all, every client is
+///    shown — hiding all of them would leave nothing to set up.
+public enum ClientVisibilityPolicy {
+    public static func effectiveEnabledClients(
+        preferences: DeviceWorkspacePreferences?,
+        observations: [TargetObservation]
+    ) -> Set<ClientKind> {
+        if let chosen = preferences?.chosenClients { return Set(chosen) }
+        if let legacy = preferences?.enabledClients, Set(legacy) != Set(ClientKind.allCases) {
+            return Set(legacy)
+        }
+        guard !observations.isEmpty else { return Set(ClientKind.allCases) }
+        let present = Set(observations.filter(\.commandAvailable).compactMap { $0.surface.client })
+        return present.isEmpty ? Set(ClientKind.allCases) : present
     }
 }
 
@@ -84,6 +127,19 @@ public struct DeviceApplicationState: Codable, Hashable, Sendable {
         guard Set(preferences.enabledClients).count == preferences.enabledClients.count else {
             throw WorkspaceDomainValidationError.duplicate("device preference clients")
         }
+        if let chosen = preferences.chosenClients {
+            guard Set(chosen).count == chosen.count else {
+                throw WorkspaceDomainValidationError.duplicate("device chosen clients")
+            }
+        }
+        if let directories = preferences.customToolDirectories {
+            guard Set(directories).count == directories.count else {
+                throw WorkspaceDomainValidationError.duplicate("device custom tool directories")
+            }
+            for directory in directories {
+                try WorkspaceDomainValidation.requireAbsolutePath(directory, field: "device custom tool directory")
+            }
+        }
         var snapshot = WorkspaceSnapshot()
         snapshot.activeProfileID = ""; snapshot.preferences = preferences.workspacePreferences
         snapshot.backupConfiguration = backupConfiguration; snapshot.encryptedSyncConfiguration = encryptedSyncConfiguration
@@ -97,6 +153,8 @@ public struct DeviceApplicationState: Codable, Hashable, Sendable {
         var value = self
         let date = WorkspaceDomainValidation.canonicalDate
         value.preferences.enabledClients.sort { $0.rawValue < $1.rawValue }
+        value.preferences.chosenClients?.sort { $0.rawValue < $1.rawValue }
+        value.preferences.customToolDirectories?.sort()
         value.backupConfiguration.lastExportAt = value.backupConfiguration.lastExportAt.map(date)
         value.encryptedSyncConfiguration.lastExportAt = value.encryptedSyncConfiguration.lastExportAt.map(date)
         value.encryptedSyncConfiguration.lastImportAt = value.encryptedSyncConfiguration.lastImportAt.map(date)

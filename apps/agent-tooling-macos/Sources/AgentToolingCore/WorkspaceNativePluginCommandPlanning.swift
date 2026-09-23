@@ -174,7 +174,7 @@ public enum WorkspaceNativePluginCommandPlanning {
         case .codex:
             expectedExecutable = "codex"
             expectedArguments = ["plugin", "add", route.externalPluginID]
-        case .gemini:
+        case .gemini, .kiro:
             throw WorkspaceNativePluginCommandPlanningError.unsupportedSurface(target.selector.surface)
         }
         guard reviewedInstall.client == client,

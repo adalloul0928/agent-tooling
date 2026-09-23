@@ -11,6 +11,7 @@ public enum ClientKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case codex = "Codex"
     case claude = "Claude Code"
     case gemini = "Gemini CLI"
+    case kiro = "Kiro CLI"
 
     public var id: String { rawValue }
 }

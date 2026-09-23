@@ -52,6 +52,10 @@ struct SkillAvailabilitySnapshot: Sendable {
                             installedPath: installedPath, providerPluginID: metadata.providerPluginID))
                 case .gemini:
                     break
+                case .kiro:
+                    // Kiro CLI records no per-skill enable switch anyone has
+                    // verified; a skill is available by being in ~/.kiro/skills.
+                    break
                 }
             }
         }

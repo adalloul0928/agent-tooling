@@ -15,12 +15,14 @@ enum MCPClientCommand {
         case .claude: "claude"
         case .codex: "codex"
         case .gemini: "gemini"
+        case .kiro: "kiro-cli"
         }
     }
 
     /// The scope word a client expects. Gemini has no separate local scope, so
     /// a local request is spelled as project there rather than silently
-    /// widening to user.
+    /// widening to user. Kiro speaks `global`/`workspace` (verified against
+    /// kiro-cli 2.23.0), so both project scopes map to `workspace`.
     static func scopeArgument(for scope: ToolingScope, client: ClientKind) -> String {
         let requested: String =
             switch scope {
@@ -29,6 +31,7 @@ enum MCPClientCommand {
             default: "user"
             }
         if client == .gemini, requested == "local" { return "project" }
+        if client == .kiro { return requested == "user" ? "global" : "workspace" }
         return requested
     }
 
@@ -63,6 +66,14 @@ enum MCPClientCommand {
             return ["mcp", "add", "--scope", scopeWord, "--transport", "http", serverID, destination.endpoint]
         case (.gemini, .stdio):
             return ["mcp", "add", "--scope", scopeWord, "--transport", "stdio", serverID, "--"] + destination.command
+        // Verified against kiro-cli 2.23.0 (`kiro-cli mcp add --help`): named
+        // flags rather than positional arguments, one `--args` per argument.
+        case (.kiro, .http):
+            return ["mcp", "add", "--name", serverID, "--url", destination.endpoint, "--scope", scopeWord, "--force"]
+        case (.kiro, .stdio):
+            guard let command = destination.command.first else { return [] }
+            return ["mcp", "add", "--name", serverID, "--command", command, "--scope", scopeWord, "--force"]
+                + destination.command.dropFirst().flatMap { ["--args", $0] }
         }
     }
 
@@ -72,6 +83,7 @@ enum MCPClientCommand {
         case .claude: return ["mcp", "remove", "--scope", scopeWord, serverID]
         case .codex: return ["mcp", "remove", serverID]
         case .gemini: return ["mcp", "remove", "--scope", scopeWord, serverID]
+        case .kiro: return ["mcp", "remove", "--name", serverID, "--scope", scopeWord]
         }
     }
 

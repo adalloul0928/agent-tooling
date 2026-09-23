@@ -291,7 +291,7 @@ enum WorkspaceSnapshotValidator {
             } else {
                 try validateWebURL(source.location, field: "Agent Plugins source")
             }
-        case .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry:
+        case .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry, .skillsShRegistry:
             try validateWebURL(source.location, field: "catalog source")
         }
     }

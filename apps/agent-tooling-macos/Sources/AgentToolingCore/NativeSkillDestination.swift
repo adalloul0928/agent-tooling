@@ -35,6 +35,7 @@ public enum NativeSkillDestination {
         case .claude: relativeDirectory = ".claude/skills"
         case .codex: relativeDirectory = ".agents/skills"
         case .gemini: relativeDirectory = ".gemini/skills"
+        case .kiro: relativeDirectory = ".kiro/skills"
         }
         return root.appending(path: relativeDirectory, directoryHint: .isDirectory)
     }

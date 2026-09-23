@@ -52,6 +52,10 @@ public enum NativePluginInstallRegister {
                 source: "codex plugin add --help; https://developers.openai.com/codex/concepts/customization")
         case .gemini:
             return nil
+        case .kiro:
+            // Kiro CLI publishes no plugin command anyone here has verified.
+            // AIM manages Kiro's packages; wiring it is a reviewed follow-up.
+            return nil
         }
     }
 

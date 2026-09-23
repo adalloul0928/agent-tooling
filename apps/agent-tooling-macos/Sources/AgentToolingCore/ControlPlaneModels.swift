@@ -33,6 +33,7 @@ public enum TargetSurface: String, Codable, CaseIterable, Identifiable, Sendable
     case geminiCLI
     case geminiIDE
     case geminiCloud
+    case kiroCLI
 
     public var id: String { rawValue }
     public var client: ClientKind? {
@@ -40,6 +41,7 @@ public enum TargetSurface: String, Codable, CaseIterable, Identifiable, Sendable
         case .claudeCode, .claudeDesktop, .claudeCloud: .claude
         case .codexCLI, .codexDesktop, .codexCloud: .codex
         case .geminiCLI, .geminiIDE, .geminiCloud: .gemini
+        case .kiroCLI: .kiro
         }
     }
 
@@ -54,6 +56,7 @@ public enum TargetSurface: String, Codable, CaseIterable, Identifiable, Sendable
         case .geminiCLI: "Gemini CLI"
         case .geminiIDE: "Gemini IDE"
         case .geminiCloud: "Gemini web"
+        case .kiroCLI: "Kiro CLI"
         }
     }
 

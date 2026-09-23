@@ -29,6 +29,7 @@ struct ClaudeCodeAdapter: TargetAdapter {
     func scan(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
         await LocalTargetScan.perform(
             surface: surface,
+            homeURL: homeURL,
             executable: "claude",
             configurationURLs: [
                 homeURL.appending(path: ".claude/settings.json"),
@@ -65,6 +66,7 @@ struct CodexAdapter: TargetAdapter {
     func scan(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
         await LocalTargetScan.perform(
             surface: surface,
+            homeURL: homeURL,
             executable: "codex",
             configurationURLs: [homeURL.appending(path: ".codex/config.toml")],
             skillRoots: [
@@ -104,6 +106,7 @@ struct GeminiCLIAdapter: TargetAdapter {
     func scan(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
         await LocalTargetScan.perform(
             surface: surface,
+            homeURL: homeURL,
             executable: "gemini",
             configurationURLs: [
                 homeURL.appending(path: ".gemini/settings.json"),
@@ -125,13 +128,57 @@ struct GeminiCLIAdapter: TargetAdapter {
     }
 }
 
+/// Amazon's Kiro CLI (`kiro-cli`, distributed through Toolbox). Surfaces
+/// verified on a real installation: skills are standard SKILL.md folders under
+/// `~/.kiro/skills`, and MCP servers live in `~/.kiro/settings/mcp.json` with
+/// verified `kiro-cli mcp add/remove` commands (2.23.0). It has no plugin
+/// marketplace this app has verified, so plugin capabilities stay off.
+struct KiroCLIAdapter: TargetAdapter {
+    public let client: ClientKind = .kiro
+    let surface: TargetSurface = .kiroCLI
+    let capabilities = TargetCapabilities(
+        supportsPluginInstall: false,
+        supportsProjectScope: true,
+        supportsLocalMarketplace: false,
+        supportsMCPAuthentication: false,
+        supportsConnectorDiscovery: false,
+        requiresNewSession: true,
+        requiresRestart: false,
+        supportsMachineReadableOutput: false
+    )
+
+    init() {}
+
+    func scan(homeURL: URL, runner: any CommandRunning) async -> TargetObservation {
+        await LocalTargetScan.perform(
+            surface: surface,
+            homeURL: homeURL,
+            executable: "kiro-cli",
+            configurationURLs: [
+                homeURL.appending(path: ".kiro/settings/mcp.json"),
+                homeURL.appending(path: ".kiro/settings/cli.json"),
+            ],
+            skillRoots: [homeURL.appending(path: ".kiro/skills", directoryHint: .isDirectory)],
+            pluginRoots: [],
+            capabilities: capabilities,
+            runner: runner
+        )
+    }
+
+    public func skillDestination(skillID: String, homeURL: URL) -> URL {
+        homeURL.appending(path: ".kiro/skills/\(skillID)", directoryHint: .isDirectory)
+    }
+}
+
 public struct ClientAdapterRegistry: Sendable {
     public let adapters: [any TargetAdapter]
 
-    /// The three adapters this app ships. Named here rather than inline in the
+    /// The four adapters this app ships. Named here rather than inline in the
     /// initializer so the adapter types themselves stay internal: only the
     /// protocol they satisfy needs to cross the module boundary.
-    public static let bundledAdapters: [any TargetAdapter] = [ClaudeCodeAdapter(), CodexAdapter(), GeminiCLIAdapter()]
+    public static let bundledAdapters: [any TargetAdapter] = [
+        ClaudeCodeAdapter(), CodexAdapter(), GeminiCLIAdapter(), KiroCLIAdapter(),
+    ]
 
     public init(adapters: [any TargetAdapter] = ClientAdapterRegistry.bundledAdapters) {
         self.adapters = adapters

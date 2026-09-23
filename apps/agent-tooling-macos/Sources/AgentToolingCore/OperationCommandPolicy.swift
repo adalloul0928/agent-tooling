@@ -38,6 +38,7 @@ struct OperationCommandPolicy: Sendable {
         case "claude": try validateClaude(arguments)
         case "codex": try validateCodex(arguments)
         case "gemini": try validateGemini(arguments)
+        case "kiro-cli": try validateKiro(arguments)
         default: throw OperationEngineError.commandNotAllowed(executable)
         }
     }
@@ -206,7 +207,61 @@ struct OperationCommandPolicy: Sendable {
         throw OperationEngineError.commandArgumentsNotAllowed("gemini")
     }
 
-    private static let allowedCommands: Set<String> = ["claude", "codex", "gemini", "git"]
+    /// Exactly the shapes `MCPClientCommand` emits for Kiro, verified against
+    /// kiro-cli 2.23.0: named flags, `global`/`workspace` scopes, and repeated
+    /// `--args` pairs after the fixed prefix for a stdio server.
+    private func validateKiro(_ arguments: [String]) throws {
+        let scopes = ["global", "workspace"]
+        if arguments.count == 6,
+            arguments[0] == "mcp",
+            arguments[1] == "remove",
+            arguments[2] == "--name",
+            Self.isSafeMCPIdentifier(arguments[3]),
+            arguments[4] == "--scope",
+            scopes.contains(arguments[5])
+        {
+            return
+        }
+        if arguments.count == 9,
+            arguments[0] == "mcp",
+            arguments[1] == "add",
+            arguments[2] == "--name",
+            Self.isSafeMCPIdentifier(arguments[3]),
+            arguments[4] == "--url",
+            Self.isSafeHTTPDestination(arguments[5]),
+            arguments[6] == "--scope",
+            scopes.contains(arguments[7]),
+            arguments[8] == "--force"
+        {
+            return
+        }
+        if arguments.count >= 9,
+            arguments[0] == "mcp",
+            arguments[1] == "add",
+            arguments[2] == "--name",
+            Self.isSafeMCPIdentifier(arguments[3]),
+            arguments[4] == "--command",
+            arguments[6] == "--scope",
+            scopes.contains(arguments[7]),
+            arguments[8] == "--force"
+        {
+            // The tail is pairs of `--args <value>`; the launched command is
+            // checked whole, the way the stdio validators already do.
+            let tail = Array(arguments.dropFirst(9))
+            var values: [String] = []
+            var index = 0
+            while index + 1 < tail.count, tail[index] == "--args" {
+                values.append(tail[index + 1])
+                index += 2
+            }
+            if index == tail.count, Self.isSafeStdioCommand([arguments[5]] + values) {
+                return
+            }
+        }
+        throw OperationEngineError.commandArgumentsNotAllowed("kiro-cli")
+    }
+
+    private static let allowedCommands: Set<String> = ["claude", "codex", "gemini", "kiro-cli", "git"]
 
     static func isSafePluginIdentifier(_ value: String) -> Bool {
         !value.isEmpty

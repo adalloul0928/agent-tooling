@@ -66,6 +66,24 @@ struct ClientExecutableLocatorTests {
         #expect(found?.path == fixture.binary(named: "claude").path)
     }
 
+    /// Amazon Toolbox installs internal builds as `~/.toolbox/bin/<tool>`
+    /// symlinks to one shared dispatcher. The shim is the tool's own path and
+    /// the dispatcher is what has to be runnable.
+    @Test func aToolboxShimIsFoundAndOfferedByItsOwnName() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let dispatcher = fixture.home.appending(path: ".toolbox/tools/toolbox/1.1.0/toolbox-exec")
+        try fixture.installRunnableFile(at: dispatcher)
+        let shim = fixture.home.appending(path: ".toolbox/bin/codex")
+        try FileManager.default.createDirectory(
+            at: shim.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: shim, withDestinationURL: dispatcher)
+
+        let found = ClientExecutableLocator.locate(.codex, homeURL: fixture.home)
+
+        #expect(found?.path == shim.path)
+    }
+
     @Test func aLinkToSomethingThatCannotRunIsNotOffered() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
