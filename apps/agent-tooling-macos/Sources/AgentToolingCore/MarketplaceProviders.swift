@@ -604,3 +604,168 @@ private struct RegistryRemote: Decodable {
 private struct RegistryEnvironmentVariable: Decodable {
     var name: String
 }
+
+/// The skills.sh community skill registry, asked through its search API.
+///
+/// skills.sh is the registry behind the `npx skills` CLI. Its one public,
+/// machine-readable endpoint is `/api/search`, which answers a semantic query
+/// with skill listings and the install counts the registry itself publishes.
+/// There is no public browse or leaderboard endpoint, so this provider answers
+/// only when there is a search term: an unqueried refresh returns an empty page
+/// rather than fabricating a browsable catalog. No web page is scraped.
+///
+/// A listing here is a pointer, not an installation: the skill's content lives
+/// in the GitHub repository the registry names, and nothing is fetched or
+/// executed from it. The install count is the registry's own report.
+public struct SkillsShRegistryProvider: MarketplaceProvider {
+    public let id = "skills-sh.registry"
+    public let displayName = "skills.sh"
+
+    /// The shortest query the registry accepts. Anything shorter is answered
+    /// locally with an empty page instead of a request the API would refuse.
+    public static let minimumQueryLength = 2
+
+    private enum Limit {
+        static let responseBytes = 2_097_152
+        static let queryCharacters = 256
+        static let listings = 100
+        static let identifierCharacters = 512
+        static let nameCharacters = 128
+        static let installCeiling = 1_000_000_000
+    }
+
+    private let baseURL: URL
+    private let loader: any HTTPDataLoading
+
+    /// The loader stays internal for the same reason as the MCP registry's:
+    /// a caller that could substitute one could point "skills.sh" anywhere.
+    public init(baseURL: URL? = nil) throws {
+        try self.init(baseURL: baseURL, loader: URLSessionHTTPDataLoader())
+    }
+
+    init(
+        baseURL: URL? = nil,
+        loader: any HTTPDataLoading = URLSessionHTTPDataLoader()
+    ) throws {
+        var defaultComponents = URLComponents()
+        defaultComponents.scheme = "https"
+        defaultComponents.host = "skills.sh"
+        guard let resolvedBaseURL = baseURL ?? defaultComponents.url,
+            resolvedBaseURL.scheme == "https",
+            resolvedBaseURL.host != nil
+        else {
+            throw MarketplaceProviderError.insecureBaseURL
+        }
+        self.baseURL = resolvedBaseURL
+        self.loader = loader
+    }
+
+    public func search(_ query: MarketplaceQuery) async throws -> MarketplacePage {
+        guard let term = Self.searchTerm(from: query) else { return MarketplacePage(packages: []) }
+
+        let endpoint = baseURL.appending(path: "api/search")
+        guard var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else {
+            throw MarketplaceProviderError.invalidRequest
+        }
+        components.queryItems = [URLQueryItem(name: "q", value: term)]
+        guard let url = components.url else { throw MarketplaceProviderError.invalidRequest }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await loader.data(for: request)
+        guard (200..<300).contains(response.statusCode) else {
+            throw MarketplaceProviderError.httpStatus(response.statusCode)
+        }
+        guard data.count <= Limit.responseBytes else {
+            throw MarketplaceProviderError.responseTooLarge
+        }
+
+        let payload: SearchResponse
+        do {
+            payload = try AgentToolingCoding.decoder().decode(SearchResponse.self, from: data)
+        } catch {
+            throw MarketplaceProviderError.invalidPayload
+        }
+        let packages = payload.skills.prefix(Limit.listings).compactMap(Self.marketplacePackage)
+        return MarketplacePage(packages: Array(packages))
+    }
+
+    /// The trimmed term the registry will accept, or `nil` when the query is
+    /// one this provider deliberately answers with silence. Public so the
+    /// catalog wrapper can explain an unqueried refresh in the Sources list
+    /// using exactly the rule the provider applies.
+    public static func searchTerm(from query: MarketplaceQuery) -> String? {
+        guard let raw = query.search?.trimmingCharacters(in: .whitespacesAndNewlines),
+            raw.count >= minimumQueryLength
+        else { return nil }
+        return String(raw.prefix(Limit.queryCharacters))
+    }
+
+    /// The command the Skills CLI documents for installing one skill from its
+    /// repository. Stated here so every display of it agrees.
+    public static func installCommand(source: String, skillID: String) -> String {
+        "npx skills add \(source)@\(skillID)"
+    }
+
+    private static func marketplacePackage(_ listing: SearchListing) -> MarketplacePackage? {
+        guard let identifier = bounded(listing.id, limit: Limit.identifierCharacters),
+            let skillID = bounded(listing.skillId ?? listing.name, limit: Limit.nameCharacters),
+            let source = bounded(listing.source, limit: Limit.identifierCharacters),
+            isPathLikeIdentifier(identifier), isRepositoryPath(source)
+        else { return nil }
+        let name = bounded(listing.name, limit: Limit.nameCharacters) ?? skillID
+        let owner = source.split(separator: "/").first.map(String.init) ?? source
+        let installs = listing.installs.flatMap { $0 >= 0 && $0 <= Limit.installCeiling ? $0 : nil }
+        let listingURL = "https://skills.sh/\(identifier)"
+        let repositoryURL = "https://github.com/\(source)"
+        return MarketplacePackage(
+            id: "skills-sh:\(identifier)",
+            name: name,
+            publisher: owner,
+            summary:
+                "Agent skill published from \(source). The registry lists names and install counts only — read the skill's SKILL.md in its repository before installing.",
+            sourceName: "skills.sh",
+            components: [.skill],
+            supportedClients: Set(ClientKind.allCases),
+            trustSummary:
+                "skills.sh indexes public GitHub repositories and reports its own install counts; it does not verify publishers or review skill content.",
+            location: listingURL,
+            provenance: PackageProvenance(
+                source: PackageSource(kind: .skillsShRegistry, location: repositoryURL),
+                publisher: owner
+            ),
+            installCount: installs
+        )
+    }
+
+    private static func bounded(_ value: String?, limit: Int) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+            !trimmed.isEmpty, trimmed.count <= limit
+        else { return nil }
+        return trimmed
+    }
+
+    /// `owner/repo/skill` path segments, and nothing that could escape one when
+    /// spliced into a URL or a command line.
+    private static func isPathLikeIdentifier(_ value: String) -> Bool {
+        !value.hasPrefix("/") && !value.hasSuffix("/") && !value.contains("..")
+            && value.allSatisfy { $0.isLetter || $0.isNumber || "-_./".contains($0) }
+    }
+
+    private static func isRepositoryPath(_ value: String) -> Bool {
+        isPathLikeIdentifier(value) && value.split(separator: "/").count == 2
+    }
+
+    private struct SearchResponse: Decodable {
+        var skills: [SearchListing]
+    }
+
+    private struct SearchListing: Decodable {
+        var id: String?
+        var skillId: String?
+        var name: String?
+        var installs: Int?
+        var source: String?
+    }
+}

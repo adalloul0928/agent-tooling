@@ -1,12 +1,15 @@
 import Foundation
 
-/// The orders the Marketplace can actually justify. There is no "popular" or
-/// "trending" here: the app observes no downloads, stars, or ratings, so it
-/// offers no order that would imply it does.
+/// The orders the Marketplace can actually justify. "Most installed" exists
+/// only because skills.sh publishes install counts on its listings; the order
+/// sorts by that published number and never by anything this app pretends to
+/// have measured. There is still no "trending": the app observes no stars,
+/// ratings, or download velocity, so it offers no order that would imply it does.
 public enum MarketplaceSortOrder: String, Codable, CaseIterable, Identifiable, Sendable {
     case relevance
     case name
     case recentlyUpdated
+    case installs
 
     public var id: String { rawValue }
 
@@ -15,6 +18,7 @@ public enum MarketplaceSortOrder: String, Codable, CaseIterable, Identifiable, S
         case .relevance: "Relevance"
         case .name: "Name"
         case .recentlyUpdated: "Recently updated"
+        case .installs: "Most installed"
         }
     }
 
@@ -27,6 +31,8 @@ public enum MarketplaceSortOrder: String, Codable, CaseIterable, Identifiable, S
             "Sorts by package name, ignoring case."
         case .recentlyUpdated:
             "Sorts by the update date the catalog published, or for a local package the newest file change on this Mac. Listings that publish no date sort last."
+        case .installs:
+            "Sorts by the install count the catalog published for the listing (skills.sh reports one). Listings whose catalog publishes no count sort last."
         }
     }
 }
@@ -61,6 +67,17 @@ public enum MarketplaceSorting {
                 switch (lhs.lastUpdate?.date, rhs.lastUpdate?.date) {
                 case (let lhsDate?, let rhsDate?):
                     if lhsDate != rhsDate { return lhsDate > rhsDate }
+                    return byName(lhs, rhs)
+                case (nil, .some): return false
+                case (.some, nil): return true
+                case (nil, nil): return byName(lhs, rhs)
+                }
+            }
+        case .installs:
+            return packages.sorted { lhs, rhs in
+                switch (lhs.installCount, rhs.installCount) {
+                case (let lhsCount?, let rhsCount?):
+                    if lhsCount != rhsCount { return lhsCount > rhsCount }
                     return byName(lhs, rhs)
                 case (nil, .some): return false
                 case (.some, nil): return true

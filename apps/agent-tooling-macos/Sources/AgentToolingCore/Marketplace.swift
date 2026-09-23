@@ -42,7 +42,8 @@ public final class MarketplaceService {
         switch source.kind {
         case .localFolder, .gitRepository:
             return try inspectFolder(source)
-        case .agentPlugins, .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry:
+        case .agentPlugins, .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry,
+            .skillsShRegistry:
             // Vendor listings are intentionally represented as sources rather
             // than copied packages. Native CLIs remain the install authority.
             return []
@@ -66,6 +67,10 @@ public final class MarketplaceService {
             ToolingSource(
                 name: "MCP Registry", kind: .mcpRegistry, location: "https://registry.modelcontextprotocol.io",
                 trustSummary: "Server metadata only; credentials and target bindings are reviewed separately"),
+            ToolingSource(
+                name: "skills.sh", kind: .skillsShRegistry, location: "https://skills.sh",
+                trustSummary:
+                    "Community skill registry — answers Discover searches with skill listings and its own install counts"),
         ]
     }
 

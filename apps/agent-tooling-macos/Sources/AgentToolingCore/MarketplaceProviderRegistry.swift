@@ -12,12 +12,14 @@
 public enum MarketplaceProviderRegistry {
     /// Every provider this build ships, ready to query.
     ///
-    /// Only the official MCP registry today. Native client catalogs are read
-    /// through `MarketplaceService.discoverNativeCatalogs`, and folders a person
-    /// added are read through `MarketplaceService.inspect`; neither is a remote
-    /// provider, and neither belongs here.
+    /// The official MCP registry and the skills.sh skill registry. Native
+    /// client catalogs are read through `MarketplaceService.discoverNativeCatalogs`,
+    /// and folders a person added are read through `MarketplaceService.inspect`;
+    /// neither is a remote provider, and neither belongs here.
     public static func builtIn() -> [any MarketplaceProvider] {
-        guard let provider = try? OfficialMCPRegistryProvider() else { return [] }
-        return [provider]
+        var providers: [any MarketplaceProvider] = []
+        if let registry = try? OfficialMCPRegistryProvider() { providers.append(registry) }
+        if let skills = try? SkillsShRegistryProvider() { providers.append(skills) }
+        return providers
     }
 }

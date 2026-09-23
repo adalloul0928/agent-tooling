@@ -10,12 +10,13 @@ import Testing
 /// to `internal` this file would stop compiling — which is the failure worth
 /// having, since the screen would go quietly empty instead.
 struct MarketplaceProviderRegistryTests {
-    @Test func theBuiltInCatalogIsTheOfficialRegistry() {
+    @Test func theBuiltInCatalogsAreTheOfficialRegistryAndSkillsSh() {
         let providers = MarketplaceProviderRegistry.builtIn()
 
-        #expect(providers.count == 1)
-        #expect(providers.first?.id == "mcp.official-registry")
+        #expect(providers.count == 2)
+        #expect(providers.map(\.id) == ["mcp.official-registry", "skills-sh.registry"])
         #expect(providers.first?.displayName == "Official MCP Registry")
+        #expect(providers.last?.displayName == "skills.sh")
     }
 
     /// The registry provider is constructed, never searched: building one is an
@@ -27,7 +28,7 @@ struct MarketplaceProviderRegistryTests {
         }
     }
 
-    /// The five catalogs Discover lists before anybody adds one. They are
+    /// The six catalogs Discover lists before anybody adds one. They are
     /// reference rows: `inspect` returns nothing for them, because a vendor
     /// listing is a place to look rather than a folder to read.
     @Test func theDefaultSourcesAreTheVendorCatalogsAndNoneOfThemIsAFolder() throws {
@@ -37,7 +38,10 @@ struct MarketplaceProviderRegistryTests {
 
         #expect(
             Set(sources.map(\.kind))
-                == [.agentPlugins, .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry])
+                == [
+                    .agentPlugins, .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry,
+                    .skillsShRegistry,
+                ])
         for source in sources {
             #expect(try service.inspect(source).isEmpty)
         }
