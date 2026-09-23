@@ -59,7 +59,7 @@ struct PresetsView: View {
             EmptyStateView(
                 symbol: "square.stack",
                 title: "No presets yet",
-                message: "A preset is a named set of tools you can put in place together. There is no way to create one from this Mac yet."
+                message: "A preset is a named set of tools you can put in place together. Presets arrive with a workspace — restored from a backup, synced from another Mac, or shared with you — and appear here once one does."
             )
         } else if let selection, let preset = presets.first(where: { $0.id == selection }) {
             HSplitView {
@@ -215,7 +215,7 @@ struct PresetsView: View {
     private func itemsCard(_ preset: WorkspaceLibraryPresetReadModel) -> some View {
         TitledCard("Items", count: "\(preset.memberArtifactIDs.count)") {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Presets are read-only here. Add or remove tools from their own screen.")
+                Text("Presets are read-only here. Add or remove the tools themselves in the Library.")
                     .font(.caption).foregroundStyle(.secondary)
                     .padding(14)
                 if preset.memberArtifactIDs.isEmpty {

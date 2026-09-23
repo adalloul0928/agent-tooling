@@ -181,11 +181,14 @@ struct AddCatalogSourceSheet: View {
             }
             .padding(20)
             Divider()
+            // The content region flexes; the footer below it does not. Switching
+            // kind must never move the primary action or truncate a sentence.
             VStack(alignment: .leading, spacing: 16) {
                 Text(
                     "Discover reads the catalog and lists what it publishes. Adding one records where to look — nothing is fetched now, nothing is installed, and each package is still added to your library one at a time."
                 )
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
                 if let message = session.errorMessage {
                     AttentionBanner(title: "That catalog was not recorded", message: message)
@@ -230,20 +233,23 @@ struct AddCatalogSourceSheet: View {
                     "The folder stays where it is and is only ever read. Its path is this Mac's own — your other Macs see the catalog and bind it to their own copy."
                 )
                 .font(.callout).foregroundStyle(.secondary)
-
-                Spacer(minLength: 0)
-
-                HStack(spacing: 12) {
-                    Spacer()
-                    Button("Add catalog") { commit() }
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(!canAdd)
-                }
+                .fixedSize(horizontal: false, vertical: true)
             }
             .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            Divider()
+            HStack(spacing: 12) {
+                Spacer()
+                Button("Add catalog") { commit() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canAdd)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
         }
-        .frame(width: 620, height: 460)
+        .frame(width: 620, height: 520)
         .background(AgentTheme.contentBackground)
     }
 

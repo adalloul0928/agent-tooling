@@ -335,7 +335,7 @@ private struct SkillsBrowser: View {
                     symbol: query.isEmpty ? "doc.text" : "doc.text.magnifyingglass",
                     title: emptyStateTitle,
                     message: emptyStateMessage,
-                    actionTitle: inventory.skills.isEmpty ? "Check this Mac's apps" : "Clear filters"
+                    actionTitle: inventory.skills.isEmpty ? "New Skill…" : "Clear filters"
                 ) {
                     performEmptyStateAction()
                 }
@@ -679,7 +679,9 @@ private struct SkillsBrowser: View {
 
     private func performEmptyStateAction() {
         guard !inventory.skills.isEmpty else {
-            Task { await workspace.device.refresh() }
+            // The button says "New skill…", so it creates one — checking this
+            // Mac's apps stays one click away in the toolbar.
+            creating = true
             return
         }
         scope = .all

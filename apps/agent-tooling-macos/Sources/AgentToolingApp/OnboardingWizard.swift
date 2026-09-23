@@ -420,7 +420,7 @@ private struct OnboardingAssignmentPickerSheet: View {
             }
             Divider()
             HStack {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
                 Text(selection.isEmpty ? "Nothing selected yet." : "\(selection.count) selected")
                     .foregroundStyle(.secondary)

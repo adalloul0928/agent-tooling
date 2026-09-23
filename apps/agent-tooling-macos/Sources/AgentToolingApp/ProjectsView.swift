@@ -14,6 +14,7 @@ struct ProjectsView: View {
     @State private var filter: ProjectFilter = .all
     @State private var selectedProjectID: ArtifactID?
     @State private var refreshID = UUID()
+    @State private var isCreatingProject = false
 
     /// `initialSelection` opens straight to one project's detail pane. Nothing
     /// in the shell deep-links here today — this section has no external
@@ -34,6 +35,10 @@ struct ProjectsView: View {
                     .labelStyle(.iconOnly)
                     .buttonStyle(.glass)
                     .disabled(workspace.library.isBusy)
+                Button("New Project…", systemImage: "plus") { isCreatingProject = true }
+                    .buttonStyle(.glass)
+                    .disabled(workspace.library.access != .writable)
+                    .help("Name a project to assign tools to. Nothing is scanned or installed.")
             }
 
             if selectedProjectID == nil {
@@ -56,6 +61,9 @@ struct ProjectsView: View {
             }
         }
         .onExitCommand { selectedProjectID = nil }
+        .sheet(isPresented: $isCreatingProject) {
+            NewProjectSheet(workspace: workspace) { refreshID = UUID() }
+        }
     }
 
     // MARK: Collection
@@ -185,13 +193,13 @@ struct ProjectsView: View {
     private var emptyStateMessage: String {
         if !query.isEmpty { return "Try a different search term." }
         if filter == .assigned { return "Assign a tool to a project to see it here." }
-        return "Projects appear here once a tool is assigned to one."
+        return "Create a project, then assign skills and servers to it from the Library."
     }
 
     private var emptyStateActionTitle: String? {
         if !query.isEmpty { return "Clear Search" }
         if filter == .assigned { return "Show All" }
-        return nil
+        return workspace.library.access == .writable ? "New Project…" : nil
     }
 
     private var emptyStateAction: (() -> Void)? {
@@ -204,6 +212,8 @@ struct ProjectsView: View {
             query = ""
         } else if filter == .assigned {
             filter = .all
+        } else {
+            isCreatingProject = true
         }
     }
 }
@@ -526,7 +536,7 @@ private struct WorkspaceProjectAddSheet: View {
             }
             Divider()
             HStack {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
                 Text(selection.isEmpty ? "Select the tools this project needs." : "\(selection.count) selected")
                     .foregroundStyle(.secondary)
@@ -694,5 +704,96 @@ private struct WorkspaceProjectDeclarationSheet: View {
         }
         .padding(16)
         .standardPanel(cornerRadius: 12)
+    }
+}
+
+
+/// Names a project and nothing else. The same footer discipline as every
+/// sheet: the primary action is pinned and never moves.
+private struct NewProjectSheet: View {
+    let workspace: WorkspaceLaunch.Workspace
+    let onCreated: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var errorMessage: String?
+    @State private var isBusy = false
+    @FocusState private var nameFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("New project").font(.title3.weight(.semibold))
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction).buttonStyle(.glass).keyboardShortcut(.cancelAction)
+            }
+            .padding(20)
+            Divider()
+            VStack(alignment: .leading, spacing: 16) {
+                Text(
+                    "A project is a name your tools are assigned to — pick skills and servers for it from the Library, and install them into each app's project scope from Apps. Creating one writes nothing anywhere else."
+                )
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+                if let errorMessage {
+                    AttentionBanner(title: "That project was not created", message: errorMessage)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    LabeledContent("Name") {
+                        TextField("My service", text: $name)
+                            .textFieldStyle(.roundedBorder).frame(maxWidth: 300)
+                            .focused($nameFocused)
+                            .onSubmit { if canCreate { create() } }
+                    }
+                }
+                .padding(16)
+                .standardPanel(cornerRadius: 12)
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            Divider()
+            HStack {
+                Spacer()
+                Button("Create Project") { create() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canCreate)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .frame(width: 520, height: 320)
+        .background(AgentTheme.contentBackground)
+        .onAppear { nameFocused = true }
+    }
+
+    private var canCreate: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isBusy
+            && workspace.library.access == .writable
+    }
+
+    private func create() {
+        guard canCreate else { return }
+        isBusy = true
+        errorMessage = nil
+        Task { @MainActor in
+            defer { isBusy = false }
+            do {
+                guard let head = try await workspace.service.snapshot()?.document.revision.id else {
+                    throw WorkspaceRevisionStoreError.notInitialized
+                }
+                _ = try await workspace.service.createProject(
+                    .init(expectedRevisionID: head, name: name))
+                await workspace.library.refresh()
+                onCreated()
+                dismiss()
+            } catch WorkspaceDomainValidationError.duplicate {
+                errorMessage = "A project with this name already exists. Names tell projects apart, so each needs its own."
+            } catch {
+                errorMessage = "This workspace could not record the project. Nothing was changed."
+            }
+        }
     }
 }

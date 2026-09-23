@@ -22,6 +22,7 @@ struct WorkspaceAttachFolderSheet: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Your folder stays where it is and stays the only copy you edit. Agent Tooling records that it exists and where each app should find it. Nothing is copied into your library and nothing is written back into the folder.")
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let message = session.errorMessage {
                     AttentionBanner(title: "That folder could not be used", message: message)
                 }
@@ -38,30 +39,47 @@ struct WorkspaceAttachFolderSheet: View {
                         }
                     }
                     .padding(16).standardPanel(cornerRadius: 12)
-                    HStack(spacing: 12) {
-                        Button("Attach this folder") {
-                            Task {
-                                await session.attach(displayName: displayName)
-                                if session.errorMessage == nil { dismiss() }
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(session.isBusy || !session.canWrite)
-                        Button("Choose a different folder…") { choose() }.disabled(session.isBusy)
-                        if !session.canWrite {
-                            Text("This workspace is open for reading only.")
-                                .font(.callout).foregroundStyle(.secondary)
-                        }
+                    if !session.canWrite {
+                        Text("This workspace is open for reading only.")
+                            .font(.callout).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 } else {
-                    Button("Choose folder…") { choose() }
-                        .buttonStyle(.borderedProminent).disabled(session.isBusy)
                     Text("Pick the folder that holds the skill's own SKILL.md — not a whole plugin.")
                         .font(.callout).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer(minLength: 0)
             }
             .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            Divider()
+            // One footer, one place: the primary changes its words with the
+            // state, never its position.
+            HStack(spacing: 12) {
+                if session.candidate != nil {
+                    Button("Choose a different folder…") { choose() }.disabled(session.isBusy)
+                }
+                Spacer()
+                if session.candidate == nil {
+                    Button("Choose Folder…") { choose() }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(session.isBusy)
+                } else {
+                    Button("Attach This Folder") {
+                        Task {
+                            await session.attach(displayName: displayName)
+                            if session.errorMessage == nil { dismiss() }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(session.isBusy || !session.canWrite)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
         }
         .frame(width: 620, height: 460)
         .background(AgentTheme.contentBackground)

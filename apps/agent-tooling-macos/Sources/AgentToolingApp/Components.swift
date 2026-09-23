@@ -231,6 +231,9 @@ struct AttentionBanner<Action: View>: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(AgentTheme.warning.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        // Banners come and go with state; arriving with a transition keeps the
+        // content below from teleporting by a banner's height.
+        .transition(.move(edge: .top).combined(with: .opacity))
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(AgentTheme.warning.opacity(0.32), lineWidth: 0.5)

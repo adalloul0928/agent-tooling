@@ -245,6 +245,35 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
             mutation: { _ in [] })
     }
 
+    /// Creates a logical project: one artifact and its project record, in one
+    /// transaction. A project made by hand is where assignments point before
+    /// any tool exists in it, so nothing else is written — no assignment, no
+    /// root binding, no scan.
+    public func createProject(_ command: CreateProjectCommand) throws -> WorkspaceCommandReceipt {
+        let digest = try command.inputDigest()
+        return try store.commitMetadata(
+            expectedRevisionID: command.expectedRevisionID,
+            idempotencyKey: command.idempotencyKey,
+            inputDigest: digest,
+            writerID: writerID
+        ) { document in
+            let name = command.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            try WorkspaceDomainValidation.requireText(name, field: "project.name", maximum: 512)
+            guard
+                !document.logicalProjects.contains(where: {
+                    $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+                })
+            else { throw WorkspaceDomainValidationError.duplicate("project name") }
+            let projectID = ArtifactID()
+            document.artifacts.append(
+                .init(
+                    identity: .init(id: projectID, kind: .logicalProject, displayName: name),
+                    authority: .centralPersonal))
+            document.logicalProjects.append(.init(id: projectID, name: name))
+            return [projectID]
+        }
+    }
+
     public func renameArtifact(_ command: RenameArtifactCommand) throws -> WorkspaceCommandReceipt {
         let digest = try command.inputDigest()
         return try store.commitMetadata(
@@ -268,6 +297,29 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
             }
             return [command.artifactID]
         }
+    }
+}
+
+public struct CreateProjectCommand: Codable, Sendable, Equatable {
+    public let expectedRevisionID: WorkspaceObjectID
+    public let idempotencyKey: WorkspaceObjectID
+    public let name: String
+
+    public init(
+        expectedRevisionID: WorkspaceObjectID, idempotencyKey: WorkspaceObjectID = WorkspaceObjectID(),
+        name: String
+    ) {
+        self.expectedRevisionID = expectedRevisionID
+        self.idempotencyKey = idempotencyKey
+        self.name = name
+    }
+
+    func inputDigest() throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        var bytes = Data("agent-tooling.create-project.v1\n".utf8)
+        bytes.append(try encoder.encode(self))
+        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
     }
 }
 
