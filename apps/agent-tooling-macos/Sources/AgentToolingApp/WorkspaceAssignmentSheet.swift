@@ -131,7 +131,7 @@ struct WorkspaceAssignmentSheet: View {
                     if let error = session.errorMessage {
                         if session.lastRefusal == .contributionConflict, navigation != nil {
                             AttentionBanner(title: "Already asked for", message: error) {
-                                Button("Install now…", action: installNow).buttonStyle(.glassProminent)
+                                Button("Install now…", action: installNow).buttonStyle(.borderedProminent)
                                     .tint(AgentTheme.selection)
                             }
                         } else {
@@ -306,7 +306,7 @@ struct WorkspaceAssignmentSheet: View {
             }
             if navigation != nil {
                 Button("Install now…", systemImage: "arrow.down.circle", action: installNow)
-                    .buttonStyle(.glassProminent).tint(AgentTheme.selection)
+                    .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
                     .accessibilityLabel("Install now")
             }
@@ -340,12 +340,12 @@ struct WorkspaceAssignmentSheet: View {
                 GlassEffectContainer(spacing: 8) {
                     if session.review != nil {
                         Button("Save assignments") { request = .save }
-                            .buttonStyle(.glassProminent)
+                            .buttonStyle(.borderedProminent)
                             .tint(AgentTheme.selection)
                             .disabled(session.isBusy || !isWritable)
                     } else {
                         Button("Review assignments") { request = .review(destinations) }
-                            .buttonStyle(.glassProminent)
+                            .buttonStyle(.borderedProminent)
                             .tint(AgentTheme.selection)
                             .disabled(!canReview || session.isBusy)
                     }
@@ -472,6 +472,7 @@ struct WorkspaceAssignmentSheet: View {
         case .claude: .claudeCode
         case .codex: .codexCLI
         case .gemini: .geminiCLI
+        case .kiro: .kiroCLI
         }
     }
 

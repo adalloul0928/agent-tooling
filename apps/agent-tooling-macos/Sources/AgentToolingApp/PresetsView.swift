@@ -536,6 +536,7 @@ private extension ClientKind {
         case .claude: .claudeCode
         case .codex: .codexCLI
         case .gemini: .geminiCLI
+        case .kiro: .kiroCLI
         }
     }
 }

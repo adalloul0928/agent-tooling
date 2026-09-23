@@ -342,8 +342,9 @@ struct InventorySearchField: View {
         .font(.system(size: 13))
         .padding(.horizontal, 11)
         .frame(height: 36)
-        .background(AgentTheme.controlBackground, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AgentTheme.separator.opacity(0.4), lineWidth: 0.5))
+        .background(AgentTheme.panelBrightening, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(AgentTheme.separator.opacity(0.4), lineWidth: 0.5))
     }
 }
 

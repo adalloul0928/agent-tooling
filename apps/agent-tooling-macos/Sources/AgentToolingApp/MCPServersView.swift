@@ -84,7 +84,6 @@ struct MCPServersView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AgentTheme.contentBackground)
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .paste:
@@ -211,6 +210,7 @@ struct MCPServersView: View {
                 }
                 .tableStyle(.inset(alternatesRowBackgrounds: false))
                 .scrollContentBackground(.hidden)
+                .collectionSurface()
             } else {
                 Table(filteredEntries, selection: $selection) {
                     TableColumn("Name") { entry in
@@ -273,6 +273,7 @@ struct MCPServersView: View {
                 }
                 .tableStyle(.inset(alternatesRowBackgrounds: false))
                 .scrollContentBackground(.hidden)
+                .collectionSurface()
             }
         }
     }

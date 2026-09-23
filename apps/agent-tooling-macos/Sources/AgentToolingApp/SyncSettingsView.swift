@@ -24,7 +24,7 @@ struct SyncSettingsView: View {
             PageToolbar(title: "Sync", context: session.statusText) {
                 if session.isConnected {
                     Button("Sync now", systemImage: "arrow.triangle.2.circlepath") { Task { await session.sync() } }
-                        .buttonStyle(.glassProminent).tint(AgentTheme.selection)
+                        .buttonStyle(.borderedProminent)
                         .disabled(session.isBusy)
                 }
             }
@@ -132,7 +132,7 @@ struct SyncSettingsView: View {
                     .textSelection(.enabled)
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AgentTheme.contentBackground, in: RoundedRectangle(cornerRadius: 8))
+                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Text(
                     "This is the only way to open that folder from another Mac. Agent Tooling will not show it again, and cannot recover it for you."
                 )
@@ -242,7 +242,7 @@ struct SyncSettingsView: View {
                                 Text("Keep this Mac's version").tag(WorkspaceConflictChoice?.some(.keepLocal))
                                 Text("Take the other Mac's version").tag(WorkspaceConflictChoice?.some(.takeRemote))
                             }
-                            .labelsHidden().pickerStyle(.segmented).fixedSize()
+                            .labelsHidden().pickerStyle(.segmented).controlSize(.regular).fixedSize()
                             .disabled(session.isBusy)
                         } else {
                             Text("This one cannot be settled by picking a Mac. Change what each item asks for, then sync again.")

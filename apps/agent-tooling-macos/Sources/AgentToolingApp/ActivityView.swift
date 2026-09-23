@@ -67,12 +67,11 @@ struct ActivityView: View {
             HStack(spacing: 8) {
                 InventorySearchField(placeholder: "Search activity", text: $query)
                     .accessibilityLabel("Search activity")
-                Picker("Filter", selection: $filter) {
+                WorkspaceSegmentedPicker("Activity filter", selection: $filter) {
                     ForEach(ActivityFilter.allCases) { item in Text(item.rawValue).tag(item) }
                 }
-                .labelsHidden()
+                .fixedSize()
                 .accessibilityLabel("Activity filter")
-                .frame(width: 142)
             }
             .padding(.horizontal, WorkspaceLayout.pageInset)
             .padding(.vertical, 10)
@@ -105,6 +104,7 @@ struct ActivityView: View {
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
+                .collectionSurface()
             }
         }
         .paneMaterial()

@@ -47,24 +47,48 @@ struct AppShellView: View {
                 // column is a page with space under it, not a card floating in
                 // the middle of the window.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .background(AgentTheme.contentBackground, ignoresSafeAreaEdges: [.top, .bottom, .trailing])
+                // No background of its own. The one glass backdrop behind the
+                // whole split view is the ground for the sidebar and the
+                // content alike — a tint here is exactly what made them differ.
         }
         .navigationSplitViewStyle(.balanced)
+        // The window toolbar draws no material of its own; the shared canvas
+        // behind the whole split view is the only ground the top strip has.
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .background(WindowBackdropMaterial().ignoresSafeArea())
         .foregroundStyle(.primary)
         .animation(reduceMotion ? nil : AgentMotion.selection, value: sidebarCollapsed)
         .groupBoxStyle(ControlGroupBoxStyle())
-        .sheet(isPresented: $paletteVisible) {
-            CommandPaletteView(
-                workspace: workspace,
-                onActivate: { outcome in
-                    paletteVisible = false
-                    // The sheet is still closing; running the outcome on the
-                    // next turn keeps a navigation change from racing it.
-                    Task { @MainActor in activate(outcome) }
-                },
-                onClose: { paletteVisible = false })
+        // Spotlight rules, not sheet rules: the palette floats over the window,
+        // a click anywhere outside it puts it away, and Escape does the same
+        // (the palette's own onExitCommand). A sheet would swallow the outside
+        // click as modal chrome.
+        .overlay {
+            if paletteVisible {
+                ZStack {
+                    Color.black.opacity(0.22)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { paletteVisible = false }
+                        .accessibilityLabel("Dismiss command palette")
+                        .accessibilityAddTraits(.isButton)
+                    CommandPaletteView(
+                        workspace: workspace,
+                        onActivate: { outcome in
+                            paletteVisible = false
+                            Task { @MainActor in activate(outcome) }
+                        },
+                        onClose: { paletteVisible = false })
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(AgentTheme.separator.opacity(0.4), lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.30), radius: 28, y: 12)
+                }
+                .transition(.opacity)
+            }
         }
+        .animation(reduceMotion ? nil : AgentMotion.quick, value: paletteVisible)
         // Checking this Mac's apps is a scan, so it starts after the window is
         // up and off this actor. Nothing on screen waits for it.
         .task {

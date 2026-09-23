@@ -200,6 +200,10 @@ struct HomeSectionRenderTests {
             destinations: [.init(surface: .codexCLI, scope: .user, deviceIDs: [fixture.store.deviceID])])
         await fixture.workspace.library.applyReviewedAssignments()
         await fixture.workspace.device.refresh()
+        // The check did not find Codex, so with nobody having chosen, it drops
+        // out of the way. Managing it explicitly is what makes its missing
+        // tool this Mac's problem — and the library's.
+        await fixture.workspace.device.setEnabled(.codex, true)
 
         let health = SectionHealth.observed(
             library: fixture.workspace.library.state?.library, device: fixture.workspace.device)

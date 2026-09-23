@@ -64,12 +64,28 @@ struct SyncCenterView: View {
                 .help("Read what each app holds on this Mac. Nothing is changed.")
                 .accessibilityLabel("Check apps")
 
+                if hasMissingManagedTool {
+                    Button {
+                        Task { await workspace.device.smartFindTools() }
+                    } label: {
+                        Label(
+                            workspace.device.isFindingTools ? "Finding…" : "Find missing tools",
+                            systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(.glass)
+                    .disabled(workspace.device.isFindingTools || workspace.device.isChecking)
+                    .help(
+                        "Asks your login shell where the missing tools live — the same answer your terminal gives — and records the folder so future checks look there."
+                    )
+                    .accessibilityLabel("Find missing tools")
+                }
+
                 Button(action: onReviewChanges) {
                     Label(
                         workspace.deployment.isBusy ? "Preparing…" : reviewTitle,
                         systemImage: "arrow.down.circle")
                 }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.borderedProminent)
                 .tint(AgentTheme.selection)
                 .disabled(workspace.deployment.isBusy)
                 .help("See exactly what would change in each app before anything is written.")
@@ -77,7 +93,7 @@ struct SyncCenterView: View {
             }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                     ForEach(Array(problems.enumerated()), id: \.offset) { _, problem in
                         AttentionBanner(title: "Apps need attention", message: problem)
                     }
@@ -95,7 +111,7 @@ struct SyncCenterView: View {
 
                     linkedDestinationsCard
                 }
-                .frame(maxWidth: 1_200, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, WorkspaceLayout.pageInset)
                 .padding(.top, WorkspaceLayout.contentTopInset)
                 .padding(.bottom, WorkspaceLayout.pageInset)
@@ -396,8 +412,18 @@ struct SyncCenterView: View {
     private var problems: [String] {
         [
             workspace.deployment.errorMessage, workspace.device.errorMessage, requests.errorMessage,
+            workspace.device.smartFindMessage,
         ]
         .compactMap { $0 }
+    }
+
+    /// Whether any managed app answered its last check without a runnable
+    /// tool. Only then is offering to find one worth a button.
+    private var hasMissingManagedTool: Bool {
+        !workspace.device.observations.isEmpty
+            && workspace.device.enabledClients.contains { client in
+                workspace.device.verdict(for: client).state == .attention
+            }
     }
 
     private func loadReceipts() async {
@@ -467,6 +493,7 @@ private struct AppTile: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverHighlight()
         .standardPanel()
         .overlay {
             RoundedRectangle(cornerRadius: AgentTheme.panelCornerRadius, style: .continuous)
@@ -545,7 +572,7 @@ private struct WorkspaceLinkDestinationSheet: View {
                 Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
             }.padding(20)
             Divider()
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                 Text(
                     "Agent Tooling normally writes into each app's own folder. Point one somewhere else and it writes there instead — into the folder you name, under each tool's own name."
                 )
@@ -590,6 +617,7 @@ private struct WorkspaceLinkDestinationSheet: View {
         case .claude: .claudeCode
         case .codex: .codexCLI
         case .gemini: .geminiCLI
+        case .kiro: .kiroCLI
         }
     }
 

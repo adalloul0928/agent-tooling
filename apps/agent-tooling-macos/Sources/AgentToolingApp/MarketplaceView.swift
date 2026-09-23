@@ -176,8 +176,13 @@ struct MarketplaceView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
-                    InventorySearchField(placeholder: "Search packages", text: $query)
-                        .onSubmit { Task { await session.search(query) } }
+                    InventorySearchField(
+                        placeholder: "Search, or describe what you need a skill for", text: $query
+                    )
+                    .onSubmit { Task { await session.search(query) } }
+                    .help(
+                        "Filters what is shown, and on Return asks every catalog — skills.sh answers a plain description with matching skills."
+                    )
                     Text(resultCountDescription(packages.count))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -227,7 +232,6 @@ struct MarketplaceView: View {
                 }
             }
             .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, WorkspaceLayout.contentTopInset)
-            .background(Color.primary.opacity(0.012))
             .overlay(alignment: .bottom) { Divider().opacity(0.35) }
 
             if packages.isEmpty {
@@ -244,12 +248,12 @@ struct MarketplaceView: View {
                 ScrollView {
                     LazyVGrid(
                         columns: showingDetails ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 360, maximum: 560))],
-                        alignment: .leading, spacing: 8
+                        alignment: .leading, spacing: 14
                     ) {
                         ForEach(packages) { package in
                             MarketplaceGalleryCard(
                                 package: package, selected: showingDetails && selectedPackageID == package.id,
-                                detail: sortOrder == .recentlyUpdated ? rowDetail(for: package) : nil,
+                                detail: [.recentlyUpdated, .installs].contains(sortOrder) ? rowDetail(for: package) : nil,
                                 inLibrary: session.libraryMatch(for: package) != nil,
                                 compact: showingDetails
                             ) {
@@ -258,7 +262,6 @@ struct MarketplaceView: View {
                             }
                         }
                     }
-                    .frame(maxWidth: 1_120)
                     .padding(.horizontal, showingDetails ? 12 : WorkspaceLayout.pageInset)
                     .padding(.top, WorkspaceLayout.contentTopInset)
                     .padding(.bottom, WorkspaceLayout.pageInset)
@@ -403,7 +406,7 @@ struct MarketplaceView: View {
                     HStack(alignment: .top, spacing: 12) {
                         ToolIdentityIcon(packageID: package.id, fallback: marketplaceKind(for: package), size: 44)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(package.presentationName).font(.system(size: 22, weight: .semibold))
+                            Text(package.presentationName).font(.system(size: 20, weight: .semibold))
                             Text("\(package.originLabel): \(package.originName)").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -455,6 +458,33 @@ struct MarketplaceView: View {
                             LabeledValueRow("Local state") {
                                 Text(localState(for: package))
                                     .foregroundStyle(.secondary)
+                            }
+                            if let installs = package.installCount {
+                                Divider()
+                                LabeledValueRow("Installs") {
+                                    Text("\(installs.formatted()) — reported by \(package.sourceName)")
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            if let command = skillsShInstallCommand(for: package) {
+                                Divider()
+                                LabeledValueRow("Install command") {
+                                    VStack(alignment: .trailing, spacing: 6) {
+                                        Text(command)
+                                            .font(.caption.monospaced())
+                                            .foregroundStyle(.secondary)
+                                            .textSelection(.enabled)
+                                        Button("Copy Command", systemImage: "doc.on.doc") {
+                                            NSPasteboard.general.clearContents()
+                                            NSPasteboard.general.setString(command, forType: .string)
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                        .help(
+                                            "Copies the Skills CLI command. It runs in your terminal, outside this app — review the skill's repository first."
+                                        )
+                                    }
+                                }
                             }
                             if let ownership = package.ownership {
                                 Divider()
@@ -664,7 +694,21 @@ struct MarketplaceView: View {
             guard let update = package.lastUpdate else { return "No update date" }
             return "Updated \(update.date.formatted(date: .abbreviated, time: .omitted))"
         }
+        if sortOrder == .installs {
+            guard let installs = package.installCount else { return "No install count" }
+            return "\(installs.formatted()) installs (\(package.sourceName))"
+        }
         return "\(package.components.count) component\(package.components.count == 1 ? "" : "s")"
+    }
+
+    /// The Skills CLI command for a skills.sh listing, rebuilt from the listing
+    /// URL the provider recorded: `skills.sh/<owner>/<repo>/<skill>`. Shown for
+    /// copying only — nothing here executes it.
+    private func skillsShInstallCommand(for package: MarketplacePackage) -> String? {
+        guard package.catalogKind == .skillsShRegistry, let url = URL(string: package.location) else { return nil }
+        let parts = url.path().split(separator: "/").map(String.init)
+        guard parts.count >= 3 else { return nil }
+        return SkillsShRegistryProvider.installCommand(source: "\(parts[0])/\(parts[1])", skillID: parts[2])
     }
 
     private var filteredPackages: [MarketplacePackage] {
@@ -705,7 +749,7 @@ struct MarketplaceView: View {
         }
         if let source = selectedSource, componentFilter != .all {
             return
-                "\(source.name) publishes no \(componentFilter.rawValue.lowercased()) packages. Native client catalogs list plugins; skills come from Agent Plugins folders and Git checkouts you add."
+                "\(source.name) publishes no \(componentFilter.rawValue.lowercased()) packages. Native client catalogs list plugins; skills come from skills.sh searches and from Agent Plugins folders and Git checkouts you add."
         }
         if let source = selectedSource, let classification = classificationFilter.classification {
             return "Nothing from \(source.name) is classified \(classification.displayName). \(classification.definition)"
@@ -715,7 +759,7 @@ struct MarketplaceView: View {
         }
         if componentFilter == .skills {
             return
-                "No catalog here publishes standalone skills. Add a local folder or Git checkout containing Agent Plugins packages to see skills."
+                "No skills matched. Describe what you need in the search field and press Return — skills.sh answers searches with community skills. Local folders and Git checkouts of Agent Plugins packages also publish skills here."
         }
         if let classification = classificationFilter.classification {
             return "No package here is classified \(classification.displayName). \(classificationFilter.measurement)"
@@ -745,6 +789,8 @@ struct MarketplaceView: View {
             package.id.hasPrefix("codex:")
         case .mcpRegistry:
             package.id.hasPrefix("mcp-registry:")
+        case .skillsShRegistry:
+            package.id.hasPrefix("skills-sh:")
         case .agentPlugins, .geminiExtensionGallery:
             false
         }
@@ -803,6 +849,7 @@ struct MarketplaceView: View {
         case .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery: "storefront"
         case .agentPlugins: "puzzlepiece.extension"
         case .mcpRegistry: "network"
+        case .skillsShRegistry: "sparkles"
         }
     }
 
@@ -1140,11 +1187,28 @@ private struct MarketplaceGalleryCard: View {
             HStack(alignment: .top, spacing: compact ? 12 : 16) {
                 ToolIdentityIcon(packageID: package.id, fallback: marketplaceKind(for: package), size: compact ? 36 : 44)
                 VStack(alignment: .leading, spacing: 7) {
-                    Text(package.presentationName).font(.system(size: compact ? 16 : 17, weight: .medium)).lineLimit(1).help(
-                        package.presentationName)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(package.presentationName).font(.system(size: compact ? 16 : 17, weight: .medium)).lineLimit(1)
+                            .help(package.presentationName)
+                        Spacer(minLength: 0)
+                        if let installs = package.installCount {
+                            Label(CompactCountFormatter.string(for: installs), systemImage: "arrow.down.circle")
+                                .font(.system(size: 11, weight: .medium).monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .labelStyle(.titleAndIcon)
+                                .help("\(installs.formatted()) installs — reported by \(package.sourceName)")
+                        }
+                    }
                     Text(package.summary).font(.system(size: compact ? 14 : 15)).foregroundStyle(.secondary)
                         .lineLimit(2).frame(maxWidth: .infinity, minHeight: 38, alignment: .topLeading)
                     HStack(spacing: 8) {
+                        ForEach(cardComponents, id: \.self) { component in
+                            Text(component.displayName)
+                                .font(.system(size: 10, weight: .semibold))
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Color.primary.opacity(0.06), in: Capsule())
+                                .foregroundStyle(.secondary)
+                        }
                         Text(detail ?? "From \(package.originName)")
                             .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                         Spacer(minLength: 0)
@@ -1159,16 +1223,59 @@ private struct MarketplaceGalleryCard: View {
                     .help(inLibrary ? "Already in your library; view details" : "View package details")
             }
             .padding(compact ? 12 : 18).frame(maxWidth: .infinity, minHeight: compact ? 116 : 138, alignment: .topLeading)
-            .background(Color.primary.opacity(hovering || selected ? 0.035 : 0), in: RoundedRectangle(cornerRadius: 12))
+            // A standing card, not floating text: material at rest, a lift on
+            // hover, and the accent stroke only when this listing is open.
+            .background(Color.primary.opacity(hovering ? 0.06 : 0), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(AgentTheme.panelBrightening, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12).strokeBorder(AgentTheme.blue.opacity(selected ? 0.6 : 0), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(
+                        selected ? AgentTheme.selection.opacity(0.65) : AgentTheme.separator.opacity(0.35),
+                        lineWidth: selected ? 1.5 : 0.5)
             )
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .accessibilityLabel("\(package.presentationName), from \(package.originName)")
+        .accessibilityLabel(accessibilitySummary)
         .accessibilityHint("Open package details and installation options")
+    }
+
+    /// The component chips a card has room for: every kind when there are a
+    /// few, and never a truncated lie when there are many. In the compact
+    /// side-by-side layout the client icons need the room more.
+    private var cardComponents: [ComponentKind] {
+        guard !compact else { return [] }
+        let sorted = package.components.sorted { $0.displayName < $1.displayName }
+        return sorted.count <= 3 ? sorted : []
+    }
+
+    private var accessibilitySummary: String {
+        var parts = ["\(package.presentationName), from \(package.originName)"]
+        if let installs = package.installCount {
+            parts.append("\(installs.formatted()) installs reported by \(package.sourceName)")
+        }
+        return parts.joined(separator: ". ")
+    }
+}
+
+/// `217637` shown as `217.6K` where a full number would not fit. Rounding is
+/// display-only; the exact count stays in the help text beside it.
+enum CompactCountFormatter {
+    static func string(for count: Int) -> String {
+        let magnitude = abs(count)
+        switch magnitude {
+        case ..<1_000: return "\(count)"
+        case ..<1_000_000: return scaled(count, by: 1_000, suffix: "K")
+        default: return scaled(count, by: 1_000_000, suffix: "M")
+        }
+    }
+
+    private static func scaled(_ count: Int, by divisor: Double, suffix: String) -> String {
+        let value = (Double(count) / divisor * 10).rounded() / 10
+        let text = value == value.rounded() ? String(Int(value)) : String(format: "%.1f", value)
+        return "\(text)\(suffix)"
     }
 }
 

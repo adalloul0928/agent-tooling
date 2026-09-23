@@ -111,6 +111,7 @@ struct ProjectsView: View {
         }
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
+        .collectionSurface()
     }
 
     private func projectRow(_ project: WorkspaceLibraryProjectReadModel) -> some View {

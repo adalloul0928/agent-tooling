@@ -70,13 +70,25 @@ enum MarketplaceCatalogs {
     /// publish, then the folders somebody added themselves.
     static func live(in context: MarketplaceCatalogContext) -> [any MarketplaceProvider] {
         let store = context.store
-        return MarketplaceProviderRegistry.builtIn().map { MCPRegistryCatalog(asking: $0) }
+        return MarketplaceProviderRegistry.builtIn().map(wrapped(_:))
             + [
                 NativeClientCatalog(
                     runner: ProcessCommandRunner(homeURL: context.homeRoot),
                     clients: { managedClients(in: store) }),
                 RecordedFolderCatalog(store: store),
             ]
+    }
+
+    /// Each remote provider is paired with the Sources row it answers for, so a
+    /// refusal or a count lands on the right row. A provider this table does
+    /// not know is passed through unannotated rather than attributed to a row
+    /// it never spoke for.
+    private static func wrapped(_ provider: any MarketplaceProvider) -> any MarketplaceProvider {
+        switch provider.id {
+        case "skills-sh.registry": SkillsShCatalog(asking: provider)
+        case "mcp.official-registry": MCPRegistryCatalog(asking: provider)
+        default: provider
+        }
     }
 
     /// Which clients this workspace manages, read when a refresh asks rather
@@ -86,9 +98,10 @@ enum MarketplaceCatalogs {
     /// A workspace that has not recorded a choice manages all of them, which is
     /// the same answer `WorkspaceDeviceSession` gives from the same record.
     private static func managedClients(in store: WorkspaceRevisionStore) -> Set<ClientKind> {
-        guard let recorded = (try? store.snapshot())?.device.applicationState?.preferences.enabledClients
-        else { return Set(ClientKind.allCases) }
-        return Set(recorded)
+        guard let device = (try? store.snapshot())?.device else { return Set(ClientKind.allCases) }
+        return ClientVisibilityPolicy.effectiveEnabledClients(
+            preferences: device.applicationState?.preferences,
+            observations: device.observations)
     }
 
     /// A fixed identity per built-in catalog row.
@@ -135,6 +148,42 @@ actor MCPRegistryCatalog: CatalogSourceReporting {
             "\(count) server\(count == 1 ? "" : "s") loaded from \(asking.displayName); "
             + "package execution still requires review"
         report.refreshedKinds = [.mcpRegistry]
+        return page
+    }
+
+    func lastReport() -> MarketplaceSourceReport { report }
+}
+
+/// The skills.sh registry, named as the Sources row it answers for.
+///
+/// The registry answers search terms only — it has no public browse endpoint —
+/// so an unqueried refresh is reported as exactly that rather than as a catalog
+/// that published nothing. Only a queried answer dates the row: a date claims
+/// the row's listings are current, which silence cannot support.
+actor SkillsShCatalog: CatalogSourceReporting {
+    nonisolated var id: String { asking.id }
+    nonisolated var displayName: String { asking.displayName }
+    nonisolated var sourceKinds: Set<SourceKind> { [.skillsShRegistry] }
+
+    private let asking: any MarketplaceProvider
+    private var report = MarketplaceSourceReport()
+
+    init(asking: any MarketplaceProvider) {
+        self.asking = asking
+    }
+
+    func search(_ query: MarketplaceQuery) async throws -> MarketplacePage {
+        guard let term = SkillsShRegistryProvider.searchTerm(from: query) else {
+            report.summaries[.skillsShRegistry] =
+                "Answers Discover searches only — type what you need a skill for and search"
+            report.refreshedKinds = []
+            return MarketplacePage(packages: [])
+        }
+        let page = try await asking.search(query)
+        let count = page.packages.count
+        report.summaries[.skillsShRegistry] =
+            "\(count) skill\(count == 1 ? "" : "s") matched “\(term)”; read the source repository before installing"
+        report.refreshedKinds = [.skillsShRegistry]
         return page
     }
 

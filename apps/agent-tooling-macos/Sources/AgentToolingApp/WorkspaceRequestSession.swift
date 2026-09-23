@@ -294,6 +294,7 @@ final class WorkspaceRequestSession {
         case .claude: .claudeCode
         case .codex: .codexCLI
         case .gemini: .geminiCLI
+        case .kiro: .kiroCLI
         }
     }
 

@@ -97,14 +97,15 @@ struct OverviewView: View {
                 .padding(.horizontal, WorkspaceLayout.pageInset)
                 .padding(.top, WorkspaceLayout.contentTopInset)
                 .padding(.bottom, WorkspaceLayout.pageInset)
-                .frame(maxWidth: 1280, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
             .font(.system(size: 15))
             .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AgentTheme.canvasGradient, ignoresSafeAreaEdges: .all)
+        // No ground of its own: the shell paints the shared translucent canvas
+        // behind every section, so Home doubling it would only dim the glass.
     }
 
     // MARK: - Getting started
@@ -134,11 +135,11 @@ struct OverviewView: View {
             }
             Spacer(minLength: 16)
             Button("Set up your library") { navigate(.skills) }
-                .buttonStyle(.glassProminent).controlSize(.large)
+                .buttonStyle(.borderedProminent).controlSize(.large)
                 .disabled(workspace.library.isBusy)
         }
         .padding(20)
-        .standardPanel(cornerRadius: 14)
+        .standardPanel()
     }
 
     // MARK: - Recommended for you
@@ -158,7 +159,7 @@ struct OverviewView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 10) {
                         Button("Browse Discover") { navigate(.marketplace) }
-                            .buttonStyle(.glassProminent)
+                            .buttonStyle(.borderedProminent)
                         Button("Open Insights") { navigate(.insights) }
                             .buttonStyle(.glass)
                     }

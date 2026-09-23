@@ -30,6 +30,7 @@ struct ClientBrandIcon: View {
         case .codex: "ClientCodex"
         case .claude: "ClientClaude"
         case .gemini: "ClientGemini"
+        case .kiro: "ClientKiro"
         }
     }
 }
@@ -63,6 +64,9 @@ enum ClientBrandAssets {
         case .gemini:
             imageSet = "ClientGemini.imageset"
             fileName = "gemini.svg"
+        case .kiro:
+            imageSet = "ClientKiro.imageset"
+            fileName = "kiro.svg"
         }
 
         let url = Bundle.module.resourceURL?

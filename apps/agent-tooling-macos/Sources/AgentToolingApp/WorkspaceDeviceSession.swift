@@ -62,6 +62,12 @@ final class WorkspaceDeviceSession {
     private(set) var errorMessage: String?
     /// Which apps this Mac manages. Local to this Mac, never portable bytes.
     private(set) var enabledClients: Set<ClientKind>
+    /// Whether somebody has explicitly chosen which apps to manage. Without a
+    /// choice, what a check finds decides what is shown; with one, it does not.
+    private var hasExplicitClientChoice: Bool
+    /// What the last "find missing tools" attempt said, for the screen to show.
+    private(set) var smartFindMessage: String?
+    private(set) var isFindingTools = false
     /// Whether this Mac checks its apps on its own. Device-local, the same as
     /// `enabledClients`, and just as inert to read: nothing here starts a
     /// check by itself.
@@ -94,9 +100,19 @@ final class WorkspaceDeviceSession {
         self.library = library
         self.homeRoot = homeRoot
         self.observer = observer
-        let preferences = (try? store.snapshot())?.device.applicationState?.preferences
-        enabledClients = preferences.map { Set($0.enabledClients) } ?? Set(ClientKind.allCases)
+        let device = (try? store.snapshot())?.device
+        let preferences = device?.applicationState?.preferences
+        // The visibility rule lives in one place: an explicit choice wins, and
+        // without one the clients the last recorded check found are the ones
+        // shown, so an app that is not installed stays out of the way until it
+        // is set up or deliberately turned on.
+        enabledClients = ClientVisibilityPolicy.effectiveEnabledClients(
+            preferences: preferences, observations: device?.observations ?? [])
+        hasExplicitClientChoice =
+            preferences?.chosenClients != nil
+            || preferences.map { Set($0.enabledClients) != Set(ClientKind.allCases) } ?? false
         automaticallyCheckHealth = preferences?.automaticallyCheckHealth ?? true
+        ClientExecutableLocator.registerAdditionalRoots(preferences?.customToolDirectories ?? [])
     }
 
     /// A surface with no client of its own is never hidden by the choice.
@@ -112,34 +128,100 @@ final class WorkspaceDeviceSession {
     func setEnabled(_ client: ClientKind, _ enabled: Bool) async {
         guard enabledClients.contains(client) != enabled else { return }
         let previous = enabledClients
+        let previousChoice = hasExplicitClientChoice
         if enabled { enabledClients.insert(client) } else { enabledClients.remove(client) }
+        hasExplicitClientChoice = true
         errorMessage = nil
         do {
             guard let head = try await service.snapshot()?.document.revision.id else {
                 throw WorkspaceRevisionStoreError.notInitialized
             }
-            // Written as a difference rather than as the whole set, so a choice
-            // made somewhere else between reading and writing is not quietly
-            // overwritten by this one.
+            // Written as a difference against what is recorded — or, for the
+            // first explicit choice, against what was effectively shown — so a
+            // choice made somewhere else between reading and writing is not
+            // quietly overwritten by this one.
             _ = try await service.commitDeviceChange(expectedRevisionID: head) { device in
                 guard var application = device.applicationState else {
                     throw WorkspaceRevisionStoreError.notInitialized
                 }
-                var clients = Set(application.preferences.enabledClients)
+                var clients = Set(application.preferences.chosenClients ?? Array(previous))
                 if enabled { clients.insert(client) } else { clients.remove(client) }
-                application.preferences.enabledClients = clients.sorted { $0.rawValue < $1.rawValue }
+                let sorted = clients.sorted { $0.rawValue < $1.rawValue }
+                application.preferences.chosenClients = sorted
+                // Mirrored so an older build of this app reads the same choice.
+                application.preferences.enabledClients = sorted
                 device.applicationState = application
             }
         } catch {
             // Showing a checkbox that did not save would be a lie about what
             // this Mac will do next.
             enabledClients = previous
+            hasExplicitClientChoice = previousChoice
             errorMessage = "This Mac could not record which apps it manages. Nothing was changed."
             return
         }
         // The choice is device state, but recording it advances the workspace,
         // so the library is read again rather than left holding an older head.
         await library.refresh()
+    }
+
+    /// Looks for the tools of managed apps the last check could not find, by
+    /// asking the login shell — the same deterministic answer the person's own
+    /// terminal would give. A folder it finds is recorded on this Mac's own
+    /// record and checked from then on; nothing is installed or executed
+    /// beyond the shell's `command -v`.
+    func smartFindTools() async {
+        guard !isFindingTools, !isChecking else { return }
+        isFindingTools = true
+        defer { isFindingTools = false }
+        smartFindMessage = nil
+        let missing = availableClients.filter {
+            enabledClients.contains($0) && verdict(for: $0).state != .healthy
+        }
+        guard !missing.isEmpty else {
+            smartFindMessage = "Every managed app's tool is already found."
+            return
+        }
+        let findings = await SmartToolFinder.probe(
+            clients: missing, runner: ProcessCommandRunner(homeURL: homeRoot))
+        guard !findings.isEmpty else {
+            let names = missing.map(\.rawValue).joined(separator: ", ")
+            smartFindMessage = "Your login shell does not know these tools either: \(names). Install them, or check their app's setup."
+            return
+        }
+        // Only folders the locator does not already check are worth recording.
+        let knownRoots = Set(
+            findings.flatMap { finding in
+                ClientExecutableLocator.candidates(for: finding.client, homeURL: homeRoot)
+                    .map { $0.deletingLastPathComponent().path }
+            })
+        let newDirectories = Set(findings.map(\.directory.path)).subtracting(knownRoots).sorted()
+        if !newDirectories.isEmpty {
+            do {
+                let snapshot = try await service.snapshot()
+                guard let head = snapshot?.document.revision.id else {
+                    throw WorkspaceRevisionStoreError.notInitialized
+                }
+                let existing = snapshot?.device.applicationState?.preferences.customToolDirectories ?? []
+                let recorded = Set(existing).union(newDirectories).sorted()
+                _ = try await service.commitDeviceChange(expectedRevisionID: head) { device in
+                    guard var application = device.applicationState else {
+                        throw WorkspaceRevisionStoreError.notInitialized
+                    }
+                    application.preferences.customToolDirectories = recorded
+                    device.applicationState = application
+                }
+                ClientExecutableLocator.registerAdditionalRoots(recorded)
+            } catch {
+                smartFindMessage = "Tools were found, but where they live could not be recorded. Nothing was changed."
+                return
+            }
+        }
+        let summary = findings
+            .map { "\($0.client.rawValue) at \($0.executableURL.path)" }
+            .sorted().joined(separator: " · ")
+        smartFindMessage = "Found \(summary). Checking again."
+        await refresh()
     }
 
     /// Turns this Mac's own automatic check on or off.
@@ -200,6 +282,13 @@ final class WorkspaceDeviceSession {
         }
         observations = observed
         lastCheckedAt = .now
+        // With no explicit choice recorded, what this check found is what the
+        // app shows: a client that is not on this Mac drops out of the way, and
+        // installing one brings it back on the next check.
+        if !hasExplicitClientChoice {
+            enabledClients = ClientVisibilityPolicy.effectiveEnabledClients(
+                preferences: nil, observations: observed)
+        }
         await record(observed)
     }
 

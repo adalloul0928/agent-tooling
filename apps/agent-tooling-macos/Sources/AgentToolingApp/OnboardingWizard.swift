@@ -77,28 +77,27 @@ struct OnboardingWizard: View {
             progressHeader
             Divider()
             VStack(alignment: .leading, spacing: 6) {
-                Text(step.title).font(.system(size: 21, weight: .semibold))
+                Text(step.title).font(.system(size: 20, weight: .semibold))
                 Text(step.subtitle).font(.system(size: 14)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 28).padding(.top, 20).padding(.bottom, 16)
+            .padding(.horizontal, WorkspaceLayout.pageInset).padding(.top, 20).padding(.bottom, 16)
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                     switch step {
                     case .found: foundStep
                     case .apps: appsStep
                     case .assign: assignStep
                     }
                 }
-                .padding(.horizontal, 28).padding(.bottom, 24)
+                .padding(.horizontal, WorkspaceLayout.pageInset).padding(.bottom, 24)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             Divider()
             footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AgentTheme.contentBackground)
         .frame(minWidth: 720, minHeight: 480)
         .sheet(isPresented: $isAssigning) {
             OnboardingAssignmentPickerSheet(session: workspace.library)
@@ -120,7 +119,7 @@ struct OnboardingWizard: View {
                 }
             }.accessibilityHidden(true)
         }
-        .padding(.horizontal, 28)
+        .padding(.horizontal, WorkspaceLayout.pageInset)
         .padding(.vertical, 14)
     }
 
@@ -129,7 +128,7 @@ struct OnboardingWizard: View {
     @ViewBuilder
     private var foundStep: some View {
         if let library = workspace.library.state?.library {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                 Text(librarySummary(library)).font(.system(size: 14)).foregroundStyle(.secondary)
                 TitledCard("Apps on this Mac", count: "\(workspace.device.availableClients.count)") {
                     ForEach(Array(workspace.device.availableClients.enumerated()), id: \.element) { index, client in
@@ -186,7 +185,7 @@ struct OnboardingWizard: View {
     // MARK: - Apps
 
     private var appsStep: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
             VStack(spacing: 0) {
                 ForEach(Array(workspace.device.availableClients.enumerated()), id: \.element) { index, client in
                     if index > 0 { Divider().padding(.leading, 64) }
@@ -206,7 +205,7 @@ struct OnboardingWizard: View {
                     .accessibilityLabel("Have this Mac manage \(client.rawValue)")
                 }
             }
-            .standardPanel(cornerRadius: 14)
+            .standardPanel()
             Text(
                 "Tracking follows your library either way. Turning an app off here only stops this Mac from keeping it in sync — nothing already installed changes."
             )
@@ -278,7 +277,7 @@ struct OnboardingWizard: View {
                     "Find useful skills", detail: "Choose whether to review recent work in Insights.",
                     symbol: "lightbulb", destination: .insights)
             }
-            .standardPanel(cornerRadius: 14)
+            .standardPanel()
         }
     }
 
@@ -319,12 +318,12 @@ struct OnboardingWizard: View {
                     .buttonStyle(.glass)
             }
             Button(primaryTitle, action: advance)
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(step == .assign && !isDone && !canAssign)
         }
         .controlSize(.large)
-        .padding(.horizontal, 28)
+        .padding(.horizontal, WorkspaceLayout.pageInset)
         .padding(.vertical, 16)
     }
 
@@ -365,6 +364,7 @@ struct OnboardingWizard: View {
         case .codex: "Agent configuration shared by Codex app and CLI"
         case .claude: "Claude Code skills, plugins, and MCP configuration"
         case .gemini: "Gemini CLI extensions and local configuration"
+        case .kiro: "Kiro CLI skills and MCP configuration"
         }
     }
 }

@@ -100,7 +100,7 @@ private struct SkillsBrowser: View {
                 } label: {
                     Label("New skill…", systemImage: "plus")
                 }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.borderedProminent)
                 .tint(AgentTheme.selection)
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(workspace.library.isBusy || !canWrite)
@@ -342,7 +342,7 @@ private struct SkillsBrowser: View {
             } else {
                 GeometryReader { geometry in
                     let columns = SkillTableColumns(
-                        width: geometry.size.width, selecting: isSelecting,
+                        width: geometry.size.width - WorkspaceLayout.pageInset * 2, selecting: isSelecting,
                         // A workspace built by scanning records no descriptions,
                         // so the column would be a screenful of dashes. It earns
                         // its width only once something in view has one.
@@ -386,6 +386,7 @@ private struct SkillsBrowser: View {
             }
         }
         .animation(.snappy(duration: 0.18), value: selection.isEmpty)
+        .collectionSurface()
         .paneMaterial()
     }
 
@@ -409,7 +410,7 @@ private struct SkillsBrowser: View {
         }
         .font(.caption.weight(.medium)).foregroundStyle(.secondary)
         .padding(.horizontal, 16).frame(height: 30)
-        .background(AgentTheme.controlBackground.opacity(0.3))
+        .background(Color.primary.opacity(0.04))
     }
 
     private func row(_ skill: SkillEntry, assignable: Bool, columns: SkillTableColumns) -> some View {
@@ -589,7 +590,7 @@ private struct SkillsBrowser: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 13)
         .frame(height: 32)
-        .background(AgentTheme.controlBackground.opacity(0.45))
+        .background(Color.primary.opacity(0.04))
     }
 
     // MARK: - Selection
@@ -935,7 +936,7 @@ private struct SkillDetailView: View {
         HStack(spacing: 13) {
             KindTile(kind: .skill, size: 40, ghost: !skill.isMaintainedHere)
             VStack(alignment: .leading, spacing: 3) {
-                Text(skill.displayName).font(.system(size: 22, weight: .semibold))
+                Text(skill.displayName).font(.system(size: 20, weight: .semibold))
                 HStack(spacing: 6) {
                     Text(skill.ownership.libraryLabel)
                         .font(.caption2.weight(.medium))
@@ -1016,7 +1017,7 @@ private struct SkillDetailView: View {
                         Button("Install…", systemImage: "arrow.down.circle") {
                             navigation?.openScreenRequest(.reviewChanges)
                         }
-                        .buttonStyle(.glassProminent).tint(AgentTheme.selection)
+                        .buttonStyle(.borderedProminent)
                         .accessibilityLabel("Install this skill from the Apps screen")
                     }
                     .padding(.horizontal, 6).padding(.vertical, 9)

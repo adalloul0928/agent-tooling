@@ -105,6 +105,17 @@ struct WorkspaceDeviceSessionTests {
                 ])
             ]))
         await session.refresh()
+        // Nobody has chosen, so the check decides what is shown — and set up
+        // means the tool runs. Gemini's does; Claude's files without a runnable
+        // tool do not count, and Codex is not here at all.
+        #expect(session.enabledClients == [.gemini])
+        #expect(session.attentionCount == 0)
+
+        // Turning a broken app on explicitly is the opt-in: its missing tool
+        // becomes this Mac's problem because somebody said so.
+        await session.setEnabled(.claude, true)
+        #expect(session.attentionCount == 1)
+        await session.setEnabled(.codex, true)
         #expect(session.attentionCount == 2)
 
         await session.setEnabled(.codex, false)
@@ -131,14 +142,15 @@ struct WorkspaceDeviceSessionTests {
         #expect(session.isEnabled(nil))
 
         let snapshot = try #require(try fixture.store.snapshot())
-        #expect(snapshot.device.applicationState?.preferences.enabledClients == [.claude, .codex])
+        #expect(snapshot.device.applicationState?.preferences.enabledClients == [.claude, .codex, .kiro])
+        #expect(snapshot.device.applicationState?.preferences.chosenClients == [.claude, .codex, .kiro])
         // The choice is this Mac's. Nothing about it goes into portable bytes.
         #expect(snapshot.document.artifacts.map(\.identity.id) == [Fixture.skill])
         #expect(snapshot.document.assignments.isEmpty)
 
         // A session opened over the same store reads the choice back.
         let reopened = await fixture.session()
-        #expect(reopened.enabledClients == [.claude, .codex])
+        #expect(reopened.enabledClients == [.claude, .codex, .kiro])
         #expect(reopened.attentionCount == 0)
     }
 
@@ -154,7 +166,7 @@ struct WorkspaceDeviceSessionTests {
         let snapshot = try #require(try fixture.store.snapshot())
         #expect(
             snapshot.device.applicationState?.preferences.enabledClients
-                == [.claude, .codex, .gemini])
+                == [.claude, .codex, .gemini, .kiro])
     }
 
     @Test func automaticHealthChecksDefaultOnAndAreRememberedOnThisMacOnly() async throws {

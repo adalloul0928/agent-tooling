@@ -77,7 +77,7 @@ struct SkillRepositorySection: View {
                     Button("Review update…", systemImage: "arrow.down.circle") {
                         Task { await session.applyUpstream(for: skill) }
                     }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.borderedProminent)
                     .tint(AgentTheme.selection)
                     .disabled(!session.canWrite)
                 }

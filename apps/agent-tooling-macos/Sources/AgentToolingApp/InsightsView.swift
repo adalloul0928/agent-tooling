@@ -52,7 +52,7 @@ struct InsightsView: View {
                     } label: {
                         Label("Scan recent work", systemImage: "magnifyingglass")
                     }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.borderedProminent)
                     .tint(AgentTheme.selection)
                     .disabled(!canScan)
                     .keyboardShortcut(.return, modifiers: [.command])
@@ -67,7 +67,7 @@ struct InsightsView: View {
                 firstRunState
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                         if session.isScanning {
                             scanningState
                         } else if let message = routeError ?? session.errorMessage {
@@ -78,7 +78,7 @@ struct InsightsView: View {
                             reportContent(report)
                         }
                     }
-                    .frame(maxWidth: 1_100, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, WorkspaceLayout.pageInset)
                     .padding(.top, WorkspaceLayout.contentTopInset)
                     .padding(.bottom, WorkspaceLayout.pageInset)
@@ -266,18 +266,14 @@ struct InsightsView: View {
     // MARK: - Report
 
     private func reportContent(_ report: InsightsReport) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
             reportSummary(report)
             HStack(spacing: 10) {
-                Text("View")
-                    .font(.callout.weight(.medium))
-                Picker("View", selection: $selection) {
+                WorkspaceSegmentedPicker("Insight category", selection: $selection) {
                     Text("Worth adding").tag(InsightSelection.opportunities)
                     Text("Skill health").tag(InsightSelection.skillHealth)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .frame(width: 180, alignment: .leading)
+                .fixedSize()
             }
             .accessibilityLabel("Insight category")
 
@@ -327,7 +323,7 @@ struct InsightsView: View {
             .padding(.trailing, 16)
         }
         .padding(.vertical, 12)
-        .standardPanel(cornerRadius: 14)
+        .standardPanel()
     }
 
     private func summaryStat(_ count: Int, _ label: String, tint: Color) -> some View {
@@ -411,7 +407,7 @@ struct InsightsView: View {
     }
 
     private func skillHealthSection(_ report: InsightsReport) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
             InsightPanel("Suggested improvements") {
                 if report.qualityFindings.isEmpty {
                     EmptyStateView(

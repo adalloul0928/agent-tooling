@@ -58,9 +58,12 @@ struct OnboardingWizardTests {
         defer { fixture.remove() }
         var finishCount = 0
         for step in OnboardingStep.allCases {
+            // Grounded the way the shell grounds every section: the wizard
+            // itself is translucent and the canvas behind it is the shell's.
             try expectDrawnWarmed(
                 OnboardingWizard(workspace: fixture.workspace, step: step) { finishCount += 1 }
-                    .environment(AppNavigationState()))
+                    .environment(AppNavigationState())
+                    .background(AgentTheme.canvasGradient))
         }
         #expect(finishCount == 0)
         #expect(fixture.workspace.library.lastReceipt == nil)

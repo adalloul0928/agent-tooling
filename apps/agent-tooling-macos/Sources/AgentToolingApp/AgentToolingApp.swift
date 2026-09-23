@@ -81,7 +81,20 @@ struct AgentToolingApplication: App {
             }
         }
 
-        Settings { AppearanceSettingsView(appearance: $appearance) }
+        Settings {
+            // The system Settings window keeps the grouped-form idiom it is
+            // expected to have; the in-app Settings screen shows the same
+            // binding as one row in its own card.
+            Form {
+                Picker("Appearance", selection: $appearance) {
+                    Text("System").tag("System")
+                    Text("Light").tag("Light")
+                    Text("Dark").tag("Dark")
+                }
+            }
+            .formStyle(.grouped)
+            .frame(width: 360)
+        }
     }
 
     /// Opens the workspace, creating one on a first run.
@@ -158,16 +171,21 @@ struct AppearanceSettingsView: View {
     @Binding var appearance: String
 
     var body: some View {
-        Form {
+        // One row in the card it sits in. A grouped Form here drew its own
+        // inset card and gray ground inside the section's card — three nested
+        // surfaces for one picker.
+        HStack {
+            Text("Appearance")
+            Spacer()
             Picker("Appearance", selection: $appearance) {
                 Text("System").tag("System")
                 Text("Light").tag("Light")
                 Text("Dark").tag("Dark")
             }
+            .labelsHidden()
+            .fixedSize()
         }
-        .formStyle(.grouped)
-        .frame(width: 360)
-        .padding(20)
+        .padding(14)
     }
 }
 

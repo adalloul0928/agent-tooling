@@ -32,7 +32,7 @@ struct PluginsView: View {
                 } label: {
                     Label(workspace.device.isChecking ? "Checking…" : "Check plugins", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.borderedProminent)
                 .tint(AgentTheme.selection)
                 .disabled(workspace.device.isChecking)
             }
@@ -129,6 +129,7 @@ struct PluginsView: View {
         }
         .tableStyle(.inset(alternatesRowBackgrounds: false))
         .scrollContentBackground(.hidden)
+        .collectionSurface()
     }
 
     private func wideTable(rows: [WorkspaceLibraryReadModelRow], updates: PluginUpdateEvaluation) -> some View {
@@ -163,6 +164,7 @@ struct PluginsView: View {
         }
         .tableStyle(.inset(alternatesRowBackgrounds: false))
         .scrollContentBackground(.hidden)
+        .collectionSurface()
     }
 
     @ViewBuilder
@@ -409,7 +411,7 @@ private struct PluginDetailView: View {
         HStack(spacing: 14) {
             pluginIcon(for: row, size: 44)
             VStack(alignment: .leading, spacing: 4) {
-                Text(row.displayName).font(.system(size: 22, weight: .semibold))
+                Text(row.displayName).font(.system(size: 20, weight: .semibold))
                 Text(row.sourceLabel ?? row.ownershipLabel).font(.callout).foregroundStyle(.secondary)
             }
             Spacer()

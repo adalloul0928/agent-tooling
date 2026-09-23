@@ -44,7 +44,10 @@ struct WorkspaceMarketplaceSessionTests {
         #expect(session.sources.first { $0.kind == .claudeMarketplace }?.name == "Vendor catalog")
         #expect(
             Set(session.sources.map(\.kind))
-                == [.claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .agentPlugins, .mcpRegistry])
+                == [
+                    .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .agentPlugins, .mcpRegistry,
+                    .skillsShRegistry,
+                ])
         // A reference row keeps the same identity across refreshes, so
         // selecting one on the Sources list survives asking the catalogs again.
         let before = session.sources.first { $0.kind == .mcpRegistry }?.id
