@@ -245,7 +245,8 @@ enum LocalTargetScan {
             .flatMap { ClientExecutableLocator.locate($0, homeURL: homeURL)?.path(percentEncoded: false) }
             ?? executable
         async let commandProbe = probe(executable: resolvedExecutable, runner: runner)
-        async let nativeInventory = nativeInventory(executable: resolvedExecutable, runner: runner)
+        async let nativeInventory = nativeInventory(
+            client: surface.client, executable: resolvedExecutable, runner: runner)
         let existingConfig = configurationURLs.filter { fileManager.fileExists(atPath: $0.path(percentEncoded: false)) }
         var configurationDocuments: [String] = []
         var notes: [String] = []
@@ -273,7 +274,7 @@ enum LocalTargetScan {
             pluginMetadata[id] = ObservedPluginMetadata(
                 name: displayName(forPluginID: id), source: "\(surface.displayName) configuration", scope: "This Mac", enabled: true)
         }
-        if executable == "gemini" {
+        if surface.client == .gemini {
             for id in pluginRoots.flatMap({ childDirectories(under: $0, fileManager: fileManager) }) where pluginMetadata[id] == nil {
                 pluginMetadata[id] = ObservedPluginMetadata(
                     name: displayName(forPluginID: id), source: "Gemini extension directory", scope: "This Mac", enabled: true)
@@ -293,7 +294,10 @@ enum LocalTargetScan {
             || pluginRoots.contains {
                 fileManager.fileExists(atPath: $0.path(percentEncoded: false))
             }
-        if !probe.available { notes.append("The \(executable) CLI was not available on PATH; configuration was scanned from disk only.") }
+        if !probe.available {
+            let name = surface.client.map(ClientExecutableLocator.executableName(for:)) ?? executable
+            notes.append("The \(name) CLI was not available in any known install location; configuration was scanned from disk only.")
+        }
         notes.append(contentsOf: native.notes)
         if surface.isCloud { notes.append("Cloud state is not inferred from local configuration.") }
         return TargetObservation(
@@ -320,10 +324,15 @@ enum LocalTargetScan {
         var notes: [String] = []
     }
 
-    private static func nativeInventory(executable: String, runner: any CommandRunning) async -> NativeInventory {
+    /// Keyed on the client, never on the executable string: the executable is
+    /// the locator's absolute path, and matching it against bare names is how
+    /// a located tool silently loses its native inventory.
+    private static func nativeInventory(
+        client: ClientKind?, executable: String, runner: any CommandRunning
+    ) async -> NativeInventory {
         let fileManager = FileManager.default
-        switch executable {
-        case "claude":
+        switch client {
+        case .claude:
             guard
                 let output = try? await runner.run(executable: executable, arguments: ["plugin", "list", "--json"], currentDirectory: nil),
                 output.status == 0
@@ -331,7 +340,7 @@ enum LocalTargetScan {
                 return NativeInventory(notes: ["Claude's native plugin inventory was unavailable; disk configuration was used instead."])
             }
             return claudeInventory(from: output.standardOutput, fileManager: fileManager)
-        case "codex":
+        case .codex:
             async let pluginOutput = runner.run(
                 executable: executable, arguments: ["plugin", "list", "--json"], currentDirectory: nil)
             async let mcpOutput = runner.run(executable: executable, arguments: ["mcp", "list", "--json"], currentDirectory: nil)

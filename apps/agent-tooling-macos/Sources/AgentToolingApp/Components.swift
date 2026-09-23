@@ -228,7 +228,7 @@ struct AttentionBanner<Action: View>: View {
             Spacer(minLength: 12)
             action
         }
-        .padding(.horizontal, 13)
+        .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(AgentTheme.warning.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
@@ -502,7 +502,7 @@ struct InfoRow<Leading: View, Trailing: View>: View {
             Spacer(minLength: 12)
             trailing
         }
-        .padding(.horizontal, 13)
+        .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .frame(minHeight: 44)
     }
@@ -747,7 +747,7 @@ struct SelectionActionBar: View {
                 .lineLimit(1)
         }
         .buttonBorderShape(.capsule)
-        .padding(.horizontal, 13)
+        .padding(.horizontal, 14)
         .frame(height: 48)
         .standardPanel()
         .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
@@ -827,7 +827,7 @@ struct ClientStatusRows: View {
                     Spacer(minLength: 20)
                     StatusBadge(state: client.state, text: client.detailWithRevision)
                 }
-                .padding(.horizontal, 13)
+                .padding(.horizontal, 14)
                 .frame(minHeight: 46)
                 if index < clients.count - 1 { Divider().opacity(0.45) }
             }

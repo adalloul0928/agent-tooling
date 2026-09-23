@@ -412,18 +412,15 @@ struct SyncCenterView: View {
     private var problems: [String] {
         [
             workspace.deployment.errorMessage, workspace.device.errorMessage, requests.errorMessage,
-            workspace.device.smartFindMessage,
         ]
         .compactMap { $0 }
     }
 
     /// Whether any managed app answered its last check without a runnable
-    /// tool. Only then is offering to find one worth a button.
+    /// tool — the same predicate the finder uses, so the button is offered
+    /// exactly when the finder would have work to do.
     private var hasMissingManagedTool: Bool {
-        !workspace.device.observations.isEmpty
-            && workspace.device.enabledClients.contains { client in
-                workspace.device.verdict(for: client).state == .attention
-            }
+        !workspace.device.missingManagedClients.isEmpty
     }
 
     private func loadReceipts() async {

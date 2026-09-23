@@ -44,13 +44,17 @@ public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
 /// Which clients this Mac shows and manages, from what was chosen and what was
 /// observed. One rule, stated once, so every reader agrees:
 ///
-/// 1. An explicit choice wins, exactly as recorded.
-/// 2. An older build's recorded choice (a trimmed `enabledClients`) still wins.
-/// 3. Otherwise the clients whose tool the last scan could actually run are the
+/// 1. An explicit choice — the `chosenClients` record — wins, exactly as made.
+///    The older `enabledClients` field deliberately does not count: builds
+///    before the choice existed persisted it as a default-of-all, and after a
+///    new client ships, that stale default is indistinguishable from somebody
+///    deliberately excluding the newcomer. A default must never be read back
+///    as a decision nobody made.
+/// 2. Otherwise the clients whose tool the last scan could actually run are the
 ///    ones shown. Leftover configuration files do not count as set up: a
 ///    client that cannot be spoken to is not hooked up, however many files it
 ///    once wrote.
-/// 4. Before any scan, or when a scan could run nothing at all, every client is
+/// 3. Before any scan, or when a scan could run nothing at all, every client is
 ///    shown — hiding all of them would leave nothing to set up.
 public enum ClientVisibilityPolicy {
     public static func effectiveEnabledClients(
@@ -58,9 +62,6 @@ public enum ClientVisibilityPolicy {
         observations: [TargetObservation]
     ) -> Set<ClientKind> {
         if let chosen = preferences?.chosenClients { return Set(chosen) }
-        if let legacy = preferences?.enabledClients, Set(legacy) != Set(ClientKind.allCases) {
-            return Set(legacy)
-        }
         guard !observations.isEmpty else { return Set(ClientKind.allCases) }
         let present = Set(observations.filter(\.commandAvailable).compactMap { $0.surface.client })
         return present.isEmpty ? Set(ClientKind.allCases) : present

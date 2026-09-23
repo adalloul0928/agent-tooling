@@ -23,6 +23,8 @@ struct MCPServersView: View {
     @State private var filter: MCPFilter = .all
     @State private var category = MCPServersView.serversCategory
     @State private var selection: Set<String> = []
+    // Presentation is separate from selection, the way Discover keeps them.
+    @State private var showingDetails = false
     @State private var activeSheet: MCPSheet?
     @State private var assignment: MCPAssignmentPresentation?
     @State private var removal: MCPRemovalPresentation?
@@ -107,7 +109,7 @@ struct MCPServersView: View {
         .onAppear(perform: consumeRequestedScreenRequest)
         .onChange(of: navigation.requestedScreenRequest) { _, _ in consumeRequestedScreenRequest() }
         .onChange(of: entries.map(\.id)) { _, _ in pruneSelection() }
-        .onExitCommand { selection = [] }
+        
         .environment(capabilities)
     }
 
@@ -115,18 +117,25 @@ struct MCPServersView: View {
 
     @ViewBuilder
     private var serversBody: some View {
-        if selection.isEmpty {
-            collectionPane
-        } else {
-            HSplitView {
-                collectionPane.frame(minWidth: 320, idealWidth: 600)
-                VStack(spacing: 0) {
-                    InspectorHeader(title: "Server details") { selection = [] }
-                    detailPane
+        GeometryReader { proxy in
+            Group {
+                if showingDetails, !selection.isEmpty {
+                    HSplitView {
+                        collectionPane.frame(minWidth: 340, idealWidth: proxy.size.width * 0.55)
+                        VStack(spacing: 0) {
+                            InspectorHeader(title: "Server details") { showingDetails = false }
+                            detailPane
+                        }
+                        .frame(minWidth: 400, idealWidth: proxy.size.width * 0.45)
+                    }
+                } else {
+                    collectionPane
                 }
-                .frame(minWidth: 400, idealWidth: 600)
             }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
+        .onChange(of: selection) { _, changed in if !changed.isEmpty { showingDetails = true } }
+        .onExitCommand { showingDetails = false }
     }
 
     private var collectionPane: some View {
@@ -461,6 +470,8 @@ struct MCPServersView: View {
     private func pruneSelection() {
         let kept = selection.intersection(entries.map(\.id))
         if kept != selection { selection = kept }
+        // A pruned-empty selection has nothing to inspect; the flag follows.
+        if kept.isEmpty, showingDetails { showingDetails = false }
     }
 
     /// Reveals one row a route named. Revealing selects it and does nothing else.

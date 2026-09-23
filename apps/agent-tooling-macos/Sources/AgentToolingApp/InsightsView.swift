@@ -368,7 +368,7 @@ struct InsightsView: View {
                     title: "Nothing worth adding right now",
                     message: "The scan did not find a repeated workflow or catalog match strong enough to recommend."
                 )
-                .frame(maxWidth: .infinity, minHeight: 190)
+                .frame(maxWidth: .infinity, minHeight: 180)
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(recommendations.enumerated()), id: \.element.id) { index, recommendation in
@@ -415,7 +415,7 @@ struct InsightsView: View {
                         title: "No quality issues found",
                         message: "The managed skills inspected by this scan passed the available static checks."
                     )
-                    .frame(maxWidth: .infinity, minHeight: 170)
+                    .frame(maxWidth: .infinity, minHeight: 180)
                 } else {
                     let findings = sortedFindings(report.qualityFindings)
                     LazyVStack(spacing: 0) {

@@ -154,6 +154,56 @@ struct WorkspaceDeviceSessionTests {
         #expect(reopened.attentionCount == 0)
     }
 
+    /// Finding a missing tool records where it lives, says so, and the message
+    /// leaves on its own once a check finds nothing missing any more.
+    @Test func findingAMissingToolRecordsItsFolderAndTheMessageDoesNotStrand() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let toolDirectory = fixture.root.appending(path: "elsewhere/bin", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: toolDirectory, withIntermediateDirectories: true)
+        let tool = toolDirectory.appending(path: "claude")
+        try Data("#!/bin/sh\n".utf8).write(to: tool)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tool.path)
+
+        struct ShellRunner: CommandRunning {
+            let answer: String
+            func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput {
+                guard executable == "/bin/zsh", arguments.last?.hasSuffix("claude") == true else {
+                    return CommandOutput(status: 1, standardOutput: "", standardError: "")
+                }
+                return CommandOutput(status: 0, standardOutput: answer, standardError: "")
+            }
+        }
+
+        let session = await fixture.session(
+            observer: ScriptedObserver(results: [
+                .success([
+                    Fixture.observation(.claudeCode, installed: true, commandAvailable: false),
+                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true),
+                ]),
+                .success([
+                    Fixture.observation(.claudeCode, installed: true, commandAvailable: true),
+                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true),
+                ]),
+            ]),
+            toolProbeRunner: ShellRunner(answer: tool.path))
+        await session.refresh()
+        // Claude's tool did not run, so it is hidden until managed explicitly.
+        await session.setEnabled(.claude, true)
+        #expect(session.missingManagedClients == [.claude])
+
+        await session.smartFindTools()
+
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(
+            snapshot.device.applicationState?.preferences.customToolDirectories
+                == [toolDirectory.path])
+        // The find re-checked, the second check found everything, and the
+        // message left with the work instead of stranding as a problem.
+        #expect(session.missingManagedClients.isEmpty)
+        #expect(session.smartFindMessage == nil)
+    }
+
     @Test func managingAnAppAgainIsRememberedTheSameWay() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -432,12 +482,14 @@ struct WorkspaceDeviceSessionTests {
                 access: .writable)
         }
 
-        func session(observer: any DeviceObserving = ScriptedObserver(results: [.success([])]))
-            async -> WorkspaceDeviceSession
-        {
+        func session(
+            observer: any DeviceObserving = ScriptedObserver(results: [.success([])]),
+            toolProbeRunner: (any CommandRunning)? = nil
+        ) async -> WorkspaceDeviceSession {
             await library.refresh()
             return WorkspaceDeviceSession(
-                service: service, library: library, store: store, homeRoot: home, observer: observer)
+                service: service, library: library, store: store, homeRoot: home, observer: observer,
+                toolProbeRunner: toolProbeRunner)
         }
 
         static func observation(

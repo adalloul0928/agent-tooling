@@ -25,12 +25,19 @@ struct ClientVisibilityPolicyTests {
                 == [.gemini])
     }
 
-    @Test func anOlderBuildsTrimmedChoiceStillWins() {
-        let preferences = DeviceWorkspacePreferences(enabledClients: [.claude, .codex])
+    /// A pre-choice build persisted `enabledClients` as a default-of-all with
+    /// three cases. After a fourth client ships, that stale default must not
+    /// read as somebody deliberately excluding the newcomer.
+    @Test func anOlderBuildsLegacyFieldIsNotMistakenForAChoice() {
+        let preferences = DeviceWorkspacePreferences(enabledClients: [.claude, .codex, .gemini])
+        let observed = [observation(.kiroCLI, installed: true, commandAvailable: true)]
 
         #expect(
+            ClientVisibilityPolicy.effectiveEnabledClients(preferences: preferences, observations: observed)
+                == [.kiro])
+        #expect(
             ClientVisibilityPolicy.effectiveEnabledClients(preferences: preferences, observations: [])
-                == [.claude, .codex])
+                == Set(ClientKind.allCases))
     }
 
     @Test func withNoChoiceOnlyClientsWhoseToolActuallyRunsAreShown() {

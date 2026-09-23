@@ -15,12 +15,19 @@
 # Usage: scripts/testbed.sh [--fresh]
 set -euo pipefail
 
-TESTBED="${TMPDIR:-/tmp}/agent-tooling-testbed"
+TESTBED="${TMPDIR:-/tmp}"
+TESTBED="${TESTBED%/}/agent-tooling-testbed"
 HOME_DIR="$TESTBED/home"
 WORKSPACE_DIR="$TESTBED/workspace"
 APP="$(cd "$(dirname "$0")/.." && pwd)/.build/Agent Tooling.app"
 
-if [[ "${1:-}" == "--fresh" ]]; then rm -rf "$TESTBED"; fi
+if [[ ! -x "$APP/Contents/MacOS/AgentTooling" ]]; then
+  echo "No packaged app at $APP — run ./scripts/package-app.sh first." >&2
+  exit 1
+fi
+for argument in "$@"; do
+  if [[ "$argument" == "--fresh" ]]; then rm -rf "$TESTBED"; fi
+done
 mkdir -p "$HOME_DIR/.local/bin" "$WORKSPACE_DIR"
 
 # Real Claude Code, testbed-homed. The shim just execs the real binary; the

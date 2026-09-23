@@ -77,21 +77,22 @@ struct OverviewView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if showsOnboarding { onboardingCard }
-                    HStack(alignment: .top, spacing: 16) {
-                        VStack(spacing: 16) {
-                            reviewQueueCard(items: attention, updates: updates)
-                            recommendedCard
+                    // Two columns where they fit; one column where they don't.
+                    // A narrow window stacks the same cards instead of
+                    // squeezing them past legibility.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 16) {
+                            reviewColumn(attention: attention, updates: updates)
+                                .frame(maxWidth: .infinity)
+                                .frame(minWidth: 420)
+                            statusColumn
+                                .frame(maxWidth: .infinity)
+                                .frame(minWidth: 420)
                         }
-                        .frame(maxWidth: .infinity)
                         VStack(spacing: 16) {
-                            libraryCard
-                            appsCard
-                            HStack(alignment: .top, spacing: 16) {
-                                readyMiniCard
-                                lastCheckMiniCard
-                            }
+                            reviewColumn(attention: attention, updates: updates)
+                            statusColumn
                         }
-                        .frame(maxWidth: .infinity)
                     }
                 }
                 .padding(.horizontal, WorkspaceLayout.pageInset)
@@ -119,6 +120,29 @@ struct OverviewView: View {
             return false
         }
         return !library.rows.isEmpty && library.rows.allSatisfy { $0.requestedAssignments.isEmpty }
+    }
+
+    /// The left column of the wide layout, and the top of the stacked one.
+    private func reviewColumn(
+        attention: [OverviewAttention],
+        updates: [(row: WorkspaceLibraryReadModelRow, availability: UpdateAvailability)]
+    ) -> some View {
+        VStack(spacing: 16) {
+            reviewQueueCard(items: attention, updates: updates)
+            recommendedCard
+        }
+    }
+
+    /// The right column of the wide layout, and the bottom of the stacked one.
+    private var statusColumn: some View {
+        VStack(spacing: 16) {
+            libraryCard
+            appsCard
+            HStack(alignment: .top, spacing: 16) {
+                readyMiniCard
+                lastCheckMiniCard
+            }
+        }
     }
 
     private var onboardingCard: some View {

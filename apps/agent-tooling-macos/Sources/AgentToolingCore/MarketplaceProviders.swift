@@ -359,6 +359,13 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
                     MCPClientCommand.removeArguments(serverID: name, client: .gemini, scope: .user),
                     "Add the reviewed HTTPS endpoint with Gemini CLI's native MCP command."
                 ),
+                route(
+                    .kiro,
+                    MCPClientCommand.addArguments(
+                        serverID: name, transport: .http, destination: httpDestination, client: .kiro, scope: .user),
+                    MCPClientCommand.removeArguments(serverID: name, client: .kiro, scope: .user),
+                    "Add the reviewed HTTPS endpoint with Kiro CLI's native MCP command."
+                ),
             ]
         case .stdio(let command):
             let stdioDestination = ValidatedMCPDestination(endpoint: "", command: command)
@@ -383,6 +390,13 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
                         serverID: name, transport: .stdio, destination: stdioDestination, client: .gemini, scope: .user),
                     MCPClientCommand.removeArguments(serverID: name, client: .gemini, scope: .user),
                     "Run the exact pinned npm package through Gemini CLI's native MCP command."
+                ),
+                route(
+                    .kiro,
+                    MCPClientCommand.addArguments(
+                        serverID: name, transport: .stdio, destination: stdioDestination, client: .kiro, scope: .user),
+                    MCPClientCommand.removeArguments(serverID: name, client: .kiro, scope: .user),
+                    "Add the reviewed launch command with Kiro CLI's native MCP command."
                 ),
             ]
         }

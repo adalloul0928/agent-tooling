@@ -17,6 +17,10 @@ struct PluginsView: View {
     @State private var query = ""
     @State private var clientFilter: ClientKind?
     @State private var selection: Set<ArtifactID> = []
+    // Presentation is separate from selection, the way Discover keeps them: a
+    // closed inspector remembers what was selected without occupying half the
+    // window, and Escape closes the pane rather than forgetting the row.
+    @State private var showingDetails = false
     @State private var stackClient: ClientKind = .claude
     @State private var refreshID = UUID()
 
@@ -37,17 +41,23 @@ struct PluginsView: View {
                 .disabled(workspace.device.isChecking)
             }
 
-            if selection.isEmpty {
-                collectionPane(rows: listed, inventory: inventory, updates: updates)
-            } else {
-                HSplitView {
-                    collectionPane(rows: listed, inventory: inventory, updates: updates)
-                        .frame(minWidth: 320, idealWidth: 600)
-                    VStack(spacing: 0) {
-                        InspectorHeader(title: "Plugin details") { selection = [] }
-                        detailPane(inventory: inventory, updates: updates)
-                    }.frame(minWidth: 400, idealWidth: 600)
+            GeometryReader { proxy in
+                Group {
+                    if showingDetails, !selection.isEmpty {
+                        HSplitView {
+                            collectionPane(rows: listed, inventory: inventory, updates: updates)
+                                .frame(minWidth: 340, idealWidth: proxy.size.width * 0.55)
+                            VStack(spacing: 0) {
+                                InspectorHeader(title: "Plugin details") { showingDetails = false }
+                                detailPane(inventory: inventory, updates: updates)
+                            }
+                            .frame(minWidth: 400, idealWidth: proxy.size.width * 0.45)
+                        }
+                    } else {
+                        collectionPane(rows: listed, inventory: inventory, updates: updates)
+                    }
                 }
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -59,7 +69,8 @@ struct PluginsView: View {
         .onChange(of: inventory.rows.map(\.artifactID)) { _, _ in pruneSelection(in: inventory.rows) }
         .onChange(of: listed.map(\.artifactID)) { _, _ in pruneSelection(in: inventory.rows) }
         .onChange(of: navigation.revision) { _, _ in consumeRequestedSelection(in: inventory.rows) }
-        .onExitCommand { selection = [] }
+        .onChange(of: selection) { _, changed in if !changed.isEmpty { showingDetails = true } }
+        .onExitCommand { showingDetails = false }
     }
 
     // MARK: Collection
@@ -244,6 +255,8 @@ struct PluginsView: View {
         let visible = Set(filtered(rows).map(\.artifactID))
         let kept = selection.intersection(visible)
         if kept != selection { selection = kept }
+        // A pruned-empty selection has nothing to inspect; the flag follows.
+        if kept.isEmpty, showingDetails { showingDetails = false }
     }
 
     /// Answers a palette result that named one plugin row: `openItem(_:in:.plugins)`

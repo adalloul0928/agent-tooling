@@ -373,6 +373,9 @@ private struct SkillsBrowser: View {
                 }
             }
         }
+        .animation(.snappy(duration: 0.18), value: selection.isEmpty)
+        .collectionSurface()
+        // Above the card's clip, so its shadow and rounded corners survive.
         .overlay(alignment: .bottom) {
             if isSelecting, !selection.isEmpty {
                 SelectionActionBar(
@@ -382,11 +385,10 @@ private struct SkillsBrowser: View {
                     action: assignSelection,
                     clear: { selection = [] }
                 )
+                .padding(.bottom, WorkspaceLayout.pageInset + 10)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.snappy(duration: 0.18), value: selection.isEmpty)
-        .collectionSurface()
         .paneMaterial()
     }
 

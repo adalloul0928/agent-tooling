@@ -68,6 +68,16 @@ final class WorkspaceDeviceSession {
     /// What the last "find missing tools" attempt said, for the screen to show.
     private(set) var smartFindMessage: String?
     private(set) var isFindingTools = false
+
+    /// The managed apps whose tool the last check could not run. The one
+    /// predicate both the screen's button and the finder itself use, so the
+    /// button is offered exactly when the finder would have work to do.
+    var missingManagedClients: [ClientKind] {
+        guard !observations.isEmpty else { return [] }
+        return availableClients.filter {
+            enabledClients.contains($0) && verdict(for: $0).state == .attention
+        }
+    }
     /// Whether this Mac checks its apps on its own. Device-local, the same as
     /// `enabledClients`, and just as inert to read: nothing here starts a
     /// check by itself.
@@ -81,6 +91,8 @@ final class WorkspaceDeviceSession {
     private let library: WorkspaceLibrarySession
     private let homeRoot: URL
     private let observer: any DeviceObserving
+    /// Scripted by tests; live launches ask the login shell for real.
+    private let toolProbeRunner: (any CommandRunning)?
 
     /// Reads back which apps this Mac manages, and nothing else.
     ///
@@ -94,12 +106,14 @@ final class WorkspaceDeviceSession {
         library: WorkspaceLibrarySession,
         store: WorkspaceRevisionStore,
         homeRoot: URL,
-        observer: any DeviceObserving = LiveDeviceObserver()
+        observer: any DeviceObserving = LiveDeviceObserver(),
+        toolProbeRunner: (any CommandRunning)? = nil
     ) {
         self.service = service
         self.library = library
         self.homeRoot = homeRoot
         self.observer = observer
+        self.toolProbeRunner = toolProbeRunner
         let device = (try? store.snapshot())?.device
         let preferences = device?.applicationState?.preferences
         // The visibility rule lives in one place: an explicit choice wins, and
@@ -108,9 +122,7 @@ final class WorkspaceDeviceSession {
         // is set up or deliberately turned on.
         enabledClients = ClientVisibilityPolicy.effectiveEnabledClients(
             preferences: preferences, observations: device?.observations ?? [])
-        hasExplicitClientChoice =
-            preferences?.chosenClients != nil
-            || preferences.map { Set($0.enabledClients) != Set(ClientKind.allCases) } ?? false
+        hasExplicitClientChoice = preferences?.chosenClients != nil
         automaticallyCheckHealth = preferences?.automaticallyCheckHealth ?? true
         ClientExecutableLocator.registerAdditionalRoots(preferences?.customToolDirectories ?? [])
     }
@@ -175,15 +187,13 @@ final class WorkspaceDeviceSession {
         isFindingTools = true
         defer { isFindingTools = false }
         smartFindMessage = nil
-        let missing = availableClients.filter {
-            enabledClients.contains($0) && verdict(for: $0).state != .healthy
-        }
+        let missing = missingManagedClients
         guard !missing.isEmpty else {
             smartFindMessage = "Every managed app's tool is already found."
             return
         }
         let findings = await SmartToolFinder.probe(
-            clients: missing, runner: ProcessCommandRunner(homeURL: homeRoot))
+            clients: missing, runner: toolProbeRunner ?? ProcessCommandRunner(homeURL: homeRoot))
         guard !findings.isEmpty else {
             let names = missing.map(\.rawValue).joined(separator: ", ")
             smartFindMessage = "Your login shell does not know these tools either: \(names). Install them, or check their app's setup."
@@ -211,7 +221,10 @@ final class WorkspaceDeviceSession {
                     application.preferences.customToolDirectories = recorded
                     device.applicationState = application
                 }
-                ClientExecutableLocator.registerAdditionalRoots(recorded)
+                // Process-wide registration is the live app's concern only. A
+                // scripted probe (a test) asserts the recorded preference and
+                // must not bleed roots into every other test's locator.
+                if toolProbeRunner == nil { ClientExecutableLocator.registerAdditionalRoots(recorded) }
             } catch {
                 smartFindMessage = "Tools were found, but where they live could not be recorded. Nothing was changed."
                 return
@@ -282,6 +295,9 @@ final class WorkspaceDeviceSession {
         }
         observations = observed
         lastCheckedAt = .now
+        // A find that has nothing left to find has said its piece: once every
+        // managed tool answers, the message would only strand on screen.
+        if smartFindMessage != nil, missingManagedClients.isEmpty { smartFindMessage = nil }
         // With no explicit choice recorded, what this check found is what the
         // app shows: a client that is not on this Mac drops out of the way, and
         // installing one brings it back on the next check.

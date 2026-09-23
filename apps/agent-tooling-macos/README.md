@@ -33,6 +33,10 @@ skill.
 - **Gemini CLI:** a created skill is packaged as a valid `gemini-extension.json`
   extension and live-linked with `gemini extensions link`; Gemini owns its
   extension directory and loads the change in a new CLI session.
+- **Kiro CLI:** skills are standard SKILL.md folders under `~/.kiro/skills`,
+  and MCP servers are managed through verified `kiro-cli mcp add`/`remove`
+  commands; Amazon Toolbox's `~/.toolbox/bin` is one of the fixed install
+  roots the locator checks.
 - **Marketplace:** local folders, checked-out Git repositories, and Agent
   Plugins packages are inspected locally. The official MCP Registry is queried
   through its documented API. Claude and Codex listings are read from their
