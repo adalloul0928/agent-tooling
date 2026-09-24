@@ -47,6 +47,10 @@ struct OverviewView: View {
     @Environment(\.availableClients) private var enabledClients
     @AppStorage("onboarding.skipped.v2") private var onboardingSkipped = false
 
+    /// The last few applied plans this Mac recorded, read once off the body. See
+    /// `recentChangesCard`.
+    @State private var recentReceipts: [OperationReceipt] = []
+
     var body: some View {
         let attention = attentionItems
         let updates = updateItems
@@ -74,35 +78,46 @@ struct OverviewView: View {
                 .help("Work out what would change in your apps. Nothing is written until you approve it.")
             }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if showsOnboarding { onboardingCard }
-                    // Two columns where they fit; one column where they don't.
-                    // A narrow window stacks the same cards instead of
-                    // squeezing them past legibility.
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: 16) {
-                            reviewColumn(attention: attention, updates: updates)
-                                .frame(maxWidth: .infinity)
-                                .frame(minWidth: 420)
-                            statusColumn
-                                .frame(maxWidth: .infinity)
-                                .frame(minWidth: 420)
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if showsOnboarding { onboardingCard }
+                        // Two columns where they fit; one column where they don't.
+                        // A narrow window stacks the same cards instead of
+                        // squeezing them past legibility.
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .top, spacing: 16) {
+                                reviewColumn(attention: attention, updates: updates)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                    .frame(minWidth: 420)
+                                statusColumn
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                    .frame(minWidth: 420)
+                            }
+                            VStack(spacing: 16) {
+                                reviewColumn(attention: attention, updates: updates)
+                                statusColumn
+                            }
+                            .frame(maxHeight: .infinity, alignment: .top)
                         }
-                        VStack(spacing: 16) {
-                            reviewColumn(attention: attention, updates: updates)
-                            statusColumn
-                        }
+                        // The dashboard fills the window rather than floating in
+                        // its top third: the columns take all the height the
+                        // page has, so no blank band is left under the cards at
+                        // the default window size.
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
+                    .padding(.horizontal, WorkspaceLayout.pageInset)
+                    .padding(.top, WorkspaceLayout.contentTopInset)
+                    .padding(.bottom, WorkspaceLayout.pageInset)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // Give the content at least the viewport's height so the
+                    // columns have a full page to expand into, while a taller
+                    // stacked layout can still scroll past it.
+                    .frame(minHeight: proxy.size.height, alignment: .top)
                 }
-                .padding(.horizontal, WorkspaceLayout.pageInset)
-                .padding(.top, WorkspaceLayout.contentTopInset)
-                .padding(.bottom, WorkspaceLayout.pageInset)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(maxWidth: .infinity)
+                .font(.system(size: 15))
+                .scrollIndicators(.hidden)
             }
-            .font(.system(size: 15))
-            .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // No ground of its own: the shell paints the shared translucent canvas
@@ -129,7 +144,11 @@ struct OverviewView: View {
     ) -> some View {
         VStack(spacing: 16) {
             reviewQueueCard(items: attention, updates: updates)
+            // The recommendation card takes the slack at the bottom of the
+            // column, so the page fills its height instead of leaving a band
+            // of empty canvas under a short queue.
             recommendedCard
+                .frame(maxHeight: .infinity, alignment: .top)
         }
     }
 
@@ -140,8 +159,9 @@ struct OverviewView: View {
             appsCard
             HStack(alignment: .top, spacing: 16) {
                 readyMiniCard
-                lastCheckMiniCard
+                recentChangesCard
             }
+            .frame(maxHeight: .infinity, alignment: .top)
         }
     }
 
@@ -275,6 +295,13 @@ struct OverviewView: View {
 
     // MARK: - Mini cards
 
+    /// Whether a prepared plan has any step still outstanding. When it does
+    /// not, there is nothing to review, and offering the button anyway would
+    /// send a person to an empty review.
+    private var hasChangesWaiting: Bool {
+        !(workspace.deployment.plan?.items.isEmpty ?? true)
+    }
+
     /// The steps a prepared plan is holding. A plan that has been applied has
     /// already re-read itself, so what shows here is what is still outstanding.
     private var readyMiniCard: some View {
@@ -292,7 +319,11 @@ struct OverviewView: View {
                     Button(workspace.deployment.isBusy ? "Preparing…" : "Review…") { reviewChanges() }
                         .buttonStyle(.glass)
                         .controlSize(.small)
-                        .disabled(workspace.deployment.isBusy)
+                        .disabled(workspace.deployment.isBusy || !hasChangesWaiting)
+                        .help(
+                            hasChangesWaiting
+                                ? "Review the changes this plan is holding."
+                                : "There is nothing waiting to review. Assign a tool first, then prepare a plan.")
                 }
             }
             .padding(.horizontal, 16)
@@ -301,30 +332,61 @@ struct OverviewView: View {
         }
     }
 
-    private var lastCheckMiniCard: some View {
-        BentoCard(symbol: "arrow.clockwise", title: "Last check") {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(lastScanText)
-                    .font(.system(size: 14, weight: .semibold))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 8) {
-                    Text("read-only scan")
-                        .font(.system(size: 12.5))
+    /// The last few things this Mac actually changed, read from the store's own
+    /// receipts. This is history, not a claim: each row is what one applied plan
+    /// recorded doing, worded the way the Activity screen words it.
+    private var recentChangesCard: some View {
+        BentoCard(
+            symbol: "clock.arrow.circlepath", title: "Recent changes",
+            action: ("Open Activity", { navigate(.activity) })
+        ) {
+            VStack(alignment: .leading, spacing: 0) {
+                if recentReceipts.isEmpty {
+                    Text("Nothing has been changed yet.")
+                        .font(.system(size: 13.5))
                         .foregroundStyle(.secondary)
-                    Spacer(minLength: 4)
-                    Button(workspace.device.isChecking ? "Checking…" : "Check") {
-                        Task { await workspace.device.refresh() }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 14)
+                        .padding(.top, 2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ForEach(recentReceipts) { receipt in
+                        HStack(alignment: .center, spacing: 10) {
+                            StatusGlyph(state: receipt.state, size: 14)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(receipt.title)
+                                    .font(.system(size: 13.5, weight: .medium))
+                                    .lineLimit(1)
+                                Text(receipt.outcomeTally)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(SnapshotTime.compact(receipt.createdAt))
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        if receipt.id != recentReceipts.last?.id {
+                            Divider().padding(.leading, 42)
+                        }
                     }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
-                    .disabled(workspace.device.isChecking)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 14)
-            .padding(.top, 2)
         }
+        // Reading the store is I/O, so it happens off the body: a receipt is a
+        // record of something already done, and re-reading it on every layout
+        // pass would put a file read in the render path for no gain.
+        .task { await loadRecentReceipts() }
+    }
+
+    /// Reads the last three receipts the store kept. The store read is
+    /// synchronous and throwing; a failure here only means the card stays
+    /// empty, which reads the same as a Mac that has changed nothing yet.
+    private func loadRecentReceipts() async {
+        recentReceipts = (try? workspace.store.operationReceipts(limit: 3)) ?? []
     }
 
     // MARK: - Waiting for your review
@@ -526,7 +588,10 @@ struct OverviewView: View {
 
     private var lastScanText: String {
         guard let date = workspace.device.observations.map(\.lastScannedAt).max() else { return "Not checked yet" }
-        return "Checked \(date.formatted(.relative(presentation: .named)))"
+        // The same phrasing the sidebar and Apps screen use for this very date,
+        // so one moment does not read as "9m ago" in one place and "43 minutes
+        // ago" in another.
+        return "Checked \(SnapshotTime.compact(date))"
     }
 
     /// These are stored Insights findings; Home never fabricates a personal

@@ -21,7 +21,6 @@ struct MCPServersView: View {
     @State private var pluginFilter = ""
     @State private var sourceFilter = ""
     @State private var filter: MCPFilter = .all
-    @State private var category = MCPServersView.serversCategory
     @State private var selection: Set<String> = []
     // Presentation is separate from selection, the way Discover keeps them.
     @State private var showingDetails = false
@@ -34,7 +33,6 @@ struct MCPServersView: View {
     @State private var capabilities = MCPCapabilityModel()
 
     private static let allApps = "All apps"
-    private static let serversCategory = "MCP servers"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -71,19 +69,8 @@ struct MCPServersView: View {
                 .disabled(workspace.library.access != .writable)
                 .help(PasteImportSheet.serverIntakeExplanation)
             }
-            .environment(\.connectionCategory, $category)
 
-            if category == Self.serversCategory {
-                serversBody
-            } else {
-                EmptyStateView(
-                    symbol: "link",
-                    title: "Connectors have no home here yet",
-                    message:
-                        "A connector is an account an app signs into rather than a server this Mac runs. "
-                        + "The versioned workspace has no place to record one, so Agent Tooling would have to "
-                        + "invent the answer. It does not. MCP servers are on the other tab.")
-            }
+            serversBody
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(item: $activeSheet) { sheet in
@@ -188,6 +175,15 @@ struct MCPServersView: View {
                     action: performEmptyStateAction)
             } else {
                 serverTable
+                // Says plainly what this screen does not cover, so its absence
+                // reads as a known gap rather than as a missing feature the
+                // person should go looking for.
+                Text("Account connectors — apps you sign into — are not tracked here yet.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, WorkspaceLayout.pageInset)
+                    .padding(.vertical, 10)
             }
         }
         .paneMaterial()

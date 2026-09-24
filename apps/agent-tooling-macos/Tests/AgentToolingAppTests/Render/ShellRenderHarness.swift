@@ -83,8 +83,14 @@ func distinctColours(in bitmap: NSBitmapImageRep) -> Int {
     for y in stride(from: 0, to: bitmap.pixelsHigh, by: step) {
         for x in stride(from: 0, to: bitmap.pixelsWide, by: step) {
             guard let colour = bitmap.colorAt(x: x, y: y) else { continue }
+            // An off-window hosting view renders text as black-on-transparent,
+            // so text pixels share RGB 0,0,0 with the transparent ground and
+            // the whole frame collapses to one colour. Alpha is the only
+            // channel that separates a drawn glyph from the empty canvas
+            // behind it, so it has to be part of what makes a colour distinct.
             let packed =
-                UInt32(colour.redComponent * 255) << 16
+                UInt32(colour.alphaComponent * 255) << 24
+                | UInt32(colour.redComponent * 255) << 16
                 | UInt32(colour.greenComponent * 255) << 8
                 | UInt32(colour.blueComponent * 255)
             seen.insert(packed)

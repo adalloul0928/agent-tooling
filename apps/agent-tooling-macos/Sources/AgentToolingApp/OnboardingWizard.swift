@@ -59,7 +59,6 @@ struct OnboardingWizard: View {
     let workspace: WorkspaceLaunch.Workspace
     var onFinish: () -> Void
 
-    @Environment(AppNavigationState.self) private var navigation
     @Environment(\.workspaceNavigate) private var workspaceNavigate
     @State private var step: OnboardingStep
     @State private var isAssigning = false
@@ -239,9 +238,9 @@ struct OnboardingWizard: View {
                 .font(.system(size: 14)).foregroundStyle(.secondary)
                 if !canAssign {
                     AttentionBanner(
-                        title: "Nothing is ready to assign yet",
+                        title: "Nothing can be assigned yet",
                         message:
-                            "A first run only tracks what it finds. Manage an item from the library before assigning it here, or skip this for now."
+                            "Nothing can be assigned yet: a first run only tracks what it finds. Manage a tool from the Library first, or finish now and come back."
                     )
                 }
                 if let error = workspace.library.errorMessage {
@@ -320,7 +319,6 @@ struct OnboardingWizard: View {
             Button(primaryTitle, action: advance)
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(step == .assign && !isDone && !canAssign)
         }
         .controlSize(.large)
         .padding(.horizontal, WorkspaceLayout.pageInset)
@@ -330,7 +328,13 @@ struct OnboardingWizard: View {
     private var primaryTitle: String {
         switch step {
         case .found, .apps: "Continue"
-        case .assign: isDone ? "Go to Home" : "Choose tools to assign…"
+        case .assign:
+            if isDone { "Go to Home" }
+            // A first run that found nothing a client already owns has nothing
+            // to assign. Rather than trapping a person behind a disabled
+            // button, the step offers a plain finish.
+            else if canAssign { "Choose tools to assign…" }
+            else { "Done" }
         }
     }
 
@@ -340,13 +344,26 @@ struct OnboardingWizard: View {
         case .apps: step = .assign
         case .assign:
             if isDone {
-                onFinish()
-                navigation.open(.section(.overview))
-            } else {
+                finishToHome()
+            } else if canAssign {
                 workspace.library.discardReview()
                 isAssigning = true
+            } else {
+                // Nothing to assign: finishing is the only sensible move, so
+                // "Done" ends onboarding and lands on Home the same way the
+                // done state's "Go to Home" does.
+                finishToHome()
             }
         }
+    }
+
+    /// Ends onboarding and navigates Home through the shell. One mechanism for
+    /// every exit here, so "Go to Home", "Done", and the next-step rows all
+    /// leave the wizard the same way rather than one going through the
+    /// navigation state and the others through the shell.
+    private func finishToHome() {
+        onFinish()
+        workspaceNavigate(.overview)
     }
 
     private func toolingKind(_ kind: ArtifactKind) -> ToolingKind {

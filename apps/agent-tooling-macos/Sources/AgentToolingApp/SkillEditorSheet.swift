@@ -120,7 +120,7 @@ struct SkillEditorSheet: View {
                 title: "What should this skill do?",
                 message: "Keep it to one reusable capability. A narrow skill triggers more reliably.")
             FormField(title: "Skill name", help: "Lowercase words separated by hyphens") {
-                TextField("release-readiness", text: $draft.name)
+                TextField("my-skill-name", text: $draft.name)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Skill name")
             }
@@ -158,7 +158,7 @@ struct SkillEditorSheet: View {
             ForEach(draft.triggers.indices, id: \.self) { index in
                 FormField(title: "Trigger \(index + 1)", help: index == 0 ? "The most natural invocation" : nil) {
                     VStack(alignment: .trailing, spacing: 5) {
-                        TextField("Check release readiness", text: $draft.triggers[index])
+                        TextField(triggerPlaceholder(index), text: $draft.triggers[index])
                             .textFieldStyle(.roundedBorder)
                             .accessibilityLabel("Trigger \(index + 1)")
                         if draft.triggers[index].count > WorkspaceLibrary.maximumTriggerLength {
@@ -169,7 +169,7 @@ struct SkillEditorSheet: View {
             }
             FormField(title: "Should not trigger for", help: "A nearby request that belongs elsewhere") {
                 VStack(alignment: .trailing, spacing: 5) {
-                    TextField("Building an unrelated feature", text: $draft.negativeTrigger)
+                    TextField("e.g. Fix the failing test", text: $draft.negativeTrigger)
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("Should not trigger for")
                     if draft.negativeTrigger.count > WorkspaceLibrary.maximumNegativeTriggerLength {
@@ -312,6 +312,18 @@ struct SkillEditorSheet: View {
         }
         .padding(.horizontal, 22)
         .frame(height: 78)
+    }
+
+    /// Example phrasing for each trigger field, worded so an empty field reads
+    /// as guidance rather than as content someone left behind. The list gives a
+    /// distinct example per row and repeats its last one for any extra fields.
+    private func triggerPlaceholder(_ index: Int) -> String {
+        let examples = [
+            "e.g. Summarise this pull request",
+            "e.g. Write release notes for this diff",
+            "e.g. Turn review comments into a checklist",
+        ]
+        return examples[min(index, examples.count - 1)]
     }
 
     private var normalizedName: String {

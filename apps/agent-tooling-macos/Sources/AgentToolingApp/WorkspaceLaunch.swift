@@ -35,6 +35,13 @@ struct WorkspaceLaunch {
         /// Absent when this Mac's linked-preset file could not be prepared. The
         /// workspace still opens; only following a preset is unavailable.
         let presets: WorkspacePresetsSession?
+        /// Why `presets`, `sync`, or the content store is absent, when it is —
+        /// the caught error's own description, so the pane that stands in for
+        /// the missing feature can say what actually went wrong rather than only
+        /// that something did. Nil when the feature opened normally.
+        let presetsUnavailableReason: String?
+        let syncUnavailableReason: String?
+        let contentStoreUnavailableReason: String?
         let declarations: WorkspaceProjectDeclarationSession
         /// True when this launch created the workspace by scanning.
         let isFirstRun: Bool
@@ -98,7 +105,17 @@ struct WorkspaceLaunch {
         try? FileManager.default.createDirectory(
             at: contentDirectory, withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700])
-        let contentStore = try? CentralPackageContentStore(directory: contentDirectory)
+        // Each optional store keeps the reason it failed, so the pane that
+        // stands in for the missing feature can name the cause instead of only
+        // reporting that something could not be prepared.
+        var contentStoreUnavailableReason: String?
+        let contentStore: CentralPackageContentStore?
+        do {
+            contentStore = try CentralPackageContentStore(directory: contentDirectory)
+        } catch {
+            contentStore = nil
+            contentStoreUnavailableReason = error.localizedDescription
+        }
         let service = WorkspaceApplicationService(store: store, writerID: writerID,
                                                   contentStore: contentStore)
         let library = WorkspaceLibrarySession(
@@ -106,10 +123,28 @@ struct WorkspaceLaunch {
             access: .writable)
         // Sync is optional: a workspace whose enrollment file cannot be prepared
         // still opens its library rather than failing to start.
-        let sync = (try? WorkspaceSyncEnrollmentStore(containerRoot: container)).map {
-            WorkspaceSyncSession(store: store, enrollmentStore: $0,
-                                 workspaceID: store.workspaceID, writerID: writerID,
-                                 keyStore: try? WorkspaceFolderKeyStore(containerRoot: container))
+        var syncUnavailableReason: String?
+        let sync: WorkspaceSyncSession?
+        do {
+            let enrollmentStore = try WorkspaceSyncEnrollmentStore(containerRoot: container)
+            sync = WorkspaceSyncSession(
+                store: store, enrollmentStore: enrollmentStore,
+                workspaceID: store.workspaceID, writerID: writerID,
+                keyStore: try? WorkspaceFolderKeyStore(containerRoot: container))
+        } catch {
+            sync = nil
+            syncUnavailableReason = error.localizedDescription
+        }
+        // Following a preset is optional the same way: the linked-preset file
+        // that cannot be prepared leaves the rest of the workspace intact.
+        var presetsUnavailableReason: String?
+        let presets: WorkspacePresetsSession?
+        do {
+            let presetStore = try WorkspaceLinkedPresetStore(containerRoot: container)
+            presets = WorkspacePresetsSession(service: service, library: library, store: presetStore)
+        } catch {
+            presets = nil
+            presetsUnavailableReason = error.localizedDescription
         }
         // Named rather than built in place: the review queue refuses a request
         // naming an app this Mac does not manage, and the answer to that has to
@@ -136,9 +171,10 @@ struct WorkspaceLaunch {
                 library: library, homeRoot: homeRoot, services: insightsServices(container)),
             requests: WorkspaceRequestSession(
                 store: store, library: library, device: device, queue: requestQueue),
-            presets: (try? WorkspaceLinkedPresetStore(containerRoot: container)).map {
-                WorkspacePresetsSession(service: service, library: library, store: $0)
-            },
+            presets: presets,
+            presetsUnavailableReason: presetsUnavailableReason,
+            syncUnavailableReason: syncUnavailableReason,
+            contentStoreUnavailableReason: contentStoreUnavailableReason,
             declarations: WorkspaceProjectDeclarationSession(library: library),
             isFirstRun: isFirstRun,
             store: store, service: service, contentStore: contentStore, homeRoot: homeRoot)

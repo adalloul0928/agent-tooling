@@ -202,22 +202,4 @@ struct ComponentsRenderTests {
         host.cacheDisplay(in: host.bounds, to: bitmap)
         return bitmap
     }
-
-    /// Counts colours over the whole primitive. A drawn one puts at least a
-    /// glyph or a word over its ground; a blank one is a single flat wash.
-    private func distinctColours(in bitmap: NSBitmapImageRep) -> Int {
-        var seen = Set<UInt32>()
-        for y in 0..<bitmap.pixelsHigh {
-            for x in 0..<bitmap.pixelsWide {
-                guard let colour = bitmap.colorAt(x: x, y: y) else { continue }
-                let packed =
-                    UInt32(colour.redComponent * 255) << 16
-                    | UInt32(colour.greenComponent * 255) << 8
-                    | UInt32(colour.blueComponent * 255)
-                seen.insert(packed)
-                if seen.count >= 2 { return seen.count }
-            }
-        }
-        return seen.count
-    }
 }

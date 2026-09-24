@@ -14,9 +14,18 @@ struct SyncSection: View {
                 EmptyStateView(
                     symbol: AppSection.sync.symbol,
                     title: "Sync unavailable",
-                    message: "Sync could not be prepared on this Mac, so this workspace stays local to it.")
+                    message: syncUnavailableMessage)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    /// Names the cause when the workspace kept one. Falls back to the plain
+    /// sentence when no reason was captured.
+    private var syncUnavailableMessage: String {
+        if let reason = workspace.syncUnavailableReason {
+            return "Sync unavailable — \(reason)"
+        }
+        return "Sync could not be prepared on this Mac, so this workspace stays local to it."
     }
 }
