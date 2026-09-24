@@ -26,7 +26,12 @@ if [[ ! -x "$APP/Contents/MacOS/AgentTooling" ]]; then
   exit 1
 fi
 for argument in "$@"; do
-  if [[ "$argument" == "--fresh" ]]; then rm -rf "$TESTBED"; fi
+  if [[ "$argument" == "--fresh" && -d "$TESTBED" ]]; then
+    # The managed content store makes its objects read-only, so a plain rm -rf
+    # stops at the first one and set -e would end the script before launching.
+    chmod -R u+w "$TESTBED"
+    rm -rf "$TESTBED"
+  fi
 done
 mkdir -p "$HOME_DIR/.local/bin" "$WORKSPACE_DIR"
 
