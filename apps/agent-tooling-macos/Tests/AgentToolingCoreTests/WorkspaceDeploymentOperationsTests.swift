@@ -234,8 +234,68 @@ struct WorkspaceDeploymentOperationsTests {
         #expect(Set(plans.flatMap(\.targetSurfaces)).count == 2)
     }
 
-    @Test func nothingReviewedProducesNoCommandOperations() {
-        #expect(WorkspaceDeploymentOperations.operations().isEmpty)
+    @Test func theOperationTitleTellsAFirstInstallFromAnUpdateFromARemoval() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let destination = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000101")!)
+        func item(_ action: WorkspaceDeploymentAction) -> WorkspaceDeploymentItem {
+            .init(artifactID: fixture.artifact.identity.id, displayName: "Personal",
+                  physicalDestinationID: destination, surface: .codexCLI, scope: .user,
+                  logicalProjectID: nil, action: action, desiredEnabled: nil, reasons: [.manual])
+        }
+        func title(_ action: WorkspaceDeploymentAction) throws -> String {
+            let plan = WorkspaceDeploymentPlan(items: [item(action)], exclusions: [])
+            // Each call gets its own staging subfolder so repeated stages of the
+            // same artifact/destination do not collide on one path.
+            let root = fixture.staging.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(
+                at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let staged = try WorkspaceDeploymentOperations.stage(
+                plan, artifacts: [fixture.artifact], content: [fixture.tree.digest: fixture.tree],
+                stagingRoot: root, homeURL: fixture.home)
+            return try #require(WorkspaceDeploymentOperations.operations(for: staged).first).title
+        }
+
+        // A first install into an absent destination reads "Install", not
+        // "Update" — the bug was calling every non-removal an update.
+        #expect(try title(.installContent(digest: fixture.tree.digest)) == "Install 1 tool in Codex")
+        #expect(
+            try title(.updateContent(from: fixture.otherDigest, to: fixture.tree.digest))
+                == "Update 1 tool in Codex")
+    }
+
+    @Test func aMixOfFirstInstallsAndUpdatesInOneFolderIsAChange() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let destination = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000101")!)
+        // A second artifact so one folder can hold both an install and an update.
+        let secondID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
+        let secondTree = try CapturedPackageTree(entries: [
+            .init(relativePath: "SKILL.md",
+                  kind: .file(bytes: Data("---\nname: second\ndescription: Second\n---\n".utf8),
+                              executable: false)),
+        ])
+        let second = ArtifactRecord(
+            identity: .init(id: secondID, kind: .skill, displayName: "Second"),
+            authority: .centralPersonal, declaredName: "second", contentDigest: secondTree.digest)
+        let plan = WorkspaceDeploymentPlan(items: [
+            .init(artifactID: fixture.artifact.identity.id, displayName: "Personal",
+                  physicalDestinationID: destination, surface: .codexCLI, scope: .user,
+                  logicalProjectID: nil, action: .installContent(digest: fixture.tree.digest),
+                  desiredEnabled: nil, reasons: [.manual]),
+            .init(artifactID: secondID, displayName: "Second",
+                  physicalDestinationID: destination, surface: .codexCLI, scope: .user,
+                  logicalProjectID: nil,
+                  action: .updateContent(from: fixture.otherDigest, to: secondTree.digest),
+                  desiredEnabled: nil, reasons: [.manual]),
+        ], exclusions: [])
+        let staged = try WorkspaceDeploymentOperations.stage(
+            plan, artifacts: [fixture.artifact, second],
+            content: [fixture.tree.digest: fixture.tree, secondTree.digest: secondTree],
+            stagingRoot: fixture.staging, homeURL: fixture.home)
+
+        let operation = try #require(WorkspaceDeploymentOperations.operations(for: staged).first)
+        #expect(operation.title == "Change 2 tools in Codex")
     }
 
     @Test func aDestinationThisMacRedirectedWritesWhereThePersonPointedIt() throws {
@@ -311,6 +371,9 @@ struct WorkspaceDeploymentOperationsTests {
         let plan: WorkspaceDeploymentPlan
         let projectID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f6")!)
         let skillBytes = Data("---\nname: personal\ndescription: Fixture\n---\n\n# Personal\n".utf8)
+        /// A stand-in digest for "something different is already there", used by
+        /// the update-vs-install title tests.
+        let otherDigest = ContentDigest(algorithm: .sha256TreeV1, value: String(repeating: "e", count: 64))
 
         init(scope: ToolingScope = .user) throws {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()

@@ -24,6 +24,36 @@ public struct CapturedSkillAssignmentTarget: Hashable, Sendable {
     public let canonicalDirectory: URL
 }
 
+/// One selector the capture could not turn into a target, paired with the
+/// reason. This is a per-selector outcome, not a failure of the whole read:
+/// a Kiro selector, a project with no folder on this Mac, or a client that is
+/// not installed are all ordinary situations the caller reports rather than a
+/// wall that takes every other client down with it.
+public struct SkippedSkillAssignmentSelector: Equatable, Sendable {
+    public let selector: ResolvedAssignmentSelector
+    public let reason: WorkspaceSkillTargetCaptureError
+
+    public init(selector: ResolvedAssignmentSelector, reason: WorkspaceSkillTargetCaptureError) {
+        self.selector = selector
+        self.reason = reason
+    }
+}
+
+/// The captured targets and the selectors that were skipped, together, so the
+/// caller can plan over what was captured and still name what was not.
+public struct WorkspaceSkillTargetCaptureResult: Sendable {
+    public let targets: [CapturedSkillAssignmentTarget]
+    public let skipped: [SkippedSkillAssignmentSelector]
+
+    public init(
+        targets: [CapturedSkillAssignmentTarget],
+        skipped: [SkippedSkillAssignmentSelector]
+    ) {
+        self.targets = targets
+        self.skipped = skipped
+    }
+}
+
 /// Resolves the native CLI skill routes on this device. Capability support is
 /// deliberately supplied separately to WorkspaceAssignmentResolver: an installed
 /// client, version string, or generic supportsProjectScope flag is not a probe.
@@ -39,7 +69,7 @@ public enum WorkspaceSkillTargetCapture {
         /// What this Mac recorded each client can accept. Empty means a target
         /// carries skills only, which is what it did before this existed.
         capabilityEvidence: [TargetCapabilityEvidence] = []
-    ) async throws -> [CapturedSkillAssignmentTarget] {
+    ) async throws -> WorkspaceSkillTargetCaptureResult {
         let task = Task.detached(priority: .utility) {
             try captureSynchronously(homeURL: homeURL, deviceID: deviceID, selectors: selectors,
                 projectRoots: projectRoots, observations: observations,
@@ -82,7 +112,7 @@ public enum WorkspaceSkillTargetCapture {
         homeURL: URL, deviceID: WorkspaceObjectID, selectors: [ResolvedAssignmentSelector],
         projectRoots: [DeviceProjectRootBinding], observations: [TargetObservation],
         capabilityEvidence: [TargetCapabilityEvidence]
-    ) throws -> [CapturedSkillAssignmentTarget] {
+    ) throws -> WorkspaceSkillTargetCaptureResult {
         try Task.checkCancellation()
         guard selectors.count <= 1_024, Set(selectors).count == selectors.count,
               observations.count <= 1_024 else { throw WorkspaceSkillTargetCaptureError.invalidSelectors }
@@ -95,14 +125,15 @@ public enum WorkspaceSkillTargetCapture {
         var rootBindings = [(homeURL, homeBinding)]
         var directoryBindings: [(URL, DirectoryBinding)] = []
         var results: [CapturedSkillAssignmentTarget] = []
+        var skipped: [SkippedSkillAssignmentSelector] = []
         for selector in selectors {
             try Task.checkCancellation()
-            let client: ClientKind
-            switch selector.surface {
-            case .claudeCode: client = .claude
-            case .codexCLI: client = .codex
-            case .geminiCLI: client = .gemini
-            default: throw WorkspaceSkillTargetCaptureError.unsupportedSurface(selector.surface)
+            // A surface with no native skill folder on this Mac is skipped, not
+            // fatal: the caller reports it and every other client still resolves.
+            guard let client = TargetSurfaceCapability.skillClient(for: selector.surface) else {
+                skipped.append(.init(selector: selector,
+                    reason: .unsupportedSurface(selector.surface)))
+                continue
             }
             let projectRoot: URL?
             switch selector.scope {
@@ -111,7 +142,13 @@ public enum WorkspaceSkillTargetCapture {
                 projectRoot = nil
             case .project:
                 guard let id = selector.logicalProjectID else { throw WorkspaceSkillTargetCaptureError.invalidSelectors }
-                guard let path = projects[id] else { throw WorkspaceSkillTargetCaptureError.missingProject(id) }
+                // No folder for this project on this Mac yet. That is a person's
+                // choice still to make, not a broken read, so it is skipped and
+                // reported rather than aborting the whole capture.
+                guard let path = projects[id] else {
+                    skipped.append(.init(selector: selector, reason: .missingProject(id)))
+                    continue
+                }
                 guard path.hasPrefix("/") else { throw WorkspaceSkillTargetCaptureError.invalidRoot }
                 let root = URL(fileURLWithPath: path, isDirectory: true)
                 let binding = try existingRoot(root, rejectLeafSymlink: true)
@@ -124,7 +161,13 @@ public enum WorkspaceSkillTargetCapture {
             let matches = observations.filter { $0.surface == selector.surface }
             guard matches.count <= 1 else { throw WorkspaceSkillTargetCaptureError.ambiguousObservation(selector.surface) }
             guard let observation = matches.first else { throw WorkspaceSkillTargetCaptureError.missingObservation(selector.surface) }
-            guard observation.installed else { throw WorkspaceSkillTargetCaptureError.unavailableClient(selector.surface) }
+            // A client that is not installed cannot carry anything. That is an
+            // ordinary state, so it is skipped and reported, not thrown.
+            guard observation.installed else {
+                skipped.append(.init(selector: selector,
+                    reason: .unavailableClient(selector.surface)))
+                continue
+            }
             let directory = try NativeSkillDestination.directory(
                 client: client, homeURL: homeURL, scope: selector.scope, projectRoot: projectRoot)
             let binding = try directoryBinding(directory)
@@ -143,7 +186,7 @@ public enum WorkspaceSkillTargetCapture {
             try Task.checkCancellation()
             guard try directoryBinding(url) == before else { throw WorkspaceSkillTargetCaptureError.changedDuringCapture }
         }
-        return results
+        return .init(targets: results, skipped: skipped)
     }
 
     private struct DirectoryBinding: Equatable {

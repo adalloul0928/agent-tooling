@@ -171,7 +171,8 @@ struct TargetCapabilityEvidenceDerivationTests {
             targets: [Self.target(.claudeCode, version: observation.version, evidence: [])],
             availableContent: [.init(artifactID: Self.skillID, digest: Self.digest)])
         #expect(refused.items.isEmpty)
-        #expect(refused.exclusions.map(\.reason) == [.unsupportedByAdapter])
+        // No evidence means the version is unknown, not that the app said no.
+        #expect(refused.exclusions.map(\.reason) == [.unknownClientVersion])
 
         var device = blind
         device.capabilityEvidence = TargetCapabilityEvidence.derive(from: [observation])

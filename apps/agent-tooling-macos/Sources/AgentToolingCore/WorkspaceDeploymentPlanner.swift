@@ -50,6 +50,12 @@ public enum WorkspaceDeploymentExclusionReason: String, Hashable, Sendable, Case
     case missingNativeRoute
     /// The adapter cannot express this scope or this on/off request.
     case unsupportedByAdapter
+    /// This app did not report its version, so what it accepts is unknown.
+    /// Different from `unsupportedByAdapter`: the answer is unknown, not no.
+    case unknownClientVersion
+    /// This destination does not exist on this Mac yet — a project with no
+    /// folder chosen, a client that is not installed, or an unsupported surface.
+    case noDestination
     /// The resolver could not produce a usable requirement.
     case needsAssignmentReview
     /// The destination already holds exactly this, by observation.
@@ -135,7 +141,14 @@ public enum WorkspaceDeploymentPlanner {
         /// Destinations the caller proved this app installed itself. Only these
         /// can ever be offered for removal; anything else stays untouched.
         provenInstalls: Set<WorkspaceDeploymentInstallKey> = [],
-        nativeInstallRoutes: Set<NativePackageRoute> = []
+        nativeInstallRoutes: Set<NativePackageRoute> = [],
+        /// Selectors this Mac has no destination for right now — a project with
+        /// no folder chosen, a client that is not installed, an unsupported
+        /// surface — each with a plain-words detail. An assignment aimed at one
+        /// of these is excluded by name with `.noDestination` and that detail,
+        /// rather than falling through to a generic "needs review" once the
+        /// resolver cannot find a target for it.
+        unavailableDestinations: [ResolvedAssignmentSelector: String] = [:]
     ) -> WorkspaceDeploymentPlan {
         var items: [WorkspaceDeploymentItem] = []
         var exclusions: [WorkspaceDeploymentExclusion] = []
@@ -149,6 +162,20 @@ public enum WorkspaceDeploymentPlanner {
                                     reason: reason, detail: detail))
         }
 
+        // An assignment aimed at a destination this Mac cannot reach right now
+        // is excluded by name here, before the resolver — which never saw a
+        // target for it — would report it as a generic review. The detail is
+        // the caller's plain-words reason, naming the project or the app.
+        var unavailableArtifacts = Set<ArtifactID>()
+        if !unavailableDestinations.isEmpty {
+            for assignment in document.assignments {
+                let selector = ResolvedAssignmentSelector(destination: assignment.destination)
+                guard let detail = unavailableDestinations[selector] else { continue }
+                exclude(.noDestination, assignment.artifactID, nil, detail)
+                unavailableArtifacts.insert(assignment.artifactID)
+            }
+        }
+
         let resolution = WorkspaceAssignmentResolver.resolve(
             artifacts: document.artifacts,
             contributions: document.assignments,
@@ -160,6 +187,16 @@ public enum WorkspaceDeploymentPlanner {
             deviceMCPBindings: device.mcpBindings ?? [])
 
         for issue in resolution.issues {
+            // A `missingResolvedTarget` for an artifact whose selector this Mac
+            // could not reach is the same fact `.noDestination` already reported
+            // in plain words above; do not also report it as a generic review.
+            // An available selector for the same artifact resolves to a
+            // requirement, so this never hides a different destination's problem.
+            if issue.kind == .missingResolvedTarget,
+               let artifactID = issue.artifactID,
+               unavailableArtifacts.contains(artifactID) {
+                continue
+            }
             exclude(reason(for: issue.kind), issue.artifactID, issue.physicalDestinationID,
                     describe(issue.kind))
         }
@@ -283,7 +320,9 @@ public enum WorkspaceDeploymentPlanner {
     }
 }
 
-private extension WorkspaceDeploymentPlanner {
+// Internal (not private) so the exclusion-description sentences can be unit
+// tested directly: a leaked enum raw value must be catchable in a test.
+extension WorkspaceDeploymentPlanner {
     struct ObservationKey: Hashable {
         let artifactID: ArtifactID
         let destination: WorkspaceObjectID
@@ -313,28 +352,39 @@ private extension WorkspaceDeploymentPlanner {
         case .missingMaterializedContent, .ambiguousContentEvidence: .missingContent
         case .nativeChildAssignment: .packageMember
         case .missingNativeRoute, .ambiguousNativeRoute, .invalidNativeRoute: .missingNativeRoute
-        case .unsupportedCapability, .unknownCapability, .missingCapabilityEvidence,
-             .contradictoryCapabilityEvidence: .unsupportedByAdapter
+        // The app answered but cannot express this: a real no.
+        case .unsupportedCapability, .unknownCapability, .contradictoryCapabilityEvidence:
+            .unsupportedByAdapter
+        // The app never said what it accepts, so the answer is unknown, not no.
+        case .missingCapabilityEvidence: .unknownClientVersion
         default: .needsAssignmentReview
         }
     }
 
+    /// One plain sentence per issue kind, and never the raw enum name. A
+    /// person reading this should learn what to do, not read a code word. The
+    /// fallback stays generic on purpose: leaking the kind was the bug.
     static func describe(_ kind: WorkspaceAssignmentIssueKind) -> String {
         switch kind {
-        case .trackedOnlyOwnership: "Tracked items record what exists; the library does not install them."
+        case .trackedOnlyOwnership:
+            "Tracked items record what exists; the library does not install them."
         case .missingMaterializedContent:
-            "The library holds no verified content for this item yet."
+            "The library holds no verified copy of this item yet."
         case .ambiguousContentEvidence:
-            "This item has more than one recorded content version in the library."
-        case .nativeChildAssignment: "Bundled tools are delivered by their package."
+            "This item has more than one recorded version in the library, so it is not clear which to install."
+        case .nativeChildAssignment:
+            "This tool comes with its package and is installed as part of it."
         case .missingNativeRoute, .ambiguousNativeRoute, .invalidNativeRoute:
-            "This app's package has no single confirmed route on this Mac."
+            "This app's package has no single confirmed way to install it on this Mac."
         case .unsupportedCapability, .unknownCapability:
-            "The installed app version does not support this destination."
-        case .missingCapabilityEvidence, .contradictoryCapabilityEvidence:
-            "This Mac has no dependable record of what the installed app supports."
-        // Naming the check that refused is what makes this actionable.
-        default: "This request needs review before it can be applied: \(kind.rawValue)."
+            "The installed app cannot accept this here."
+        case .contradictoryCapabilityEvidence:
+            "This Mac has conflicting records of what the installed app accepts, so it is not safe to proceed."
+        case .missingCapabilityEvidence:
+            "This app did not report its version, so Agent Tooling cannot confirm it accepts this. "
+                + "Check your apps again once it answers."
+        default:
+            "This request needs a second look before it can be applied."
         }
     }
 

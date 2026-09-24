@@ -121,11 +121,7 @@ public enum WorkspaceNativePluginCommandPlanning {
             throw WorkspaceNativePluginCommandPlanningError.invalidRequirement
         }
 
-        let client: ClientKind
-        switch target.selector.surface {
-        case .claudeCode: client = .claude
-        case .codexCLI: client = .codex
-        default:
+        guard let client = TargetSurfaceCapability.nativePluginClient(for: target.selector.surface) else {
             throw WorkspaceNativePluginCommandPlanningError.unsupportedSurface(target.selector.surface)
         }
         guard target.selector.scope == .user, target.selector.logicalProjectID == nil else {

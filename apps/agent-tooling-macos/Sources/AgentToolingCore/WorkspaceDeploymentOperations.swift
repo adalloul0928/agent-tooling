@@ -14,6 +14,18 @@ public enum WorkspaceDeploymentOperationError: Error, Equatable, Sendable {
 
 /// A reviewed content deployment, staged and ready for the existing executor.
 public struct StagedDeployment: Hashable, Sendable {
+    /// Which kind of content change a staged copy represents, so an operation
+    /// title can tell a first install from a replacement rather than calling
+    /// every non-removal an "update".
+    public enum Change: Hashable, Sendable {
+        /// Nothing is at the destination; this creates it.
+        case install
+        /// Something is there and differs; this replaces it.
+        case update
+        /// The installed copy is being removed.
+        case remove
+    }
+
     public let artifactID: ArtifactID
     public let deploymentName: String
     /// Empty for a removal: nothing is staged to put there.
@@ -23,11 +35,12 @@ public struct StagedDeployment: Hashable, Sendable {
     public let destinationPath: String
     public let client: ClientKind
     public let scope: ToolingScope
-    public let isRemoval: Bool
+    public let change: Change
+    public var isRemoval: Bool { change == .remove }
 
     public init(
         artifactID: ArtifactID, deploymentName: String, stagingPath: String, fingerprint: String,
-        destinationPath: String, client: ClientKind, scope: ToolingScope, isRemoval: Bool = false
+        destinationPath: String, client: ClientKind, scope: ToolingScope, change: Change = .install
     ) {
         self.artifactID = artifactID
         self.deploymentName = deploymentName
@@ -36,7 +49,7 @@ public struct StagedDeployment: Hashable, Sendable {
         self.destinationPath = destinationPath
         self.client = client
         self.scope = scope
-        self.isRemoval = isRemoval
+        self.change = change
     }
 }
 
@@ -81,10 +94,11 @@ public enum WorkspaceDeploymentOperations {
         for item in plan.items {
             let digest: ContentDigest
             var removing = false
+            let change: StagedDeployment.Change
             switch item.action {
-            case .installContent(let value): digest = value
-            case .updateContent(_, let value): digest = value
-            case .removeContent(let value): digest = value; removing = true
+            case .installContent(let value): digest = value; change = .install
+            case .updateContent(_, let value): digest = value; change = .update
+            case .removeContent(let value): digest = value; removing = true; change = .remove
             // These are the command bridges' work, not a folder copy.
             case .installNativePackage, .configureManagedConnection: continue
             }
@@ -144,7 +158,7 @@ public enum WorkspaceDeploymentOperations {
                     artifactID: item.artifactID, deploymentName: deploymentName,
                     stagingPath: "", fingerprint: installed,
                     destinationPath: destination.path, client: client, scope: item.scope,
-                    isRemoval: true))
+                    change: .remove))
                 continue
             }
             guard let tree else { throw WorkspaceDeploymentOperationError.missingContent }
@@ -159,7 +173,8 @@ public enum WorkspaceDeploymentOperations {
             staged.append(.init(
                 artifactID: item.artifactID, deploymentName: deploymentName,
                 stagingPath: folder.path, fingerprint: fingerprint,
-                destinationPath: destination.path, client: client, scope: item.scope))
+                destinationPath: destination.path, client: client, scope: item.scope,
+                change: change))
         }
         return staged
     }
@@ -200,12 +215,26 @@ public enum WorkspaceDeploymentOperations {
                             destinationPath: deployment.destinationPath)
                 }
                 let removals = sorted.filter(\.isRemoval).count
+                let installs = sorted.filter { $0.change == .install }.count
+                let updates = sorted.filter { $0.change == .update }.count
+                let count = sorted.count
+                let tools = count == 1 ? "1 tool" : "\(count) tools"
+                let title: String
+                if removals == count {
+                    title = "Remove \(tools) from \(key.client.rawValue)"
+                } else if installs == count {
+                    title = "Install \(tools) in \(key.client.rawValue)"
+                } else if updates == count {
+                    title = "Update \(tools) in \(key.client.rawValue)"
+                } else {
+                    // A folder that gets some first installs and some
+                    // replacements at once is neither, so it is a change.
+                    title = "Change \(tools) in \(key.client.rawValue)"
+                }
                 return OperationPlan(
                     id: identifiers(),
                     kind: .installSkill,
-                    title: removals == sorted.count
-                        ? "Remove \(sorted.count == 1 ? "1 tool" : "\(sorted.count) tools") from \(key.client.rawValue)"
-                        : "Update \(sorted.count == 1 ? "1 tool" : "\(sorted.count) tools") in \(key.client.rawValue)",
+                    title: title,
                     summary: "Only what you reviewed changes. Nothing else in that folder is touched.",
                     targetSurfaces: [key.client.primarySurface],
                     scope: key.scope,

@@ -120,12 +120,8 @@ public enum WorkspaceManagedMCPCommandPlanning {
             throw WorkspaceManagedMCPCommandPlanningError.invalidRequirement
         }
 
-        let client: ClientKind
-        switch target.selector.surface {
-        case .claudeCode: client = .claude
-        case .codexCLI: client = .codex
-        case .geminiCLI: client = .gemini
-        default: throw WorkspaceManagedMCPCommandPlanningError.unsupportedSurface(target.selector.surface)
+        guard let client = TargetSurfaceCapability.managedMCPClient(for: target.selector.surface) else {
+            throw WorkspaceManagedMCPCommandPlanningError.unsupportedSurface(target.selector.surface)
         }
         let expectedExecutable = MCPClientCommand.executable(for: client)
         guard NativeSkillDestination.isValidRoot(executableURL),

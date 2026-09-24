@@ -297,6 +297,15 @@ enum LocalTargetScan {
         if !probe.available {
             let name = surface.client.map(ClientExecutableLocator.executableName(for:)) ?? executable
             notes.append("The \(name) CLI was not available in any known install location; configuration was scanned from disk only.")
+        } else if let status = probe.unansweredExitStatus {
+            // The tool is present but did not answer --version, so its version is
+            // unknown. Say so plainly: a later plan cannot confirm what an
+            // unknown version accepts, which is different from the app not
+            // supporting the request.
+            let name = surface.client.map(ClientExecutableLocator.executableName(for:)) ?? executable
+            notes.append(
+                "The \(name) CLI is present but did not answer --version (exit \(status)), "
+                + "so its version is unknown and Agent Tooling cannot confirm what it accepts.")
         }
         notes.append(contentsOf: native.notes)
         if surface.isCloud { notes.append("Cloud state is not inferred from local configuration.") }
@@ -459,6 +468,11 @@ enum LocalTargetScan {
     private struct CommandProbe {
         var available: Bool
         var version: String?
+        /// The exit status of `--version` when the tool ran but did not report
+        /// a version. `nil` means either it answered cleanly or was not found.
+        /// Present only for the "present but did not answer" case, so a note can
+        /// say the version is unknown rather than the tool being unsupported.
+        var unansweredExitStatus: Int32?
     }
 
     private static func probe(executable: String, runner: any CommandRunning) async -> CommandProbe {
@@ -466,12 +480,17 @@ enum LocalTargetScan {
             output.status != 126,
             output.status != 127
         else {
-            return CommandProbe(available: false, version: nil)
+            return CommandProbe(available: false, version: nil, unansweredExitStatus: nil)
         }
         let value = (output.standardOutput.isEmpty ? output.standardError : output.standardOutput)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let version = output.status == 0 && !value.isEmpty ? value.components(separatedBy: "\n").first : nil
-        return CommandProbe(available: true, version: version)
+        // The tool ran (it was not missing, 126 and 127 already returned above),
+        // but a non-zero exit or empty output left the version unknown. Keep it
+        // available with no version, and record the exit status so the caller
+        // can say the version is unknown rather than that the tool is missing.
+        let unanswered: Int32? = version == nil ? output.status : nil
+        return CommandProbe(available: true, version: version, unansweredExitStatus: unanswered)
     }
 
     private static func childDirectories(under root: URL, fileManager: FileManager) -> [String] {

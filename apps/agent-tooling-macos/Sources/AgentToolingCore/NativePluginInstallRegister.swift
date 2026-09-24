@@ -59,6 +59,18 @@ public enum NativePluginInstallRegister {
         }
     }
 
+    /// Whether this register holds a package-install command for a client.
+    ///
+    /// This is the single fact the three planners and the evidence derivation
+    /// ask when deciding whether a native package install is expressible: a
+    /// client with no recorded command here can never have a plan built for
+    /// one, so none of them may claim it can. Asked with a well-formed probe
+    /// identifier so a client that has a command is recognised regardless of
+    /// which package is being considered; no command is built and none is run.
+    public static func supportsClient(_ client: ClientKind) -> Bool {
+        command(for: client, externalPluginID: "agent-tooling-probe") != nil
+    }
+
     /// The same command as a `NativeInstall`, which is the shape the command
     /// bridge already checks against.
     public static func reviewedInstall(

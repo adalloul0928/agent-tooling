@@ -20,6 +20,10 @@ struct PlanReviewSheet: View {
     /// Computed before approval, never during execution. A person cannot
     /// consent to content they were only shown afterwards.
     @State private var reviewState: ReviewState = .loading
+    /// The "not being installed" list starts open when there is nothing else to
+    /// show, so the reasons are in front of the person rather than hidden behind
+    /// a closed disclosure while the sheet reads "nothing to install".
+    @State private var exclusionsExpanded = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -71,12 +75,27 @@ struct PlanReviewSheet: View {
                     }
 
                     if plan.items.isEmpty {
-                        EmptyStateView(
-                            symbol: "checkmark.circle",
-                            title: "Nothing to install",
-                            message: "Your apps already match what you asked for."
-                        )
-                        .frame(height: 200)
+                        if plan.exclusions.isEmpty {
+                            EmptyStateView(
+                                symbol: "checkmark.circle",
+                                title: "Nothing to install",
+                                message: "Your apps already match what you asked for."
+                            )
+                            .frame(height: 200)
+                        } else {
+                            // Things were asked for, and none can be installed
+                            // right now. Say so plainly and show the reasons,
+                            // rather than implying everything already matches.
+                            EmptyStateView(
+                                symbol: "exclamationmark.triangle",
+                                title: "Nothing can be installed right now",
+                                message:
+                                    "\(plan.exclusions.count) requested "
+                                    + "\(plan.exclusions.count == 1 ? "item is" : "items are") "
+                                    + "not being installed. The reasons are listed below."
+                            )
+                            .frame(height: 200)
+                        }
                     } else {
                         Text("Planned steps")
                             .font(.headline)
@@ -157,6 +176,9 @@ struct PlanReviewSheet: View {
         .background(AgentTheme.contentBackground)
         .interactiveDismissDisabled(isRunning)
         .task(id: planIdentity) {
+            // With nothing installable, open the reasons by default so they are
+            // read rather than hidden behind a closed disclosure.
+            exclusionsExpanded = plan.items.isEmpty && !plan.exclusions.isEmpty
             reviewState = .loading
             guard let contentStore = workspace.contentStore else {
                 reviewState = .failed(
@@ -184,7 +206,9 @@ struct PlanReviewSheet: View {
     // MARK: - Sections
 
     private var excluded: some View {
-        DisclosureGroup("\(plan.exclusions.count) not being installed") {
+        DisclosureGroup(
+            isExpanded: $exclusionsExpanded
+        ) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(
                     "Asking for a tool and installing it are two different things. These were asked for and are not being installed."
@@ -202,6 +226,8 @@ struct PlanReviewSheet: View {
             }
             .padding(.top, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Text("\(plan.exclusions.count) not being installed")
         }
         .padding(14)
         .standardPanel()
@@ -252,7 +278,12 @@ struct PlanReviewSheet: View {
     }
 
     private var installLabel: String {
-        runnableCount == 0 && !plan.items.isEmpty
+        if plan.items.isEmpty {
+            // Nothing to run and nothing listed: the button says so rather than
+            // "Install 0 changes", which reads as an action that does something.
+            return "Nothing to install"
+        }
+        return runnableCount == 0
             ? "Nothing can run yet"
             : "Install \(runnableCount) change\(runnableCount == 1 ? "" : "s")"
     }
@@ -263,7 +294,12 @@ struct PlanReviewSheet: View {
     }
 
     private var title: String {
-        plan.items.isEmpty ? "Nothing to install" : installLabel
+        if plan.items.isEmpty {
+            return plan.exclusions.isEmpty
+                ? "Nothing to install"
+                : "Nothing can be installed right now"
+        }
+        return installLabel
     }
 
     private var summary: String {
@@ -319,6 +355,8 @@ struct PlanReviewSheet: View {
         case .packageMember: "Comes with its package"
         case .missingNativeRoute: "No install route on this Mac"
         case .unsupportedByAdapter: "This app version cannot do it"
+        case .unknownClientVersion: "App version unknown"
+        case .noDestination: "No destination on this Mac"
         case .needsAssignmentReview: "Needs review first"
         case .alreadyPresent: "Already there"
         }
