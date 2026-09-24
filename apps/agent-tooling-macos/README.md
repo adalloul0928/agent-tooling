@@ -41,7 +41,10 @@ skill.
   Plugins packages are inspected locally. The official MCP Registry is queried
   through its documented API. Claude and Codex listings are read from their
   respective machine-readable native catalog commands. Gemini's gallery
-  remains a native source rather than an undocumented scraped API.
+  remains a native source rather than an undocumented scraped API. Adding an
+  MCP Registry server to the library goes through the same reviewed intake as
+  pasting one by hand: Discover builds the connection from the listing's
+  reviewed transport, records one connection, and starts or contacts nothing.
 - **Connections:** the app records ownership, expected surfaces, and optional
   secret *reference names* only. OAuth tokens, API keys, and cloud connectors
   remain in their owning client, account, keychain, provider, or admin system.
@@ -53,45 +56,31 @@ and records partial per-target outcomes.
 
 ## Set up your existing tools
 
-Open **Home → Set up your library** or **Settings → General → Open setup…**.
-New empty workspaces show the wizard once automatically; existing workspaces
-keep their current view and can start it from Home. Deferring setup never
-deletes tools, and the wizard can be run again from Settings.
+Home shows a **Set up your library** card while a new workspace holds discovered
+tools that have not been assigned anywhere yet. The card opens the Skills
+screen, where the setup wizard runs. Skipping it never deletes tools, and it
+reappears from Home until you assign something.
 
-The sequence is **Apps → Plugins → Skills → Connections → Review → Ready**:
+The wizard has three steps, **Found → Apps → Assign**:
 
-- Choose the local clients to scan. This saves Agent Tooling's client visibility
-  preference, then reads the selected apps' current configuration. Scan details
-  show coverage notes and the files inspected.
-- Choose whole plugins first. Their discovered bundled skills and MCP servers
-  are included automatically. Then choose standalone skills and connections;
-  bundled items are never presented as a second checklist. Each step offers
-  search and bulk selection in a compact native list with fixed controls.
-  Selecting a standalone skill, including **Select all**, tracks its existing
-  installation. It never requests a personal copy. Native plugins and MCP
-  servers retain their ownership and update routes.
-- Name the configuration in Review and check each choice and its existing
-  per-client placement. Any skill
-  copies use the ordinary operation-plan sheet before the configuration can be
-  saved. The original client files remain in place. Disabled tools are recorded
-  as disabled, and a skill found in only one client is not silently assigned to
-  another. Later library sync honors this configuration's selected skills and
-  client assignments, including inherited configurations.
-- Skill metadata supports standard YAML, including multiline descriptions and
-  quoted names. Managed copies use the name declared in `SKILL.md`, even when
-  the source folder has a different name; source files are preserved. Import
-  issues appear in an expandable summary. **Track without copying** retains
-  affected tools in the setup while removing their copy requests. Name
-  collisions and genuinely invalid metadata still
-  require review.
-- Finish with links to review app changes, backups/encrypted folder exchange,
-  and optional Insights. Setup does not automatically scan conversation history,
-  enable continuous sync, connect cloud accounts, or rewrite native MCP secrets.
+- **Found** shows what the first run already discovered on this Mac and placed
+  in your library. Nothing has been installed or assigned; this step is a
+  read-only summary of what is there.
+- **Apps** chooses which local clients this Mac keeps in sync. This only sets
+  Agent Tooling's client visibility preference; what is already installed in
+  each app does not change.
+- **Assign** records where you want a tool. Choosing tools here writes down the
+  intent only — putting a tool into an app stays a separate, reviewed step on
+  the Apps screen. You can finish without assigning anything.
+
+Skill metadata supports standard YAML, including multiline descriptions and
+quoted names. Managed copies use the name declared in `SKILL.md`, even when the
+source folder has a different name; source files are preserved.
 
 **Make personal copy** is a separate opt-in for a standalone skill that you
-want to maintain independently. Bundled skills stay with their plugin. The
-normal review action is **Save setup**; only explicit copies require a file
-operation review first.
+want to maintain independently. Bundled skills stay with their plugin. Assigning
+a skill records where you want it and never requests a personal copy on its own;
+only an explicit copy uses the operation-plan sheet before anything is written.
 
 ### Repository-linked skills and native plugin updates
 
@@ -138,6 +127,44 @@ remove saved desired state; checking it again restores its saved state. Run
 Check Clients to refresh its current installation. Historical records involving
 unchecked clients are hidden, while their original receipts remain on disk.
 Client selection is locked while an operation is running or awaiting review.
+
+## Apps, health, and why an install waits
+
+The Apps screen states each managed client's health from its last check. A
+client is only healthy when its command-line tool both answered and reported a
+version: that pair is what tells an install the client will accept what it is
+given. A client whose command ran but did not report a version shows **Found,
+version unknown**, because it has not confirmed what it accepts — a tool asked
+for in that client waits rather than installing until the client answers with a
+version. A client whose files are present but whose command-line tool is missing
+shows **Command unavailable**.
+
+The launch-time check is a preference. **Settings → General → Check health
+automatically** decides whether this Mac's apps are checked when Agent Tooling
+opens; with it off, health is refreshed only when you run **Check apps**. The
+manual button is unaffected by the setting.
+
+## Projects and project folders
+
+A project can be given a folder on this Mac from the Projects screen with
+**Choose folder…**. Until it has one, a project-scoped install has nowhere to
+write, so it waits: the plan names the project and points you at the Projects
+screen to choose a folder rather than failing silently. Choosing a folder never
+moves or rewrites what is already in it.
+
+## Presets
+
+The Presets tab manages named sets of library items. **New preset…** creates one
+from items already in your library; each preset can be renamed and deleted from
+its row menu. Deleting a preset leaves its items in the library. A preset can
+also arrive with a workspace — restored from a backup, synced from another Mac,
+or shared with you.
+
+## Activity
+
+The Activity screen is this Mac's journal. It lists the operation receipts a
+real install, update, or removal wrote, alongside the drift the app has
+recorded, reading the same receipts and journal the rest of the app writes.
 
 ## Create a skill with Codex
 
