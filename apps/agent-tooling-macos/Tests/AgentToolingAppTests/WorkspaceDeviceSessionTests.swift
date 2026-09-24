@@ -22,7 +22,8 @@ struct WorkspaceDeviceSessionTests {
         #expect(await observer.calls == 0)
         #expect(session.observations.isEmpty)
         #expect(session.lastCheckedAt == nil)
-        #expect(session.verdict(for: .claude) == ClientVerdict(state: .pending, text: "Not checked yet"))
+        #expect(session.verdict(for: .claude).state == .pending)
+        #expect(session.verdict(for: .claude).text == "Not checked yet")
     }
 
     @Test func aClientWhoseCommandAnswersIsHealthyAndSaysWhenItWasChecked() async throws {
@@ -33,8 +34,9 @@ struct WorkspaceDeviceSessionTests {
             observer: ScriptedObserver(results: [
                 .success([
                     // The later of the two is the one reported, so a stale
-                    // surface cannot make a fresh check look old.
-                    Fixture.claudeCode(commandAvailable: true, scannedAt: .now),
+                    // surface cannot make a fresh check look old. A version is
+                    // present, so the client is genuinely healthy.
+                    Fixture.claudeCode(commandAvailable: true, version: "2.1.263", scannedAt: .now),
                     Fixture.observation(
                         .claudeDesktop, installed: true, commandAvailable: false,
                         scannedAt: earlier),
@@ -58,16 +60,14 @@ struct WorkspaceDeviceSessionTests {
         let earlier = Date.now.addingTimeInterval(-40 * 24 * 60 * 60)
         let session = await fixture.session(
             observer: ScriptedObserver(results: [
-                .success([Fixture.claudeCode(commandAvailable: true, scannedAt: earlier)])
+                .success([Fixture.claudeCode(commandAvailable: true, version: "2.1.263", scannedAt: earlier)])
             ]))
 
         await session.refresh()
 
-        #expect(
-            session.verdict(for: .claude)
-                == ClientVerdict(
-                    state: .healthy,
-                    text: "Checked \(earlier.formatted(.dateTime.month(.abbreviated).day()))"))
+        let verdict = session.verdict(for: .claude)
+        #expect(verdict.state == .healthy)
+        #expect(verdict.text == "Checked \(earlier.formatted(.dateTime.month(.abbreviated).day()))")
     }
 
     @Test func filesWithoutACommandAreDistinguishedFromNothingAtAll() async throws {
@@ -83,14 +83,85 @@ struct WorkspaceDeviceSessionTests {
 
         await session.refresh()
 
-        #expect(
-            session.verdict(for: .claude)
-                == ClientVerdict(state: .attention, text: "Command unavailable"))
-        #expect(session.verdict(for: .codex) == ClientVerdict(state: .attention, text: "Not found"))
+        #expect(session.verdict(for: .claude).state == .attention)
+        #expect(session.verdict(for: .claude).text == "Command unavailable")
+        #expect(session.verdict(for: .codex).state == .attention)
+        #expect(session.verdict(for: .codex).text == "Not found")
         // Never scanned is not the same as looked for and missing.
-        #expect(
-            session.verdict(for: .gemini)
-                == ClientVerdict(state: .pending, text: "Not checked yet"))
+        #expect(session.verdict(for: .gemini).state == .pending)
+        #expect(session.verdict(for: .gemini).text == "Not checked yet")
+    }
+
+    /// A command that ran but reported no version has not said what it accepts,
+    /// so it is neither healthy nor missing: it is attention, and the words say
+    /// why a tool asked for in it would wait.
+    @Test func aCommandThatAnsweredWithoutAVersionIsAttentionNotHealthy() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session(
+            observer: ScriptedObserver(results: [
+                .success([Fixture.claudeCode(commandAvailable: true, version: nil)])
+            ]))
+
+        await session.refresh()
+
+        let verdict = session.verdict(for: .claude)
+        #expect(verdict.state == .attention)
+        #expect(verdict.text == "Found, version unknown")
+        #expect(verdict.detail.contains("did not answer --version"))
+        #expect(verdict.detail.contains("wait until it does"))
+        // A blank version string is treated the same as none.
+        let blank = await fixture.session(
+            observer: ScriptedObserver(results: [
+                .success([Fixture.claudeCode(commandAvailable: true, version: "")])
+            ]))
+        await blank.refresh()
+        #expect(blank.verdict(for: .claude).state == .attention)
+        #expect(blank.verdict(for: .claude).text == "Found, version unknown")
+    }
+
+    /// Every state carries a plain explanation for a tooltip or an
+    /// accessibility value, and it names the client it is about.
+    @Test func everyVerdictStateCarriesAPlainExplanation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session(
+            observer: ScriptedObserver(results: [
+                .success([
+                    Fixture.claudeCode(commandAvailable: true, version: "2.1.263"),
+                    Fixture.observation(.codexCLI, installed: false, commandAvailable: false),
+                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: false),
+                ])
+            ]))
+
+        // Before any check: "Run Check apps to look."
+        #expect(session.verdict(for: .kiro).detail == "Run Check apps to look.")
+
+        await session.refresh()
+
+        #expect(session.verdict(for: .claude).detail == "Claude Code answered and reported version 2.1.263.")
+        #expect(session.verdict(for: .codex).detail == "Nothing from Codex was found on this Mac.")
+        #expect(session.verdict(for: .gemini).detail.contains("files were found on this Mac, but its command-line tool was not"))
+        // Kiro was in this scan at all only if the scan reported it; it did not,
+        // so it stays "not checked" with its own instruction.
+        #expect(session.verdict(for: .kiro).detail == "Run Check apps to look.")
+    }
+
+    /// The managed set is every available client this Mac has been left
+    /// managing, in the registry's own order, and it narrows exactly as the
+    /// choice does.
+    @Test func managedClientsFollowTheChoiceInRegistryOrder() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        #expect(session.managedClients == ClientKind.allCases)
+
+        await session.setEnabled(.gemini, false)
+        #expect(session.managedClients == [.codex, .claude, .kiro])
+        // Order is the registry's (ClientKind.allCases), not the order clients
+        // were toggled in.
+        await session.setEnabled(.gemini, true)
+        #expect(session.managedClients == ClientKind.allCases)
     }
 
     @Test func onlyTheAppsThisMacManagesAreCountedAsNeedingAttention() async throws {
@@ -101,13 +172,14 @@ struct WorkspaceDeviceSessionTests {
                 .success([
                     Fixture.observation(.claudeCode, installed: true, commandAvailable: false),
                     Fixture.observation(.codexCLI, installed: false, commandAvailable: false),
-                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true),
+                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true, version: "1.4.0"),
                 ])
             ]))
         await session.refresh()
         // Nobody has chosen, so the check decides what is shown — and set up
-        // means the tool runs. Gemini's does; Claude's files without a runnable
-        // tool do not count, and Codex is not here at all.
+        // means the tool runs. Gemini's does and reports a version, so it is
+        // healthy; Claude's files without a runnable tool do not count, and
+        // Codex is not here at all.
         #expect(session.enabledClients == [.gemini])
         #expect(session.attentionCount == 0)
 
@@ -123,7 +195,8 @@ struct WorkspaceDeviceSessionTests {
         // The verdict is still known and still honest; it is just not this
         // Mac's problem any more.
         #expect(session.attentionCount == 1)
-        #expect(session.verdict(for: .codex) == ClientVerdict(state: .attention, text: "Not found"))
+        #expect(session.verdict(for: .codex).state == .attention)
+        #expect(session.verdict(for: .codex).text == "Not found")
     }
 
     @Test func choosingWhichAppsThisMacManagesIsRememberedOnThisMacOnly() async throws {
@@ -179,11 +252,11 @@ struct WorkspaceDeviceSessionTests {
             observer: ScriptedObserver(results: [
                 .success([
                     Fixture.observation(.claudeCode, installed: true, commandAvailable: false),
-                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true),
+                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true, version: "1.4.0"),
                 ]),
                 .success([
-                    Fixture.observation(.claudeCode, installed: true, commandAvailable: true),
-                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true),
+                    Fixture.observation(.claudeCode, installed: true, commandAvailable: true, version: "2.1.263"),
+                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true, version: "1.4.0"),
                 ]),
             ]),
             toolProbeRunner: ShellRunner(answer: tool.path))
@@ -282,7 +355,7 @@ struct WorkspaceDeviceSessionTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let observer = ScriptedObserver(results: [
-            .success([Fixture.claudeCode(commandAvailable: true)]),
+            .success([Fixture.claudeCode(commandAvailable: true, version: "2.1.263")]),
             .failure(ScanFailure()),
         ])
         let session = await fixture.session(observer: observer)

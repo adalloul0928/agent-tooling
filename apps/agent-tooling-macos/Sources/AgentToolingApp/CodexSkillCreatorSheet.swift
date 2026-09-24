@@ -454,7 +454,7 @@ struct CodexSkillCreatorSheet: View {
     /// The apps this Mac manages. Every other client is one this Mac was told
     /// not to touch, so it is not offered as a destination.
     private var enabledClients: [ClientKind] {
-        workspace.device.availableClients.filter(workspace.device.isEnabled)
+        workspace.device.managedClients
     }
 
     private var canGenerate: Bool {

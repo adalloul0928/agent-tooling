@@ -37,12 +37,17 @@ struct AppShellView: View {
                 workspace: workspace, selection: $selection,
                 openPalette: { paletteVisible = true }
             )
+            .minuteTicker()
             .navigationSplitViewColumnWidth(min: 210, ideal: 230, max: 300)
         } detail: {
             SectionContent(section: selection, workspace: workspace)
                 .environment(\.workspaceSelection, selection)
                 .environment(\.workspaceNavigate, navigate)
                 .environment(\.availableClients, enabledClients)
+                // Relative times ("checked 9m ago") re-tick about once a minute
+                // here; the launch scan lives on the split view's own `.task`
+                // below, outside this wrapper, so a redraw is never a re-scan.
+                .minuteTicker()
                 // Top, not centre: a screen that does not claim the whole
                 // column is a page with space under it, not a card floating in
                 // the middle of the window.
@@ -92,11 +97,17 @@ struct AppShellView: View {
         // Checking this Mac's apps is a scan, so it starts after the window is
         // up and off this actor. Nothing on screen waits for it.
         .task {
-            // Read the library once for every section, and check this Mac's apps
-            // alongside it; neither waits for the other and neither blocks the shell.
+            // Read the library once for every section, and — only when this Mac
+            // is set to check its apps on open — check them alongside it. Both
+            // run off this actor; neither blocks the shell. The manual Check
+            // apps button is unaffected by this choice.
             async let library: Void = workspace.library.refresh()
-            async let device: Void = workspace.device.refresh()
-            _ = await (library, device)
+            if workspace.device.automaticallyCheckHealth {
+                async let device: Void = workspace.device.refresh()
+                _ = await (library, device)
+            } else {
+                await library
+            }
         }
         .onAppear(perform: applyExternalNavigation)
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
@@ -111,7 +122,7 @@ struct AppShellView: View {
     /// What the marks on a row are allowed to show: the apps this Mac manages,
     /// in the registry's own order.
     private var enabledClients: [ClientKind] {
-        workspace.device.availableClients.filter(workspace.device.isEnabled)
+        workspace.device.managedClients
     }
 
     private var sidebarVisibility: Binding<NavigationSplitViewVisibility> {

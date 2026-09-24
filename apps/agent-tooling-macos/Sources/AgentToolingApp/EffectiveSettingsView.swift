@@ -12,6 +12,7 @@ import SwiftUI
 /// changed from here.
 struct EffectiveSettingsView: View {
     let session: WorkspaceSettingsSession
+    @Environment(\.availableClients) private var managedClients
     @State private var refreshID = UUID()
 
     var body: some View {
@@ -49,6 +50,14 @@ struct EffectiveSettingsView: View {
                     if let message = session.editMessage {
                         AttentionBanner(title: "That change was not made", message: message)
                     }
+                    if session.hasNoReadableSurfaces {
+                        EmptyStateView(
+                            symbol: "gearshape",
+                            title: "No app settings to show",
+                            message: "No settings can be read yet for the apps this Mac manages."
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 160)
+                    }
                     ForEach(session.surfaces) { surface in
                         surfaceCard(surface)
                     }
@@ -58,7 +67,8 @@ struct EffectiveSettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: refreshID) { await session.refresh() }
+        .task(id: refreshID) { await session.refresh(managedClients: managedClients) }
+        .task(id: managedClients) { await session.refresh(managedClients: managedClients) }
         .sheet(
             item: Binding(get: { session.pendingEdit }, set: { if $0 == nil { session.discardEdit() } })
         ) { edit in

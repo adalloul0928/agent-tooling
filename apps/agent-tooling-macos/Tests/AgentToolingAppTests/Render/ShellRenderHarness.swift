@@ -101,7 +101,7 @@ func distinctColours(in bitmap: NSBitmapImageRep) -> Int {
 /// sidebar on screen depending on whose Mac it was.
 struct StubDeviceObserver: DeviceObserving {
     var observations: [TargetObservation] = [
-        ShellRenderFixture.observation(.claudeCode, installed: true, commandAvailable: true),
+        ShellRenderFixture.observation(.claudeCode, installed: true, commandAvailable: true, version: "2.1.263"),
         ShellRenderFixture.observation(.codexCLI, installed: false, commandAvailable: false),
     ]
 

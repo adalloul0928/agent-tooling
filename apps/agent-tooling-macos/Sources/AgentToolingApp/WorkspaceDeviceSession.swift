@@ -4,9 +4,22 @@ import Observation
 
 /// One verdict per client from the last local check, so the sidebar and the
 /// Home conduit say the same thing about the same Mac.
+///
+/// `text` is the short line a row shows; `detail` is the full plain-words
+/// explanation of what that state means and what to do about it, so a tooltip
+/// or an accessibility value can say more than the badge itself. `detail` has a
+/// default so callers that only build a verdict for its state and text keep
+/// compiling.
 struct ClientVerdict: Equatable, Sendable {
     let state: HealthState
     let text: String
+    let detail: String
+
+    init(state: HealthState, text: String, detail: String = "") {
+        self.state = state
+        self.text = text
+        self.detail = detail
+    }
 }
 
 /// Reading what is on this Mac, and changing none of it.
@@ -74,9 +87,7 @@ final class WorkspaceDeviceSession {
     /// button is offered exactly when the finder would have work to do.
     var missingManagedClients: [ClientKind] {
         guard !observations.isEmpty else { return [] }
-        return availableClients.filter {
-            enabledClients.contains($0) && verdict(for: $0).state == .attention
-        }
+        return managedClients.filter { verdict(for: $0).state == .attention }
     }
     /// Whether this Mac checks its apps on its own. Device-local, the same as
     /// `enabledClients`, and just as inert to read: nothing here starts a
@@ -86,6 +97,15 @@ final class WorkspaceDeviceSession {
     /// Every app this build knows how to speak to, in the registry's own order,
     /// so every list and picker offers them the same way round.
     let availableClients: [ClientKind] = ClientKind.allCases
+
+    /// The apps this Mac actually manages, in the registry's own order — every
+    /// available client this Mac has been left managing. This is the one set
+    /// the sidebar's client marks, the palette's client results, the Apps
+    /// tiles, and the plugin and skill destination pickers all draw from, so
+    /// they never offer an app somebody switched off.
+    var managedClients: [ClientKind] {
+        availableClients.filter(isEnabled)
+    }
 
     private let service: WorkspaceApplicationService
     private let library: WorkspaceLibrarySession
@@ -344,16 +364,51 @@ final class WorkspaceDeviceSession {
     /// Never checked is said as never checked rather than as absent. A client
     /// whose files are here but whose command is not is neither healthy nor
     /// missing, and says which of the two it is.
+    ///
+    /// Answering the command is not enough to be healthy: a command that ran
+    /// but reported no version has not told this app what it accepts, so a tool
+    /// asked for in it would wait rather than install. That is `.attention`, not
+    /// health, and says so.
     func verdict(for client: ClientKind) -> ClientVerdict {
+        let name = client.rawValue
         let matching = observations.filter { $0.surface.client == client }
-        guard !matching.isEmpty else { return ClientVerdict(state: .pending, text: "Not checked yet") }
-        if matching.contains(where: \.isCommandAvailable) {
-            let checked = matching.map(\.lastScannedAt).max().map { "Checked \(SnapshotTime.compact($0))" }
-            return ClientVerdict(state: .healthy, text: checked ?? "Available")
+        guard !matching.isEmpty else {
+            return ClientVerdict(
+                state: .pending, text: "Not checked yet", detail: "Run Check apps to look.")
+        }
+        // A command that answered AND reported a version is the only healthy
+        // state: that pair is what lets an install know the client will accept
+        // what it is given.
+        let answered = matching.filter(\.isCommandAvailable)
+        if let versioned = answered.first(where: { $0.version?.isEmpty == false }),
+            let version = versioned.version
+        {
+            let checked = answered.map(\.lastScannedAt).max().map { "Checked \(SnapshotTime.compact($0))" }
+            return ClientVerdict(
+                state: .healthy,
+                text: checked ?? "Available",
+                detail: "\(name) answered and reported version \(version).")
+        }
+        if !answered.isEmpty {
+            return ClientVerdict(
+                state: .attention,
+                text: "Found, version unknown",
+                detail:
+                    "\(name) is installed but did not answer --version, so Agent Tooling cannot confirm what it accepts; tools asked for in it wait until it does."
+            )
+        }
+        if matching.contains(where: \.installed) {
+            return ClientVerdict(
+                state: .attention,
+                text: "Command unavailable",
+                detail:
+                    "\(name)'s files were found on this Mac, but its command-line tool was not. Use Check apps or Find missing tools after installing it."
+            )
         }
         return ClientVerdict(
             state: .attention,
-            text: matching.contains(where: \.installed) ? "Command unavailable" : "Not found")
+            text: "Not found",
+            detail: "Nothing from \(name) was found on this Mac.")
     }
 
     /// How many of the apps this Mac manages need looking at.
@@ -362,6 +417,6 @@ final class WorkspaceDeviceSession {
     /// counted. Neither is one that has not been checked yet: a badge for
     /// something nobody has looked at would send someone after nothing.
     var attentionCount: Int {
-        availableClients.filter { isEnabled($0) && verdict(for: $0).state == .attention }.count
+        managedClients.filter { verdict(for: $0).state == .attention }.count
     }
 }

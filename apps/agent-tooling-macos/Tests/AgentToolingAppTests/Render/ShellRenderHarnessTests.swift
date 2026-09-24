@@ -58,6 +58,7 @@ struct ShellRenderHarnessTests {
         await fixture.workspace.device.refresh()
 
         #expect(fixture.workspace.device.verdict(for: .claude).state == .healthy)
-        #expect(fixture.workspace.device.verdict(for: .codex) == ClientVerdict(state: .attention, text: "Not found"))
+        #expect(fixture.workspace.device.verdict(for: .codex).state == .attention)
+        #expect(fixture.workspace.device.verdict(for: .codex).text == "Not found")
     }
 }

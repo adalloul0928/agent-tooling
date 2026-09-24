@@ -207,7 +207,7 @@ struct PluginsView: View {
     /// This Mac's apps this workspace manages, in the registry's own order —
     /// the set every marks glyph and picker in this screen draws from.
     private var availableClients: [ClientKind] {
-        workspace.device.availableClients.filter(workspace.device.isEnabled)
+        workspace.device.managedClients
     }
 
     private var libraryRows: [WorkspaceLibraryReadModelRow] {

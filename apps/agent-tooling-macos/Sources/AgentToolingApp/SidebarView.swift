@@ -200,12 +200,12 @@ struct SidebarView: View {
         .opacity(enabled ? 1 : 0.45)
         .help(
             enabled
-                ? "Show only \(client.rawValue) in Apps. \(verdict.text)."
-                : "\(client.rawValue) is not managed on this Mac. \(verdict.text)."
+                ? "Show only \(client.rawValue) in Apps. \(verdict.detail)"
+                : "\(client.rawValue) is not managed on this Mac. \(verdict.detail)"
         )
         .accessibilityLabel("Show \(client.rawValue) only")
         .accessibilityValue(
-            [selected ? "Selected" : "", enabled ? "" : "Not managed on this Mac", verdict.text]
+            [selected ? "Selected" : "", enabled ? "" : "Not managed on this Mac", verdict.detail]
                 .filter { !$0.isEmpty }
                 .joined(separator: ", "))
     }

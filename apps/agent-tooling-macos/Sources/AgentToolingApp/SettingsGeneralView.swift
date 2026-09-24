@@ -93,7 +93,7 @@ struct SettingsGeneralView: View {
     }
 
     private func statusRow(_ status: MCPRuntimeStatus) -> some View {
-        InfoRow(status.displayName, detail: status.version.map { "\(status.detail) Version \($0)." } ?? status.detail) {
+        InfoRow(status.displayName, detail: rowDetail(status)) {
             Image(systemName: status.id == "toolhive" ? "server.rack" : "app.connected.to.app.below.fill")
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
@@ -102,6 +102,25 @@ struct SettingsGeneralView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .help(status.detail)
+    }
+
+    /// The row's own line. Direct configuration always says what it reported;
+    /// ToolHive says its version when it answered, and otherwise a plain
+    /// sentence rather than the shell's own words, which stay in the tooltip.
+    private func rowDetail(_ status: MCPRuntimeStatus) -> String {
+        guard status.id == "toolhive" else {
+            return status.version.map { "\(status.detail) Version \($0)." } ?? status.detail
+        }
+        if status.isAvailable, status.capabilities.contains(.health) {
+            return status.version.map { "\(status.detail) Version \($0)." } ?? status.detail
+        }
+        // Not runnable at all reads as not installed; runnable but unreadable
+        // reads as a check that could not complete. The raw diagnostic (for
+        // example "env: thv: No such file or directory") stays in the tooltip.
+        return status.isAvailable
+            ? "ToolHive could not be checked."
+            : "ToolHive (thv) is not installed on this Mac."
     }
 
     private func runtimeAvailabilityLabel(for status: MCPRuntimeStatus) -> String {
@@ -139,14 +158,6 @@ struct SettingsGeneralView: View {
                     .toggleStyle(.switch)
                     .disabled(workspace.device.isChecking)
                 }
-                Divider()
-                Text(
-                    "Recorded for this Mac now. The check Agent Tooling runs when it opens does not read this choice yet, so switching it off does not change that check today."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -173,12 +184,6 @@ struct SettingsGeneralView: View {
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Divider()
-                Text("Importing a policy file from here is being restored; nothing on this Mac is affected by that yet.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }

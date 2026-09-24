@@ -121,7 +121,7 @@ struct SyncCenterView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $isChoosingDestination) {
-            WorkspaceLinkDestinationSheet(session: workspace.deployment)
+            WorkspaceLinkDestinationSheet(session: workspace.deployment, clients: enabledClients)
         }
         .task {
             // The shell opens the workspace without reading its library, so a
@@ -496,8 +496,12 @@ private struct AppTile: View {
             RoundedRectangle(cornerRadius: AgentTheme.panelCornerRadius, style: .continuous)
                 .stroke(selected ? AgentTheme.selection : Color.clear, lineWidth: 1.5)
         }
-        .help(selected ? "Show every app again" : "Show only \(client.rawValue)")
+        .help(
+            [selected ? "Show every app again" : "Show only \(client.rawValue)", verdict.detail]
+                .filter { !$0.isEmpty }
+                .joined(separator: " · "))
         .accessibilityLabel("\(client.rawValue), \(clause)")
+        .accessibilityValue(verdict.detail)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -557,6 +561,10 @@ private struct ManagedClientsPopover: View {
 /// Choosing which destination goes somewhere other than its app's own folder.
 private struct WorkspaceLinkDestinationSheet: View {
     let session: WorkspaceDeploymentSession
+    /// Only the apps this Mac manages are offered: pointing a folder at an app
+    /// this Mac was told not to touch would record a destination for something
+    /// nothing here will ever write to.
+    let clients: [ClientKind]
     @Environment(\.dismiss) private var dismiss
     @State private var client: ClientKind = .codex
     @State private var folder: URL?
@@ -579,7 +587,7 @@ private struct WorkspaceLinkDestinationSheet: View {
                 )
                 .font(.callout).foregroundStyle(.secondary)
                 Picker("App", selection: $client) {
-                    ForEach(ClientKind.allCases) { value in Text(value.rawValue).tag(value) }
+                    ForEach(clients) { value in Text(value.rawValue).tag(value) }
                 }.frame(maxWidth: 280)
                 HStack(spacing: 12) {
                     Button("Choose folder…") { choose() }
@@ -607,6 +615,11 @@ private struct WorkspaceLinkDestinationSheet: View {
         }
         .frame(width: 580, height: 420)
         .background(AgentTheme.contentBackground)
+        .onAppear {
+            // The stored default may be an app this Mac does not manage, which
+            // would leave the picker showing a choice not in its own list.
+            if !clients.contains(client), let first = clients.first { client = first }
+        }
     }
 
     private var surface: TargetSurface {

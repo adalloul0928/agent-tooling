@@ -118,6 +118,45 @@ struct WorkspaceSettingsEditingTests {
         #expect(surface.configuration?.rows.allSatisfy { !session.isEditable($0, surface: .codexCLI) } == true)
     }
 
+    /// Only the apps this Mac manages get a settings surface. An app switched
+    /// off has its own files left alone and off this screen.
+    @Test func onlyManagedClientsGetASurface() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.writeUserSettings(#"{"model":"opus"}"#)
+        try fixture.writeCodexConfig("model = \"gpt-5\"\n")
+        let session = fixture.session()
+
+        // Managing only Claude Code: Codex is not built even though its file
+        // is right there to read.
+        await session.refresh(managedClients: [.claude])
+        #expect(session.surfaces.map(\.id) == [.claudeCode])
+        #expect(session.hasNoReadableSurfaces == false)
+
+        // Managing only Codex: the opposite.
+        await session.refresh(managedClients: [.codex])
+        #expect(session.surfaces.map(\.id) == [.codexCLI])
+
+        // Managing both: both, in the order they are read.
+        await session.refresh(managedClients: [.claude, .codex])
+        #expect(session.surfaces.map(\.id) == [.claudeCode, .codexCLI])
+    }
+
+    /// A client with no configuration adapter — everything but Claude Code and
+    /// Codex — contributes no surface, so managing only those leaves nothing to
+    /// read and the screen says so rather than drawing an empty page.
+    @Test func managingOnlyAdapterlessClientsLeavesNothingToRead() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.writeUserSettings(#"{"model":"opus"}"#)
+        let session = fixture.session()
+
+        await session.refresh(managedClients: [.gemini, .kiro])
+
+        #expect(session.surfaces.isEmpty)
+        #expect(session.hasNoReadableSurfaces)
+    }
+
     @Test func standingInstructionsAreListedBesideTheSettings() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

@@ -159,7 +159,7 @@ enum CommandPaletteCatalog {
     /// place a search result can send them.
     @MainActor
     private static func clients(for workspace: WorkspaceLaunch.Workspace) -> [CommandPaletteItem] {
-        workspace.device.availableClients.filter(workspace.device.isEnabled).map { client in
+        workspace.device.managedClients.map { client in
             CommandPaletteItem(
                 id: "client.\(client.id)",
                 title: client.rawValue,
@@ -296,9 +296,18 @@ struct CommandPaletteView: View {
         }
         .frame(width: 660, height: 460)
         .background(AgentTheme.contentBackground)
+        // The container declares the field as its default focus, and .onAppear
+        // sets it again on the next run-loop turn. The palette floats in as an
+        // overlay, where setting focus during the same turn the view appears was
+        // unreliable — typed text landed in the page behind it — so the delayed
+        // set is what actually lands the caret in the field.
+        .defaultFocus($searchFocused, true)
         .onAppear {
             items = CommandPaletteCatalog.items(for: workspace)
-            searchFocused = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(60))
+                searchFocused = true
+            }
         }
         .onChange(of: query) { _, _ in highlighted = 0 }
         .onExitCommand(perform: onClose)

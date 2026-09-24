@@ -49,4 +49,17 @@ struct SnapshotTimeTests {
         #expect(SnapshotTime.standalone(yesterday, now: noon, calendar: calendar) == "Yesterday")
         #expect(SnapshotTime.standalone(noon.addingTimeInterval(-60 * 7), now: noon, calendar: calendar) == "7m ago")
     }
+
+    /// The string measures against the `now` it is given, so advancing `now`
+    /// re-reads the same instant — which is exactly what the window's
+    /// once-a-minute ticker relies on to move "just now" to "1m ago".
+    @Test func advancingNowRereadsTheSameInstant() {
+        let scanned = noon
+        #expect(SnapshotTime.compact(scanned, now: noon, calendar: calendar) == "just now")
+        #expect(
+            SnapshotTime.compact(scanned, now: noon.addingTimeInterval(60), calendar: calendar) == "1m ago")
+        #expect(
+            SnapshotTime.compact(scanned, now: noon.addingTimeInterval(9 * 60), calendar: calendar)
+                == "9m ago")
+    }
 }
