@@ -149,6 +149,32 @@ struct WorkspaceLibraryReadModelTests {
         #expect(model.rows.allSatisfy { $0.childCount == 0 })
     }
 
+    /// The content-store digest travels from the artifact onto the row, so the
+    /// insights scan has the key it needs to read a library skill's real
+    /// SKILL.md. An artifact with no digest leaves the row's digest nil.
+    @Test func theContentDigestTravelsFromTheArtifactOntoTheRow() throws {
+        let withDigest = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f1")!)
+        let withoutDigest = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f2")!)
+        let digest = ContentDigest(value: String(repeating: "a", count: 64))
+        let workspaceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f9")!)
+        let document = try WorkspaceDocumentCoding.seal(.init(
+            workspaceID: workspaceID,
+            revision: .init(writerID: WorkspaceObjectID()),
+            artifacts: [
+                .init(
+                    identity: .init(id: withDigest, kind: .skill, displayName: "With Digest"),
+                    authority: .centralPersonal, declaredName: "with-digest", contentDigest: digest),
+                .init(
+                    identity: .init(id: withoutDigest, kind: .skill, displayName: "Without Digest"),
+                    authority: .centralPersonal, declaredName: "without-digest"),
+            ]))
+        let device = DeviceWorkspaceState(workspaceID: workspaceID)
+        let model = try WorkspaceLibraryReadModel(snapshot: .init(document: document, device: device))
+
+        #expect(model.rows.first { $0.artifactID == withDigest }?.contentDigest == digest)
+        #expect(model.rows.first { $0.artifactID == withoutDigest }?.contentDigest == nil)
+    }
+
     private struct Fixture {
         let workspaceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000001")!)
         let deviceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000002")!)

@@ -803,6 +803,141 @@ struct ToolingInsightsTests {
         #expect(!identifiers.contains("metadata-unavailable:missing-triggers"))
         #expect(!identifiers.contains("metadata-unavailable:missing-negative-trigger"))
     }
+
+    @Test func unknownPresenceFilesAndDescriptionProduceNoneOfTheThreeFalseFindings() async throws {
+        let home = try TemporaryInsightsHome()
+        defer { home.remove() }
+        // A library-authored skill exactly as the projection first hands it over:
+        // an empty description (not yet read from SKILL.md), an empty file list
+        // (the captured tree was not read), and a requested-but-unmeasured client
+        // (isInstalled == nil). None of description-too-short, missing-skill-file,
+        // or client-drift may fire on these unknowns.
+        let unknownSkill = Skill(
+            id: "unknown-skill",
+            name: "unknown-skill",
+            displayName: "Review Notes",
+            summary: "",
+            bundle: "fixture",
+            scope: "This Mac",
+            owned: true,
+            triggers: [],
+            negativeTrigger: "",
+            files: [],
+            clients: [
+                ClientState(client: .claude, state: .pending, detail: "Asked for.", isInstalled: nil)
+            ],
+            validationCount: 0
+        )
+        // The same skill once the scan read its content: a real description and a
+        // real SKILL.md. The description is long enough, and SKILL.md is present,
+        // so neither finding fires — the read facts clear the false findings.
+        let readSkill = Skill(
+            id: "read-skill",
+            name: "read-skill",
+            displayName: "Review Notes",
+            summary: "Captures review notes and organizes them into a shareable summary.",
+            bundle: "fixture",
+            scope: "This Mac",
+            owned: true,
+            triggers: [],
+            negativeTrigger: "",
+            files: ["SKILL.md", "references/reference.md"],
+            clients: [
+                ClientState(client: .claude, state: .pending, detail: "Asked for.", isInstalled: nil)
+            ],
+            validationCount: 0
+        )
+
+        let report = await ToolingInsightsService().scan(
+            options: InsightScanOptions(clients: []),
+            skills: [unknownSkill, readSkill],
+            marketplacePackages: [],
+            homeURL: home.url
+        )
+        let identifiers = Set(report.qualityFindings.map(\.id))
+
+        // Unknown never reads as a defect.
+        #expect(!identifiers.contains("unknown-skill:description-too-short"))
+        #expect(!identifiers.contains("unknown-skill:missing-skill-file"))
+        #expect(!identifiers.contains("unknown-skill:client-drift"))
+        // Read facts that are fine also stay silent.
+        #expect(!identifiers.contains("read-skill:description-too-short"))
+        #expect(!identifiers.contains("read-skill:missing-skill-file"))
+        #expect(!identifiers.contains("read-skill:client-drift"))
+    }
+
+    @Test func knownMissingSkillFileAndKnownAbsentClientStillProduceFindings() async throws {
+        let home = try TemporaryInsightsHome()
+        defer { home.remove() }
+        // A file list that was actually inventoried but lacks SKILL.md is a real
+        // structural defect; a client measured absent (isInstalled == false) is
+        // real drift. Both must still fire.
+        let brokenSkill = Skill(
+            id: "broken-skill",
+            name: "broken-skill",
+            displayName: "Broken Skill",
+            summary: "Has a real, sufficiently long description but no entry point file.",
+            bundle: "fixture",
+            scope: "This Mac",
+            owned: true,
+            triggers: [],
+            negativeTrigger: "",
+            files: ["README.md", "helper.py"],
+            clients: [
+                ClientState(client: .codex, state: .attention, detail: "Expected but missing", isInstalled: false)
+            ],
+            validationCount: 0
+        )
+
+        let report = await ToolingInsightsService().scan(
+            options: InsightScanOptions(clients: []),
+            skills: [brokenSkill],
+            marketplacePackages: [],
+            homeURL: home.url
+        )
+        let identifiers = Set(report.qualityFindings.map(\.id))
+
+        #expect(identifiers.contains("broken-skill:missing-skill-file"))
+        #expect(identifiers.contains("broken-skill:client-drift"))
+    }
+
+    @Test func skillContentFactsReadDescriptionAndFilesFromACapturedTree() throws {
+        let markdown = """
+            ---
+            name: review-notes
+            description: Captures review notes and organizes them into a shareable summary.
+            ---
+
+            # Review Notes
+            """
+        let tree = try CapturedPackageTree(entries: [
+            .init(relativePath: "SKILL.md", kind: .file(bytes: Data(markdown.utf8), executable: false)),
+            .init(relativePath: "references", kind: .directory),
+            .init(
+                relativePath: "references/reference.md",
+                kind: .file(bytes: Data("# Reference\n".utf8), executable: false)),
+        ])
+
+        let facts = SkillContentFacts.read(from: tree)
+
+        #expect(facts.description == "Captures review notes and organizes them into a shareable summary.")
+        // Directories are not files; the required entry point lists as the exact
+        // name the structure check looks for.
+        #expect(facts.files == ["SKILL.md", "references/reference.md"])
+    }
+
+    @Test func skillContentFactsLeaveDescriptionUnknownWhenNoSkillFileIsPresent() throws {
+        let tree = try CapturedPackageTree(entries: [
+            .init(relativePath: "README.md", kind: .file(bytes: Data("# Notes\n".utf8), executable: false))
+        ])
+
+        let facts = SkillContentFacts.read(from: tree)
+
+        // No SKILL.md to read a description from: unknown, not blank. The files
+        // it does have are still reported honestly.
+        #expect(facts.description == nil)
+        #expect(facts.files == ["README.md"])
+    }
 }
 
 private func makeSkill(

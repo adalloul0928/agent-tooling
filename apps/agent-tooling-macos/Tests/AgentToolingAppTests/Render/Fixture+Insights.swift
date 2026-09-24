@@ -86,8 +86,13 @@ final class StubInsightsServices: InsightsServicing, @unchecked Sendable {
     private var kept: InsightsReport?
     private var answer: InsightsReport
     private var scans = 0
+    private var scannedSkills: [Skill] = []
+    private var contentRequests: [SkillContentRequest] = []
     private let holdFor: Duration?
     private let keepFails: Bool
+    /// Canned content facts by skill id, so a test can prove the session reads
+    /// a library skill's real description and files and applies them.
+    private let contentFacts: [String: SkillContentFacts]
     /// Whether the screen may offer catalog suggestions. False by default: a
     /// stub reaches nothing, and saying otherwise would let a test pass while
     /// the real screen offered a question with nowhere to send it.
@@ -100,17 +105,30 @@ final class StubInsightsServices: InsightsServicing, @unchecked Sendable {
         restored: InsightsReport? = nil,
         holdFor: Duration? = nil,
         keepFails: Bool = false,
-        reachesCatalog: Bool = false
+        reachesCatalog: Bool = false,
+        contentFacts: [String: SkillContentFacts] = [:]
     ) {
         self.answer = answer
         self.holdFor = holdFor
         self.keepFails = keepFails
+        self.contentFacts = contentFacts
         canReachCatalog = reachesCatalog
         kept = restored
     }
 
     var scanCount: Int {
         lock.withLock { scans }
+    }
+
+    /// The skills the last scan was handed, so a test can assert the session
+    /// enriched them from content before scanning.
+    var lastScannedSkills: [Skill] {
+        lock.withLock { scannedSkills }
+    }
+
+    /// The content requests the last scan asked for.
+    var lastContentRequests: [SkillContentRequest] {
+        lock.withLock { contentRequests }
     }
 
     var keptReport: InsightsReport? {
@@ -121,8 +139,16 @@ final class StubInsightsServices: InsightsServicing, @unchecked Sendable {
         lock.withLock { answer = report }
     }
 
+    func libraryContent(for requests: [SkillContentRequest]) async -> [String: SkillContentFacts] {
+        lock.withLock { contentRequests = requests }
+        return contentFacts
+    }
+
     func scan(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> InsightsReport {
-        lock.withLock { scans += 1 }
+        lock.withLock {
+            scans += 1
+            scannedSkills = skills
+        }
         // Returns early when the scan is stopped, which is what a person
         // pressing Cancel is waiting to see.
         if let holdFor { try? await Task.sleep(for: holdFor) }

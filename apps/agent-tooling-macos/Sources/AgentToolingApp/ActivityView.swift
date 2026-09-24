@@ -21,7 +21,7 @@ struct ActivityView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: AppSection.activity.navigationTitle, context: "\(session.activities.count) receipts") {
+            PageToolbar(title: AppSection.activity.navigationTitle, context: activityContext) {
                 Button {
                     selectedID = displayedActivities.first?.id
                 } label: {
@@ -62,7 +62,7 @@ struct ActivityView: View {
     private var activityList: some View {
         VStack(spacing: 0) {
             PanelHeader("Receipts") {
-                Text(session.activities.count == 1 ? "1 total" : "\(session.activities.count) total")
+                Text(mergedActivities.count == 1 ? "1 total" : "\(mergedActivities.count) total")
             }
             HStack(spacing: 8) {
                 InventorySearchField(placeholder: "Search activity", text: $query)
@@ -79,11 +79,11 @@ struct ActivityView: View {
             if displayedActivities.isEmpty {
                 EmptyStateView(
                     symbol: "clock.arrow.circlepath",
-                    title: session.activities.isEmpty ? "No activity yet" : "No matching activity",
-                    message: session.activities.isEmpty
+                    title: mergedActivities.isEmpty ? "No activity yet" : "No matching activity",
+                    message: mergedActivities.isEmpty
                         ? "Checks, reviewed changes, and account attestations will appear here."
                         : "Try another kind or clear the search.",
-                    actionTitle: session.activities.isEmpty ? nil : "Clear Filters"
+                    actionTitle: mergedActivities.isEmpty ? nil : "Clear Filters"
                 ) {
                     query = ""
                     filter = .all
@@ -130,8 +130,17 @@ struct ActivityView: View {
         }
     }
 
+    /// The journal and the synthesized operation-receipt rows as one list, the
+    /// collection every count, filter, and selection on this screen reads from.
+    private var mergedActivities: [ActivityReceipt] { session.mergedActivities }
+
+    private var activityContext: String {
+        let count = mergedActivities.count
+        return count == 1 ? "1 receipt" : "\(count) receipts"
+    }
+
     private var filteredActivities: [ActivityReceipt] {
-        session.activities.filter { receipt in
+        mergedActivities.filter { receipt in
             (filter.kind == nil || receipt.kind == filter.kind)
                 && (query.isEmpty
                     || [receipt.displayTitle, receipt.detail, receipt.command ?? ""].joined(separator: " ")
@@ -165,14 +174,14 @@ struct ActivityView: View {
         return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
     }
 
-    private var selectedReceipt: ActivityReceipt? { session.activities.first { $0.id == selectedID } }
+    private var selectedReceipt: ActivityReceipt? { mergedActivities.first { $0.id == selectedID } }
 
     /// A palette result that named one receipt reveals it and nothing more;
     /// consuming the request is how this screen tells the shell it arrived.
     private func consumeRequest() {
         guard let id = navigation.requestedItemID,
             let uuid = UUID(uuidString: id),
-            session.activities.contains(where: { $0.id == uuid })
+            mergedActivities.contains(where: { $0.id == uuid })
         else { return }
         query = ""
         filter = .all

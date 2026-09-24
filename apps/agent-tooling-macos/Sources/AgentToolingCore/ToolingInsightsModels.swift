@@ -324,3 +324,46 @@ public struct MarketplaceDiscoverySummary: Codable, Hashable, Sendable {
         self.wasCancelled = wasCancelled
     }
 }
+
+/// The real, read-from-content facts about one library-authored skill.
+///
+/// The insights projection can only say what a person *asked for*; it cannot
+/// see inside the skill's captured tree. This is what the scan learns once it
+/// reads that tree from the content store: the description declared in the
+/// skill's own SKILL.md, and the files the tree actually contains. Both are
+/// optional-shaped on purpose — a `nil` description or an empty file list means
+/// "not read", never "known missing", so a health check can tell the two apart.
+public struct SkillContentFacts: Equatable, Sendable {
+    /// The description declared in the skill's SKILL.md frontmatter, or nil when
+    /// no SKILL.md could be read or parsed. Nil is unknown, not blank.
+    public let description: String?
+    /// The relative paths of the files the captured tree holds. Empty when the
+    /// tree could not be read; a real inventory always lists at least SKILL.md.
+    public let files: [String]
+
+    public init(description: String?, files: [String]) {
+        self.description = description
+        self.files = files
+    }
+
+    /// Reads the honest facts out of a captured skill tree.
+    ///
+    /// Files are the tree's file entries by relative path, so a root SKILL.md
+    /// lists as `"SKILL.md"` — the exact name the structure check looks for.
+    /// The description is parsed from that SKILL.md's frontmatter; a tree with
+    /// no SKILL.md, or one whose header does not parse, yields a nil
+    /// description while still reporting the files it does have.
+    public static func read(from tree: CapturedPackageTree) -> SkillContentFacts {
+        var files: [String] = []
+        var skillMarkdown: String?
+        for entry in tree.entries {
+            guard case .file(let bytes, _) = entry.kind else { continue }
+            files.append(entry.relativePath)
+            if entry.relativePath.lowercased() == "skill.md" {
+                skillMarkdown = String(decoding: bytes, as: UTF8.self)
+            }
+        }
+        let description = skillMarkdown.flatMap { try? SkillFrontmatter.parse($0).description }
+        return SkillContentFacts(description: description, files: files.sorted())
+    }
+}

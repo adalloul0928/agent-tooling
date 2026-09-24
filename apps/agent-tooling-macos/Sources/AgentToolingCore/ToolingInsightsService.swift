@@ -96,7 +96,11 @@ private func buildQualityFindings(
     for skill in skills {
         guard skill.owned else { continue }
         let summary = skill.summary.trimmingCharacters(in: .whitespacesAndNewlines)
-        if summary.count < 24 {
+        // An empty summary is unknown, not too short: a library-authored skill
+        // whose SKILL.md description could not be read leaves this blank rather
+        // than proven short. Flagging blank-as-unknown would tell a person to
+        // "clarify" a description the app never actually looked at.
+        if !summary.isEmpty, summary.count < 24 {
             findings.append(
                 finding(
                     skill: skill,
@@ -156,7 +160,11 @@ private func buildQualityFindings(
                 )
             }
         }
-        if !skill.files.contains(where: { $0.lowercased() == "skill.md" }) {
+        // Only a file list that was actually inventoried can be missing a
+        // required entry. An empty list is unknown — a library-authored skill
+        // whose captured tree was not read has no files listed here yet — and
+        // an unknown inventory must never be reported as one missing SKILL.md.
+        if !skill.files.isEmpty, !skill.files.contains(where: { $0.lowercased() == "skill.md" }) {
             findings.append(
                 finding(
                     skill: skill,
@@ -183,8 +191,12 @@ private func buildQualityFindings(
                 )
             )
         }
-        let missingClients = skill.clients.filter { !$0.reportsLocalPresence }.map(\.client.rawValue).sorted()
-        if !skill.clients.isEmpty, !missingClients.isEmpty {
+        // Drift is only real for a client this app actually checked and found
+        // the skill absent (`isInstalled == false`). A `nil` presence is
+        // unknown — the projection records a requested destination without ever
+        // measuring it — and unknown must never be reported as missing.
+        let missingClients = skill.clients.filter { $0.isInstalled == false }.map(\.client.rawValue).sorted()
+        if !missingClients.isEmpty {
             findings.append(
                 finding(
                     skill: skill,

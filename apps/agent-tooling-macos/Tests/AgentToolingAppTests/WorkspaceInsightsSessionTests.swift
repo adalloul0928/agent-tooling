@@ -114,3 +114,98 @@ extension ShellRenderFixture {
         WorkspaceInsightsSession(library: workspace.library, homeRoot: home, services: services)
     }
 }
+
+/// The scan enriches a library-authored skill with the real description and
+/// files read from its content, so the health checks judge what the SKILL.md
+/// says rather than the projection's empty placeholders.
+@MainActor
+struct WorkspaceInsightsSessionEnrichmentTests {
+    @Test func aLibrarySkillWithADigestIsEnrichedFromContentBeforeScanning() async throws {
+        let harness = try await DigestedLibraryHarness().prepared()
+        defer { harness.remove() }
+        let skillID = harness.skillID.rawValue.uuidString.lowercased()
+        let facts = SkillContentFacts(
+            description: "Captures review notes and organizes them into a shareable summary.",
+            files: ["SKILL.md", "references/reference.md"])
+        let services = StubInsightsServices(
+            answer: ShellRenderFixture.insightsReport(),
+            contentFacts: [skillID: facts])
+        let session = WorkspaceInsightsSession(
+            library: harness.library, homeRoot: harness.home, services: services)
+
+        await session.scan(options: .init(clients: []))
+
+        // The session asked for exactly the digested library skill's content.
+        #expect(services.lastContentRequests.map(\.skillID) == [skillID])
+        #expect(services.lastContentRequests.first?.digest == harness.digest)
+        // And it applied the facts to the skill it scanned: the real
+        // description and the real file list, not the empty placeholders.
+        let scanned = try #require(services.lastScannedSkills.first { $0.id == skillID })
+        #expect(scanned.summary == facts.description)
+        #expect(scanned.files == facts.files)
+    }
+
+    @Test func aLibrarySkillWithNoContentFactsKeepsItsUnknownPlaceholders() async throws {
+        let harness = try await DigestedLibraryHarness().prepared()
+        defer { harness.remove() }
+        let skillID = harness.skillID.rawValue.uuidString.lowercased()
+        // The content read returns nothing (an unreadable or absent tree): the
+        // skill must stay honestly unknown rather than being invented.
+        let services = StubInsightsServices(answer: ShellRenderFixture.insightsReport())
+        let session = WorkspaceInsightsSession(
+            library: harness.library, homeRoot: harness.home, services: services)
+
+        await session.scan(options: .init(clients: []))
+
+        let scanned = try #require(services.lastScannedSkills.first { $0.id == skillID })
+        #expect(scanned.summary.isEmpty)
+        #expect(scanned.files.isEmpty)
+    }
+}
+
+/// A minimal real workspace whose one library skill pins content by digest, so
+/// the insights session builds a content request for it. Separate from the
+/// shared render fixture, whose standalone skill intentionally has no digest.
+@MainActor
+final class DigestedLibraryHarness {
+    let root: URL
+    let home: URL
+    let store: WorkspaceRevisionStore
+    let library: WorkspaceLibrarySession
+    let skillID = ArtifactID()
+    let digest = ContentDigest(value: String(repeating: "b", count: 64))
+
+    init() throws {
+        root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "insights-enrich-\(UUID())", directoryHint: .isDirectory)
+        let container = root.appending(path: "store", directoryHint: .isDirectory)
+        home = root.appending(path: "home", directoryHint: .isDirectory)
+        for directory in [container, home] {
+            try FileManager.default.createDirectory(
+                at: directory, withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
+        }
+        let document = try WorkspaceDocumentCoding.seal(.init(
+            workspaceID: WorkspaceObjectID(),
+            revision: .init(writerID: WorkspaceObjectID()),
+            artifacts: [
+                .init(
+                    identity: .init(id: skillID, kind: .skill, displayName: "Review Notes"),
+                    authority: .centralPersonal, declaredName: "review-notes", contentDigest: digest)
+            ]))
+        let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
+        store = try WorkspaceRevisionStore(
+            containerRoot: container, workspaceID: document.workspaceID, deviceID: device.deviceID)
+        try store.initialize(document: document, device: device)
+        let service = WorkspaceApplicationService(store: store, writerID: WorkspaceObjectID())
+        library = WorkspaceLibrarySession(
+            service: service, workspaceID: store.workspaceID, deviceID: store.deviceID, access: .writable)
+    }
+
+    func prepared() async -> DigestedLibraryHarness {
+        await library.refresh()
+        return self
+    }
+
+    func remove() { try? FileManager.default.removeItem(at: root) }
+}

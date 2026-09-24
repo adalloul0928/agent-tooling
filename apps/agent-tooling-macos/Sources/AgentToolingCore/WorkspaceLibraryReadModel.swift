@@ -57,7 +57,8 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
                             assignments[child.identity.id] ?? [], deviceID: snapshot.device.deviceID
                         ),
                         nativeRoutes: Self.routes(child.nativeRoutes),
-                        connection: connections[child.identity.id]
+                        connection: connections[child.identity.id],
+                        contentDigest: child.contentDigest
                     )
                 }
                 .sorted(by: Self.order)
@@ -85,7 +86,8 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
                     : nil,
                 assignableReasons: authority == .trackedOnly ? [] : [.manual, .preset],
                 nativeRoutes: Self.routes(artifact.nativeRoutes),
-                connection: connections[artifact.identity.id]
+                connection: connections[artifact.identity.id],
+                contentDigest: artifact.contentDigest
             )
         }.sorted(by: Self.order)
         let presets: [WorkspaceLibraryPresetReadModel] = snapshot.document.presets.map {
@@ -399,6 +401,10 @@ public struct WorkspaceLibraryIncludedItem: Sendable, Equatable, Identifiable {
     public let nativeRoutes: [WorkspaceLibraryNativeRoute]
     /// Present only for a connection this workspace holds a definition for.
     public let connection: WorkspaceLibraryMCPConnection?
+    /// The content-store digest of this item's captured tree, when the library
+    /// pins one. It is the key the insights scan uses to read the real SKILL.md
+    /// for a library-authored skill; nil means nothing was captured to read.
+    public let contentDigest: ContentDigest?
 
     public init(
         artifactID: ArtifactID,
@@ -410,7 +416,8 @@ public struct WorkspaceLibraryIncludedItem: Sendable, Equatable, Identifiable {
         observedDescription: String?,
         requestedAssignments: [WorkspaceLibraryRequestedAssignment],
         nativeRoutes: [WorkspaceLibraryNativeRoute],
-        connection: WorkspaceLibraryMCPConnection? = nil
+        connection: WorkspaceLibraryMCPConnection? = nil,
+        contentDigest: ContentDigest? = nil
     ) {
         self.artifactID = artifactID
         self.displayName = displayName
@@ -422,6 +429,7 @@ public struct WorkspaceLibraryIncludedItem: Sendable, Equatable, Identifiable {
         self.requestedAssignments = requestedAssignments
         self.nativeRoutes = nativeRoutes
         self.connection = connection
+        self.contentDigest = contentDigest
     }
 }
 
@@ -448,6 +456,10 @@ public struct WorkspaceLibraryReadModelRow: Sendable, Equatable, Identifiable {
     public let nativeRoutes: [WorkspaceLibraryNativeRoute]
     /// Present only for a connection this workspace holds a definition for.
     public let connection: WorkspaceLibraryMCPConnection?
+    /// The content-store digest of this row's captured tree, when the library
+    /// pins one. It is the key the insights scan uses to read the real SKILL.md
+    /// for a library-authored skill; nil means nothing was captured to read.
+    public let contentDigest: ContentDigest?
 
     public init(
         artifactID: ArtifactID,
@@ -464,7 +476,8 @@ public struct WorkspaceLibraryReadModelRow: Sendable, Equatable, Identifiable {
         assignmentExplanation: String?,
         assignableReasons: [WorkspaceLibraryAssignableReason],
         nativeRoutes: [WorkspaceLibraryNativeRoute],
-        connection: WorkspaceLibraryMCPConnection? = nil
+        connection: WorkspaceLibraryMCPConnection? = nil,
+        contentDigest: ContentDigest? = nil
     ) {
         self.artifactID = artifactID
         self.displayName = displayName
@@ -481,6 +494,7 @@ public struct WorkspaceLibraryReadModelRow: Sendable, Equatable, Identifiable {
         self.assignableReasons = assignableReasons
         self.nativeRoutes = nativeRoutes
         self.connection = connection
+        self.contentDigest = contentDigest
     }
 }
 

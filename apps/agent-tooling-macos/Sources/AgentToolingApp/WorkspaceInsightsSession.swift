@@ -12,6 +12,15 @@ protocol InsightsServicing: Sendable {
     /// Reads local conversation history and returns aggregate findings only.
     /// Never installs, never writes to a client, and never keeps message text.
     func scan(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> InsightsReport
+    /// Reads the real SKILL.md description and file list for library-authored
+    /// skills out of the content store, keyed by skill id.
+    ///
+    /// The projection can only report what a person asked for; this is how the
+    /// scan learns what a skill's own captured tree actually says, so a health
+    /// check does not fire "description too short" or "SKILL.md missing" against
+    /// facts it never read. A build with no content store returns nothing, and
+    /// every skill stays honestly unknown.
+    func libraryContent(for requests: [SkillContentRequest]) async -> [String: SkillContentFacts]
     /// Whether there is a catalog to ask at all.
     ///
     /// The scan options offer catalog suggestions only when this is true, so
@@ -23,10 +32,22 @@ protocol InsightsServicing: Sendable {
     func forget() throws
 }
 
+/// One library-authored skill the scan wants the real content facts for: its
+/// id, and the content-store digest of its captured tree to read them from.
+struct SkillContentRequest: Sendable, Equatable {
+    let skillID: String
+    let digest: ContentDigest
+}
+
 extension InsightsServicing {
     /// Reaching no catalog is the safe answer: a scan that cannot ask one still
     /// works, and a screen told so offers nothing it cannot do.
     var canReachCatalog: Bool { false }
+
+    /// Reading no content is the safe answer: a build without a content store,
+    /// or a test that hands in none, leaves every skill's description and files
+    /// honestly unknown rather than inventing them.
+    func libraryContent(for requests: [SkillContentRequest]) async -> [String: SkillContentFacts] { [:] }
 }
 
 /// The real scan, and the file the last report is kept in.
@@ -42,6 +63,10 @@ struct LiveInsightsServices: InsightsServicing {
 
     private let service = ToolingInsightsService()
     private let file: URL
+    /// The workspace's content store directory. The scan opens a read handle on
+    /// it to read a library skill's real SKILL.md; the objects there are
+    /// immutable and content-addressed, so a second read handle is safe.
+    private let contentDirectory: URL
     private let providers: [any MarketplaceProvider]
     private let cachedPackages: [MarketplacePackage]
 
@@ -54,6 +79,7 @@ struct LiveInsightsServices: InsightsServicing {
         cachedPackages: [MarketplacePackage] = []
     ) {
         file = container.appending(path: "insights-report.json")
+        contentDirectory = container.appending(path: "content")
         self.providers = providers
         self.cachedPackages = cachedPackages
     }
@@ -67,6 +93,25 @@ struct LiveInsightsServices: InsightsServicing {
         await service.scan(
             options: options, skills: skills, marketplacePackages: cachedPackages, homeURL: homeURL,
             marketplaceProviders: providers)
+    }
+
+    /// Reads the real description and files for each requested library skill.
+    ///
+    /// The content store is opened read-only (`initializeIfEmpty: false`) so
+    /// this never creates or mutates anything; a workspace with no content
+    /// directory yet, or a digest with no stored object, simply drops out of
+    /// the result and that skill stays honestly unknown. A read that throws is
+    /// treated the same way — a failed read must not become a false finding.
+    func libraryContent(for requests: [SkillContentRequest]) async -> [String: SkillContentFacts] {
+        guard !requests.isEmpty,
+            let store = try? CentralPackageContentStore(directory: contentDirectory, initializeIfEmpty: false)
+        else { return [:] }
+        var facts: [String: SkillContentFacts] = [:]
+        for request in requests {
+            guard let tree = try? await store.read(request.digest) else { continue }
+            facts[request.skillID] = SkillContentFacts.read(from: tree)
+        }
+        return facts
     }
 
     func lastReport() -> InsightsReport? {
@@ -146,7 +191,20 @@ final class WorkspaceInsightsSession {
             return
         }
         // The versioned library, in the shape the surviving scan already speaks.
-        let skills = VersionedInventoryProjection.inventory(state.library).skills
+        let projected = VersionedInventoryProjection.inventory(state.library).skills
+        // The projection can only report requested intent, so a library-authored
+        // skill's description and files arrive empty — unknown, not missing. Read
+        // the real facts from each skill's own captured tree so the health checks
+        // judge what the SKILL.md actually says instead of the placeholders.
+        let requests = Self.libraryContentRequests(state.library)
+        let facts = requests.isEmpty ? [:] : await services.libraryContent(for: requests)
+        let skills = projected.map { skill -> Skill in
+            guard let fact = facts[skill.id] else { return skill }
+            var enriched = skill
+            if let description = fact.description { enriched.summary = description }
+            if !fact.files.isEmpty { enriched.files = fact.files }
+            return enriched
+        }
         generation &+= 1
         let token = generation
         isScanning = true
@@ -181,6 +239,39 @@ final class WorkspaceInsightsSession {
         scanTask.cancel()
         self.scanTask = nil
         isScanning = false
+    }
+
+    /// The library-authored skills worth reading real content for: the ones the
+    /// workspace owns (its own or an upstream copy) that pin a captured tree by
+    /// digest. A native-owned or tracked-only row is not the workspace's content
+    /// to read, and a row with no digest has nothing stored to read.
+    ///
+    /// The projection derives a skill's id from its artifact id the same way, so
+    /// these requests line up with the projected skills by id.
+    private static func libraryContentRequests(_ library: WorkspaceLibraryReadModel) -> [SkillContentRequest] {
+        var requests: [SkillContentRequest] = []
+        for row in library.rows {
+            if row.kind == .skill, isWorkspaceOwned(row.ownership), let digest = row.contentDigest {
+                requests.append(.init(skillID: skillID(row.artifactID), digest: digest))
+            }
+            for child in row.includedChildren where child.kind == .skill {
+                if isWorkspaceOwned(child.ownership), let digest = child.contentDigest {
+                    requests.append(.init(skillID: skillID(child.artifactID), digest: digest))
+                }
+            }
+        }
+        return requests
+    }
+
+    private static func isWorkspaceOwned(_ ownership: WorkspaceLibraryOwnership) -> Bool {
+        switch ownership {
+        case .centralPersonal, .centralUpstream: true
+        case .nativeOwned, .attachedAuthoring, .trackedOnly: false
+        }
+    }
+
+    private static func skillID(_ id: ArtifactID) -> String {
+        id.rawValue.uuidString.lowercased()
     }
 
     /// Forgets the saved aggregate report. Chat history is not touched.

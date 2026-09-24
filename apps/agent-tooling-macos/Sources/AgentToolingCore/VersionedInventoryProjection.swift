@@ -14,7 +14,11 @@ import Foundation
 /// person *asked for*, and the legacy inventory recorded what a scan *found*.
 /// Those are not the same claim, so nothing in this projection reports a
 /// requested destination as an installed one. Every projected client state is
-/// `pending` and `isInstalled: false`, whatever the request says.
+/// `pending`, and its `isInstalled` is left `nil` — presence is *unknown* here,
+/// not *absent*. Only the Install step, or a later scan enrichment, can turn
+/// that unknown into a measured yes or no. Reporting `false` would be a claim
+/// this projection cannot honestly make, and it makes downstream health checks
+/// fire "not installed" findings against a skill nobody ever checked.
 public enum VersionedInventoryProjection {
     public struct Inventory: Sendable, Equatable {
         public var skills: [Skill]
@@ -158,7 +162,7 @@ public enum VersionedInventoryProjection {
                 detail: count == 1
                     ? "Asked for in one place. Not checked against this Mac."
                     : "Asked for in \(count) places. Not checked against this Mac.",
-                isInstalled: false)
+                isInstalled: nil)
         }
     }
 }
