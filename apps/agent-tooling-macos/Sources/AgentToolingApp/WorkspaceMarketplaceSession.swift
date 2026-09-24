@@ -162,10 +162,63 @@ final class WorkspaceMarketplaceSession {
         reload()
     }
 
+    // MARK: - Adding an MCP server listing to the library
+
+    /// What adding an MCP-server listing needs: a reviewed connection ready to
+    /// record, or a manual setup this app cannot complete on its own. Asked by
+    /// the screen so it can show one button or one sentence rather than four
+    /// dead per-client buttons.
+    ///
+    /// Returns `nil` when the listing is not an MCP server at all, so a plugin
+    /// listing keeps its per-client buttons.
+    func mcpAvailability(for package: MarketplacePackage) -> ReviewedMarketplaceMCPServer.Availability? {
+        ReviewedMarketplaceMCPServer.availability(for: package)
+    }
+
+    /// The sentence shown in place of buttons for an MCP-server listing with no
+    /// reviewed route. Stated once so the screen and this session agree.
+    static let mcpManualSetupNote =
+        "This listing needs credentials or a manual install, so Agent Tooling cannot add it here. "
+        + "Its install command is shown below."
+
+    /// Records a reviewed MCP-server listing through the same managed-MCP intake
+    /// the Paste sheet uses. The listing carries the reviewed transport, so this
+    /// builds the definition from it, writes one connection, and nothing else:
+    /// no server is started, contacted, or put in an app. On success the row
+    /// shows as held, with the words Discover uses for every added package.
+    func adoptMCPServer(_ package: MarketplacePackage) async {
+        guard canAdopt, !isAdopting else { return }
+        guard case .reviewed(let draft) = ReviewedMarketplaceMCPServer.availability(for: package) else {
+            adoption = .init(packageID: package.id, message: Self.mcpManualSetupNote)
+            return
+        }
+        isAdopting = true
+        adoption = nil
+        defer { isAdopting = false }
+        do {
+            guard let head = try await service.snapshot()?.document.revision.id else {
+                adoption = .init(
+                    packageID: package.id,
+                    message: "This workspace could not be read. Nothing was added.")
+                return
+            }
+            let command = try ManagedMCPServerIntakeCommand(expectedRevisionID: head, draft: draft)
+            _ = try await service.intakeManagedMCPServer(command)
+            adoption = .init(
+                packageID: package.id,
+                message: "Added to your library. Choose where it goes on the Apps screen.")
+        } catch {
+            adoption = .init(packageID: package.id, message: Self.message(for: error))
+        }
+        await library.refresh()
+        reload()
+    }
+
     /// A refusal carries the sentence it wants shown; anything else is named
     /// without pretending to know more about it than that it stopped the write.
     private static func message(for error: any Error) -> String {
         if let refusal = error as? NativePackageAdoptionError { return refusal.localizedDescription }
+        if let refusal = error as? ManagedMCPServerIntakeError { return refusal.localizedDescription }
         if case WorkspaceRevisionStoreError.staleRevision = error {
             return "This workspace changed while you were reading. Try again."
         }

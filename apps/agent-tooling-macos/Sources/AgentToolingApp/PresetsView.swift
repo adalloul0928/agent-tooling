@@ -6,10 +6,11 @@ import SwiftUI
 /// preset, what catching up would change, its items, and a way to share one
 /// of them.
 ///
-/// Presets are read-only here — there is no command yet for creating one or
-/// changing its membership from this app, so this screen only follows,
-/// catches up, and shares. That is stated once, plainly, rather than left
-/// implicit by missing buttons.
+/// A preset can be created here from library items, renamed, and deleted;
+/// deleting one leaves its members exactly where they are and only lets go of
+/// the assignments the preset itself produced. Its membership is still edited
+/// by adding or removing the tools in the Library. Export, Share and Follow
+/// stay as they were.
 struct PresetsView: View {
     let session: WorkspacePresetsSession
     let library: WorkspaceLibrarySession
@@ -18,6 +19,8 @@ struct PresetsView: View {
     @State private var linking: ArtifactID?
     @State private var shareSelection: ArtifactID?
     @State private var shareAnchor = ShareAnchor()
+    @State private var creatingPreset = false
+    @State private var renaming: ArtifactID?
 
     init(
         session: WorkspacePresetsSession, library: WorkspaceLibrarySession,
@@ -32,6 +35,13 @@ struct PresetsView: View {
     var body: some View {
         VStack(spacing: 0) {
             PageToolbar(title: AppSection.presets.navigationTitle, context: context) {
+                Button("New preset…", systemImage: "plus") { creatingPreset = true }
+                    .buttonStyle(.glass)
+                    .disabled(session.isBusy || !session.canWrite)
+                    .help(
+                        session.canWrite
+                            ? "Create a preset from items already in your library"
+                            : "This workspace is open for reading only.")
                 Button("Refresh", systemImage: "arrow.clockwise") { Task { await session.refresh() } }
                     .labelStyle(.iconOnly).buttonStyle(.glass).disabled(session.isBusy)
             }
@@ -49,6 +59,18 @@ struct PresetsView: View {
                 PresetFollowSheet(session: session, library: library, presetID: presetID, name: preset.name)
             }
         }
+        .sheet(isPresented: $creatingPreset) {
+            PresetEditorSheet(session: session, library: library, mode: .create) { created in
+                selection = created
+            }
+        }
+        .sheet(isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            if let presetID = renaming, let preset = presets.first(where: { $0.id == presetID }) {
+                PresetEditorSheet(
+                    session: session, library: library,
+                    mode: .rename(presetID: presetID, currentName: preset.name)) { _ in }
+            }
+        }
     }
 
     private var presets: [WorkspaceLibraryPresetReadModel] { library.state?.library.presets ?? [] }
@@ -59,8 +81,12 @@ struct PresetsView: View {
             EmptyStateView(
                 symbol: "square.stack",
                 title: "No presets yet",
-                message: "A preset is a named set of tools you can put in place together. Presets arrive with a workspace — restored from a backup, synced from another Mac, or shared with you — and appear here once one does."
-            )
+                message: "A preset is a named set of tools you can put in place together. Create one with “New preset…” from items already in your library, or receive one with a workspace — restored from a backup, synced from another Mac, or shared with you.",
+                actionTitle: session.canWrite ? "New preset…" : nil,
+                isActionEnabled: session.canWrite && !session.isBusy
+            ) {
+                creatingPreset = true
+            }
         } else if let selection, let preset = presets.first(where: { $0.id == selection }) {
             HSplitView {
                 list.frame(minWidth: 280, idealWidth: 320)
@@ -120,6 +146,26 @@ struct PresetsView: View {
                 Text(itemSummary(preset)).font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
+            Menu {
+                Button("Rename…", systemImage: "pencil") { renaming = preset.id }
+                    .disabled(!session.canWrite || session.isBusy)
+                Button("Delete preset", systemImage: "trash", role: .destructive) {
+                    Task {
+                        if await session.deletePreset(preset.id), selection == preset.id { selection = nil }
+                    }
+                }
+                .disabled(!session.canWrite || session.isBusy)
+            } label: {
+                Label("Preset actions", systemImage: "ellipsis.circle")
+                    .labelStyle(.iconOnly)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .disabled(!session.canWrite || session.isBusy)
+            .help(
+                session.canWrite
+                    ? "Rename or delete this preset. Deleting it leaves its items in your library."
+                    : "This workspace is open for reading only.")
         }
     }
 
@@ -215,7 +261,7 @@ struct PresetsView: View {
     private func itemsCard(_ preset: WorkspaceLibraryPresetReadModel) -> some View {
         TitledCard("Items", count: "\(preset.memberArtifactIDs.count)") {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Presets are read-only here. Add or remove the tools themselves in the Library.")
+                Text("A preset's items are set when you create it. To change which tools are in it, add or remove the tools themselves in the Library.")
                     .font(.caption).foregroundStyle(.secondary)
                     .padding(14)
                 if preset.memberArtifactIDs.isEmpty {
@@ -449,6 +495,7 @@ private struct PresetFollowSheet: View {
     let presetID: ArtifactID
     let name: String
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.availableClients) private var availableClients
     @State private var clients: Set<ClientKind> = []
     @State private var scope: ToolingScope = .user
     @State private var projectID: ArtifactID?
@@ -468,7 +515,7 @@ private struct PresetFollowSheet: View {
                 .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Apps").font(.headline)
-                    ForEach(ClientKind.allCases) { client in
+                    ForEach(availableClients) { client in
                         Toggle(
                             client.rawValue,
                             isOn: Binding(
@@ -537,6 +584,205 @@ private extension ClientKind {
         case .codex: .codexCLI
         case .gemini: .geminiCLI
         case .kiro: .kiroCLI
+        }
+    }
+}
+
+/// Creating a preset, or renaming one.
+///
+/// A preset is a name and a set of library items. Create mode asks for both: a
+/// name, and a checklist of the skills, servers and plugins the library already
+/// holds, searchable because a full library is long. Rename mode asks for the
+/// name only — a preset's membership is changed by editing the tools in the
+/// Library, not here. Nothing is put in place by either: creating records the
+/// shelf, and following it later is what moves anything.
+private struct PresetEditorSheet: View {
+    enum Mode {
+        case create
+        case rename(presetID: ArtifactID, currentName: String)
+    }
+
+    let session: WorkspacePresetsSession
+    let library: WorkspaceLibrarySession
+    let mode: Mode
+    /// Called with the new preset's id after a successful create, so the list
+    /// can select it. Rename passes nil back through the same closure unused.
+    let onCreated: (ArtifactID?) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var members: Set<ArtifactID> = []
+    @State private var search = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(isRenaming ? "Rename preset" : "New preset").font(.title3.weight(.semibold))
+                Spacer()
+                Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
+            }
+            .padding(20)
+            Divider()
+            VStack(alignment: .leading, spacing: 16) {
+                if let message = session.errorMessage {
+                    AttentionBanner(title: isRenaming ? "That preset was not renamed" : "That preset was not created", message: message)
+                }
+                LabeledContent("Name") {
+                    TextField("Starter set", text: $name)
+                        .textFieldStyle(.roundedBorder).frame(maxWidth: 320)
+                        .accessibilityLabel("Preset name")
+                }
+                if !isRenaming { memberPicker }
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            Divider()
+            HStack {
+                Text(
+                    isRenaming
+                        ? "Renaming keeps the preset's items and its following."
+                        : "Creating records the preset. Nothing is put in place until you follow it."
+                )
+                .font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Button(isRenaming ? "Rename" : "Create preset") { commit() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canCommit)
+            }
+            .padding(20)
+        }
+        .frame(width: 560, height: 560)
+        .background(AgentTheme.contentBackground)
+        .onAppear {
+            session.clearError()
+            if case .rename(_, let currentName) = mode { name = currentName }
+        }
+    }
+
+    private var memberPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Items").font(.headline)
+                Spacer()
+                Text(members.count == 1 ? "1 chosen" : "\(members.count) chosen")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            InventorySearchField(placeholder: "Search your library", text: $search)
+            if candidates.isEmpty {
+                Text("Your library has no skills, servers, or plugins to put in a preset yet.")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(filteredCandidates) { row in
+                            PresetMemberToggle(
+                                row: row,
+                                isMember: members.contains(row.artifactID),
+                                kind: toolingKind(row.kind)
+                            ) { on in
+                                if on { members.insert(row.artifactID) } else { members.remove(row.artifactID) }
+                            }
+                            if row.artifactID != filteredCandidates.last?.artifactID { Divider().opacity(0.3) }
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+                .frame(maxHeight: .infinity)
+                .standardPanel(cornerRadius: 12)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var isRenaming: Bool {
+        if case .rename = mode { return true }
+        return false
+    }
+
+    /// The library items that can go in a preset: skills, servers and plugins.
+    /// Presets and logical projects are not members of a preset, so they are
+    /// left out rather than offered as choices that would be refused.
+    private var candidates: [WorkspaceLibraryReadModelRow] {
+        (library.state?.library.rows ?? []).filter {
+            switch $0.kind {
+            case .skill, .mcpServer, .nativePlugin, .package: true
+            case .preset, .logicalProject: false
+            }
+        }
+    }
+
+    private var filteredCandidates: [WorkspaceLibraryReadModelRow] {
+        let term = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return candidates }
+        return candidates.filter { $0.displayName.localizedCaseInsensitiveContains(term) }
+    }
+
+    private var canCommit: Bool {
+        guard !session.isBusy, session.canWrite,
+            !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return false }
+        return isRenaming || !members.isEmpty
+    }
+
+    private func commit() {
+        Task {
+            switch mode {
+            case .create:
+                if await session.createPreset(name: name, memberArtifactIDs: Array(members)) {
+                    onCreated(session.lastCreatedPresetID)
+                    dismiss()
+                }
+            case .rename(let presetID, _):
+                if await session.renamePreset(presetID, name: name) { dismiss() }
+            }
+        }
+    }
+
+    private func toolingKind(_ kind: ArtifactKind) -> ToolingKind {
+        switch kind {
+        case .skill: .skill
+        case .mcpServer: .mcpServer
+        case .nativePlugin, .package: .plugin
+        case .preset: .collection
+        case .logicalProject: .library
+        }
+    }
+}
+
+/// One checkable library item in the preset editor's member list. Extracted so
+/// the enclosing `ForEach` infers a plain collection rather than the binding
+/// overload the inline `Toggle` binding pushed it toward.
+private struct PresetMemberToggle: View {
+    let row: WorkspaceLibraryReadModelRow
+    let isMember: Bool
+    let kind: ToolingKind
+    let setMember: (Bool) -> Void
+
+    var body: some View {
+        Toggle(isOn: Binding(get: { isMember }, set: setMember)) {
+            HStack(spacing: 9) {
+                KindTile(kind: kind, size: 22)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(row.displayName).font(.callout)
+                    Text(kindLabel(row.kind)).font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .toggleStyle(.checkbox)
+        .padding(.vertical, 5)
+    }
+
+    /// A plain word for the item's kind, so the row reads without leaning on a
+    /// domain enum's raw case name.
+    private func kindLabel(_ kind: ArtifactKind) -> String {
+        switch kind {
+        case .skill: "Skill"
+        case .mcpServer: "MCP server"
+        case .nativePlugin, .package: "Plugin"
+        case .preset: "Preset"
+        case .logicalProject: "Project"
         }
     }
 }

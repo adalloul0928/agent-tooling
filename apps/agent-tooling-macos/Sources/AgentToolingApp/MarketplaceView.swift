@@ -16,6 +16,7 @@ struct MarketplaceView: View {
     let session: WorkspaceMarketplaceSession
     @Environment(AppNavigationState.self) private var navigation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.availableClients) private var availableClients
     // Inspector selection is transient, just like its presentation state.
     // Persistent filters restore the browsing context without reopening a panel.
     @State private var selectedPackageID: String?
@@ -611,27 +612,80 @@ struct MarketplaceView: View {
     /// with no assignment and no destination; what a client is asked to run is
     /// decided on Apps, from a reviewed plan, and nowhere else.
     ///
-    /// A route this build cannot act on keeps its button, disabled, with the
-    /// command's own sentence explaining why — a Gemini listing, because
-    /// nothing has read that client's install command and inventing one is the
-    /// thing the register exists to avoid.
+    /// An MCP-server listing is added once, through the same managed-MCP intake
+    /// the Paste sheet uses, so it is never four dead per-client buttons: a
+    /// server is not a per-client plugin. A plugin listing keeps its per-client
+    /// buttons, but only for the clients this Mac manages, and a client that
+    /// cannot act on the listing says why in a line under the buttons rather
+    /// than only in a tooltip nobody hovers.
     @ViewBuilder
     private func installRoutes(for package: MarketplacePackage) -> some View {
-        let scopes = Set(package.nativeInstalls.map(\.scope))
+        if let availability = session.mcpAvailability(for: package) {
+            mcpServerRoutes(for: package, availability: availability)
+        } else {
+            pluginRoutes(for: package)
+        }
+    }
+
+    /// One button for an MCP-server listing with a reviewed route, or one plain
+    /// sentence when it needs credentials or a manual install. The command/Copy
+    /// UI below still shows the install command in the manual case.
+    @ViewBuilder
+    private func mcpServerRoutes(
+        for package: MarketplacePackage, availability: ReviewedMarketplaceMCPServer.Availability
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(package.nativeInstalls.isEmpty ? "No native install route" : "Native install routes")
+            Text("Native install route")
                 .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            if package.nativeInstalls.isEmpty {
-                Text("This listing publishes no verified installer for any app on this Mac.")
+            switch availability {
+            case .reviewed:
+                Button {
+                    Task { await session.adoptMCPServer(package) }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "tray.and.arrow.down")
+                        Text("Add to Library")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AgentTheme.selection)
+                .disabled(!session.canAdopt || session.isAdopting)
+                .help(session.canAdopt ? WorkspaceMarketplaceSession.adoptionNote : WorkspaceMarketplaceSession.readOnlyNote)
+            case .needsManualSetup:
+                Text(WorkspaceMarketplaceSession.mcpManualSetupNote)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            adoptionMessage(for: package)
+        }
+    }
+
+    /// Per-client buttons for a plugin listing, one for each client this Mac
+    /// manages. A client that cannot act on the listing shows its refusal as a
+    /// line under the buttons in the command's own words, not only in a tooltip.
+    @ViewBuilder
+    private func pluginRoutes(for package: MarketplacePackage) -> some View {
+        let scopes = Set(package.nativeInstalls.map(\.scope))
+        let routes = package.nativeInstalls.filter { availableClients.contains($0.client) }
+        VStack(alignment: .leading, spacing: 8) {
+            Text(routes.isEmpty ? "No native install route" : "Native install routes")
+                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            if routes.isEmpty {
+                Text(
+                    package.nativeInstalls.isEmpty
+                        ? "This listing publishes no verified installer for any app on this Mac."
+                        : "None of the apps this Mac manages can install this listing."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
             if scopes.count == 1, let scope = scopes.first {
                 InstallScopeNote(scope: scope)
             }
             FlowLayout(spacing: 8) {
-                ForEach(package.nativeInstalls) { route in
+                ForEach(routes) { route in
                     let refusal = session.adoptionRefusal(for: package, client: route.client)
                     Button {
                         Task { await session.adopt(package, client: route.client) }
@@ -650,9 +704,19 @@ struct MarketplaceView: View {
                                 + WorkspaceMarketplaceSession.adoptionNote))
                 }
             }
+            // A client that refused says so in a readable line, so a disabled
+            // button is never disabled without a reason a person can see.
+            ForEach(routes) { route in
+                if let refusal = session.adoptionRefusal(for: package, client: route.client) {
+                    Text("\(route.client.rawValue): \(refusal)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             if scopes.count > 1 {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(package.nativeInstalls) { route in
+                    ForEach(routes) { route in
                         HStack(spacing: 6) {
                             ClientBrandIcon(client: route.client, size: 12)
                             Text("\(route.client.rawValue) · \(route.scope.marketplaceInstallTitle)")
@@ -662,18 +726,22 @@ struct MarketplaceView: View {
                     }
                 }
             }
-            // What the last attempt on this listing said, in the command's own
-            // words, and otherwise what pressing the button would do. A message
-            // left by another package is never shown here.
-            Text(
-                session.adoption?.packageID == package.id
-                    ? (session.adoption?.message ?? WorkspaceMarketplaceSession.adoptionNote)
-                    : WorkspaceMarketplaceSession.adoptionNote
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            adoptionMessage(for: package)
         }
+    }
+
+    /// What the last attempt on this listing said, in the command's own words,
+    /// and otherwise what pressing the button would do. A message left by
+    /// another package is never shown here.
+    private func adoptionMessage(for package: MarketplacePackage) -> some View {
+        Text(
+            session.adoption?.packageID == package.id
+                ? (session.adoption?.message ?? WorkspaceMarketplaceSession.adoptionNote)
+                : WorkspaceMarketplaceSession.adoptionNote
+        )
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// What the last refresh could say about the catalog behind a package.
@@ -1035,11 +1103,15 @@ private struct MarketplaceSourceRow: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(source.name).font(.callout.weight(.semibold)).lineLimit(1)
                         if let contents {
-                            Text(contents).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(contents).font(.caption).foregroundStyle(.secondary)
+                                .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                                .help(contents)
                         } else {
                             Text(source.kind.displayName).font(.caption).foregroundStyle(.secondary)
                         }
-                        Text(source.trustSummary).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        Text(source.trustSummary).font(.caption2).foregroundStyle(.secondary)
+                            .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                            .help(source.trustSummary)
                         if source.isOptionalBackup {
                             Text("Optional Git source")
                                 .font(.caption2)

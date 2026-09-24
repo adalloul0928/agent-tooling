@@ -195,6 +195,107 @@ struct WorkspaceMarketplaceSessionTests {
         #expect(await provider.lastQuery?.search == nil)
     }
 
+    // MARK: - Adding an MCP server listing
+
+    /// An MCP-server listing with a reviewed route is added through the same
+    /// managed-MCP intake the Paste sheet uses, not the native-plugin path that
+    /// only accepts `claude:`/`codex:` identifiers. A definition is recorded.
+    @Test func anMCPServerListingIsAddedThroughManagedIntake() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let listing = Self.reviewedRegistryServer(
+            id: "mcp-registry:io.example/notes@1.2.0", name: "io.example/notes",
+            endpoint: "https://mcp.example.com/notes")
+
+        let session = fixture.session(providers: [StubMarketplaceProvider(packages: [listing])])
+        await session.refresh()
+        // The reviewed listing is ready to add without a person entering anything.
+        #expect(session.mcpAvailability(for: listing) == .reviewed(
+            ReviewedMarketplaceMCPServer.reviewedDraft(for: listing) ?? MCPDraft()))
+
+        await session.adoptMCPServer(listing)
+
+        #expect(session.adoption?.packageID == listing.id)
+        #expect(session.adoption?.message == "Added to your library. Choose where it goes on the Apps screen.")
+        let document = try #require(try fixture.store.snapshot()).document
+        // Recorded as a managed MCP connection: one artifact and one definition,
+        // named by the server's short install identifier.
+        let artifact = try #require(
+            document.artifacts.first { $0.identity.kind == .mcpServer && $0.declaredName == "notes" })
+        #expect(document.mcpDefinitions?.contains { $0.artifactID == artifact.identity.id } == true)
+    }
+
+    /// A listing that publishes no reviewed route — it needs credentials, a
+    /// header, or an unpinned version — is not added. The session says so in one
+    /// plain sentence rather than offering a control that would refuse.
+    @Test func anMCPServerListingWithoutAReviewedRouteIsNotAddedAndSaysWhy() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        // No native install routes: exactly what the provider writes for a
+        // listing it could not review without a secret or a manual step.
+        let listing = ShellRenderFixture.catalogPackage(
+            id: "mcp-registry:io.example/secret@1", name: "io.example/secret",
+            summary: "A server that needs credentials.")
+        var needsSetup = listing
+        needsSetup.components = [.mcpServer]
+        needsSetup.nativeInstalls = []
+
+        let session = fixture.session(providers: [StubMarketplaceProvider(packages: [needsSetup])])
+        await session.refresh()
+        #expect(session.mcpAvailability(for: needsSetup) == .needsManualSetup)
+
+        await session.adoptMCPServer(needsSetup)
+
+        #expect(session.adoption?.packageID == needsSetup.id)
+        #expect(session.adoption?.message == WorkspaceMarketplaceSession.mcpManualSetupNote)
+        // Nothing was recorded.
+        let document = try #require(try fixture.store.snapshot()).document
+        #expect(document.mcpDefinitions?.isEmpty == true)
+        #expect(!document.artifacts.contains { $0.identity.kind == .mcpServer })
+    }
+
+    /// A plugin listing is not an MCP server, so it keeps the per-client path:
+    /// `mcpAvailability` returns nil and its per-client refusals are readable.
+    @Test func aPluginListingKeepsThePerClientPathAndNamesEachRefusal() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let plugin = ShellRenderFixture.unheldPackage  // a `claude:` plugin listing
+
+        let session = fixture.session(providers: [StubMarketplaceProvider(packages: [plugin])])
+        await session.refresh()
+
+        #expect(session.mcpAvailability(for: plugin) == nil)
+        // The Claude route is actionable; a Codex route on the same listing is
+        // refused with the command's own words rather than only in a tooltip.
+        #expect(session.adoptionRefusal(for: plugin, client: .claude) == nil)
+        #expect(session.adoptionRefusal(for: plugin, client: .codex) != nil)
+    }
+
+    /// A reviewed MCP-registry listing: an https endpoint with a native install
+    /// route per client, built with the same command builder the real provider
+    /// uses so the session recovers the endpoint exactly as it would in the app.
+    static func reviewedRegistryServer(id: String, name: String, endpoint: String) -> MarketplacePackage {
+        let destination = ValidatedMCPDestination(endpoint: endpoint, command: [])
+        let installName = name.split(separator: "/").last.map(String.init) ?? name
+        let routes = ClientKind.allCases.map { client in
+            NativeInstall(
+                client: client,
+                executable: MCPClientCommand.executable(for: client),
+                arguments: MCPClientCommand.addArguments(
+                    serverID: installName, transport: .http, destination: destination, client: client, scope: .user),
+                removalArguments: MCPClientCommand.removeArguments(serverID: installName, client: client, scope: .user),
+                scope: .user, detail: "Add the reviewed HTTPS endpoint.", isInstalled: false)
+        }
+        return MarketplacePackage(
+            id: id, name: name, publisher: "example.com", summary: "A reviewed MCP server.",
+            sourceName: "Official MCP Registry", revision: "1.2.0",
+            components: [.mcpServer], supportedClients: Set(ClientKind.allCases),
+            hasExecutableContent: true,
+            trustSummary: "Registry metadata is validated; behavior still requires review.",
+            location: "https://github.com/example/notes", nativeInstalls: routes,
+            ownership: .managed)
+    }
+
     /// A workspace that already holds one native plugin, records one catalog
     /// source, and has kept one listing from the last time it could ask.
     @MainActor private struct Fixture {

@@ -33,6 +33,9 @@ final class WorkspacePresetsSession {
     private(set) var isBusy = false
     private(set) var errorMessage: String?
     private(set) var lastAppliedName: String?
+    /// The preset the last successful create produced, so the screen can select
+    /// it once the library and this session have caught up with the new row.
+    private(set) var lastCreatedPresetID: ArtifactID?
 
     private let service: WorkspaceApplicationService
     private let library: WorkspaceLibrarySession
@@ -46,6 +49,10 @@ final class WorkspacePresetsSession {
     }
 
     var canWrite: Bool { library.access == .writable }
+
+    /// Clears the last refusal so a sheet does not open showing an error left
+    /// by an earlier attempt.
+    func clearError() { errorMessage = nil }
 
     func refresh() async {
         guard !isBusy else { return }
@@ -148,5 +155,107 @@ final class WorkspacePresetsSession {
         }
         await library.refresh()
         reload()
+    }
+
+    // MARK: - Authoring presets
+
+    /// Creates a preset from library items and selects it once it lands.
+    ///
+    /// Creating a preset records the shelf; it puts nothing in place. The
+    /// members are chosen from what the library already holds, so a member that
+    /// is no longer there is refused by the command in words this returns.
+    /// Returns true when the preset was recorded.
+    @discardableResult
+    func createPreset(name: String, memberArtifactIDs: [ArtifactID]) async -> Bool {
+        guard canWrite, !isBusy else { return false }
+        isBusy = true
+        errorMessage = nil
+        lastCreatedPresetID = nil
+        defer { isBusy = false }
+        do {
+            guard let head = library.state?.snapshot.document.revision.id else {
+                errorMessage = "This workspace could not be read. Nothing was created."
+                return false
+            }
+            let command = try CreatePresetCommand(
+                expectedRevisionID: head, name: name, memberArtifactIDs: memberArtifactIDs)
+            _ = try await service.createPreset(command)
+            lastCreatedPresetID = command.presetID
+        } catch let refusal as WorkspacePresetCommandError {
+            errorMessage = refusal.localizedDescription
+            return false
+        } catch WorkspaceRevisionStoreError.staleRevision {
+            errorMessage = "This workspace changed while you were choosing. Try again."
+            return false
+        } catch {
+            errorMessage = "That preset could not be created. Nothing was changed."
+            return false
+        }
+        await library.refresh()
+        reload()
+        return true
+    }
+
+    /// Renames a preset in place, keeping its members and its following.
+    @discardableResult
+    func renamePreset(_ presetID: ArtifactID, name: String) async -> Bool {
+        guard canWrite, !isBusy else { return false }
+        isBusy = true
+        errorMessage = nil
+        defer { isBusy = false }
+        do {
+            guard let head = library.state?.snapshot.document.revision.id else {
+                errorMessage = "This workspace could not be read. Nothing was renamed."
+                return false
+            }
+            _ = try await service.renamePreset(
+                try RenamePresetCommand(expectedRevisionID: head, presetID: presetID, name: name))
+        } catch let refusal as WorkspacePresetCommandError {
+            errorMessage = refusal.localizedDescription
+            return false
+        } catch WorkspaceRevisionStoreError.staleRevision {
+            errorMessage = "This workspace changed while you were editing. Try again."
+            return false
+        } catch {
+            errorMessage = "That preset could not be renamed. Nothing was changed."
+            return false
+        }
+        await library.refresh()
+        reload()
+        return true
+    }
+
+    /// Deletes a preset. Its members stay where they are; only the assignments
+    /// this preset alone produced are let go of. Stops following it here too, so
+    /// this Mac is not left tracking a preset that no longer exists.
+    @discardableResult
+    func deletePreset(_ presetID: ArtifactID) async -> Bool {
+        guard canWrite, !isBusy else { return false }
+        isBusy = true
+        errorMessage = nil
+        defer { isBusy = false }
+        do {
+            guard let head = library.state?.snapshot.document.revision.id else {
+                errorMessage = "This workspace could not be read. Nothing was deleted."
+                return false
+            }
+            _ = try await service.deletePreset(
+                DeletePresetCommand(expectedRevisionID: head, presetID: presetID))
+            // The preset is gone, so following it is meaningless; drop this
+            // Mac's subscription rather than leaving it pointing at nothing.
+            try? store.write(try store.read().filter { $0.presetID != presetID })
+        } catch let refusal as WorkspacePresetCommandError {
+            errorMessage = refusal.localizedDescription
+            return false
+        } catch WorkspaceRevisionStoreError.staleRevision {
+            errorMessage = "This workspace changed while you were looking. Try again."
+            return false
+        } catch {
+            errorMessage = "That preset could not be deleted. Nothing was changed."
+            return false
+        }
+        await library.refresh()
+        reload()
+        return true
     }
 }

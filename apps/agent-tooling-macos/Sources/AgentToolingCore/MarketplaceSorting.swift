@@ -28,7 +28,7 @@ public enum MarketplaceSortOrder: String, Codable, CaseIterable, Identifiable, S
         case .relevance:
             "Ranks how closely the search term matches the package name, then its publisher, summary, and components. Without a search term this is name order."
         case .name:
-            "Sorts by package name, ignoring case."
+            "Sorts by the display name shown on the card, ignoring case. A reverse-DNS registry name sorts by its short last segment, so a listing is ordered by the words a person reads rather than by its publisher's domain."
         case .recentlyUpdated:
             "Sorts by the update date the catalog published, or for a local package the newest file change on this Mac. Listings that publish no date sort last."
         case .installs:
@@ -120,9 +120,26 @@ public enum MarketplaceSorting {
         return score
     }
 
+    /// The words a person reads on the card, which is what a name sort should
+    /// order by. A reverse-DNS registry name such as `ac.inference.sh/mcp` is
+    /// shown and ordered by its last segment, `mcp`, so listings sort by their
+    /// human-facing label rather than by their publisher's domain. Anything
+    /// without that shape is its own display name.
+    public static func displayName(for package: MarketplacePackage) -> String {
+        let name = package.name
+        guard let slash = name.lastIndex(of: "/") else { return name }
+        let tail = name[name.index(after: slash)...]
+        return tail.isEmpty ? name : String(tail)
+    }
+
+    /// Orders by the display name first, then by the full name, then by the
+    /// identifier, so the result is total and stable: two listings whose short
+    /// names collide still fall through to a fixed order.
     private static func byName(_ lhs: MarketplacePackage, _ rhs: MarketplacePackage) -> Bool {
-        let order = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
-        if order != .orderedSame { return order == .orderedAscending }
+        let displayOrder = displayName(for: lhs).localizedCaseInsensitiveCompare(displayName(for: rhs))
+        if displayOrder != .orderedSame { return displayOrder == .orderedAscending }
+        let nameOrder = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+        if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
         return lhs.id < rhs.id
     }
 }
