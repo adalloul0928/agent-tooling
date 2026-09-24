@@ -202,7 +202,10 @@ final class WorkspaceInsightsSession {
             guard let fact = facts[skill.id] else { return skill }
             var enriched = skill
             if let description = fact.description { enriched.summary = description }
-            if !fact.files.isEmpty { enriched.files = fact.files }
+            enriched.files = fact.files
+            // The facts came from reading this skill's own captured tree, so the
+            // file list is now known — even when the tree genuinely holds none.
+            enriched.filesKnown = true
             return enriched
         }
         generation &+= 1

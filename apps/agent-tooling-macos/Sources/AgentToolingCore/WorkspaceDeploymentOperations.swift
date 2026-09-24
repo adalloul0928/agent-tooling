@@ -36,12 +36,17 @@ public struct StagedDeployment: Hashable, Sendable {
     public let client: ClientKind
     public let scope: ToolingScope
     public let change: Change
+    /// The project folder a project-scoped copy lands under, so the executor
+    /// can admit that folder's own client directory. Absent for user scope.
+    public let projectRootPath: String?
     public var isRemoval: Bool { change == .remove }
 
     public init(
         artifactID: ArtifactID, deploymentName: String, stagingPath: String, fingerprint: String,
-        destinationPath: String, client: ClientKind, scope: ToolingScope, change: Change = .install
+        destinationPath: String, client: ClientKind, scope: ToolingScope, change: Change = .install,
+        projectRootPath: String? = nil
     ) {
+        self.projectRootPath = projectRootPath
         self.artifactID = artifactID
         self.deploymentName = deploymentName
         self.stagingPath = stagingPath
@@ -158,12 +163,21 @@ public enum WorkspaceDeploymentOperations {
                     artifactID: item.artifactID, deploymentName: deploymentName,
                     stagingPath: "", fingerprint: installed,
                     destinationPath: destination.path, client: client, scope: item.scope,
-                    change: .remove))
+                    change: .remove, projectRootPath: projectRoot?.path))
                 continue
             }
             guard let tree else { throw WorkspaceDeploymentOperationError.missingContent }
             let folder = stagingRoot.appending(path: item.artifactID.rawValue.uuidString.lowercased()
                 + "-" + item.physicalDestinationID.rawValue.uuidString.lowercased())
+            // The staging folder is named after the item and its destination,
+            // so a second attempt at the same install finds the last attempt's
+            // copy still there and the exporter refuses a non-empty folder.
+            // What is staged is always rebuilt from the library, so the old copy
+            // is disposable; anything else under the staging root is left alone.
+            if FileManager.default.fileExists(atPath: folder.path) {
+                do { try FileManager.default.removeItem(at: folder) }
+                catch { throw WorkspaceDeploymentOperationError.stagingFailed }
+            }
             do { try WorkspacePackageExporter.write(tree: tree, to: folder) }
             catch { throw WorkspaceDeploymentOperationError.stagingFailed }
             let fingerprint: String
@@ -174,7 +188,7 @@ public enum WorkspaceDeploymentOperations {
                 artifactID: item.artifactID, deploymentName: deploymentName,
                 stagingPath: folder.path, fingerprint: fingerprint,
                 destinationPath: destination.path, client: client, scope: item.scope,
-                change: change))
+                change: change, projectRootPath: projectRoot?.path))
         }
         return staged
     }
@@ -202,7 +216,8 @@ public enum WorkspaceDeploymentOperations {
                             destinationPath: deployment.destinationPath,
                             // Bound to the installed tree; an edited folder is
                             // left alone rather than deleted.
-                            destinationFingerprint: deployment.fingerprint)
+                            destinationFingerprint: deployment.fingerprint,
+                            projectRootPath: deployment.projectRootPath)
                         : OperationStep(
                             id: identifiers(),
                             kind: .copyDirectory,
@@ -212,7 +227,11 @@ public enum WorkspaceDeploymentOperations {
                             // The executor recomputes this before committing, so a
                             // staged folder that changed cannot slip past review.
                             sourceFingerprint: deployment.fingerprint,
-                            destinationPath: deployment.destinationPath)
+                            destinationPath: deployment.destinationPath,
+                            // Names the project folder the copy lands under, so the
+                            // executor admits that folder's client directory and
+                            // nothing outside it.
+                            projectRootPath: deployment.projectRootPath)
                 }
                 let removals = sorted.filter(\.isRemoval).count
                 let installs = sorted.filter { $0.change == .install }.count

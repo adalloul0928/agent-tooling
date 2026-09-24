@@ -96,6 +96,46 @@ struct WorkspaceDeploymentOperationsTests {
             stagingRoot: fixture.staging, homeURL: fixture.home,
             projectRoots: [fixture.projectID: project])
         #expect(staged.first?.destinationPath == project.appending(path: ".agents/skills/personal").path)
+        #expect(staged.first?.projectRootPath == project.path)
+    }
+
+    /// A second attempt at the same install must not fail on the first
+    /// attempt's leftovers: the staging folder is deterministic, and the
+    /// exporter refuses a folder that is not empty.
+    @Test func stagingTheSameInstallTwiceReplacesTheEarlierStagedCopy() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let first = try WorkspaceDeploymentOperations.stage(
+            fixture.plan, artifacts: [fixture.artifact], content: [fixture.tree.digest: fixture.tree],
+            stagingRoot: fixture.staging, homeURL: fixture.home)
+        let second = try WorkspaceDeploymentOperations.stage(
+            fixture.plan, artifacts: [fixture.artifact], content: [fixture.tree.digest: fixture.tree],
+            stagingRoot: fixture.staging, homeURL: fixture.home)
+        #expect(first.map(\.stagingPath) == second.map(\.stagingPath))
+        #expect(first.map(\.fingerprint) == second.map(\.fingerprint))
+    }
+
+    /// The executor only writes into a project folder it was told about, so a
+    /// project-scoped step has to carry the folder or the copy is refused at
+    /// the last moment, after review, for a reason the review never showed.
+    @Test func aProjectDeploymentActuallyInstallsIntoTheProjectFolder() async throws {
+        let fixture = try Fixture(scope: .project)
+        defer { fixture.remove() }
+        let project = fixture.root.appending(path: "project")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let staged = try WorkspaceDeploymentOperations.stage(
+            fixture.plan, artifacts: [fixture.artifact], content: [fixture.tree.digest: fixture.tree],
+            stagingRoot: fixture.staging, homeURL: fixture.home,
+            projectRoots: [fixture.projectID: project])
+        let operation = try #require(WorkspaceDeploymentOperations.operations(for: staged).first)
+        #expect(operation.steps.allSatisfy { $0.projectRootPath == project.path })
+        let executor = OperationExecutor(store: fixture.store, homeURL: fixture.home)
+
+        let receipt = await executor.execute(operation)
+
+        #expect(receipt.results.allSatisfy { $0.status == .succeeded }, "\(receipt.results.map(\.output))")
+        let installed = project.appending(path: ".agents/skills/personal/SKILL.md")
+        #expect(try Data(contentsOf: installed) == fixture.skillBytes)
     }
 
     @Test func thePlannedOperationActuallyInstallsTheReviewedVersion() async throws {

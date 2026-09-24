@@ -115,7 +115,7 @@ public struct EffectiveAssignmentRequirement: Hashable, Sendable {
     }
 }
 
-public enum WorkspaceAssignmentIssueKind: String, Hashable, Sendable {
+public enum WorkspaceAssignmentIssueKind: String, Hashable, Sendable, CaseIterable {
     case duplicateContributionID
     case invalidDesiredPresence
     case unknownArtifact
@@ -124,6 +124,9 @@ public enum WorkspaceAssignmentIssueKind: String, Hashable, Sendable {
     case missingResolvedTarget
     case duplicateResolvedTarget
     case invalidResolvedTarget
+    /// The captured target carries no client version, so nothing recorded
+    /// about what that client accepts can be matched against it.
+    case unknownClientVersion
     case unsupportedArtifactKind
     case trackedOnlyOwnership
     case nativeChildAssignment
@@ -276,11 +279,16 @@ public enum WorkspaceAssignmentResolver {
                 contribution: contribution,
                 key: .init(artifactID: contribution.artifactID, physicalDestinationID: target.physicalDestinationID)
             ))
-            guard target.adapterContractVersion > 0,
-                let installedVersion = validText(target.installedClientVersion),
-                wellFormedComponentContexts(target.componentContexts)
-            else {
+            guard target.adapterContractVersion > 0, wellFormedComponentContexts(target.componentContexts) else {
                 issues.insert(issue(.invalidResolvedTarget, contribution, physical: target.physicalDestinationID))
+                continue
+            }
+            // A client that answered without a version is a different case from a
+            // malformed target: the target is fine, the app just never said what
+            // it is, so the person is told to check it again rather than to
+            // review the request.
+            guard let installedVersion = validText(target.installedClientVersion) else {
+                issues.insert(issue(.unknownClientVersion, contribution, physical: target.physicalDestinationID))
                 continue
             }
 

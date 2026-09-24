@@ -758,10 +758,10 @@ private struct PresetMemberToggle: View {
     let row: WorkspaceLibraryReadModelRow
     let isMember: Bool
     let kind: ToolingKind
-    let setMember: (Bool) -> Void
+    let setMember: @MainActor @Sendable (Bool) -> Void
 
     var body: some View {
-        Toggle(isOn: Binding(get: { isMember }, set: setMember)) {
+        Toggle(isOn: Binding(get: { isMember }, set: { setMember($0) })) {
             HStack(spacing: 9) {
                 KindTile(kind: kind, size: 22)
                 VStack(alignment: .leading, spacing: 1) {

@@ -731,7 +731,8 @@ struct ToolingInsightsTests {
             negativeTrigger: "",
             files: ["/Users/example/private/helper.sh"],
             clients: [],
-            validationCount: 0
+            validationCount: 0,
+            filesKnown: true
         )
         let driftSkill = Skill(
             id: "drift-skill",
@@ -845,7 +846,8 @@ struct ToolingInsightsTests {
             clients: [
                 ClientState(client: .claude, state: .pending, detail: "Asked for.", isInstalled: nil)
             ],
-            validationCount: 0
+            validationCount: 0,
+            filesKnown: true
         )
 
         let report = await ToolingInsightsService().scan(
@@ -886,7 +888,8 @@ struct ToolingInsightsTests {
             clients: [
                 ClientState(client: .codex, state: .attention, detail: "Expected but missing", isInstalled: false)
             ],
-            validationCount: 0
+            validationCount: 0,
+            filesKnown: true
         )
 
         let report = await ToolingInsightsService().scan(

@@ -191,7 +191,9 @@ struct WorkspaceSkillTargetCaptureTests {
             contributions: [contribution], currentDeviceID: deviceID,
             targets: target.map(\.target), capabilityEvidence: [])
         #expect(resolution.requirements.isEmpty)
-        #expect(resolution.issues.map(\.kind) == [.invalidResolvedTarget])
+        // A well-formed target whose client never said its version is refused
+        // for that reason, not as a malformed target.
+        #expect(resolution.issues.map(\.kind) == [.unknownClientVersion])
 
         let versioned = try await WorkspaceSkillTargetCapture.capture(
             homeURL: fixture.home, deviceID: deviceID,

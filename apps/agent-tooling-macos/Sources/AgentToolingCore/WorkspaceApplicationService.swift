@@ -147,7 +147,8 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
         targets: [ResolvedAssignmentTarget],
         observations: [WorkspaceDeploymentObservation] = [],
         provenInstalls: Set<WorkspaceDeploymentInstallKey> = [],
-        nativeInstallRoutes: Set<NativePackageRoute> = []
+        nativeInstallRoutes: Set<NativePackageRoute> = [],
+        unavailableDestinations: [ResolvedAssignmentSelector: String] = [:]
     ) async throws -> WorkspaceDeploymentPlan {
         guard let snapshot = try store.snapshot() else {
             throw WorkspaceRevisionStoreError.notInitialized
@@ -164,7 +165,8 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
         return WorkspaceDeploymentPlanner.plan(
             document: snapshot.document, device: snapshot.device, targets: targets,
             availableContent: available, observations: observations,
-            provenInstalls: provenInstalls, nativeInstallRoutes: nativeInstallRoutes)
+            provenInstalls: provenInstalls, nativeInstallRoutes: nativeInstallRoutes,
+            unavailableDestinations: unavailableDestinations)
     }
 
     /// Registers a folder this person already authors in. The folder is not

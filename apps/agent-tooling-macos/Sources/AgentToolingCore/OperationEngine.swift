@@ -528,6 +528,7 @@ public actor OperationExecutor {
             (homeURL.appending(path: ".claude/skills", directoryHint: .isDirectory), homeURL),
             (homeURL.appending(path: ".agents/skills", directoryHint: .isDirectory), homeURL),
             (homeURL.appending(path: ".gemini/skills", directoryHint: .isDirectory), homeURL),
+            (homeURL.appending(path: ".kiro/skills", directoryHint: .isDirectory), homeURL),
         ].map { ($0.0.standardizedFileURL, $0.1.standardizedFileURL) }
 
         // Folders this device registered. Each is its own anchor, so the item
@@ -554,6 +555,7 @@ public actor OperationExecutor {
                     (projectRoot.appending(path: ".claude/skills", directoryHint: .isDirectory), projectRoot),
                     (projectRoot.appending(path: ".agents/skills", directoryHint: .isDirectory), projectRoot),
                     (projectRoot.appending(path: ".gemini/skills", directoryHint: .isDirectory), projectRoot),
+                    (projectRoot.appending(path: ".kiro/skills", directoryHint: .isDirectory), projectRoot),
                 ].map { ($0.0.standardizedFileURL, $0.1.standardizedFileURL) })
             if linkedUpdate {
                 permittedSkillRoots.append((projectRoot.appending(path: ".codex/skills").standardizedFileURL, projectRoot))

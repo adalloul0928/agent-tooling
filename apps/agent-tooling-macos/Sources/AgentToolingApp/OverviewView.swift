@@ -191,7 +191,8 @@ struct OverviewView: View {
     private var recommendedCard: some View {
         BentoCard(
             symbol: "sparkles", title: "Recommended",
-            action: recommendations.isEmpty ? nil : ("All suggestions", { navigate(.insights) })
+            action: recommendations.isEmpty ? nil : ("All suggestions", { navigate(.insights) }),
+            fillsHeight: true
         ) {
             if recommendations.isEmpty {
                 VStack(alignment: .leading, spacing: 14) {
@@ -305,7 +306,7 @@ struct OverviewView: View {
     /// The steps a prepared plan is holding. A plan that has been applied has
     /// already re-read itself, so what shows here is what is still outstanding.
     private var readyMiniCard: some View {
-        BentoCard(symbol: "arrow.down.circle", title: "Ready to install") {
+        BentoCard(symbol: "arrow.down.circle", title: "Ready to install", fillsHeight: true) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(workspace.deployment.plan?.items.count ?? 0, format: .number)
                     .font(.system(size: 30, weight: .bold)).monospacedDigit()
@@ -338,7 +339,7 @@ struct OverviewView: View {
     private var recentChangesCard: some View {
         BentoCard(
             symbol: "clock.arrow.circlepath", title: "Recent changes",
-            action: ("Open Activity", { navigate(.activity) })
+            action: ("Open Activity", { navigate(.activity) }), fillsHeight: true
         ) {
             VStack(alignment: .leading, spacing: 0) {
                 if recentReceipts.isEmpty {
@@ -466,13 +467,14 @@ struct OverviewView: View {
             workspace.device.verdict(for: $0).state == .attention
         }
         let clients = unreachable.map { client in
-            let observed = workspace.device.observations.filter { $0.surface.client == client }
+            // The verdict already says what is wrong in the same words the
+            // sidebar and Apps use, so Home repeats it rather than working
+            // out a second, possibly different, description from the scan.
+            let verdict = workspace.device.verdict(for: client)
             return OverviewAttention(
                 id: "client-\(client.rawValue)",
-                title: observed.contains(where: \.installed)
-                    ? "\(client.rawValue) command is unavailable"
-                    : "\(client.rawValue) was not found",
-                detail: observed.lazy.flatMap(\.notes).first ?? "The expected local path was checked.",
+                title: "\(client.rawValue): \(verdict.text.lowercased())",
+                detail: verdict.detail,
                 state: .attention, destination: .syncCenter)
         }
         let queued = requests.requests.map { request in
@@ -605,8 +607,11 @@ struct OverviewView: View {
     /// Works out what would change, on the screen that can approve it. Preparing
     /// reads only; nothing is written until somebody says so there.
     private func reviewChanges() {
+        // The same route "Install now…" takes: Apps prepares the plan and opens
+        // it for review, so the person lands on the sheet rather than on a
+        // screen they then have to ask again.
         navigation.showAllClients()
-        Task { await workspace.deployment.prepare() }
+        navigation.openScreenRequest(.reviewChanges)
     }
 
     /// Reveals one plugin on the Plugins tab. Revealing is not acting on it.
@@ -713,12 +718,21 @@ private struct BentoCard<Content: View>: View {
     let symbol: String
     let title: String
     var action: (String, () -> Void)?
+    /// Whether the card's own surface grows to the height its column gives it.
+    /// A frame put on the card from outside stretches an invisible box; the
+    /// panel background has to be the thing that stretches for the page to
+    /// read as filled rather than as short cards over an empty canvas.
+    var fillsHeight = false
     @ViewBuilder var content: Content
 
-    init(symbol: String, title: String, action: (String, () -> Void)? = nil, @ViewBuilder content: () -> Content) {
+    init(
+        symbol: String, title: String, action: (String, () -> Void)? = nil, fillsHeight: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
         self.symbol = symbol
         self.title = title
         self.action = action
+        self.fillsHeight = fillsHeight
         self.content = content()
     }
 
@@ -745,7 +759,7 @@ private struct BentoCard<Content: View>: View {
             .padding(.bottom, 9)
             content
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
         .standardPanel(cornerRadius: 16)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)

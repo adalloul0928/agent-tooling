@@ -187,23 +187,9 @@ struct WorkspaceDeploymentPlannerTests {
     }
 
     @Test func describeNeverLeaksARawEnumValue() {
-        // The resolver's issue kind is not CaseIterable, so the whole set is
-        // listed here on purpose: a new kind added upstream should make this
-        // list — and this test — the place a leaked code word is caught.
-        let allKinds: [WorkspaceAssignmentIssueKind] = [
-            .duplicateContributionID, .invalidDesiredPresence, .unknownArtifact,
-            .duplicateArtifactIdentity, .invalidDestinationSelector, .missingResolvedTarget,
-            .duplicateResolvedTarget, .invalidResolvedTarget, .unsupportedArtifactKind,
-            .trackedOnlyOwnership, .nativeChildAssignment, .missingNativeRoute,
-            .ambiguousNativeRoute, .invalidNativeRoute, .missingMCPDefinition,
-            .ambiguousMCPDefinition, .invalidMCPTransport, .invalidManagedMCPDefinition,
-            .missingDeviceMCPBinding, .ambiguousDeviceMCPBinding, .invalidDeviceMCPBinding,
-            .contradictoryMCPDefinition, .missingTargetComponentContext,
-            .contradictoryTargetComponentContext, .missingCapabilityEvidence,
-            .contradictoryCapabilityEvidence, .unsupportedCapability, .unknownCapability,
-            .missingMaterializedContent, .ambiguousContentEvidence, .conflictingEnabledIntent,
-            .incompatiblePhysicalStrategies,
-        ]
+        // Every kind the resolver can raise, so a new one added upstream is
+        // checked here the moment it exists.
+        let allKinds = WorkspaceAssignmentIssueKind.allCases
         for kind in allKinds {
             let sentence = WorkspaceDeploymentPlanner.describe(kind)
             #expect(!sentence.contains(kind.rawValue), "\(kind.rawValue) leaked in: \(sentence)")

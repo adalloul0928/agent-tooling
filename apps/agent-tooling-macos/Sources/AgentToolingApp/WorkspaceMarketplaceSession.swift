@@ -45,6 +45,10 @@ final class WorkspaceMarketplaceSession {
     /// Discover matches a catalog listing against this rather than against a
     /// name, so a namesake is never mistaken for the package you already have.
     private(set) var installedRoutes: [NativePackageRoute: LibraryMatch] = [:]
+    /// The connections the library already holds, by the name the managed-MCP
+    /// intake would give a listing, so an added server reads as held rather than
+    /// as offered again.
+    private(set) var heldConnections: [String: LibraryMatch] = [:]
 
     /// What adding the last listing did, or why it was refused.
     private(set) var adoption: AdoptionOutcome?
@@ -113,9 +117,20 @@ final class WorkspaceMarketplaceSession {
     /// on a display name: `NativeCatalogPackageIdentity` refuses anything whose
     /// identifier, components, client and provenance do not all agree.
     func libraryMatch(for package: MarketplacePackage) -> LibraryMatch? {
-        guard let identity = NativeCatalogPackageIdentity.recognize(package) else { return nil }
-        return installedRoutes[
-            NativePackageRoute(client: identity.client, externalPluginID: identity.externalPluginID)]
+        if let identity = NativeCatalogPackageIdentity.recognize(package) {
+            return installedRoutes[
+                NativePackageRoute(client: identity.client, externalPluginID: identity.externalPluginID)]
+        }
+        // An MCP listing is held once a connection with the name its intake
+        // would record exists, whichever screen recorded it.
+        guard package.components.contains(.mcpServer),
+            case .reviewed(let draft) = ReviewedMarketplaceMCPServer.availability(for: package)
+        else { return nil }
+        return heldConnections[Self.connectionKey(draft.name)]
+    }
+
+    private static func connectionKey(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     // MARK: - Adding a listing to the library
@@ -176,10 +191,17 @@ final class WorkspaceMarketplaceSession {
     }
 
     /// The sentence shown in place of buttons for an MCP-server listing with no
-    /// reviewed route. Stated once so the screen and this session agree.
+    /// reviewed route. Stated once so the screen and this session agree. The
+    /// screen appends `mcpManualSetupCommandClause` only when the detail pane
+    /// actually renders an install command for the listing; a credentials-only
+    /// registry listing has no command row, so promising one below would be a
+    /// sentence pointing at nothing.
     static let mcpManualSetupNote =
-        "This listing needs credentials or a manual install, so Agent Tooling cannot add it here. "
-        + "Its install command is shown below."
+        "This listing needs credentials or a manual install, so Agent Tooling cannot add it here."
+
+    /// Appended to `mcpManualSetupNote` only when a copyable install command is
+    /// shown beneath the sentence.
+    static let mcpManualSetupCommandClause = " Its install command is shown below."
 
     /// Records a reviewed MCP-server listing through the same managed-MCP intake
     /// the Paste sheet uses. The listing carries the reviewed transport, so this
@@ -286,6 +308,14 @@ final class WorkspaceMarketplaceSession {
                     artifact.nativeRoutes.map {
                         ($0, LibraryMatch(artifactID: artifact.identity.id, displayName: artifact.identity.displayName))
                     }
+                },
+            uniquingKeysWith: { first, _ in first })
+        heldConnections = Dictionary(
+            snapshot.document.artifacts
+                .filter { $0.identity.kind == .mcpServer && $0.identity.parentPackageID == nil }
+                .map {
+                    (Self.connectionKey($0.declaredName ?? $0.identity.displayName),
+                     LibraryMatch(artifactID: $0.identity.id, displayName: $0.identity.displayName))
                 },
             uniquingKeysWith: { first, _ in first })
         // Only on the first read: a refresh that reached a catalog must not be

@@ -229,37 +229,27 @@ final class WorkspaceDeploymentSession {
         let observations =
             await Self.measure(snapshot: snapshot, targets: captured, alsoMeasuring: proven)
             + Self.reportedNativePackages(snapshot: snapshot, targets: captured)
-        // A native package is only offered where the person's own retained
-        // record holds an install command for that exact client and package.
-        // Without one there is nothing to run, and offering it anyway would be
-        // an install claim with no command behind it.
-        let availableContent = await Self.availableContent(
-            snapshot: snapshot, contentStore: contentStore)
-        return WorkspaceDeploymentPlanner.plan(
-            document: snapshot.document, device: snapshot.device,
-            targets: captured.map(\.target), availableContent: availableContent,
-            observations: observations, provenInstalls: proven,
-            nativeInstallRoutes: Self.reviewedNativeRoutes(snapshot: snapshot),
-            unavailableDestinations: unavailable)
+        // The service reads the held content itself and forwards everything to
+        // the planner, so the unavailable-destination reasons this screen built
+        // reach the plan without the screen re-reading the content store.
+        do {
+            return try await service.deploymentPlan(
+                targets: captured.map(\.target),
+                observations: observations, provenInstalls: proven,
+                nativeInstallRoutes: Self.reviewedNativeRoutes(snapshot: snapshot),
+                unavailableDestinations: unavailable)
+        } catch {
+            // The snapshot was read a moment ago; a plan over an empty library
+            // is a truthful "nothing to do" rather than a fabricated one.
+            return WorkspaceDeploymentPlanner.plan(
+                document: snapshot.document, device: snapshot.device,
+                targets: captured.map(\.target), observations: observations,
+                provenInstalls: proven,
+                nativeInstallRoutes: Self.reviewedNativeRoutes(snapshot: snapshot),
+                unavailableDestinations: unavailable)
+        }
     }
 
-    /// The content this Mac's store can actually read, so an item with no held
-    /// bytes is excluded rather than assumed present. Mirrors what the service
-    /// computes; kept here because the planner is called directly to carry the
-    /// unavailable-destination map through.
-    private nonisolated static func availableContent(
-        snapshot: WorkspaceApplicationSnapshot,
-        contentStore: CentralPackageContentStore?
-    ) async -> [AssignmentContentEvidence] {
-        guard let contentStore else { return [] }
-        var available: [AssignmentContentEvidence] = []
-        for artifact in snapshot.document.artifacts {
-            guard let digest = artifact.contentDigest else { continue }
-            guard (try? await contentStore.read(digest)) != nil else { continue }
-            available.append(.init(artifactID: artifact.identity.id, digest: digest))
-        }
-        return available
-    }
 
     /// Turns each skipped selector into a reason in a person's words, naming
     /// the project or the app so the plan says what to do rather than showing a
@@ -728,8 +718,16 @@ final class WorkspaceDeploymentSession {
             errorMessage = "One of these needs its project folder on this Mac. Nothing was changed."
         } catch WorkspaceDeploymentOperationError.destinationOccupied {
             errorMessage = "A folder you pointed a destination at already holds something Agent Tooling did not put there. It was left exactly as it is, and nothing was installed."
+        } catch WorkspaceDeploymentOperationError.missingContent {
+            errorMessage = "The library has no verified copy of one of these tools, so nothing was installed."
+        } catch WorkspaceDeploymentOperationError.stagingFailed, WorkspaceDeploymentOperationError.invalidStagingRoot {
+            errorMessage = "The approved copy could not be prepared inside Agent Tooling's own library, so nothing was installed."
+        } catch WorkspaceDeploymentOperationError.unsupportedSurface, WorkspaceDeploymentOperationError.unsupportedScope {
+            errorMessage = "One of these asks for a place Agent Tooling cannot install into yet, so nothing was installed."
         } catch {
-            errorMessage = "These tools could not be installed. Your apps were left as they are."
+            // Anything else is named, because a sentence with no cause sends a
+            // person hunting through logs for what this screen already knew.
+            errorMessage = "These tools could not be installed. Your apps were left as they are. (\(error.localizedDescription))"
         }
     }
 }

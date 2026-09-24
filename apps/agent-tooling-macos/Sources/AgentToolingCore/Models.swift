@@ -61,6 +61,13 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
     public var triggers: [String]
     public var negativeTrigger: String
     public var files: [String]
+    /// Whether `files` came from reading a real package tree on disk. An empty
+    /// `files` list is otherwise ambiguous: a skill whose captured tree was
+    /// never read has no files listed yet, which is not the same as a skill
+    /// that was inventoried and genuinely holds none. Older snapshots omit this
+    /// and decode as `false`, so an un-enriched projection is treated as
+    /// unknown rather than as an empty inventory.
+    public var filesKnown: Bool
     public var clients: [ClientState]
     public var validationCount: Int
     /// Older snapshots omit this field. Generated packages use it to avoid
@@ -83,7 +90,8 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
         validationCount: Int,
         projectRoot: String? = nil,
         authoringOrigin: SkillAuthoringOrigin? = nil,
-        repositoryBinding: SkillRepositoryBinding? = nil
+        repositoryBinding: SkillRepositoryBinding? = nil,
+        filesKnown: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -96,6 +104,7 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
         self.triggers = triggers
         self.negativeTrigger = negativeTrigger
         self.files = files
+        self.filesKnown = filesKnown
         self.clients = clients
         self.validationCount = validationCount
         self.authoringOrigin = authoringOrigin

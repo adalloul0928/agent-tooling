@@ -356,7 +356,7 @@ extension WorkspaceDeploymentPlanner {
         case .unsupportedCapability, .unknownCapability, .contradictoryCapabilityEvidence:
             .unsupportedByAdapter
         // The app never said what it accepts, so the answer is unknown, not no.
-        case .missingCapabilityEvidence: .unknownClientVersion
+        case .missingCapabilityEvidence, .unknownClientVersion: .unknownClientVersion
         default: .needsAssignmentReview
         }
     }
@@ -380,7 +380,7 @@ extension WorkspaceDeploymentPlanner {
             "The installed app cannot accept this here."
         case .contradictoryCapabilityEvidence:
             "This Mac has conflicting records of what the installed app accepts, so it is not safe to proceed."
-        case .missingCapabilityEvidence:
+        case .missingCapabilityEvidence, .unknownClientVersion:
             "This app did not report its version, so Agent Tooling cannot confirm it accepts this. "
                 + "Check your apps again once it answers."
         default:

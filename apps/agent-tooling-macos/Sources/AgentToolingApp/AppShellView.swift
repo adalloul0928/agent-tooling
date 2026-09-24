@@ -168,7 +168,7 @@ struct AppShellView: View {
             Task { await workspace.device.refresh() }
         case .reviewSync:
             navigation.showAllClients()
-            Task { await workspace.deployment.prepare() }
+            navigation.openScreenRequest(.reviewChanges)
         }
     }
 }

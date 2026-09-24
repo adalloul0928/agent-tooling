@@ -161,10 +161,11 @@ private func buildQualityFindings(
             }
         }
         // Only a file list that was actually inventoried can be missing a
-        // required entry. An empty list is unknown — a library-authored skill
-        // whose captured tree was not read has no files listed here yet — and
-        // an unknown inventory must never be reported as one missing SKILL.md.
-        if !skill.files.isEmpty, !skill.files.contains(where: { $0.lowercased() == "skill.md" }) {
+        // required entry. A skill whose captured tree was never read has an
+        // unknown inventory (filesKnown == false) — a library-authored skill
+        // whose tree was not read is one — and an unknown inventory must never
+        // be reported as one missing SKILL.md.
+        if skill.filesKnown, !skill.files.contains(where: { $0.lowercased() == "skill.md" }) {
             findings.append(
                 finding(
                     skill: skill,

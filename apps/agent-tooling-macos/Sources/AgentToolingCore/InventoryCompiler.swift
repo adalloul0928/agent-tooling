@@ -33,7 +33,10 @@ public enum InventoryCompiler {
                 clients: ClientKind.allCases.map { client in
                     state(for: id, in: byClient[client] ?? [], type: .skill, client: client)
                 },
-                validationCount: 0
+                validationCount: 0,
+                // The file list came from scanning the installed skill's own
+                // folder on this Mac, so its inventory is known.
+                filesKnown: true
             )
         }
 

@@ -46,11 +46,11 @@ struct AgentToolingApplication: App {
         .commands {
             CommandGroup(after: .newItem) {
                 Button("Sync Agent Tooling") {
-                    guard let workspace else { return }
+                    guard workspace != nil else { return }
                     // Preparing is not applying. This opens Apps with a plan on
                     // it; writing anything is still a decision made there.
                     navigation.showAllClients()
-                    Task { await workspace.deployment.prepare() }
+                    navigation.openScreenRequest(.reviewChanges)
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(workspace?.deployment.isBusy != false)
@@ -154,7 +154,7 @@ private struct MenuBarContent: View {
         Button(workspace.deployment.isBusy ? "Preparing changes…" : "Review sync") {
             open()
             navigation.showAllClients()
-            Task { await workspace.deployment.prepare() }
+            navigation.openScreenRequest(.reviewChanges)
         }
         .disabled(workspace.deployment.isBusy)
         Divider()

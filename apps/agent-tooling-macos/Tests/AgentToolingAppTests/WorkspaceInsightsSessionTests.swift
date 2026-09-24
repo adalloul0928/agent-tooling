@@ -143,6 +143,9 @@ struct WorkspaceInsightsSessionEnrichmentTests {
         let scanned = try #require(services.lastScannedSkills.first { $0.id == skillID })
         #expect(scanned.summary == facts.description)
         #expect(scanned.files == facts.files)
+        // The files came from reading the captured tree, so the inventory is
+        // known and the missing-file check may now judge it.
+        #expect(scanned.filesKnown)
     }
 
     @Test func aLibrarySkillWithNoContentFactsKeepsItsUnknownPlaceholders() async throws {
@@ -160,6 +163,9 @@ struct WorkspaceInsightsSessionEnrichmentTests {
         let scanned = try #require(services.lastScannedSkills.first { $0.id == skillID })
         #expect(scanned.summary.isEmpty)
         #expect(scanned.files.isEmpty)
+        // No tree was read, so the inventory stays unknown and the missing-file
+        // check must not treat the empty list as a real absence.
+        #expect(!scanned.filesKnown)
     }
 }
 
