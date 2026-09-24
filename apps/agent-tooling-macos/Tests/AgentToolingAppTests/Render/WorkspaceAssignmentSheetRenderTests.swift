@@ -43,4 +43,18 @@ struct WorkspaceAssignmentSheetRenderTests {
 
         #expect(distinctColours(in: bitmap) > 4, "the sheet drew a blank frame")
     }
+
+    /// Opening straight into a project scope, on a project with no folder on
+    /// this Mac, draws the picker and the inline "installing waits" note rather
+    /// than a blank frame. The fixture's project has no folder binding, so this
+    /// is the note path, not the folder-present one.
+    @Test func theSheetDrawsInProjectScopeForAFolderlessProject() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+
+        try expectDrawn(
+            WorkspaceAssignmentSheet(
+                session: fixture.workspace.library, artifactIDs: [ShellRenderFixture.skill],
+                initialProjectID: ShellRenderFixture.projectID))
+    }
 }

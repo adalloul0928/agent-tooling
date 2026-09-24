@@ -146,8 +146,8 @@ struct ProjectsView: View {
     private func detailPane(allProjects: [WorkspaceLibraryProjectReadModel]) -> some View {
         if let id = selectedProjectID, let project = allProjects.first(where: { $0.id == id }) {
             ProjectDetailView(
-                project: project, library: workspace.library, declarations: workspace.declarations,
-                projectRoot: projectRoot(for: project.id))
+                workspace: workspace, project: project, library: workspace.library,
+                declarations: workspace.declarations, projectRoot: projectRoot(for: project.id))
         } else {
             EmptyStateView(
                 symbol: "folder.badge.gearshape",
@@ -302,6 +302,7 @@ private struct ProjectCollectionRow: View {
 // MARK: - Detail
 
 private struct ProjectDetailView: View {
+    let workspace: WorkspaceLaunch.Workspace
     let project: WorkspaceLibraryProjectReadModel
     let library: WorkspaceLibrarySession
     var declarations: WorkspaceProjectDeclarationSession?
@@ -309,6 +310,10 @@ private struct ProjectDetailView: View {
     @State private var tab: ProjectDetailTab = .skills
     @State private var isAdding = false
     @State private var isDeclaring = false
+    /// Filled when binding or forgetting a folder could not be recorded, so the
+    /// header can say what happened instead of silently doing nothing.
+    @State private var folderError: String?
+    @State private var isBindingFolder = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -354,6 +359,7 @@ private struct ProjectDetailView: View {
                     }
                 }
                 Spacer()
+                folderControls
                 if declarations != nil, projectRoot != nil {
                     Button("Project files…", systemImage: "doc.badge.plus") {
                         declarations?.prepare(projectID: project.id)
@@ -370,6 +376,17 @@ private struct ProjectDetailView: View {
                     .disabled(library.isBusy)
             }
 
+            if let folderError {
+                AttentionBanner(title: "That folder was not set", message: folderError)
+            }
+
+            if projectRoot == nil {
+                Text("Project-scoped tools install into this folder's own app directories (for example .claude/skills).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Text(originSummary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -378,6 +395,83 @@ private struct ProjectDetailView: View {
         .padding(.horizontal, 22)
         .padding(.top, 18)
         .padding(.bottom, 14)
+    }
+
+    /// The one place a project's folder on this Mac is chosen, changed or
+    /// forgotten. Offered only where the workspace can be written to, because
+    /// each is a recorded change and a read-only session cannot make one.
+    @ViewBuilder
+    private var folderControls: some View {
+        if library.access == .writable {
+            if projectRoot == nil {
+                Button("Choose folder…", systemImage: "folder.badge.plus") { chooseFolder() }
+                    .buttonStyle(.bordered)
+                    .disabled(isBindingFolder || library.isBusy)
+                    .help("Point this project at a folder on this Mac so project-scoped tools have somewhere to install.")
+            } else {
+                Menu("Folder") {
+                    Button("Change folder…") { chooseFolder() }
+                    Button("Forget folder") { forgetFolder() }
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .disabled(isBindingFolder || library.isBusy)
+                .help("Change which folder on this Mac backs this project, or forget it. Nothing on disk is deleted.")
+            }
+        }
+    }
+
+    /// Opens a directory picker, then records the choice on this Mac. A folder
+    /// the command refuses — a symlink, a file, one another project already
+    /// uses — surfaces its plain reason rather than binding anything.
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Use Folder"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let path = url.standardizedFileURL.path
+        isBindingFolder = true
+        folderError = nil
+        Task { @MainActor in
+            defer { isBindingFolder = false }
+            do {
+                guard let head = try await workspace.service.snapshot()?.document.revision.id else {
+                    throw WorkspaceRevisionStoreError.notInitialized
+                }
+                try await workspace.service.bindProjectRoot(
+                    projectID: project.id, rootPath: path, expectedRevisionID: head)
+                // The header, the assignment sheet and the install plan all read
+                // the binding from the library, so it has to see it now.
+                await workspace.library.refresh()
+            } catch let error as WorkspaceProjectRootError {
+                folderError = error.localizedDescription
+            } catch {
+                folderError = "This Mac could not record that folder. Nothing was changed."
+            }
+        }
+    }
+
+    /// Removes the binding on this Mac. Nothing in the folder is touched — the
+    /// project simply has no folder here again.
+    private func forgetFolder() {
+        isBindingFolder = true
+        folderError = nil
+        Task { @MainActor in
+            defer { isBindingFolder = false }
+            do {
+                guard let head = try await workspace.service.snapshot()?.document.revision.id else {
+                    throw WorkspaceRevisionStoreError.notInitialized
+                }
+                try await workspace.service.unbindProjectRoot(
+                    projectID: project.id, expectedRevisionID: head)
+                await workspace.library.refresh()
+            } catch {
+                folderError = "This Mac could not forget that folder. Nothing was changed."
+            }
+        }
     }
 
     private var originSummary: String {

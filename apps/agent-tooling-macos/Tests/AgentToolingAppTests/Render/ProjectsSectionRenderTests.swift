@@ -41,4 +41,17 @@ struct ProjectsSectionRenderTests {
             ProjectsView(workspace: fixture.workspace, initialSelection: ShellRenderFixture.projectID)
                 .frame(width: shellWindowSize.width, height: shellWindowSize.height))
     }
+
+    /// A project with no folder on this Mac draws its detail header with the
+    /// "Choose folder…" button and the one-line explanation, rather than the
+    /// bound-folder location text. The fixture's project has no binding, so
+    /// selecting it straight away exercises the no-folder path.
+    @Test func theProjectDetailPaneDrawsWithoutAFolder() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+
+        try expectDrawn(
+            ProjectsView(workspace: fixture.workspace, initialSelection: ShellRenderFixture.projectID)
+                .frame(width: shellWindowSize.width, height: shellWindowSize.height))
+    }
 }

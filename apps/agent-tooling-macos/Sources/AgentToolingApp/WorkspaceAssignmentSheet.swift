@@ -16,6 +16,10 @@ struct WorkspaceAssignmentSheet: View {
     /// Present when the sheet is shown inside the shell; a sheet drawn on its
     /// own (tests, previews) has nowhere to send a person, so it offers nothing.
     @Environment(AppNavigationState.self) private var navigation: AppNavigationState?
+    /// The apps this Mac manages, published by the shell. The destination editor
+    /// offers only these; a preview or test with none set gets every client, as
+    /// the environment's default is `allCases`.
+    @Environment(\.availableClients) private var availableClients: [ClientKind]
     @State private var selectedClients: Set<ClientKind>
     @State private var scope: ToolingScope
     @State private var selectedProjectID: ArtifactID?
@@ -93,7 +97,9 @@ struct WorkspaceAssignmentSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.lastReceipt == nil ? "Assign library items" : "Assignments saved")
                     .font(.title2.weight(.semibold))
-                Text("Choose where to use these items.")
+                Text(session.lastReceipt == nil
+                    ? "Choose where to use these items."
+                    : "Saved to your workspace. Installing is reviewed on the Apps screen.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -217,19 +223,29 @@ struct WorkspaceAssignmentSheet: View {
                 title: "Apps",
                 detail: "Choose each app explicitly."
             ) {
-                VStack(spacing: 0) {
-                    ForEach(Array(ClientKind.allCases.enumerated()), id: \.element) { index, client in
-                        Toggle(isOn: clientBinding(client)) {
-                            HStack(spacing: 10) {
-                                ClientBrandIcon(client: client, size: 20).frame(width: 24, height: 24)
-                                Text(surface(client).displayName).font(.callout.weight(.medium))
+                if availableClients.isEmpty {
+                    Text("No apps are managed on this Mac. Choose apps on the Apps screen.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .standardPanel()
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(availableClients.enumerated()), id: \.element) { index, client in
+                            Toggle(isOn: clientBinding(client)) {
+                                HStack(spacing: 10) {
+                                    ClientBrandIcon(client: client, size: 20).frame(width: 24, height: 24)
+                                    Text(surface(client).displayName).font(.callout.weight(.medium))
+                                }
                             }
+                            .padding(.horizontal, 14).padding(.vertical, 9)
+                            if index < availableClients.count - 1 { Divider().opacity(0.45) }
                         }
-                        .padding(.horizontal, 14).padding(.vertical, 9)
-                        if index < ClientKind.allCases.count - 1 { Divider().opacity(0.45) }
                     }
+                    .standardPanel()
                 }
-                .standardPanel()
             }
 
             field(title: "Scope", detail: "Assignments are limited to this Mac.") {
@@ -242,18 +258,44 @@ struct WorkspaceAssignmentSheet: View {
 
             if scope == .project {
                 field(title: "Project", detail: "Choose the project for every selected app.") {
-                    Picker("Project", selection: $selectedProjectID) {
-                        Text("Choose a project").tag(nil as ArtifactID?)
-                        ForEach(library.projects) { project in
-                            Text(project.name).tag(project.id as ArtifactID?)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Project", selection: $selectedProjectID) {
+                            Text("Choose a project").tag(nil as ArtifactID?)
+                            ForEach(library.projects) { project in
+                                Text(projectPickerLabel(project))
+                                    .tag(project.id as ArtifactID?)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(maxWidth: 420, alignment: .leading)
+
+                        if let selectedProjectID, !projectHasFolder(selectedProjectID) {
+                            // A note, not a blocker: the assignment saves, and
+                            // installing simply waits until the project has a
+                            // folder on this Mac.
+                            Text("Installing waits until this project has a folder on this Mac. Choose one on the Projects screen.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    .pickerStyle(.menu)
-                    .frame(maxWidth: 420, alignment: .leading)
                 }
             }
         }
         .disabled(draftLocked)
+    }
+
+    /// A project's name, plus a plain marker when it has no folder on this Mac,
+    /// so the picker shows which projects are ready to install into.
+    private func projectPickerLabel(_ project: WorkspaceLibraryProjectReadModel) -> String {
+        projectHasFolder(project.id) ? project.name : "\(project.name) — no folder on this Mac"
+    }
+
+    /// Whether this project has a folder recorded on this Mac. The binding lives
+    /// in device state, which the session's snapshot carries alongside the
+    /// portable read model.
+    private func projectHasFolder(_ projectID: ArtifactID) -> Bool {
+        session.state?.snapshot.device.projectRoots?.contains { $0.projectID == projectID } ?? false
     }
 
     private func reviewSummary(_ review: WorkspaceAssignmentReview) -> some View {
