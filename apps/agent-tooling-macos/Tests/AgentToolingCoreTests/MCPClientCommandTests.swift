@@ -73,4 +73,20 @@ struct MCPClientCommandTests {
         }
         #expect(MCPClientCommand.scope(fromDisplayName: "not a scope") == .user)
     }
+
+    /// The OAuth login exists for the clients that run one, and the command it
+    /// emits is admitted by the policy under a safe server name.
+    @Test func theLoginCommandExistsOnlyForClientsThatRunOneAndPassesThePolicy() throws {
+        #expect(MCPClientCommand.loginArguments(client: .claude, serverID: "linear") == ["mcp", "login", "linear", "--no-browser"])
+        #expect(MCPClientCommand.loginArguments(client: .codex, serverID: "docs") == ["mcp", "login", "docs", "--no-browser"])
+        #expect(MCPClientCommand.loginArguments(client: .gemini, serverID: "x") == nil)
+        #expect(MCPClientCommand.loginArguments(client: .kiro, serverID: "x") == nil)
+
+        for client in [ClientKind.claude, .codex] {
+            let arguments = try #require(MCPClientCommand.loginArguments(client: client, serverID: "example-server"))
+            #expect(throws: Never.self) {
+                try policy.validate(executable: MCPClientCommand.executable(for: client), arguments: arguments)
+            }
+        }
+    }
 }

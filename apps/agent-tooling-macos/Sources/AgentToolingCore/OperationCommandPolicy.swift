@@ -77,6 +77,24 @@ struct OperationCommandPolicy: Sendable {
     }
 
     private func validateClaude(_ arguments: [String]) throws {
+        // Read-only listing and per-server lookup, plus the OAuth login flow.
+        // The login opens the browser itself; the app never handles a token.
+        if arguments == ["mcp", "list"] { return }
+        if arguments.count == 3,
+            arguments[0] == "mcp",
+            ["get", "login"].contains(arguments[1]),
+            Self.isSafeMCPIdentifier(arguments[2])
+        {
+            return
+        }
+        if arguments.count == 4,
+            arguments[0] == "mcp",
+            arguments[1] == "login",
+            Self.isSafeMCPIdentifier(arguments[2]),
+            arguments[3] == "--no-browser"
+        {
+            return
+        }
         if arguments.count == 5,
             ["install", "uninstall", "update"].contains(arguments[1]),
             arguments[0] == "plugin",
@@ -124,6 +142,25 @@ struct OperationCommandPolicy: Sendable {
     }
 
     private func validateCodex(_ arguments: [String]) throws {
+        // Read-only listing (text or JSON) and per-server lookup, plus the
+        // OAuth login flow for HTTP servers. The login opens the browser
+        // itself; no token passes through this app.
+        if arguments == ["mcp", "list"] || arguments == ["mcp", "list", "--json"] { return }
+        if arguments.count == 3,
+            arguments[0] == "mcp",
+            ["get", "login"].contains(arguments[1]),
+            Self.isSafeMCPIdentifier(arguments[2])
+        {
+            return
+        }
+        if arguments.count == 4,
+            arguments[0] == "mcp",
+            arguments[1] == "login",
+            Self.isSafeMCPIdentifier(arguments[2]),
+            arguments[3] == "--no-browser"
+        {
+            return
+        }
         if arguments.count == 3,
             arguments[0] == "plugin",
             ["add", "remove"].contains(arguments[1]),
@@ -212,6 +249,9 @@ struct OperationCommandPolicy: Sendable {
     /// `--args` pairs after the fixed prefix for a stdio server.
     private func validateKiro(_ arguments: [String]) throws {
         let scopes = ["global", "workspace"]
+        // Read-only listing. Kiro CLI 2.23.0 has no verified login command, so
+        // this is list-only; no login shape is admitted for it.
+        if arguments == ["mcp", "list"] { return }
         if arguments.count == 6,
             arguments[0] == "mcp",
             arguments[1] == "remove",

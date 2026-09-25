@@ -1,0 +1,234 @@
+import Foundation
+
+/// Turns a client's health listing into structured entries, and nothing else.
+///
+/// This is a pure function over text on purpose. The probe that runs the
+/// command is where timeouts, output limits and executable location live; the
+/// parsing is separated out so every status shape a client can print is pinned
+/// down by a test against a fixed string, with no process involved. A shape
+/// this parser has not seen becomes `.unknown(rawText:)` carrying the line, so
+/// an unfamiliar client update is shown verbatim rather than misread.
+public enum ConnectionHealthReport {
+    /// Parses one client's listing. Claude Code prints a status glyph per line;
+    /// Codex and Kiro CLI list servers without a health check, so their entries
+    /// come back `.unknown` unless a later `mcp get` says otherwise.
+    public static func parse(client: ClientKind, text: String) -> [ConnectionHealthEntry] {
+        switch client {
+        case .claude: parseClaude(text)
+        case .codex: parseCodexText(text)
+        case .kiro: parseKiro(text)
+        case .gemini: []
+        }
+    }
+
+    /// Parses Codex's `mcp list --json` when it answered JSON, falling back to
+    /// the text table when it did not. Codex reports no health in either shape,
+    /// so every server is `.unknown` here; a status only arrives from `mcp get`.
+    public static func parseCodex(client: ClientKind = .codex, jsonOrText text: String) -> [ConnectionHealthEntry] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("{") || trimmed.hasPrefix("["),
+            let data = trimmed.data(using: .utf8),
+            let entries = parseCodexJSON(data)
+        {
+            return entries
+        }
+        return parseCodexText(text)
+    }
+
+    // MARK: - Claude
+
+    private static func parseClaude(_ text: String) -> [ConnectionHealthEntry] {
+        text
+            .split(whereSeparator: \.isNewline)
+            .compactMap { parseClaudeLine(String($0)) }
+    }
+
+    /// One Claude line looks like `<name>: <command or url> - <glyph> <state>`.
+    /// The status is read off the glyph and the words after it; the summary is
+    /// the middle, redacted. A header line such as "Checking MCP server health…"
+    /// has no `: … -` shape and is skipped.
+    private static func parseClaudeLine(_ rawLine: String) -> ConnectionHealthEntry? {
+        let line = rawLine.trimmingCharacters(in: .whitespaces)
+        guard !line.isEmpty else { return nil }
+        // A health line is "name: <summary> - <state>". The name ends at the
+        // first ": " (colon then space); a `plugin:foo:bar` name keeps its own
+        // colons because none of them is followed by a space, and a URL's
+        // "https://" colon comes later in the summary.
+        guard let nameSeparator = line.range(of: ": ") else { return nil }
+        let name = String(line[line.startIndex..<nameSeparator.lowerBound]).trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, !name.contains(" ") else {
+            // A sentence ("Checking MCP server health…") has spaces before its
+            // first ": ", if it has one at all. A server name does not.
+            return nil
+        }
+        let remainder = String(line[nameSeparator.upperBound...]).trimmingCharacters(in: .whitespaces)
+        // The status is the segment after the last " - ". Splitting on the last
+        // occurrence keeps a command that itself contains " - " in the summary.
+        guard let separator = remainder.range(of: " - ", options: .backwards) else {
+            return nil
+        }
+        let summary = String(remainder[remainder.startIndex..<separator.lowerBound])
+            .trimmingCharacters(in: .whitespaces)
+        let statusText = String(remainder[separator.upperBound...]).trimmingCharacters(in: .whitespaces)
+        let status = claudeStatus(from: statusText)
+        let source = claudeSource(name: name, summary: summary, statusText: statusText)
+        let displayName = displayName(from: name, source: source)
+        return ConnectionHealthEntry(
+            client: .claude,
+            name: name,
+            displayName: displayName,
+            source: source,
+            status: status,
+            summary: SensitiveValueRedactor.redact(summary),
+            rawLine: rawLine)
+    }
+
+    /// Maps the words after the glyph to a state. The glyphs are matched by the
+    /// state word beside them rather than the symbol, so a client that swaps a
+    /// glyph but keeps the wording still reads correctly; a wholly unfamiliar
+    /// tail is kept verbatim as `.unknown`.
+    private static func claudeStatus(from statusText: String) -> ConnectionHealthStatus {
+        let lowered = statusText.lowercased()
+        if lowered.contains("connected") { return .connected }
+        if lowered.contains("needs authentication") { return .needsAuthentication }
+        if lowered.contains("pending approval") { return .pendingApproval }
+        if lowered.contains("disabled") { return .disabled }
+        if lowered.contains("failed to connect") {
+            // The reason is printed after the em dash (or a hyphen fallback).
+            let detail = failureDetail(from: statusText)
+            return .failed(detail: detail)
+        }
+        return .unknown(rawText: statusText)
+    }
+
+    /// Pulls the human reason out of "Failed to connect — <detail>". The em
+    /// dash is what Claude prints; a plain hyphen is accepted too so a terminal
+    /// that rewrote it still yields the detail rather than an empty string.
+    private static func failureDetail(from statusText: String) -> String {
+        for separator in [" — ", " – ", " - "] {
+            if let range = statusText.range(of: separator) {
+                return String(statusText[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return ""
+    }
+
+    private static func claudeSource(name: String, summary: String, statusText: String) -> ConnectionHealthSource {
+        if name.hasPrefix("plugin:") {
+            // `plugin:<plugin>:<server>` — the plugin is the middle segment.
+            let parts = name.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
+            if parts.count >= 2 { return .plugin(String(parts[1])) }
+            return .plugin("")
+        }
+        let haystack = (summary + " " + statusText).lowercased()
+        if haystack.contains("claude.ai") || haystack.contains("connector") {
+            return .claudeAI
+        }
+        return .unknown
+    }
+
+    // MARK: - Codex
+
+    private static func parseCodexJSON(_ data: Data) -> [ConnectionHealthEntry]? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) else { return nil }
+        // Codex has printed either an object keyed by server name or an array
+        // of server objects. Both are accepted; anything else falls back to the
+        // text reader.
+        if let dictionary = object as? [String: Any] {
+            let servers = dictionary["mcpServers"] as? [String: Any] ?? dictionary
+            return servers.keys.sorted().compactMap { key in
+                codexEntry(name: key, fields: servers[key] as? [String: Any] ?? [:])
+            }
+        }
+        if let array = object as? [[String: Any]] {
+            return array.compactMap { fields in
+                guard let name = fields["name"] as? String else { return nil }
+                return codexEntry(name: name, fields: fields)
+            }
+        }
+        return nil
+    }
+
+    private static func codexEntry(name: String, fields: [String: Any]) -> ConnectionHealthEntry? {
+        guard !name.isEmpty else { return nil }
+        let url = (fields["url"] as? String).map { $0 }
+        let command = fields["command"] as? String
+        let args = (fields["args"] as? [String])?.joined(separator: " ")
+        let summary = url ?? [command, args].compactMap { $0 }.joined(separator: " ")
+        return ConnectionHealthEntry(
+            client: .codex,
+            name: name,
+            displayName: name,
+            source: .unknown,
+            status: .unknown(rawText: "Codex does not report connection health in its listing."),
+            summary: SensitiveValueRedactor.redact(summary),
+            rawLine: name)
+    }
+
+    /// Reads Codex's plain-text table. Each server line begins with the server
+    /// name; a header row and separators are skipped. No health is inferred.
+    private static func parseCodexText(_ text: String) -> [ConnectionHealthEntry] {
+        text
+            .split(whereSeparator: \.isNewline)
+            .compactMap { rawLine in
+                let line = String(rawLine).trimmingCharacters(in: .whitespaces)
+                guard !line.isEmpty else { return nil }
+                let lowered = line.lowercased()
+                // Skip a header row and any rule of dashes under it.
+                if lowered.hasPrefix("name") && lowered.contains("command") { return nil }
+                if line.allSatisfy({ $0 == "-" || $0 == " " || $0 == "|" }) { return nil }
+                let fields = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+                guard let name = fields.first, !name.hasPrefix("-") else { return nil }
+                let summary = fields.dropFirst().joined(separator: " ")
+                return ConnectionHealthEntry(
+                    client: .codex,
+                    name: name,
+                    displayName: name,
+                    source: .unknown,
+                    status: .unknown(rawText: "Codex does not report connection health in its listing."),
+                    summary: SensitiveValueRedactor.redact(summary),
+                    rawLine: String(rawLine))
+            }
+    }
+
+    // MARK: - Kiro
+
+    /// Kiro CLI lists servers without any health check, so every entry is
+    /// `.unknown`. The name is the first field on a line; a header is skipped.
+    private static func parseKiro(_ text: String) -> [ConnectionHealthEntry] {
+        text
+            .split(whereSeparator: \.isNewline)
+            .compactMap { rawLine in
+                let line = String(rawLine).trimmingCharacters(in: .whitespaces)
+                guard !line.isEmpty else { return nil }
+                let lowered = line.lowercased()
+                if lowered.hasPrefix("name") && lowered.contains("command") { return nil }
+                if line.allSatisfy({ $0 == "-" || $0 == " " || $0 == "|" }) { return nil }
+                let fields = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+                guard let name = fields.first, !name.hasPrefix("-") else { return nil }
+                let summary = fields.dropFirst().joined(separator: " ")
+                return ConnectionHealthEntry(
+                    client: .kiro,
+                    name: name,
+                    displayName: name,
+                    source: .unknown,
+                    status: .unknown(rawText: "Kiro CLI lists servers without a connection health check."),
+                    summary: SensitiveValueRedactor.redact(summary),
+                    rawLine: String(rawLine))
+            }
+    }
+
+    // MARK: - Shared
+
+    /// Strips a `plugin:` prefix down to the server's own name for display,
+    /// leaving anything else as it was printed.
+    private static func displayName(from name: String, source: ConnectionHealthSource) -> String {
+        guard name.hasPrefix("plugin:") else { return name }
+        let parts = name.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
+        // `plugin:<plugin>:<server>` shows the server; a shorter shape shows
+        // whatever followed the prefix rather than an empty string.
+        if parts.count >= 3 { return String(parts[2]) }
+        if parts.count == 2 { return String(parts[1]) }
+        return name
+    }
+}

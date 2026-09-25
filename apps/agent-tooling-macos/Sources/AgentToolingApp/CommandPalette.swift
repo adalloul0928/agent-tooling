@@ -13,6 +13,9 @@ enum CommandPaletteOutcome: Equatable {
     case openSkill(String)
     /// Read this Mac's apps again. Reads only.
     case checkSetup
+    /// Read each managed app's connections again and show the Health screen.
+    /// Reads only.
+    case checkConnectionHealth
     /// Prepare one plan for everything out of step, and show it. Preparing is
     /// not applying; the Apps screen still asks before anything is written.
     case reviewSync
@@ -117,6 +120,16 @@ enum CommandPaletteCatalog {
                 keywords: ["sync", "install", "plan", "reconcile", "apps"],
                 priority: 100,
                 outcome: .reviewSync),
+            CommandPaletteItem(
+                id: "action.checkConnectionHealth",
+                title: "Check connection health",
+                subtitle: "Read each managed app's connections and see which need signing in",
+                contextLabel: "Action",
+                kind: nil,
+                symbol: "waveform.path.ecg",
+                keywords: ["health", "connection", "mcp", "connector", "auth", "login", "reauthenticate"],
+                priority: 100,
+                outcome: .checkConnectionHealth),
             CommandPaletteItem(
                 id: "action.addServer",
                 title: "Add MCP server",

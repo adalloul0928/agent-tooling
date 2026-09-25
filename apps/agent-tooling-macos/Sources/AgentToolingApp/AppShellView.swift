@@ -166,6 +166,9 @@ struct AppShellView: View {
             }
         case .checkSetup:
             Task { await workspace.device.refresh() }
+        case .checkConnectionHealth:
+            navigate(.health)
+            Task { await workspace.health.check() }
         case .reviewSync:
             navigation.showAllClients()
             navigation.openScreenRequest(.reviewChanges)

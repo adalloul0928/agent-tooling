@@ -19,6 +19,10 @@ struct WorkspaceLaunch {
         /// This Mac's own apps: what the last check found, and which of them
         /// this Mac manages. It has checked nothing until something asks it to.
         let device: WorkspaceDeviceSession
+        /// The connection Health screen's state: what each managed client's
+        /// last connection check found, and the reviewed re-authentication a
+        /// person can start from a row. Checked only when asked.
+        let health: WorkspaceHealthSession
         let history: WorkspaceHistorySession
         let authoring: WorkspaceAuthoringSession
         let export: WorkspacePackageExportSession
@@ -152,6 +156,7 @@ struct WorkspaceLaunch {
         let device = WorkspaceDeviceSession(
             service: service, library: library, store: store,
             homeRoot: homeRoot, observer: deviceObserver)
+        let health = WorkspaceHealthSession(device: device, homeRoot: homeRoot)
         return .init(
             library: library, sync: sync,
             settings: WorkspaceSettingsSession(homeRoot: homeRoot, library: library),
@@ -159,6 +164,7 @@ struct WorkspaceLaunch {
                 service: service, library: library, store: store,
                 homeRoot: homeRoot, contentStore: contentStore),
             device: device,
+            health: health,
             history: WorkspaceHistorySession(store: store, library: library,
                                              writerID: writerID, access: .writable),
             authoring: WorkspaceAuthoringSession(service: service, library: library),

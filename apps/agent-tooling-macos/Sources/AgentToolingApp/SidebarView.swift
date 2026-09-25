@@ -92,7 +92,9 @@ struct SidebarView: View {
                         .accessibilityLabel("Needs attention")
                 }
             }
-            .badge(section == .syncCenter ? workspace.device.attentionCount : 0)
+            // Apps carries both kinds of attention it can act on: clients the
+            // check could not reach and connections the health check found broken.
+            .badge(section == .syncCenter ? workspace.device.attentionCount + workspace.health.attentionCount : 0)
             .tag(section)
             .contentShape(Rectangle())
             // Selecting an already-highlighted parent still returns to its

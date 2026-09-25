@@ -484,7 +484,18 @@ struct OverviewView: View {
                 detail: request.summary,
                 state: .pending, destination: .syncCenter)
         }
-        return Array((clients + queued).prefix(3))
+        // Connections the last health check found broken. Nothing is checked
+        // from here: a count appears only once somebody ran a check, so Home
+        // never reports a problem it has not seen.
+        let health = workspace.health.attentionCount
+        let connections: [OverviewAttention] = health == 0 ? [] : [
+            OverviewAttention(
+                id: "health",
+                title: health == 1 ? "1 connection needs attention" : "\(health) connections need attention",
+                detail: "Sign in again or reconnect on the Health tab.",
+                state: .attention, destination: .health)
+        ]
+        return Array((connections + clients + queued).prefix(3))
     }
 
     /// Plugins a catalog says have something newer. Before any catalog has been

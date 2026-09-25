@@ -43,6 +43,7 @@ struct CommandPaletteCatalogTests {
             #expect(items.contains { $0.outcome == .openClient(client) })
         }
         #expect(items.contains { $0.outcome == .checkSetup })
+        #expect(items.contains { $0.outcome == .checkConnectionHealth })
         #expect(items.contains { $0.outcome == .reviewSync })
         #expect(items.contains { $0.outcome == .screenRequest(.addMCPServer) })
         #expect(items.contains { $0.outcome == .screenRequest(.pasteImport) })

@@ -78,6 +78,23 @@ struct AppNavigationStateTests {
         #expect(navigation.selectedClient == nil)
     }
 
+    /// Health is a tab of the Apps family: it lights up the Apps sidebar row,
+    /// sits alongside Clients and Settings in the family's tab row, and reads
+    /// under the "Apps" heading.
+    @Test("Health belongs to the Apps family")
+    @MainActor
+    func healthIsATabOfTheAppsFamily() {
+        #expect(AppSection.health.rawValue == "Health")
+        #expect(AppSection.health.tabTitle == "Health")
+        #expect(AppSection.health.sidebarDestination == .syncCenter)
+        #expect(AppSection.health.workspaceTitle == "Apps")
+        #expect(AppSection.health.workspaceTabs == [.syncCenter, .appSettings, .health])
+        // The family's other members offer the same tab row, so Health is
+        // reachable from Clients and from Settings within Apps.
+        #expect(AppSection.syncCenter.workspaceTabs.contains(.health))
+        #expect(AppSection.appSettings.workspaceTabs.contains(.health))
+    }
+
     @Test("Brand icons are available as a compiled catalog or source assets")
     @MainActor
     func brandIconsAreAvailableAcrossSwiftToolchains() {
@@ -250,7 +267,7 @@ struct AppSectionTests {
     func tabFamiliesAreSymmetric() {
         let families: [[AppSection]] = [
             [.skills, .plugins, .mcpServers, .presets],
-            [.syncCenter, .appSettings],
+            [.syncCenter, .appSettings, .health],
             [.activity, .history],
             [.settings, .sync],
         ]

@@ -93,4 +93,21 @@ enum MCPClientCommand {
         guard client == .codex else { return true }
         return scopeArgument(for: scope, client: client) == "user"
     }
+
+    /// The OAuth login command for one server, for the clients that run one.
+    ///
+    /// Claude Code and Codex open the browser themselves; nil for the clients
+    /// that have no verified login (Gemini here, Kiro CLI as of 2.23.0), so a
+    /// caller offers re-authentication exactly where a command exists to run.
+    /// The shape is matched by `OperationCommandPolicy`, so a name that is not
+    /// a safe identifier is refused at execution rather than mis-run.
+    static func loginArguments(client: ClientKind, serverID: String) -> [String]? {
+        switch client {
+        // `--no-browser` makes the tool print the authorization URL instead of
+        // opening a browser from inside a process the app owns; the app opens
+        // that URL itself, so the person sees where they are being sent.
+        case .claude, .codex: ["mcp", "login", serverID, "--no-browser"]
+        case .gemini, .kiro: nil
+        }
+    }
 }
