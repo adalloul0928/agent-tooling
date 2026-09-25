@@ -41,7 +41,9 @@ extension MarketplaceView {
     }
 
     func marketplaceFilterMenu(compact: Bool) -> some View {
-        let activeCount = (clientFilter == .all ? 0 : 1) + (classificationFilter == .all ? 0 : 1)
+        let activeCount =
+            (clientFilter == .all ? 0 : 1) + (classificationFilter == .all ? 0 : 1) + (categoryFilter == nil ? 0 : 1)
+        let categories = availableCategories
         return Menu {
             Menu("App") {
                 ForEach(MarketplaceClientFilter.allCases.filter { workspace.device.isEnabled($0.client) }) { filter in
@@ -69,6 +71,31 @@ extension MarketplaceView {
                     }
                 }
             }
+            if !categories.isEmpty {
+                Menu("Category") {
+                    Button {
+                        categoryFilter = nil
+                    } label: {
+                        if categoryFilter == nil {
+                            Label("Any category", systemImage: "checkmark")
+                        } else {
+                            Text("Any category")
+                        }
+                    }
+                    Divider()
+                    ForEach(categories, id: \.self) { category in
+                        Button {
+                            categoryFilter = category
+                        } label: {
+                            if categoryFilter == category {
+                                Label(category.capitalized, systemImage: "checkmark")
+                            } else {
+                                Text(category.capitalized)
+                            }
+                        }
+                    }
+                }
+            }
         } label: {
             MarketplaceMenuButtonLabel(
                 systemImage: "line.3.horizontal.decrease",
@@ -78,9 +105,16 @@ extension MarketplaceView {
         }
         .inventoryMenuStyle()
         .fixedSize()
-        .help(activeCount == 0 ? "Filter packages by app or provenance" : "\(activeCount) filters active")
+        .help(activeCount == 0 ? "Filter packages by app, provenance, or category" : "\(activeCount) filters active")
         .accessibilityLabel("Package filters")
-        .accessibilityValue(activeCount == 0 ? "No app or provenance filter" : "\(activeCount) active")
+        .accessibilityValue(activeCount == 0 ? "No app, provenance, or category filter" : "\(activeCount) active")
+    }
+
+    /// The categories present in what the catalogs returned, sorted, so the
+    /// Category filter offers exactly the labels a person could actually pick
+    /// and nothing this app invented.
+    var availableCategories: [String] {
+        Array(Set(session.packages.compactMap(\.category))).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
     func marketplaceSortMenu(compact: Bool) -> some View {
@@ -119,7 +153,7 @@ extension MarketplaceView {
     }
 
     var hasActiveTokenFilter: Bool {
-        selectedSourceID != nil || clientFilter != .all || classificationFilter != .all
+        selectedSourceID != nil || clientFilter != .all || classificationFilter != .all || categoryFilter != nil
     }
 
     func clearFilters() {
@@ -127,6 +161,7 @@ extension MarketplaceView {
         componentFilter = .all
         clientFilter = .all
         classificationFilter = .all
+        categoryFilter = nil
         selectedSourceID = nil
     }
 

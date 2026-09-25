@@ -10,6 +10,7 @@ extension MarketplaceView {
             componentFilter.matches(package)
                 && clientFilter.matches(package)
                 && classificationFilter.matches(package)
+                && matchesSelectedCategory(package)
                 && matchesSelectedSource(package)
                 && (searchTerm.isEmpty
                     || [
@@ -22,11 +23,18 @@ extension MarketplaceView {
         return MarketplaceSorting.sorted(matches, by: sortOrder, searchTerm: searchTerm)
     }
 
+    /// Whether the listing matches the selected category, or there is none. A
+    /// listing with no category never matches a specific category selection.
+    func matchesSelectedCategory(_ package: MarketplacePackage) -> Bool {
+        guard let categoryFilter else { return true }
+        return package.category == categoryFilter
+    }
+
     var selectedPackage: MarketplacePackage? { session.packages.first { $0.id == selectedPackageID } }
 
     var hasActiveFilter: Bool {
         !normalizedQuery.isEmpty || componentFilter != .all || clientFilter != .all || classificationFilter != .all
-            || selectedSourceID != nil
+            || categoryFilter != nil || selectedSourceID != nil
     }
 
     var normalizedQuery: String {
@@ -285,6 +293,14 @@ struct MarketplaceGalleryCard: View {
                                 .padding(.horizontal, 6).padding(.vertical, 2)
                                 .background(Color.primary.opacity(0.06), in: Capsule())
                                 .foregroundStyle(.secondary)
+                        }
+                        if let category = package.category, !compact {
+                            Text(category.capitalized)
+                                .font(.system(size: 10, weight: .medium))
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(AgentTheme.blue.opacity(0.10), in: Capsule())
+                                .foregroundStyle(.secondary)
+                                .help("Filed under \(category) by \(package.sourceName)")
                         }
                         Text(detail ?? "From \(package.originName)")
                             .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)

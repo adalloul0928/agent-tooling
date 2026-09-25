@@ -24,6 +24,11 @@ struct MarketplaceView: View {
     @SceneStorage("agentTooling.marketplace.component") var componentFilter: MarketplaceComponentFilter = .all
     @SceneStorage("agentTooling.marketplace.client") var clientFilter: MarketplaceClientFilter = .all
     @SceneStorage("agentTooling.marketplace.provenance") var classificationFilter: MarketplaceClassificationFilter = .all
+    /// A category the catalog filed listings under, or nil for any. Data-driven
+    /// rather than a fixed enum: the choices are exactly the categories present
+    /// in what the catalogs returned, so the menu only offers this filter when a
+    /// listing actually carries a category.
+    @SceneStorage("agentTooling.marketplace.category") var categoryFilter: String?
     @SceneStorage("agentTooling.marketplace.sort") var sortOrder: MarketplaceSortOrder = .relevance
     @SceneStorage("agentTooling.marketplace.source") var selectedSourceIDStorage: String?
     @State var showingSources = false
@@ -115,6 +120,7 @@ struct MarketplaceView: View {
         componentFilter = .all
         clientFilter = .all
         classificationFilter = .all
+        categoryFilter = nil
         selectedSourceID = nil
         selectedPackageID = requestedID
         showingDetails = true
@@ -217,6 +223,11 @@ struct MarketplaceView: View {
                                     classificationFilter = .all
                                 }
                             }
+                            if let categoryFilter {
+                                ActiveFilterToken(title: categoryFilter.capitalized, accessibilityName: "category") {
+                                    self.categoryFilter = nil
+                                }
+                            }
                             Button("Clear all") { clearFilters() }
                                 .buttonStyle(.plain)
                                 .font(.caption.weight(.medium))
@@ -228,8 +239,37 @@ struct MarketplaceView: View {
                 }
                 .animation(reduceMotion ? nil : AgentMotion.quick, value: hasActiveTokenFilter)
 
-                if let errorMessage = session.errorMessage {
-                    AttentionBanner(title: "Some catalogs did not answer", message: errorMessage)
+                if !session.catalogFailures.isEmpty {
+                    if session.packages.isEmpty {
+                        // Nothing came back from any source, and at least one
+                        // said why. Lead with the reasons rather than an empty
+                        // grid that reads as "there is nothing here".
+                        AttentionBanner(
+                            title: "Some catalogs could not be read",
+                            message: session.catalogFailures.map { "\($0.name): \($0.reason)" }
+                                .joined(separator: "\n")
+                        ) {
+                            Button("Sources", systemImage: "shippingbox") { showingSources = true }
+                                .buttonStyle(.glass)
+                                .help("Open the Sources list to see each catalog's status")
+                        }
+                    } else {
+                        // Some catalogs answered and some did not. The grid
+                        // below is real, so the shortfall is a quiet one-line
+                        // note that points at the Sources list for the detail.
+                        Button {
+                            showingSources = true
+                        } label: {
+                            let count = session.catalogFailures.count
+                            Text("\(count) catalog\(count == 1 ? "" : "s") could not be read — Sources")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Open the Sources list to see which catalogs could not be read and why")
+                        .accessibilityLabel(
+                            "\(session.catalogFailures.count) catalogs could not be read. Open Sources for detail.")
+                    }
                 }
             }
             .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, WorkspaceLayout.contentTopInset)

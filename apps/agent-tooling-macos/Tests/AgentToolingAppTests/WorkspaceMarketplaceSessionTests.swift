@@ -150,6 +150,28 @@ struct WorkspaceMarketplaceSessionTests {
         #expect(message.contains("The stub catalog was unreachable."))
     }
 
+    /// A refresh names every catalog that could not be read, with the plain
+    /// words the Sources row shows, so Discover can explain an empty or partial
+    /// result. When nothing failed the list is empty.
+    @Test func aRefreshNamesEachCatalogThatCouldNotBeRead() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+
+        let failing = fixture.session(providers: [
+            StubMarketplaceProvider(packages: [ShellRenderFixture.unheldPackage]),
+            StubMarketplaceProvider(id: "stub.broken", displayName: "Broken catalog", fails: true),
+        ])
+        await failing.refresh()
+
+        #expect(failing.catalogFailures.map(\.name) == ["Broken catalog"])
+        #expect(failing.catalogFailures.first?.reason == "The stub catalog was unreachable.")
+
+        // A refresh where everything answered leaves the failure list empty.
+        let healthy = fixture.session(providers: [StubMarketplaceProvider()])
+        await healthy.refresh()
+        #expect(healthy.catalogFailures.isEmpty)
+    }
+
     @Test func aRefreshWhereEveryCatalogFailsKeepsWhatWasAlreadyOnScreen() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

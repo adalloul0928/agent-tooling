@@ -37,6 +37,16 @@ final class WorkspaceMarketplaceSession {
     private(set) var sources: [ToolingSource] = []
     private(set) var isRefreshing = false
     private(set) var errorMessage: String?
+    /// The catalogs whose last refresh could not be read, each with the plain
+    /// words the Sources row shows for it. Discover reads this to explain an
+    /// empty result honestly — a banner when nothing came back, a one-line note
+    /// when some catalogs answered and others did not — and it is empty whenever
+    /// nothing failed.
+    private(set) var catalogFailures: [CatalogFailure] = []
+    /// Marketplaces whose listings are on screen from the published catalog
+    /// file while the client has not added the marketplace yet. Kept so the
+    /// detail pane can warn before an Apply would fail at the client.
+    private(set) var marketplacesNotAdded: [ClientKind: Set<String>] = [:]
     /// When the last refresh that reached a catalog finished. A refresh that
     /// only re-read this Mac's own record leaves it alone.
     private(set) var lastRefreshedAt: Date?
@@ -54,12 +64,34 @@ final class WorkspaceMarketplaceSession {
     private(set) var adoption: AdoptionOutcome?
     private(set) var isAdopting = false
 
+    /// The one command that would let `client` install this listing, when its
+    /// marketplace has not been added to the client yet; nil when nothing
+    /// stands in the way. Only the official Claude catalog is known well
+    /// enough to name its add command.
+    func marketplaceAddCommand(for package: MarketplacePackage, client: ClientKind) -> String? {
+        guard client == .claude,
+            package.catalogKind == .claudeMarketplace,
+            let missing = marketplacesNotAdded[.claude],
+            missing.contains(ClaudePluginsOfficialCatalogProvider.marketplaceName),
+            package.id.hasSuffix("@\(ClaudePluginsOfficialCatalogProvider.marketplaceName)")
+        else { return nil }
+        return "claude plugin marketplace add anthropics/claude-plugins-official"
+    }
+
     /// One library row a catalog listing turned out to be.
     struct LibraryMatch: Equatable {
         let artifactID: ArtifactID
         let displayName: String
         /// The form `AppNavigationState.openItem` and the palette both use.
         var itemID: String { artifactID.rawValue.uuidString.lowercased() }
+    }
+
+    /// A catalog that could not be read on the last refresh, named for a person
+    /// with the same words its Sources row carries.
+    struct CatalogFailure: Equatable, Identifiable {
+        let name: String
+        let reason: String
+        var id: String { name }
     }
 
     /// What adding a listing does, and what it deliberately does not do.
@@ -342,6 +374,7 @@ final class WorkspaceMarketplaceSession {
         let retained = packages
         var collected: [MarketplacePackage] = []
         var failures: [String] = []
+        var structuredFailures: [CatalogFailure] = []
         var learned = MarketplaceSourceReport()
         var answered = 0
 
@@ -362,7 +395,10 @@ final class WorkspaceMarketplaceSession {
                 // provider that refused says why, and a name says which one.
                 refused = SensitiveValueRedactor.redact(error.localizedDescription)
             }
-            if let refused { failures.append("\(provider.displayName): \(refused)") }
+            if let refused {
+                failures.append("\(provider.displayName): \(refused)")
+                structuredFailures.append(CatalogFailure(name: provider.displayName, reason: refused))
+            }
             guard let reporting = provider as? any CatalogSourceReporting else { continue }
             let report = await reporting.lastReport()
             learned.summaries.merge(report.summaries) { _, latest in latest }
@@ -370,6 +406,7 @@ final class WorkspaceMarketplaceSession {
             learned.refreshedKinds.formUnion(report.refreshedKinds)
             learned.refreshedFolders.formUnion(report.refreshedFolders)
             learned.incompletePackagePrefixes.formUnion(report.incompletePackagePrefixes)
+            learned.marketplacesNotAdded.merge(report.marketplacesNotAdded) { $0.union($1) }
             // A catalog that refused outright says so on its own row, since its
             // report has nothing newer to put there.
             if let refused {
@@ -390,6 +427,8 @@ final class WorkspaceMarketplaceSession {
             await retain(packages)
         }
         annotate(learned)
+        catalogFailures = structuredFailures
+        marketplacesNotAdded = learned.marketplacesNotAdded
         errorMessage = failures.isEmpty ? nil : failures.joined(separator: " · ")
     }
 

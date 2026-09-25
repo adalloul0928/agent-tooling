@@ -52,6 +52,13 @@ extension MarketplaceView {
                                 )
                                 .foregroundStyle(.secondary)
                             }
+                            if let category = package.category {
+                                Divider()
+                                LabeledValueRow("Category") {
+                                    Text("\(category.capitalized) — filed by \(package.sourceName)")
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                             Divider()
                             LabeledValueRow("Available for") {
                                 Text(
@@ -328,6 +335,21 @@ extension MarketplaceView {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                // Adding to the library records the intent; the install itself
+                // runs later through the client, which refuses a plugin from a
+                // marketplace it has not added. Saying so here, with the exact
+                // command, beats a failure at apply time.
+                if let addCommand = session.marketplaceAddCommand(for: package, client: route.client) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(route.client.rawValue) has not added this marketplace yet, so it cannot install this plugin until you run:")
+                            .font(.caption2)
+                            .foregroundStyle(AgentTheme.warning)
+                        Text(addCommand)
+                            .font(.caption2.monospaced())
+                            .textSelection(.enabled)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if scopes.count > 1 {

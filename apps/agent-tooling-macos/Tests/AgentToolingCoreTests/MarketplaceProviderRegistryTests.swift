@@ -10,12 +10,13 @@ import Testing
 /// to `internal` this file would stop compiling — which is the failure worth
 /// having, since the screen would go quietly empty instead.
 struct MarketplaceProviderRegistryTests {
-    @Test func theBuiltInCatalogsAreTheOfficialRegistryAndSkillsSh() {
+    @Test func theBuiltInCatalogsAreTheOfficialRegistryClaudeAndSkillsSh() {
         let providers = MarketplaceProviderRegistry.builtIn()
 
-        #expect(providers.count == 2)
-        #expect(providers.map(\.id) == ["mcp.official-registry", "skills-sh.registry"])
+        #expect(providers.count == 3)
+        #expect(providers.map(\.id) == ["mcp.official-registry", "claude.plugins-official", "skills-sh.registry"])
         #expect(providers.first?.displayName == "Official MCP Registry")
+        #expect(providers.map(\.displayName).contains("claude-plugins-official"))
         #expect(providers.last?.displayName == "skills.sh")
     }
 

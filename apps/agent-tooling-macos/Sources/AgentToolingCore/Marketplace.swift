@@ -455,6 +455,13 @@ public final class MarketplaceService {
         // record and the tool list that actually exists, never an empty one.
         merged.lastUpdate = [current.lastUpdate, candidate.lastUpdate].compactMap { $0 }.max { $0.date < $1.date }
         merged.tools = preferred.tools ?? current.tools ?? candidate.tools
+        // The CLI and the HTTPS catalog describe the same Claude plugin from two
+        // angles: the CLI knows whether it is installed and how many installs it
+        // has, while the file supplies the category, homepage, and author the
+        // CLI leaves out. Neither is dropped — whichever source has each field
+        // keeps it, so a merged row carries both halves.
+        merged.installCount = preferred.installCount ?? current.installCount ?? candidate.installCount
+        merged.category = current.category ?? candidate.category
 
         var routesByID = Dictionary(uniqueKeysWithValues: current.nativeInstalls.map { ($0.id, $0) })
         for route in candidate.nativeInstalls {
