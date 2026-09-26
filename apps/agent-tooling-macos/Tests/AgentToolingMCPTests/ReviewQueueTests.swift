@@ -172,7 +172,7 @@ struct ReviewQueueTests {
         #expect(rows.count == 1)
         #expect(payload["state"]?.stringValue == "pending-review")
 
-        let draft = try harness.store.requestDraft(rows[0].id, as: CodexSkillDraftRequest.self)
+        let draft = try harness.store.requestDraft(rows[0].id, as: SkillDraftRequest.self)
         let resolved = try #require(draft)
         #expect(resolved.proposedName == "release-summary")
         #expect(resolved.targets == [.claude, .codex])
@@ -196,7 +196,7 @@ struct ReviewQueueTests {
 
         #expect(repeated["collapsedIntoExistingRequest"]?.boolValue == true)
         #expect(try harness.pendingRequests().count == 1)
-        #expect(try harness.store.requestDraft(request.id, as: CodexSkillDraftRequest.self)?
+        #expect(try harness.store.requestDraft(request.id, as: SkillDraftRequest.self)?
             .proposedName == "release-summary")
     }
 

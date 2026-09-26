@@ -9,27 +9,27 @@ import SwiftUI
 /// render test has to be able to hand in something that runs nothing. Nothing on
 /// this protocol writes to the library or to a client: it stages files, and it
 /// puts staged files away again.
-protocol CodexSkillDrafting: Sendable {
-    func createDraft(_ request: CodexSkillDraftRequest) async throws -> CodexSkillDraftResult
-    func discardDraft(_ result: CodexSkillDraftResult) async throws
+protocol SkillDrafting: Sendable {
+    func createDraft(_ request: SkillDraftRequest) async throws -> SkillDraftResult
+    func discardDraft(_ result: SkillDraftResult) async throws
     func discardRequest(id: UUID) async throws
 }
 
 /// The real one. Every rule about what Codex may write, how large a package may
 /// be and where it may be staged lives in the core actor; this only carries the
 /// calls across.
-struct LiveCodexSkillDrafting: CodexSkillDrafting {
-    private let service: CodexSkillDraftService
+struct LiveSkillDrafting: SkillDrafting {
+    private let service: SkillDraftService
 
     init(stagingRoot: URL) {
-        service = CodexSkillDraftService(stagingRootURL: stagingRoot)
+        service = SkillDraftService(stagingRootURL: stagingRoot)
     }
 
-    func createDraft(_ request: CodexSkillDraftRequest) async throws -> CodexSkillDraftResult {
+    func createDraft(_ request: SkillDraftRequest) async throws -> SkillDraftResult {
         try await service.createDraft(request)
     }
 
-    func discardDraft(_ result: CodexSkillDraftResult) async throws {
+    func discardDraft(_ result: SkillDraftResult) async throws {
         try await service.discardDraft(result)
     }
 
@@ -41,7 +41,7 @@ struct LiveCodexSkillDrafting: CodexSkillDrafting {
 extension EnvironmentValues {
     /// How the creator reaches Codex, given the folder its drafts may be staged
     /// in. A test replaces the whole factory, so no render can start a process.
-    @Entry var codexSkillDrafting: (URL) -> any CodexSkillDrafting = { LiveCodexSkillDrafting(stagingRoot: $0) }
+    @Entry var skillDrafting: (URL) -> any SkillDrafting = { LiveSkillDrafting(stagingRoot: $0) }
 }
 
 extension WorkspaceLaunch.Workspace {
@@ -63,7 +63,7 @@ enum WorkspaceSkillDraftSeed {
     /// Writes one draft request beside this Mac's workspace so the creator can
     /// open it. Nothing is queued, nothing is generated, and nothing is
     /// installed. Returns false when this Mac could not record it.
-    static func save(_ request: CodexSkillDraftRequest, in store: WorkspaceRevisionStore) async -> Bool {
+    static func save(_ request: SkillDraftRequest, in store: WorkspaceRevisionStore) async -> Bool {
         await Task.detached(priority: .userInitiated) {
             (try? store.saveRequestDraft(request.id, request)) != nil
         }.value
@@ -83,7 +83,7 @@ enum WorkspaceSkillDraftSeed {
 final class WorkspaceSkillDraftSession {
     /// The staged package waiting to be reviewed, or nothing when no draft has
     /// been produced yet.
-    private(set) var result: CodexSkillDraftResult?
+    private(set) var result: SkillDraftResult?
     /// True while Codex is running or a reviewed draft is being saved. The sheet
     /// blocks its own actions on this; nothing else in the window waits for it.
     private(set) var isBusy = false
@@ -94,14 +94,14 @@ final class WorkspaceSkillDraftSession {
     @ObservationIgnored private let service: WorkspaceApplicationService
     @ObservationIgnored private let library: WorkspaceLibrarySession
     @ObservationIgnored private let store: WorkspaceRevisionStore
-    @ObservationIgnored private let drafting: any CodexSkillDrafting
+    @ObservationIgnored private let drafting: any SkillDrafting
     @ObservationIgnored private let queue: any PendingRequestQueuing
 
     init(
         service: WorkspaceApplicationService,
         library: WorkspaceLibrarySession,
         store: WorkspaceRevisionStore,
-        drafting: any CodexSkillDrafting,
+        drafting: any SkillDrafting,
         queue: any PendingRequestQueuing = LivePendingRequestQueue()
     ) {
         self.service = service
@@ -122,10 +122,10 @@ final class WorkspaceSkillDraftSession {
     /// A review row whose payload is missing can never be opened, so saying so
     /// is the honest answer rather than opening an empty creator that would
     /// generate something nobody asked for.
-    func loadRequest(id: UUID) async -> CodexSkillDraftRequest? {
+    func loadRequest(id: UUID) async -> SkillDraftRequest? {
         let store = self.store
         let loaded = await Task.detached(priority: .userInitiated) {
-            try? store.requestDraft(id, as: CodexSkillDraftRequest.self)
+            try? store.requestDraft(id, as: SkillDraftRequest.self)
         }.value
         if loaded == nil {
             errorMessage = "That skill request is no longer available. Nothing was changed."
@@ -137,7 +137,7 @@ final class WorkspaceSkillDraftSession {
     ///
     /// Nothing is written to the library here, and a failed run leaves nothing
     /// behind: the service removes its own stage before it throws.
-    func generate(_ request: CodexSkillDraftRequest) async {
+    func generate(_ request: SkillDraftRequest) async {
         guard !isBusy else { return }
         isBusy = true
         isGenerating = true

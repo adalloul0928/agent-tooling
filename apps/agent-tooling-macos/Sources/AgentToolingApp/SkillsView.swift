@@ -31,7 +31,7 @@ struct SkillsBrowser: View {
     @Environment(AppNavigationState.self) var navigation
     @Environment(\.workspaceNavigate) var navigate
     @Environment(\.availableClients) var availableClients
-    @Environment(\.codexSkillDrafting) var codexDrafting
+    @Environment(\.skillDrafting) var codexDrafting
     @Binding var sourceOwnership: String
     let inventory: SkillInventoryIndex
 
@@ -160,7 +160,7 @@ struct SkillsBrowser: View {
         // library until the draft is accepted, and where a saved skill is used
         // is still asked separately, once this sheet has closed.
         .sheet(item: $codexCreator, onDismiss: finishCodexCreation) { presentation in
-            CodexSkillCreatorSheet(
+            SkillCreatorSheet(
                 workspace: workspace,
                 drafting: codexDrafting(workspace.skillDraftStagingRoot),
                 pendingRequestID: presentation.requestID

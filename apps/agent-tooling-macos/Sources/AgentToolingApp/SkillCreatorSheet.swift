@@ -5,7 +5,7 @@ import SwiftUI
 /// A review-first authoring surface. Codex may write only into the isolated
 /// draft directory; the managed library is changed only after this sheet shows
 /// the exact files and the user chooses to save them.
-struct CodexSkillCreatorSheet: View {
+struct SkillCreatorSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let workspace: WorkspaceLaunch.Workspace
@@ -34,7 +34,7 @@ struct CodexSkillCreatorSheet: View {
     /// can render it without a Codex sign-in or a process.
     init(
         workspace: WorkspaceLaunch.Workspace,
-        drafting: any CodexSkillDrafting,
+        drafting: any SkillDrafting,
         pendingRequestID: UUID? = nil,
         onCreated: @escaping (ArtifactID, Set<ClientKind>) -> Void
     ) {
@@ -154,7 +154,7 @@ struct CodexSkillCreatorSheet: View {
                 HStack {
                     Text("Codex creates one portable package in an isolated draft folder.")
                     Spacer()
-                    Text("\(instruction.count.formatted()) / \(CodexSkillDraftRequest.maximumInstructionCharacters.formatted())")
+                    Text("\(instruction.count.formatted()) / \(SkillDraftRequest.maximumInstructionCharacters.formatted())")
                         .monospacedDigit()
                 }
                 .font(.caption)
@@ -244,7 +244,7 @@ struct CodexSkillCreatorSheet: View {
         }
     }
 
-    private func review(_ result: CodexSkillDraftResult) -> some View {
+    private func review(_ result: SkillDraftResult) -> some View {
         HSplitView {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -462,8 +462,8 @@ struct CodexSkillCreatorSheet: View {
     }
 
     private var instructionTooLong: Bool {
-        instruction.count > CodexSkillDraftRequest.maximumInstructionCharacters
-            || instruction.lengthOfBytes(using: .utf8) > CodexSkillDraftRequest.maximumInstructionBytes
+        instruction.count > SkillDraftRequest.maximumInstructionCharacters
+            || instruction.lengthOfBytes(using: .utf8) > SkillDraftRequest.maximumInstructionBytes
     }
 
     private var validationMessage: String? {
@@ -513,8 +513,8 @@ struct CodexSkillCreatorSheet: View {
         )
     }
 
-    private func makeRequest() -> CodexSkillDraftRequest {
-        CodexSkillDraftRequest(
+    private func makeRequest() -> SkillDraftRequest {
+        SkillDraftRequest(
             id: requestID,
             instruction: instruction,
             proposedName: proposedName.isEmpty ? nil : proposedName,
@@ -544,7 +544,7 @@ struct CodexSkillCreatorSheet: View {
         reviewedPaths = [initialPath]
     }
 
-    private func save(_ result: CodexSkillDraftResult) {
+    private func save(_ result: SkillDraftResult) {
         guard generationTask == nil, !session.isBusy else { return }
         generationTask = Task { @MainActor in
             defer { generationTask = nil }
@@ -615,11 +615,11 @@ struct CodexSkillCreatorSheet: View {
         projectRoot = url.standardizedFileURL.path(percentEncoded: false)
     }
 
-    private func selectedReviewFile(in result: CodexSkillDraftResult) -> CodexSkillDraftFile? {
+    private func selectedReviewFile(in result: SkillDraftResult) -> SkillDraftFile? {
         result.files.first { $0.relativePath == selectedReviewPath }
     }
 
-    private func selectedReviewContent(in result: CodexSkillDraftResult) -> String? {
+    private func selectedReviewContent(in result: SkillDraftResult) -> String? {
         guard let file = selectedReviewFile(in: result) else { return nil }
         if file.relativePath.hasSuffix("/SKILL.md") {
             return result.skillMarkdown
@@ -627,11 +627,11 @@ struct CodexSkillCreatorSheet: View {
         return file.textContent
     }
 
-    private func allFilesReviewed(in result: CodexSkillDraftResult) -> Bool {
+    private func allFilesReviewed(in result: SkillDraftResult) -> Bool {
         result.files.allSatisfy { reviewedPaths.contains($0.relativePath) }
     }
 
-    private func reviewProgress(for result: CodexSkillDraftResult) -> String {
+    private func reviewProgress(for result: SkillDraftResult) -> String {
         let remaining = result.files.filter { !reviewedPaths.contains($0.relativePath) }.count
         return remaining == 0
             ? "Every generated file has been opened for review."

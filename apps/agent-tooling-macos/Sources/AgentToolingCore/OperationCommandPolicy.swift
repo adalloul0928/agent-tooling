@@ -77,6 +77,13 @@ struct OperationCommandPolicy: Sendable {
     }
 
     private func validateClaude(_ arguments: [String]) throws {
+        // The skill creator: Claude Code in print mode, answering one prompt
+        // from standard input inside a staged request folder. The whole
+        // shape is fixed except the session identifier.
+        if SkillCreatorCommandShapes.isClaudeCreatorShape(arguments) { return }
+        // Adding the official marketplace, which the skill-creator plugin
+        // install needs first. One literal, nothing variable.
+        if arguments == SkillCreatorCommandShapes.claudeOfficialMarketplaceAddArguments { return }
         // Read-only listing and per-server lookup, plus the OAuth login flow.
         // The login opens the browser itself; the app never handles a token.
         if arguments == ["mcp", "list"] { return }
@@ -145,6 +152,9 @@ struct OperationCommandPolicy: Sendable {
         // Read-only listing (text or JSON) and per-server lookup, plus the
         // OAuth login flow for HTTP servers. The login opens the browser
         // itself; no token passes through this app.
+        // The skill creator: Codex exec, starting a thread in a staged request
+        // folder under the home directory, or resuming one by identifier.
+        if SkillCreatorCommandShapes.isCodexCreatorShape(arguments, homeURL: homeURL) { return }
         if arguments == ["mcp", "list"] || arguments == ["mcp", "list", "--json"] { return }
         if arguments.count == 3,
             arguments[0] == "mcp",

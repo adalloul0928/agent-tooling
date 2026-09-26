@@ -11,7 +11,7 @@ import Foundation
 /// written into the fixture's own temporary folder and the run is scripted.
 extension ShellRenderFixture {
     func skillDraftSession(
-        _ drafting: any CodexSkillDrafting,
+        _ drafting: any SkillDrafting,
         queue: any PendingRequestQueuing = RecordingPendingRequestQueue(),
         in workspace: WorkspaceLaunch.Workspace? = nil
     ) -> WorkspaceSkillDraftSession {
@@ -44,10 +44,10 @@ extension ShellRenderFixture {
     /// Writes the package a finished Codex run would have staged, and returns
     /// the result the creator would have been handed for review.
     func stageSkillDraft(
-        request: CodexSkillDraftRequest,
+        request: SkillDraftRequest,
         name: String = "codex-release-readiness",
         description: String = "Review release readiness and report blocking evidence."
-    ) throws -> CodexSkillDraftResult {
+    ) throws -> SkillDraftResult {
         let drafts = root.appending(path: "drafts", directoryHint: .isDirectory)
         let requestURL = drafts.appending(
             path: "request-\(request.id.uuidString.lowercased())", directoryHint: .isDirectory)
@@ -72,7 +72,7 @@ extension ShellRenderFixture {
             """
         try Data(markdown.utf8).write(to: skillURL.appending(path: "SKILL.md"), options: .atomic)
 
-        return CodexSkillDraftResult(
+        return SkillDraftResult(
             request: request, skillName: name, description: description,
             packageURL: packageURL, skillURL: skillURL, manifest: manifest, skillMarkdown: markdown,
             files: [
@@ -93,21 +93,21 @@ extension ShellRenderFixture {
     func queueSkillDraftRequest(
         instruction: String = "Write a skill that reviews release readiness.",
         targets: [ClientKind] = [.codex]
-    ) throws -> (request: PendingAgentRequest, draft: CodexSkillDraftRequest) {
+    ) throws -> (request: PendingAgentRequest, draft: SkillDraftRequest) {
         let outcome = try PendingRequestQueueService.enqueue(
             kind: .createSkill, title: "Create the skill 'release-readiness'",
             summary: "Codex is asking to create a skill named 'release-readiness'.",
             componentID: nil, scope: .user, targets: targets, reason: nil,
             reviewDetails: PendingRequestReviewDetails(instruction: instruction),
             fingerprintInputs: ["", instruction, ""], clientLabel: "Codex", store: store)
-        let draft = CodexSkillDraftRequest(
+        let draft = SkillDraftRequest(
             id: outcome.request.id, instruction: instruction, scope: .user, targets: targets)
         try store.saveRequestDraft(draft.id, draft)
         return (outcome.request, draft)
     }
 
-    func savedDraftRequest(_ id: UUID) -> CodexSkillDraftRequest? {
-        try? store.requestDraft(id, as: CodexSkillDraftRequest.self)
+    func savedDraftRequest(_ id: UUID) -> SkillDraftRequest? {
+        try? store.requestDraft(id, as: SkillDraftRequest.self)
     }
 }
 
@@ -115,15 +115,15 @@ extension ShellRenderFixture {
 /// process. It records what it was asked to put away, so a test can prove that
 /// an accepted draft leaves nothing behind and an abandoned one leaves the
 /// request it came from alone.
-final class StubCodexSkillDrafting: CodexSkillDrafting, @unchecked Sendable {
+final class StubSkillDrafting: SkillDrafting, @unchecked Sendable {
     private let lock = NSLock()
-    private var answer: CodexSkillDraftResult?
+    private var answer: SkillDraftResult?
     private var failure: (any Error)?
     private var created: [UUID] = []
     private var discardedDrafts: [UUID] = []
     private var discardedRequests: [UUID] = []
 
-    init(answer: CodexSkillDraftResult? = nil, failure: (any Error)? = nil) {
+    init(answer: SkillDraftResult? = nil, failure: (any Error)? = nil) {
         self.answer = answer
         self.failure = failure
     }
@@ -132,15 +132,15 @@ final class StubCodexSkillDrafting: CodexSkillDrafting, @unchecked Sendable {
     var discardedDraftIDs: [UUID] { lock.withLock { discardedDrafts } }
     var discardedRequestIDs: [UUID] { lock.withLock { discardedRequests } }
 
-    func answer(with result: CodexSkillDraftResult) {
+    func answer(with result: SkillDraftResult) {
         lock.withLock {
             answer = result
             failure = nil
         }
     }
 
-    func createDraft(_ request: CodexSkillDraftRequest) async throws -> CodexSkillDraftResult {
-        let staged: CodexSkillDraftResult? = try lock.withLock {
+    func createDraft(_ request: SkillDraftRequest) async throws -> SkillDraftResult {
+        let staged: SkillDraftResult? = try lock.withLock {
             created.append(request.id)
             if let failure { throw failure }
             return answer
@@ -149,7 +149,7 @@ final class StubCodexSkillDrafting: CodexSkillDrafting, @unchecked Sendable {
         return staged
     }
 
-    func discardDraft(_ result: CodexSkillDraftResult) async throws {
+    func discardDraft(_ result: SkillDraftResult) async throws {
         lock.withLock { discardedDrafts.append(result.id) }
     }
 

@@ -14,14 +14,14 @@ import Testing
 /// before they typed a word.
 @Suite("Codex skill creator renders")
 @MainActor
-struct CodexSkillCreatorRenderTests {
+struct SkillCreatorRenderTests {
     @Test func theCreatorDrawsBeforeAnythingIsGenerated() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        let drafting = StubCodexSkillDrafting()
+        let drafting = StubSkillDrafting()
 
         try expectDrawn(
-            CodexSkillCreatorSheet(
+            SkillCreatorSheet(
                 workspace: fixture.workspace, drafting: drafting, onCreated: { _, _ in }))
 
         #expect(drafting.createCount == 0, "drawing the creator asked Codex for a draft")
@@ -30,26 +30,26 @@ struct CodexSkillCreatorRenderTests {
     @Test func theCreatorDrawsTheGeneratedPackageForReview() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        let request = CodexSkillDraftRequest(instruction: "Write a release-readiness skill.", targets: [.codex])
+        let request = SkillDraftRequest(instruction: "Write a release-readiness skill.", targets: [.codex])
         let staged = try fixture.stageSkillDraft(request: request)
-        let drafting = StubCodexSkillDrafting(answer: staged)
+        let drafting = StubSkillDrafting(answer: staged)
         let reviewing = fixture.skillDraftSession(drafting)
         await reviewing.generate(request)
         #expect(reviewing.result != nil)
 
         let review = try rasterize(
-            CodexSkillCreatorSheet(
+            SkillCreatorSheet(
                 workspace: fixture.workspace, session: reviewing, onCreated: { _, _ in }))
         try expectDrawn(
-            CodexSkillCreatorSheet(
+            SkillCreatorSheet(
                 workspace: fixture.workspace, session: reviewing, onCreated: { _, _ in }))
 
         // The blank-frame check passes on the chrome alone, so the package has
         // to be shown to have changed something: a review pane that drew the
         // authoring form would draw exactly what the empty creator draws.
         let authoring = try rasterize(
-            CodexSkillCreatorSheet(
-                workspace: fixture.workspace, drafting: StubCodexSkillDrafting(), onCreated: { _, _ in }))
+            SkillCreatorSheet(
+                workspace: fixture.workspace, drafting: StubSkillDrafting(), onCreated: { _, _ in }))
         #expect(
             review.tiffRepresentation != authoring.tiffRepresentation,
             "the generated package changed nothing on screen")
@@ -63,12 +63,12 @@ struct CodexSkillCreatorRenderTests {
         defer { fixture.remove() }
         let queued = try fixture.queueSkillDraftRequest()
         let queue = RecordingPendingRequestQueue(requests: [queued.request])
-        let session = fixture.skillDraftSession(StubCodexSkillDrafting(), queue: queue)
+        let session = fixture.skillDraftSession(StubSkillDrafting(), queue: queue)
 
         let loaded = await session.loadRequest(id: queued.request.id)
 
         try expectDrawn(
-            CodexSkillCreatorSheet(
+            SkillCreatorSheet(
                 workspace: fixture.workspace, session: session,
                 pendingRequestID: queued.request.id, onCreated: { _, _ in }))
         #expect(loaded?.instruction == queued.draft.instruction)

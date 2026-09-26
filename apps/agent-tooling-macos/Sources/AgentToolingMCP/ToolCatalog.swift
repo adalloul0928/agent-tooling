@@ -317,7 +317,7 @@ enum ToolCatalog {
                 properties: [
                     "instruction": ToolSchema.string(
                         "What the skill should do, in plain language.",
-                        maximumLength: CodexSkillDraftRequest.maximumInstructionCharacters
+                        maximumLength: SkillDraftRequest.maximumInstructionCharacters
                     ),
                     "proposedName": ToolSchema.string(
                         "Suggested skill identifier, lower case with hyphens.",

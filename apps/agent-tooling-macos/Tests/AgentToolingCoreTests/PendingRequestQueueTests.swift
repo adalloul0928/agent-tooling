@@ -62,7 +62,7 @@ struct PendingRequestQueueTests {
         )
         try fixture.store.saveRequestDraft(
             old.request.id,
-            CodexSkillDraftRequest(id: old.request.id, instruction: "Old instruction"))
+            SkillDraftRequest(id: old.request.id, instruction: "Old instruction"))
         let repeated = try PendingRequestQueueService.enqueue(
             kind: .createSkill,
             title: "Create old skill",
@@ -86,7 +86,7 @@ struct PendingRequestQueueTests {
         )
         let rows = try fixture.store.pendingRequestQueue().requests
         #expect(rows.map(\.componentID) == ["current"])
-        #expect(try fixture.store.requestDraft(old.request.id, as: CodexSkillDraftRequest.self) == nil)
+        #expect(try fixture.store.requestDraft(old.request.id, as: SkillDraftRequest.self) == nil)
     }
     @Test func concurrentProcessesDoNotOverwriteEachOthersRequests() async throws {
         let root = FileManager.default.temporaryDirectory

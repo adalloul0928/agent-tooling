@@ -16,8 +16,8 @@ func authenticatedCodexCreatesDisposableSkillDraft() async throws {
         .appending(path: "AgentToolingLiveCodexSmoke-\(UUID().uuidString)", directoryHint: .isDirectory)
     defer { try? FileManager.default.removeItem(at: root) }
 
-    let service = CodexSkillDraftService(stagingRootURL: root)
-    let request = CodexSkillDraftRequest(
+    let service = SkillDraftService(stagingRootURL: root)
+    let request = SkillDraftRequest(
         instruction: """
             Create a small portable skill that reviews a release checklist. It should trigger when a user asks whether a software release is ready, verify that tests, documentation, rollback notes, and version metadata are present, and return a concise list of unresolved blockers. Keep the skill self-contained and do not add scripts or assets.
             """,

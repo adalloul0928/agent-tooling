@@ -15,9 +15,9 @@ struct WorkspaceSkillDraftSessionTests {
     @Test func generatingStagesADraftAndLeavesTheLibraryAlone() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        let request = CodexSkillDraftRequest(instruction: "Write a release-readiness skill.", targets: [.codex])
+        let request = SkillDraftRequest(instruction: "Write a release-readiness skill.", targets: [.codex])
         let staged = try fixture.stageSkillDraft(request: request)
-        let drafting = StubCodexSkillDrafting(answer: staged)
+        let drafting = StubSkillDrafting(answer: staged)
         let session = fixture.skillDraftSession(drafting)
         let before = try #require(fixture.workspace.library.state).library.rows.count
 
@@ -36,7 +36,7 @@ struct WorkspaceSkillDraftSessionTests {
     @Test func aRefusedGenerationSaysWhatCodexRefusedAndStagesNothing() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        let drafting = StubCodexSkillDrafting(
+        let drafting = StubSkillDrafting(
             failure: StubDraftFailure.refused("The installed Codex Skill Creator was not found."))
         let session = fixture.skillDraftSession(drafting)
 
@@ -51,7 +51,7 @@ struct WorkspaceSkillDraftSessionTests {
         defer { fixture.remove() }
         let queued = try fixture.queueSkillDraftRequest()
         let staged = try fixture.stageSkillDraft(request: queued.draft)
-        let drafting = StubCodexSkillDrafting(answer: staged)
+        let drafting = StubSkillDrafting(answer: staged)
         let queue = RecordingPendingRequestQueue(requests: [queued.request])
         let workspace = try await fixture.workspaceHoldingContent()
         let session = fixture.skillDraftSession(drafting, queue: queue, in: workspace)
@@ -79,13 +79,13 @@ struct WorkspaceSkillDraftSessionTests {
     @Test func aDraftThatNoLongerMatchesWhatWasReviewedIsRefused() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        let request = CodexSkillDraftRequest(instruction: "Write a release-readiness skill.", targets: [.codex])
+        let request = SkillDraftRequest(instruction: "Write a release-readiness skill.", targets: [.codex])
         let staged = try fixture.stageSkillDraft(request: request, name: "codex-release-readiness")
         // The files on disk say one thing; the reviewed draft claims another.
         var renamed = staged
         renamed.skillName = "something-else"
         let workspace = try await fixture.workspaceHoldingContent()
-        let session = fixture.skillDraftSession(StubCodexSkillDrafting(answer: renamed), in: workspace)
+        let session = fixture.skillDraftSession(StubSkillDrafting(answer: renamed), in: workspace)
         await session.generate(request)
 
         let adopted = await session.adopt(resolving: nil)
@@ -102,7 +102,7 @@ struct WorkspaceSkillDraftSessionTests {
         defer { fixture.remove() }
         let queued = try fixture.queueSkillDraftRequest()
         let staged = try fixture.stageSkillDraft(request: queued.draft)
-        let drafting = StubCodexSkillDrafting(answer: staged)
+        let drafting = StubSkillDrafting(answer: staged)
         let queue = RecordingPendingRequestQueue(requests: [queued.request])
         let session = fixture.skillDraftSession(drafting, queue: queue)
         await session.generate(queued.draft)
@@ -119,9 +119,9 @@ struct WorkspaceSkillDraftSessionTests {
     @Test func closingWithoutAcceptingDropsARequestNothingIsWaitingOn() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        let seeded = CodexSkillDraftRequest(instruction: "Write a changelog skill.", targets: [.codex])
+        let seeded = SkillDraftRequest(instruction: "Write a changelog skill.", targets: [.codex])
         #expect(await WorkspaceSkillDraftSeed.save(seeded, in: fixture.store))
-        let drafting = StubCodexSkillDrafting()
+        let drafting = StubSkillDrafting()
         let session = fixture.skillDraftSession(drafting)
 
         await session.abandon(requestID: seeded.id)
@@ -137,7 +137,7 @@ struct WorkspaceSkillDraftSessionTests {
         defer { fixture.remove() }
         let queued = try fixture.queueSkillDraftRequest()
         let staged = try fixture.stageSkillDraft(request: queued.draft)
-        let drafting = StubCodexSkillDrafting(answer: staged)
+        let drafting = StubSkillDrafting(answer: staged)
         let session = fixture.skillDraftSession(drafting, queue: RecordingPendingRequestQueue(requests: [queued.request]))
         await session.generate(queued.draft)
 
@@ -153,7 +153,7 @@ struct WorkspaceSkillDraftSessionTests {
         defer { fixture.remove() }
         let queued = try fixture.queueSkillDraftRequest(
             instruction: "Turn a week of merged pull requests into a changelog entry.")
-        let session = fixture.skillDraftSession(StubCodexSkillDrafting())
+        let session = fixture.skillDraftSession(StubSkillDrafting())
 
         let loaded = await session.loadRequest(id: queued.draft.id)
 
@@ -164,7 +164,7 @@ struct WorkspaceSkillDraftSessionTests {
     @Test func aRequestWithNoPayloadSaysSoRatherThanOpeningAnEmptyCreator() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        let session = fixture.skillDraftSession(StubCodexSkillDrafting())
+        let session = fixture.skillDraftSession(StubSkillDrafting())
 
         let loaded = await session.loadRequest(id: UUID())
 

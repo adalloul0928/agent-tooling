@@ -131,11 +131,11 @@ struct AgentToolingCLI {
         let instruction =
             try BoundedInputReader.readUTF8(
                 from: .standardInput,
-                maximumBytes: CodexSkillDraftRequest.maximumInstructionBytes
+                maximumBytes: SkillDraftRequest.maximumInstructionBytes
             )
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !instruction.isEmpty,
-            instruction.count <= CodexSkillDraftRequest.maximumInstructionCharacters,
+            instruction.count <= SkillDraftRequest.maximumInstructionCharacters,
             !IntegrationTextSanitizer.containsUnsupportedControlCharacter(instruction, allowsLineBreaks: true)
         else { throw CLIError.invalidInstruction }
 
@@ -190,7 +190,7 @@ struct AgentToolingCLI {
             clientLabel: "Agent Tooling CLI",
             store: store
         )
-        let draftRequest = CodexSkillDraftRequest(
+        let draftRequest = SkillDraftRequest(
             id: outcome.request.id,
             instruction: instruction,
             proposedName: proposedName,

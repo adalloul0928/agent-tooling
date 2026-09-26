@@ -559,7 +559,7 @@ struct InsightsView: View {
         let instruction = recommendation.draftInstruction ?? recommendation.summary
         guard !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         routeError = nil
-        let request = CodexSkillDraftRequest(
+        let request = SkillDraftRequest(
             instruction: instruction,
             targets: enabledClients.isEmpty ? [.codex] : enabledClients)
         let store = workspace.store

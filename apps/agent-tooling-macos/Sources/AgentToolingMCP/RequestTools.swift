@@ -70,7 +70,7 @@ enum RequestTools {
     private static func createSkill(_ context: ToolCallContext) throws -> ToolOutcome {
         let instruction = try context.arguments.requiredString(
             "instruction",
-            maximum: CodexSkillDraftRequest.maximumInstructionCharacters,
+            maximum: SkillDraftRequest.maximumInstructionCharacters,
             allowsLineBreaks: true
         )
         let scope = try context.arguments.requiredScope()
@@ -103,7 +103,7 @@ enum RequestTools {
         // Keep the app's local draft payload bound to the queue row even when
         // this call collapsed into an identical older request. That repairs a
         // missing payload instead of leaving a review row that can never open.
-        let draft = CodexSkillDraftRequest(
+        let draft = SkillDraftRequest(
             id: outcome.request.id,
             instruction: instruction,
             proposedName: proposedName,

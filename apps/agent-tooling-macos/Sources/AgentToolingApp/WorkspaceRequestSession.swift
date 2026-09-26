@@ -433,8 +433,8 @@ enum PendingRequestEnvelope {
         case .createSkill:
             guard let instruction = details.instruction,
                 !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                instruction.count <= CodexSkillDraftRequest.maximumInstructionCharacters,
-                instruction.utf8.count <= CodexSkillDraftRequest.maximumInstructionBytes,
+                instruction.count <= SkillDraftRequest.maximumInstructionCharacters,
+                instruction.utf8.count <= SkillDraftRequest.maximumInstructionBytes,
                 details.endpoint == nil, details.transport == nil, details.source == nil,
                 details.componentKind == nil
             else { return nil }

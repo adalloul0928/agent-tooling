@@ -3,7 +3,7 @@ import Testing
 
 @testable import AgentToolingCore
 
-private actor CodexSkillDraftRunnerStub: StandardInputCommandRunning {
+private actor SkillDraftRunnerStub: StandardInputCommandRunning {
     enum Behavior: Sendable {
         case valid(name: String)
         case completeReviewInventory(name: String)
@@ -164,7 +164,7 @@ private actor BlockingCodexSkillDraftRunner: StandardInputCommandRunning {
         guard let currentDirectory else {
             return CommandOutput(status: 64, standardOutput: "", standardError: "missing current directory")
         }
-        try CodexSkillDraftRunnerStub.writePackage(
+        try SkillDraftRunnerStub.writePackage(
             name: "concurrent-draft",
             at: currentDirectory.appending(path: "draft", directoryHint: .isDirectory)
         )
@@ -181,11 +181,11 @@ private actor BlockingCodexSkillDraftRunner: StandardInputCommandRunning {
     }
 }
 
-struct CodexSkillDraftServiceTests {
+struct SkillDraftServiceTests {
     @Test func stagesValidSkillForReviewUsingCodexAndStandardInput() async throws {
         let fixture = try makeFixture()
-        let runner = CodexSkillDraftRunnerStub(.valid(name: "release-review"))
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.valid(name: "release-review"))
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
@@ -193,7 +193,7 @@ struct CodexSkillDraftServiceTests {
         let instruction = "Create a skill that reviews release readiness and reports blocking evidence."
 
         let result = try await service.createDraft(
-            CodexSkillDraftRequest(
+            SkillDraftRequest(
                 instruction: instruction,
                 proposedName: "release-review",
                 scope: .project,
@@ -234,15 +234,15 @@ struct CodexSkillDraftServiceTests {
 
     @Test func rejectsMultipleGeneratedSkillsAndRemovesFailedStagingRequest() async throws {
         let fixture = try makeFixture()
-        let runner = CodexSkillDraftRunnerStub(.twoSkills)
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.twoSkills)
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
         )
 
-        await #expect(throws: CodexSkillDraftError.self) {
-            try await service.createDraft(CodexSkillDraftRequest(instruction: "Create one narrow release skill."))
+        await #expect(throws: SkillDraftError.self) {
+            try await service.createDraft(SkillDraftRequest(instruction: "Create one narrow release skill."))
         }
         let remaining = try FileManager.default.contentsOfDirectory(atPath: fixture.staging.path(percentEncoded: false))
         #expect(remaining.isEmpty)
@@ -250,15 +250,15 @@ struct CodexSkillDraftServiceTests {
 
     @Test func enumeratesEveryRegularFileInTheBoundedReviewInventory() async throws {
         let fixture = try makeFixture()
-        let runner = CodexSkillDraftRunnerStub(.completeReviewInventory(name: "complete-review"))
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.completeReviewInventory(name: "complete-review"))
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
         )
 
         let result = try await service.createDraft(
-            CodexSkillDraftRequest(instruction: "Create a complete review draft.", proposedName: "complete-review")
+            SkillDraftRequest(instruction: "Create a complete review draft.", proposedName: "complete-review")
         )
 
         #expect(
@@ -276,8 +276,8 @@ struct CodexSkillDraftServiceTests {
 
     @Test func rejectsHiddenNestedFilesInsteadOfSilentlyExcludingThemFromReview() async throws {
         let fixture = try makeFixture()
-        let runner = CodexSkillDraftRunnerStub(.hiddenNestedFile(name: "hidden-review"))
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.hiddenNestedFile(name: "hidden-review"))
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
@@ -285,10 +285,10 @@ struct CodexSkillDraftServiceTests {
 
         do {
             _ = try await service.createDraft(
-                CodexSkillDraftRequest(instruction: "Create a hidden review draft.", proposedName: "hidden-review")
+                SkillDraftRequest(instruction: "Create a hidden review draft.", proposedName: "hidden-review")
             )
             Issue.record("Expected the hidden file to be rejected")
-        } catch let error as CodexSkillDraftError {
+        } catch let error as SkillDraftError {
             #expect(error.localizedDescription.contains("Hidden package item"))
             #expect(error.localizedDescription.contains(".unreviewed.md"))
         }
@@ -297,8 +297,8 @@ struct CodexSkillDraftServiceTests {
 
     @Test func rejectsFilesBeyondTheReviewDepthInsteadOfSilentlyExcludingThem() async throws {
         let fixture = try makeFixture()
-        let runner = CodexSkillDraftRunnerStub(.overDepthFile(name: "deep-review"))
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.overDepthFile(name: "deep-review"))
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
@@ -306,10 +306,10 @@ struct CodexSkillDraftServiceTests {
 
         do {
             _ = try await service.createDraft(
-                CodexSkillDraftRequest(instruction: "Create a deep review draft.", proposedName: "deep-review")
+                SkillDraftRequest(instruction: "Create a deep review draft.", proposedName: "deep-review")
             )
             Issue.record("Expected the over-depth file to be rejected")
-        } catch let error as CodexSkillDraftError {
+        } catch let error as SkillDraftError {
             #expect(error.localizedDescription.contains("maximum review depth"))
             #expect(error.localizedDescription.contains("unreviewed.md"))
         }
@@ -318,14 +318,14 @@ struct CodexSkillDraftServiceTests {
 
     @Test func discardIsIdempotentAndRejectsAResultOutsideItsRequestDirectory() async throws {
         let fixture = try makeFixture()
-        let runner = CodexSkillDraftRunnerStub(.valid(name: "review-draft"))
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.valid(name: "review-draft"))
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
         )
         let result = try await service.createDraft(
-            CodexSkillDraftRequest(instruction: "Create a review draft.", proposedName: "review-draft")
+            SkillDraftRequest(instruction: "Create a review draft.", proposedName: "review-draft")
         )
 
         try await service.discardDraft(result)
@@ -334,27 +334,27 @@ struct CodexSkillDraftServiceTests {
 
         var forged = result
         forged.packageURL = fixture.root.appending(path: "unrelated", directoryHint: .isDirectory)
-        await #expect(throws: CodexSkillDraftError.self) {
+        await #expect(throws: SkillDraftError.self) {
             try await service.discardDraft(forged)
         }
     }
 
     @Test func recoversACompletePersistedDraftWithoutRunningCodexAgain() async throws {
         let fixture = try makeFixture()
-        let request = CodexSkillDraftRequest(
+        let request = SkillDraftRequest(
             instruction: "Create a recoverable draft.",
             proposedName: "recoverable-draft"
         )
-        let initialRunner = CodexSkillDraftRunnerStub(.valid(name: "recoverable-draft"))
-        let initialService = CodexSkillDraftService(
+        let initialRunner = SkillDraftRunnerStub(.valid(name: "recoverable-draft"))
+        let initialService = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: initialRunner,
             skillCreatorURL: fixture.skillCreator
         )
         let initial = try await initialService.createDraft(request)
 
-        let recoveryRunner = CodexSkillDraftRunnerStub(.failure)
-        let recovered = try await CodexSkillDraftService(
+        let recoveryRunner = SkillDraftRunnerStub(.failure)
+        let recovered = try await SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: recoveryRunner,
             skillCreatorURL: fixture.skillCreator
@@ -367,7 +367,7 @@ struct CodexSkillDraftServiceTests {
 
     @Test func retriesAnIncompletePersistedRequestFromACleanDirectory() async throws {
         let fixture = try makeFixture()
-        let request = CodexSkillDraftRequest(
+        let request = SkillDraftRequest(
             id: UUID(),
             instruction: "Create a retried draft.",
             proposedName: "retried-draft"
@@ -379,7 +379,7 @@ struct CodexSkillDraftServiceTests {
         try FileManager.default.createDirectory(at: requestURL, withIntermediateDirectories: true)
         let metadata = try AgentToolingCoding.encoder().encode(request)
         try metadata.write(
-            to: requestURL.appending(path: CodexSkillDraftService.requestMetadataFileName),
+            to: requestURL.appending(path: SkillDraftService.requestMetadataFileName),
             options: .atomic
         )
         try "partial".write(
@@ -387,8 +387,8 @@ struct CodexSkillDraftServiceTests {
             atomically: true,
             encoding: .utf8
         )
-        let runner = CodexSkillDraftRunnerStub(.valid(name: "retried-draft"))
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.valid(name: "retried-draft"))
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
@@ -404,7 +404,7 @@ struct CodexSkillDraftServiceTests {
     @Test func doesNotReuseOrDeleteAStageWhosePersistedRequestDiffers() async throws {
         let fixture = try makeFixture()
         let requestID = UUID()
-        let persisted = CodexSkillDraftRequest(
+        let persisted = SkillDraftRequest(
             id: requestID,
             instruction: "The original instruction.",
             proposedName: "original-draft"
@@ -415,21 +415,21 @@ struct CodexSkillDraftServiceTests {
         )
         try FileManager.default.createDirectory(at: requestURL, withIntermediateDirectories: true)
         try AgentToolingCoding.encoder().encode(persisted).write(
-            to: requestURL.appending(path: CodexSkillDraftService.requestMetadataFileName),
+            to: requestURL.appending(path: SkillDraftService.requestMetadataFileName),
             options: .atomic
         )
         let marker = requestURL.appending(path: "keep-me")
         try Data().write(to: marker)
-        let runner = CodexSkillDraftRunnerStub(.valid(name: "replacement-draft"))
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.valid(name: "replacement-draft"))
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
         )
 
-        await #expect(throws: CodexSkillDraftError.self) {
+        await #expect(throws: SkillDraftError.self) {
             try await service.createDraft(
-                CodexSkillDraftRequest(
+                SkillDraftRequest(
                     id: requestID,
                     instruction: "A different instruction.",
                     proposedName: "replacement-draft"
@@ -442,22 +442,22 @@ struct CodexSkillDraftServiceTests {
     @Test func duplicateSameProcessRequestCannotDeleteAnInFlightDraft() async throws {
         let fixture = try makeFixture()
         let runner = BlockingCodexSkillDraftRunner()
-        let service = CodexSkillDraftService(
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
         )
-        let request = CodexSkillDraftRequest(
+        let request = SkillDraftRequest(
             instruction: "Create a concurrent draft.",
             proposedName: "concurrent-draft"
         )
         let first = Task { try await service.createDraft(request) }
         await runner.waitUntilStarted()
 
-        await #expect(throws: CodexSkillDraftError.self) {
+        await #expect(throws: SkillDraftError.self) {
             try await service.createDraft(request)
         }
-        await #expect(throws: CodexSkillDraftError.self) {
+        await #expect(throws: SkillDraftError.self) {
             try await service.discardRequest(id: request.id)
         }
 
@@ -469,16 +469,16 @@ struct CodexSkillDraftServiceTests {
 
     @Test func rejectsSymbolicLinksInGeneratedPackage() async throws {
         let fixture = try makeFixture()
-        let runner = CodexSkillDraftRunnerStub(.symbolicLink)
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.symbolicLink)
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
         )
 
-        await #expect(throws: CodexSkillDraftError.self) {
+        await #expect(throws: SkillDraftError.self) {
             try await service.createDraft(
-                CodexSkillDraftRequest(instruction: "Create a linked skill.", proposedName: "linked-skill")
+                SkillDraftRequest(instruction: "Create a linked skill.", proposedName: "linked-skill")
             )
         }
         let remaining = try FileManager.default.contentsOfDirectory(atPath: fixture.staging.path(percentEncoded: false))
@@ -487,48 +487,48 @@ struct CodexSkillDraftServiceTests {
 
     @Test func validatesRequestBeforeLaunchingCodex() async throws {
         let fixture = try makeFixture()
-        let runner = CodexSkillDraftRunnerStub(.valid(name: "unused"))
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.valid(name: "unused"))
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
         )
 
-        await #expect(throws: CodexSkillDraftError.self) {
-            try await service.createDraft(CodexSkillDraftRequest(instruction: " "))
+        await #expect(throws: SkillDraftError.self) {
+            try await service.createDraft(SkillDraftRequest(instruction: " "))
         }
-        await #expect(throws: CodexSkillDraftError.self) {
+        await #expect(throws: SkillDraftError.self) {
             try await service.createDraft(
-                CodexSkillDraftRequest(instruction: "Project skill", scope: .project, projectRoot: nil)
+                SkillDraftRequest(instruction: "Project skill", scope: .project, projectRoot: nil)
             )
         }
-        await #expect(throws: CodexSkillDraftError.self) {
+        await #expect(throws: SkillDraftError.self) {
             try await service.createDraft(
-                CodexSkillDraftRequest(instruction: "Local project skill", scope: .localProject, projectRoot: "/tmp/project")
+                SkillDraftRequest(instruction: "Local project skill", scope: .localProject, projectRoot: "/tmp/project")
             )
         }
-        await #expect(throws: CodexSkillDraftError.self) {
-            try await service.createDraft(CodexSkillDraftRequest(instruction: "No target", targets: []))
+        await #expect(throws: SkillDraftError.self) {
+            try await service.createDraft(SkillDraftRequest(instruction: "No target", targets: []))
         }
         #expect(await runner.recordedInvocations().isEmpty)
     }
 
     @Test func rejectsProtectedAndSymbolicLinkStagingRootsWithoutChangingThem() async throws {
         let fixture = try makeFixture()
-        let runner = CodexSkillDraftRunnerStub(.valid(name: "unused"))
+        let runner = SkillDraftRunnerStub(.valid(name: "unused"))
         let home = FileManager.default.homeDirectoryForCurrentUser
         let permissionsBefore = try #require(
             (FileManager.default.attributesOfItem(atPath: home.path(percentEncoded: false))[.posixPermissions] as? NSNumber)?
                 .intValue
         )
-        let protectedService = CodexSkillDraftService(
+        let protectedService = SkillDraftService(
             stagingRootURL: home,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
         )
 
-        await #expect(throws: CodexSkillDraftError.self) {
-            try await protectedService.createDraft(CodexSkillDraftRequest(instruction: "Do not write here."))
+        await #expect(throws: SkillDraftError.self) {
+            try await protectedService.createDraft(SkillDraftRequest(instruction: "Do not write here."))
         }
         let permissionsAfter = try #require(
             (FileManager.default.attributesOfItem(atPath: home.path(percentEncoded: false))[.posixPermissions] as? NSNumber)?
@@ -540,30 +540,30 @@ struct CodexSkillDraftServiceTests {
         let linked = fixture.root.appending(path: "linked-staging", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: actual, withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(at: linked, withDestinationURL: actual)
-        let linkedService = CodexSkillDraftService(
+        let linkedService = SkillDraftService(
             stagingRootURL: linked,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
         )
-        await #expect(throws: CodexSkillDraftError.self) {
-            try await linkedService.createDraft(CodexSkillDraftRequest(instruction: "Do not follow this link."))
+        await #expect(throws: SkillDraftError.self) {
+            try await linkedService.createDraft(SkillDraftRequest(instruction: "Do not follow this link."))
         }
         #expect(try FileManager.default.contentsOfDirectory(atPath: actual.path(percentEncoded: false)).isEmpty)
     }
 
     @Test func reportsRedactedCodexFailureAndCleansStagingRequest() async throws {
         let fixture = try makeFixture()
-        let runner = CodexSkillDraftRunnerStub(.failure)
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.failure)
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
         )
 
         do {
-            _ = try await service.createDraft(CodexSkillDraftRequest(instruction: "Create a release skill."))
+            _ = try await service.createDraft(SkillDraftRequest(instruction: "Create a release skill."))
             Issue.record("Expected Codex to fail")
-        } catch let error as CodexSkillDraftError {
+        } catch let error as SkillDraftError {
             #expect(error.localizedDescription.contains("Bearer [redacted]"))
             #expect(!error.localizedDescription.contains("secret-token-value"))
         }
@@ -573,17 +573,17 @@ struct CodexSkillDraftServiceTests {
 
     @Test func reportsClearErrorWhenCodexExitsSuccessfullyWithoutADraft() async throws {
         let fixture = try makeFixture()
-        let runner = CodexSkillDraftRunnerStub(.successWithoutDraft)
-        let service = CodexSkillDraftService(
+        let runner = SkillDraftRunnerStub(.successWithoutDraft)
+        let service = SkillDraftService(
             stagingRootURL: fixture.staging,
             runner: runner,
             skillCreatorURL: fixture.skillCreator
         )
 
         do {
-            _ = try await service.createDraft(CodexSkillDraftRequest(instruction: "Create a release skill."))
+            _ = try await service.createDraft(SkillDraftRequest(instruction: "Create a release skill."))
             Issue.record("Expected the missing draft to be reported")
-        } catch let error as CodexSkillDraftError {
+        } catch let error as SkillDraftError {
             guard case .missingPackage = error else {
                 Issue.record("Expected missingPackage, got \(error)")
                 return
@@ -672,7 +672,7 @@ struct CodexSkillDraftServiceTests {
 
     private func makeFixture() throws -> (root: URL, staging: URL, skillCreator: URL) {
         let root = FileManager.default.temporaryDirectory
-            .appending(path: "CodexSkillDraftServiceTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appending(path: "SkillDraftServiceTests-\(UUID().uuidString)", directoryHint: .isDirectory)
         let staging = root.appending(path: "staging", directoryHint: .isDirectory)
         let skillCreator = root.appending(path: "codex/skills/.system/skill-creator/SKILL.md")
         try FileManager.default.createDirectory(at: skillCreator.deletingLastPathComponent(), withIntermediateDirectories: true)
