@@ -84,6 +84,15 @@ enum RequestTools {
             proposedName = normalized
         }
 
+        // Which local assistant drafts it. Codex when unsaid, as every request
+        // before there was a choice was.
+        let assistant: ClientKind
+        switch try context.arguments.optionalString("assistant", maximum: 32)?.lowercased() {
+        case nil, "codex": assistant = .codex
+        case "claude", "claude-code": assistant = .claude
+        default: throw ToolInputError.notInEnumeration("assistant", ["claude-code", "codex"])
+        }
+
         let identifier = context.identifierFactory()
         let outcome = try enqueueRequest(
             context: context,
@@ -105,6 +114,7 @@ enum RequestTools {
         // missing payload instead of leaving a review row that can never open.
         let draft = SkillDraftRequest(
             id: outcome.request.id,
+            client: assistant,
             instruction: instruction,
             proposedName: proposedName,
             scope: scope,

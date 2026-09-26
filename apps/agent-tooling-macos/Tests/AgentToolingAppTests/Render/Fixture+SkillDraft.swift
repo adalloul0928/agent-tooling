@@ -3,22 +3,25 @@ import Foundation
 @testable import AgentToolingApp
 @testable import AgentToolingCore
 
-/// The shapes the Codex skill creator reaches for: a staged draft package on
-/// disk, a Codex that never runs, and a review queue that answers from memory.
+/// The shapes the skill creator reaches for: a staged draft package on disk, an
+/// assistant that never runs, an installer that records what it was asked, and
+/// a review queue that answers from memory.
 ///
-/// A real draft starts a signed-in `codex` process and stages a package under
-/// this Mac's support folder. Neither belongs in a test, so the package is
-/// written into the fixture's own temporary folder and the run is scripted.
+/// A real turn starts a signed-in `claude` or `codex` process and stages a
+/// package under this Mac's support folder. Neither belongs in a test, so the
+/// package is written into the fixture's own temporary folder and the turns are
+/// scripted.
 extension ShellRenderFixture {
     func skillDraftSession(
         _ drafting: any SkillDrafting,
+        installing: any SkillCreatorInstalling = RecordingSkillCreatorInstalling(),
         queue: any PendingRequestQueuing = RecordingPendingRequestQueue(),
         in workspace: WorkspaceLaunch.Workspace? = nil
     ) -> WorkspaceSkillDraftSession {
         let target = workspace ?? self.workspace
         return WorkspaceSkillDraftSession(
             service: target.service, library: target.library, store: store,
-            drafting: drafting, queue: queue)
+            drafting: drafting, installing: installing, queue: queue)
     }
 
     /// The same store, over sessions that can actually publish a package's
@@ -41,8 +44,8 @@ extension ShellRenderFixture {
         return opened
     }
 
-    /// Writes the package a finished Codex run would have staged, and returns
-    /// the result the creator would have been handed for review.
+    /// Writes the package a finished turn would have staged, and returns the
+    /// result the creator would have been handed for review.
     func stageSkillDraft(
         request: SkillDraftRequest,
         name: String = "codex-release-readiness",
@@ -91,17 +94,18 @@ extension ShellRenderFixture {
     /// for rather than a row with nothing behind it.
     @discardableResult
     func queueSkillDraftRequest(
+        client: ClientKind = .codex,
         instruction: String = "Write a skill that reviews release readiness.",
         targets: [ClientKind] = [.codex]
     ) throws -> (request: PendingAgentRequest, draft: SkillDraftRequest) {
         let outcome = try PendingRequestQueueService.enqueue(
             kind: .createSkill, title: "Create the skill 'release-readiness'",
-            summary: "Codex is asking to create a skill named 'release-readiness'.",
+            summary: "\(client.rawValue) is asking to create a skill named 'release-readiness'.",
             componentID: nil, scope: .user, targets: targets, reason: nil,
             reviewDetails: PendingRequestReviewDetails(instruction: instruction),
-            fingerprintInputs: ["", instruction, ""], clientLabel: "Codex", store: store)
+            fingerprintInputs: ["", instruction, ""], clientLabel: client.rawValue, store: store)
         let draft = SkillDraftRequest(
-            id: outcome.request.id, instruction: instruction, scope: .user, targets: targets)
+            id: outcome.request.id, client: client, instruction: instruction, scope: .user, targets: targets)
         try store.saveRequestDraft(draft.id, draft)
         return (outcome.request, draft)
     }
@@ -111,46 +115,113 @@ extension ShellRenderFixture {
     }
 }
 
-/// A Codex run that answers with what a test staged, and never starts a
-/// process. It records what it was asked to put away, so a test can prove that
-/// an accepted draft leaves nothing behind and an abandoned one leaves the
-/// request it came from alone.
+/// A scripted assistant. It answers each turn from a queue a test filled, never
+/// starts a process, and records what it was asked so a test can prove that an
+/// accepted draft leaves nothing behind and an abandoned one leaves the request
+/// it came from alone.
 final class StubSkillDrafting: SkillDrafting, @unchecked Sendable {
-    private let lock = NSLock()
-    private var answer: SkillDraftResult?
-    private var failure: (any Error)?
-    private var created: [UUID] = []
-    private var discardedDrafts: [UUID] = []
-    private var discardedRequests: [UUID] = []
-
-    init(answer: SkillDraftResult? = nil, failure: (any Error)? = nil) {
-        self.answer = answer
-        self.failure = failure
+    /// What one scripted turn does.
+    enum Step {
+        /// The assistant replies, and the draft folder holds `draft` afterwards
+        /// (nil when it wrote nothing complete).
+        case reply(String, draft: SkillDraftResult? = nil, notes: [String] = [], draftIssue: String? = nil)
+        /// The turn fails the way the service reports it.
+        case fail(any Error)
     }
 
-    var createCount: Int { lock.withLock { created.count } }
+    private let lock = NSLock()
+    private var script: [Step]
+    private var availability: [ClientKind: SkillCreatorAvailability]
+    private var started: [SkillDraftRequest] = []
+    private var continued: [(requestID: UUID, reply: String)] = []
+    private var discardedDrafts: [UUID] = []
+    private var discardedRequests: [UUID] = []
+    private var latestDraft: SkillDraftResult?
+    private var keptConversations: [UUID: SkillDraftConversation] = [:]
+
+    /// `answer` is the one-turn shorthand: the first turn writes that draft
+    /// and replies briefly. `failure` makes the first turn fail.
+    init(
+        answer: SkillDraftResult? = nil,
+        failure: (any Error)? = nil,
+        script: [Step] = [],
+        availability: [ClientKind: SkillCreatorAvailability] = [.claude: .available, .codex: .available]
+    ) {
+        var steps = script
+        if let failure {
+            steps.insert(.fail(failure), at: 0)
+        } else if let answer {
+            steps.insert(.reply("I wrote the draft. Review the files on the right.", draft: answer), at: 0)
+        }
+        self.script = steps
+        self.availability = availability
+    }
+
+    var startedRequests: [SkillDraftRequest] { lock.withLock { started } }
+    var createCount: Int { lock.withLock { started.count } }
+    var continuedReplies: [String] { lock.withLock { continued.map(\.reply) } }
     var discardedDraftIDs: [UUID] { lock.withLock { discardedDrafts } }
     var discardedRequestIDs: [UUID] { lock.withLock { discardedRequests } }
 
-    func answer(with result: SkillDraftResult) {
+    /// Queues one more scripted turn.
+    func enqueue(_ step: Step) {
+        lock.withLock { script.append(step) }
+    }
+
+    /// Changes what the stub says about a client, as installing would.
+    func setAvailability(_ value: SkillCreatorAvailability, for client: ClientKind) {
+        lock.withLock { availability[client] = value }
+    }
+
+    /// Plants the exchange and draft an earlier run would have left on disk.
+    func keep(_ conversation: SkillDraftConversation, draft: SkillDraftResult? = nil) {
         lock.withLock {
-            answer = result
-            failure = nil
+            keptConversations[conversation.request.id] = conversation
+            if let draft { latestDraft = draft }
         }
     }
 
-    func createDraft(_ request: SkillDraftRequest) async throws -> SkillDraftResult {
-        let staged: SkillDraftResult? = try lock.withLock {
-            created.append(request.id)
-            if let failure { throw failure }
-            return answer
+    func existingConversation(for requestID: UUID) async throws -> SkillDraftConversation? {
+        lock.withLock { keptConversations[requestID] }
+    }
+
+    func skillCreatorAvailability(for client: ClientKind) async -> SkillCreatorAvailability {
+        lock.withLock { availability[client] ?? .unsupportedClient }
+    }
+
+    func startConversation(_ request: SkillDraftRequest) async throws -> SkillDraftTurn {
+        try takeTurn { started.append(request) }
+    }
+
+    func continueConversation(requestID: UUID, reply: String) async throws -> SkillDraftTurn {
+        try takeTurn { continued.append((requestID, reply)) }
+    }
+
+    private func takeTurn(_ record: () -> Void) throws -> SkillDraftTurn {
+        try lock.withLock {
+            record()
+            guard !script.isEmpty else { throw StubDraftFailure.nothingStaged }
+            switch script.removeFirst() {
+            case .fail(let error):
+                throw error
+            case .reply(let text, let draft, let notes, let draftIssue):
+                latestDraft = draft
+                return SkillDraftTurn(
+                    reply: SkillDraftMessage(role: .assistant, text: text), notes: notes, draft: draft,
+                    draftIssue: draftIssue)
+            }
         }
-        guard let staged else { throw StubDraftFailure.nothingStaged }
-        return staged
+    }
+
+    func currentDraft(for requestID: UUID) async throws -> SkillDraftResult? {
+        lock.withLock { latestDraft?.id == requestID ? latestDraft : nil }
     }
 
     func discardDraft(_ result: SkillDraftResult) async throws {
-        lock.withLock { discardedDrafts.append(result.id) }
+        lock.withLock {
+            discardedDrafts.append(result.id)
+            if latestDraft?.id == result.id { latestDraft = nil }
+        }
     }
 
     func discardRequest(id: UUID) async throws {
@@ -158,7 +229,34 @@ final class StubSkillDrafting: SkillDrafting, @unchecked Sendable {
     }
 }
 
-/// What a scripted Codex refuses with, in the shape a person would read.
+/// An installer that runs nothing and remembers what it was asked to run.
+final class RecordingSkillCreatorInstalling: SkillCreatorInstalling, @unchecked Sendable {
+    private let lock = NSLock()
+    private var installed: [(client: ClientKind, commands: [SkillCreatorInstallCommand])] = []
+    private let failure: (any Error)?
+    /// Called on a successful install, so a test can flip the stub's
+    /// availability the way a real install flips the client's.
+    private let onInstall: (@Sendable () -> Void)?
+
+    init(failure: (any Error)? = nil, onInstall: (@Sendable () -> Void)? = nil) {
+        self.failure = failure
+        self.onInstall = onInstall
+    }
+
+    var installedCommands: [[SkillCreatorInstallCommand]] { lock.withLock { installed.map(\.commands) } }
+    var installedClients: [ClientKind] { lock.withLock { installed.map(\.client) } }
+
+    func install(_ commands: [SkillCreatorInstallCommand], for client: ClientKind) async throws -> String {
+        try lock.withLock {
+            installed.append((client, commands))
+            if let failure { throw failure }
+        }
+        onInstall?()
+        return "Installed."
+    }
+}
+
+/// What a scripted assistant refuses with, in the shape a person would read.
 enum StubDraftFailure: LocalizedError {
     case nothingStaged
     case refused(String)

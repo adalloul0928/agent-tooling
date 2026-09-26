@@ -166,36 +166,60 @@ The Activity screen is this Mac's journal. It lists the operation receipts a
 real install, update, or removal wrote, alongside the drift the app has
 recorded, reading the same receipts and journal the rest of the app writes.
 
-## Create a skill with Codex
+## Create a skill with Claude Code or Codex
 
-The **New skill** action uses the locally installed Codex CLI and its bundled
-Skill Creator. It uses the account already reported by `codex login status`;
-the desktop app does not request, copy, or store an OpenAI API key. Claude is
-not configured or invoked as a generation provider.
+**New skill…** (⌘N) asks how the skill should be written: **Create with
+Claude Code**, **Create with Codex**, or **Write it yourself**. The first two
+open a conversation inside the app; the third opens the form.
 
-Codex writes only into a private staging directory. The app validates the
-canonical Agent Plugins package, shows every generated file, and requires each
-file to be opened before the package can be saved. Saving creates a separate
-installation plan; it still does not change Codex, Claude Code, or Gemini until
-that plan is approved. Codex is the default destination, while the other
-clients remain optional destinations for the same portable skill.
+The creator is a conversation, not a one-shot generator. The exchange is on the
+left and the draft folder's files are on the right, re-read after every turn.
+The assistant may ask a few questions before it writes anything, and you can
+ask for changes after each draft. Each turn runs one fixed command through your
+signed-in local client — `claude -p --session-id … / --resume …` or
+`codex exec --json … / codex exec resume …` — with the prompt on standard input.
+Both commands are checked against the operation policy's allowlist before they
+launch; the assistant may write only inside a private staging folder; and
+nothing reaches the library until you press **Save**, which runs the same
+"choose where it is used" step every other new skill goes through. Closing the
+sheet puts the staging folder away. The conversation is kept beside the draft,
+so a sheet closed mid-exchange reopens where it stopped.
 
-Requirements:
+The assistants are offered only for clients this Mac manages. Each uses its
+own skill creator: Claude Code's `skill-creator@claude-plugins-official`
+plugin, or the skill creator Codex ships as a system skill. If the chosen
+client does not have it, the sheet offers to install it first with the
+client's own command (`claude plugin install skill-creator@claude-plugins-official`,
+preceded by `claude plugin marketplace add anthropics/claude-plugins-official`
+only when Claude Code does not know that marketplace yet), and records a
+receipt like any other install. Codex's creator cannot be installed
+separately; a Codex too old to have it is reported as such.
+
+Neither assistant is given an API key by this app. Claude Code uses whatever
+sign-in `claude` already has, and Codex uses the account `codex login status`
+reports; Codex's own configuration is kept so the person's provider and
+credentials apply. What is left out is everything that would act beyond the
+folder: project rules, plugins, hooks, apps, MCP servers, Bash, and the web.
+
+Requirements, per client:
 
 ```sh
+claude plugin list | grep skill-creator
 codex login status
 test -f "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-creator/SKILL.md"
 ```
 
-The generator uses `codex exec` with argv-only invocation, bounded stdin,
-workspace-write isolation, timeout/cancellation, redacted diagnostics, and a
-review-only output contract.
+The app validates the canonical Agent Plugins package after every turn, shows
+every generated file, and requires each file to be opened before the package
+can be saved. A request queued by the CLI helper or the MCP server
+(`--provider claude|codex`, or the `assistant` argument) names the assistant
+and opens the same creator on the `agent-tooling://skills/create/<id>` route.
 
 ## Raycast shortcuts
 
 The companion extension lives at
 [`integrations/raycast/agent-tooling`](../../integrations/raycast/agent-tooling).
-It can search the local inventory, queue a Codex skill request, check setup,
+It can search the local inventory, queue a skill request, check setup,
 open Sync, and focus the app. It finds the signed CLI helper inside
 `Agent Tooling.app/Contents/Helpers/agent-tooling`; no separate shell setup is
 needed for a packaged build.

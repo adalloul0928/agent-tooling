@@ -84,6 +84,23 @@ struct ClientExecutableLocatorTests {
         #expect(found?.path == shim.path)
     }
 
+    /// A Mac with Toolbox usually also has an older native install beside it.
+    /// The managed shim is the one the person's shell runs and the one that
+    /// carries their sign-in, so it is the one offered.
+    @Test func aToolboxShimIsPreferredToANativeInstallBesideIt() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.installTool(named: "claude", executable: true)
+        let dispatcher = fixture.home.appending(path: ".toolbox/tools/toolbox/1.1.0/toolbox-exec")
+        try fixture.installRunnableFile(at: dispatcher)
+        let shim = fixture.home.appending(path: ".toolbox/bin/claude")
+        try FileManager.default.createDirectory(
+            at: shim.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: shim, withDestinationURL: dispatcher)
+
+        #expect(ClientExecutableLocator.locate(.claude, homeURL: fixture.home)?.path == shim.path)
+    }
+
     @Test func aLinkToSomethingThatCannotRunIsNotOffered() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

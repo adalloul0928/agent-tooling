@@ -31,7 +31,8 @@ struct SkillsBrowser: View {
     @Environment(AppNavigationState.self) var navigation
     @Environment(\.workspaceNavigate) var navigate
     @Environment(\.availableClients) var availableClients
-    @Environment(\.skillDrafting) var codexDrafting
+    @Environment(\.skillDrafting) var skillDrafting
+    @Environment(\.skillCreatorInstalling) var skillCreatorInstalling
     @Binding var sourceOwnership: String
     let inventory: SkillInventoryIndex
 
@@ -49,12 +50,14 @@ struct SkillsBrowser: View {
     @State var isSelecting = false
     @State var selection: Set<ArtifactID> = []
     @State var creating = false
+    /// The "New skill…" chooser: an assistant or the form.
+    @State var choosingCreation = false
     @State var attaching = false
-    @State var codexCreator: CodexCreatorPresentation?
+    @State var skillCreator: SkillCreatorPresentation?
     /// The skill the creator just admitted, held until its sheet has closed:
     /// choosing where a new skill is used is a second sheet, and two of them
     /// cannot be on screen at once.
-    @State var createdByCodex: CodexAdoption?
+    @State var createdBySkillCreator: SkillCreatorAdoption?
     @State var editingSource: SkillEntry?
     @State var assignment: AssignmentPresentation?
     @State var exporting: ExportPresentation?
@@ -73,9 +76,6 @@ struct SkillsBrowser: View {
                     Menu {
                         Button("Choose several…", systemImage: "checkmark.circle") { setSelecting(true) }
                             .disabled(workspace.library.isBusy || assignableIDs.isEmpty)
-                        Button("New skill with Codex…", systemImage: "sparkles") { openCodexCreator() }
-                            .disabled(workspace.library.isBusy || !canWrite || !workspace.device.isEnabled(.codex))
-                            .help("Asks your signed-in Codex to write a skill you review before anything is saved")
                         Button("Attach a folder you author…", systemImage: "folder.badge.plus") { attaching = true }
                             .disabled(workspace.library.isBusy || !canWrite)
                         Divider()
@@ -96,7 +96,7 @@ struct SkillsBrowser: View {
                 .buttonStyle(.glass)
                 .accessibilityHint("Scans recent work for useful skills, plugins, and MCP servers")
                 Button {
-                    creating = true
+                    choosingCreation = true
                 } label: {
                     Label("New skill…", systemImage: "plus")
                 }
@@ -104,6 +104,7 @@ struct SkillsBrowser: View {
                 .tint(AgentTheme.selection)
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(workspace.library.isBusy || !canWrite)
+                .help("Create a skill with Claude Code, with Codex, or by hand")
             }
 
             filtersToolbar(skills: listed)
@@ -130,6 +131,16 @@ struct SkillsBrowser: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task(id: refreshID) { await workspace.library.refresh() }
+        // Choosing how decides nothing durable. An assistant stages a draft
+        // and the form writes only when it is saved.
+        .sheet(isPresented: $choosingCreation) {
+            SkillCreationChooserSheet(managedClients: workspace.device.managedClients) { method in
+                switch method {
+                case .assistant(let client): openSkillCreator(client: client)
+                case .manual: creating = true
+                }
+            }
+        }
         .sheet(isPresented: $creating) {
             SkillEditorSheet(
                 existingNames: inventory.skills.map(\.displayName) + inventory.skills.compactMap(\.declaredName),
@@ -156,16 +167,18 @@ struct SkillsBrowser: View {
         .sheet(isPresented: $attaching) {
             WorkspaceAttachFolderSheet(session: workspace.authoring)
         }
-        // Codex writes only into an isolated draft folder. Nothing reaches the
-        // library until the draft is accepted, and where a saved skill is used
-        // is still asked separately, once this sheet has closed.
-        .sheet(item: $codexCreator, onDismiss: finishCodexCreation) { presentation in
+        // The assistant writes only into an isolated draft folder. Nothing
+        // reaches the library until the draft is accepted, and where a saved
+        // skill is used is still asked separately, once this sheet has closed.
+        .sheet(item: $skillCreator, onDismiss: finishSkillCreation) { presentation in
             SkillCreatorSheet(
                 workspace: workspace,
-                drafting: codexDrafting(workspace.skillDraftStagingRoot),
+                drafting: skillDrafting(workspace.skillDraftStagingRoot),
+                installing: skillCreatorInstalling(workspace),
+                client: presentation.client,
                 pendingRequestID: presentation.requestID
             ) { artifactID, clients in
-                createdByCodex = CodexAdoption(artifactID: artifactID, clients: clients)
+                createdBySkillCreator = SkillCreatorAdoption(artifactID: artifactID, clients: clients)
             }
         }
         .sheet(item: $exporting) { presentation in

@@ -2,9 +2,13 @@ import AgentToolingCore
 import AppKit
 import SwiftUI
 
-/// A review-first authoring surface. Codex may write only into the isolated
-/// draft directory; the managed library is changed only after this sheet shows
-/// the exact files and the user chooses to save them.
+/// Creating a skill in conversation with Claude Code or Codex, review first.
+///
+/// The conversation is on the left and the draft folder's files on the right,
+/// re-read after every turn. Each turn is one fixed command the operation
+/// policy admits, the assistant may write only inside the isolated draft
+/// folder, and the managed library changes only when this sheet has shown the
+/// exact files and the person chooses to save them.
 struct SkillCreatorSheet: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -16,25 +20,30 @@ struct SkillCreatorSheet: View {
     let onCreated: (ArtifactID, Set<ClientKind>) -> Void
 
     @State private var session: WorkspaceSkillDraftSession
+    @State private var client: ClientKind
     @State private var requestID: UUID
-    @State private var instruction = ""
+    @State private var composerText = ""
     @State private var proposedName = ""
     @State private var scope: ToolingScope = .user
     @State private var projectRoot = ""
-    @State private var targets: Set<ClientKind> = [.codex]
-    @State private var generationTask: Task<Void, Never>?
+    @State private var targets: Set<ClientKind> = []
+    @State private var showsOptions = false
+    @State private var turnTask: Task<Void, Never>?
     @State private var selectedReviewPath = ""
     @State private var reviewedPaths: Set<String> = []
     @State private var loadedPendingRequest = false
-    @State private var pendingAutoGeneration = false
+    @State private var pendingAutoStart = false
     @State private var disposed = false
+    @FocusState private var composerFocused: Bool
 
-    /// The drafting service is resolved by the screen that presents this sheet
-    /// and handed in, so the sheet itself never names the real one and a test
-    /// can render it without a Codex sign-in or a process.
+    /// The drafting service and the installer are resolved by the screen that
+    /// presents this sheet and handed in, so the sheet itself never names the
+    /// real ones and a test can render it without a sign-in or a process.
     init(
         workspace: WorkspaceLaunch.Workspace,
         drafting: any SkillDrafting,
+        installing: any SkillCreatorInstalling = UnavailableSkillCreatorInstalling(),
+        client: ClientKind? = nil,
         pendingRequestID: UUID? = nil,
         onCreated: @escaping (ArtifactID, Set<ClientKind>) -> Void
     ) {
@@ -42,16 +51,17 @@ struct SkillCreatorSheet: View {
             workspace: workspace,
             session: WorkspaceSkillDraftSession(
                 service: workspace.service, library: workspace.library, store: workspace.store,
-                drafting: drafting),
-            pendingRequestID: pendingRequestID, onCreated: onCreated)
+                drafting: drafting, installing: installing),
+            client: client, pendingRequestID: pendingRequestID, onCreated: onCreated)
     }
 
     /// The same sheet over a session somebody else made. It is how a test draws
-    /// the review pane: the draft is staged and generated before the sheet
+    /// the review pane: the draft is staged and the turn taken before the sheet
     /// exists, so laying it out runs nothing.
     init(
         workspace: WorkspaceLaunch.Workspace,
         session: WorkspaceSkillDraftSession,
+        client: ClientKind? = nil,
         pendingRequestID: UUID? = nil,
         onCreated: @escaping (ArtifactID, Set<ClientKind>) -> Void
     ) {
@@ -60,6 +70,7 @@ struct SkillCreatorSheet: View {
         self.onCreated = onCreated
         _requestID = State(initialValue: pendingRequestID ?? UUID())
         _session = State(initialValue: session)
+        _client = State(initialValue: client ?? .codex)
     }
 
     var body: some View {
@@ -67,34 +78,47 @@ struct SkillCreatorSheet: View {
             header
             Divider()
 
-            if let result = session.result {
-                review(result)
+            if let availability = session.availability, case .missing(let reason, let install) = availability {
+                installOffer(reason: reason, install: install)
             } else {
-                authoring
+                HSplitView {
+                    conversationPane
+                        .frame(minWidth: 380, idealWidth: 430, maxWidth: 520, maxHeight: .infinity)
+                    draftPane
+                        .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
 
             Divider()
             footer
         }
         .onAppear {
-            targets.formIntersection(Set(enabledClients))
+            if targets.isEmpty { targets = Set(enabledClients) }
             selectInitialFile()
         }
         // A package that arrives opens on its definition, so the review pane is
-        // never a list beside an empty preview.
-        .onChange(of: session.result?.id) { _, _ in selectInitialFile() }
-        .frame(width: 940, height: 700)
+        // never a list beside an empty preview. A package rewritten in a later
+        // turn is a new set of files to read.
+        .onChange(of: session.result?.fingerprint) { _, _ in
+            selectedReviewPath = ""
+            reviewedPaths = []
+            selectInitialFile()
+        }
+        .frame(width: 1_000, height: 720)
         .background(AgentTheme.contentBackground)
+        .task(id: client) {
+            await session.checkAvailability(for: client)
+        }
         .task(id: pendingRequestID) {
             await openPendingRequestIfNeeded()
         }
         .onChange(of: workspace.library.isBusy) { _, isBusy in
-            guard !isBusy, pendingAutoGeneration, session.result == nil else { return }
-            pendingAutoGeneration = false
-            generate()
+            guard !isBusy, pendingAutoStart, !session.hasConversation else { return }
+            pendingAutoStart = false
+            sendComposer()
         }
         .onDisappear {
-            generationTask?.cancel()
+            turnTask?.cancel()
             guard !disposed else { return }
             disposed = true
             let session = session
@@ -103,20 +127,37 @@ struct SkillCreatorSheet: View {
         }
     }
 
+    // MARK: - Header
+
     private var header: some View {
         HStack(spacing: 13) {
-            ClientBrandIcon(client: .codex, size: 30)
+            ClientBrandIcon(client: client, size: 30)
                 .frame(width: 34, height: 34)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.result == nil ? "Create a skill with Codex" : "Review the generated skill")
+                Text("Create a skill with \(client.rawValue)")
                     .font(.title2.weight(.semibold))
                 Text(headerDetail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
+
+            // Which assistant writes the draft can change until the first
+            // turn; after that the conversation belongs to one of them.
+            if !session.hasConversation, pendingRequestID == nil {
+                Picker("Assistant", selection: $client) {
+                    ForEach(assistantChoices, id: \.self) { choice in
+                        Text(choice.rawValue).tag(choice)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .disabled(session.isBusy)
+                .accessibilityLabel("Assistant")
+            }
         }
         .padding(.horizontal, 24)
         .frame(height: 78)
@@ -126,128 +167,372 @@ struct SkillCreatorSheet: View {
         if session.result != nil {
             return "Nothing is installed until you save this draft and choose where it should be used."
         }
-        return "Uses the Skill Creator with your signed-in Codex account. Claude is not used for generation."
+        return "Uses the skill creator in your signed-in \(client.rawValue). It writes only into a private draft folder."
     }
 
-    private var authoring: some View {
-        HStack(alignment: .top, spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Describe the workflow")
+    /// The assistants this sheet can switch between: the managed ones with a
+    /// skill creator, and always the one it opened with.
+    private var assistantChoices: [ClientKind] {
+        var choices: [ClientKind] = [.claude, .codex].filter { (choice: ClientKind) in workspace.device.isEnabled(choice) }
+        if !choices.contains(client) { choices.append(client) }
+        return choices
+    }
+
+    // MARK: - Install offer
+
+    private func installOffer(reason: String, install: [SkillCreatorInstallCommand]) -> some View {
+        VStack(spacing: 18) {
+            Spacer()
+            Image(systemName: "puzzlepiece.extension")
+                .font(.system(size: 40, weight: .light))
+                .foregroundStyle(.secondary)
+            VStack(spacing: 6) {
+                Text("\(client.rawValue) needs its skill creator first")
+                    .font(.title3.weight(.semibold))
+                Text(reason)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 520)
+            }
+            if install.isEmpty {
+                Text("Agent Tooling does not know a command that installs it here.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(install.enumerated()), id: \.offset) { _, command in
+                        Text("\(command.executable) \(command.arguments.joined(separator: " "))")
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                }
+                .padding(12)
+                .background(AgentTheme.controlBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text("This runs \(client.rawValue)'s own install command and records a receipt. Nothing about your skills changes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 520)
+                Button {
+                    turnTask = Task { @MainActor in
+                        await session.installSkillCreator(for: client)
+                        turnTask = nil
+                    }
+                } label: {
+                    if session.isInstalling {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Installing…")
+                        }
+                    } else {
+                        Text("Install the skill creator")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(session.isBusy || turnTask != nil)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
+    }
+
+    // MARK: - Conversation
+
+    private var conversationPane: some View {
+        VStack(spacing: 0) {
+            if session.messages.isEmpty {
+                openingGuidance
+            } else {
+                transcript
+            }
+            Divider()
+            composer
+        }
+        .background(AgentTheme.controlBackground.opacity(0.34))
+    }
+
+    private var openingGuidance: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Describe the skill")
                     .font(.headline)
-                Text("Tell Codex what the skill should accomplish, when it should be used, and any constraints it must follow.")
+                Text("Say what it should accomplish, when \(client.rawValue) should reach for it, and any constraints it must follow. \(client.rawValue) may ask a few questions before it writes anything, and you can ask for changes after each draft.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                TextEditor(text: $instruction)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(AgentTheme.controlBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(AgentTheme.separator.opacity(0.55), lineWidth: 0.5)
-                    }
-                    .accessibilityLabel("Skill instructions")
-
-                HStack {
-                    Text("Codex creates one portable package in an isolated draft folder.")
-                    Spacer()
-                    Text("\(instruction.count.formatted()) / \(SkillDraftRequest.maximumInstructionCharacters.formatted())")
-                        .monospacedDigit()
-                }
-                .font(.caption)
-                .foregroundStyle(instructionTooLong ? Color.red : Color.secondary)
+                optionsSummary
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+    }
 
-            Divider()
-
+    private var transcript: some View {
+        ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    configurationField(
-                        title: "Suggested name",
-                        detail: "Optional. Codex can choose a name if this is blank."
-                    ) {
-                        TextField("release-readiness", text: $proposedName)
-                            .textFieldStyle(.roundedBorder)
-                            .accessibilityLabel("Suggested skill name")
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    ForEach(session.messages) { message in
+                        messageRow(message)
+                            .id(message.id)
                     }
-
-                    configurationField(
-                        title: "Install scope",
-                        detail: "This controls the destination, not where Codex runs."
-                    ) {
-                        WorkspaceSegmentedPicker("Install scope", selection: $scope) {
-                            Text(ToolingScope.user.displayName).tag(ToolingScope.user)
-                            Text(ToolingScope.project.displayName).tag(ToolingScope.project)
+                    if session.isThinking {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("\(client.rawValue) is working…")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
                         }
-                        .labelsHidden()
+                        .padding(.horizontal, 4)
+                        .id("thinking")
                     }
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .onChange(of: session.messages.count) { _, _ in
+                withAnimation { proxy.scrollTo(session.messages.last?.id, anchor: .bottom) }
+            }
+            .onChange(of: session.isThinking) { _, thinking in
+                guard thinking else { return }
+                withAnimation { proxy.scrollTo("thinking", anchor: .bottom) }
+            }
+        }
+    }
 
-                    if scope == .project {
-                        configurationField(title: "Project folder", detail: "The selected folder must already exist.") {
-                            HStack(spacing: 8) {
-                                TextField("Choose a folder", text: $projectRoot)
-                                    .textFieldStyle(.roundedBorder)
-                                    .accessibilityLabel("Project folder")
-                                Button("Choose…", action: chooseProjectFolder)
-                            }
-                        }
-                    }
+    @ViewBuilder
+    private func messageRow(_ message: SkillDraftMessage) -> some View {
+        switch message.role {
+        case .person:
+            HStack {
+                Spacer(minLength: 40)
+                Text(message.text)
+                    .font(.callout)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(AgentTheme.selection.opacity(0.18), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .accessibilityLabel("You said: \(message.text)")
+        case .assistant:
+            HStack(alignment: .top, spacing: 10) {
+                ClientBrandIcon(client: client, size: 18)
+                    .frame(width: 22, height: 22)
+                    .accessibilityHidden(true)
+                Text(message.text)
+                    .font(.callout)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 20)
+            }
+            .accessibilityLabel("\(client.rawValue) said: \(message.text)")
+        case .note:
+            Label(message.text, systemImage: "info.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 
-                    configurationField(
-                        title: "Use after review",
-                        detail: "Codex creates the draft. These are the apps offered when you choose where the saved skill is used."
-                    ) {
-                        if enabledClients.isEmpty {
-                            Label(
-                                "This Mac is not managing any apps yet, so there is nowhere to offer the saved skill.",
-                                systemImage: "exclamationmark.triangle"
-                            )
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if session.hasConversation {
+                HStack {
+                    Text(session.result == nil ? "Answer or add detail" : "Ask for changes")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if !session.messages.isEmpty {
+                        Button("Start over") { startOver() }
+                            .buttonStyle(.borderless)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        } else {
-                            VStack(spacing: 0) {
-                                ForEach(Array(enabledClients.enumerated()), id: \.element) { index, client in
-                                    Toggle(isOn: targetBinding(client)) {
-                                        HStack(spacing: 9) {
-                                            ClientBrandIcon(client: client, size: 20)
-                                                .frame(width: 24, height: 24)
-                                            Text(client.rawValue)
-                                                .font(.callout.weight(.medium))
-                                        }
-                                    }
-                                    .padding(.vertical, 9)
-                                    if index < enabledClients.count - 1 {
-                                        Divider()
-                                    }
+                            .disabled(turnTask != nil || session.isBusy)
+                    }
+                }
+            } else {
+                HStack {
+                    Text("Your first message")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        showsOptions.toggle()
+                    } label: {
+                        Label(showsOptions ? "Hide options" : "Options", systemImage: "slider.horizontal.3")
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .disabled(session.isBusy)
+                }
+                if showsOptions { optionsForm }
+            }
+
+            TextEditor(text: $composerText)
+                .font(.body)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .frame(minHeight: 72, maxHeight: 140)
+                .background(AgentTheme.contentBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(AgentTheme.separator.opacity(0.55), lineWidth: 0.5)
+                }
+                .focused($composerFocused)
+                .disabled(session.isBusy)
+                .accessibilityLabel(session.hasConversation ? "Your reply" : "Skill description")
+
+            HStack {
+                if let validationMessage {
+                    Label(validationMessage, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(composerText.isEmpty ? Color.secondary : Color.red)
+                        .lineLimit(2)
+                } else {
+                    Text("\(composerText.count.formatted()) / \(SkillDraftRequest.maximumInstructionCharacters.formatted())")
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    sendComposer()
+                } label: {
+                    Label("Send", systemImage: "arrow.up.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(turnTask != nil || session.isBusy || !canSend)
+                .help("Send (⌘↩)")
+            }
+        }
+        .padding(16)
+    }
+
+    /// What the draft will be told about itself, shown as one line until the
+    /// person wants to change it.
+    private var optionsSummary: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Draft options")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(optionsSummaryText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AgentTheme.contentBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var optionsSummaryText: String {
+        let name = proposedName.isEmpty ? "\(client.rawValue) chooses the name" : "named \(proposedName)"
+        let offered = targets.isEmpty
+            ? "offered to no app yet"
+            : "offered to \(targets.sorted { $0.rawValue < $1.rawValue }.map(\.rawValue).joined(separator: ", "))"
+        let where_ = scope == .project ? "for a project" : "for you"
+        return "\(name), \(where_), \(offered) after review. Change these under Options before the first message."
+    }
+
+    private var optionsForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            configurationField(title: "Suggested name", detail: "Optional. Leave blank to let \(client.rawValue) choose.") {
+                TextField("release-readiness", text: $proposedName)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Suggested skill name")
+            }
+            configurationField(title: "Install scope", detail: "The destination, not where \(client.rawValue) runs.") {
+                WorkspaceSegmentedPicker("Install scope", selection: $scope) {
+                    Text(ToolingScope.user.displayName).tag(ToolingScope.user)
+                    Text(ToolingScope.project.displayName).tag(ToolingScope.project)
+                }
+                .labelsHidden()
+            }
+            if scope == .project {
+                configurationField(title: "Project folder", detail: "The selected folder must already exist.") {
+                    HStack(spacing: 8) {
+                        TextField("Choose a folder", text: $projectRoot)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("Project folder")
+                        Button("Choose…", action: chooseProjectFolder)
+                    }
+                }
+            }
+            configurationField(
+                title: "Use after review",
+                detail: "The apps offered when you choose where the saved skill is used."
+            ) {
+                if enabledClients.isEmpty {
+                    Label(
+                        "This Mac is not managing any apps yet, so there is nowhere to offer the saved skill.",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    HStack(spacing: 14) {
+                        ForEach(enabledClients, id: \.self) { target in
+                            Toggle(isOn: targetBinding(target)) {
+                                HStack(spacing: 6) {
+                                    ClientBrandIcon(client: target, size: 16)
+                                        .frame(width: 18, height: 18)
+                                    Text(target.rawValue)
+                                        .font(.caption)
                                 }
                             }
+                            .toggleStyle(.checkbox)
                         }
                     }
-
-                    if let validationMessage {
-                        Label(validationMessage, systemImage: "exclamationmark.triangle")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
                 }
-                .padding(24)
             }
-            .frame(width: 350)
-            .background(AgentTheme.controlBackground.opacity(0.34))
+        }
+        .padding(12)
+        .background(AgentTheme.contentBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    // MARK: - Draft
+
+    @ViewBuilder
+    private var draftPane: some View {
+        if let result = session.result {
+            review(result)
+        } else {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Draft")
+                        .font(.headline)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .frame(height: 54)
+                Divider()
+                if let draftIssue = session.draftIssue {
+                    EmptyStateView(
+                        symbol: "doc.badge.ellipsis",
+                        title: "The draft is not ready to review",
+                        message: "\(draftIssue) Ask \(client.rawValue) to fix it, or start over.")
+                } else if session.hasConversation {
+                    EmptyStateView(
+                        symbol: "doc.text",
+                        title: "Nothing written yet",
+                        message: "\(client.rawValue) has not written the package yet. Answer its questions and the files will appear here.")
+                } else {
+                    EmptyStateView(
+                        symbol: "doc.text",
+                        title: "The draft appears here",
+                        message: "Every file \(client.rawValue) writes into the draft folder is listed here after each turn, so you can read exactly what would be saved.")
+                }
+            }
         }
     }
 
     private func review(_ result: SkillDraftResult) -> some View {
         HSplitView {
             VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(result.skillName)
                         .font(.title3.weight(.semibold))
                     Text(result.description)
@@ -255,7 +540,8 @@ struct SkillCreatorSheet: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(20)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
 
                 Divider()
 
@@ -274,6 +560,7 @@ struct SkillCreatorSheet: View {
                                         Text(file.relativePath)
                                             .font(.callout.weight(.medium))
                                             .lineLimit(1)
+                                            .truncationMode(.middle)
                                         Text(ByteCountFormatter.string(fromByteCount: Int64(file.byteCount), countStyle: .file))
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -291,8 +578,8 @@ struct SkillCreatorSheet: View {
                                             .accessibilityLabel("Reviewed")
                                     }
                                 }
-                                .padding(.horizontal, 18)
-                                .frame(minHeight: 52)
+                                .padding(.horizontal, 16)
+                                .frame(minHeight: 50)
                                 .contentShape(Rectangle())
                                 .background(
                                     selectedReviewPath == file.relativePath
@@ -306,7 +593,7 @@ struct SkillCreatorSheet: View {
                     }
                 }
             }
-            .frame(minWidth: 280, idealWidth: 320, maxWidth: 370, maxHeight: .infinity)
+            .frame(minWidth: 200, idealWidth: 230, maxWidth: 300, maxHeight: .infinity)
             .background(AgentTheme.controlBackground.opacity(0.34))
 
             VStack(alignment: .leading, spacing: 0) {
@@ -314,6 +601,7 @@ struct SkillCreatorSheet: View {
                     Text(selectedReviewFile(in: result)?.relativePath ?? "Select a file")
                         .font(.headline)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                     Spacer()
                     Button {
                         guard let file = selectedReviewFile(in: result) else { return }
@@ -360,9 +648,11 @@ struct SkillCreatorSheet: View {
                     )
                 }
             }
-            .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+
+    // MARK: - Footer
 
     @ViewBuilder
     private var footer: some View {
@@ -372,17 +662,17 @@ struct SkillCreatorSheet: View {
                     .font(.caption)
                     .foregroundStyle(.red)
                     .lineLimit(2)
-                    .frame(maxWidth: 470, alignment: .leading)
-            } else if session.isGenerating {
+                    .frame(maxWidth: 520, alignment: .leading)
+            } else if session.isThinking {
                 ProgressView()
                     .controlSize(.small)
-                Text("Codex is building the draft…")
+                Text("\(client.rawValue) is working on the draft…")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else if pendingAutoGeneration {
+            } else if pendingAutoStart {
                 ProgressView()
                     .controlSize(.small)
-                Text("Finishing the current library read before opening Codex…")
+                Text("Finishing the current library read before opening \(client.rawValue)…")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if session.isSaving {
@@ -395,40 +685,32 @@ struct SkillCreatorSheet: View {
                 Label(reviewProgress(for: result), systemImage: "eye")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            } else {
+                Text("Nothing is saved until you press Save.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            Button(session.isGenerating ? "Cancel" : "Close") {
+            Button(session.isThinking ? "Stop" : "Close") {
                 close()
             }
             .keyboardShortcut(.cancelAction)
-            .disabled(session.isSaving)
+            .disabled(session.isSaving || session.isInstalling)
 
             if let result = session.result {
-                Button("Start over") {
-                    startOver()
-                }
-                .disabled(generationTask != nil || session.isBusy)
-
                 Button("Save skill and choose where it is used") {
                     save(result)
                 }
                 .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
                 .disabled(
-                    generationTask != nil
+                    turnTask != nil
                         || session.isBusy
                         || !session.canWrite
                         || !allFilesReviewed(in: result)
                 )
-            } else {
-                Button("Generate draft") {
-                    generate()
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-                .disabled(generationTask != nil || !canGenerate || session.isBusy)
+                .help(allFilesReviewed(in: result) ? "Admits the reviewed package to your library" : reviewProgress(for: result))
             }
         }
         .padding(.horizontal, 22)
@@ -440,9 +722,9 @@ struct SkillCreatorSheet: View {
         detail: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(title)
-                .font(.callout.weight(.semibold))
+                .font(.caption.weight(.semibold))
             Text(detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -451,41 +733,41 @@ struct SkillCreatorSheet: View {
         }
     }
 
+    // MARK: - Rules
+
     /// The apps this Mac manages. Every other client is one this Mac was told
     /// not to touch, so it is not offered as a destination.
     private var enabledClients: [ClientKind] {
         workspace.device.managedClients
     }
 
-    private var canGenerate: Bool {
-        validationMessage == nil
+    private var canSend: Bool {
+        validationMessage == nil && !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var instructionTooLong: Bool {
-        instruction.count > SkillDraftRequest.maximumInstructionCharacters
-            || instruction.lengthOfBytes(using: .utf8) > SkillDraftRequest.maximumInstructionBytes
+    private var composerTooLong: Bool {
+        composerText.count > SkillDraftRequest.maximumInstructionCharacters
+            || composerText.lengthOfBytes(using: .utf8) > SkillDraftRequest.maximumInstructionBytes
     }
 
     private var validationMessage: String? {
-        if !workspace.device.isEnabled(.codex) {
-            return "This Mac is not managing Codex, so it cannot be asked to write a skill. Turn Codex on in Choose apps first."
+        if !workspace.device.isEnabled(client) {
+            return "This Mac is not managing \(client.rawValue), so it cannot be asked to write a skill. Turn it on in Choose apps first."
         }
-        if instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Describe what the skill should do."
+        if composerTooLong {
+            return "Shorten the message before sending it."
         }
-        if instructionTooLong {
-            return "Shorten the instructions before generating the draft."
-        }
+        if session.hasConversation { return nil }
         if !proposedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             (try? WorkspaceLibrary.normalizedIdentifier(proposedName)) == nil
         {
             return "The suggested name must use lowercase letters, numbers, and single hyphens."
         }
         if scope == .project, !projectFolderIsValid {
-            return "Choose an existing project folder."
+            return "Choose an existing project folder under Options."
         }
         if targets.isEmpty {
-            return "Choose at least one app to offer this skill to."
+            return "Choose at least one app under Options to offer this skill to."
         }
         return nil
     }
@@ -500,14 +782,14 @@ struct SkillCreatorSheet: View {
             && isDirectory.boolValue
     }
 
-    private func targetBinding(_ client: ClientKind) -> Binding<Bool> {
+    private func targetBinding(_ target: ClientKind) -> Binding<Bool> {
         Binding(
-            get: { targets.contains(client) },
+            get: { targets.contains(target) },
             set: { enabled in
                 if enabled {
-                    targets.insert(client)
+                    targets.insert(target)
                 } else {
-                    targets.remove(client)
+                    targets.remove(target)
                 }
             }
         )
@@ -516,7 +798,8 @@ struct SkillCreatorSheet: View {
     private func makeRequest() -> SkillDraftRequest {
         SkillDraftRequest(
             id: requestID,
-            instruction: instruction,
+            client: client,
+            instruction: composerText,
             proposedName: proposedName.isEmpty ? nil : proposedName,
             scope: scope,
             projectRoot: scope == .project ? projectRoot : nil,
@@ -524,12 +807,29 @@ struct SkillCreatorSheet: View {
         )
     }
 
-    private func generate() {
-        guard canGenerate, generationTask == nil else { return }
-        let request = makeRequest()
-        generationTask = Task { @MainActor in
-            await session.generate(request)
-            generationTask = nil
+    // MARK: - Actions
+
+    /// Sends what is in the composer: the opening message when no conversation
+    /// exists yet, a reply otherwise.
+    private func sendComposer() {
+        guard canSend, turnTask == nil else { return }
+        let text = composerText
+        composerText = ""
+        showsOptions = false
+        if session.hasConversation {
+            turnTask = Task { @MainActor in
+                await session.send(text, client: client)
+                turnTask = nil
+                composerFocused = true
+            }
+        } else {
+            var request = makeRequest()
+            request.instruction = text
+            turnTask = Task { @MainActor in
+                await session.start(request)
+                turnTask = nil
+                composerFocused = true
+            }
         }
     }
 
@@ -545,9 +845,9 @@ struct SkillCreatorSheet: View {
     }
 
     private func save(_ result: SkillDraftResult) {
-        guard generationTask == nil, !session.isBusy else { return }
-        generationTask = Task { @MainActor in
-            defer { generationTask = nil }
+        guard turnTask == nil, !session.isBusy else { return }
+        turnTask = Task { @MainActor in
+            defer { turnTask = nil }
             guard let artifactID = await session.adopt(resolving: pendingRequestID) else { return }
             disposed = true
             onCreated(artifactID, Set(result.request.targets))
@@ -556,18 +856,18 @@ struct SkillCreatorSheet: View {
     }
 
     private func startOver() {
-        guard generationTask == nil else { return }
-        generationTask = Task { @MainActor in
+        guard turnTask == nil else { return }
+        turnTask = Task { @MainActor in
             selectedReviewPath = ""
             reviewedPaths = []
             await session.startOver()
             requestID = pendingRequestID ?? UUID()
-            generationTask = nil
+            turnTask = nil
         }
     }
 
     private func close() {
-        let runningTask = generationTask
+        let runningTask = turnTask
         runningTask?.cancel()
         guard !disposed else {
             dismiss()
@@ -588,15 +888,21 @@ struct SkillCreatorSheet: View {
         loadedPendingRequest = true
         guard let request = await session.loadRequest(id: pendingRequestID) else { return }
         requestID = request.id
-        instruction = request.instruction
+        client = request.client
+        composerText = request.instruction
         proposedName = request.proposedName ?? ""
         scope = request.scope == .localProject ? .project : request.scope
         projectRoot = request.projectRoot ?? ""
         targets = Set(request.targets).intersection(Set(enabledClients))
+        // The request was written by something that could not check whether
+        // the creator is installed. Look first; the offer to install shows
+        // instead of a failed first turn.
+        await session.checkAvailability(for: client)
+        guard session.availability?.isAvailable == true else { return }
         if workspace.library.isBusy {
-            pendingAutoGeneration = true
+            pendingAutoStart = true
         } else {
-            generate()
+            sendComposer()
         }
     }
 

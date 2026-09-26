@@ -22,6 +22,17 @@ struct ExternalAppRouteTests {
         )
     }
 
+    @Test("Parses a route into the skill creator for a queued request")
+    func parsesCreateSkill() throws {
+        let id = UUID()
+        #expect(
+            ExternalAppRoute(url: try #require(URL(string: "agent-tooling://skills/create/\(id.uuidString.lowercased())")))
+                == .createSkill(id)
+        )
+        #expect(ExternalAppRoute(url: try #require(URL(string: "agent-tooling://skills/create/not-a-uuid"))) == nil)
+        #expect(ExternalAppRoute(url: try #require(URL(string: "agent-tooling://skills/create/\(id.uuidString)/save"))) == nil)
+    }
+
     @Test("Parses normalized skill identifiers")
     func parsesSkill() throws {
         #expect(

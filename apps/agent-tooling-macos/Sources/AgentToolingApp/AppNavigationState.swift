@@ -54,6 +54,9 @@ final class AppNavigationState {
             if !pendingRequestQueue.contains(id) {
                 pendingRequestQueue.append(id)
             }
+        case .createSkill(let id):
+            openSkillCreationRequest(id)
+            return
         }
         revision += 1
     }

@@ -538,7 +538,7 @@ struct InsightsView: View {
     private func open(_ recommendation: ToolRecommendation) {
         switch recommendation.kind {
         case .createCustomSkill:
-            draftWithCodex(recommendation)
+            draftWithAssistant(recommendation)
         case .useExistingSkill:
             if let skillID = recommendation.skillID {
                 navigation.open(.skill(skillID))
@@ -552,20 +552,24 @@ struct InsightsView: View {
         }
     }
 
-    /// Writes down what this recommendation would ask Codex for and opens the
-    /// creator on it. Nothing is generated here and nothing is saved: the
-    /// creator shows every generated file before anything reaches the library.
-    private func draftWithCodex(_ recommendation: ToolRecommendation) {
+    /// Writes down what this recommendation would ask an assistant for and
+    /// opens the creator on it. Nothing is generated here and nothing is
+    /// saved: the creator shows every generated file before anything reaches
+    /// the library. The assistant is the first managed one that has a skill
+    /// creator; the creator lets the person switch before the first turn.
+    private func draftWithAssistant(_ recommendation: ToolRecommendation) {
         let instruction = recommendation.draftInstruction ?? recommendation.summary
         guard !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         routeError = nil
+        let client = [ClientKind.claude, .codex].first(where: enabledClients.contains) ?? .codex
         let request = SkillDraftRequest(
+            client: client,
             instruction: instruction,
-            targets: enabledClients.isEmpty ? [.codex] : enabledClients)
+            targets: enabledClients.isEmpty ? [client] : enabledClients)
         let store = workspace.store
         Task {
             guard await WorkspaceSkillDraftSeed.save(request, in: store) else {
-                routeError = "This Mac could not record what to ask Codex for. Nothing was changed."
+                routeError = "This Mac could not record what to ask \(client.rawValue) for. Nothing was changed."
                 return
             }
             navigation.openSkillCreationRequest(request.id)

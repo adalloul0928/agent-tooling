@@ -371,7 +371,7 @@ extension SkillsBrowser {
         guard !inventory.skills.isEmpty else {
             // The button says "New skill…", so it creates one — checking this
             // Mac's apps stays one click away in the toolbar.
-            creating = true
+            choosingCreation = true
             return
         }
         scope = .all
@@ -390,9 +390,9 @@ extension SkillsBrowser {
     }
 
     func applyExternalNavigation() {
-        if codexCreator == nil, let requestID = navigation.requestedSkillCreationID {
+        if skillCreator == nil, let requestID = navigation.requestedSkillCreationID {
             navigation.consumeSkillCreationRequest(requestID)
-            openCodexCreator(requestID: requestID)
+            openSkillCreator(requestID: requestID)
         }
         let requested = navigation.requestedSkillID ?? navigation.requestedItemID
         guard let requested,
@@ -405,17 +405,18 @@ extension SkillsBrowser {
         navigation.consumeRequestedItem(requested)
     }
 
-    /// Opens the creator, for a request somebody queued or for a blank one.
-    func openCodexCreator(requestID: UUID? = nil) {
-        createdByCodex = nil
-        codexCreator = .init(requestID: requestID)
+    /// Opens the creator: with a chosen assistant for a blank skill, or for a
+    /// request somebody queued, whose payload names the assistant itself.
+    func openSkillCreator(client: ClientKind? = nil, requestID: UUID? = nil) {
+        createdBySkillCreator = nil
+        skillCreator = .init(client: client, requestID: requestID)
     }
 
     /// The creator has closed. A skill it admitted is revealed and offered a
     /// destination; nothing is assigned until that second sheet is saved.
-    func finishCodexCreation() {
-        guard let created = createdByCodex else { return }
-        createdByCodex = nil
+    func finishSkillCreation() {
+        guard let created = createdBySkillCreator else { return }
+        createdBySkillCreator = nil
         selectedID = created.artifactID
         workspace.library.discardReview()
         assignment = .init(artifactIDs: [created.artifactID], initialClients: created.clients)
@@ -424,13 +425,16 @@ extension SkillsBrowser {
     /// A skill the creator admitted, and the apps it was ticked for in "Use
     /// after review" — held until the creator's own sheet has closed, so the
     /// hand-off can offer the same apps again instead of a blank sheet.
-    struct CodexAdoption {
+    struct SkillCreatorAdoption {
         let artifactID: ArtifactID
         let clients: Set<ClientKind>
     }
 
-    struct CodexCreatorPresentation: Identifiable {
+    struct SkillCreatorPresentation: Identifiable {
         let id = UUID()
+        /// The assistant chosen for a blank skill. Nil when a queued request
+        /// is opened: its payload says which assistant was asked.
+        let client: ClientKind?
         /// The queued request this creator was opened for, when there was one.
         let requestID: UUID?
     }

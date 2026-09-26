@@ -323,6 +323,10 @@ enum ToolCatalog {
                         "Suggested skill identifier, lower case with hyphens.",
                         maximumLength: 96
                     ),
+                    "assistant": ToolSchema.enumeration(
+                        "Which signed-in local app drafts the skill with the person. Codex when omitted.",
+                        values: ["claude-code", "codex"]
+                    ),
                     "scope": ToolSchema.scope,
                     "projectRoot": ToolSchema.projectRoot,
                     "targets": ToolSchema.targets,

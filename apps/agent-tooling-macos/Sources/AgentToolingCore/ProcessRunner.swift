@@ -154,16 +154,20 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
             homeURL: homeURL
         )
         process.environment = environment
-        if let resolvedExecutable = canonicalExecutableURL(
+        if let launchExecutable = launchExecutableURL(
             for: executable,
             environment: environment,
             currentDirectory: currentDirectory
         ) {
-            // Foundation's Process launch path does not consistently follow a
-            // PATH-installed symlink when the app itself was launched outside
-            // a login shell. Resolve it first so app-bundled CLI targets (such
-            // as ~/.local/bin/codex -> ChatGPT.app/.../codex) launch directly.
-            process.executableURL = resolvedExecutable
+            // Foundation's Process launch path does not consistently find a
+            // PATH-installed tool when the app itself was launched outside a
+            // login shell, so the tool is found here and launched by absolute
+            // path. The path is the installed one, not the file it links to:
+            // a shim such as Amazon Toolbox's dispatches on the name it was
+            // invoked by, and a launch through the resolved target would lose
+            // that name. What the link leads to has already been checked to
+            // be a runnable file.
+            process.executableURL = launchExecutable
             process.arguments = arguments
         } else {
             // Preserve the existing command-not-found behavior for probes of
@@ -229,6 +233,21 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         currentDirectory: URL?,
         fileManager: FileManager = .default
     ) -> URL? {
+        launchExecutableURL(for: executable, environment: environment, currentDirectory: currentDirectory, fileManager: fileManager)
+            .map { $0.resolvingSymlinksInPath().standardizedFileURL }
+    }
+
+    /// The installed path to launch: the first candidate — the absolute path
+    /// given, or the tool by name on the launch `PATH` — whose target, after
+    /// following every link, is a runnable regular file. The candidate itself
+    /// is returned, links unresolved, because a shim dispatches on the name it
+    /// is launched by.
+    static func launchExecutableURL(
+        for executable: String,
+        environment: [String: String],
+        currentDirectory: URL?,
+        fileManager: FileManager = .default
+    ) -> URL? {
         guard !executable.isEmpty, !executable.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
         else { return nil }
 
@@ -245,12 +264,13 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         }
 
         for candidate in candidates {
-            let canonical = candidate.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
+            let installed = candidate.standardizedFileURL
+            let canonical = installed.resolvingSymlinksInPath().standardizedFileURL
             guard let values = try? canonical.resourceValues(forKeys: [.isRegularFileKey]),
                 values.isRegularFile == true,
                 fileManager.isExecutableFile(atPath: canonical.path(percentEncoded: false))
             else { continue }
-            return canonical
+            return installed
         }
         return nil
     }

@@ -33,16 +33,19 @@ public enum ClientExecutableLocator {
     /// the folders somebody recorded for this Mac first, then the fixed roots.
     /// `~/.toolbox/bin` is Amazon Toolbox's shim directory: internal builds of
     /// these clients install there as symlinks to a dispatcher, which the
-    /// runnability check follows like any other link.
+    /// runnability check follows like any other link. It is checked before the
+    /// per-user install folders because a Mac that has it usually also has an
+    /// older native install beside it, and the managed shim is the one the
+    /// person's shell runs and the one that carries their sign-in.
     public static func candidates(for client: ClientKind, homeURL: URL) -> [URL] {
         let name = executableName(for: client)
         let fixed = [
             URL(fileURLWithPath: "/opt/homebrew/bin"),
             URL(fileURLWithPath: "/usr/local/bin"),
+            homeURL.appending(path: ".toolbox/bin"),
             homeURL.appending(path: ".local/bin"),
             homeURL.appending(path: ".bun/bin"),
             homeURL.appending(path: ".npm-global/bin"),
-            homeURL.appending(path: ".toolbox/bin"),
         ]
         var roots = recordedRoots.withLock { $0 }
         roots.append(contentsOf: fixed.filter { root in !roots.contains(root) })

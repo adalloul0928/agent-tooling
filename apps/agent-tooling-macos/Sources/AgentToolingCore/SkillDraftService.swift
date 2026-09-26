@@ -176,6 +176,20 @@ public actor SkillDraftService {
         return try loadConversation(at: requestURL)
     }
 
+    /// The draft as it stands in an open conversation's folder: nil when
+    /// nothing has been written there yet, a result when a complete package
+    /// is present, and an error when a package is there but cannot be shown.
+    /// Nothing runs; this only reads what a previous turn left.
+    public func currentDraft(for requestID: UUID) throws -> SkillDraftResult? {
+        let requestURL = requestDirectory(for: requestID)
+        guard fileManager.fileExists(atPath: requestURL.path(percentEncoded: false)),
+            let conversation = try loadConversation(at: requestURL)
+        else { return nil }
+        let packageURL = requestURL.appending(path: "draft", directoryHint: .isDirectory)
+        guard fileManager.fileExists(atPath: packageURL.path(percentEncoded: false)) else { return nil }
+        return try inspectDraft(at: packageURL, request: conversation.request)
+    }
+
     /// Opens a conversation: stages the request folder, sends the kickoff
     /// prompt with the person's opening message, and returns the first reply
     /// together with whatever draft the client wrote.
@@ -262,13 +276,22 @@ public actor SkillDraftService {
     }
 
     /// Runs one turn: the policy admits the shape, the prompt goes on standard
-    /// input, and a non-zero exit becomes a typed failure carrying a redacted,
+    /// input, and a failed turn becomes a typed failure carrying a redacted,
     /// bounded diagnostic.
+    ///
+    /// The tool is the one `ClientExecutableLocator` finds for this client —
+    /// the same file every other command this app runs for it uses — so an
+    /// app launched outside a login shell reaches the person's real install
+    /// rather than whatever a bare name would resolve to. The policy accepts
+    /// exactly that path, or the bare name when nothing is found.
     private func runTurn(
         adapter: any SkillCreatorClientAdapter, arguments: [String], prompt: String, requestURL: URL
     ) async throws -> SkillCreatorParsedTurn {
+        let executable =
+            ClientExecutableLocator.locate(adapter.client, homeURL: homeURL)?.path(percentEncoded: false)
+            ?? adapter.executable
         do {
-            try policy.validate(executable: adapter.executable, arguments: arguments)
+            try policy.validate(executable: executable, arguments: arguments)
         } catch {
             throw SkillDraftError.commandRefused(adapter.client)
         }
@@ -276,7 +299,7 @@ public actor SkillDraftService {
             promptData.count <= SkillDraftRequest.maximumInstructionBytes + 32 * 1_024
         else { throw SkillDraftError.instructionTooLarge }
         let output = try await runner.run(
-            executable: adapter.executable, arguments: arguments, standardInput: promptData, currentDirectory: requestURL)
+            executable: executable, arguments: arguments, standardInput: promptData, currentDirectory: requestURL)
         let parsed: SkillCreatorParsedTurn
         do {
             parsed = try adapter.parse(output)
@@ -284,8 +307,11 @@ public actor SkillDraftService {
             let rawDiagnostic = output.standardError.isEmpty ? output.standardOutput : output.standardError
             throw SkillDraftError.clientFailed(adapter.client, output.status, boundedDiagnostic(rawDiagnostic))
         }
-        if parsed.failed, parsed.reply.isEmpty {
-            let rawDiagnostic = [parsed.notes.joined(separator: " "), output.standardError, output.standardOutput]
+        if parsed.failed {
+            // A turn the client itself marks failed did not do the work, even
+            // when it comes with a sentence: that sentence is the diagnostic
+            // ("Failed to authenticate…"), not a reply to carry on from.
+            let rawDiagnostic = [parsed.reply, parsed.notes.joined(separator: " "), output.standardError, output.standardOutput]
                 .first { !$0.isEmpty } ?? ""
             throw SkillDraftError.clientFailed(adapter.client, output.status, boundedDiagnostic(rawDiagnostic))
         }
@@ -490,7 +516,7 @@ public actor SkillDraftService {
     private func validateSkillCreator(for client: ClientKind) throws {
         switch skillCreatorAvailability(for: client) {
         case .available: return
-        case .missing(let reason, _, _): throw SkillDraftError.skillCreatorUnavailable(reason)
+        case .missing(let reason, _): throw SkillDraftError.skillCreatorUnavailable(reason)
         case .unsupportedClient: throw SkillDraftError.unsupportedClient(client)
         }
     }

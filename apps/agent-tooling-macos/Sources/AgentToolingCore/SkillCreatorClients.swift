@@ -66,13 +66,32 @@ public struct SkillDraftConversation: Codable, Hashable, Sendable {
     }
 }
 
+/// One command that installs part of a client's skill creator: the client's
+/// own tool, run with a fixed argument list the operation policy admits.
+public struct SkillCreatorInstallCommand: Hashable, Sendable {
+    public var title: String
+    public var executable: String
+    public var arguments: [String]
+
+    public init(title: String, executable: String, arguments: [String]) {
+        self.title = title
+        self.executable = executable
+        self.arguments = arguments
+    }
+}
+
 /// Whether a client can run its skill creator right now.
 public enum SkillCreatorAvailability: Hashable, Sendable {
     case available
-    /// Not installed. `installArguments` is the exact command that installs it,
-    /// when this app knows one; nil when only the person can fix it.
-    case missing(reason: String, executable: String?, installArguments: [String]?)
+    /// Not installed. `install` is the exact sequence that installs it, when
+    /// this app knows one; empty when only the person can fix it.
+    case missing(reason: String, install: [SkillCreatorInstallCommand])
     case unsupportedClient
+
+    public var isAvailable: Bool {
+        if case .available = self { return true }
+        return false
+    }
 }
 
 // MARK: - Command shapes
@@ -102,10 +121,17 @@ public enum SkillCreatorCommandShapes {
 
     /// Codex, starting a thread in the staged request folder. The thread is
     /// kept (no `--ephemeral`) so later turns can resume it.
+    ///
+    /// The person's own Codex configuration is kept too: it holds the model
+    /// provider and the sign-in this Mac actually uses, and without it Codex
+    /// reaches for an account that may not exist here. What is left out is
+    /// everything that would act on this Mac beyond the folder: project
+    /// rules, plugins, hooks, and apps. The sandbox confines writes to the
+    /// working directory, which is the request folder.
     public static func codexStart(requestDirectory: URL) -> [String] {
         [
             "exec", "--json",
-            "--ignore-user-config", "--ignore-rules",
+            "--ignore-rules",
             "--disable", "plugins", "--disable", "hooks", "--disable", "apps", "--disable", "remote_plugin",
             "--enable", "code_mode_host",
             "--sandbox", "workspace-write",
@@ -121,7 +147,7 @@ public enum SkillCreatorCommandShapes {
     public static func codexResume(threadID: String) -> [String] {
         [
             "exec", "resume", threadID, "--json",
-            "--ignore-user-config", "--ignore-rules",
+            "--ignore-rules",
             "--disable", "plugins", "--disable", "hooks", "--disable", "apps", "--disable", "remote_plugin",
             "--enable", "code_mode_host",
             "-c", "sandbox_mode=workspace-write",
@@ -134,6 +160,7 @@ public enum SkillCreatorCommandShapes {
     /// commands that add it. Installing needs the marketplace to be known to
     /// Claude Code first; both shapes are admitted by the policy.
     public static let claudeSkillCreatorPluginID = "skill-creator@claude-plugins-official"
+    public static let claudeOfficialMarketplaceName = "claude-plugins-official"
     public static let claudeOfficialMarketplaceAddArguments = ["plugin", "marketplace", "add", "anthropics/claude-plugins-official"]
     public static var claudeSkillCreatorInstallArguments: [String] {
         ["plugin", "install", claudeSkillCreatorPluginID, "--scope", "user"]
@@ -336,29 +363,58 @@ enum SkillCreatorClientAdapters {
 /// Where each client keeps the skill creator, so the app can say whether a
 /// conversation can start before it tries.
 public enum SkillCreatorLocator {
-    /// Claude Code records installed plugins in its config directory. Reading
-    /// that file is instant and needs no process; the CLI would say the same.
+    /// Claude Code records installed plugins and known marketplaces in its
+    /// config directory. Reading those files is instant and needs no process;
+    /// the CLI would say the same.
+    ///
+    /// When the plugin is missing, the install sequence adds the official
+    /// marketplace first only if Claude Code does not know it yet: adding one
+    /// it already has would refresh it, which is a longer operation nobody
+    /// asked for.
     public static func claudeAvailability(
         homeURL: URL, environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> SkillCreatorAvailability {
-        let configDirectory: URL
+        let configDirectory = claudeConfigDirectory(homeURL: homeURL, environment: environment)
+        let pluginsDirectory = configDirectory.appending(path: "plugins", directoryHint: .isDirectory)
+        let installed = readJSONObject(at: pluginsDirectory.appending(path: "installed_plugins.json"))
+        if let plugins = installed?["plugins"] as? [String: Any],
+            plugins[SkillCreatorCommandShapes.claudeSkillCreatorPluginID] != nil
+        {
+            return .available
+        }
+        let marketplaces = readJSONObject(at: pluginsDirectory.appending(path: "known_marketplaces.json"))
+        let knowsMarketplace = marketplaces?[SkillCreatorCommandShapes.claudeOfficialMarketplaceName] != nil
+        var install: [SkillCreatorInstallCommand] = []
+        if !knowsMarketplace {
+            install.append(
+                SkillCreatorInstallCommand(
+                    title: "Add the official Claude plugin marketplace",
+                    executable: "claude",
+                    arguments: SkillCreatorCommandShapes.claudeOfficialMarketplaceAddArguments))
+        }
+        install.append(
+            SkillCreatorInstallCommand(
+                title: "Install \(SkillCreatorCommandShapes.claudeSkillCreatorPluginID)",
+                executable: "claude",
+                arguments: SkillCreatorCommandShapes.claudeSkillCreatorInstallArguments))
+        return .missing(
+            reason: "Claude Code does not have the skill-creator plugin installed.",
+            install: install)
+    }
+
+    static func claudeConfigDirectory(homeURL: URL, environment: [String: String]) -> URL {
         if let configured = environment["CLAUDE_CONFIG_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines),
             !configured.isEmpty
         {
-            configDirectory = URL(filePath: configured, directoryHint: .isDirectory)
-        } else {
-            configDirectory = homeURL.appending(path: ".claude", directoryHint: .isDirectory)
+            return URL(filePath: configured, directoryHint: .isDirectory)
         }
-        let file = configDirectory.appending(path: "plugins/installed_plugins.json", directoryHint: .notDirectory)
-        let missing = SkillCreatorAvailability.missing(
-            reason: "Claude Code does not have the skill-creator plugin installed.",
-            executable: "claude",
-            installArguments: SkillCreatorCommandShapes.claudeSkillCreatorInstallArguments)
-        guard let text = try? BoundedFileAccess.readUTF8(at: file, maximumBytes: 1_048_576, allowSymbolicLink: false),
-            let document = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
-            let plugins = document["plugins"] as? [String: Any]
-        else { return missing }
-        return plugins[SkillCreatorCommandShapes.claudeSkillCreatorPluginID] != nil ? .available : missing
+        return homeURL.appending(path: ".claude", directoryHint: .isDirectory)
+    }
+
+    private static func readJSONObject(at file: URL) -> [String: Any]? {
+        guard let text = try? BoundedFileAccess.readUTF8(at: file, maximumBytes: 1_048_576, allowSymbolicLink: false)
+        else { return nil }
+        return try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any]
     }
 
     /// Codex ships its skill creator as a system skill; there is nothing to
@@ -369,7 +425,7 @@ public enum SkillCreatorLocator {
         else {
             return .missing(
                 reason: "Codex's built-in skill creator was not found at \(skillCreatorURL.path(percentEncoded: false)). Update Codex to a version that includes it.",
-                executable: nil, installArguments: nil)
+                install: [])
         }
         return .available
     }
