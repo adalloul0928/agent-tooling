@@ -257,6 +257,7 @@ private enum MarketplaceLocation {
 
 /// Purpose first, with app compatibility and a dated fact when sorting by recency.
 struct MarketplaceGalleryCard: View {
+    @Environment(\.hoverSuppressed) private var hoverSuppressed
     let package: MarketplacePackage
     let selected: Bool
     let detail: String?
@@ -318,7 +319,7 @@ struct MarketplaceGalleryCard: View {
             .padding(compact ? 12 : 18).frame(maxWidth: .infinity, minHeight: compact ? 116 : 138, alignment: .topLeading)
             // A standing card, not floating text: material at rest, a lift on
             // hover, and the accent stroke only when this listing is open.
-            .background(Color.primary.opacity(hovering ? 0.06 : 0), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(Color.primary.opacity(hovering && !hoverSuppressed ? 0.06 : 0), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .background(AgentTheme.panelBrightening, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(

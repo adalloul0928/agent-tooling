@@ -46,12 +46,20 @@ struct SyncCenterView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: "Apps", context: statusLine) {
-                Button("Choose apps…") { showingClientSelection = true }
-                    .buttonStyle(.glass)
-                    .popover(isPresented: $showingClientSelection) {
-                        ManagedClientsPopover(device: workspace.device).frame(width: 380)
-                    }
+            // One app chosen: this is that app's page, and says so. No app
+            // chosen: every app, and the way to choose which ones are managed.
+            PageToolbar(title: client?.rawValue ?? "Apps", context: statusLine, usesSectionTitle: client == nil) {
+                if client != nil {
+                    Button("All apps", systemImage: "chevron.left", action: onShowAllClients)
+                        .buttonStyle(.glass)
+                        .help("Back to every app on this Mac")
+                } else {
+                    Button("Choose apps…") { showingClientSelection = true }
+                        .buttonStyle(.glass)
+                        .popover(isPresented: $showingClientSelection) {
+                            ManagedClientsPopover(device: workspace.device).frame(width: 380)
+                        }
+                }
                 Button {
                     Task { await workspace.device.refresh() }
                 } label: {
@@ -112,7 +120,11 @@ struct SyncCenterView: View {
                         .accessibilityLabel(added)
                     }
 
-                    appTiles
+                    if let client {
+                        clientHeader(client)
+                    } else {
+                        appTiles
+                    }
 
                     if let plan = workspace.deployment.plan {
                         let items = scoped(plan.items)
@@ -219,6 +231,95 @@ struct SyncCenterView: View {
                 }
             }
         }
+    }
+
+    // MARK: - One app's page
+
+    /// The top of one app's page: what this Mac knows about that app from its
+    /// last check. Every value here is read from the observation; nothing is
+    /// asked of the app to draw it.
+    private func clientHeader(_ app: ClientKind) -> some View {
+        let verdict = workspace.device.verdict(for: app)
+        let observations = workspace.device.observations.filter { $0.surface.client == app }
+        let held = held(for: app)
+        let paths = Array(Set(observations.flatMap(\.configurationPaths))).sorted()
+        let notes = Array(Set(observations.flatMap(\.notes))).sorted()
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 14) {
+                ClientDisc(client: app, size: 48)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(app.rawValue).font(.title3.weight(.semibold))
+                        if let version = version(for: app) {
+                            Text(version).font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        StatusGlyph(state: verdict.state, size: 13)
+                        Text(verdict.text).font(.callout)
+                        if let checked = observations.map(\.lastScannedAt).max() {
+                            Text("· checked \(SnapshotTime.compact(checked))").font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
+                    if !verdict.detail.isEmpty {
+                        Text(verdict.detail).font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 12)
+                if !workspace.device.isEnabled(app) {
+                    Text("Not managed here").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(.quaternary, in: Capsule())
+                }
+            }
+            .padding(16)
+
+            Divider()
+
+            // What the app holds, as the check saw it. Counts, not claims: an
+            // app that has not been checked has no numbers, and says so.
+            HStack(spacing: 0) {
+                heldColumn("Skills", count: held?.skills)
+                Divider().frame(height: 36)
+                heldColumn("MCP servers", count: held?.servers)
+                Divider().frame(height: 36)
+                heldColumn("Plugins", count: held?.plugins)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 10)
+
+            if !paths.isEmpty || !notes.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    if !paths.isEmpty {
+                        Text("Keeps its configuration in").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        ForEach(paths, id: \.self) { path in
+                            Text(path).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
+                                .help(path)
+                        }
+                    }
+                    ForEach(notes, id: \.self) { note in
+                        Text(note).font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .standardPanel()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(app.rawValue), \(verdict.text)")
+    }
+
+    private func heldColumn(_ title: String, count: Int?) -> some View {
+        VStack(spacing: 2) {
+            Text(count.map(String.init) ?? "—").font(.title2.weight(.semibold)).monospacedDigit()
+            Text(title).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(count.map { "\($0) \(title.lowercased())" } ?? "\(title): not checked yet")
     }
 
     // MARK: - Cards

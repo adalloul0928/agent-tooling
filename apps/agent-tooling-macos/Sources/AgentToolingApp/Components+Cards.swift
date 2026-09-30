@@ -10,11 +10,16 @@ struct PageToolbar<Actions: View>: View {
     @Environment(\.connectionCategory) private var connectionCategory
     let title: String
     let context: String?
+    /// Whether the section's own title wins over `title`. It does for every
+    /// ordinary screen; a screen narrowed to one thing (one app's page) passes
+    /// false so the thing it is about is what the page is called.
+    let usesSectionTitle: Bool
     @ViewBuilder let actions: Actions
 
-    init(title: String, context: String? = nil, @ViewBuilder actions: () -> Actions) {
+    init(title: String, context: String? = nil, usesSectionTitle: Bool = true, @ViewBuilder actions: () -> Actions) {
         self.title = title
         self.context = context
+        self.usesSectionTitle = usesSectionTitle
         self.actions = actions()
     }
 
@@ -22,7 +27,7 @@ struct PageToolbar<Actions: View>: View {
         VStack(spacing: 0) {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(section?.workspaceTitle ?? title)
+                    Text(usesSectionTitle ? (section?.workspaceTitle ?? title) : title)
                         .font(.system(size: 20, weight: .semibold))
                     if let context {
                         Text(context)

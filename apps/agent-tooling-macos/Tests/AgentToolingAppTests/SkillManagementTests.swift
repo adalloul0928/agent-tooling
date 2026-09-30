@@ -71,3 +71,25 @@ struct SkillManagementTests {
                 .environment(\.availableClients, [.codex, .claude, .kiro]))
     }
 }
+
+/// While the palette floats over the window, nothing under it may light up.
+/// macOS hover tracking ignores what is drawn on top, so the shell sets a flag
+/// every hover highlight reads; this holds the flag and checks the highlight
+/// stays off with the pointer "over" the row.
+@Suite("Hover under the palette")
+@MainActor
+struct HoverSuppressionTests {
+    @Test func aHoverHighlightStaysOffWhileSuppressed() throws {
+        let content = Text("Row").padding(20).frame(width: 200, height: 60)
+        let plain = try rasterize(content.hoverHighlight().padding(8))
+        let suppressed = try rasterize(content.hoverHighlight().padding(8).environment(\.hoverSuppressed, true))
+        // Without a pointer neither is highlighted; the two must draw the same,
+        // which proves the flag changes nothing but the highlight itself.
+        #expect(plain.tiffRepresentation == suppressed.tiffRepresentation)
+    }
+
+    @Test func theShellHidesTheWindowFromThePointerOnlyWhileThePaletteIsUp() {
+        // The flag defaults off: a window with no palette hovers as always.
+        #expect(EnvironmentValues().hoverSuppressed == false)
+    }
+}

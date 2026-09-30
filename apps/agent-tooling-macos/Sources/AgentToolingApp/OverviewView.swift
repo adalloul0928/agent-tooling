@@ -3,13 +3,14 @@ import SwiftUI
 
 private struct LibraryDestinationStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.hoverSuppressed) private var suppressed
     @State private var hovering = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.primary.opacity(configuration.isPressed ? 0.08 : hovering ? 0.035 : 0))
+                    .fill(Color.primary.opacity(configuration.isPressed ? 0.08 : hovering && !suppressed ? 0.035 : 0))
             }
             .onHover { hovering = $0 }
             .animation(reduceMotion ? nil : AgentMotion.quick, value: hovering)

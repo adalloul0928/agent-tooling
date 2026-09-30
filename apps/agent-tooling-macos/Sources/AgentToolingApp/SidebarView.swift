@@ -11,6 +11,9 @@ struct SidebarView: View {
     @Environment(AppNavigationState.self) private var navigation
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("appearance") private var appearance = "System"
+    /// Whether Apps shows the apps on this Mac beneath it. Remembered across
+    /// launches; the Apps row itself is always there.
+    @AppStorage("sidebar.appsExpanded") private var appsExpanded = true
     @Binding var selection: AppSection
     let openPalette: () -> Void
 
@@ -27,9 +30,13 @@ struct SidebarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Agent Tooling")
-                    .font(.headline)
-                    .lineLimit(1)
+                HStack {
+                    Text("Agent Tooling")
+                        .font(.headline)
+                        .lineLimit(1)
+                    Spacer()
+                    appearanceButton
+                }
 
                 paletteButton
             }
@@ -50,11 +57,6 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
-
-            clientsBlock
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
         }
         // No background or glass overlay: NavigationSplitView owns the
         // sidebar material, including its adaptive foreground appearance.
@@ -72,39 +74,64 @@ struct SidebarView: View {
         .observed(library: workspace.library.state?.library, device: workspace.device)
     }
 
-    private var sidebarSelection: Binding<AppSection?> {
+    /// What the list highlights: a screen, or one app under Apps. The apps are
+    /// not a fourth group of screens; an app row is the Apps screen narrowed to
+    /// that app, and the highlight moving to it is what says so.
+    private var sidebarSelection: Binding<SidebarItem?> {
         Binding(
-            get: { selection.sidebarDestination },
-            set: { section in
-                guard let section else { return }
-                openSection(section)
+            get: {
+                if selection.sidebarDestination == .syncCenter, let client = navigation.selectedClient {
+                    return .client(client)
+                }
+                return .section(selection.sidebarDestination)
+            },
+            set: { item in
+                switch item {
+                case .section(let section): openSection(section)
+                case .client(let client): navigation.openClient(client)
+                case nil: break
+                }
             })
     }
 
     @ViewBuilder
     private func navigationRows(_ sections: [AppSection]) -> some View {
         ForEach(sections) { section in
-            HStack {
-                Label(section.navigationTitle, systemImage: section.symbol)
-                Spacer(minLength: 4)
-                if health[section] == .attention {
-                    StatusGlyph(state: .attention, size: 12)
-                        .accessibilityLabel("Needs attention")
+            if section == .syncCenter {
+                DisclosureGroup(isExpanded: $appsExpanded) {
+                    ForEach(workspace.device.availableClients) { client in
+                        clientRow(client)
+                    }
+                } label: {
+                    sectionRow(section)
                 }
+            } else {
+                sectionRow(section)
             }
-            // Apps carries both kinds of attention it can act on: clients the
-            // check could not reach and connections the health check found broken.
-            .badge(section == .syncCenter ? workspace.device.attentionCount + workspace.health.attentionCount : 0)
-            .tag(section)
-            .contentShape(Rectangle())
-            // Selecting an already-highlighted parent still returns to its
-            // main screen, or clears a client scope on the Apps screen.
-            .simultaneousGesture(TapGesture().onEnded { openSection(section) })
-            .help(section.navigationTitle)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(section.navigationTitle)
-            .accessibilityAction { openSection(section) }
         }
+    }
+
+    private func sectionRow(_ section: AppSection) -> some View {
+        HStack {
+            Label(section.navigationTitle, systemImage: section.symbol)
+            Spacer(minLength: 4)
+            if health[section] == .attention {
+                StatusGlyph(state: .attention, size: 12)
+                    .accessibilityLabel("Needs attention")
+            }
+        }
+        // Apps carries both kinds of attention it can act on: clients the
+        // check could not reach and connections the health check found broken.
+        .badge(section == .syncCenter ? workspace.device.attentionCount + workspace.health.attentionCount : 0)
+        .tag(SidebarItem.section(section))
+        .contentShape(Rectangle())
+        // Selecting an already-highlighted parent still returns to its
+        // main screen, or clears a client scope on the Apps screen.
+        .simultaneousGesture(TapGesture().onEnded { openSection(section) })
+        .help(section.navigationTitle)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(section.navigationTitle)
+        .accessibilityAction { openSection(section) }
     }
 
     private func openSection(_ section: AppSection) {
@@ -145,70 +172,44 @@ struct SidebarView: View {
         .accessibilityLabel(colorScheme == .dark ? "Use light appearance" : "Use dark appearance")
     }
 
-    /// Client shortcuts retain an exact scope independently of navigation.
-    ///
-    /// An app this Mac has stopped managing is dimmed rather than removed: a row
-    /// that disappears reads as an app that is gone, and it is not.
-    private var clientsBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("On this Mac")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                appearanceButton
-            }
-
-            ForEach(workspace.device.availableClients) { client in
-                clientRow(client)
-            }
-
-            if navigation.selectedClient != nil {
-                Button("Show all apps") { navigation.showAllClients() }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .help("Stop scoping Apps to one client.")
-            }
-        }
-    }
-
+    /// One app under Apps. An app this Mac has stopped managing is dimmed
+    /// rather than removed: a row that disappears reads as an app that is
+    /// gone, and it is not. The list's own highlight marks the chosen one.
     private func clientRow(_ client: ClientKind) -> some View {
         let verdict = workspace.device.verdict(for: client)
         let enabled = workspace.device.isEnabled(client)
         let selected = selection.sidebarDestination == .syncCenter && navigation.selectedClient == client
-        return Button {
-            navigation.openClient(client)
-        } label: {
-            HStack(spacing: 8) {
-                ClientBrandIcon(client: client, size: 16)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(client.rawValue)
-                        .fontWeight(selected ? .semibold : .regular)
-                        .lineLimit(1)
-                    Text(verdict.text)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 4)
-                StatusGlyph(state: verdict.state, size: 12)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+        return HStack(spacing: 8) {
+            ClientBrandIcon(client: client, size: 15)
+                .frame(width: 20)
+            Text(client.rawValue)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            StatusGlyph(state: verdict.state, size: 11)
         }
-        .buttonStyle(.borderless)
-        .foregroundStyle(.primary)
         .opacity(enabled ? 1 : 0.45)
+        .tag(SidebarItem.client(client))
+        .contentShape(Rectangle())
+        // Choosing the highlighted app again keeps it; the Apps row above is
+        // the way back to every app.
+        .simultaneousGesture(TapGesture().onEnded { navigation.openClient(client) })
         .help(
             enabled
-                ? "Show only \(client.rawValue) in Apps. \(verdict.detail)"
+                ? "\(client.rawValue) on this Mac. \(verdict.detail)"
                 : "\(client.rawValue) is not managed on this Mac. \(verdict.detail)"
         )
-        .accessibilityLabel("Show \(client.rawValue) only")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(client.rawValue)
         .accessibilityValue(
-            [selected ? "Selected" : "", enabled ? "" : "Not managed on this Mac", verdict.detail]
+            [selected ? "Selected" : "", enabled ? "" : "Not managed on this Mac", verdict.text]
                 .filter { !$0.isEmpty }
                 .joined(separator: ", "))
+        .accessibilityAction { navigation.openClient(client) }
     }
+}
+
+/// A row the sidebar list can highlight.
+enum SidebarItem: Hashable {
+    case section(AppSection)
+    case client(ClientKind)
 }

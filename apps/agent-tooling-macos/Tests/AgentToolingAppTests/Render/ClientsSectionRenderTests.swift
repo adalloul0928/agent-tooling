@@ -45,6 +45,8 @@ struct ClientsSectionRenderTests {
     }
 
     /// Scoped to one client, the screen keeps its scope bar and its verdict.
+    /// One app chosen is that app's page, not the Apps page with a filter: it
+    /// draws differently from every-app, and the sidebar highlights the app.
     @Test func theScreenDrawsOneClientOnItsOwn() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
@@ -52,12 +54,29 @@ struct ClientsSectionRenderTests {
         let navigation = AppNavigationState()
         navigation.openClient(.claude)
 
+        let one = try rasterize(
+            AppShellView(
+                workspace: fixture.workspace, initialSection: .syncCenter, navigation: navigation
+            )
+            .frame(width: shellWindowSize.width, height: shellWindowSize.height)
+            .scriptedReceipts())
         try expectDrawn(
             AppShellView(
                 workspace: fixture.workspace, initialSection: .syncCenter, navigation: navigation
             )
             .frame(width: shellWindowSize.width, height: shellWindowSize.height)
             .scriptedReceipts())
+        let all = try rasterize(
+            AppShellView(workspace: fixture.workspace, initialSection: .syncCenter, navigation: AppNavigationState())
+                .frame(width: shellWindowSize.width, height: shellWindowSize.height)
+                .scriptedReceipts())
+        #expect(one.tiffRepresentation != all.tiffRepresentation, "one app's page drew the same as every app")
+
+        // The sidebar lists the apps under Apps and highlights the chosen one.
+        try expectDrawn(
+            SidebarView(workspace: fixture.workspace, selection: .constant(.syncCenter))
+                .environment(navigation)
+                .frame(width: 240, height: 520))
     }
 
     /// The review sheets draw on their own; the shell never opens one by itself,

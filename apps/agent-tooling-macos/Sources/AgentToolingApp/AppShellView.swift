@@ -64,6 +64,12 @@ struct AppShellView: View {
         .foregroundStyle(.primary)
         .animation(reduceMotion ? nil : AgentMotion.selection, value: sidebarCollapsed)
         .groupBoxStyle(ControlGroupBoxStyle())
+        // While the palette is up, the window under it is scenery. Hover
+        // tracking on macOS does not respect what is drawn on top, so rows
+        // beneath the palette would light up as the pointer crossed them;
+        // both the hit test and the hover highlights are switched off here.
+        .allowsHitTesting(!paletteVisible)
+        .environment(\.hoverSuppressed, paletteVisible)
         // Spotlight rules, not sheet rules: the palette floats over the window,
         // a click anywhere outside it puts it away, and Escape does the same
         // (the palette's own onExitCommand). A sheet would swallow the outside

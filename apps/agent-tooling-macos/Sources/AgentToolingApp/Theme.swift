@@ -179,15 +179,23 @@ extension AgentTheme {
     }
 }
 
+extension EnvironmentValues {
+    /// True while something floats over the window (the command palette).
+    /// macOS hover tracking ignores what is drawn on top, so every hover
+    /// highlight the app draws itself checks this before lighting up.
+    @Entry var hoverSuppressed = false
+}
+
 private struct HoverHighlightModifier: ViewModifier {
     let cornerRadius: CGFloat
     @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.hoverSuppressed) private var suppressed
 
     func body(content: Content) -> some View {
         content
             .background(
-                Color.primary.opacity(hovering ? 0.06 : 0),
+                Color.primary.opacity(hovering && !suppressed ? 0.06 : 0),
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
             .onHover { hovering = $0 }
