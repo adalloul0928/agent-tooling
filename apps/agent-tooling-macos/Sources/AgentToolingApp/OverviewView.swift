@@ -156,6 +156,7 @@ struct OverviewView: View {
     /// The right column of the wide layout, and the bottom of the stacked one.
     private var statusColumn: some View {
         VStack(spacing: 16) {
+            setupCard
             libraryCard
             appsCard
             HStack(alignment: .top, spacing: 16) {
@@ -519,6 +520,39 @@ struct OverviewView: View {
     }
 
     // MARK: - Apps
+
+    /// The last checkup in a sentence, and the way into the next one. Reads
+    /// the setup session's kept checkup; never starts one.
+    private var setupCard: some View {
+        let setup = workspace.setup
+        return BentoCard(
+            symbol: "stethoscope", title: "Your setup",
+            action: ("Checkup", { navigate(.checkup) })
+        ) {
+            HStack(spacing: 12) {
+                if let checkup = setup.checkup {
+                    let open = checkup.openFindings.count + checkup.openRecommendations.count
+                    StatusGlyph(state: open == 0 ? .healthy : ((checkup.audit.highestSeverity ?? .info) >= .medium ? .attention : .pending), size: 18)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(open == 0 ? "Nothing needs attention" : "\(open) thing\(open == 1 ? "" : "s") to look at")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Checked \(SnapshotTime.compact(checkup.completedAt))" + (setup.isStale ? " · a new checkup is due" : ""))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                } else {
+                    Image(systemName: "wand.and.stars").font(.system(size: 18)).foregroundStyle(.secondary).frame(width: 18)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("This Mac has not been checked yet").font(.system(size: 14, weight: .medium))
+                        Text("Find what is broken, duplicated, or unmanaged, and have your assistant say what to do.")
+                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 8)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
 
     private var appsCard: some View {
         BentoCard(

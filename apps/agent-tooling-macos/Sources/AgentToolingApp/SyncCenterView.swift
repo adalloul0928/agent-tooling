@@ -41,6 +41,7 @@ struct SyncCenterView: View {
     @Environment(\.workspaceNavigate) private var navigate
     @Environment(\.operationReceiptReader) private var receiptReader
     @State private var showingClientSelection = false
+    @State private var showingSetup = false
     @State private var isChoosingDestination = false
     @State private var receipts: [OperationReceipt] = []
 
@@ -59,6 +60,9 @@ struct SyncCenterView: View {
                         .popover(isPresented: $showingClientSelection) {
                             ManagedClientsPopover(device: workspace.device).frame(width: 380)
                         }
+                    Button("Set up…", systemImage: "wand.and.stars") { showingSetup = true }
+                        .buttonStyle(.glass)
+                        .help("Audit this Mac, have your assistant read the results, and walk through what to change.")
                 }
                 Button {
                     Task { await workspace.device.refresh() }
@@ -148,6 +152,9 @@ struct SyncCenterView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $isChoosingDestination) {
             WorkspaceLinkDestinationSheet(session: workspace.deployment, clients: enabledClients)
+        }
+        .sheet(isPresented: $showingSetup) {
+            SetupWizardSheet(workspace: workspace, session: workspace.setup, onClose: { showingSetup = false })
         }
         .task {
             // The shell opens the workspace without reading its library, so a

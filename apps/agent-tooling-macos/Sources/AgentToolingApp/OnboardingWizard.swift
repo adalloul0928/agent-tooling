@@ -316,6 +316,13 @@ struct OnboardingWizard: View {
                 Button("Back") { step = OnboardingStep(rawValue: step.rawValue - 1) ?? .found }
                     .buttonStyle(.glass)
             }
+            if step == .assign {
+                // The thorough route: audit this Mac and have the assistant
+                // read the results, category by category, on the Checkup tab.
+                Button("Check this Mac…", action: finishToSetup)
+                    .buttonStyle(.glass)
+                    .help("Find what is broken, duplicated, or unmanaged, and walk through what to change.")
+            }
             Button(primaryTitle, action: advance)
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
@@ -364,6 +371,13 @@ struct OnboardingWizard: View {
     private func finishToHome() {
         onFinish()
         workspaceNavigate(.overview)
+    }
+
+    /// Ends onboarding on the Apps screen with the full setup wizard open,
+    /// for a person who wants the audit and the assistant's read right away.
+    private func finishToSetup() {
+        onFinish()
+        workspaceNavigate(.checkup)
     }
 
     private func toolingKind(_ kind: ArtifactKind) -> ToolingKind {
