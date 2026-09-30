@@ -89,6 +89,9 @@ struct OperationCommandPolicy: Sendable {
         if SkillTrialCommandShapes.isTrialShape(.claude, arguments) { return }
         // The insights deep dive: print mode, no tools, one fixed schema.
         if InsightsDeepDiveCommandShapes.isClaudeShape(arguments) { return }
+        // The setup review: print mode, reading only the tooling folders under
+        // home (and, for a client review, the web); never a shell or a write.
+        if SetupReviewCommandShapes.isClaudeShape(arguments, homeURL: homeURL) { return }
         // Read-only listing and per-server lookup, plus the OAuth login flow.
         // The login opens the browser itself; the app never handles a token.
         if arguments == ["mcp", "list"] { return }
@@ -166,6 +169,9 @@ struct OperationCommandPolicy: Sendable {
         // The insights deep dive: read-only exec in a staged folder under the
         // home directory, answering to the schema file inside it.
         if InsightsDeepDiveCommandShapes.isCodexShape(arguments, homeURL: homeURL) { return }
+        // The setup review: read-only exec rooted at home so the tooling
+        // folders are in reach, answering to a schema file in a staged folder.
+        if SetupReviewCommandShapes.isCodexShape(arguments, homeURL: homeURL) { return }
         if arguments == ["mcp", "list"] || arguments == ["mcp", "list", "--json"] { return }
         if arguments.count == 3,
             arguments[0] == "mcp",
