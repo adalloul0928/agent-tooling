@@ -2,11 +2,15 @@ import AgentToolingCore
 import AppKit
 import SwiftUI
 
+/// The App filter: any app, or one of the clients this app knows. Every
+/// `ClientKind` has a case here, so a client the registry gains is a filter the
+/// screen offers; Kiro was missing from this list and so from the menu.
 enum SkillClientFilter: String, CaseIterable, Identifiable {
     case all = "Any app"
     case claude = "Claude Code"
     case codex = "Codex"
     case gemini = "Gemini CLI"
+    case kiro = "Kiro CLI"
 
     var id: String { rawValue }
 
@@ -16,6 +20,7 @@ enum SkillClientFilter: String, CaseIterable, Identifiable {
         case .claude: .claude
         case .codex: .codex
         case .gemini: .gemini
+        case .kiro: .kiro
         }
     }
 

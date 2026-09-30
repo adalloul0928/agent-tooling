@@ -6,6 +6,21 @@ import Testing
 
 @Suite("Skill ownership classification")
 struct SkillOrganizationTests {
+    /// The App filter offers one entry per client the registry knows. A client
+    /// left out of it cannot be filtered to, and reads as if the app did not
+    /// manage it — which is how Kiro went missing from the menu.
+    @Test func theAppFilterOffersEveryClient() {
+        let offered = Set(SkillClientFilter.allCases.compactMap(\.client))
+        #expect(offered == Set(ClientKind.allCases))
+        #expect(SkillClientFilter.allCases.first?.client == nil, "the first choice is every app")
+        for client in ClientKind.allCases {
+            let filter = SkillClientFilter.allCases.first { $0.client == client }
+            #expect(filter?.rawValue == client.rawValue)
+            #expect(filter?.matches([client]) == true)
+            #expect(filter?.matches([]) == false)
+        }
+    }
+
     @Test func standaloneSkillsDoNotShareOwnership() {
         #expect(
             SkillOrganization.ownershipKey(skillID: "custom", pluginID: nil)
