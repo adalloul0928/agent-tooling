@@ -149,8 +149,9 @@ public enum WorkspaceFirstRun {
     }
 
     /// Everything this package claims, by its own record or by what a client
-    /// reported.
-    private static func claimedMembers(
+    /// reported. Shared with the reconciliation a later check runs, so the two
+    /// cannot disagree about what belongs to a package.
+    static func claimedMembers(
         of packageID: String, inventory: ScannedInventory, observations: [TargetObservation]
     ) -> Set<String> {
         var members = Set(inventory.plugins.first { $0.id == packageID }?.skills ?? [])
@@ -201,7 +202,7 @@ public enum WorkspaceFirstRun {
     ///
     /// Two packages claiming one item is not a parent to pick between, so it is
     /// recorded as belonging to neither rather than arbitrarily to one.
-    private static func parentPackage(
+    static func parentPackage(
         of identifier: String,
         inventory: ScannedInventory,
         observations: [TargetObservation],

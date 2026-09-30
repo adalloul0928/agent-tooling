@@ -54,6 +54,23 @@ engine has a fixed executable allowlist, restricts file writes to managed or
 supported locations, moves replaced files to a rollback area, redacts receipts,
 and records partial per-target outcomes.
 
+## What the Library holds
+
+The Library is a record of tools, not a mirror of any one app. The first run
+writes down what a scan of this Mac found; after that, **Check apps** (and the
+automatic check on open, when it is on) compares what it finds with what the
+Library holds and adds the difference under the first run's own rules: a
+package a client installed is that client's, its skills belong to it, and
+everything else is only tracked. Rows already in the Library are never changed
+by a check, and nothing is removed because a scan did not see it this time —
+taking something out is a choice a person makes. When a check adds anything,
+the Apps screen says how much.
+
+`1 mine · 33 unclassified` counts ownership, not installation. *Mine* is a
+skill whose source lives in this library; *tracked* is one the app knows about
+and can find, but whose files belong to the app or folder that has them. Both
+are installed wherever their row's marks say they were found.
+
 ## Set up your existing tools
 
 Home shows a **Set up your library** card while a new workspace holds discovered

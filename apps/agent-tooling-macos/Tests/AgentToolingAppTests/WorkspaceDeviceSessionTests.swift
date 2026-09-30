@@ -164,6 +164,76 @@ struct WorkspaceDeviceSessionTests {
         #expect(session.managedClients == ClientKind.allCases)
     }
 
+    // MARK: - Catching the library up
+
+    /// A first run writes what it saw. Every check after it used to update
+    /// only the marks, so a skill a client gained afterwards was visible to
+    /// the client and invisible here.
+    @Test func aCheckAddsWhatAClientGainedSinceTheLibraryWasWritten() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        var claude = Fixture.claudeCode(commandAvailable: true, version: "2.1.263")
+        let packageRoot = fixture.home.appending(path: ".claude/plugins/cache/aim/core/1.0").path(percentEncoded: false)
+        claude.discoveredPlugins = ["core@aim"]
+        claude.discoveredSkills = ["core:brazil", "docx"]
+        claude.pluginMetadata = [
+            "core@aim": .init(name: "Core", source: packageRoot, scope: "User", enabled: true, skillIDs: ["core:brazil"])
+        ]
+        claude.skillMetadata = [
+            "core:brazil": .init(path: "\(packageRoot)/skills/brazil/", source: "core@aim", providerPluginID: "core@aim"),
+            "docx": .init(path: fixture.home.appending(path: ".claude/skills/docx/").path(percentEncoded: false), source: "Standalone Claude Code skill"),
+        ]
+        let session = await fixture.session(observer: ScriptedObserver(results: [.success([claude])]))
+        let before = try #require(fixture.library.state).library.rows
+
+        await session.refresh()
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        let rows = try #require(fixture.library.state).library.rows
+        // The package and the standalone skill are rows; the package's member
+        // is listed inside it.
+        #expect(rows.count == before.count + 2)
+        let package = try #require(rows.first { $0.kind == .nativePlugin && $0.declaredName == "core@aim" })
+        #expect(package.includedChildren.map(\.displayName) == ["Brazil"])
+        #expect(package.includedChildren.first?.kind == .skill)
+        let standalone = try #require(rows.first { $0.kind == .skill && $0.declaredName == "docx" })
+        #expect(standalone.ownership == .trackedOnly)
+        // The one row that was here before is untouched, and nothing gained an
+        // assignment: where a found skill is used is still a choice to make.
+        #expect(rows.first { $0.artifactID == Fixture.skill }?.displayName == "Standalone Skill")
+        #expect(rows.allSatisfy { $0.requestedAssignments.isEmpty })
+        #expect(session.libraryUpdateMessage == "Added 2 skills and 1 package this Mac's apps have that the library did not.")
+
+        // A second check that finds the same things adds nothing and says so
+        // by saying nothing.
+        await session.refresh()
+        #expect(try #require(fixture.library.state).library.rows.count == before.count + 2)
+        #expect(session.libraryUpdateMessage == nil)
+    }
+
+    @Test func theLibraryUpdateSentenceCountsEachKindItAdded() throws {
+        func plan(skills: Int, packages: Int, connections: Int) -> WorkspaceObservationReconciliation.Plan {
+            var additions: [ArtifactRecord] = []
+            for index in 0..<packages {
+                additions.append(.init(identity: .init(id: ArtifactID(), kind: .nativePlugin, displayName: "P\(index)"), authority: .trackedOnly))
+            }
+            for index in 0..<skills {
+                additions.append(.init(identity: .init(id: ArtifactID(), kind: .skill, displayName: "S\(index)"), authority: .trackedOnly))
+            }
+            for index in 0..<connections {
+                additions.append(.init(identity: .init(id: ArtifactID(), kind: .mcpServer, displayName: "C\(index)"), authority: .trackedOnly))
+            }
+            return .init(additions: additions)
+        }
+        #expect(WorkspaceDeviceSession.libraryUpdateSentence(for: plan(skills: 0, packages: 0, connections: 0)) == nil)
+        #expect(
+            WorkspaceDeviceSession.libraryUpdateSentence(for: plan(skills: 1, packages: 0, connections: 0))
+                == "Added 1 skill this Mac's apps have that the library did not.")
+        #expect(
+            WorkspaceDeviceSession.libraryUpdateSentence(for: plan(skills: 135, packages: 3, connections: 2))
+                == "Added 135 skills, 3 packages, and 2 connections this Mac's apps have that the library did not.")
+    }
+
     @Test func onlyTheAppsThisMacManagesAreCountedAsNeedingAttention() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

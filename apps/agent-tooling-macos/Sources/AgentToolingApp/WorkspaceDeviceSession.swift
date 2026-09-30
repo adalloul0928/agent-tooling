@@ -80,6 +80,10 @@ final class WorkspaceDeviceSession {
     private var hasExplicitClientChoice: Bool
     /// What the last "find missing tools" attempt said, for the screen to show.
     private(set) var smartFindMessage: String?
+    /// What the last check added to the library, in a sentence, or nil when it
+    /// added nothing. A check that finds a skill a client gained since the
+    /// last one records it, and this is where that is said.
+    private(set) var libraryUpdateMessage: String?
     private(set) var isFindingTools = false
 
     /// The managed apps whose tool the last check could not run. The one
@@ -354,9 +358,62 @@ final class WorkspaceDeviceSession {
             errorMessage = "This Mac's apps were checked, but what was found could not be saved."
             return
         }
+        await reconcileLibrary(with: observed)
         // Recording it advances the workspace, so the library is read again
         // rather than left holding an older head.
         await library.refresh()
+    }
+
+    /// Adds to the library what this check found and the library did not hold,
+    /// under the rules a first run uses: a client's package stays the client's,
+    /// its members belong to it, and everything else is only tracked. Rows
+    /// already here are never changed, and nothing is taken away.
+    ///
+    /// The inventory is compiled off the main actor, because it reads every
+    /// skill's definition to name it, and a Mac with a few hundred skills
+    /// should not stall the screen while it does.
+    private func reconcileLibrary(with observed: [TargetObservation]) async {
+        let homeRoot = self.homeRoot
+        let inventory = await Task.detached(priority: .userInitiated) {
+            InventoryCompiler.compile(observations: observed, homeURL: homeRoot)
+        }.value
+        do {
+            guard let document = try await service.snapshot()?.document else { return }
+            let plan = WorkspaceObservationReconciliation.plan(
+                document: document, observations: observed, inventory: inventory)
+            guard !plan.isEmpty else {
+                libraryUpdateMessage = nil
+                return
+            }
+            _ = try await service.reconcileObservedInventory(
+                .init(expectedRevisionID: document.revision.id, plan: plan))
+            libraryUpdateMessage = Self.libraryUpdateSentence(for: plan)
+        } catch {
+            // The check itself stands: what was found is recorded and on
+            // screen. Only the library's catch-up did not happen, and saying
+            // so is better than a library that silently stays behind.
+            errorMessage = "This Mac's apps were checked, but the new items found could not be added to the library."
+        }
+    }
+
+    /// "Added 3 skills and 1 package to the library", in the words a person
+    /// reads, or nil when nothing was added.
+    static func libraryUpdateSentence(for plan: WorkspaceObservationReconciliation.Plan) -> String? {
+        let parts: [String] = [
+            (plan.count(of: .skill), "skill"),
+            (plan.count(of: .nativePlugin), "package"),
+            (plan.count(of: .mcpServer), "connection"),
+        ].compactMap { count, noun in
+            count == 0 ? nil : "\(count) \(noun)\(count == 1 ? "" : "s")"
+        }
+        guard !parts.isEmpty else { return nil }
+        let list: String
+        switch parts.count {
+        case 1: list = parts[0]
+        case 2: list = parts.joined(separator: " and ")
+        default: list = parts.dropLast().joined(separator: ", ") + ", and " + parts[parts.count - 1]
+        }
+        return "Added \(list) this Mac's apps have that the library did not."
     }
 
     /// What the last check found for one client, in the words a person reads.

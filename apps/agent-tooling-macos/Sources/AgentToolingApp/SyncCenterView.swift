@@ -97,6 +97,20 @@ struct SyncCenterView: View {
                     ForEach(Array(problems.enumerated()), id: \.offset) { _, problem in
                         AttentionBanner(title: "Apps need attention", message: problem)
                     }
+                    if let added = workspace.device.libraryUpdateMessage {
+                        // A check that found something the library lacked has
+                        // grown the library. It is news rather than a fault,
+                        // so it is said plainly and goes away on the next check.
+                        HStack(spacing: 10) {
+                            StatusGlyph(state: .healthy, size: 16)
+                            Text(added).font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 12)
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .background(AgentTheme.controlBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .accessibilityLabel(added)
+                    }
 
                     appTiles
 
