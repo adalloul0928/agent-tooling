@@ -36,6 +36,9 @@ struct WorkspaceLaunch {
         /// The review queue. Home counts it and Apps decides it, and a request
         /// decided on one is gone from the other without a second read.
         let requests: WorkspaceRequestSession
+        /// The audit of this Mac's tooling and the assistant's reading of it.
+        /// The setup wizard, the weekly checkup, and a client review all run it.
+        let setup: WorkspaceSetupSession
         /// Absent when this Mac's linked-preset file could not be prepared. The
         /// workspace still opens; only following a preset is unavailable.
         let presets: WorkspacePresetsSession?
@@ -67,7 +70,8 @@ struct WorkspaceLaunch {
         marketplaceProviders: (MarketplaceCatalogContext) -> [any MarketplaceProvider] =
             MarketplaceCatalogs.live,
         insightsServices: (URL) -> any InsightsServicing = { LiveInsightsServices(container: $0) },
-        requestQueue: any PendingRequestQueuing = LivePendingRequestQueue()
+        requestQueue: any PendingRequestQueuing = LivePendingRequestQueue(),
+        setupServices: (URL) -> any SetupServicing = { LiveSetupServices(container: $0) }
     ) async throws -> Workspace {
         let locator = try WorkspaceLocator(
             root: supportRoot?.standardizedFileURL ?? (try WorkspaceLocator.defaultRoot()))
@@ -75,14 +79,14 @@ struct WorkspaceLaunch {
             return sessions(
                 store: existing, homeRoot: homeRoot, isFirstRun: false, deviceObserver: deviceObserver,
                 marketplaceProviders: marketplaceProviders, insightsServices: insightsServices,
-                requestQueue: requestQueue)
+                requestQueue: requestQueue, setupServices: setupServices)
         }
         let created = try await locator.openOrCreate(
             homeURL: homeRoot, runner: ProcessCommandRunner(homeURL: homeRoot))
         return sessions(
             store: created, homeRoot: homeRoot, isFirstRun: true, deviceObserver: deviceObserver,
             marketplaceProviders: marketplaceProviders, insightsServices: insightsServices,
-            requestQueue: requestQueue)
+            requestQueue: requestQueue, setupServices: setupServices)
     }
 
     /// Everything that reaches outside this app is a parameter with a live
@@ -98,7 +102,8 @@ struct WorkspaceLaunch {
         marketplaceProviders: (MarketplaceCatalogContext) -> [any MarketplaceProvider] =
             MarketplaceCatalogs.live,
         insightsServices: (URL) -> any InsightsServicing = { LiveInsightsServices(container: $0) },
-        requestQueue: any PendingRequestQueuing = LivePendingRequestQueue()
+        requestQueue: any PendingRequestQueuing = LivePendingRequestQueue(),
+        setupServices: (URL) -> any SetupServicing = { LiveSetupServices(container: $0) }
     ) -> Workspace {
         let container = store.databaseURL.deletingLastPathComponent()
         let writerID = WorkspaceObjectID()
@@ -157,6 +162,7 @@ struct WorkspaceLaunch {
             service: service, library: library, store: store,
             homeRoot: homeRoot, observer: deviceObserver)
         let health = WorkspaceHealthSession(device: device, homeRoot: homeRoot)
+        let insights = WorkspaceInsightsSession(library: library, homeRoot: homeRoot, services: insightsServices(container))
         return .init(
             library: library, sync: sync,
             settings: WorkspaceSettingsSession(homeRoot: homeRoot, library: library),
@@ -173,10 +179,12 @@ struct WorkspaceLaunch {
                 providers: marketplaceProviders(
                     MarketplaceCatalogContext(homeRoot: homeRoot, store: store)),
                 service: service, library: library, store: store),
-            insights: WorkspaceInsightsSession(
-                library: library, homeRoot: homeRoot, services: insightsServices(container)),
+            insights: insights,
             requests: WorkspaceRequestSession(
                 store: store, library: library, device: device, queue: requestQueue),
+            setup: WorkspaceSetupSession(
+                service: service, library: library, device: device, insights: insights, store: store,
+                homeRoot: homeRoot, services: setupServices(container)),
             presets: presets,
             presetsUnavailableReason: presetsUnavailableReason,
             syncUnavailableReason: syncUnavailableReason,

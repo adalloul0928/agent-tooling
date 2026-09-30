@@ -16,6 +16,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case syncCenter = "Clients"
     case appSettings = "App settings"
     case health = "Health"
+    case checkup = "Checkup"
     case activity = "Activity"
     case history = "History"
     case projects = "Projects"
@@ -51,7 +52,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     var sidebarDestination: AppSection {
         switch self {
         case .plugins, .mcpServers, .presets: .skills
-        case .appSettings, .health: .syncCenter
+        case .appSettings, .health, .checkup: .syncCenter
         case .history: .activity
         case .sync: .settings
         default: self
@@ -61,7 +62,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     var workspaceTabs: [AppSection] {
         switch self {
         case .skills, .plugins, .mcpServers, .presets: [.skills, .plugins, .mcpServers, .presets]
-        case .syncCenter, .appSettings, .health: [.syncCenter, .appSettings, .health]
+        case .syncCenter, .appSettings, .health, .checkup: [.syncCenter, .checkup, .appSettings, .health]
         case .activity, .history: [.activity, .history]
         case .settings, .sync: [.settings, .sync]
         default: []
@@ -92,6 +93,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .syncCenter: "desktopcomputer"
         case .appSettings: "slider.horizontal.3"
         case .health: "waveform.path.ecg"
+        case .checkup: "stethoscope"
         case .activity: "list.bullet.rectangle"
         case .history: "clock.arrow.circlepath"
         case .projects: "folder.badge.gearshape"

@@ -88,7 +88,7 @@ struct AppNavigationStateTests {
         #expect(AppSection.health.tabTitle == "Health")
         #expect(AppSection.health.sidebarDestination == .syncCenter)
         #expect(AppSection.health.workspaceTitle == "Apps")
-        #expect(AppSection.health.workspaceTabs == [.syncCenter, .appSettings, .health])
+        #expect(AppSection.health.workspaceTabs == [.syncCenter, .checkup, .appSettings, .health])
         // The family's other members offer the same tab row, so Health is
         // reachable from Clients and from Settings within Apps.
         #expect(AppSection.syncCenter.workspaceTabs.contains(.health))
@@ -267,7 +267,7 @@ struct AppSectionTests {
     func tabFamiliesAreSymmetric() {
         let families: [[AppSection]] = [
             [.skills, .plugins, .mcpServers, .presets],
-            [.syncCenter, .appSettings, .health],
+            [.syncCenter, .checkup, .appSettings, .health],
             [.activity, .history],
             [.settings, .sync],
         ]

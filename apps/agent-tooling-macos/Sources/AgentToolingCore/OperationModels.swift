@@ -29,6 +29,10 @@ public enum OperationStepKind: String, Codable, CaseIterable, Sendable {
     /// this workspace's trash first so it can be put back. Never a folder the
     /// library holds, never anything outside a skills folder.
     case removeUnmanagedSkillCopy
+    /// Removes one cached version of a plugin that its client no longer uses:
+    /// a version folder directly inside a plugin's cache folder, moved into
+    /// this workspace's trash first. Never the version in use.
+    case removeUnmanagedPluginCache
     case replaceManagedLibrary
     case command
     case scan

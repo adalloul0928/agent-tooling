@@ -144,6 +144,7 @@ struct StubDeviceObserver: DeviceObserving {
         insightsServices: any InsightsServicing = StubInsightsServices(
             answer: ShellRenderFixture.insightsReport()),
         requestQueue: any PendingRequestQueuing = StubPendingRequestQueue(),
+        setupServices: any SetupServicing = StubSetupServices(),
         readsLibrary: Bool = true
     ) async throws {
         root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
@@ -205,7 +206,8 @@ struct StubDeviceObserver: DeviceObserving {
         workspace = WorkspaceLaunch.sessions(
             store: store, homeRoot: home, isFirstRun: true, deviceObserver: deviceObserver,
             marketplaceProviders: { _ in marketplaceProviders },
-            insightsServices: { _ in insightsServices }, requestQueue: requestQueue)
+            insightsServices: { _ in insightsServices }, requestQueue: requestQueue,
+            setupServices: { _ in setupServices })
         // A test of the cold launch itself wants the library still unread.
         if readsLibrary { await workspace.library.refresh() }
     }

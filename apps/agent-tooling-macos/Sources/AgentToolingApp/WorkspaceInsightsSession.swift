@@ -343,6 +343,16 @@ final class WorkspaceInsightsSession {
         }
     }
 
+    /// Fresh digests of recent work for a setup review, read now and kept
+    /// nowhere. Empty when the library is unread or nothing is managed.
+    func digestsForReview() async -> [ConversationDigest] {
+        guard let state = library.state else { return [] }
+        let clients = Set(InsightScanOptions().clients)
+        guard !clients.isEmpty else { return [] }
+        let skills = VersionedInventoryProjection.inventory(state.library).skills
+        return await services.scanWithDigests(options: InsightScanOptions(clients: clients), skills: skills, homeURL: homeRoot).digests
+    }
+
     private func keep(_ report: InsightsReport) {
         do {
             try services.keep(report)

@@ -120,6 +120,9 @@ struct AppShellView: View {
             await workspace.insights.runScheduledDeepDiveIfStale(
                 options: InsightScanOptions(clients: Set(workspace.device.managedClients)),
                 managedClients: workspace.device.managedClients)
+            // The weekly checkup, after the deep dive so the two do not both
+            // hold the assistant at once. Audit first, fast; review behind it.
+            await workspace.setup.runScheduledCheckupIfStale()
         }
         .onAppear(perform: applyExternalNavigation)
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }

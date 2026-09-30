@@ -356,6 +356,20 @@ public actor OperationExecutor {
             try fileManager.moveItem(at: destination, to: kept)
             return (.succeeded, "Moved \(destination.path(percentEncoded: false)) to \(kept.path(percentEncoded: false)).")
 
+        case .removeUnmanagedPluginCache:
+            guard let destinationPath = step.destinationPath else { throw OperationEngineError.malformedStep(step.title) }
+            let destination = try unmanagedPluginCacheVersion(destinationPath)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: destination.path(percentEncoded: false), isDirectory: &isDirectory), isDirectory.boolValue else {
+                return (.skipped, "Nothing to remove at \(destination.path(percentEncoded: false)).")
+            }
+            let trash = store.rootURL.appending(path: "trash", directoryHint: .isDirectory)
+                .appending(path: Self.trashStamp(), directoryHint: .isDirectory)
+            try fileManager.createDirectory(at: trash, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let kept = trash.appending(path: destination.deletingLastPathComponent().lastPathComponent + "-" + destination.lastPathComponent, directoryHint: .isDirectory)
+            try fileManager.moveItem(at: destination, to: kept)
+            return (.succeeded, "Moved \(destination.path(percentEncoded: false)) to \(kept.path(percentEncoded: false)).")
+
         case .replaceManagedLibrary:
             guard let destinationPath = step.destinationPath, let contents = step.contents else {
                 throw OperationEngineError.malformedStep(step.title)
@@ -607,6 +621,27 @@ public actor OperationExecutor {
         guard OperationCommandPolicy.isSafeMCPIdentifier(destination.lastPathComponent),
             roots.contains(where: { Self.samePath(destination.deletingLastPathComponent(), $0) }),
             !Self.samePath(destination, store.libraryURL),
+            !destination.standardizedFileURL.path(percentEncoded: false).hasPrefix(store.rootURL.standardizedFileURL.path(percentEncoded: false))
+        else { throw OperationEngineError.unsafeDestination(rawPath) }
+        return destination
+    }
+
+    /// A plugin version folder this app may remove: `<cache>/<marketplace>/
+    /// <plugin>/<version>` under a client's plugin cache, with checked names.
+    /// The version in use is refused: it is the one the client's install
+    /// record names, and the ledger of that is the plugin metadata the audit
+    /// read, so the audit never offers it.
+    private func unmanagedPluginCacheVersion(_ rawPath: String) throws -> URL {
+        let destination = URL(fileURLWithPath: rawPath).standardizedFileURL
+        let caches = [".claude/plugins/cache", ".codex/plugins/cache"].map {
+            homeURL.appending(path: $0, directoryHint: .isDirectory).standardizedFileURL
+        }
+        // cache / marketplace / plugin / version: exactly three levels down.
+        let plugin = destination.deletingLastPathComponent()
+        let marketplace = plugin.deletingLastPathComponent()
+        let cache = marketplace.deletingLastPathComponent()
+        guard caches.contains(where: { Self.samePath(cache, $0) }),
+            [destination, plugin, marketplace].allSatisfy({ OperationCommandPolicy.isSafePluginIdentifier($0.lastPathComponent) || OperationCommandPolicy.isSafeMCPIdentifier($0.lastPathComponent) }),
             !destination.standardizedFileURL.path(percentEncoded: false).hasPrefix(store.rootURL.standardizedFileURL.path(percentEncoded: false))
         else { throw OperationEngineError.unsafeDestination(rawPath) }
         return destination
