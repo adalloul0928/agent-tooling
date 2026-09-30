@@ -177,7 +177,7 @@ func requireCentralStandaloneSkill(_ artifact: ArtifactRecord) throws {
     guard artifact.contentDigest != nil else { throw WorkspaceSkillCommandError.missingContent }
 }
 
-private func skillCommandDigest<T: Encodable>(_ command: T, operation: String) throws -> String {
+func skillCommandDigest<T: Encodable>(_ command: T, operation: String) throws -> String {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     var bytes = Data("agent-tooling.standalone-skill-\(operation).v1\n".utf8)

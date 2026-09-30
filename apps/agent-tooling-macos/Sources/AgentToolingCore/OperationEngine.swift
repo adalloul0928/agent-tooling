@@ -334,6 +334,28 @@ public actor OperationExecutor {
             let note = forgetManagedInstall(destination: destination)
             return (.succeeded, "Removed \(destination.path(percentEncoded: false)).\(note)")
 
+        case .removeUnmanagedSkillCopy:
+            guard let destinationPath = step.destinationPath else { throw OperationEngineError.malformedStep(step.title) }
+            let destination = try unmanagedSkillCopy(destinationPath)
+            let values = try? destination.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
+            let isLink = values?.isSymbolicLink == true
+            guard isLink || fileManager.fileExists(atPath: destination.path(percentEncoded: false)) else {
+                return (.skipped, "Nothing to remove at \(destination.path(percentEncoded: false)).")
+            }
+            if isLink {
+                // A link holds nothing of its own; the target is untouched.
+                try fileManager.removeItem(at: destination)
+                return (.succeeded, "Removed the link at \(destination.path(percentEncoded: false)). What it pointed at was not touched.")
+            }
+            // The folder is kept in this workspace's trash under a dated name,
+            // so a removal somebody regrets can be reversed by hand.
+            let trash = store.rootURL.appending(path: "trash", directoryHint: .isDirectory)
+                .appending(path: Self.trashStamp(), directoryHint: .isDirectory)
+            try fileManager.createDirectory(at: trash, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let kept = trash.appending(path: destination.lastPathComponent, directoryHint: .isDirectory)
+            try fileManager.moveItem(at: destination, to: kept)
+            return (.succeeded, "Moved \(destination.path(percentEncoded: false)) to \(kept.path(percentEncoded: false)).")
+
         case .replaceManagedLibrary:
             guard let destinationPath = step.destinationPath, let contents = step.contents else {
                 throw OperationEngineError.malformedStep(step.title)
@@ -571,6 +593,30 @@ public actor OperationExecutor {
         }
         try validateContainedPath(permitted.root, within: permitted.anchor)
         return destination
+    }
+
+    /// A skill copy this app may remove: directly inside one of the known
+    /// user-level skills folders, with a checked name, and not the library's.
+    /// The same roots the app may write into are the only ones it may remove
+    /// from; a project folder is not offered here.
+    private func unmanagedSkillCopy(_ rawPath: String) throws -> URL {
+        let destination = URL(fileURLWithPath: rawPath).standardizedFileURL
+        let roots = [".claude/skills", ".agents/skills", ".codex/skills", ".gemini/skills", ".kiro/skills"].map {
+            homeURL.appending(path: $0, directoryHint: .isDirectory).standardizedFileURL
+        }
+        guard OperationCommandPolicy.isSafeMCPIdentifier(destination.lastPathComponent),
+            roots.contains(where: { Self.samePath(destination.deletingLastPathComponent(), $0) }),
+            !Self.samePath(destination, store.libraryURL),
+            !destination.standardizedFileURL.path(percentEncoded: false).hasPrefix(store.rootURL.standardizedFileURL.path(percentEncoded: false))
+        else { throw OperationEngineError.unsafeDestination(rawPath) }
+        return destination
+    }
+
+    private static func trashStamp() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        return formatter.string(from: .now) + "-" + UUID().uuidString.prefix(8).lowercased()
     }
 
     private func commandWorkingDirectory(_ rawPath: String?, authorizedProjectRootPath: String?) throws -> URL? {

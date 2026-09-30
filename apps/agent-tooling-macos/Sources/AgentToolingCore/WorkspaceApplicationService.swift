@@ -125,7 +125,7 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
         }
     }
 
-    private func publishReviewedSkill(_ prepared: PreparedStandaloneSkill) async throws {
+    func publishReviewedSkill(_ prepared: PreparedStandaloneSkill) async throws {
         guard let contentStore else { throw WorkspaceSkillCommandError.contentStoreUnavailable }
         let stored = try await contentStore.store(prepared.tree)
         guard stored.digest == prepared.review.contentDigest else { throw WorkspaceSkillCommandError.reviewMismatch }

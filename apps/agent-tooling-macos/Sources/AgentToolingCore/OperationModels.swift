@@ -24,6 +24,11 @@ public enum OperationStepKind: String, Codable, CaseIterable, Sendable {
     /// Removes a directory this app can prove it installed and that still
     /// matches what was approved. It never touches anything else.
     case removeManagedDirectory
+    /// Removes one app's copy of a skill that this app did not install: a
+    /// folder or a symlink directly inside a known skills folder, moved into
+    /// this workspace's trash first so it can be put back. Never a folder the
+    /// library holds, never anything outside a skills folder.
+    case removeUnmanagedSkillCopy
     case replaceManagedLibrary
     case command
     case scan
