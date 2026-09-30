@@ -91,6 +91,8 @@ public enum SetupAction: Codable, Hashable, Sendable {
     case pruneStalePluginCache(paths: [String], client: ClientKind)
     /// Open the client's MCP configuration so the person can fix the command.
     case inspectMCPServer(name: String, client: ClientKind)
+    /// Turn an MCP server off in a client without removing its configuration.
+    case disableMCPServer(name: String, client: ClientKind)
     /// Run "Find missing tools" for the client.
     case locateTool(client: ClientKind)
     /// Run a check of this client.
@@ -107,6 +109,7 @@ public enum SetupAction: Codable, Hashable, Sendable {
         case .reinstallPlugin: "Reinstall the plugin"
         case .pruneStalePluginCache(let paths, _): paths.count == 1 ? "Remove the old version" : "Remove \(paths.count) old versions"
         case .inspectMCPServer: "Open its configuration"
+        case .disableMCPServer: "Turn it off"
         case .locateTool: "Find the tool"
         case .checkClient: "Check this app"
         case .manageMCPServer: "Manage from the library"
@@ -404,7 +407,10 @@ public struct SetupAuditor: Sendable {
                         kind: .unreachableMCPCommand, severity: .medium, client: client, subject: server,
                         title: "\(server)'s command was not found",
                         detail: "\(client.rawValue) is set to start this server with `\(redact(command))`, which is not on this Mac in any place the app knows to look. The server fails to start.",
-                        evidence: [redact(command)], actions: [.inspectMCPServer(name: server, client: client)]))
+                        evidence: [redact(command)],
+                        actions: metadata.enabled
+                            ? [.disableMCPServer(name: server, client: client), .inspectMCPServer(name: server, client: client)]
+                            : [.inspectMCPServer(name: server, client: client)]))
             }
         }
         return findings

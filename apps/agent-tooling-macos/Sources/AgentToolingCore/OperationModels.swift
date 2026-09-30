@@ -33,6 +33,10 @@ public enum OperationStepKind: String, Codable, CaseIterable, Sendable {
     /// a version folder directly inside a plugin's cache folder, moved into
     /// this workspace's trash first. Never the version in use.
     case removeUnmanagedPluginCache
+    /// Changes one key in one of the client configuration files this app
+    /// knows, after copying the file into the workspace trash. The edit is in
+    /// `contents` as JSON; the file is `destinationPath`.
+    case editClientConfiguration
     case replaceManagedLibrary
     case command
     case scan

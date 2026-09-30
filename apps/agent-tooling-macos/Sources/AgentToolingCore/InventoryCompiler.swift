@@ -626,7 +626,8 @@ enum LocalTargetScan {
             boundedText(dictionary?["auth_status"] as? String, maximum: 4_096)
             ?? (dictionary?["url"] == nil ? "Not inferred" : "Account or OAuth")
         return ObservedMCPMetadata(
-            transport: transport, authentication: authentication, source: source, enabled: dictionary?["enabled"] as? Bool ?? true)
+            transport: transport, authentication: authentication, source: source,
+            enabled: dictionary?["enabled"] as? Bool ?? !(dictionary?["disabled"] as? Bool ?? false))
     }
 
     private static func displayName(forPluginID id: String) -> String {

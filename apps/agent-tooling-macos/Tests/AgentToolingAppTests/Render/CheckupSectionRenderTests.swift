@@ -33,13 +33,17 @@ struct CheckupSectionRenderTests {
             "the kept checkup changed nothing on screen")
     }
 
-    @Test func aFindingRowAndARecommendationRowDrawOnTheirOwn() throws {
+    @Test func aRowDrawsClosedAndOpenAndTheFixAllSheetDraws() throws {
         let checkup = ShellRenderFixture.setupCheckup(home: URL(filePath: "/Users/example"))
-        try expectDrawn(
-            FindingRowView(finding: checkup.audit.findings[0], isBusy: false, onApply: { _ in }, onDismiss: {}, onOpen: { _ in })
-                .frame(width: 700))
-        try expectDrawn(
-            RecommendationRowView(recommendation: checkup.review!.recommendations[0], isBusy: false, onApply: {}, onDismiss: {}, onOpen: {})
-                .frame(width: 700))
+        let items = CheckupTriage.items(from: checkup)
+        let item = try #require(items.first)
+        for expanded in [false, true] {
+            try expectDrawn(
+                CheckupRow(item: item, isExpanded: expanded, isBusy: false, onToggle: {}, onRun: {}, onRunOne: { _ in }, onDismiss: {}, onOpen: { _ in })
+                    .frame(width: 760))
+        }
+        let plan = CheckupTriage.fixAll(items)
+        #expect(!plan.isEmpty)
+        try expectDrawn(FixAllSheet(plan: plan, onCancel: {}, onConfirm: {}))
     }
 }

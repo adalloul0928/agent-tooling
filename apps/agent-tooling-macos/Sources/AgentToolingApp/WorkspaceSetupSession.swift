@@ -143,6 +143,8 @@ final class WorkspaceSetupSession {
     private(set) var reviewMessage: String?
     /// What the last apply did, in a sentence, for the screen to show.
     private(set) var lastApplyMessage: String?
+    /// How far a bulk apply has got: done of total. Nil when none is running.
+    private(set) var applyProgress: (done: Int, total: Int)?
     /// One app's review, by app. Kept apart from the weekly checkup: it is
     /// asked for from that app's page and looks outward at what changed.
     private(set) var clientReviews: [ClientKind: ClientReview] = [:]
@@ -197,7 +199,8 @@ final class WorkspaceSetupSession {
         generation &+= 1
         let token = generation
         isAuditing = true
-        errorMessage = nil
+        // An audit reports nothing of its own that could fail except keeping
+        // the result, so it leaves any message an apply just set in place.
         defer { if token == generation { isAuditing = false } }
         if device.observations.isEmpty { await device.refresh() }
         let observations = device.observations
@@ -355,58 +358,137 @@ final class WorkspaceSetupSession {
     /// re-audits so the screen shows what is true now. One action at a time:
     /// the person reads each before it runs.
     func apply(_ action: SetupAction) async {
-        guard !isApplying else { return }
+        await applyAll([action])
+    }
+
+    func apply(_ action: SetupRecommendationAction) async {
+        switch action {
+        case .take(let setupAction): await applyAll([setupAction])
+        case .installPlugin(let client, let pluginID): await applyAll([.reinstallPlugin(pluginID: pluginID, client: client)])
+        case .disableMCPServer(let client, let name): await applyAll([.disableMCPServer(name: name, client: client)])
+        case .setSetting(let client, let key, let value): await applyAll([], settings: [(client, key, value)])
+        case .readOnly: return
+        }
+    }
+
+    /// Carries out several actions in order, each through the app's own
+    /// reviewed paths, then re-audits once so the screen shows what is true
+    /// now. One that fails does not stop the rest; the message says how many
+    /// went through and quotes the first failure.
+    func applyAll(_ actions: [SetupAction], settings: [(ClientKind, String, String)] = []) async {
+        let work: [() async throws -> String] = actions.map { action in { try await self.perform(action) } }
+            + settings.map { setting in { try await self.setSetting(client: setting.0, key: setting.1, value: setting.2) } }
+        guard !isApplying, !work.isEmpty else { return }
         isApplying = true
         errorMessage = nil
         lastApplyMessage = nil
-        defer { isApplying = false }
-        do {
-            switch action {
-            case .adoptSkill(let path, _):
-                lastApplyMessage = try await adopt(path: path)
-            case .removeSkillCopy(let path, let client), .removeBrokenLink(let path, let client):
-                lastApplyMessage = try await remove(path: path, client: client)
-            case .pruneStalePluginCache(let paths, let client):
-                var removed = 0
-                for path in paths { _ = try await removePluginCache(path: path, client: client); removed += 1 }
-                lastApplyMessage = "Removed \(removed) old version\(removed == 1 ? "" : "s")."
-            case .reinstallPlugin(let pluginID, let client):
-                lastApplyMessage = try await reinstall(pluginID: pluginID, client: client)
-            case .checkClient:
-                await device.refresh()
-                lastApplyMessage = "Checked."
-            case .locateTool:
-                await device.smartFindTools()
-                lastApplyMessage = device.smartFindMessage ?? "Looked for the tool."
-            case .inspectMCPServer, .manageMCPServer:
-                // These open screens; the view handles them. Nothing to apply.
-                return
+        applyProgress = (0, work.count)
+        defer {
+            isApplying = false
+            applyProgress = nil
+        }
+        var done: [String] = []
+        var failures: [String] = []
+        for (index, step) in work.enumerated() {
+            do { done.append(try await step()) } catch {
+                failures.append((error as? any LocalizedError)?.errorDescription ?? error.localizedDescription)
             }
-        } catch {
-            errorMessage = (error as? any LocalizedError)?.errorDescription ?? error.localizedDescription
+            applyProgress = (index + 1, work.count)
+        }
+        if work.count == 1 {
+            lastApplyMessage = done.first
+            errorMessage = failures.first
+        } else {
+            lastApplyMessage = "\(done.count) of \(work.count) done."
+            if let first = failures.first {
+                errorMessage = "\(failures.count) did not go through. First: \(first)"
+            }
         }
         await library.refresh()
         await device.refresh()
         await audit()
     }
 
-    func apply(_ action: SetupRecommendationAction) async {
+    /// One action, in a sentence about what it did. Opening a screen is not
+    /// an action here; the view does that.
+    private func perform(_ action: SetupAction) async throws -> String {
         switch action {
-        case .take(let setupAction):
-            await apply(setupAction)
-        case .installPlugin(let client, let pluginID):
-            isApplying = true
-            defer { isApplying = false }
-            do { lastApplyMessage = try await reinstall(pluginID: pluginID, client: client) } catch {
-                errorMessage = (error as? any LocalizedError)?.errorDescription ?? error.localizedDescription
-            }
+        case .adoptSkill(let path, _):
+            return try await adopt(path: path)
+        case .removeSkillCopy(let path, let client), .removeBrokenLink(let path, let client):
+            return try await remove(path: path, client: client)
+        case .pruneStalePluginCache(let paths, let client):
+            for path in paths { _ = try await removePluginCache(path: path, client: client) }
+            return "Removed \(paths.count) old version\(paths.count == 1 ? "" : "s")."
+        case .reinstallPlugin(let pluginID, let client):
+            return try await reinstall(pluginID: pluginID, client: client)
+        case .disableMCPServer(let name, let client):
+            return try await disableMCPServer(name: name, client: client)
+        case .checkClient:
             await device.refresh()
-            await audit()
-        case .setSetting, .disableMCPServer, .readOnly:
-            // Settings and server toggles are shown with instructions; the
-            // configuration screens own those writes.
-            return
+            return "Checked."
+        case .locateTool:
+            await device.smartFindTools()
+            return device.smartFindMessage ?? "Looked for the tool."
+        case .inspectMCPServer, .manageMCPServer:
+            return "Opened."
         }
+    }
+
+    // MARK: Configuration writes
+
+    /// Sets one documented key in the client's user-level settings file. The
+    /// value is parsed, never run; the file is backed up first.
+    private func setSetting(client: ClientKind, key: String, value: String) async throws -> String {
+        let file = ClientConfigurationFile.settings(for: client)
+        let edit = ClientConfigurationEdit(file: file, keyPath: key.split(separator: ".").map(String.init), value: .parsing(value))
+        guard edit.isSafe else { throw SetupApplyError.unsupported("\(key) is not a key this app will write.") }
+        return try await runEdits([edit], title: "Set \(key) in \(client.rawValue)", client: client)
+    }
+
+    /// Turns a server off where the client records that: Codex's
+    /// `[mcp_servers.<name>] enabled = false`, Kiro's `disabled: true`, and for
+    /// Claude Code the `disabledMcpServers` list of every project it knows,
+    /// which is the only place Claude Code reads one.
+    private func disableMCPServer(name: String, client: ClientKind) async throws -> String {
+        guard ClientConfigurationEdit.isSafeKeyComponent(name), !name.contains("/"), !name.contains(" ") else {
+            throw SetupApplyError.unsupported("\(name) is not a server name this app will write.")
+        }
+        let edits: [ClientConfigurationEdit]
+        switch client {
+        case .codex:
+            edits = [.init(file: .codexConfig, keyPath: ["mcp_servers", name, "enabled"], value: .bool(false))]
+        case .kiro:
+            edits = [.init(file: .kiroMCP, keyPath: ["mcpServers", name, "disabled"], value: .bool(true))]
+        case .claude:
+            let global = ClientConfigurationFile.claudeGlobal.url(homeURL: homeRoot)
+            let root = (try? Data(contentsOf: global)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+            let projects = ((root["projects"] as? [String: Any]) ?? [:]).keys.sorted()
+            guard !projects.isEmpty else {
+                throw SetupApplyError.unsupported("Claude Code turns servers off per project, and it has no projects recorded yet. Open a project in Claude Code and use /mcp there.")
+            }
+            edits = projects.map { .init(file: .claudeGlobal, keyPath: ["projects", $0, "disabledMcpServers"], value: .appendToList(name)) }
+        case .gemini:
+            throw SetupApplyError.unsupported("Gemini CLI has no switch for one server that this app knows how to write.")
+        }
+        let note = client == .claude ? " in \(edits.count) project\(edits.count == 1 ? "" : "s")" : ""
+        _ = try await runEdits(edits, title: "Turn \(name) off in \(client.rawValue)", client: client)
+        return "Turned \(name) off in \(client.rawValue)\(note). Its configuration is kept."
+    }
+
+    private func runEdits(_ edits: [ClientConfigurationEdit], title: String, client: ClientKind) async throws -> String {
+        let plan = OperationPlan(
+            kind: .configureMCP, title: title,
+            summary: "Changes one key in \(client.rawValue)'s own configuration file. The file is copied into this workspace's trash first.",
+            targetSurfaces: [client.userSurface].compactMap { $0 },
+            steps: try edits.map { edit in
+                OperationStep(
+                    kind: .editClientConfiguration, title: edit.summary, detail: edit.file.relativePath,
+                    destinationPath: edit.file.url(homeURL: homeRoot).path(percentEncoded: false), contents: try edit.encoded(), isReversible: true)
+            })
+        let receipt = await OperationExecutor(store: store, homeURL: homeRoot).execute(plan)
+        if let failed = receipt.results.first(where: { $0.status == .failed }) { throw SetupApplyError.stepFailed(failed.output) }
+        return receipt.results.map(\.output).joined(separator: " ")
     }
 
     private func adopt(path: String) async throws -> String {

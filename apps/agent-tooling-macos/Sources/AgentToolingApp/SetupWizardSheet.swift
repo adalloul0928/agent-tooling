@@ -80,6 +80,7 @@ struct SetupWizardSheet: View {
     @State private var step: SetupWizardStep
     @State private var startedAudit = false
     @State private var startedReview = false
+    @State private var expandedRows: Set<String> = []
 
     /// `initialStep` lets a test or a deep link open on one stop; the app
     /// always starts at the apps.
@@ -319,47 +320,70 @@ struct SetupWizardSheet: View {
         }
     }
 
+    /// The same grouped rows as the Checkup screen, filtered to one stop, with
+    /// one button to take everything the stop can take.
     @ViewBuilder private func categoryStep(_ category: SetupRecommendation.Category) -> some View {
         if let checkup = session.checkup {
-            let recommendations = checkup.openRecommendations.filter { $0.category == category }
-            let findings = checkup.openFindings.filter { $0.kind.category == category }
-            if !recommendations.isEmpty {
-                TitledCard("Your assistant recommends", count: "\(recommendations.count)") {
-                    VStack(spacing: 0) {
-                        ForEach(Array(recommendations.enumerated()), id: \.element.id) { index, recommendation in
-                            RecommendationRowView(
-                                recommendation: recommendation, isBusy: session.isApplying,
-                                onApply: { Task { await session.apply(recommendation.action) } },
-                                onDismiss: { session.dismiss(recommendation) },
-                                onOpen: { openScreen(for: recommendation) })
-                            if index < recommendations.count - 1 { Divider().padding(.leading, 14) }
-                        }
-                    }
-                }
+            let rows = CheckupTriage.items(from: checkup).filter { item in
+                item.recommendation?.category == category || item.findings.contains { $0.kind.category == category }
             }
-            if !findings.isEmpty {
-                TitledCard("Findings", count: "\(findings.count)") {
-                    VStack(spacing: 0) {
-                        ForEach(Array(findings.prefix(80).enumerated()), id: \.element.id) { index, finding in
-                            FindingRowView(
-                                finding: finding, isBusy: session.isApplying,
-                                onApply: { action in Task { await session.apply(action) } },
-                                onDismiss: { session.dismiss(finding) },
-                                onOpen: { openScreen(for: $0) })
-                            if index < min(findings.count, 80) - 1 { Divider().padding(.leading, 14) }
-                        }
-                    }
-                }
-            }
-            if recommendations.isEmpty && findings.isEmpty {
+            let fixable = CheckupTriage.fixAll(rows)
+            if rows.isEmpty {
                 HStack(spacing: 10) {
                     StatusGlyph(state: .healthy, size: 16)
                     Text("Nothing left here.").font(.callout)
                     Spacer()
                 }
                 .padding(14).standardPanel()
+            } else {
+                if !fixable.isEmpty {
+                    HStack {
+                        Text("\(fixable.total) thing\(fixable.total == 1 ? "" : "s") can be fixed here in one go.").font(.callout).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Fix all \(fixable.total)") {
+                            Task { await session.applyAll(fixable.actions, settings: fixable.settings.map { ($0.client, $0.key, $0.value) }) }
+                        }
+                        .buttonStyle(.borderedProminent).tint(AgentTheme.selection).disabled(session.isBusy)
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 10).standardPanel()
+                }
+                if let progress = session.applyProgress {
+                    HStack(spacing: 10) {
+                        ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).frame(width: 160)
+                        Text("\(progress.done) of \(progress.total) done").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
+                ForEach(CheckupItem.Bucket.allCases, id: \.self) { bucket in
+                    let mine = rows.filter { $0.bucket == bucket }
+                    if !mine.isEmpty {
+                        TitledCard(bucket.title, count: "\(mine.count)") {
+                            VStack(spacing: 0) {
+                                ForEach(Array(mine.enumerated()), id: \.element.id) { index, item in
+                                    CheckupRow(
+                                        item: item, isExpanded: expandedRows.contains(item.id), isBusy: session.isApplying,
+                                        onToggle: { if expandedRows.contains(item.id) { expandedRows.remove(item.id) } else { expandedRows.insert(item.id) } },
+                                        onRun: {
+                                            if item.canRun {
+                                                Task { await session.applyAll(item.actions, settings: item.settings.map { ($0.client, $0.key, $0.value) }) }
+                                            } else if let section = item.opens { navigate(section); onClose() } else { dismiss(item) }
+                                        },
+                                        onRunOne: { action in Task { await session.apply(action) } },
+                                        onDismiss: { dismiss(item) },
+                                        onOpen: { section in navigate(section); onClose() })
+                                    if index < mine.count - 1 { Divider().padding(.leading, 46) }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private func dismiss(_ item: CheckupItem) {
+        for finding in item.findings { session.dismiss(finding) }
+        if let recommendation = item.recommendation { session.dismiss(recommendation) }
     }
 
     private var doneStep: some View {
@@ -376,23 +400,6 @@ struct SetupWizardSheet: View {
             }
             Text("The checkup runs again on its own once a week when Agent Tooling opens, and each app's page has a Review button for what has changed upstream.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func openScreen(for action: SetupAction) {
-        switch action {
-        case .inspectMCPServer, .manageMCPServer: navigate(.mcpServers); onClose()
-        default: break
-        }
-    }
-
-    private func openScreen(for recommendation: SetupRecommendation) {
-        switch recommendation.action {
-        case .take(let action): openScreen(for: action)
-        case .setSetting: navigate(.appSettings); onClose()
-        case .disableMCPServer: navigate(.mcpServers); onClose()
-        case .installPlugin: navigate(.plugins); onClose()
-        case .readOnly: break
         }
     }
 }

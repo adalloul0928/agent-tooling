@@ -42,6 +42,7 @@ struct SyncCenterView: View {
     @Environment(\.operationReceiptReader) private var receiptReader
     @State private var showingClientSelection = false
     @State private var showingSetup = false
+    @State private var expandedReviewRows: Set<String> = []
     @State private var isChoosingDestination = false
     @State private var receipts: [OperationReceipt] = []
 
@@ -375,13 +376,21 @@ struct SyncCenterView: View {
                         .font(.caption)
                         .padding(.horizontal, 14).padding(.vertical, 8)
                     }
+                    // The same compact rows the Checkup uses, one per recommendation.
                     ForEach(review.openRecommendations) { recommendation in
                         Divider()
-                        RecommendationRowView(
-                            recommendation: recommendation, isBusy: setup.isApplying,
-                            onApply: { Task { await setup.apply(recommendation.action) } },
+                        let item = CheckupTriage.item(for: recommendation, audit: setup.checkup?.audit)
+                        CheckupRow(
+                            item: item, isExpanded: expandedReviewRows.contains(item.id), isBusy: setup.isApplying,
+                            onToggle: { if expandedReviewRows.contains(item.id) { expandedReviewRows.remove(item.id) } else { expandedReviewRows.insert(item.id) } },
+                            onRun: {
+                                if item.canRun { Task { await setup.applyAll(item.actions, settings: item.settings.map { ($0.client, $0.key, $0.value) }) } }
+                                else if let section = item.opens { navigate(section) }
+                                else { setup.dismiss(recommendation, in: app) }
+                            },
+                            onRunOne: { action in Task { await setup.apply(action) } },
                             onDismiss: { setup.dismiss(recommendation, in: app) },
-                            onOpen: { openScreen(for: recommendation) })
+                            onOpen: { section in navigate(section) })
                     }
                 } else if let message = setup.clientReviewMessage {
                     Text(message).font(.callout).foregroundStyle(.secondary).padding(14)
@@ -405,15 +414,6 @@ struct SyncCenterView: View {
     private func reviewHelp(_ app: ClientKind) -> String {
         guard let assistant = workspace.setup.reviewClient else { return "A review needs Claude Code or Codex; this Mac is not managing either." }
         return "Fetches \(app.rawValue)'s release notes and has your signed-in \(assistant.rawValue) read them, your configuration, and \(app.rawValue)'s documentation on the web. It can read; it cannot change anything."
-    }
-
-    private func openScreen(for recommendation: SetupRecommendation) {
-        switch recommendation.action {
-        case .take(.inspectMCPServer), .take(.manageMCPServer), .disableMCPServer: navigate(.mcpServers)
-        case .setSetting: navigate(.appSettings)
-        case .installPlugin: navigate(.plugins)
-        default: break
-        }
     }
 
     private func heldColumn(_ title: String, count: Int?) -> some View {

@@ -1,20 +1,26 @@
 import AgentToolingCore
 import SwiftUI
 
-/// Checkup: the deterministic audit of this Mac's tooling, the assistant's
-/// reading of it, and the actions for each, one reviewed step at a time.
+/// Checkup: what is wrong with this Mac's AI tooling, in a short list you can
+/// clear from the top.
 ///
-/// The audit is fast and always shown first; the review arrives behind it. A
-/// finding is a fact with its evidence; a recommendation is the assistant's
-/// proposal and says where its claim came from. Nothing on this screen changes
-/// an app until a button on one row is pressed, and each press is one action.
+/// The audit finds hundreds of facts; the assistant speaks for groups of them;
+/// this screen shows one row per group in three buckets — to fix, to decide,
+/// fine as they are — with one button per row and one button for the lot. A
+/// row is one line until it is opened. Every fix goes through the app's own
+/// reviewed paths and is backed up or moved to the trash, never deleted.
 struct CheckupView: View {
     let workspace: WorkspaceLaunch.Workspace
     @Bindable var session: WorkspaceSetupSession
-    @Environment(AppNavigationState.self) private var navigation
     @Environment(\.workspaceNavigate) private var navigate
-    @State private var showDismissed = false
+    @State private var expanded: Set<String> = []
+    @State private var summaryExpanded = false
+    @State private var confirmingFixAll = false
     @State private var openingSetup = false
+    @State private var showingFine = false
+
+    private var items: [CheckupItem] { session.checkup.map(CheckupTriage.items) ?? [] }
+    private var fixAll: CheckupTriage.FixAllPlan { CheckupTriage.fixAll(items) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,7 +28,7 @@ struct CheckupView: View {
                 Button {
                     Task { await session.audit() }
                 } label: {
-                    Label(session.isAuditing ? "Auditing…" : "Audit now", systemImage: "magnifyingglass")
+                    Label(session.isAuditing ? "Auditing…" : "Audit", systemImage: "magnifyingglass")
                 }
                 .buttonStyle(.glass)
                 .disabled(session.isBusy)
@@ -34,37 +40,50 @@ struct CheckupView: View {
                         await session.review(purpose: .checkup)
                     }
                 } label: {
-                    Label(session.isReviewing ? "Reviewing…" : reviewTitle, systemImage: "sparkles")
+                    Label(session.isReviewing ? "Reviewing…" : "Ask \(session.reviewClient?.rawValue ?? "assistant")", systemImage: "sparkles")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(AgentTheme.selection)
+                .buttonStyle(.glass)
                 .disabled(session.isBusy || session.reviewClient == nil)
                 .help(reviewHelp)
 
-                Button("Set up…", systemImage: "wand.and.stars") { openingSetup = true }
+                Button("Walk through…", systemImage: "wand.and.stars") { openingSetup = true }
                     .buttonStyle(.glass)
-                    .help("Walk through everything the audit found, category by category.")
+                    .help("One step per category, with the findings and recommendations for it.")
+
+                if !fixAll.isEmpty {
+                    Button {
+                        confirmingFixAll = true
+                    } label: {
+                        Label("Fix all \(fixAll.total)", systemImage: "checkmark.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AgentTheme.selection)
+                    .disabled(session.isBusy)
+                    .help("Runs every fix in the \"To fix\" list, after showing you exactly what will happen.")
+                }
             }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
+                VStack(alignment: .leading, spacing: 14) {
                     if let message = session.errorMessage {
                         AttentionBanner(title: "Something did not go through", message: message)
                     }
-                    if let message = session.lastApplyMessage {
+                    if let progress = session.applyProgress {
+                        progressRow(progress)
+                    } else if let message = session.lastApplyMessage {
                         noticeRow(message, state: .healthy)
                     }
                     if let checkup = session.checkup {
-                        summaryCard(checkup)
-                        reviewCard(checkup)
-                        findingsCards(checkup)
+                        headline(checkup)
+                        assistantLine(checkup)
+                        buckets
                     } else if session.isAuditing {
                         noticeRow("Reading what each app holds…", state: .pending)
                     } else {
                         EmptyStateView(
                             symbol: "stethoscope", title: "No checkup yet",
-                            message: "Audit this Mac to see what is broken, duplicated, or not yet managed, then have your assistant read the results.",
-                            actionTitle: "Audit now", action: { Task { await session.audit() } })
+                            message: "Find what is broken, duplicated, or not yet managed, then have your assistant say what to do.",
+                            actionTitle: "Audit this Mac", action: { Task { await session.audit() } })
                         .frame(height: 220)
                     }
                 }
@@ -79,154 +98,205 @@ struct CheckupView: View {
         .sheet(isPresented: $openingSetup) {
             SetupWizardSheet(workspace: workspace, session: session, onClose: { openingSetup = false })
         }
+        .sheet(isPresented: $confirmingFixAll) {
+            FixAllSheet(plan: fixAll, onCancel: { confirmingFixAll = false }) {
+                confirmingFixAll = false
+                let plan = fixAll
+                Task { await session.applyAll(plan.actions, settings: plan.settings.map { ($0.client, $0.key, $0.value) }) }
+            }
+        }
     }
 
-    // MARK: Header
+    // MARK: Top
 
     private var statusLine: String {
         guard let checkup = session.checkup else { return "Not checked yet" }
-        let open = checkup.openFindings.count
-        let when = SnapshotTime.compact(checkup.completedAt)
         if session.isReviewing { return "\(session.reviewClient?.rawValue ?? "Your assistant") is reading the audit…" }
-        return open == 0 ? "Nothing needs attention · \(when)" : "\(open) finding\(open == 1 ? "" : "s") · \(when)"
-    }
-
-    private var reviewTitle: String {
-        session.reviewClient.map { "Review with \($0.rawValue)" } ?? "Review"
+        return "Checked \(SnapshotTime.compact(checkup.completedAt))"
     }
 
     private var reviewHelp: String {
         guard let client = session.reviewClient else { return "A review needs Claude Code or Codex; this Mac is not managing either." }
-        return "Has your signed-in \(client.rawValue) read the audit and the apps' own configuration folders, then say what to change. It can read; it cannot change anything. Runs on its own once a week when the app opens."
+        return "\(client.rawValue) reads the audit and the apps' configuration folders, then says what to change. It can read; it cannot change anything."
     }
 
-    private func summaryCard(_ checkup: SetupCheckup) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            ForEach(checkup.audit.clients) { client in
-                let count = checkup.audit.counts[client]
-                let open = checkup.openFindings.filter { $0.client == client }
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        ClientDisc(client: client, size: 28)
-                        Text(client.rawValue).font(.callout.weight(.semibold))
-                        Spacer(minLength: 4)
-                        if open.isEmpty {
-                            StatusGlyph(state: .healthy, size: 14)
-                        } else {
-                            Text("\(open.count)").font(.caption.weight(.semibold))
-                                .padding(.horizontal, 7).padding(.vertical, 2)
-                                .background((open.map(\.severity).max() ?? .info) >= .medium ? AgentTheme.warning.opacity(0.18) : Color.primary.opacity(0.08), in: Capsule())
-                        }
-                    }
-                    Text(count.map { "\($0.skills) skills · \($0.plugins) plugins · \($0.mcpServers) servers" } ?? "Not checked")
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+    /// The whole picture in one line: how much is left in each bucket.
+    private func headline(_ checkup: SetupCheckup) -> some View {
+        let fix = items.filter { $0.bucket == .fix }
+        let decide = items.filter { $0.bucket == .decide }
+        let fine = items.filter { $0.bucket == .fine }
+        return HStack(spacing: 0) {
+            bucketCount(fix.count, unit: "to fix", state: fix.isEmpty ? .healthy : ((fix.map(\.severity).max() ?? .info) >= .medium ? .attention : .pending))
+            Divider().frame(height: 34)
+            bucketCount(decide.count, unit: "to decide", state: decide.isEmpty ? .healthy : .pending)
+            Divider().frame(height: 34)
+            bucketCount(fine.count, unit: fine.count == 1 ? "fine as it is" : "fine as they are", state: .healthy)
+            Divider().frame(height: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    ForEach(checkup.audit.clients) { client in ClientBrandIcon(client: client, size: 14) }
                 }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .standardPanel()
+                Text(appsLine(checkup)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 16)
+        }
+        .padding(.vertical, 12)
+        .standardPanel()
+    }
+
+    private func bucketCount(_ count: Int, unit: String, state: HealthState) -> some View {
+        HStack(spacing: 10) {
+            StatusGlyph(state: state, size: 18)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("\(count)").font(.system(size: 22, weight: .semibold)).monospacedDigit()
+                Text(unit).font(.caption).foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(count) \(unit)")
     }
 
-    // MARK: Review
+    private func appsLine(_ checkup: SetupCheckup) -> String {
+        let skills = checkup.audit.counts.values.reduce(0) { $0 + $1.skills }
+        let plugins = checkup.audit.counts.values.reduce(0) { $0 + $1.plugins }
+        let servers = checkup.audit.counts.values.reduce(0) { $0 + $1.mcpServers }
+        return "\(skills) skills · \(plugins) plugins · \(servers) servers"
+    }
 
-    @ViewBuilder private func reviewCard(_ checkup: SetupCheckup) -> some View {
+    /// What the assistant said, one sentence at a time.
+    @ViewBuilder private func assistantLine(_ checkup: SetupCheckup) -> some View {
         if session.isReviewing {
-            TitledCard("What your assistant says") {
-                HStack(spacing: 12) {
-                    ProgressView().controlSize(.small)
-                    Text("\(session.reviewClient?.rawValue ?? "Your assistant") is reading the audit and the apps' configuration folders. This takes a few minutes; the findings below are ready now.")
-                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                }
-                .padding(14)
+            HStack(spacing: 10) {
+                ProgressView().controlSize(.small)
+                Text("\(session.reviewClient?.rawValue ?? "Your assistant") is reading the audit and the apps' configuration folders. The list below is ready now; its advice joins it in a few minutes.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Spacer()
             }
+            .padding(.horizontal, 16).padding(.vertical, 12).standardPanel()
         } else if let message = session.reviewMessage {
-            TitledCard("What your assistant says") {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle").foregroundStyle(AgentTheme.warning)
-                    Text(message).font(.callout).fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                }
-                .padding(14)
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(AgentTheme.warning)
+                Text(message).font(.callout).fixedSize(horizontal: false, vertical: true)
+                Spacer()
             }
+            .padding(.horizontal, 16).padding(.vertical, 12).standardPanel()
         } else if let review = checkup.review {
-            let open = checkup.openRecommendations
-            TitledCard("What \(review.client.rawValue) says", count: open.isEmpty ? nil : "\(open.count)") {
-                Text(SnapshotTime.compact(review.generatedAt)).foregroundStyle(.tertiary)
-            } content: {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(review.summary).font(.callout).fixedSize(horizontal: false, vertical: true).padding(14)
-                    ForEach(open) { recommendation in
-                        Divider()
-                        RecommendationRowView(
-                            recommendation: recommendation, isBusy: session.isApplying,
-                            onApply: { Task { await session.apply(recommendation.action) } },
-                            onDismiss: { session.dismiss(recommendation) },
-                            onOpen: { openScreen(for: recommendation) })
+            let sentences = Self.sentences(review.summary)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top, spacing: 10) {
+                    ClientBrandIcon(client: review.client, size: 16).padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(summaryExpanded ? review.summary : (sentences.first ?? review.summary))
+                            .font(.callout).fixedSize(horizontal: false, vertical: true)
+                        if sentences.count > 1 {
+                            Button(summaryExpanded ? "Less" : "More") { withAnimation(AgentMotion.quick) { summaryExpanded.toggle() } }
+                                .buttonStyle(.borderless).font(.caption)
+                        }
                     }
+                    Spacer()
+                    Text(SnapshotTime.compact(review.generatedAt)).font(.caption2).foregroundStyle(.tertiary)
                 }
             }
+            .padding(.horizontal, 16).padding(.vertical, 12).standardPanel()
         }
     }
 
-    // MARK: Findings
-
-    @ViewBuilder private func findingsCards(_ checkup: SetupCheckup) -> some View {
-        let open = checkup.openFindings
-        if open.isEmpty {
-            TitledCard("Findings") {
-                HStack(spacing: 10) {
-                    StatusGlyph(state: .healthy, size: 16)
-                    Text("Nothing is broken, duplicated, or unmanaged in the apps this Mac looks after.").font(.callout)
-                    Spacer()
-                }
-                .padding(14)
-            }
-        } else {
-            ForEach(SetupFinding.Kind.allCases, id: \.self) { kind in
-                let matching = open.filter { $0.kind == kind }
-                if !matching.isEmpty {
-                    TitledCard(kind.title, count: "\(matching.count)") {
-                        VStack(spacing: 0) {
-                            ForEach(Array(matching.prefix(60).enumerated()), id: \.element.id) { index, finding in
-                                FindingRowView(
-                                    finding: finding, isBusy: session.isApplying,
-                                    onApply: { action in Task { await session.apply(action) } },
-                                    onDismiss: { session.dismiss(finding) },
-                                    onOpen: { openScreen(for: $0) })
-                                if index < min(matching.count, 60) - 1 { Divider().padding(.leading, 14) }
-                            }
-                            if matching.count > 60 {
-                                Divider()
-                                Text("\(matching.count - 60) more of the same kind. Handle these and the rest follow.")
-                                    .font(.caption).foregroundStyle(.secondary).padding(12)
-                            }
-                        }
-                    }
-                }
+    static func sentences(_ text: String) -> [String] {
+        var out: [String] = []
+        var current = ""
+        for character in text {
+            current.append(character)
+            if ".!?".contains(character) {
+                out.append(current.trimmingCharacters(in: .whitespaces))
+                current = ""
             }
         }
-        if !checkup.dismissedFindingIDs.isEmpty || !checkup.dismissedRecommendationIDs.isEmpty {
-            Button(showDismissed ? "Hide dismissed" : "Show \(checkup.dismissedFindingIDs.count + checkup.dismissedRecommendationIDs.count) dismissed") {
-                showDismissed.toggle()
+        if !current.trimmingCharacters(in: .whitespaces).isEmpty { out.append(current.trimmingCharacters(in: .whitespaces)) }
+        return out
+    }
+
+    // MARK: Buckets
+
+    @ViewBuilder private var buckets: some View {
+        let fix = items.filter { $0.bucket == .fix }
+        let decide = items.filter { $0.bucket == .decide }
+        let fine = items.filter { $0.bucket == .fine }
+        if fix.isEmpty && decide.isEmpty {
+            HStack(spacing: 10) {
+                StatusGlyph(state: .healthy, size: 18)
+                Text("Nothing to fix or decide. Your apps are in the shape you left them.").font(.callout)
+                Spacer()
+            }
+            .padding(16).standardPanel()
+        }
+        if !fix.isEmpty { bucketCard(.fix, fix) }
+        if !decide.isEmpty { bucketCard(.decide, decide) }
+        if !fine.isEmpty {
+            Button(showingFine ? "Hide what is fine" : "Show \(fine.count) that \(fine.count == 1 ? "is" : "are") fine as \(fine.count == 1 ? "it is" : "they are")") {
+                withAnimation(AgentMotion.quick) { showingFine.toggle() }
             }
             .buttonStyle(.borderless).font(.caption).foregroundStyle(.secondary)
-            if showDismissed {
-                TitledCard("Dismissed") {
-                    VStack(spacing: 0) {
-                        ForEach(checkup.audit.findings.filter { checkup.dismissedFindingIDs.contains($0.id) }) { finding in
-                            HStack {
-                                Text(finding.title).font(.callout).foregroundStyle(.secondary)
-                                Spacer()
-                                Button("Bring back") { session.undismiss(finding) }.buttonStyle(.borderless).font(.caption)
-                            }
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                        }
-                    }
+            if showingFine { bucketCard(.fine, fine) }
+        }
+        if let checkup = session.checkup, !checkup.dismissedFindingIDs.isEmpty || !checkup.dismissedRecommendationIDs.isEmpty {
+            Text("\(checkup.dismissedFindingIDs.count + checkup.dismissedRecommendationIDs.count) dismissed. They come back if they change.")
+                .font(.caption2).foregroundStyle(.tertiary)
+        }
+    }
+
+    private func bucketCard(_ bucket: CheckupItem.Bucket, _ rows: [CheckupItem]) -> some View {
+        TitledCard(bucket.title, count: "\(rows.count)") {
+            if bucket == .fine {
+                Button("Dismiss all") { for row in rows { dismiss(row) } }.buttonStyle(.borderless)
+            }
+        } content: {
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, item in
+                    CheckupRow(
+                        item: item, isExpanded: expanded.contains(item.id), isBusy: session.isApplying,
+                        onToggle: { withAnimation(AgentMotion.quick) { toggle(item) } },
+                        onRun: { run(item) },
+                        onRunOne: { action in Task { await session.apply(action) } },
+                        onDismiss: { dismiss(item) },
+                        onOpen: { section in navigate(section) })
+                    if index < rows.count - 1 { Divider().padding(.leading, 46) }
                 }
             }
         }
+    }
+
+    private func toggle(_ item: CheckupItem) {
+        if expanded.contains(item.id) { expanded.remove(item.id) } else { expanded.insert(item.id) }
+    }
+
+    private func run(_ item: CheckupItem) {
+        if item.canRun {
+            Task { await session.applyAll(item.actions, settings: item.settings.map { ($0.client, $0.key, $0.value) }) }
+        } else if let section = item.opens {
+            navigate(section)
+        } else {
+            dismiss(item)
+        }
+    }
+
+    private func dismiss(_ item: CheckupItem) {
+        for finding in item.findings { session.dismiss(finding) }
+        if let recommendation = item.recommendation { session.dismiss(recommendation) }
+    }
+
+    // MARK: Small rows
+
+    private func progressRow(_ progress: (done: Int, total: Int)) -> some View {
+        HStack(spacing: 10) {
+            ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).frame(width: 160)
+            Text("\(progress.done) of \(progress.total) done").font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            Spacer()
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(AgentTheme.controlBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func noticeRow(_ text: String, state: HealthState) -> some View {
@@ -238,169 +308,151 @@ struct CheckupView: View {
         .padding(.horizontal, 14).padding(.vertical, 10)
         .background(AgentTheme.controlBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
-
-    // MARK: Opening
-
-    /// Actions that open a screen rather than change a file.
-    private func openScreen(for action: SetupAction) {
-        switch action {
-        case .inspectMCPServer, .manageMCPServer: navigate(.mcpServers)
-        default: break
-        }
-    }
-
-    private func openScreen(for recommendation: SetupRecommendation) {
-        switch recommendation.action {
-        case .take(let action): openScreen(for: action)
-        case .setSetting: navigate(.appSettings)
-        case .disableMCPServer: navigate(.mcpServers)
-        case .installPlugin: navigate(.plugins)
-        case .readOnly: break
-        }
-    }
 }
 
-extension SetupFinding.Kind {
-    var title: String {
-        switch self {
-        case .brokenSkillLink: "Links that point at nothing"
-        case .missingPluginInstall: "Plugins whose files are gone"
-        case .duplicateSkillInClient: "Skills an app can reach twice"
-        case .unmanagedSkill: "Skills not managed by this app"
-        case .unreachableMCPCommand: "MCP servers that cannot start"
-        case .stalePluginCache: "Old plugin versions on disk"
-        case .toolUnavailable: "Apps whose command could not be run"
-        case .neverChecked: "Apps never checked"
-        case .skillWithoutDefinition: "Skill folders with no definition"
-        case .mcpServerRepeatedAcrossClients: "Servers configured in several apps"
-        }
-    }
-}
+// MARK: - One row
 
-/// One finding: what it is, the proof, and the ways to deal with it. The
-/// first action is the preferred one and gets the prominent button; anything
-/// that changes files says so in its help.
-struct FindingRowView: View {
-    let finding: SetupFinding
+/// One line: app, what, how many, one button. Open it for the why, where the
+/// claim came from, and the individual findings with their own buttons.
+struct CheckupRow: View {
+    let item: CheckupItem
+    let isExpanded: Bool
     let isBusy: Bool
-    let onApply: (SetupAction) -> Void
+    let onToggle: () -> Void
+    let onRun: () -> Void
+    let onRunOne: (SetupAction) -> Void
     let onDismiss: () -> Void
-    let onOpen: (SetupAction) -> Void
-    @State private var showingEvidence = false
+    let onOpen: (AppSection) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 10) {
-                if let client = finding.client { ClientBrandIcon(client: client, size: 16).frame(width: 22).padding(.top, 2) }
-                else { Image(systemName: "desktopcomputer").foregroundStyle(.secondary).frame(width: 22).padding(.top, 2) }
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(finding.title).font(.callout.weight(.medium))
-                        SeverityBadge(severity: finding.severity)
-                    }
-                    Text(finding.detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    if !finding.evidence.isEmpty {
-                        Button(showingEvidence ? "Hide evidence" : "Show evidence") { showingEvidence.toggle() }
-                            .buttonStyle(.borderless).font(.caption2)
-                        if showingEvidence {
-                            ForEach(finding.evidence, id: \.self) { line in
-                                Text(line).font(.caption2.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
-                            }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Button(action: onToggle) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.bold)).foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .frame(width: 10)
+                        if let client = item.client { ClientBrandIcon(client: client, size: 16).frame(width: 20) }
+                        else { Image(systemName: "desktopcomputer").font(.caption).foregroundStyle(.secondary).frame(width: 20) }
+                        Text(item.title).font(.callout.weight(.medium)).lineLimit(1)
+                        if item.severity >= .medium, item.bucket != .fine { SeverityBadge(severity: item.severity) }
+                        if item.recommendation != nil {
+                            Image(systemName: "sparkles").font(.caption2).foregroundStyle(.secondary)
+                                .help("Your assistant spoke to this.")
                         }
+                        Spacer(minLength: 8)
                     }
+                    .contentShape(Rectangle())
                 }
-                Spacer(minLength: 12)
+                .buttonStyle(.plain)
+                .accessibilityLabel(item.title)
+                .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+
                 HStack(spacing: 6) {
-                    ForEach(Array(finding.actions.enumerated()), id: \.offset) { index, action in
-                        if index == 0 {
-                            Button(action.title) { press(action) }
-                                .buttonStyle(.borderedProminent).tint(AgentTheme.selection)
-                                .controlSize(.small).disabled(isBusy).help(help(for: action))
-                        } else {
-                            Button(action.title) { press(action) }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small).disabled(isBusy).help(help(for: action))
-                        }
+                    if item.canRun, let title = item.primaryTitle {
+                        Button(title, action: onRun)
+                            .buttonStyle(.borderedProminent).tint(AgentTheme.selection).controlSize(.small)
+                            .disabled(isBusy)
+                            .help(item.changesFiles ? "Changes files on this Mac. Removals go to Agent Tooling's trash; configuration files are backed up first." : "Reads only.")
+                    } else if let section = item.opens {
+                        Button(item.primaryTitle ?? "Open") { onOpen(section) }.buttonStyle(.bordered).controlSize(.small)
                     }
-                    Button("Dismiss", action: onDismiss).buttonStyle(.borderless).controlSize(.small).foregroundStyle(.secondary)
+                    Button(item.bucket == .fine ? "Dismiss" : "Skip", action: onDismiss)
+                        .buttonStyle(.borderless).controlSize(.small).foregroundStyle(.secondary)
                         .help("Stop mentioning this. It comes back if it changes.")
                 }
             }
+            .padding(.horizontal, 14).padding(.vertical, 9)
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(item.detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    if let recommendation = item.recommendation, !recommendation.rationale.isEmpty, recommendation.rationale != item.detail {
+                        Text(recommendation.rationale).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let provenance = item.provenance { ProvenanceLabel(provenance: provenance) }
+                    if item.findings.count > 1 || (item.findings.count == 1 && item.recommendation == nil) {
+                        findingList
+                    }
+                }
+                .padding(.leading, 46).padding(.trailing, 14).padding(.bottom, 12)
+            }
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
     }
 
-    /// An action that changes files, checks, or looks for a tool runs; one
-    /// that only names a screen opens it.
-    private func press(_ action: SetupAction) {
-        switch action {
-        case .inspectMCPServer, .manageMCPServer: onOpen(action)
-        default: onApply(action)
+    /// The individual findings behind a group, each with its own button, so a
+    /// person can take one without taking them all.
+    private var findingList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(item.findings.prefix(40).enumerated()), id: \.element.id) { index, finding in
+                HStack(spacing: 8) {
+                    Text(finding.subject).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
+                    if let first = finding.evidence.first, first != finding.subject {
+                        Text(first).font(.caption2.monospaced()).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.middle)
+                    }
+                    Spacer(minLength: 8)
+                    ForEach(Array(finding.actions.prefix(2).enumerated()), id: \.offset) { _, action in
+                        switch action {
+                        case .inspectMCPServer, .manageMCPServer:
+                            Button(action.title) { onOpen(.mcpServers) }.buttonStyle(.borderless).controlSize(.mini)
+                        default:
+                            Button(action.title) { onRunOne(action) }.buttonStyle(.borderless).controlSize(.mini).disabled(isBusy)
+                        }
+                    }
+                }
+                .padding(.vertical, 3)
+                if index < min(item.findings.count, 40) - 1 { Divider().opacity(0.4) }
+            }
+            if item.findings.count > 40 {
+                Text("\(item.findings.count - 40) more of the same.").font(.caption2).foregroundStyle(.tertiary).padding(.top, 4)
+            }
         }
-    }
-
-    private func help(for action: SetupAction) -> String {
-        switch action {
-        case .adoptSkill: "Copies the files into the library as yours. The app's folder is not changed."
-        case .removeSkillCopy: "Moves this folder into Agent Tooling's trash so it can be put back. The library's copy, if any, stays."
-        case .removeBrokenLink: "Removes the link. Nothing else is touched."
-        case .reinstallPlugin: "Runs the app's own plugin install command."
-        case .pruneStalePluginCache: "Moves the unused version folders into Agent Tooling's trash."
-        case .inspectMCPServer: "Opens Connections, where this server's configuration is shown."
-        case .locateTool: "Asks your login shell where the tool lives, and records the folder."
-        case .checkClient: "Reads what the app holds. Nothing is changed."
-        case .manageMCPServer: "Opens Connections to bring this server into the library once."
-        }
+        .padding(10)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
-/// One recommendation: the proposal, why, where the claim came from, and the
-/// one action it carries.
-struct RecommendationRowView: View {
-    let recommendation: SetupRecommendation
-    let isBusy: Bool
-    let onApply: () -> Void
-    let onDismiss: () -> Void
-    let onOpen: () -> Void
+// MARK: - Fix all
+
+/// What "Fix all" will do, counted, before it does it. Nothing is deleted:
+/// folders go to the trash and configuration files are backed up.
+struct FixAllSheet: View {
+    let plan: CheckupTriage.FixAllPlan
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            if let client = recommendation.client { ClientBrandIcon(client: client, size: 16).frame(width: 22).padding(.top, 2) }
-            else { Image(systemName: "sparkles").foregroundStyle(.secondary).frame(width: 22).padding(.top, 2) }
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(recommendation.title).font(.callout.weight(.medium))
-                    Text(recommendation.category.title).font(.caption2).foregroundStyle(.secondary)
-                        .padding(.horizontal, 6).padding(.vertical, 2).background(.quaternary, in: Capsule())
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.circle").font(.system(size: 26)).foregroundStyle(AgentTheme.selection)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Fix \(plan.total) thing\(plan.total == 1 ? "" : "s")").font(.title3.weight(.semibold))
+                    Text("Each runs through Agent Tooling's own reviewed path. Nothing is deleted: folders move to the workspace trash and configuration files are copied there first.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                Text(recommendation.summary).font(.caption).fixedSize(horizontal: false, vertical: true)
-                Text(recommendation.rationale).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                ProvenanceLabel(provenance: recommendation.provenance)
             }
-            Spacer(minLength: 12)
-            HStack(spacing: 6) {
-                switch recommendation.action {
-                case .take(let action):
-                    Button(action.title) { action.changesFiles ? onApply() : onOpen() }
-                        .buttonStyle(.borderedProminent).tint(AgentTheme.selection).controlSize(.small).disabled(isBusy)
-                case .installPlugin(_, let pluginID):
-                    Button("Install \(pluginID.split(separator: "@").first.map(String.init) ?? pluginID)", action: onApply)
-                        .buttonStyle(.borderedProminent).tint(AgentTheme.selection).controlSize(.small).disabled(isBusy)
-                case .setSetting(_, let key, let value):
-                    Button("Open settings", action: onOpen).buttonStyle(.bordered).controlSize(.small)
-                        .help("Set \(key) to \(value). Settings are changed on the Settings tab, where the file is shown.")
-                case .disableMCPServer(_, let name):
-                    Button("Open connections", action: onOpen).buttonStyle(.bordered).controlSize(.small)
-                        .help("Turn \(name) off from Connections.")
-                case .readOnly:
-                    EmptyView()
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(plan.lines, id: \.self) { line in
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.turn.down.right").font(.caption).foregroundStyle(.tertiary)
+                        Text(line).font(.callout)
+                    }
                 }
-                Button("Dismiss", action: onDismiss).buttonStyle(.borderless).controlSize(.small).foregroundStyle(.secondary)
+            }
+            .padding(14).frame(maxWidth: .infinity, alignment: .leading).standardPanel()
+            HStack {
+                Button("Cancel", action: onCancel).keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Fix all", action: onConfirm).buttonStyle(.borderedProminent).tint(AgentTheme.selection).keyboardShortcut(.defaultAction)
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
+        .padding(22)
+        .frame(width: 520)
     }
 }
+
+// MARK: - Shared bits
 
 struct SeverityBadge: View {
     let severity: SetupFinding.Severity
@@ -445,6 +497,23 @@ struct ProvenanceLabel: View {
         case .audit: "Grounded in a finding the deterministic audit proved."
         case .investigated(let source): "The assistant read this itself: \(source)"
         case .opinion: "The assistant's judgment, with no specific file or finding behind it."
+        }
+    }
+}
+
+extension SetupFinding.Kind {
+    var title: String {
+        switch self {
+        case .brokenSkillLink: "Links that point at nothing"
+        case .missingPluginInstall: "Plugins whose files are gone"
+        case .duplicateSkillInClient: "Skills an app can reach twice"
+        case .unmanagedSkill: "Skills not managed by this app"
+        case .unreachableMCPCommand: "MCP servers that cannot start"
+        case .stalePluginCache: "Old plugin versions on disk"
+        case .toolUnavailable: "Apps whose command could not be run"
+        case .neverChecked: "Apps never checked"
+        case .skillWithoutDefinition: "Skill folders with no definition"
+        case .mcpServerRepeatedAcrossClients: "Servers configured in several apps"
         }
     }
 }

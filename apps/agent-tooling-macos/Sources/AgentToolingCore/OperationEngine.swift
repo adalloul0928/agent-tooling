@@ -370,6 +370,30 @@ public actor OperationExecutor {
             try fileManager.moveItem(at: destination, to: kept)
             return (.succeeded, "Moved \(destination.path(percentEncoded: false)) to \(kept.path(percentEncoded: false)).")
 
+        case .editClientConfiguration:
+            guard let destinationPath = step.destinationPath, let contents = step.contents else { throw OperationEngineError.malformedStep(step.title) }
+            guard let file = ClientConfigurationFile.matching(destinationPath, homeURL: homeURL) else {
+                throw OperationEngineError.unsafeDestination(destinationPath)
+            }
+            let edit = try ClientConfigurationEdit.decode(contents)
+            guard edit.file == file, edit.isSafe else { throw OperationEngineError.unsafeDestination(destinationPath) }
+            let destination = file.url(homeURL: homeURL)
+            let existing = (try? String(contentsOf: destination, encoding: .utf8)) ?? ""
+            guard existing.utf8.count <= BoundedFileAccess.maximumConfigurationBytes else { throw OperationEngineError.sourceTooLarge }
+            let updated = try ClientConfigurationEditor.apply(edit, to: existing)
+            if updated == existing { return (.skipped, "\(destination.lastPathComponent) already says that.") }
+            // The file as it was, kept whole under a dated name, so any edit
+            // can be undone by putting it back.
+            if !existing.isEmpty {
+                let trash = store.rootURL.appending(path: "trash", directoryHint: .isDirectory)
+                    .appending(path: Self.trashStamp(), directoryHint: .isDirectory)
+                try fileManager.createDirectory(at: trash, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                try Data(existing.utf8).write(to: trash.appending(path: destination.lastPathComponent), options: .atomic)
+            }
+            try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(updated.utf8).write(to: destination, options: .atomic)
+            return (.succeeded, edit.summary + ".")
+
         case .replaceManagedLibrary:
             guard let destinationPath = step.destinationPath, let contents = step.contents else {
                 throw OperationEngineError.malformedStep(step.title)
