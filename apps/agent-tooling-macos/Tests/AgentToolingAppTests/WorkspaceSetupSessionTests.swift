@@ -80,7 +80,9 @@ struct WorkspaceSetupSessionTests {
         let freshFixture = try await ShellRenderFixture(setupServices: freshServices)
         defer { freshFixture.remove() }
         await freshFixture.workspace.setup.runScheduledCheckupIfStale()
-        #expect(freshServices.reviewCalls.isEmpty, "an hour-old checkup is not redone")
+        #expect(freshServices.reviewCalls.isEmpty, "an hour-old review is not redone")
+        #expect(freshFixture.workspace.setup.checkup?.audit.generatedAt ?? .distantPast > fresh.audit.generatedAt, "the audit itself runs on every open")
+        #expect(freshFixture.workspace.setup.checkup?.review != nil, "and keeps the review it had")
 
         var stale = ShellRenderFixture.setupCheckup(home: URL(filePath: "/Users/example"))
         stale.completedAt = .now.addingTimeInterval(-8 * 24 * 3_600)

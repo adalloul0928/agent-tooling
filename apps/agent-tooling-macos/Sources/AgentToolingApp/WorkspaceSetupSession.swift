@@ -264,12 +264,15 @@ final class WorkspaceSetupSession {
         }
     }
 
-    /// The weekly run: when the app opens and the last checkup is more than a
-    /// week old, audit and review in the background.
+    /// The run on open. The audit is a second's work and reads only what the
+    /// last check saw, so it runs every time and the list is always current;
+    /// the assistant's review is the slow part and runs when the last one is
+    /// more than a week old.
     func runScheduledCheckupIfStale() async {
-        guard isStale, !isBusy else { return }
+        guard !isBusy else { return }
+        let wasStale = isStale
         await audit()
-        guard reviewClient != nil else { return }
+        guard wasStale, reviewClient != nil else { return }
         await review(purpose: .checkup)
     }
 
