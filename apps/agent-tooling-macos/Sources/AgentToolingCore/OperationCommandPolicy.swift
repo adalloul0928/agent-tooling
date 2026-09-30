@@ -84,6 +84,9 @@ struct OperationCommandPolicy: Sendable {
         // Adding the official marketplace, which the skill-creator plugin
         // install needs first. One literal, nothing variable.
         if arguments == SkillCreatorCommandShapes.claudeOfficialMarketplaceAddArguments { return }
+        // Trying a skill: the interactive client, with `/name` as its first
+        // message. The name is one checked identifier.
+        if SkillTrialCommandShapes.isTrialShape(.claude, arguments) { return }
         // Read-only listing and per-server lookup, plus the OAuth login flow.
         // The login opens the browser itself; the app never handles a token.
         if arguments == ["mcp", "list"] { return }
@@ -155,6 +158,9 @@ struct OperationCommandPolicy: Sendable {
         // The skill creator: Codex exec, starting a thread in a staged request
         // folder under the home directory, or resuming one by identifier.
         if SkillCreatorCommandShapes.isCodexCreatorShape(arguments, homeURL: homeURL) { return }
+        // Trying a skill: the interactive client, with `$name` as its first
+        // message. The name is one checked identifier.
+        if SkillTrialCommandShapes.isTrialShape(.codex, arguments) { return }
         if arguments == ["mcp", "list"] || arguments == ["mcp", "list", "--json"] { return }
         if arguments.count == 3,
             arguments[0] == "mcp",
@@ -259,6 +265,9 @@ struct OperationCommandPolicy: Sendable {
     /// `--args` pairs after the fixed prefix for a stdio server.
     private func validateKiro(_ arguments: [String]) throws {
         let scopes = ["global", "workspace"]
+        // Trying a skill: an interactive chat with `/name` as its first
+        // message. The name is one checked identifier.
+        if SkillTrialCommandShapes.isTrialShape(.kiro, arguments) { return }
         // Read-only listing. Kiro CLI 2.23.0 has no verified login command, so
         // this is list-only; no login shape is admitted for it.
         if arguments == ["mcp", "list"] { return }

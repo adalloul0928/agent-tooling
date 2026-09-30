@@ -215,6 +215,23 @@ can be saved. A request queued by the CLI helper or the MCP server
 (`--provider claude|codex`, or the `assistant` argument) names the assistant
 and opens the same creator on the `agent-tooling://skills/create/<id>` route.
 
+## Try a skill in its app
+
+Each row under **Apps** in a skill's details has a **Try…** button where the
+last check found the skill. It opens Terminal.app with that client running
+interactively and the skill invoked as the first message — `claude /name`
+(`/plugin:name` for a plugin's skill), `codex $name`, or
+`kiro-cli chat /name` — so you can watch what the skill does and keep talking
+to the client afterwards. Gemini CLI is not offered: this app has no verified
+way to call a skill there by name.
+
+The launch is a `.command` file written under the workspace's own cache. It
+runs the tool the app located (the same one every other command uses), through
+your login shell so your profile applies, from your home directory. The
+argument list is checked against the operation policy before the file is
+written, and every value in the script is quoted. Nothing in the library or in
+any client changes.
+
 ## Raycast shortcuts
 
 The companion extension lives at

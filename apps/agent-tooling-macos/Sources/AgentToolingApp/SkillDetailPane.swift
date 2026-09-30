@@ -4,6 +4,11 @@ import SwiftUI
 
 struct SkillDetailView: View {
     @Environment(AppNavigationState.self) private var navigation: AppNavigationState?
+    @Environment(\.skillTrialOpening) private var trialOpening
+    /// The client being opened in Terminal right now, if any.
+    @State private var openingTrialIn: ClientKind?
+    /// What the last try opened, or why it could not.
+    @State private var trialNotice: TrialNotice?
     let skill: SkillEntry
     let workspace: WorkspaceLaunch.Workspace
     let content: SkillContentSession
@@ -114,9 +119,25 @@ struct SkillDetailView: View {
                         } else {
                             Text(detail(for: client)).font(.caption).foregroundStyle(.secondary)
                         }
+                        tryButton(for: client)
                     }
                     .padding(.horizontal, 6).padding(.vertical, 9)
                     if index < availableClients.count - 1 { Divider() }
+                }
+                if let trialNotice {
+                    Divider()
+                    HStack(spacing: 8) {
+                        Image(systemName: trialNotice.isError ? "exclamationmark.triangle" : "terminal")
+                            .foregroundStyle(trialNotice.isError ? Color.red : Color.secondary)
+                        Text(trialNotice.text)
+                            .font(.caption)
+                            .foregroundStyle(trialNotice.isError ? Color.red : Color.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer()
+                        Button("Dismiss") { self.trialNotice = nil }
+                            .buttonStyle(.borderless).font(.caption)
+                    }
+                    .padding(.horizontal, 6).padding(.vertical, 9)
                 }
                 if navigation != nil, availableClients.contains(where: isAskedForButAbsent) {
                     Divider()
@@ -144,10 +165,78 @@ struct SkillDetailView: View {
                 Text("Apps")
                 SkillInfoButton(
                     text:
-                        "Found means the last check of this Mac saw this skill in that app. Asked for means somebody saved that choice here; installing it is a separate, reviewed step on the Apps screen.",
+                        "Found means the last check of this Mac saw this skill in that app. Asked for means somebody saved that choice here; installing it is a separate, reviewed step on the Apps screen. Try opens Terminal with that app running and the skill invoked, so you can see what it does.",
                     label: "About app availability")
             }
         }
+    }
+
+    // MARK: - Trying the skill
+
+    /// Opens Terminal with `client` running and this skill invoked as its
+    /// first message. Offered only where the last check found the skill: a
+    /// client that does not have it would only say so.
+    @ViewBuilder private func tryButton(for client: ClientKind) -> some View {
+        let reason = cannotTryReason(in: client)
+        Button {
+            guard let name = skill.declaredName else { return }
+            openingTrialIn = client
+            trialNotice = nil
+            let opening = trialOpening(workspace)
+            Task { @MainActor in
+                defer { openingTrialIn = nil }
+                do {
+                    let launch = try await opening.tryOut(skillName: name, in: client)
+                    trialNotice = TrialNotice(
+                        text: "Opened Terminal running \(launch.commandLine). Nothing here changed.", isError: false)
+                } catch {
+                    trialNotice = TrialNotice(
+                        text: (error as? any LocalizedError)?.errorDescription ?? "Terminal could not be opened.",
+                        isError: true)
+                }
+            }
+        } label: {
+            if openingTrialIn == client {
+                ProgressView().controlSize(.mini)
+            } else {
+                Label("Try…", systemImage: "terminal")
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(reason != nil || openingTrialIn != nil)
+        .help(reason ?? tryHelp(for: client))
+        .accessibilityLabel("Try this skill in \(client.rawValue)")
+        .accessibilityHint(reason ?? tryHelp(for: client))
+    }
+
+    private func tryHelp(for client: ClientKind) -> String {
+        let invocation = skill.declaredName.flatMap { SkillTrialCommandShapes.invocationText(for: client, skillName: $0) }
+        return "Opens Terminal running \(client.rawValue) with \(invocation ?? "this skill") as the first message."
+    }
+
+    /// Why this skill cannot be tried in `client` right now, or nil when it can.
+    private func cannotTryReason(in client: ClientKind) -> String? {
+        guard SkillTrialCommandShapes.isSupported(client) else {
+            return "Trying a skill in \(client.rawValue) from here is not supported yet."
+        }
+        guard let name = skill.declaredName, SkillTrialCommandShapes.isValidSkillReference(name) else {
+            return "This skill has no name a client could call."
+        }
+        guard inventory.observedClients[skill.id]?.contains(client) == true else {
+            return skill.requestedClients.contains(client)
+                ? "Install it in \(client.rawValue) first; the last check did not find it there."
+                : "The last check did not find this skill in \(client.rawValue)."
+        }
+        guard trialOpening(workspace).canTry(in: client) else {
+            return "\(client.rawValue)'s command-line tool was not found on this Mac."
+        }
+        return nil
+    }
+
+    private struct TrialNotice: Equatable {
+        let text: String
+        let isError: Bool
     }
 
     /// Found beats asked for: what is actually there is the stronger claim, and
