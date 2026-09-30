@@ -54,4 +54,5 @@ public enum ExternalAppSection: String, CaseIterable, Sendable {
     case activity
     case accounts
     case settings
+    case checkup
 }

@@ -158,6 +158,55 @@ struct SetupAuditTests {
         #expect(report.findings.first?.severity == .high, "worst first")
     }
 
+    /// AIM keeps Codex's plugins flat by name; their siblings are other
+    /// plugins, not old versions, and must not be offered for removal.
+    @Test func aPluginKeptFlatByNameHasNoStaleVersions() throws {
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "SetupAuditTests-flat-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let plugins = root.appending(path: ".aim/plugins/codex", directoryHint: .isDirectory)
+        for name in ["Core", "Pipeline", "Atlas"] {
+            try FileManager.default.createDirectory(at: plugins.appending(path: name), withIntermediateDirectories: true)
+        }
+        let observation = TargetObservation(
+            surface: .codexCLI, installed: true, commandAvailable: true, version: "0.159",
+            configurationPaths: [], discoveredSkills: [], discoveredPlugins: ["Core@aim"], discoveredMCPServers: [],
+            skillMetadata: [:],
+            pluginMetadata: ["Core@aim": .init(name: "Core", source: plugins.appending(path: "Core").path(percentEncoded: false), scope: "User", enabled: true)],
+            mcpMetadata: [:], capabilities: Home.capabilities, notes: [])
+        let report = SetupAuditor(homeURL: root).audit(observations: [observation], managed: [.codex], library: .init(managedSkillNames: []))
+        #expect(!report.findings.contains { $0.kind == .stalePluginCache })
+        #expect(SetupAuditor.looksLikeVersion("1.0.6484223236") && SetupAuditor.looksLikeVersion("fa59bc903774") && SetupAuditor.looksLikeVersion("unknown"))
+        #expect(!SetupAuditor.looksLikeVersion("Pipeline") && !SetupAuditor.looksLikeVersion("Core"))
+    }
+
+    /// A plugin from a directory marketplace loads from that folder even
+    /// when its install record names a cache path that is gone.
+    @Test func aPluginFromADirectoryMarketplaceIsNotMissingWhenItsFolderIsThere() throws {
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "SetupAuditTests-mkt-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let marketplace = root.appending(path: ".aim/cc-plugins", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: marketplace.appending(path: "Woot-all/.claude-plugin"), withIntermediateDirectories: true)
+        try "{}".write(to: marketplace.appending(path: "Woot-all/.claude-plugin/plugin.json"), atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(at: root.appending(path: ".claude"), withIntermediateDirectories: true)
+        let settings = root.appending(path: ".claude/settings.json")
+        try #"{"extraKnownMarketplaces":{"aim":{"source":{"source":"directory","path":"\#(marketplace.path(percentEncoded: false))"}}}}"#
+            .write(to: settings, atomically: true, encoding: .utf8)
+        let observation = TargetObservation(
+            surface: .claudeCode, installed: true, commandAvailable: true, version: "2",
+            configurationPaths: [settings.path(percentEncoded: false)], discoveredSkills: [], discoveredPlugins: ["Woot-all@aim", "Gone-all@aim"],
+            discoveredMCPServers: [], skillMetadata: [:],
+            pluginMetadata: [
+                "Woot-all@aim": .init(name: "Woot", source: root.appending(path: ".claude/plugins/cache/aim/Woot-all/1.0.1").path(percentEncoded: false), scope: "User", enabled: true),
+                "Gone-all@aim": .init(name: "Gone", source: root.appending(path: ".claude/plugins/cache/aim/Gone-all/1.0.1").path(percentEncoded: false), scope: "User", enabled: true),
+            ],
+            mcpMetadata: [:], capabilities: Home.capabilities, notes: [])
+        let report = SetupAuditor(homeURL: root).audit(observations: [observation], managed: [.claude], library: .init(managedSkillNames: []))
+        let missing = report.findings.filter { $0.kind == .missingPluginInstall }.map(\.subject)
+        #expect(missing == ["Gone-all@aim"], "the one whose folder is in the marketplace directory is not missing")
+    }
+
     @Test func aManagedSkillIsNotReportedAsUnmanaged() throws {
         let home = try Home()
         defer { home.remove() }

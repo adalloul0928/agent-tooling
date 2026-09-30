@@ -334,10 +334,21 @@ public struct SetupAuditor: Sendable {
 
     private func pluginFindings(client: ClientKind, observation: TargetObservation) -> [SetupFinding] {
         var findings: [SetupFinding] = []
+        let marketplaceDirectories = directoryMarketplaces(client: client, configurationPaths: observation.configurationPaths)
         for (id, plugin) in observation.pluginMetadata.sorted(by: { $0.key < $1.key }) {
             guard plugin.source.hasPrefix("/") else { continue }
             let install = URL(filePath: plugin.source)
             if !fileManager.fileExists(atPath: install.path(percentEncoded: false)) {
+                // A plugin from a directory marketplace loads from that
+                // directory, whatever the install record's cache path says.
+                // The record is stale; the plugin is not missing.
+                let name = id.split(separator: "@").first.map(String.init) ?? id
+                let marketplace = id.split(separator: "@").dropFirst().first.map(String.init)
+                if let marketplace, let directory = marketplaceDirectories[marketplace],
+                    fileManager.fileExists(atPath: directory.appending(path: name).appending(path: ".claude-plugin/plugin.json").path(percentEncoded: false))
+                {
+                    continue
+                }
                 findings.append(
                     SetupFinding(
                         kind: .missingPluginInstall, severity: .high, client: client, subject: id,
@@ -345,9 +356,15 @@ public struct SetupAuditor: Sendable {
                         detail: "\(client.rawValue) records this plugin as installed at a folder that does not exist, so its skills and servers do not load.",
                         evidence: [redact(plugin.source)], actions: [.reinstallPlugin(pluginID: id, client: client)]))
             }
-            // Sibling version folders beside the one in use.
+            // Sibling version folders beside the one in use. Only where the
+            // install path is a version folder inside a plugin cache
+            // (`…/cache/<marketplace>/<plugin>/<version>`): a plugin kept flat
+            // by name, as AIM keeps Codex's, has siblings that are other
+            // plugins, not old versions.
             let versionsRoot = install.deletingLastPathComponent()
-            if let siblings = try? fileManager.contentsOfDirectory(at: versionsRoot, includingPropertiesForKeys: [.isDirectoryKey]) {
+            let isVersionedCache = versionsRoot.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent == "cache"
+                && Self.looksLikeVersion(install.lastPathComponent)
+            if isVersionedCache, let siblings = try? fileManager.contentsOfDirectory(at: versionsRoot, includingPropertiesForKeys: [.isDirectoryKey]) {
                 let stale = siblings.filter {
                     $0.lastPathComponent != install.lastPathComponent && !$0.lastPathComponent.hasPrefix(".")
                         && ((try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false)
@@ -364,6 +381,14 @@ public struct SetupAuditor: Sendable {
             }
         }
         return findings
+    }
+
+    /// A version folder's name: digits and dots (`1.0.6484223236`), or a git
+    /// revision (`fa59bc903774`, `unknown` as Claude writes it).
+    static func looksLikeVersion(_ name: String) -> Bool {
+        if name == "unknown" { return true }
+        if name.allSatisfy({ $0.isNumber || $0 == "." }), name.contains(".") { return true }
+        return name.count >= 7 && name.count <= 40 && name.allSatisfy { $0.isHexDigit }
     }
 
     // MARK: MCP servers
@@ -383,6 +408,28 @@ public struct SetupAuditor: Sendable {
             }
         }
         return findings
+    }
+
+    /// Marketplaces a client reads from a folder on disk, by name: Claude's
+    /// `extraKnownMarketplaces` in settings.json and its known_marketplaces
+    /// record. A plugin from one of these loads from the folder directly.
+    func directoryMarketplaces(client: ClientKind, configurationPaths: [String]) -> [String: URL] {
+        guard client == .claude else { return [:] }
+        var found: [String: URL] = [:]
+        let candidates = configurationPaths.map { URL(filePath: $0) } + [homeURL.appending(path: ".claude/plugins/known_marketplaces.json")]
+        for url in candidates {
+            guard let text = try? BoundedFileAccess.readUTF8(at: url, maximumBytes: BoundedFileAccess.maximumConfigurationBytes),
+                let data = text.data(using: .utf8), let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { continue }
+            let entries = (root["extraKnownMarketplaces"] as? [String: Any]) ?? (url.lastPathComponent == "known_marketplaces.json" ? root : [:])
+            for (name, value) in entries {
+                guard let source = (value as? [String: Any])?["source"] as? [String: Any],
+                    source["source"] as? String == "directory", let path = source["path"] as? String
+                else { continue }
+                found[name] = URL(filePath: path.hasPrefix("~/") ? homeURL.appending(path: String(path.dropFirst(2))).path(percentEncoded: false) : path, directoryHint: .isDirectory)
+            }
+        }
+        return found
     }
 
     /// The `command` of every stdio server in the client's own configuration

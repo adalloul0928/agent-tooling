@@ -181,6 +181,7 @@ extension AppSection {
         case .activity: self = .activity
         case .accounts: self = .syncCenter
         case .settings: self = .settings
+        case .checkup: self = .checkup
         }
     }
 }
