@@ -263,6 +263,50 @@ inside a private request folder — with the digests on standard input, so the
 assistant can read and answer but cannot act. Nothing about the transcripts
 leaves this Mac except through the assistant you are already signed in to.
 
+## Checkup, setup, and reviewing an app
+
+Three loops share one pipeline: a deterministic audit, then your own signed-in
+assistant reading it, then a walk through what it proposes, one reviewed action
+at a time.
+
+**The audit** reads what the last check of each app saw plus a bounded look at
+the folders it named, and lists facts with their evidence: a skill folder entry
+that points at nothing, a plugin the app lists whose install folder is gone, a
+skill one app can reach by two paths, a skill this library does not manage, an
+MCP server whose command is not on disk or the login shell's PATH, old plugin
+versions beside the one in use, a skill folder with no SKILL.md, an app whose
+tool could not be run, and a server configured by hand in several apps. Every
+finding carries the actions the app can take for it. It runs in a moment and
+gives the same answer every time.
+
+**The review** hands the audit to Claude Code (or Codex when Claude Code is not
+managed) in a command the operation policy holds to one shape: it may read the
+six tooling folders under home (`~/.claude`, `~/.codex`, `~/.agents`,
+`~/.kiro`, `~/.gemini`, `~/.aim`), and for a client review the web, and nothing
+else — no shell, no writes. Its answer is a schema of bounded strings mapped to
+typed recommendations, each labelled with where its claim came from: a finding
+id, the file or page the assistant read, or plainly its opinion. A
+recommendation naming a finding or action that does not exist is dropped.
+
+**Applying** is one row at a time. Adopting a skill copies its files into the
+library as yours and leaves the app's folder alone; removing a copy moves the
+folder into the workspace's trash (or removes a link, leaving its target);
+reinstalling a plugin runs the app's own command; pruning old versions moves
+them to the trash. Settings and server toggles open the screens that own them.
+Nothing runs in bulk.
+
+The **Checkup** tab under Apps shows the latest audit and review and runs both
+on its own when the app opens and the last checkup is more than a week old.
+**Set up…** (on Apps, on Checkup, and at the end of first-run onboarding) opens
+a wizard: choose the apps this Mac manages, audit, hand off to the assistant,
+then one stop per category — cleanup, duplicates, unmanaged skills,
+connections, settings — with the findings and recommendations for it. Home
+shows the last checkup in a sentence. Each app's page has **Review**, which
+fetches what the app has published since your installed version (Claude Code's
+changelog, Codex's GitHub releases, Kiro's changelog pages), hands the notes,
+your configuration, and the audit to the assistant with the web allowed, and
+shows what to adopt with each item's source.
+
 ## Try a skill in its app
 
 Each row under **Apps** in a skill's details has a **Try…** button where the
