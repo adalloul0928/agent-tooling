@@ -82,7 +82,7 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
                 ),
                 isAssignable: authority != .trackedOnly,
                 assignmentExplanation: authority == .trackedOnly
-                    ? "Tracked in this library. Choose how to manage it before assigning."
+                    ? "Not managed by this app. It was found where it is and this library holds no copy, so it cannot be placed from here."
                     : nil,
                 assignableReasons: authority == .trackedOnly ? [] : [.manual, .preset],
                 nativeRoutes: Self.routes(artifact.nativeRoutes),

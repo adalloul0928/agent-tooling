@@ -122,6 +122,30 @@ struct ClientMarks: View {
     }
 }
 
+/// The apps this library has placed something in, as overlapping discs: one
+/// glance says "yours, and in these". Order follows the shell's client order
+/// so the same apps stack the same way on every row.
+struct PlacementStack: View {
+    let placed: Set<ClientKind>
+    var size: CGFloat = 20
+    @Environment(\.availableClients) private var order
+
+    private var ordered: [ClientKind] { order.filter(placed.contains) }
+
+    var body: some View {
+        HStack(spacing: -(size * 0.32)) {
+            ForEach(ordered) { client in
+                ClientDisc(client: client, size: size)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            ordered.isEmpty
+                ? "Not placed anywhere"
+                : "Yours. Placed by this app in \(ordered.map(\.rawValue).joined(separator: ", "))")
+    }
+}
+
 struct ClientDisc: View {
     let client: ClientKind
     var size: CGFloat = 34

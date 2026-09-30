@@ -36,7 +36,7 @@ struct SkillTableColumns {
     /// Whether anything on this list has a description to put in one.
     let describing: Bool
     var expanded: Bool { width >= 940 }
-    var verdict: CGFloat { expanded ? 96 : 78 }
+    var verdict: CGFloat { expanded ? 118 : 104 }
     var name: CGFloat {
         guard expanded else { return max(140, width - 144 - verdict - (selecting ? 32 : 0)) }
         // With no description column the name takes the space back rather than
@@ -73,12 +73,10 @@ struct SkillCollectionRow: View {
         (columns.describing ? 1 : 0) + (origin == nil ? 0 : 1)
     }
 
-    /// What has been asked for, never what is installed.
-    private var verdict: String {
-        let count = skill.requestedAssignments.filter(\.desiredPresence).count
-        guard count > 0 else { return skill.isAssignable ? "Not assigned" : "Tracked" }
-        return count == 1 ? "1 place" : "\(count) places"
-    }
+    /// Who manages this skill, which is a different claim from where it was
+    /// found. Where this app placed it, the apps are shown; otherwise the
+    /// words say who does manage it, so a row never reads as "not available".
+    private var management: SkillManagement { SkillManagement(skill) }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -129,11 +127,23 @@ struct SkillCollectionRow: View {
             .buttonStyle(.plain).accessibilityLabel(skill.displayName)
             ClientMarks(present: observed, size: 15)
                 .frame(width: 72, alignment: .trailing)
-            Text(verdict)
-                .font(.caption).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
-                .lineLimit(1)
-                .frame(width: columns.verdict, alignment: .trailing)
-                .help("Where this skill has been asked for. Installation is checked separately.")
+            Group {
+                if case .placed(let clients) = management {
+                    // The word says whose it is; the discs say where this app
+                    // put it. One disc alone would only say "Claude".
+                    HStack(spacing: 6) {
+                        Text(management.label)
+                            .font(.caption).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
+                        PlacementStack(placed: clients, size: 20)
+                    }
+                } else {
+                    Text(management.label)
+                        .font(.caption).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(width: columns.verdict, alignment: .trailing)
+            .help(management.explanation)
         }
         .foregroundStyle(selected ? Color.white : Color.primary)
         .padding(.horizontal, 16)
@@ -143,3 +153,52 @@ struct SkillCollectionRow: View {
     }
 }
 
+
+/// The Managed column's four answers. "Found in" says where a skill is;
+/// this says who put it there and who can change it.
+enum SkillManagement: Equatable {
+    /// Yours, and this app placed it in these apps.
+    case placed(Set<ClientKind>)
+    /// Yours, but not placed anywhere yet.
+    case yoursUnplaced
+    /// Came with a plugin. The plugin is what an app installs or removes.
+    case byPlugin
+    /// Found in an app's folder; this app did not put it there and holds no
+    /// copy, so it can show and try it, not place, edit, or update it.
+    case notByThisApp
+
+    init(_ skill: SkillEntry) {
+        let placed = skill.requestedClients
+        if !placed.isEmpty {
+            self = .placed(placed)
+        } else if skill.ownership == .trackedOnly {
+            self = .notByThisApp
+        } else if skill.ownership == .nativeOwned {
+            self = .byPlugin
+        } else {
+            self = .yoursUnplaced
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .placed: "Yours"
+        case .yoursUnplaced: "Yours, not placed"
+        case .byPlugin: "By its plugin"
+        case .notByThisApp: "Not by this app"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .placed:
+            "Yours. This app placed it in the apps shown. Whether each install is in place is checked on the Apps screen."
+        case .yoursUnplaced:
+            "Yours, in this library, but not placed in any app yet. Choose where to use it from its details."
+        case .byPlugin:
+            "Came with a plugin. The plugin is what gets installed or removed; this library lists the skill so you can find it, see where it is, and try it."
+        case .notByThisApp:
+            "Found in an app's folder, but this app did not put it there and holds no copy. It can show and try it, not place, edit, or update it."
+        }
+    }
+}

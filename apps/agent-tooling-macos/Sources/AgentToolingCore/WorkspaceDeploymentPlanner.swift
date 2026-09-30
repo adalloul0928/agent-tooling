@@ -228,7 +228,7 @@ public enum WorkspaceDeploymentPlanner {
             case .content:
                 guard artifact.authority != .trackedOnly else {
                     exclude(.trackedOwnership, artifact.identity.id, requirement.physicalDestinationID,
-                            "Tracked items record what exists; the library does not install them.")
+                            "Not managed by this app: this library records that it exists and does not install it.")
                     continue
                 }
                 guard let digest = artifact.contentDigest else {
@@ -367,7 +367,7 @@ extension WorkspaceDeploymentPlanner {
     static func describe(_ kind: WorkspaceAssignmentIssueKind) -> String {
         switch kind {
         case .trackedOnlyOwnership:
-            "Tracked items record what exists; the library does not install them."
+            "Not managed by this app: this library records that it exists and does not install it."
         case .missingMaterializedContent:
             "The library holds no verified copy of this item yet."
         case .ambiguousContentEvidence:

@@ -505,7 +505,7 @@ struct WorkspaceAssignmentSheet: View {
         case .centralUpstream: "Upstream linked"
         case .nativeOwned: "Native plugin"
         case .attachedAuthoring: "Attached authoring source"
-        case .trackedOnly: "Tracked only"
+        case .trackedOnly: "Not managed by this app"
         }
     }
 

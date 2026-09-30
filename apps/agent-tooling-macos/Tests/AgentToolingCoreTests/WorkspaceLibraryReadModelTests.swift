@@ -26,7 +26,7 @@ struct WorkspaceLibraryReadModelTests {
         let tracked = try #require(model.rows.first { $0.artifactID == fixture.trackedID })
         #expect(!tracked.isAssignable)
         #expect(tracked.assignableReasons.isEmpty)
-        #expect(tracked.assignmentExplanation == "Tracked in this library. Choose how to manage it before assigning.")
+        #expect(tracked.assignmentExplanation == "Not managed by this app. It was found where it is and this library holds no copy, so it cannot be placed from here.")
     }
 
     @Test func theLibrarySizeCountsToolsCarriedInsidePluginsNotJustTheRowsAListCanShow() throws {

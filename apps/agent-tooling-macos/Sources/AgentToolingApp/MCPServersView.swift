@@ -607,7 +607,7 @@ extension WorkspaceLibraryOwnership {
         case .centralUpstream: "From a repository"
         case .nativeOwned: "Managed by its app"
         case .attachedAuthoring: "Linked authoring folder"
-        case .trackedOnly: "Tracked only"
+        case .trackedOnly: "Not managed by this app"
         }
     }
 }

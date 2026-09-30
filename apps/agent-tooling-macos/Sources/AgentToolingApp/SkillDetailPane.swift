@@ -53,19 +53,37 @@ struct SkillDetailView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(skill.displayName).font(.system(size: 20, weight: .semibold))
                 HStack(spacing: 6) {
-                    Text(skill.ownership.libraryLabel)
+                    Text(managementBadge)
                         .font(.caption2.weight(.medium))
                         .padding(.horizontal, 7).padding(.vertical, 3)
                         .background(.quaternary, in: Capsule())
-                    SkillInfoButton(
-                        text: skill.isMaintainedHere
-                            ? "The source is yours. Save an edit here, then review where the change should be used."
-                            : "This skill is maintained where it came from. This library records that it exists and where it is used.",
-                        label: "About maintenance")
+                    SkillInfoButton(text: managementNote, label: "About management")
                 }
                 .foregroundStyle(.secondary)
             }
             Spacer()
+        }
+    }
+
+    /// Who manages this skill, in the words the Managed column uses.
+    private var managementBadge: String {
+        switch skill.ownership {
+        case .centralPersonal: "Yours"
+        case .centralUpstream: "Yours · follows a repository"
+        case .attachedAuthoring: "Yours · linked folder"
+        case .nativeOwned: skill.parentID == nil ? "Managed by its app" : "Part of a plugin"
+        case .trackedOnly: "Not managed by this app"
+        }
+    }
+
+    private var managementNote: String {
+        switch skill.ownership {
+        case .centralPersonal, .centralUpstream, .attachedAuthoring:
+            "The source is yours. Save an edit here, then review where the change should be used."
+        case .nativeOwned:
+            SkillManagement.byPlugin.explanation
+        case .trackedOnly:
+            SkillManagement.notByThisApp.explanation
         }
     }
 
