@@ -232,6 +232,37 @@ can be saved. A request queued by the CLI helper or the MCP server
 (`--provider claude|codex`, or the `assistant` argument) names the assistant
 and opens the same creator on the `agent-tooling://skills/create/<id>` route.
 
+## Insights: what you keep doing by hand
+
+The Insights screen reads recent local chat history from Claude Code, Codex,
+and Kiro CLI (`~/.claude/projects`, `~/.codex/sessions` and its thread
+history, `~/.kiro/sessions/cli`) and answers two questions: which skills are
+actually being used, and what recurring work has no skill yet. Only aggregate
+findings are kept, in `insights-report.json` inside the workspace; message
+text never is.
+
+**Scan recent work** is the instant pass: a keyword match between what was
+asked and the skills the library holds. **Deep dive with Claude Code** (or
+Codex, when Claude Code is not managed) runs that pass, then hands the same
+conversations to your own signed-in assistant as bounded, redacted digests —
+the first few things you asked in each, capped at 400 characters apiece, the
+tool and skill names that answered, and the project folder's name, with
+secrets and `/Users/…` paths removed. The assistant is asked, against the
+list of skills you already have, for the themes it sees and for skills to
+create, use, or improve, each citing how many conversations support it. Its
+answer arrives in the background a minute or so later and appears above the
+keyword pass, where a "create" recommendation opens the skill creator with the
+brief the assistant wrote.
+
+The deep dive also runs on its own: once a day, when the app opens, after the
+library has been read, and only when the last one is more than a day old. It
+never blocks the window. The commands it runs are held to one shape each by
+the operation policy — `claude -p --output-format json --json-schema … --permission-mode plan`
+with every tool disallowed, or `codex exec --json --ephemeral --sandbox read-only --output-schema …`
+inside a private request folder — with the digests on standard input, so the
+assistant can read and answer but cannot act. Nothing about the transcripts
+leaves this Mac except through the assistant you are already signed in to.
+
 ## Try a skill in its app
 
 Each row under **Apps** in a skill's details has a **Try…** button where the

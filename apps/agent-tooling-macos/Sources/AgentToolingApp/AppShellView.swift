@@ -108,6 +108,12 @@ struct AppShellView: View {
             } else {
                 await library
             }
+            // The daily deep dive. The library has been read by now, so the
+            // scan has skills to compare against; it runs in the background
+            // and the Insights screen shows its answer when it arrives.
+            await workspace.insights.runScheduledDeepDiveIfStale(
+                options: InsightScanOptions(clients: Set(workspace.device.managedClients)),
+                managedClients: workspace.device.managedClients)
         }
         .onAppear(perform: applyExternalNavigation)
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }

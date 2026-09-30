@@ -186,7 +186,9 @@ struct ToolingInsightsTests {
         )
 
         let report = await ToolingInsightsService().scan(
-            options: InsightScanOptions(lookbackDays: 7, includeMarketplaceRecommendations: true),
+            // This fixture Mac has Claude and Codex history. Naming them keeps
+            // a Kiro source that is not there from reading as unavailable.
+            options: InsightScanOptions(clients: [.claude, .codex], lookbackDays: 7, includeMarketplaceRecommendations: true),
             skills: [releaseSkill, unusedSkill, singleUseSkill],
             marketplacePackages: [package, routeInstalledPackage],
             homeURL: home.url
@@ -423,7 +425,7 @@ struct ToolingInsightsTests {
         )
 
         let report = await ToolingInsightsService().scan(
-            options: InsightScanOptions(maximumItemsPerConversation: 10),
+            options: InsightScanOptions(clients: [.claude, .codex], maximumItemsPerConversation: 10),
             skills: [oldSkill, newSkill],
             marketplacePackages: [],
             homeURL: home.url

@@ -14,6 +14,22 @@ public struct ToolingInsightsService: Sendable {
         homeURL: URL,
         marketplaceProviders: [any MarketplaceProvider] = []
     ) async -> InsightsReport {
+        await scanWithDigests(
+            options: options, skills: skills, marketplacePackages: marketplacePackages, homeURL: homeURL,
+            marketplaceProviders: marketplaceProviders
+        ).report
+    }
+
+    /// The report, and the digests the same pass produced for a deep dive.
+    /// The digests are returned rather than kept: they hold redacted
+    /// conversation text, which the saved report never does.
+    public func scanWithDigests(
+        options: InsightScanOptions,
+        skills: [Skill],
+        marketplacePackages: [MarketplacePackage],
+        homeURL: URL,
+        marketplaceProviders: [any MarketplaceProvider] = []
+    ) async -> (report: InsightsReport, digests: [ConversationDigest]) {
         let now = Date.now
         let artifact = scanner.scan(options: options, skills: skills, homeURL: homeURL, now: now)
         let discovery = await discoverMarketplacePackages(
@@ -32,7 +48,7 @@ public struct ToolingInsightsService: Sendable {
             usage: usage,
             messages: artifact.messages
         )
-        return InsightsReport(
+        let report = InsightsReport(
             generatedAt: now,
             windowStart: artifact.windowStart,
             coverage: artifact.coverage.sorted { lhs, rhs in lhs.client.rawValue < rhs.client.rawValue },
@@ -43,6 +59,7 @@ public struct ToolingInsightsService: Sendable {
             conversationsScanned: artifact.coverage.reduce(0) { $0 + $1.conversationsScanned },
             itemsInspected: artifact.coverage.reduce(0) { $0 + $1.itemsInspected }
         )
+        return (report, artifact.digests)
     }
 }
 

@@ -56,7 +56,150 @@ public struct LocalConversationScanner: Sendable {
                 )
             }
         }
+        guard !Task.isCancelled else { return artifact }
+        if options.clients.contains(.kiro) {
+            artifact.merge(scanKiro(homeURL: homeURL, windowStart: windowStart, options: options, skillLookup: lookup))
+        }
 
+        return artifact
+    }
+
+    /// Kiro CLI keeps one `<id>.jsonl` per chat session, each line one item:
+    /// `Prompt` for the person, `AssistantMessage` for the model (with its tool
+    /// uses), `ToolResults` for what came back. A sibling `<id>.json` names the
+    /// session and its working directory.
+    private func scanKiro(
+        homeURL: URL,
+        windowStart: Date,
+        options: InsightScanOptions,
+        skillLookup: SkillNameLookup
+    ) -> ConversationScanArtifact {
+        var artifact = ConversationScanArtifact(windowStart: windowStart)
+        let kiroHome: URL
+        if let configured = ProcessInfo.processInfo.environment["KIRO_HOME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+            !configured.isEmpty
+        {
+            kiroHome = URL(filePath: configured, directoryHint: .isDirectory)
+        } else {
+            kiroHome = homeURL.appending(path: ".kiro", directoryHint: .isDirectory)
+        }
+        let sessionsURL = kiroHome.appending(path: "sessions/cli", directoryHint: .isDirectory)
+        let queriedFiles = recentJSONLFiles(
+            under: sessionsURL, containedBy: homeURL, limit: options.maximumConversationsPerClient + 1)
+        guard !queriedFiles.isEmpty else {
+            artifact.coverage = [
+                ConversationScanCoverage(
+                    client: .kiro, sourceID: "kiro-cli-sessions-jsonl-v1", sourceName: "Kiro CLI chat sessions",
+                    status: .unavailable, detail: "Kiro CLI chat sessions were not available.")
+            ]
+            return artifact
+        }
+        let files = Array(queriedFiles.prefix(options.maximumConversationsPerClient))
+        var scannedFiles = 0
+        var inspected = 0
+        var skipped = 0
+        var latestItemAt: Date?
+        var hadReadFailure = false
+        var wasTruncated = queriedFiles.count > options.maximumConversationsPerClient
+        var remainingTranscriptBytes = maximumClaudeTranscriptBytes
+        let maximumFileBytes = min(
+            16 * 1_024 * 1_024, max(options.maximumItemBytes, options.maximumItemBytes * options.maximumItemsPerConversation))
+
+        for file in files {
+            if Task.isCancelled { break }
+            guard let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= maximumFileBytes,
+                size <= remainingTranscriptBytes
+            else {
+                hadReadFailure = true
+                continue
+            }
+            remainingTranscriptBytes -= size
+            guard let contents = try? BoundedFileAccess.readUTF8(at: file, maximumBytes: maximumFileBytes, allowSymbolicLink: false)
+            else {
+                hadReadFailure = true
+                continue
+            }
+            let conversationID = file.deletingPathExtension().lastPathComponent
+            var digest = ConversationDigestBuilder(conversationID: conversationID, client: .kiro)
+            // The sibling metadata file names the session. It is small and its
+            // absence is fine; the transcript stands on its own.
+            let metadataURL = file.deletingPathExtension().appendingPathExtension("json")
+            if let metadataText = try? BoundedFileAccess.readUTF8(at: metadataURL, maximumBytes: 64 * 1_024, allowSymbolicLink: false),
+                let metadata = parseJSONObject(metadataText) as? [String: Any]
+            {
+                digest.title = metadata["title"] as? String
+                digest.workingDirectory = metadata["cwd"] as? String
+            }
+            let allLines = contents.split(whereSeparator: \Character.isNewline)
+            if allLines.count > options.maximumItemsPerConversation { wasTruncated = true }
+            var sawItemInWindow = false
+            var currentTurn = "before-first-prompt"
+            for (ordinal, line) in allLines.suffix(options.maximumItemsPerConversation).enumerated() {
+                if Task.isCancelled { break }
+                guard line.utf8.count <= options.maximumItemBytes,
+                    let object = parseJSONObject(String(line)) as? [String: Any],
+                    let kind = object["kind"] as? String,
+                    let data = object["data"] as? [String: Any]
+                else {
+                    skipped += 1
+                    continue
+                }
+                let date = ((data["meta"] as? [String: Any])?["timestamp"] as? Double).map { Date(timeIntervalSince1970: $0) }
+                    ?? Date.distantPast
+                guard date >= windowStart else { continue }
+                sawItemInWindow = true
+                inspected += 1
+                latestItemAt = maxDate(latestItemAt, date)
+                let texts = ((data["content"] as? [[String: Any]]) ?? []).compactMap { block -> String? in
+                    guard block["kind"] as? String == "text" else { return nil }
+                    return block["data"] as? String
+                }
+                switch kind {
+                case "Prompt":
+                    currentTurn = data["message_id"] as? String ?? "\(date.timeIntervalSince1970):\(ordinal)"
+                    let text = texts.joined(separator: "\n")
+                    guard !text.isEmpty else { continue }
+                    artifact.messages.append(
+                        .init(conversationID: conversationID, client: .kiro, date: date,
+                              tokens: insightTokens(from: sanitizeConversationText(text))))
+                    digest.noteUserMessage(text, at: date)
+                    // Kiro invokes a skill as a slash command in the prompt.
+                    for reference in slashSkillReferences(in: text) {
+                        digest.noteSkill(reference, at: date)
+                        if let skillID = skillLookup.resolve(reference) {
+                            artifact.evidence.insert(
+                                UsageEvidence(
+                                    key: "kiro:use:\(conversationID):\(currentTurn):\(skillID)", skillID: skillID,
+                                    precision: .exact, provenance: .kiroSlashCommand, client: .kiro, date: date))
+                        }
+                    }
+                case "AssistantMessage":
+                    for block in (data["content"] as? [[String: Any]]) ?? [] where block["kind"] as? String == "tool_use" {
+                        guard let use = block["data"] as? [String: Any], let name = use["name"] as? String else { continue }
+                        digest.noteTool(name, at: date)
+                    }
+                default:
+                    continue
+                }
+            }
+            if sawItemInWindow {
+                scannedFiles += 1
+                if let built = digest.digest { artifact.digests.append(built) }
+            }
+        }
+
+        artifact.coverage = [
+            ConversationScanCoverage(
+                client: .kiro, sourceID: "kiro-cli-sessions-jsonl-v1", sourceName: "Kiro CLI chat sessions",
+                status: (hadReadFailure || wasTruncated || skipped > 0) ? .degraded : .scanned,
+                conversationsScanned: scannedFiles, itemsInspected: inspected, itemsSkipped: skipped,
+                latestItemAt: latestItemAt, supportsUsageAttribution: true,
+                detail: hadReadFailure
+                    ? "One or more sessions exceeded safe read limits and were skipped."
+                    : wasTruncated
+                        ? "Newest bounded sessions were scanned; a skill is attributed when a prompt invokes it as a slash command."
+                        : "A skill is attributed when a prompt invokes it as a slash command; no session content was retained.")
+        ]
         return artifact
     }
 
@@ -99,6 +242,7 @@ public struct LocalConversationScanner: Sendable {
 
             for conversation in conversations {
                 if Task.isCancelled { break }
+                var digest = ConversationDigestBuilder(conversationID: conversation.id, client: .codex)
                 let queriedRows = try database.queryRows(
                     sql: """
                         SELECT item_type, item_json, created_at_ms, turn_id
@@ -141,6 +285,8 @@ public struct LocalConversationScanner: Sendable {
                                     tokens: insightTokens(from: sanitizeConversationText(text))
                                 )
                             )
+                            digest.noteUserMessage(text, at: row.date(milliseconds: true))
+                            for reference in dollarSkillReferences(in: text) { digest.noteSkill(reference, at: row.date(milliseconds: true)) }
                             for skillID in explicitlyReferencedSkills(in: text, lookup: skillLookup) {
                                 artifact.evidence.insert(
                                     UsageEvidence(
@@ -154,7 +300,15 @@ public struct LocalConversationScanner: Sendable {
                                 )
                             }
                         }
+                    case "mcpToolCall":
+                        if let dictionary = object as? [String: Any] {
+                            let server = dictionary["server"] as? String ?? ""
+                            let tool = dictionary["tool"] as? String ?? ""
+                            let name = [server, tool].filter { !$0.isEmpty }.joined(separator: "/")
+                            if !name.isEmpty { digest.noteTool(name, at: row.date(milliseconds: true)) }
+                        }
                     case "commandExecution":
+                        digest.noteTool("shell", at: row.date(milliseconds: true))
                         for command in commandStrings(from: object) {
                             for skillID in skillDefinitionReferences(in: command, lookup: skillLookup) {
                                 artifact.evidence.insert(
@@ -173,6 +327,7 @@ public struct LocalConversationScanner: Sendable {
                         break
                     }
                 }
+                if let built = digest.digest { artifact.digests.append(built) }
             }
 
             artifact.coverage = [
@@ -251,6 +406,7 @@ public struct LocalConversationScanner: Sendable {
 
             for conversation in conversations {
                 if Task.isCancelled { break }
+                var digest = ConversationDigestBuilder(conversationID: conversation.id, client: .codex)
                 let queriedRows = try database.queryRows(
                     sql: """
                         SELECT kind, message, timestamp
@@ -405,6 +561,7 @@ public struct LocalConversationScanner: Sendable {
             scannedFiles += 1
             var currentTurn = "before-first-user"
             let conversationFallback = file.deletingPathExtension().lastPathComponent
+            var digest = ConversationDigestBuilder(conversationID: conversationFallback, client: .claude)
             let allLines = contents.split(whereSeparator: \Character.isNewline)
             if allLines.count > options.maximumItemsPerConversation { wasTruncated = true }
             let lines = allLines.suffix(options.maximumItemsPerConversation)
@@ -425,12 +582,16 @@ public struct LocalConversationScanner: Sendable {
                     dictionary["sessionId"] as? String
                     ?? dictionary["conversation_uuid"] as? String
                     ?? conversationFallback
+                if digest.workingDirectory == nil, let cwd = dictionary["cwd"] as? String { digest.workingDirectory = cwd }
                 let type = (dictionary["type"] as? String)?.lowercased()
                 let message = dictionary["message"] ?? dictionary
 
                 if type == "user" || messageRole(from: message) == "user" {
                     currentTurn = dictionary["uuid"] as? String ?? "\(date.timeIntervalSince1970):\(ordinal)"
-                    if let text = messageText(from: message), !text.isEmpty {
+                    // A tool result comes back as a user-role item; it is the
+                    // tool speaking, not the person, and is not their message.
+                    let isToolResult = (message as? [String: Any]).map { isToolResultContent($0["content"]) } ?? false
+                    if !isToolResult, let text = messageText(from: message), !text.isEmpty {
                         artifact.messages.append(
                             .init(
                                 conversationID: conversationID,
@@ -439,6 +600,7 @@ public struct LocalConversationScanner: Sendable {
                                 tokens: insightTokens(from: sanitizeConversationText(text))
                             )
                         )
+                        digest.noteUserMessage(text, at: date)
                     }
                 } else if type == "assistant" || messageRole(from: message) == "assistant" {
                     collectClaudeAssistantEvidence(
@@ -449,8 +611,16 @@ public struct LocalConversationScanner: Sendable {
                         skillLookup: skillLookup,
                         artifact: &artifact
                     )
+                    for block in toolUseBlocks(in: dictionary) {
+                        guard let name = block["name"] as? String else { continue }
+                        digest.noteTool(name, at: date)
+                        if name.lowercased() == "skill" {
+                            for reference in possibleSkillNames(in: block["input"]) { digest.noteSkill(reference, at: date) }
+                        }
+                    }
                 }
             }
+            if let built = digest.digest { artifact.digests.append(built) }
         }
 
         artifact.coverage = [
@@ -485,6 +655,10 @@ struct ConversationScanArtifact: Sendable {
     var coverage: [ConversationScanCoverage] = []
     var evidence: Set<UsageEvidence> = []
     var messages: [TokenizedConversationMessage] = []
+    /// One bounded, redacted digest per conversation, for the deep dive. Kept
+    /// only in this in-memory artifact and in the prompt sent to the person's
+    /// own assistant; never in the saved report.
+    var digests: [ConversationDigest] = []
 
     var hasObservableSource: Bool {
         coverage.contains { $0.status == .scanned || ($0.status == .degraded && $0.itemsInspected > 0) }
@@ -494,6 +668,91 @@ struct ConversationScanArtifact: Sendable {
         coverage.append(contentsOf: other.coverage)
         evidence.formUnion(other.evidence)
         messages.append(contentsOf: other.messages)
+        digests.append(contentsOf: other.digests)
+    }
+}
+
+/// Builds one conversation's digest as its items stream past: the first few
+/// things the person asked, the tools and skills that answered, and where the
+/// work happened. Every string is redacted the way the token pass redacts it,
+/// and every list is capped, so the digest is short enough to send in bulk and
+/// carries no secret or home path.
+struct ConversationDigestBuilder {
+    static let maximumUserMessages = 4
+    static let maximumUserMessageCharacters = 400
+    static let maximumTools = 12
+
+    let conversationID: String
+    let client: ClientKind
+    var startedAt: Date?
+    var endedAt: Date?
+    var title: String?
+    var workingDirectory: String?
+    private var userMessages: [String] = []
+    private var userMessageCount = 0
+    private var tools: [String] = []
+    private var skills: Set<String> = []
+
+    init(conversationID: String, client: ClientKind) {
+        self.conversationID = conversationID
+        self.client = client
+    }
+
+    mutating func noteUserMessage(_ text: String, at date: Date) {
+        note(date)
+        userMessageCount += 1
+        // The first message says what the person came for; a couple of later
+        // ones say where it went. The middle is left out.
+        let redacted = String(sanitizeConversationText(text).prefix(Self.maximumUserMessageCharacters))
+        guard !redacted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        if userMessages.count < Self.maximumUserMessages {
+            userMessages.append(redacted)
+        } else {
+            userMessages[Self.maximumUserMessages - 1] = redacted
+        }
+    }
+
+    mutating func noteTool(_ name: String, at date: Date) {
+        note(date)
+        let trimmed = String(name.prefix(64))
+        guard !trimmed.isEmpty, !tools.contains(trimmed), tools.count < Self.maximumTools else { return }
+        tools.append(trimmed)
+    }
+
+    mutating func noteSkill(_ id: String, at date: Date) {
+        note(date)
+        skills.insert(String(id.prefix(128)))
+    }
+
+    private mutating func note(_ date: Date) {
+        startedAt = startedAt.map { min($0, date) } ?? date
+        endedAt = endedAt.map { max($0, date) } ?? date
+    }
+
+    /// Nil when the conversation had nothing a person said in it.
+    /// A conversation with nothing to learn from: the person said only a few
+    /// words in total ("ping", "whoami", "hi") and asked for no tool or skill.
+    /// Sending it would spend the budget on noise and tempt the reader to
+    /// count it.
+    var isTrivial: Bool {
+        userMessages.reduce(0) { $0 + $1.count } < 24 && tools.isEmpty && skills.isEmpty
+    }
+
+    var digest: ConversationDigest? {
+        guard !userMessages.isEmpty, !isTrivial, let startedAt, let endedAt else { return nil }
+        return ConversationDigest(
+            conversationID: conversationID, client: client, startedAt: startedAt, endedAt: endedAt,
+            title: title.map { String(sanitizeConversationText($0).prefix(160)) },
+            workingDirectory: workingDirectory.map(Self.projectName),
+            userMessages: userMessages, userMessageCount: userMessageCount,
+            toolsUsed: tools, skillsUsed: skills.sorted())
+    }
+
+    /// The last path component only: what the project was called, not where
+    /// on the disk it lives.
+    static func projectName(_ path: String) -> String {
+        let trimmed = path.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        return String((trimmed.split(separator: "/").last.map(String.init) ?? trimmed).prefix(80))
     }
 }
 
@@ -738,6 +997,31 @@ private func messageContentStrings(from value: Any) -> [String] {
         return [text]
     }
     return []
+}
+
+/// Whether a user-role item's content is a tool result rather than something
+/// the person typed. Claude Code records tool results as user items.
+private func isToolResultContent(_ content: Any?) -> Bool {
+    guard let blocks = content as? [Any], !blocks.isEmpty else { return false }
+    return blocks.allSatisfy { ($0 as? [String: Any])?["type"] as? String == "tool_result" }
+}
+
+/// The `/name` slash commands at the start of a Kiro prompt or a line in it.
+private func slashSkillReferences(in text: String) -> [String] {
+    guard let expression = try? NSRegularExpression(pattern: #"(?m)^\s*/([a-z0-9][a-z0-9_.:-]{1,63})\b"#, options: [.caseInsensitive])
+    else { return [] }
+    return expression.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+        Range(match.range(at: 1), in: text).map { String(text[$0]) }
+    }
+}
+
+/// The `$name` skill invocations in a Codex message.
+private func dollarSkillReferences(in text: String) -> [String] {
+    guard let expression = try? NSRegularExpression(pattern: #"(?<![\w$])\$([a-z0-9][a-z0-9_.-]{1,63})"#, options: [.caseInsensitive])
+    else { return [] }
+    return expression.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+        Range(match.range(at: 1), in: text).map { String(text[$0]) }
+    }
 }
 
 private func messageRole(from object: Any) -> String? {

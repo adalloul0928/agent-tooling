@@ -81,6 +81,35 @@ extension ShellRenderFixture {
 ///
 /// Nothing here reads a transcript, runs a command, or writes a file, so a
 /// render of this screen says the same thing on every Mac.
+extension ShellRenderFixture {
+    /// A deep dive as Claude Code would answer it: one theme, one skill to
+    /// create, one to use. `at` is when it was made.
+    static func insightsDeepDive(at generatedAt: Date = .now) -> InsightsDeepDive {
+        InsightsDeepDive(
+            generatedAt: generatedAt,
+            client: .claude,
+            conversationsConsidered: 42,
+            windowStart: generatedAt.addingTimeInterval(-30 * 86_400),
+            themes: [
+                DeepDiveTheme(
+                    title: "Brazil build repair", detail: "Eleven sessions begin from a failed brazil-build.",
+                    conversationCount: 11, clients: [.claude, .kiro])
+            ],
+            recommendations: [
+                ToolRecommendation(
+                    id: "deep-dive:claude:0:brazil-build-triage", kind: .createCustomSkill, title: "Brazil build triage",
+                    summary: "Diagnose a failed brazil-build from its log.", rationale: "Repeated across 11 sessions.",
+                    confidence: .high, supportingConversationCount: 11, sourceName: "Claude Code deep dive",
+                    draftInstruction: "Create a skill that reads a brazil-build log and names the failing step."),
+                ToolRecommendation(
+                    id: "deep-dive:claude:1:use-crux", kind: .useExistingSkill, title: "Use crux-code-reviews",
+                    summary: "You write CR descriptions by hand.", rationale: "Six sessions.", confidence: .medium,
+                    supportingConversationCount: 6, skillID: "crux-code-reviews", sourceName: "Claude Code deep dive"),
+            ],
+            summary: "Most of your recent sessions repair failed Brazil builds and write CR descriptions by hand.")
+    }
+}
+
 final class StubInsightsServices: InsightsServicing, @unchecked Sendable {
     private let lock = NSLock()
     private var kept: InsightsReport?
@@ -90,6 +119,11 @@ final class StubInsightsServices: InsightsServicing, @unchecked Sendable {
     private var contentRequests: [SkillContentRequest] = []
     private let holdFor: Duration?
     private let keepFails: Bool
+    /// What a deep dive answers: a finding, or a failure with its own words.
+    /// Nil means this stub's assistant cannot be reached at all.
+    private var deepDiveAnswer: Result<InsightsDeepDive, any Error>?
+    private var deepDives: [(client: ClientKind, digests: Int)] = []
+    private let digests: [ConversationDigest]
     /// Canned content facts by skill id, so a test can prove the session reads
     /// a library skill's real description and files and applies them.
     private let contentFacts: [String: SkillContentFacts]
@@ -106,12 +140,16 @@ final class StubInsightsServices: InsightsServicing, @unchecked Sendable {
         holdFor: Duration? = nil,
         keepFails: Bool = false,
         reachesCatalog: Bool = false,
-        contentFacts: [String: SkillContentFacts] = [:]
+        contentFacts: [String: SkillContentFacts] = [:],
+        digests: [ConversationDigest] = [],
+        deepDive: Result<InsightsDeepDive, any Error>? = nil
     ) {
         self.answer = answer
         self.holdFor = holdFor
         self.keepFails = keepFails
         self.contentFacts = contentFacts
+        self.digests = digests
+        self.deepDiveAnswer = deepDive
         canReachCatalog = reachesCatalog
         kept = restored
     }
@@ -153,6 +191,25 @@ final class StubInsightsServices: InsightsServicing, @unchecked Sendable {
         // pressing Cancel is waiting to see.
         if let holdFor { try? await Task.sleep(for: holdFor) }
         return lock.withLock { answer }
+    }
+
+    /// Every deep dive asked for, with which client and how many digests.
+    var deepDiveCalls: [(client: ClientKind, digests: Int)] {
+        lock.withLock { deepDives }
+    }
+
+    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (report: InsightsReport, digests: [ConversationDigest]) {
+        (await scan(options: options, skills: skills, homeURL: homeURL), digests)
+    }
+
+    func deepDive(client: ClientKind, digests: [ConversationDigest], skills: [Skill], windowStart: Date) async throws -> InsightsDeepDive {
+        let answer = lock.withLock {
+            deepDives.append((client, digests.count))
+            return deepDiveAnswer
+        }
+        guard let answer else { throw InsightsDeepDiveError.nothingToRead }
+        if let holdFor { try await Task.sleep(for: holdFor) }
+        return try answer.get()
     }
 
     func lastReport() -> InsightsReport? {

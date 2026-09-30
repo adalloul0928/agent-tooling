@@ -16,6 +16,7 @@ struct InsightsView: View {
     @Environment(\.availableClients) private var enabledClients
     @State private var includeClaude = true
     @State private var includeCodex = true
+    @State private var includeKiro = true
     @State private var lookbackDays = 30
     @State private var maximumConversations = 25
     /// Off unless somebody turns it on: a local scan must never start reaching
@@ -52,11 +53,20 @@ struct InsightsView: View {
                     } label: {
                         Label("Scan recent work", systemImage: "magnifyingglass")
                     }
+                    .buttonStyle(.glass)
+                    .disabled(!canScan)
+                    .accessibilityHint("Reads selected local chat history and saves only aggregate findings")
+                    Button {
+                        startScan(deepDive: true)
+                    } label: {
+                        Label(deepDiveButtonTitle, systemImage: "sparkles")
+                    }
                     .buttonStyle(.borderedProminent)
                     .tint(AgentTheme.selection)
-                    .disabled(!canScan)
+                    .disabled(!canScan || deepDiveClient == nil || session.isDeepDiving)
                     .keyboardShortcut(.return, modifiers: [.command])
-                    .accessibilityHint("Reads selected local chat history and saves only aggregate findings")
+                    .help(deepDiveHelp)
+                    .accessibilityHint(deepDiveHelp)
                 }
             }
             Divider()
@@ -140,6 +150,14 @@ struct InsightsView: View {
                                     HStack(spacing: 8) {
                                         ClientBrandIcon(client: .codex, size: 16)
                                         Text("Codex")
+                                    }
+                                }
+                            }
+                            if workspace.device.isEnabled(.kiro) {
+                                Toggle(isOn: $includeKiro) {
+                                    HStack(spacing: 8) {
+                                        ClientBrandIcon(client: .kiro, size: 16)
+                                        Text("Kiro CLI")
                                     }
                                 }
                             }
@@ -279,6 +297,7 @@ struct InsightsView: View {
 
             switch selection {
             case .opportunities:
+                deepDiveSection(report)
                 opportunitiesSection(report.recommendations)
             case .skillHealth:
                 skillHealthSection(report)
@@ -360,8 +379,80 @@ struct InsightsView: View {
         }
     }
 
+    /// What the person's own assistant concluded, above the keyword pass. It
+    /// is the slow, considered read; the keyword rows below are the instant one.
+    @ViewBuilder private func deepDiveSection(_ report: InsightsReport) -> some View {
+        if session.isDeepDiving {
+            InsightPanel("Deep dive") {
+                HStack(spacing: 12) {
+                    ProgressView().controlSize(.small)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(deepDiveClient?.rawValue ?? "Your assistant") is reading your recent conversations…")
+                            .font(.callout.weight(.medium))
+                        Text("This takes a few minutes. The findings below are the instant keyword pass; the considered read replaces them here when it lands.")
+                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                }
+                .padding(15)
+            }
+        } else if let message = session.deepDiveMessage {
+            InsightPanel("Deep dive") {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(AgentTheme.warning)
+                    Text(message).font(.callout).fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                }
+                .padding(15)
+            }
+        } else if let dive = report.deepDive {
+            InsightPanel("Deep dive — what \(dive.client.rawValue) sees in your recent work") {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(dive.summary).font(.callout).fixedSize(horizontal: false, vertical: true)
+                        Text(
+                            "\(dive.conversationsConsidered) conversations read · \(dive.generatedAt.formatted(.relative(presentation: .named)))"
+                        )
+                        .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .padding(15)
+                    if !dive.themes.isEmpty {
+                        Divider()
+                        ForEach(Array(dive.themes.enumerated()), id: \.element.id) { index, theme in
+                            HStack(alignment: .top, spacing: 13) {
+                                Image(systemName: "repeat").foregroundStyle(.secondary).frame(width: 28)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(theme.title).font(.callout.weight(.semibold))
+                                    Text(theme.detail).font(.caption).foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text(themeMetadata(theme)).font(.caption2).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 15).padding(.vertical, 11)
+                            if index < dive.themes.count - 1 { Divider().padding(.leading, 49) }
+                        }
+                    }
+                    if !dive.recommendations.isEmpty {
+                        Divider()
+                        ForEach(Array(dive.recommendations.enumerated()), id: \.element.id) { index, recommendation in
+                            RecommendationRow(recommendation: recommendation) { open(recommendation) }
+                            if index < dive.recommendations.count - 1 { Divider().padding(.leading, 49) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func themeMetadata(_ theme: DeepDiveTheme) -> String {
+        var parts = ["Seen in \(theme.conversationCount) \(theme.conversationCount == 1 ? "conversation" : "conversations")"]
+        if !theme.clients.isEmpty { parts.append(theme.clients.map(\.rawValue).joined(separator: ", ")) }
+        return parts.joined(separator: " · ")
+    }
+
     private func opportunitiesSection(_ recommendations: [ToolRecommendation]) -> some View {
-        InsightPanel("Worth adding — from your real sessions") {
+        InsightPanel("Worth adding — keyword pass") {
             if recommendations.isEmpty {
                 EmptyStateView(
                     symbol: "checkmark.circle",
@@ -498,6 +589,7 @@ struct InsightsView: View {
         var clients: Set<ClientKind> = []
         if includeClaude, workspace.device.isEnabled(.claude) { clients.insert(.claude) }
         if includeCodex, workspace.device.isEnabled(.codex) { clients.insert(.codex) }
+        if includeKiro, workspace.device.isEnabled(.kiro) { clients.insert(.kiro) }
         return clients
     }
 
@@ -505,15 +597,33 @@ struct InsightsView: View {
         !scannableClients.isEmpty && !session.isScanning
     }
 
+    /// The assistant that reads the digests: Claude Code when this Mac manages
+    /// it, else Codex. Kiro has no print mode this app drives, so it is a
+    /// source but never the reader.
+    private var deepDiveClient: ClientKind? {
+        WorkspaceInsightsSession.deepDiveClient(managed: workspace.device.managedClients)
+    }
+
+    private var deepDiveButtonTitle: String {
+        deepDiveClient.map { "Deep dive with \($0.rawValue)" } ?? "Deep dive"
+    }
+
+    private var deepDiveHelp: String {
+        guard let client = deepDiveClient else {
+            return "A deep dive needs Claude Code or Codex; this Mac is not managing either."
+        }
+        return "Runs the keyword pass, then has your signed-in \(client.rawValue) read digests of the selected conversations and say what you keep doing by hand. Runs on its own once a day when the app opens."
+    }
+
     /// Why there is nothing to scan, when there is nothing to scan. An app this
     /// Mac is not managing is a different reason from one that is switched off
     /// here, and saying the wrong one sends someone to the wrong screen.
     private var sourceWarning: String? {
         guard scannableClients.isEmpty else { return nil }
-        let managed = workspace.device.isEnabled(.claude) || workspace.device.isEnabled(.codex)
+        let managed = [ClientKind.claude, .codex, .kiro].contains { workspace.device.isEnabled($0) }
         return managed
-            ? "Select Claude Code, Codex, or both to scan."
-            : "This Mac is not managing Claude Code or Codex, so there is no local chat history to review."
+            ? "Select at least one app to scan."
+            : "This Mac is not managing Claude Code, Codex, or Kiro CLI, so there is no local chat history to review."
     }
 
     private var toolbarContext: String? {
@@ -521,7 +631,7 @@ struct InsightsView: View {
         return "Updated \(report.generatedAt.formatted(.relative(presentation: .named)))"
     }
 
-    private func startScan() {
+    private func startScan(deepDive: Bool = false) {
         guard canScan else { return }
         let options = InsightScanOptions(
             clients: scannableClients,
@@ -529,7 +639,8 @@ struct InsightsView: View {
             maximumConversationsPerClient: maximumConversations,
             includeMarketplaceRecommendations: includeCatalogSuggestions && session.canReachCatalog
         )
-        Task { await session.scan(options: options) }
+        let reader = deepDive ? deepDiveClient : nil
+        Task { await session.scan(options: options, deepDiveWith: reader) }
     }
 
     /// A recommendation opens a screen. Nothing here installs, nothing here

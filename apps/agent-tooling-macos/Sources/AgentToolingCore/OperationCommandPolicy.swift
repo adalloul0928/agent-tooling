@@ -87,6 +87,8 @@ struct OperationCommandPolicy: Sendable {
         // Trying a skill: the interactive client, with `/name` as its first
         // message. The name is one checked identifier.
         if SkillTrialCommandShapes.isTrialShape(.claude, arguments) { return }
+        // The insights deep dive: print mode, no tools, one fixed schema.
+        if InsightsDeepDiveCommandShapes.isClaudeShape(arguments) { return }
         // Read-only listing and per-server lookup, plus the OAuth login flow.
         // The login opens the browser itself; the app never handles a token.
         if arguments == ["mcp", "list"] { return }
@@ -161,6 +163,9 @@ struct OperationCommandPolicy: Sendable {
         // Trying a skill: the interactive client, with `$name` as its first
         // message. The name is one checked identifier.
         if SkillTrialCommandShapes.isTrialShape(.codex, arguments) { return }
+        // The insights deep dive: read-only exec in a staged folder under the
+        // home directory, answering to the schema file inside it.
+        if InsightsDeepDiveCommandShapes.isCodexShape(arguments, homeURL: homeURL) { return }
         if arguments == ["mcp", "list"] || arguments == ["mcp", "list", "--json"] { return }
         if arguments.count == 3,
             arguments[0] == "mcp",

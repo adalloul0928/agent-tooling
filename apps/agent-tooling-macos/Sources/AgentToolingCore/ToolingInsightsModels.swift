@@ -12,7 +12,7 @@ public struct InsightScanOptions: Codable, Hashable, Sendable {
     public var includeMarketplaceRecommendations: Bool
 
     public init(
-        clients: Set<ClientKind> = [.claude, .codex],
+        clients: Set<ClientKind> = [.claude, .codex, .kiro],
         lookbackDays: Int = 30,
         maximumConversationsPerClient: Int = 50,
         maximumItemsPerConversation: Int = 500,
@@ -29,7 +29,7 @@ public struct InsightScanOptions: Codable, Hashable, Sendable {
 
     var bounded: Self {
         var result = self
-        result.clients = result.clients.intersection([.claude, .codex])
+        result.clients = result.clients.intersection([.claude, .codex, .kiro])
         result.lookbackDays = min(max(result.lookbackDays, 1), 365)
         result.maximumConversationsPerClient = min(max(result.maximumConversationsPerClient, 1), 200)
         result.maximumItemsPerConversation = min(max(result.maximumItemsPerConversation, 10), 2_000)
@@ -107,6 +107,44 @@ public enum SkillUsageProvenance: String, Codable, Hashable, Sendable {
     case claudeAttribution
     case codexExplicitReference
     case skillDefinitionRead
+    case kiroSlashCommand
+}
+
+/// One conversation, boiled down for the deep dive: what the person asked
+/// (first few messages, redacted and capped), which tools and skills answered,
+/// and which project it happened in. Lives in memory and in the prompt sent
+/// to the person's own assistant; the saved report never carries one.
+public struct ConversationDigest: Codable, Hashable, Sendable {
+    public var conversationID: String
+    public var client: ClientKind
+    public var startedAt: Date
+    public var endedAt: Date
+    public var title: String?
+    /// The project folder's name only, never its path.
+    public var workingDirectory: String?
+    public var userMessages: [String]
+    /// How many things the person said in all, so a long session reads as
+    /// long even though only a few of its messages are here.
+    public var userMessageCount: Int
+    public var toolsUsed: [String]
+    public var skillsUsed: [String]
+
+    public init(
+        conversationID: String, client: ClientKind, startedAt: Date, endedAt: Date, title: String? = nil,
+        workingDirectory: String? = nil, userMessages: [String], userMessageCount: Int, toolsUsed: [String],
+        skillsUsed: [String]
+    ) {
+        self.conversationID = conversationID
+        self.client = client
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.title = title
+        self.workingDirectory = workingDirectory
+        self.userMessages = userMessages
+        self.userMessageCount = userMessageCount
+        self.toolsUsed = toolsUsed
+        self.skillsUsed = skillsUsed
+    }
 }
 
 public struct SkillUsageMetric: Identifiable, Codable, Hashable, Sendable {
@@ -272,6 +310,9 @@ public struct InsightsReport: Identifiable, Codable, Hashable, Sendable {
     public var conversationsScanned: Int
     public var itemsInspected: Int
     public var reportFormatVersion: Int
+    /// What the person's own assistant concluded from the digests, when a deep
+    /// dive has run. Reports written before it existed decode without one.
+    public var deepDive: InsightsDeepDive?
 
     public init(
         id: UUID = UUID(),
@@ -284,7 +325,8 @@ public struct InsightsReport: Identifiable, Codable, Hashable, Sendable {
         marketplaceDiscovery: MarketplaceDiscoverySummary? = nil,
         conversationsScanned: Int,
         itemsInspected: Int,
-        reportFormatVersion: Int = 1
+        reportFormatVersion: Int = 1,
+        deepDive: InsightsDeepDive? = nil
     ) {
         self.id = id
         self.generatedAt = generatedAt
@@ -297,6 +339,7 @@ public struct InsightsReport: Identifiable, Codable, Hashable, Sendable {
         self.conversationsScanned = conversationsScanned
         self.itemsInspected = itemsInspected
         self.reportFormatVersion = reportFormatVersion
+        self.deepDive = deepDive
     }
 
     /// Raw conversation content exists only in ephemeral scanner memory.

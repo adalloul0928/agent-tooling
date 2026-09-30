@@ -12,6 +12,12 @@ protocol InsightsServicing: Sendable {
     /// Reads local conversation history and returns aggregate findings only.
     /// Never installs, never writes to a client, and never keeps message text.
     func scan(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> InsightsReport
+    /// The same pass, also handing back one redacted digest per conversation
+    /// for the deep dive. The digests are not kept anywhere.
+    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (report: InsightsReport, digests: [ConversationDigest])
+    /// Asks the person's own assistant to read the digests. Throws with the
+    /// client's own words when it cannot.
+    func deepDive(client: ClientKind, digests: [ConversationDigest], skills: [Skill], windowStart: Date) async throws -> InsightsDeepDive
     /// Reads the real SKILL.md description and file list for library-authored
     /// skills out of the content store, keyed by skill id.
     ///
@@ -44,6 +50,16 @@ extension InsightsServicing {
     /// works, and a screen told so offers nothing it cannot do.
     var canReachCatalog: Bool { false }
 
+    /// A service with no digests to give runs the plain scan and hands back
+    /// none, so a deep dive over it has nothing to read and says so.
+    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (report: InsightsReport, digests: [ConversationDigest]) {
+        (await scan(options: options, skills: skills, homeURL: homeURL), [])
+    }
+
+    func deepDive(client: ClientKind, digests: [ConversationDigest], skills: [Skill], windowStart: Date) async throws -> InsightsDeepDive {
+        throw InsightsDeepDiveError.nothingToRead
+    }
+
     /// Reading no content is the safe answer: a build without a content store,
     /// or a test that hands in none, leaves every skill's description and files
     /// honestly unknown rather than inventing them.
@@ -62,6 +78,8 @@ struct LiveInsightsServices: InsightsServicing {
     private static let maximumReportBytes = 8 * 1_024 * 1_024
 
     private let service = ToolingInsightsService()
+    private let deepDiveService: InsightsDeepDiveService
+    private let homeRoot: URL
     private let file: URL
     /// The workspace's content store directory. The scan opens a read handle on
     /// it to read a library skill's real SKILL.md; the objects there are
@@ -75,13 +93,21 @@ struct LiveInsightsServices: InsightsServicing {
     /// parameter: a test hands in none, and reaches no registry.
     init(
         container: URL,
+        homeRoot: URL = FileManager.default.homeDirectoryForCurrentUser,
         providers: [any MarketplaceProvider] = MarketplaceProviderRegistry.builtIn(),
         cachedPackages: [MarketplacePackage] = []
     ) {
         file = container.appending(path: "insights-report.json")
         contentDirectory = container.appending(path: "content")
+        self.homeRoot = homeRoot
         self.providers = providers
         self.cachedPackages = cachedPackages
+        // The deep dive stages its schema file beside the skill drafts, inside
+        // this workspace's own cache: the one place a request folder may be.
+        deepDiveService = InsightsDeepDiveService(
+            stagingRootURL: container.appending(path: "cache", directoryHint: .isDirectory)
+                .appending(path: "insights-deep-dive", directoryHint: .isDirectory),
+            homeURL: homeRoot)
     }
 
     /// Whether a catalog can be reached at all. The scan options offer catalog
@@ -93,6 +119,16 @@ struct LiveInsightsServices: InsightsServicing {
         await service.scan(
             options: options, skills: skills, marketplacePackages: cachedPackages, homeURL: homeURL,
             marketplaceProviders: providers)
+    }
+
+    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (report: InsightsReport, digests: [ConversationDigest]) {
+        await service.scanWithDigests(
+            options: options, skills: skills, marketplacePackages: cachedPackages, homeURL: homeURL,
+            marketplaceProviders: providers)
+    }
+
+    func deepDive(client: ClientKind, digests: [ConversationDigest], skills: [Skill], windowStart: Date) async throws -> InsightsDeepDive {
+        try await deepDiveService.run(client: client, digests: digests, skills: skills, windowStart: windowStart)
     }
 
     /// Reads the real description and files for each requested library skill.
@@ -150,15 +186,26 @@ final class WorkspaceInsightsSession {
     /// from a previous one.
     private(set) var report: InsightsReport?
     private(set) var isScanning = false
+    /// True while the person's own assistant is reading the digests. The fast
+    /// pass has already landed by then; this is the slow part, in the
+    /// background, and the screen says so rather than blocking on it.
+    private(set) var isDeepDiving = false
     private(set) var errorMessage: String?
+    /// Why the last deep dive did not land, when it did not. Kept apart from
+    /// `errorMessage` because the fast pass may have succeeded.
+    private(set) var deepDiveMessage: String?
     /// When a scan in this session last finished. A restored report carries its
     /// own `generatedAt`, which is older and says so.
     private(set) var lastScannedAt: Date?
+
+    /// How old the last deep dive may be before opening the app runs another.
+    static let deepDiveStaleAfter: TimeInterval = 24 * 60 * 60
 
     @ObservationIgnored private let library: WorkspaceLibrarySession
     @ObservationIgnored private let services: any InsightsServicing
     @ObservationIgnored private let homeRoot: URL
     @ObservationIgnored private var scanTask: Task<InsightsReport, Never>?
+    @ObservationIgnored private var deepDiveTask: Task<Void, Never>?
     /// Which scan the state on screen belongs to. A scan that is not the
     /// current one has been stopped or replaced, and its answer is dropped.
     @ObservationIgnored private var generation: UInt64 = 0
@@ -180,10 +227,37 @@ final class WorkspaceInsightsSession {
     /// enables its catalog-suggestions switch on this and nothing else.
     var canReachCatalog: Bool { services.canReachCatalog }
 
+    /// Which assistant the deep dive runs in: Claude Code when this Mac has it,
+    /// else Codex, else none. Only the managed clients are considered.
+    static func deepDiveClient(managed: [ClientKind]) -> ClientKind? {
+        [ClientKind.claude, .codex].first(where: managed.contains)
+    }
+
+    /// Whether opening the app should run a deep dive now: the last one is
+    /// older than a day, or there has never been one.
+    var isDeepDiveStale: Bool {
+        guard let last = report?.deepDive?.generatedAt else { return true }
+        return Date.now.timeIntervalSince(last) > Self.deepDiveStaleAfter
+    }
+
+    /// The daily run. Called when the app opens; it does nothing when a deep
+    /// dive is fresh, a scan is already running, or no managed client can run
+    /// one. Everything runs off the main actor and the screen keeps drawing.
+    func runScheduledDeepDiveIfStale(options: InsightScanOptions, managedClients: [ClientKind]) async {
+        guard isDeepDiveStale, !isScanning, !isDeepDiving,
+            let client = Self.deepDiveClient(managed: managedClients)
+        else { return }
+        await scan(options: options, deepDiveWith: client)
+    }
+
     /// Reviews recent work against the skills this workspace holds.
     ///
-    /// Returns when the scan has finished, been stopped, or been replaced.
-    func scan(options: InsightScanOptions) async {
+    /// The fast pass lands first and is shown; when `deepDiveWith` names a
+    /// client, that client then reads the digests in the background and its
+    /// conclusions are added to the same report when they arrive.
+    ///
+    /// Returns when the fast pass has finished, been stopped, or been replaced.
+    func scan(options: InsightScanOptions, deepDiveWith deepDiveClient: ClientKind? = nil) async {
         guard !isScanning else { return }
         guard let state = library.state else {
             errorMessage =
@@ -212,10 +286,13 @@ final class WorkspaceInsightsSession {
         let token = generation
         isScanning = true
         errorMessage = nil
+        deepDiveTask?.cancel()
+        deepDiveTask = nil
+        isDeepDiving = false
         let task = Task { [services, homeRoot] in
-            await services.scan(options: options, skills: skills, homeURL: homeRoot)
+            await services.scanWithDigests(options: options, skills: skills, homeURL: homeRoot)
         }
-        scanTask = task
+        scanTask = Task { await task.value.report }
         let scanned = await task.value
         // A scan somebody stopped, or one a newer scan replaced, is no longer
         // this Mac's answer: it is dropped rather than written over what the
@@ -223,10 +300,52 @@ final class WorkspaceInsightsSession {
         guard token == generation else { return }
         scanTask = nil
         isScanning = false
-        report = scanned
-        lastScannedAt = scanned.generatedAt
+        // A fresh fast pass keeps the last deep dive until a new one lands:
+        // the model's conclusions do not go stale because a keyword count did.
+        var fresh = scanned.report
+        fresh.deepDive = report?.deepDive
+        report = fresh
+        lastScannedAt = fresh.generatedAt
+        keep(fresh)
+        guard let deepDiveClient else { return }
+        startDeepDive(client: deepDiveClient, digests: scanned.digests, skills: skills, windowStart: fresh.windowStart, token: token)
+    }
+
+    /// Hands the digests to the assistant in the background. When its answer
+    /// arrives and this is still the current scan, it joins the report on
+    /// screen; a stopped or superseded run is dropped.
+    private func startDeepDive(client: ClientKind, digests: [ConversationDigest], skills: [Skill], windowStart: Date, token: UInt64) {
+        isDeepDiving = true
+        deepDiveMessage = nil
+        deepDiveTask = Task { [services] in
+            let outcome: Result<InsightsDeepDive, any Error>
+            do {
+                outcome = .success(try await services.deepDive(client: client, digests: digests, skills: skills, windowStart: windowStart))
+            } catch {
+                outcome = .failure(error)
+            }
+            await MainActor.run {
+                guard token == self.generation else { return }
+                self.isDeepDiving = false
+                self.deepDiveTask = nil
+                switch outcome {
+                case .success(let dive):
+                    guard var current = self.report else { return }
+                    current.deepDive = dive
+                    self.report = current
+                    self.keep(current)
+                case .failure(let error):
+                    if error is CancellationError { return }
+                    self.deepDiveMessage =
+                        (error as? any LocalizedError)?.errorDescription ?? "\(client.rawValue) could not finish the deep dive."
+                }
+            }
+        }
+    }
+
+    private func keep(_ report: InsightsReport) {
         do {
-            try services.keep(scanned)
+            try services.keep(report)
         } catch {
             errorMessage = "This scan is on screen but could not be saved, so it will be gone when Agent Tooling closes."
         }
@@ -237,11 +356,14 @@ final class WorkspaceInsightsSession {
     /// The reading itself is a local pass that does not stop halfway; what this
     /// guarantees is that its result is never saved or shown.
     func cancelScan() {
-        guard let scanTask else { return }
+        guard scanTask != nil || deepDiveTask != nil else { return }
         generation &+= 1
-        scanTask.cancel()
-        self.scanTask = nil
+        scanTask?.cancel()
+        scanTask = nil
         isScanning = false
+        deepDiveTask?.cancel()
+        deepDiveTask = nil
+        isDeepDiving = false
     }
 
     /// The library-authored skills worth reading real content for: the ones the
@@ -282,6 +404,7 @@ final class WorkspaceInsightsSession {
         report = nil
         lastScannedAt = nil
         errorMessage = nil
+        deepDiveMessage = nil
         do {
             try services.forget()
         } catch {
