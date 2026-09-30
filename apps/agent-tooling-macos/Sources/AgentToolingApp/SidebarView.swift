@@ -97,9 +97,12 @@ struct SidebarView: View {
     @ViewBuilder
     private func navigationRows(_ sections: [AppSection]) -> some View {
         ForEach(sections) { section in
-            if section == .syncCenter {
+            // Only the apps this Mac manages hang under Apps. One it does not
+            // is set up from the Apps screen ("Choose apps…") and appears here
+            // once it is; until then a row for it would be a row for nothing.
+            if section == .syncCenter, !workspace.device.managedClients.isEmpty {
                 DisclosureGroup(isExpanded: $appsExpanded) {
-                    ForEach(workspace.device.availableClients) { client in
+                    ForEach(workspace.device.managedClients) { client in
                         clientRow(client)
                     }
                 } label: {
@@ -172,12 +175,10 @@ struct SidebarView: View {
         .accessibilityLabel(colorScheme == .dark ? "Use light appearance" : "Use dark appearance")
     }
 
-    /// One app under Apps. An app this Mac has stopped managing is dimmed
-    /// rather than removed: a row that disappears reads as an app that is
-    /// gone, and it is not. The list's own highlight marks the chosen one.
+    /// One managed app under Apps. The list's own highlight marks the chosen
+    /// one; the glyph is the last check's verdict on it.
     private func clientRow(_ client: ClientKind) -> some View {
         let verdict = workspace.device.verdict(for: client)
-        let enabled = workspace.device.isEnabled(client)
         let selected = selection.sidebarDestination == .syncCenter && navigation.selectedClient == client
         return HStack(spacing: 8) {
             ClientBrandIcon(client: client, size: 15)
@@ -187,23 +188,15 @@ struct SidebarView: View {
             Spacer(minLength: 4)
             StatusGlyph(state: verdict.state, size: 11)
         }
-        .opacity(enabled ? 1 : 0.45)
         .tag(SidebarItem.client(client))
         .contentShape(Rectangle())
         // Choosing the highlighted app again keeps it; the Apps row above is
         // the way back to every app.
         .simultaneousGesture(TapGesture().onEnded { navigation.openClient(client) })
-        .help(
-            enabled
-                ? "\(client.rawValue) on this Mac. \(verdict.detail)"
-                : "\(client.rawValue) is not managed on this Mac. \(verdict.detail)"
-        )
+        .help("\(client.rawValue) on this Mac. \(verdict.detail)")
         .accessibilityElement(children: .combine)
         .accessibilityLabel(client.rawValue)
-        .accessibilityValue(
-            [selected ? "Selected" : "", enabled ? "" : "Not managed on this Mac", verdict.text]
-                .filter { !$0.isEmpty }
-                .joined(separator: ", "))
+        .accessibilityValue([selected ? "Selected" : "", verdict.text].filter { !$0.isEmpty }.joined(separator: ", "))
         .accessibilityAction { navigation.openClient(client) }
     }
 }

@@ -79,6 +79,25 @@ struct ClientsSectionRenderTests {
                 .frame(width: 240, height: 520))
     }
 
+    /// Only managed apps hang under Apps. One this Mac has not set up is not a
+    /// dimmed row; it is absent until "Choose apps…" brings it in.
+    @Test func theSidebarListsOnlyManagedApps() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        await fixture.workspace.device.refresh()
+        let device = fixture.workspace.device
+        #expect(device.availableClients.contains(.gemini))
+        await device.setEnabled(.gemini, false)
+
+        #expect(!device.managedClients.contains(.gemini))
+        // What the sidebar hangs under Apps is exactly the managed set.
+        #expect(device.managedClients == device.availableClients.filter(device.isEnabled))
+        try expectDrawn(
+            SidebarView(workspace: fixture.workspace, selection: .constant(.syncCenter))
+                .environment(AppNavigationState())
+                .frame(width: 240, height: 520))
+    }
+
     /// The review sheets draw on their own; the shell never opens one by itself,
     /// so nothing else would catch them failing to lay out.
     @Test func theRequestReviewSheetDraws() throws {
