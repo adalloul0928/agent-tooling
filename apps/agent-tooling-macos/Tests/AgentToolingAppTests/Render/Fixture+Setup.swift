@@ -41,6 +41,18 @@ final class StubSetupServices: SetupServicing, @unchecked Sendable {
 
     func lastCheckup() -> SetupCheckup? { lock.withLock { kept } }
     func keep(_ checkup: SetupCheckup) throws { lock.withLock { kept = checkup } }
+
+    /// Scripted notes per client; a client not listed has none to fetch.
+    var notes: [ClientKind: Result<[ClientReleaseNote], any Error>] = [:]
+    private var keptClientReviews: [ClientKind: ClientReview] = [:]
+
+    func releaseNotes(for client: ClientKind, installedVersion: String?) async throws -> [ClientReleaseNote] {
+        guard let scripted = lock.withLock({ notes[client] }) else { throw ClientReleaseNotesError.unsupportedClient(client) }
+        return try scripted.get()
+    }
+    func lastClientReviews() -> [ClientKind: ClientReview] { lock.withLock { keptClientReviews } }
+    func keep(clientReviews: [ClientKind: ClientReview]) throws { lock.withLock { keptClientReviews = clientReviews } }
+    var keptClientReview: (ClientKind) -> ClientReview? { { client in self.lock.withLock { self.keptClientReviews[client] } } }
 }
 
 extension ShellRenderFixture {

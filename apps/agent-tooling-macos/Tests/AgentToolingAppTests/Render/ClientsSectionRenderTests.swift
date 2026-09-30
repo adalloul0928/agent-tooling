@@ -118,6 +118,38 @@ struct ClientsSectionRenderTests {
             PlanReviewSheet(
                 workspace: fixture.workspace, plan: ShellRenderFixture.deploymentPlan()))
     }
+    /// One app's page draws its review card empty, mid-run, and with a kept
+    /// review in it.
+    @Test func theClientPageDrawsItsReviewInEveryState() async throws {
+        let services = StubSetupServices(restored: ShellRenderFixture.setupCheckup(home: URL(filePath: "/Users/example")))
+        let audit = ShellRenderFixture.setupCheckup(home: URL(filePath: "/Users/example")).audit
+        try services.keep(clientReviews: [
+            .claude: ClientReview(
+                client: .claude, installedVersion: "2.1.285", latestVersion: "2.1.287",
+                notes: [.init(client: .claude, version: "2.1.287", source: "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md", body: "- Added thing")],
+                review: ShellRenderFixture.setupReview(over: audit), dismissedRecommendationIDs: [], completedAt: .now)
+        ])
+        let fixture = try await ShellRenderFixture(setupServices: services)
+        defer { fixture.remove() }
+        await fixture.workspace.device.refresh()
+        let navigation = AppNavigationState()
+        navigation.openClient(.claude)
+        let withReview = try rasterize(
+            AppShellView(workspace: fixture.workspace, initialSection: .syncCenter, navigation: navigation)
+                .frame(width: shellWindowSize.width, height: shellWindowSize.height).scriptedReceipts())
+        try expectDrawn(
+            AppShellView(workspace: fixture.workspace, initialSection: .syncCenter, navigation: navigation)
+                .frame(width: shellWindowSize.width, height: shellWindowSize.height).scriptedReceipts())
+
+        let plain = try await ShellRenderFixture(setupServices: StubSetupServices())
+        defer { plain.remove() }
+        await plain.workspace.device.refresh()
+        let without = try rasterize(
+            AppShellView(workspace: plain.workspace, initialSection: .syncCenter, navigation: navigation)
+                .frame(width: shellWindowSize.width, height: shellWindowSize.height).scriptedReceipts())
+        #expect(withReview.tiffRepresentation != without.tiffRepresentation, "the kept review changed nothing on the page")
+    }
+
 }
 
 extension View {

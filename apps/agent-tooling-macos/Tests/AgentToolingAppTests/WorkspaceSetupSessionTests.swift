@@ -141,4 +141,36 @@ struct WorkspaceSetupSessionTests {
         #expect(artifact?.authority == .centralPersonal)
         #expect(FileManager.default.fileExists(atPath: folder.appending(path: "SKILL.md").path(percentEncoded: false)), "the app's folder is untouched")
     }
+
+    @Test func reviewingOneAppFetchesItsNotesAndHandsThemToTheAssistantWithTheWebAllowed() async throws {
+        let restored = ShellRenderFixture.setupCheckup(home: URL(filePath: "/Users/example"), review: false)
+        let services = StubSetupServices(restored: restored, review: .success(ShellRenderFixture.setupReview(over: restored.audit)))
+        services.notes[.codex] = .success([
+            .init(client: .codex, version: "0.160.0", source: "https://github.com/openai/codex/releases/tag/rust-v0.160.0", body: "- Big one")
+        ])
+        let fixture = try await ShellRenderFixture(setupServices: services)
+        defer { fixture.remove() }
+        await fixture.workspace.device.refresh()
+        let session = fixture.workspace.setup
+
+        await session.reviewClient(.codex)
+
+        let review = try #require(session.clientReviews[.codex])
+        #expect(review.latestVersion == "0.160.0")
+        #expect(review.notes.count == 1)
+        #expect(review.review?.recommendations.count == 2)
+        #expect(session.reviewingClient == nil)
+        #expect(session.clientReviewMessage == nil, "\(session.clientReviewMessage ?? "")")
+        let call = try #require(services.reviewCalls.first)
+        #expect(call.purpose == .clientReview, "the review that reaches the web")
+        #expect(call.focus == .codex, "about the app under review")
+        #expect(call.client == .claude, "run in the assistant this Mac prefers")
+        #expect(call.releaseNotes == 1, "the fetched notes are handed over")
+        #expect(services.keptClientReview(.codex)?.latestVersion == "0.160.0", "kept for the next launch")
+
+        // Notes the app cannot fetch do not stop the review; the screen is told.
+        await session.reviewClient(.kiro)
+        #expect(session.clientReviews[.kiro]?.review != nil)
+        #expect(session.clientReviewMessage?.contains("without release notes") == true)
+    }
 }

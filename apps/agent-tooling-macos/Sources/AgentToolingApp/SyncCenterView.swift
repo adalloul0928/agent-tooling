@@ -126,6 +126,7 @@ struct SyncCenterView: View {
 
                     if let client {
                         clientHeader(client)
+                        clientReviewCard(client)
                     } else {
                         appTiles
                     }
@@ -317,6 +318,102 @@ struct SyncCenterView: View {
         .standardPanel()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(app.rawValue), \(verdict.text)")
+    }
+
+    /// What has changed in this app since the installed version and what the
+    /// assistant recommends adopting. Asked for from here; nothing runs until
+    /// the button is pressed, and the assistant only reads.
+    @ViewBuilder private func clientReviewCard(_ app: ClientKind) -> some View {
+        let setup = workspace.setup
+        let review = setup.clientReviews[app]
+        let running = setup.reviewingClient == app
+        TitledCard("What's new in \(app.rawValue)", count: review.map { r in r.openRecommendations.isEmpty ? nil : "\(r.openRecommendations.count)" } ?? nil) {
+            Button {
+                Task { await setup.reviewClient(app) }
+            } label: {
+                Label(running ? "Reviewing…" : (review == nil ? "Review \(app.rawValue)" : "Review again"), systemImage: "sparkles")
+            }
+            .buttonStyle(.borderless)
+            .disabled(running || setup.reviewClient == nil || setup.isBusy)
+            .help(reviewHelp(app))
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                if running {
+                    HStack(spacing: 12) {
+                        ProgressView().controlSize(.small)
+                        Text("Fetching \(app.rawValue)'s release notes, then having \(setup.reviewClient?.rawValue ?? "your assistant") read them against your setup. A few minutes.")
+                            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Spacer()
+                    }
+                    .padding(14)
+                } else if let review {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Text(versionLine(review)).font(.callout.weight(.medium))
+                            Spacer()
+                            Text(SnapshotTime.compact(review.completedAt)).font(.caption2).foregroundStyle(.tertiary)
+                        }
+                        if let summary = review.review?.summary { Text(summary).font(.callout).fixedSize(horizontal: false, vertical: true) }
+                        if let message = setup.clientReviewMessage {
+                            Text(message).font(.caption).foregroundStyle(AgentTheme.warning).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(14)
+                    if !review.notes.isEmpty {
+                        Divider()
+                        DisclosureGroup("Release notes read · \(review.notes.count)") {
+                            ForEach(review.notes, id: \.version) { note in
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("\(note.version)").font(.caption.weight(.semibold))
+                                    Link(note.source, destination: URL(string: note.source) ?? URL(filePath: "/")).font(.caption2).lineLimit(1)
+                                    Text(note.body.prefix(600) + (note.body.count > 600 ? "…" : "")).font(.caption2).foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .padding(.vertical, 6)
+                            }
+                        }
+                        .font(.caption)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                    }
+                    ForEach(review.openRecommendations) { recommendation in
+                        Divider()
+                        RecommendationRowView(
+                            recommendation: recommendation, isBusy: setup.isApplying,
+                            onApply: { Task { await setup.apply(recommendation.action) } },
+                            onDismiss: { setup.dismiss(recommendation, in: app) },
+                            onOpen: { openScreen(for: recommendation) })
+                    }
+                } else if let message = setup.clientReviewMessage {
+                    Text(message).font(.callout).foregroundStyle(.secondary).padding(14)
+                } else {
+                    Text("Fetches what \(app.rawValue) has published since the version on this Mac and has your assistant read it against your configuration: settings the docs now recommend, hooks, skills, plugins, and servers worth adding, and what is deprecated. Every claim names its source.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(14)
+                }
+            }
+        }
+    }
+
+    private func versionLine(_ review: ClientReview) -> String {
+        switch (review.installedVersion, review.latestVersion) {
+        case (let installed?, let latest?) where installed != latest: "Installed \(installed) · latest \(latest)"
+        case (let installed?, _): "Installed \(installed) · up to date"
+        case (nil, let latest?): "Latest \(latest) · installed version unknown"
+        default: "Versions unknown"
+        }
+    }
+
+    private func reviewHelp(_ app: ClientKind) -> String {
+        guard let assistant = workspace.setup.reviewClient else { return "A review needs Claude Code or Codex; this Mac is not managing either." }
+        return "Fetches \(app.rawValue)'s release notes and has your signed-in \(assistant.rawValue) read them, your configuration, and \(app.rawValue)'s documentation on the web. It can read; it cannot change anything."
+    }
+
+    private func openScreen(for recommendation: SetupRecommendation) {
+        switch recommendation.action {
+        case .take(.inspectMCPServer), .take(.manageMCPServer), .disableMCPServer: navigate(.mcpServers)
+        case .setSetting: navigate(.appSettings)
+        case .installPlugin: navigate(.plugins)
+        default: break
+        }
     }
 
     private func heldColumn(_ title: String, count: Int?) -> some View {

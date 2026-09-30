@@ -15,6 +15,27 @@ protocol SetupServicing: Sendable {
     ) async throws -> SetupReview
     func lastCheckup() -> SetupCheckup?
     func keep(_ checkup: SetupCheckup) throws
+    /// What a client has published since the installed version. Reaches the
+    /// network; throws in the fetcher's words when it cannot.
+    func releaseNotes(for client: ClientKind, installedVersion: String?) async throws -> [ClientReleaseNote]
+    func lastClientReviews() -> [ClientKind: ClientReview]
+    func keep(clientReviews: [ClientKind: ClientReview]) throws
+}
+
+/// One app's review: what changed upstream since the installed version and
+/// what the assistant recommends, with the notes it was handed.
+struct ClientReview: Codable, Equatable, Sendable {
+    var client: ClientKind
+    var installedVersion: String?
+    var latestVersion: String?
+    var notes: [ClientReleaseNote]
+    var review: SetupReview?
+    var dismissedRecommendationIDs: Set<String>
+    var completedAt: Date
+
+    var openRecommendations: [SetupRecommendation] {
+        (review?.recommendations ?? []).filter { !dismissedRecommendationIDs.contains($0.id) }
+    }
 }
 
 /// What a checkup left behind: the audit, the review if one ran, and the
@@ -43,11 +64,15 @@ struct SetupCheckup: Codable, Equatable, Sendable {
 
 struct LiveSetupServices: SetupServicing {
     private let file: URL
+    private let clientReviewsFile: URL
     private let reviewService: SetupReviewService
+    private let releaseNotes: ClientReleaseNotesService
     private let homeRoot: URL
 
     init(container: URL, homeRoot: URL = FileManager.default.homeDirectoryForCurrentUser) {
         file = container.appending(path: "setup-checkup.json")
+        clientReviewsFile = container.appending(path: "client-reviews.json")
+        releaseNotes = ClientReleaseNotesService()
         self.homeRoot = homeRoot
         reviewService = SetupReviewService(
             stagingRootURL: container.appending(path: "cache", directoryHint: .isDirectory)
@@ -81,6 +106,24 @@ struct LiveSetupServices: SetupServicing {
         encoder.outputFormatting = [.sortedKeys]
         try encoder.encode(checkup).write(to: file, options: .atomic)
     }
+
+    func releaseNotes(for client: ClientKind, installedVersion: String?) async throws -> [ClientReleaseNote] {
+        try await releaseNotes.notes(for: client, installedVersion: installedVersion)
+    }
+
+    func lastClientReviews() -> [ClientKind: ClientReview] {
+        guard let data = try? Data(contentsOf: clientReviewsFile) else { return [:] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([ClientReview].self, from: data)).map { Dictionary($0.map { ($0.client, $0) }, uniquingKeysWith: { first, _ in first }) } ?? [:]
+    }
+
+    func keep(clientReviews: [ClientKind: ClientReview]) throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        try encoder.encode(clientReviews.values.sorted { $0.client.rawValue < $1.client.rawValue }).write(to: clientReviewsFile, options: .atomic)
+    }
 }
 
 /// The setup loop: audit this Mac, have the person's assistant read the audit,
@@ -100,6 +143,11 @@ final class WorkspaceSetupSession {
     private(set) var reviewMessage: String?
     /// What the last apply did, in a sentence, for the screen to show.
     private(set) var lastApplyMessage: String?
+    /// One app's review, by app. Kept apart from the weekly checkup: it is
+    /// asked for from that app's page and looks outward at what changed.
+    private(set) var clientReviews: [ClientKind: ClientReview] = [:]
+    private(set) var reviewingClient: ClientKind?
+    private(set) var clientReviewMessage: String?
 
     static let checkupStaleAfter: TimeInterval = 7 * 24 * 60 * 60
 
@@ -124,6 +172,7 @@ final class WorkspaceSetupSession {
         self.homeRoot = homeRoot
         self.services = services
         checkup = services.lastCheckup()
+        clientReviews = services.lastClientReviews()
     }
 
     var isBusy: Bool { isAuditing || isReviewing || isApplying }
@@ -219,6 +268,62 @@ final class WorkspaceSetupSession {
         await audit()
         guard reviewClient != nil else { return }
         await review(purpose: .checkup)
+    }
+
+    // MARK: Reviewing one app
+
+    /// Fetches what the app has published since its installed version, then
+    /// has the assistant read those notes, the audit's findings for the app,
+    /// and (with the web allowed) the app's documentation, and say what to
+    /// adopt. The assistant is Claude Code or Codex; the app under review can
+    /// be any of them.
+    func reviewClient(_ client: ClientKind) async {
+        guard reviewingClient == nil else { return }
+        guard let assistant = reviewClient else {
+            clientReviewMessage = "A review needs Claude Code or Codex; this Mac is not managing either."
+            return
+        }
+        reviewingClient = client
+        clientReviewMessage = nil
+        defer { reviewingClient = nil }
+        if checkup == nil { await audit() }
+        guard let audit = checkup?.audit else { return }
+        let installed = device.observations.first { $0.surface.client == client && $0.version?.isEmpty == false }?.version
+        var notes: [ClientReleaseNote] = []
+        var noteFailure: String?
+        do { notes = try await services.releaseNotes(for: client, installedVersion: installed) } catch {
+            noteFailure = (error as? any LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+        let versions = Dictionary(
+            device.observations.compactMap { o -> (ClientKind, String)? in
+                guard let c = o.surface.client, let v = o.version else { return nil }
+                return (c, v)
+            }, uniquingKeysWith: { first, _ in first })
+        var next = ClientReview(
+            client: client, installedVersion: installed, latestVersion: notes.first?.version, notes: notes, review: nil,
+            dismissedRecommendationIDs: clientReviews[client]?.dismissedRecommendationIDs ?? [], completedAt: .now)
+        do {
+            let review = try await services.review(
+                client: assistant, purpose: .clientReview, audit: audit, digests: [], focus: client, clientVersions: versions,
+                releaseNotes: notes.map(\.rendered))
+            next.review = review
+            next.dismissedRecommendationIDs = next.dismissedRecommendationIDs.intersection(review.recommendations.map(\.id))
+            if let noteFailure { clientReviewMessage = "The review ran without release notes: \(noteFailure)" }
+        } catch {
+            clientReviewMessage = (error as? any LocalizedError)?.errorDescription ?? "\(assistant.rawValue) could not finish the review."
+            if let noteFailure { clientReviewMessage = (clientReviewMessage ?? "") + " \(noteFailure)" }
+        }
+        clientReviews[client] = next
+        do { try services.keep(clientReviews: clientReviews) } catch {
+            errorMessage = "This review is on screen but could not be saved."
+        }
+    }
+
+    func dismiss(_ recommendation: SetupRecommendation, in client: ClientKind) {
+        guard var review = clientReviews[client] else { return }
+        review.dismissedRecommendationIDs.insert(recommendation.id)
+        clientReviews[client] = review
+        try? services.keep(clientReviews: clientReviews)
     }
 
     // MARK: Dismissing
