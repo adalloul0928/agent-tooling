@@ -52,4 +52,22 @@ public enum SmartToolFinder {
         }
         return findings
     }
+
+    /// The folders the login shell searches for commands, in its order. One
+    /// fixed command with nothing of anybody's in it; the answer is a list of
+    /// absolute folders and anything else in it is dropped. A GUI app's own
+    /// PATH is not the shell's, and a server the shell can start reads as
+    /// missing without this.
+    public static func loginShellSearchPath(runner: any CommandRunning) async -> [URL] {
+        guard
+            let output = try? await runner.run(
+                executable: "/bin/zsh", arguments: ["-l", "-c", "printf %s \"$PATH\""], currentDirectory: nil),
+            output.status == 0
+        else { return [] }
+        return output.standardOutput.split(separator: ":").compactMap { entry in
+            let path = entry.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard path.hasPrefix("/"), !path.contains("\n") else { return nil }
+            return URL(filePath: path, directoryHint: .isDirectory).standardizedFileURL
+        }
+    }
 }
