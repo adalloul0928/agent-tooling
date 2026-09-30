@@ -36,7 +36,7 @@ struct SkillTableColumns {
     /// Whether anything on this list has a description to put in one.
     let describing: Bool
     var expanded: Bool { width >= 940 }
-    var verdict: CGFloat { expanded ? 118 : 104 }
+    var verdict: CGFloat { expanded ? 104 : 96 }
     var name: CGFloat {
         guard expanded else { return max(140, width - 144 - verdict - (selecting ? 32 : 0)) }
         // With no description column the name takes the space back rather than
@@ -180,12 +180,13 @@ enum SkillManagement: Equatable {
         }
     }
 
+    /// One word each. The discs beside "Yours" say where; no discs says
+    /// nowhere yet. The hover text carries the sentence.
     var label: String {
         switch self {
-        case .placed: "Yours"
-        case .yoursUnplaced: "Yours, not placed"
-        case .byPlugin: "By its plugin"
-        case .notByThisApp: "Not by this app"
+        case .placed, .yoursUnplaced: "Yours"
+        case .byPlugin: "Plugin"
+        case .notByThisApp: "Unmanaged"
         }
     }
 

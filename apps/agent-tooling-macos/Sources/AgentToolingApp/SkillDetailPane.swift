@@ -69,10 +69,10 @@ struct SkillDetailView: View {
     private var managementBadge: String {
         switch skill.ownership {
         case .centralPersonal: "Yours"
-        case .centralUpstream: "Yours · follows a repository"
+        case .centralUpstream: "Yours · repository"
         case .attachedAuthoring: "Yours · linked folder"
-        case .nativeOwned: skill.parentID == nil ? "Managed by its app" : "Part of a plugin"
-        case .trackedOnly: "Not managed by this app"
+        case .nativeOwned: skill.parentID == nil ? "Its app" : "Plugin"
+        case .trackedOnly: "Unmanaged"
         }
     }
 

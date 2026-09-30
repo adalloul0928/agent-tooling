@@ -29,33 +29,38 @@ struct SkillManagementTests {
     }
 
     @Test func aSkillOfYoursNotPlacedAnywhereSaysSo() {
-        #expect(SkillManagement(entry(ownership: .centralPersonal)).label == "Yours, not placed")
-        #expect(SkillManagement(entry(ownership: .attachedAuthoring)).label == "Yours, not placed")
-        #expect(SkillManagement(entry(ownership: .centralUpstream)).label == "Yours, not placed")
+        // Still one word; the missing discs are what say "nowhere yet".
+        #expect(SkillManagement(entry(ownership: .centralPersonal)) == .yoursUnplaced)
+        #expect(SkillManagement(entry(ownership: .centralPersonal)).label == "Yours")
+        #expect(SkillManagement(entry(ownership: .attachedAuthoring)) == .yoursUnplaced)
+        #expect(SkillManagement(entry(ownership: .centralUpstream)) == .yoursUnplaced)
+        #expect(SkillManagement.yoursUnplaced.explanation.contains("not placed"))
     }
 
     @Test func aPluginsSkillIsManagedByItsPlugin() {
         let management = SkillManagement(entry(ownership: .nativeOwned, inPlugin: true))
         #expect(management == .byPlugin)
-        #expect(management.label == "By its plugin")
+        #expect(management.label == "Plugin")
         #expect(!management.explanation.contains("assign"), "the explanation says what happens, not what is refused")
     }
 
     @Test func aSkillFoundButNotHeldIsNotManagedByThisApp() {
         let management = SkillManagement(entry(ownership: .trackedOnly))
         #expect(management == .notByThisApp)
-        #expect(management.label == "Not by this app")
+        #expect(management.label == "Unmanaged")
         #expect(management.explanation.contains("holds no copy"))
     }
 
-    /// The old words are gone everywhere a person could read them.
-    @Test func theOldVocabularyIsGone() {
+    /// One word each, and the old words are gone everywhere a person could
+    /// read them.
+    @Test func everyLabelIsOneWordAndTheOldVocabularyIsGone() {
         for management in [SkillManagement.yoursUnplaced, .byPlugin, .notByThisApp, .placed([.claude])] {
+            #expect(!management.label.contains(" "), "\(management.label) is more than one word")
             for word in ["Tracked", "Not assigned", "place\"", "places"] {
                 #expect(!management.label.contains(word), "\(management.label) still says \(word)")
             }
         }
-        #expect(WorkspaceLibraryOwnership.trackedOnly.libraryLabel == "Not managed by this app")
+        #expect(WorkspaceLibraryOwnership.trackedOnly.libraryLabel == "Unmanaged")
     }
 
     @Test func aPlacementStackDrawsOneDiscPerApp() throws {
