@@ -77,7 +77,7 @@ struct AppShellView: View {
         .overlay {
             if paletteVisible {
                 ZStack {
-                    Color.black.opacity(0.22)
+                    AgentTheme.scrim
                         .ignoresSafeArea()
                         .contentShape(Rectangle())
                         .onTapGesture { paletteVisible = false }
@@ -90,11 +90,11 @@ struct AppShellView: View {
                             Task { @MainActor in activate(outcome) }
                         },
                         onClose: { paletteVisible = false })
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .clipShape(RoundedRectangle.panel)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .strokeBorder(AgentTheme.separator.opacity(0.4), lineWidth: 0.5))
-                        .shadow(color: .black.opacity(0.30), radius: 28, y: 12)
+                            RoundedRectangle.panel
+                                .strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width))
+                        .shadow(color: AgentTheme.shadowStrong, radius: 28, y: 12)
                 }
                 .transition(.opacity)
             }

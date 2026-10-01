@@ -46,47 +46,47 @@ struct SettingsGeneralView: View {
                 Text(
                     "Servers stay configured directly in each client by default. ToolHive is an optional, separate host for isolated workloads; Agent Tooling never moves servers into it automatically."
                 )
-                .font(.callout)
+                .font(AgentFont.body)
                 .foregroundStyle(.secondary)
-                .padding(14)
+                .padding(Space.xl)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 if let runtimes, !runtimes.statuses.isEmpty {
                     ForEach(runtimes.statuses, id: \.id) { status in
-                        Divider()
+                        Hairline()
                         statusRow(status)
                     }
                     if let error = runtimes.mcpRuntimeError {
-                        Divider()
+                        Hairline()
                         Text(error)
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
-                            .padding(14)
+                            .padding(Space.xl)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Divider()
+                    Hairline()
                     HStack {
                         Text(workloadSummary)
-                            .font(.callout)
+                            .font(AgentFont.body)
                             .foregroundStyle(.secondary)
                         Spacer()
                         Button("Refresh") { Task { await runtimes.refresh() } }
-                            .buttonStyle(.bordered)
+                            .secondaryActionStyle()
                             .controlSize(.small)
                             .disabled(runtimes.isRefreshingMCPRuntimes)
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                 } else {
-                    Divider()
+                    Hairline()
                     HStack {
-                        Text("Connection mode check").font(.callout.weight(.medium))
+                        Text("Connection mode check").font(AgentFont.bodyMedium)
                         Spacer()
                         Button("Check Modes") { Task { await runtimes?.refresh() } }
-                            .buttonStyle(.bordered)
+                            .secondaryActionStyle()
                             .controlSize(.small)
                             .disabled(runtimes?.isRefreshingMCPRuntimes == true)
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                 }
             }
         }
@@ -96,10 +96,10 @@ struct SettingsGeneralView: View {
         InfoRow(status.displayName, detail: rowDetail(status)) {
             Image(systemName: status.id == "toolhive" ? "server.rack" : "app.connected.to.app.below.fill")
                 .foregroundStyle(.secondary)
-                .frame(width: 20)
+                .frame(width: Size.glyphSlot)
         } trailing: {
             Text(runtimeAvailabilityLabel(for: status))
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
         }
         .help(status.detail)
@@ -146,7 +146,7 @@ struct SettingsGeneralView: View {
                     "Check health automatically",
                     detail: "Check this Mac's apps when Agent Tooling opens, instead of waiting for a manual refresh."
                 ) {
-                    Image(systemName: "switch.2").foregroundStyle(.secondary).frame(width: 20)
+                    Image(systemName: "switch.2").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                 } trailing: {
                     Toggle(
                         "Check health automatically",
@@ -171,7 +171,7 @@ struct SettingsGeneralView: View {
                         "Location checked on this Mac",
                         detail: "Agent Tooling knows where to look for an organization policy on this Mac."
                     ) {
-                        Image(systemName: "building.2.crop.circle").foregroundStyle(.secondary).frame(width: 20)
+                        Image(systemName: "building.2.crop.circle").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                     } trailing: {
                         PathInfoButton(path: policyPath.path(percentEncoded: false))
                     }
@@ -179,9 +179,9 @@ struct SettingsGeneralView: View {
                     Text(
                         "Agent Tooling was not told where an organization policy file would be on this Mac, so it cannot rule one out. If your organization sets one, it may decide a setting shown elsewhere as changeable."
                     )
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                    .padding(14)
+                    .padding(Space.xl)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }

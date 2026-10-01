@@ -16,23 +16,23 @@ struct CollectionPills: View {
 
     var body: some View {
         if !names.isEmpty {
-            HStack(spacing: 5) {
+            HStack(spacing: Space.xs) {
                 ForEach(names.prefix(limit), id: \.self) { name in
                     Label(name, systemImage: ToolingKind.collection.symbol)
                         .labelStyle(.titleAndIcon)
-                        .font(.caption2.weight(.medium))
+                        .font(AgentFont.microMedium)
                         .imageScale(.small)
                         .lineLimit(1)
                         .foregroundStyle(selected ? Color.white : AgentTheme.collection)
-                        .padding(.horizontal, 7)
-                        .frame(height: 18)
+                        .padding(.horizontal, Space.sm)
+                        .frame(height: Size.chipHeight)
                         .background(
                             Capsule().fill(selected ? Color.white.opacity(0.22) : AgentTheme.collection.opacity(0.13))
                         )
                 }
                 if names.count > limit {
                     Text("+\(names.count - limit)")
-                        .font(.caption2.weight(.medium))
+                        .font(AgentFont.microMedium)
                         .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
                 }
             }
@@ -51,21 +51,21 @@ struct TagPills: View {
 
     var body: some View {
         if !tags.isEmpty {
-            HStack(spacing: 5) {
+            HStack(spacing: Space.xs) {
                 ForEach(tags.prefix(limit), id: \.self) { tag in
                     Text(tag)
-                        .font(.caption2)
+                        .font(AgentFont.micro)
                         .lineLimit(1)
                         .foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
-                        .padding(.horizontal, 7)
-                        .frame(height: 18)
+                        .padding(.horizontal, Space.sm)
+                        .frame(height: Size.chipHeight)
                         .background(
-                            Capsule().fill(selected ? Color.white.opacity(0.16) : Color.primary.opacity(0.06))
+                            Capsule().fill(selected ? Color.white.opacity(0.16) : AgentTheme.fillSubtle)
                         )
                 }
                 if tags.count > limit {
                     Text("+\(tags.count - limit)")
-                        .font(.caption2)
+                        .font(AgentFont.micro)
                         .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
                 }
             }
@@ -85,7 +85,7 @@ struct FilterPill: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: Space.xs) {
                 Text(title).lineLimit(1)
                 if let count {
                     Text(count, format: .number)
@@ -93,12 +93,12 @@ struct FilterPill: View {
                         .monospacedDigit()
                 }
             }
-            .font(.caption.weight(isOn ? .semibold : .regular))
+            .font(isOn ? AgentFont.captionSemibold : AgentFont.caption)
             .foregroundStyle(isOn ? Color.white : Color.primary)
-            .padding(.horizontal, 10)
-            .frame(height: 22)
+            .padding(.horizontal, Space.lg)
+            .frame(height: Size.pillHeight)
             .background(
-                Capsule().fill(isOn ? AgentTheme.blue : Color.primary.opacity(0.06))
+                Capsule().fill(isOn ? AgentTheme.selection : AgentTheme.fillSubtle)
             )
             .contentShape(Capsule())
         }
@@ -117,7 +117,7 @@ struct TagFilterBar: View {
     @Binding var untaggedOnly: Bool
 
     var body: some View {
-        FlowLayout(spacing: 6) {
+        FlowLayout(spacing: Space.sm) {
             FilterPill(title: "Untagged", count: untaggedCount, isOn: untaggedOnly) {
                 untaggedOnly.toggle()
                 if untaggedOnly { selection.removeAll() }
@@ -134,10 +134,10 @@ struct TagFilterBar: View {
                     untaggedOnly = false
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundStyle(AgentTheme.blue)
-                .padding(.horizontal, 6)
-                .frame(height: 22)
+                .font(AgentFont.caption)
+                .foregroundStyle(AgentTheme.selection)
+                .padding(.horizontal, Space.sm)
+                .frame(height: Size.pillHeight)
             }
         }
         .accessibilityLabel("Filter by tag")
@@ -160,8 +160,7 @@ struct EmptyStateView: View {
         } actions: {
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .disabled(!isActionEnabled)
             }
         }
@@ -181,7 +180,7 @@ struct SelectionCheckbox: View {
 
     var body: some View {
         Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-            .font(.system(size: 15))
+            .font(.system(size: Size.brandMark))
             .foregroundStyle(tint)
             .accessibilityHidden(true)
     }
@@ -203,26 +202,25 @@ struct SelectionActionBar: View {
     let clear: () -> Void
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: Space.md) {
             Text("\(count) selected")
-                .font(.callout.weight(.medium))
+                .font(AgentFont.bodyMedium)
                 .monospacedDigit()
                 .lineLimit(1)
-            Spacer(minLength: 8)
+            Spacer(minLength: Space.md)
             Button("Clear", action: clear)
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
             Button(actionTitle, action: action)
-                .buttonStyle(.borderedProminent)
-                .tint(AgentTheme.selection)
+                .primaryActionStyle()
                 .disabled(!isActionEnabled)
                 .lineLimit(1)
         }
         .buttonBorderShape(.capsule)
-        .padding(.horizontal, 14)
-        .frame(height: 48)
+        .padding(.horizontal, Space.xl)
+        .frame(height: Size.headerHeight)
         .standardPanel()
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
-        .padding(12)
+        .shadow(color: AgentTheme.shadow, radius: 8, y: 3)
+        .padding(Space.lg)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(count) selected")
     }
@@ -239,16 +237,16 @@ struct LabeledValueRow<Trailing: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 14) {
+        HStack(alignment: .firstTextBaseline, spacing: Space.lg) {
             Text(label)
                 .foregroundStyle(.secondary)
-                .frame(width: 132, alignment: .leading)
+                .frame(width: Size.labelColumn, alignment: .leading)
             trailing
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .font(.callout)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .font(AgentFont.body)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
     }
 }
 
@@ -263,7 +261,7 @@ struct CommandDisclosure: View {
         DisclosureGroup(isExpanded: $isExpanded) {
             HStack {
                 Text(command)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(AgentFont.mono)
                     .textSelection(.enabled)
                 Spacer()
                 Button {
@@ -272,15 +270,15 @@ struct CommandDisclosure: View {
                 } label: {
                     Label("Copy", systemImage: "doc.on.doc")
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .controlSize(.small)
             }
-            .padding(.top, 10)
+            .padding(.top, Space.lg)
         } label: {
             Text(title)
-                .font(.callout)
+                .font(AgentFont.body)
         }
-        .padding(13)
+        .padding(Space.xl)
         .standardPanel()
     }
 }
@@ -291,16 +289,16 @@ struct ClientStatusRows: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(clients.enumerated()), id: \.offset) { index, client in
-                HStack(spacing: 11) {
-                    ClientDisc(client: client.client, size: 30)
+                HStack(spacing: Space.lg) {
+                    ClientDisc(client: client.client, size: Size.disc)
                     Text(client.client.rawValue)
-                        .font(.callout.weight(.medium))
-                    Spacer(minLength: 20)
+                        .font(AgentFont.bodyMedium)
+                    Spacer(minLength: Space.xxl)
                     StatusBadge(state: client.state, text: client.detailWithRevision)
                 }
-                .padding(.horizontal, 14)
-                .frame(minHeight: 46)
-                if index < clients.count - 1 { Divider().opacity(0.45) }
+                .padding(.horizontal, Space.xl)
+                .frame(minHeight: Size.rowHeight)
+                if index < clients.count - 1 { Hairline() }
             }
         }
     }
@@ -311,7 +309,7 @@ struct SectionCaption: View {
 
     var body: some View {
         Text(text)
-            .font(.caption.weight(.medium))
+            .font(AgentFont.captionMedium)
             .foregroundStyle(.secondary)
     }
 }

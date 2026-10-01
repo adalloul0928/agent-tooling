@@ -56,14 +56,14 @@ extension AgentTheme {
 
 struct KindTile: View {
     let kind: ToolingKind
-    var size: CGFloat = 28
+    var size: CGFloat = Size.tile
     /// Discovered on this Mac but not managed by Agent Tooling: the same tile
     /// at reduced presence, so long lists of vendor items stay quiet.
     var ghost = false
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: max(6, size * 0.28), style: .continuous)
+            RoundedRectangle(cornerRadius: max(Radius.sm, size * 0.28), style: .continuous)
                 .fill(kind.color.gradient)
             Image(systemName: kind.symbol)
                 .font(.system(size: size * 0.5, weight: .medium))
@@ -79,11 +79,11 @@ struct KindTile: View {
 /// A neutral graphite tile for objects outside the four identity kinds.
 struct SymbolTile: View {
     let symbol: String
-    var size: CGFloat = 34
+    var size: CGFloat = Size.discLarge
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: max(6, size * 0.28), style: .continuous)
+            RoundedRectangle(cornerRadius: max(Radius.sm, size * 0.28), style: .continuous)
                 .fill(AgentTheme.graphite.gradient)
             Image(systemName: symbol)
                 .font(.system(size: size * 0.46, weight: .medium))
@@ -99,7 +99,7 @@ struct SymbolTile: View {
 /// All three marks, always in the same order; absent clients are dimmed.
 struct ClientMarks: View {
     let present: Set<ClientKind>
-    var size: CGFloat = 15
+    var size: CGFloat = Size.brandMark
     /// The shell publishes the clients this Mac actually offers, so a row never
     /// has to know how that set was decided. With nothing published the marks
     /// fall back to every known client, which is what a single row rendered on
@@ -107,7 +107,7 @@ struct ClientMarks: View {
     @Environment(\.availableClients) private var order
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: Space.sm) {
             ForEach(order) { client in
                 ClientBrandIcon(client: client, size: size)
                     .opacity(present.contains(client) ? 1 : 0.22)
@@ -127,7 +127,7 @@ struct ClientMarks: View {
 /// so the same apps stack the same way on every row.
 struct PlacementStack: View {
     let placed: Set<ClientKind>
-    var size: CGFloat = 20
+    var size: CGFloat = Size.tileSmall
     @Environment(\.availableClients) private var order
 
     private var ordered: [ClientKind] { order.filter(placed.contains) }
@@ -148,14 +148,14 @@ struct PlacementStack: View {
 
 struct ClientDisc: View {
     let client: ClientKind
-    var size: CGFloat = 34
+    var size: CGFloat = Size.discLarge
     var bordered = true
 
     var body: some View {
         ZStack {
             if bordered {
                 Circle().fill(AgentTheme.controlBackground)
-                Circle().strokeBorder(AgentTheme.separator.opacity(0.5), lineWidth: 0.5)
+                Circle().strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width)
             }
             ClientBrandIcon(client: client, size: size * 0.53)
         }
@@ -169,10 +169,10 @@ struct SelectionRowBackground: View {
 
     var body: some View {
         if selected {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle.control
                 .fill(AgentTheme.selection)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 1)
+                .padding(.horizontal, Space.sm)
+                .padding(.vertical, Space.xxs)
         } else {
             Color.clear
         }
@@ -183,7 +183,7 @@ struct SelectionRowBackground: View {
 
 struct StatusGlyph: View {
     let state: HealthState
-    var size: CGFloat = 14
+    var size: CGFloat = Size.glyph
     /// Selected rows draw the glyph in white so it stays legible on the accent fill.
     var tint: Color?
 
@@ -220,12 +220,12 @@ struct StatusBadge: View {
     var tint: Color?
 
     var body: some View {
-        HStack(spacing: 5) {
-            StatusGlyph(state: state, size: 13, tint: tint)
+        HStack(spacing: Space.xs) {
+            StatusGlyph(state: state, size: Size.glyphSmall, tint: tint)
             Text(text)
                 .lineLimit(1)
         }
-        .font(.caption.weight(.medium))
+        .font(AgentFont.captionMedium)
         .foregroundStyle(tint ?? Color.secondary)
         .accessibilityElement(children: .combine)
     }
@@ -243,24 +243,24 @@ struct AttentionBanner<Action: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            StatusGlyph(state: .attention, size: 16)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.callout.weight(.semibold))
-                Text(message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        HStack(spacing: Space.lg) {
+            StatusGlyph(state: .attention, size: Size.glyphLarge)
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(title).font(AgentFont.bodySemibold)
+                Text(message).font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.lg)
             action
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(AgentTheme.warning.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
+        .background(AgentTheme.warning.opacity(0.10), in: RoundedRectangle.card)
         // Banners come and go with state; arriving with a transition keeps the
         // content below from teleporting by a banner's height.
         .transition(.move(edge: .top).combined(with: .opacity))
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(AgentTheme.warning.opacity(0.32), lineWidth: 0.5)
+            RoundedRectangle.card
+                .strokeBorder(AgentTheme.warning.opacity(0.32), lineWidth: Hairline.width)
         }
     }
 }

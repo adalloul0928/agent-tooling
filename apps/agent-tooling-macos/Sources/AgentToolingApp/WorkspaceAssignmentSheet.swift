@@ -46,7 +46,7 @@ struct WorkspaceAssignmentSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
+            Hairline()
 
             Group {
                 if session.state == nil, session.isBusy {
@@ -62,10 +62,10 @@ struct WorkspaceAssignmentSheet: View {
                 }
             }
 
-            Divider()
+            Hairline()
             footer
         }
-        .frame(width: 720, height: 680)
+        .sheetSize(SheetSize.large)
         .background(AgentTheme.contentBackground)
         .interactiveDismissDisabled(session.isBusy)
         .task(id: loadID) {
@@ -92,42 +92,42 @@ struct WorkspaceAssignmentSheet: View {
     }
 
     private var header: some View {
-        HStack(spacing: 13) {
-            SymbolTile(symbol: presetID == nil ? "arrow.triangle.branch" : "square.stack.3d.up", size: 36)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: Space.lg) {
+            SymbolTile(symbol: presetID == nil ? "arrow.triangle.branch" : "square.stack.3d.up", size: Size.tileLarge)
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(session.lastReceipt == nil ? "Assign library items" : "Assignments saved")
-                    .font(.title2.weight(.semibold))
+                    .font(AgentFont.titleLarge)
                 Text(session.lastReceipt == nil
                     ? "Choose where to use these items."
                     : "Saved to your workspace. Installing is reviewed on the Apps screen.")
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
             }
             Spacer()
         }
-        .padding(.horizontal, 24)
-        .frame(height: 82)
+        .padding(.horizontal, Space.xxxl)
+        .frame(height: Size.sheetBarHeight)
     }
 
     @ViewBuilder
     private func content(_ library: WorkspaceLibraryReadModel) -> some View {
         if session.lastReceipt != nil {
             let itemSummaries = summaries(in: library)
-            VStack(spacing: 16) {
+            VStack(spacing: Space.xl) {
                 selectedItems(itemSummaries, library: library)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 24)
+                    .padding(.horizontal, Space.xxxl)
+                    .padding(.top, Space.xxxl)
                 success
                 if let error = session.errorMessage {
                     AttentionBanner(title: "Saved with a refresh issue", message: error)
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 24)
+                        .padding(.horizontal, Space.xxxl)
+                        .padding(.bottom, Space.xxxl)
                 }
             }
         } else {
             let itemSummaries = summaries(in: library)
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 24) {
+                LazyVStack(alignment: .leading, spacing: Space.xxxl) {
                     selectedItems(itemSummaries, library: library)
                     if let review = session.review {
                         reviewSummary(review)
@@ -137,15 +137,14 @@ struct WorkspaceAssignmentSheet: View {
                     if let error = session.errorMessage {
                         if session.lastRefusal == .contributionConflict, navigation != nil {
                             AttentionBanner(title: "Already asked for", message: error) {
-                                Button("Install now…", action: installNow).buttonStyle(.borderedProminent)
-                                    .tint(AgentTheme.selection)
+                                Button("Install now…", action: installNow).primaryActionStyle()
                             }
                         } else {
                             AttentionBanner(title: "Couldn’t prepare assignments", message: error)
                         }
                     }
                 }
-                .padding(24)
+                .padding(Space.xxxl)
             }
         }
     }
@@ -154,27 +153,27 @@ struct WorkspaceAssignmentSheet: View {
         _ itemSummaries: [ItemSummary],
         library: WorkspaceLibraryReadModel
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Space.md) {
             HStack {
                 Text(presetID == nil ? "Selected items" : "Preset items")
-                    .font(.headline)
+                    .font(AgentFont.heading)
                 Spacer()
                 Text("\(itemSummaries.count)")
-                    .font(.callout.monospacedDigit())
+                    .font(AgentFont.body.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             VStack(spacing: 0) {
                 if let presetID, let preset = library.presets.first(where: { $0.id == presetID }) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: Space.lg) {
                         Image(systemName: "square.stack.3d.up")
                             .foregroundStyle(.secondary)
-                        Text(preset.name).font(.callout.weight(.semibold))
+                        Text(preset.name).font(AgentFont.bodySemibold)
                         Spacer()
                         Text("Revision \(preset.revision)")
-                            .font(.callout).foregroundStyle(.secondary)
+                            .font(AgentFont.body).foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 14).padding(.vertical, 11)
-                    Divider().opacity(0.45)
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                    Hairline()
                 }
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -182,18 +181,18 @@ struct WorkspaceAssignmentSheet: View {
                             Array((isShowingAllItems ? itemSummaries : Array(itemSummaries.prefix(2))).enumerated()),
                             id: \.element.id
                         ) { index, item in
-                            HStack(spacing: 10) {
-                                KindTile(kind: toolingKind(item.kind), size: 28)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.name).font(.callout.weight(.medium))
+                            HStack(spacing: Space.lg) {
+                                KindTile(kind: toolingKind(item.kind), size: Size.tile)
+                                VStack(alignment: .leading, spacing: Space.xxs) {
+                                    Text(item.name).font(AgentFont.bodyMedium)
                                     Text(item.detail)
-                                        .font(.callout).foregroundStyle(.secondary)
+                                        .font(AgentFont.body).foregroundStyle(.secondary)
                                 }
                                 Spacer()
                             }
-                            .padding(.horizontal, 14).padding(.vertical, 9)
+                            .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
                             if index < (isShowingAllItems ? itemSummaries.count : min(2, itemSummaries.count)) - 1 {
-                                Divider().opacity(0.45)
+                                Hairline()
                             }
                         }
                     }
@@ -201,15 +200,15 @@ struct WorkspaceAssignmentSheet: View {
                 .frame(maxHeight: isShowingAllItems ? 160 : nil)
 
                 if itemSummaries.count > 2 {
-                    Divider().opacity(0.45)
+                    Hairline()
                     Button(isShowingAllItems ? "Show fewer items" : "Show all \(itemSummaries.count) items") {
                         isShowingAllItems.toggle()
                     }
                     .buttonStyle(.plain)
-                    .font(.callout.weight(.medium))
+                    .font(AgentFont.bodyMedium)
                     .foregroundStyle(AgentTheme.selection)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, Space.xl)
+                    .padding(.vertical, Space.lg)
                     .disabled(draftLocked)
                 }
             }
@@ -218,30 +217,31 @@ struct WorkspaceAssignmentSheet: View {
     }
 
     private func destinationEditor(_ library: WorkspaceLibraryReadModel) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: Space.xxl) {
             field(
                 title: "Apps",
                 detail: "Choose each app explicitly."
             ) {
                 if availableClients.isEmpty {
                     Text("No apps are managed on this Mac. Choose apps on the Apps screen.")
-                        .font(.callout)
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(14)
+                        .padding(Space.xl)
                         .standardPanel()
                 } else {
                     VStack(spacing: 0) {
                         ForEach(Array(availableClients.enumerated()), id: \.element) { index, client in
                             Toggle(isOn: clientBinding(client)) {
-                                HStack(spacing: 10) {
-                                    ClientBrandIcon(client: client, size: 20).frame(width: 24, height: 24)
-                                    Text(surface(client).displayName).font(.callout.weight(.medium))
+                                HStack(spacing: Space.lg) {
+                                    ClientBrandIcon(client: client, size: Size.tileSmall).frame(width: Size.tile, height: Size.tile)
+                                    Text(surface(client).displayName).font(AgentFont.bodyMedium)
                                 }
                             }
-                            .padding(.horizontal, 14).padding(.vertical, 9)
-                            if index < availableClients.count - 1 { Divider().opacity(0.45) }
+                            .frame(maxWidth: .infinity, minHeight: Size.rowHeight, alignment: .leading)
+                            .padding(.horizontal, Space.xl)
+                            if index < availableClients.count - 1 { Hairline() }
                         }
                     }
                     .standardPanel()
@@ -253,12 +253,12 @@ struct WorkspaceAssignmentSheet: View {
                     Text("This Mac").tag(ToolingScope.user)
                     Text("Project").tag(ToolingScope.project)
                 }
-                .frame(maxWidth: 320)
+                .fixedSize()
             }
 
             if scope == .project {
                 field(title: "Project", detail: "Choose the project for every selected app.") {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Space.md) {
                         Picker("Project", selection: $selectedProjectID) {
                             Text("Choose a project").tag(nil as ArtifactID?)
                             ForEach(library.projects) { project in
@@ -274,7 +274,7 @@ struct WorkspaceAssignmentSheet: View {
                             // installing simply waits until the project has a
                             // folder on this Mac.
                             Text("Installing waits until this project has a folder on this Mac. Choose one on the Projects screen.")
-                                .font(.caption)
+                                .font(AgentFont.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -299,22 +299,22 @@ struct WorkspaceAssignmentSheet: View {
     }
 
     private func reviewSummary(_ review: WorkspaceAssignmentReview) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Review assignments").font(.headline)
+        VStack(alignment: .leading, spacing: Space.xl) {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("Review assignments").font(AgentFont.heading)
                 Text(reviewTargetSummary(review))
-                    .font(.body)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: 12) {
+            HStack(spacing: Space.lg) {
                 reviewCount("Additions", count: review.preview.additions.count, symbol: "plus.circle")
                 if !review.preview.removals.isEmpty {
                     reviewCount("Removals", count: review.preview.removals.count, symbol: "minus.circle")
                 }
             }
             Text("Saves these choices to your workspace. Installing them in apps is a separate step.")
-                .font(.body)
+                .font(AgentFont.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if !isWritable {
@@ -324,23 +324,23 @@ struct WorkspaceAssignmentSheet: View {
                 )
             }
         }
-        .padding(16)
+        .padding(Space.xl)
         .standardPanel()
     }
 
     private func reviewCount(_ title: String, count: Int, symbol: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Space.md) {
             Image(systemName: symbol).foregroundStyle(.secondary)
-            Text(title).font(.callout.weight(.medium))
-            Text(count.formatted()).font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+            Text(title).font(AgentFont.bodyMedium)
+            Text(count.formatted()).font(AgentFont.body.monospacedDigit()).foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 12).padding(.vertical, 9)
+        .padding(.horizontal, Space.lg).padding(.vertical, Space.md)
         .background(AgentTheme.controlBackground, in: Capsule())
-        .overlay { Capsule().strokeBorder(AgentTheme.separator.opacity(0.35), lineWidth: 0.5) }
+        .overlay { Capsule().strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width) }
     }
 
     private var success: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: Space.xl) {
             ContentUnavailableView {
                 Label("Assignments saved", systemImage: "checkmark.circle")
             } description: {
@@ -348,7 +348,7 @@ struct WorkspaceAssignmentSheet: View {
             }
             if navigation != nil {
                 Button("Install now…", systemImage: "arrow.down.circle", action: installNow)
-                    .buttonStyle(.borderedProminent)
+                    .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
                     .accessibilityLabel("Install now")
             }
@@ -364,7 +364,7 @@ struct WorkspaceAssignmentSheet: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.lg) {
             if session.review != nil {
                 Button("Back") {
                     request = nil
@@ -379,16 +379,14 @@ struct WorkspaceAssignmentSheet: View {
             }
             Spacer()
             if session.lastReceipt == nil {
-                GlassEffectContainer(spacing: 8) {
+                GlassEffectContainer(spacing: Space.md) {
                     if session.review != nil {
                         Button("Save assignments") { request = .save }
-                            .buttonStyle(.borderedProminent)
-                            .tint(AgentTheme.selection)
+                            .primaryActionStyle()
                             .disabled(session.isBusy || !isWritable)
                     } else {
                         Button("Review assignments") { request = .review(destinations) }
-                            .buttonStyle(.borderedProminent)
-                            .tint(AgentTheme.selection)
+                            .primaryActionStyle()
                             .disabled(!canReview || session.isBusy)
                     }
                 }
@@ -397,16 +395,16 @@ struct WorkspaceAssignmentSheet: View {
                 .tint(nil as Color?)
             }
         }
-        .padding(.horizontal, 24)
-        .frame(height: 72)
+        .padding(.horizontal, Space.xxxl)
+        .frame(height: Size.sheetBarHeight)
     }
 
     private func field<Content: View>(
         title: String, detail: String, @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
-            Text(detail).font(.body).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Space.md) {
+            Text(title).font(AgentFont.heading)
+            Text(detail).font(AgentFont.body).foregroundStyle(.secondary)
             content()
         }
     }

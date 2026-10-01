@@ -79,23 +79,23 @@ struct SkillCollectionRow: View {
     private var management: SkillManagement { SkillManagement(skill) }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.lg) {
             Button(action: activate) {
-                HStack(spacing: 12) {
+                HStack(spacing: Space.lg) {
                     if selecting {
-                        SelectionCheckbox(selected: selected, enabled: isAssignable).frame(width: 20)
+                        SelectionCheckbox(selected: selected, enabled: isAssignable).frame(width: Size.glyphSlot)
                     }
-                    HStack(spacing: 9) {
-                        KindTile(kind: .skill, size: 20, ghost: !skill.isMaintainedHere)
+                    HStack(spacing: Space.md) {
+                        KindTile(kind: .skill, size: Size.tileSmall, ghost: !skill.isMaintainedHere)
                             .foregroundStyle(selected ? Color.white.opacity(0.7) : Color.secondary)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(skill.displayName).font(.callout.weight(.medium)).lineLimit(1)
+                        VStack(alignment: .leading, spacing: Space.xxs) {
+                            Text(skill.displayName).font(AgentFont.bodyMedium).lineLimit(1)
                             if !columns.expanded {
                                 if columns.describing {
-                                    Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    Text(summary).font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
                                 }
                                 if let origin {
-                                    Text(origin).font(.caption).foregroundStyle(.secondary).lineLimit(1).help(origin)
+                                    Text(origin).font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1).help(origin)
                                 }
                             }
                         }
@@ -104,17 +104,17 @@ struct SkillCollectionRow: View {
                     .frame(width: columns.name, alignment: .leading)
                     if columns.expanded {
                         if columns.describing {
-                            Text(summary).font(.callout).foregroundStyle(.secondary)
+                            Text(summary).font(AgentFont.body).foregroundStyle(.secondary)
                                 .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                                 .help(summary)
                         } else {
                             Spacer(minLength: 0)
                         }
                         Text(presentation.pluginName ?? skill.parentPluginLabel ?? "Standalone")
-                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            .font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
                             .frame(width: columns.plugin, alignment: .leading)
                         Text(presentation.marketplaceName ?? skill.sourceLabel ?? "—")
-                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            .font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
                             .truncationMode(.middle)
                             .frame(width: columns.marketplace, alignment: .leading)
                             .help(presentation.marketplaceName ?? skill.sourceLabel ?? "No recorded source")
@@ -125,20 +125,20 @@ struct SkillCollectionRow: View {
                 .frame(maxHeight: .infinity).contentShape(Rectangle())
             }
             .buttonStyle(.plain).accessibilityLabel(skill.displayName)
-            ClientMarks(present: observed, size: 15)
+            ClientMarks(present: observed, size: Size.brandMark)
                 .frame(width: 72, alignment: .trailing)
             Group {
                 if case .placed(let clients) = management {
                     // The word says whose it is; the discs say where this app
                     // put it. One disc alone would only say "Claude".
-                    HStack(spacing: 6) {
+                    HStack(spacing: Space.sm) {
                         Text(management.label)
-                            .font(.caption).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
-                        PlacementStack(placed: clients, size: 20)
+                            .font(AgentFont.caption).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
+                        PlacementStack(placed: clients, size: Size.tileSmall)
                     }
                 } else {
                     Text(management.label)
-                        .font(.caption).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
+                        .font(AgentFont.caption).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
                         .lineLimit(1)
                 }
             }
@@ -146,10 +146,10 @@ struct SkillCollectionRow: View {
             .help(management.explanation)
         }
         .foregroundStyle(selected ? Color.white : Color.primary)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Space.xl)
         .frame(height: columns.expanded ? 44 : [40, 48, 64][min(captionLines, 2)])
         .rowSelection(selected)
-        .overlay(alignment: .bottom) { Divider().opacity(0.25) }
+        .hairlineBottom()
     }
 }
 

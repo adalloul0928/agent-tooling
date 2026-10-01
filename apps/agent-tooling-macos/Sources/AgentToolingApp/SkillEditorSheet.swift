@@ -32,15 +32,15 @@ struct SkillEditorSheet: View {
             HStack(spacing: 0) {
                 stepList
                     .frame(width: 205)
-                Divider()
+                Hairline()
                 stepContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            Divider()
+            Hairline()
             footer
         }
-        .frame(width: 900, height: 650)
+        .sheetSize(SheetSize.editor)
         .background(AgentTheme.contentBackground)
         .onAppear {
             // The form's own defaults describe the old install step, which this
@@ -50,56 +50,56 @@ struct SkillEditorSheet: View {
     }
 
     private var header: some View {
-        HStack(spacing: 13) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: Space.lg) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text("New skill")
-                    .font(.title2.weight(.semibold))
+                    .font(AgentFont.titleLarge)
                 Text("Write the definition. Choosing where to use it comes after, and installing is reviewed separately.")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
             Text("Step \(step + 1) of \(steps.count)")
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 22)
-        .frame(height: 82)
+        .padding(.horizontal, Space.xxxl)
+        .frame(height: Size.sheetBarHeight)
     }
 
     private var stepList: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: Space.xs) {
             ForEach(Array(steps.enumerated()), id: \.offset) { index, title in
                 Button {
                     if index <= highestReachableStep { step = index }
                 } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: Space.lg) {
                         Text("\(index + 1)")
-                            .font(.caption.monospacedDigit())
+                            .font(AgentFont.caption.monospacedDigit())
                             .foregroundStyle(index == step ? Color.primary : Color.secondary)
                             .frame(width: 20, alignment: .trailing)
-                        Text(title).font(.callout.weight(index == step ? .semibold : .regular))
+                        Text(title).font(index == step ? AgentFont.bodySemibold : AgentFont.body)
                         Spacer()
                     }
-                    .padding(.horizontal, 10)
-                    .frame(height: 42)
+                    .padding(.horizontal, Space.lg)
+                    .frame(height: Size.rowHeight)
                     .background(
                         index == step ? AgentTheme.controlBackground : .clear,
-                        in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        in: RoundedRectangle.control)
                 }
                 .buttonStyle(.plain)
                 .disabled(index > highestReachableStep)
             }
             Spacer()
         }
-        .padding(16)
+        .padding(Space.xl)
         .paneMaterial()
     }
 
     @ViewBuilder
     private var stepContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: Space.xxl) {
                 switch step {
                 case 0: purposeStep
                 case 1: triggersStep
@@ -110,7 +110,7 @@ struct SkillEditorSheet: View {
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(26)
+            .padding(Space.xxxl)
         }
     }
 
@@ -125,13 +125,13 @@ struct SkillEditorSheet: View {
                     .accessibilityLabel("Skill name")
             }
             FormField(title: "Purpose", help: "One sentence from the user’s point of view") {
-                VStack(alignment: .trailing, spacing: 5) {
+                VStack(alignment: .trailing, spacing: Space.xs) {
                     TextEditor(text: $draft.purpose)
-                        .font(.body)
+                        .font(AgentFont.body)
                         .scrollContentBackground(.hidden)
-                        .padding(8)
+                        .padding(Space.md)
                         .frame(height: 120)
-                        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .background(.quaternary.opacity(0.28), in: RoundedRectangle.control)
                         .accessibilityLabel("Purpose")
                     if draft.purpose.count > WorkspaceLibrary.maximumPurposeLength * 3 / 4 {
                         CharacterCount(current: draft.purpose.count, maximum: WorkspaceLibrary.maximumPurposeLength)
@@ -140,11 +140,11 @@ struct SkillEditorSheet: View {
             }
             if nameCollision {
                 Label("A skill with this name already exists. Choose a distinctive name.", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.red)
             } else if !draft.name.isEmpty, !isNameValid {
                 Label(nameValidationMessage, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.red)
             }
         }
@@ -157,7 +157,7 @@ struct SkillEditorSheet: View {
                 message: "Use the actual phrases you expect to type, plus one case that should not trigger it.")
             ForEach(draft.triggers.indices, id: \.self) { index in
                 FormField(title: "Trigger \(index + 1)", help: index == 0 ? "The most natural invocation" : nil) {
-                    VStack(alignment: .trailing, spacing: 5) {
+                    VStack(alignment: .trailing, spacing: Space.xs) {
                         TextField(triggerPlaceholder(index), text: $draft.triggers[index])
                             .textFieldStyle(.roundedBorder)
                             .accessibilityLabel("Trigger \(index + 1)")
@@ -168,7 +168,7 @@ struct SkillEditorSheet: View {
                 }
             }
             FormField(title: "Should not trigger for", help: "A nearby request that belongs elsewhere") {
-                VStack(alignment: .trailing, spacing: 5) {
+                VStack(alignment: .trailing, spacing: Space.xs) {
                     TextField("e.g. Fix the failing test", text: $draft.negativeTrigger)
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("Should not trigger for")
@@ -188,27 +188,27 @@ struct SkillEditorSheet: View {
                 message: "The source is kept in your personal library. Apps get a copy only after you review one.")
             VStack(spacing: 0) {
                 LabeledValueRow("Kept in") { Text("Your personal library").fontWeight(.medium) }
-                Divider()
+                Hairline()
                 LabeledValueRow("Called") {
                     Text(normalizedName.isEmpty ? "—" : normalizedName)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(AgentFont.mono)
                 }
-                Divider()
+                Hairline()
                 LabeledValueRow("Shown as") { Text(SkillTemplate.displayName(for: normalizedName)) }
             }
-            .standardPanel(cornerRadius: 13)
+            .standardPanel()
 
             AutomationToggle(
                 title: "Choose where to use it next",
                 detail: "Opens the assignment review as soon as the skill is created",
                 isOn: $draft.syncClients
             )
-            .standardPanel(cornerRadius: 13)
+            .standardPanel()
 
             Text(
                 "Where a skill is used is a saved choice, not an installation. Putting it into an app is reviewed separately on the Apps screen."
             )
-            .font(.caption)
+            .font(AgentFont.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -227,8 +227,8 @@ struct SkillEditorSheet: View {
                         .foregroundStyle(.secondary)
                         .accessibilityLabel("Included")
                 }
-                .padding(14)
-                Divider()
+                .padding(Space.xl)
+                Hairline()
                 Toggle(isOn: $draft.includeScript) {
                     FileToggleLabel(
                         symbol: "terminal",
@@ -237,17 +237,17 @@ struct SkillEditorSheet: View {
                     )
                 }
                 .accessibilityLabel("Include shell script template")
-                .padding(14)
-                Divider()
+                .padding(Space.xl)
+                Hairline()
                 Toggle(isOn: $draft.includeReference) {
                     FileToggleLabel(
                         symbol: "books.vertical", title: "Reference file",
                         detail: "Long-form guidance loaded only when needed")
                 }
                 .accessibilityLabel("Include reference file")
-                .padding(14)
+                .padding(Space.xl)
             }
-            .standardPanel(cornerRadius: 13)
+            .standardPanel()
         }
     }
 
@@ -259,29 +259,29 @@ struct SkillEditorSheet: View {
             if let errorMessage {
                 AttentionBanner(title: "That could not be created", message: errorMessage)
             }
-            HStack(alignment: .top, spacing: 14) {
+            HStack(alignment: .top, spacing: Space.xl) {
                 VStack(spacing: 0) {
                     ReviewRow(label: "Name", value: normalizedName)
-                    Divider()
+                    Hairline()
                     ReviewRow(label: "Purpose", value: draft.purpose)
-                    Divider()
+                    Hairline()
                     ReviewRow(label: "Files", value: fileSummary)
-                    Divider()
+                    Hairline()
                     ReviewRow(label: "Kept in", value: "Your personal library")
-                    Divider()
+                    Hairline()
                     ReviewRow(
                         label: "Next", value: draft.syncClients ? "Choose where to use it" : "Nothing until you ask")
                 }
-                .standardPanel(cornerRadius: 13)
+                .standardPanel()
 
                 VStack(spacing: 0) {
                     ReviewFact(title: "Definition checked", detail: "The SKILL.md is read and validated before it is stored")
-                    Divider()
+                    Hairline()
                     ReviewFact(title: "Nothing is installed", detail: "No app is written to by creating a skill")
-                    Divider()
+                    Hairline()
                     ReviewFact(title: "Nothing is assigned", detail: "Where it is used is saved only when you review it")
                 }
-                .standardPanel(cornerRadius: 13)
+                .standardPanel()
             }
         }
     }
@@ -289,29 +289,27 @@ struct SkillEditorSheet: View {
     private var footer: some View {
         HStack {
             Button("Cancel") { dismiss() }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .keyboardShortcut(.cancelAction)
             Spacer()
             if isBusy { ProgressView().controlSize(.small) }
             if step > 0 {
                 Button("Back") { step -= 1 }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
             }
             if step < steps.count - 1 {
                 Button("Continue") { step += 1 }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .disabled(!canContinue)
             } else {
                 Button("Create Skill") { onCreate(draft, draft.syncClients) }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
                     .disabled(!isDraftValid || isBusy || !canWrite)
             }
         }
-        .padding(.horizontal, 22)
-        .frame(height: 78)
+        .padding(.horizontal, Space.xxxl)
+        .frame(height: Size.sheetBarHeight)
     }
 
     /// Example phrasing for each trigger field, worded so an empty field reads
@@ -399,9 +397,9 @@ private struct StepHeading: View {
     let title: String
     let message: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.title3.weight(.semibold))
-            Text(message).font(.callout).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text(title).font(AgentFont.title)
+            Text(message).font(AgentFont.body).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -413,7 +411,7 @@ private struct CharacterCount: View {
 
     var body: some View {
         Text("\(current.formatted()) of \(maximum.formatted()) characters")
-            .font(.caption2.monospacedDigit())
+            .font(AgentFont.micro.monospacedDigit())
             .foregroundStyle(current > maximum ? Color.red : Color.secondary)
     }
 }
@@ -430,10 +428,10 @@ private struct FormField<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: Space.sm) {
             HStack {
-                Text(title).font(.callout.weight(.medium))
-                if let help { Text(help).font(.caption).foregroundStyle(.secondary) }
+                Text(title).font(AgentFont.bodyMedium)
+                if let help { Text(help).font(AgentFont.caption).foregroundStyle(.secondary) }
             }
             content
         }
@@ -445,11 +443,11 @@ private struct FileToggleLabel: View {
     let title: String
     let detail: String
     var body: some View {
-        HStack(spacing: 10) {
-            SymbolTile(symbol: symbol, size: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.callout.weight(.medium))
-                Text(detail).font(.caption).foregroundStyle(.secondary)
+        HStack(spacing: Space.lg) {
+            SymbolTile(symbol: symbol, size: Size.discLarge)
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(title).font(AgentFont.bodyMedium)
+                Text(detail).font(AgentFont.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -460,17 +458,17 @@ private struct ReviewFact: View {
     let detail: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: Space.lg) {
             Image(systemName: "checkmark")
                 .foregroundStyle(.secondary)
-                .frame(width: 16)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.callout.weight(.medium))
-                Text(detail).font(.caption2).foregroundStyle(.secondary)
+                .frame(width: Size.glyphSlot)
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(title).font(AgentFont.bodyMedium)
+                Text(detail).font(AgentFont.micro).foregroundStyle(.secondary)
             }
             Spacer()
         }
-        .padding(10)
+        .padding(Space.lg)
     }
 }
 
@@ -478,11 +476,11 @@ private struct ReviewRow: View {
     let label: String
     let value: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.callout.weight(.medium)).lineLimit(2)
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text(label).font(AgentFont.caption).foregroundStyle(.secondary)
+            Text(value).font(AgentFont.bodyMedium).lineLimit(2)
         }
-        .padding(12)
+        .padding(Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -493,13 +491,13 @@ private struct AutomationToggle: View {
     @Binding var isOn: Bool
     var body: some View {
         Toggle(isOn: $isOn) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.callout.weight(.medium))
-                Text(detail).font(.caption2).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(title).font(AgentFont.bodyMedium)
+                Text(detail).font(AgentFont.micro).foregroundStyle(.secondary)
             }
         }
         .accessibilityLabel(title)
         .accessibilityHint(detail)
-        .padding(10)
+        .padding(Space.lg)
     }
 }

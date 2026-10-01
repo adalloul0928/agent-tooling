@@ -34,7 +34,7 @@ struct ActivityView: View {
             if !driftReports.isEmpty {
                 InstallDriftNotice(reports: driftReports)
                     .padding(.horizontal, WorkspaceLayout.pageInset)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, Space.lg)
             }
 
             if selectedID == nil {
@@ -64,7 +64,7 @@ struct ActivityView: View {
             PanelHeader("Receipts") {
                 Text(mergedActivities.count == 1 ? "1 total" : "\(mergedActivities.count) total")
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 InventorySearchField(placeholder: "Search activity", text: $query)
                     .accessibilityLabel("Search activity")
                 WorkspaceSegmentedPicker("Activity filter", selection: $filter) {
@@ -74,7 +74,7 @@ struct ActivityView: View {
                 .accessibilityLabel("Activity filter")
             }
             .padding(.horizontal, WorkspaceLayout.pageInset)
-            .padding(.vertical, 10)
+            .padding(.vertical, Space.lg)
 
             if displayedActivities.isEmpty {
                 EmptyStateView(
@@ -89,21 +89,26 @@ struct ActivityView: View {
                     filter = .all
                 }
             } else {
+                // The day titles are rows of the list rather than native
+                // section headers: a `List` section header draws its own
+                // rule and ground, which is what put black lines between
+                // the days on this screen and nowhere else in the app.
                 List(selection: $selectedID) {
                     ForEach(activityGroups) { group in
-                        Section(group.title) {
-                            ForEach(group.receipts) { receipt in
-                                ActivityCollectionRow(receipt: receipt, selected: selectedID == receipt.id)
-                                    .tag(receipt.id)
-                                    .listRowBackground(SelectionRowBackground(selected: selectedID == receipt.id))
-                                    .accessibilityLabel(receipt.displayTitle)
-                                    .accessibilityValue(selectedID == receipt.id ? "Selected" : "")
-                            }
+                        CollectionSectionHeader(title: group.title)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                            .selectionDisabled()
+                        ForEach(group.receipts) { receipt in
+                            ActivityCollectionRow(receipt: receipt, selected: selectedID == receipt.id)
+                                .tag(receipt.id)
+                                .collectionRowChrome(selected: selectedID == receipt.id)
+                                .accessibilityLabel(receipt.displayTitle)
+                                .accessibilityValue(selectedID == receipt.id ? "Selected" : "")
                         }
                     }
                 }
-                .listStyle(.inset)
-                .scrollContentBackground(.hidden)
+                .collectionListChrome()
                 .collectionSurface()
             }
         }
@@ -223,24 +228,24 @@ private struct ActivityCollectionRow: View {
     let selected: Bool
 
     var body: some View {
-        HStack(spacing: 11) {
-            StatusGlyph(state: receipt.state, size: 16, tint: selected ? Color.white : nil)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: Space.lg) {
+            StatusGlyph(state: receipt.state, size: Size.glyphLarge, tint: selected ? Color.white : nil)
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(receipt.displayTitle)
-                    .font(.callout.weight(.medium))
+                    .font(AgentFont.bodyMedium)
                     .foregroundStyle(selected ? Color.white : Color.primary)
                     .lineLimit(1)
                 Text(receipt.detail)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
                     .lineLimit(1)
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.lg)
             Text(SnapshotTime.standalone(receipt.date))
-                .font(.caption2)
+                .font(AgentFont.caption)
                 .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, Space.sm)
     }
 }
 
@@ -250,37 +255,37 @@ private struct InstallDriftNotice: View {
     let reports: [InstalledPackageDrift]
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: Space.lg) {
             Image(systemName: "square.and.pencil")
-                .font(.callout)
+                .font(AgentFont.body)
                 .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.callout.weight(.medium))
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(title).font(AgentFont.bodyMedium)
                 ForEach(reports.prefix(6)) { report in
-                    HStack(spacing: 6) {
+                    HStack(spacing: Space.sm) {
                         Text(report.packageName)
-                            .font(.caption.weight(.medium))
+                            .font(AgentFont.captionMedium)
                         Text(report.headline)
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
                         PathInfoButton(path: report.destinationPath)
                     }
                 }
                 if reports.count > 6 {
-                    Text("and \(reports.count - 6) more").font(.caption2).foregroundStyle(.tertiary)
+                    Text("and \(reports.count - 6) more").font(AgentFont.micro).foregroundStyle(.tertiary)
                 }
                 Text(
                     "Re-install from the library whenever you want Agent Tooling's record to match the files again. Nothing was changed."
                 )
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .standardPanel(cornerRadius: 12)
+        .standardPanel()
     }
 
     private var title: String {
@@ -295,12 +300,12 @@ private struct ActivityReceiptDetail: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 14) {
-                    KindTile(kind: .activity, size: 40)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(receipt.displayTitle).font(.title3.weight(.semibold))
-                        Text(receipt.detail).font(.callout).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Space.xl) {
+                HStack(spacing: Space.lg) {
+                    KindTile(kind: .activity, size: Size.tileLarge)
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text(receipt.displayTitle).font(AgentFont.title)
+                        Text(receipt.detail).font(AgentFont.body).foregroundStyle(.secondary)
                     }
                     Spacer()
                     StatusBadge(state: receipt.state, text: statusText)
@@ -308,30 +313,30 @@ private struct ActivityReceiptDetail: View {
 
                 TitledCard("Receipt") {
                     LabeledValueRow("Operation") { Text(receipt.kind.rawValue.capitalized) }
-                    Divider()
+                    Hairline()
                     LabeledValueRow("Started") { Text(receipt.date.formatted(date: .abbreviated, time: .standard)) }
                     if let duration = receipt.duration {
-                        Divider()
+                        Hairline()
                         LabeledValueRow("Duration") {
                             Text(duration.formatted(.number.precision(.fractionLength(1))) + " seconds")
                         }
                     }
-                    Divider()
+                    Hairline()
                     LabeledValueRow("Receipt ID") {
-                        Text(receipt.id.uuidString.lowercased()).font(.system(.caption, design: .monospaced))
+                        Text(receipt.id.uuidString.lowercased()).font(AgentFont.mono)
                     }
                 }
 
                 if let operationReceipt, !operationReceipt.itemOutcomes.isEmpty {
                     TitledCard("Each item in this batch", count: "\(operationReceipt.itemOutcomes.count)") {
                         Text(operationReceipt.outcomeTally)
-                            .font(.callout.weight(.medium).monospacedDigit())
+                            .font(AgentFont.bodyMedium.monospacedDigit())
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                        Divider()
+                            .padding(Space.xl)
+                        Hairline()
                         ForEach(Array(operationReceipt.itemOutcomes.enumerated()), id: \.element.id) { index, outcome in
                             ItemOutcomeRow(outcome: outcome)
-                            if index < operationReceipt.itemOutcomes.count - 1 { Divider() }
+                            if index < operationReceipt.itemOutcomes.count - 1 { Hairline() }
                         }
                     }
                 }
@@ -346,10 +351,10 @@ private struct ActivityReceiptDetail: View {
                     if receipt.affectedPaths.isEmpty {
                         HStack {
                             Image(systemName: "minus.circle").foregroundStyle(.secondary)
-                            Text("No file changes recorded").foregroundStyle(.secondary)
+                            Text("No file changes recorded").font(AgentFont.body).foregroundStyle(.secondary)
                             Spacer()
                         }
-                        .padding(13)
+                        .padding(Space.xl)
                     } else {
                         ForEach(Array(receipt.affectedPaths.enumerated()), id: \.offset) { index, path in
                             HStack {
@@ -357,20 +362,20 @@ private struct ActivityReceiptDetail: View {
                                 LocationText(path: path)
                                 Spacer()
                             }
-                            .padding(12)
-                            if index < receipt.affectedPaths.count - 1 { Divider() }
+                            .padding(Space.lg)
+                            if index < receipt.affectedPaths.count - 1 { Hairline() }
                         }
                     }
                 }
 
-                HStack(spacing: 8) {
+                HStack(spacing: Space.md) {
                     Image(systemName: "lock.shield").foregroundStyle(.secondary)
-                    Text("Sensitive values were redacted before this receipt was stored.").font(.caption).foregroundStyle(.secondary)
+                    Text("Sensitive values were redacted before this receipt was stored.").font(AgentFont.caption).foregroundStyle(.secondary)
                 }
-                .padding(12)
-                .standardPanel(cornerRadius: 12)
+                .padding(Space.lg)
+                .standardPanel()
             }
-            .padding(22)
+            .padding(WorkspaceLayout.paneInset)
         }
     }
 
@@ -391,25 +396,25 @@ private struct ItemOutcomeRow: View {
     let outcome: OperationItemOutcome
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            StatusGlyph(state: state, size: 14)
+        HStack(alignment: .top, spacing: Space.lg) {
+            StatusGlyph(state: state, size: Size.glyph)
                 .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 7) {
-                    Text(outcome.title).font(.callout.weight(.medium))
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                HStack(spacing: Space.sm) {
+                    Text(outcome.title).font(AgentFont.bodyMedium)
                     Text(outcome.status.displayName)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
                 Text(outcome.reason)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(Space.lg)
     }
 
     private var state: HealthState {

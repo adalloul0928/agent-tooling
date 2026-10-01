@@ -193,7 +193,7 @@ struct MCPServerCapabilitiesPane: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Space.xl) {
             MCPTestConsoleSection(server: server, resolution: resolution, console: console)
             MCPCapabilitySection(
                 serverID: server.id,
@@ -219,7 +219,7 @@ private struct MCPTestConsoleSection: View {
     @State private var pendingRun: MCPPendingToolRun?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: Space.sm) {
             header
             switch resolution {
             case .success(let target): connectableBody(target)
@@ -254,30 +254,30 @@ private struct MCPTestConsoleSection: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Text("Live test").font(.subheadline.weight(.semibold))
+        HStack(spacing: Space.md) {
+            Text("Live test").font(AgentFont.heading)
             Spacer()
             statusBadge
         }
-        .padding(.horizontal, 2)
+        .padding(.horizontal, Space.xxs)
     }
 
     @ViewBuilder
     private var statusBadge: some View {
         switch console.phase {
         case .idle:
-            Text("Not tested").font(.caption).foregroundStyle(.secondary)
+            Text("Not tested").font(AgentFont.caption).foregroundStyle(.secondary)
         case .connecting:
-            HStack(spacing: 6) {
+            HStack(spacing: Space.sm) {
                 ProgressView().controlSize(.small)
-                Text("Connecting…").font(.caption).foregroundStyle(.secondary)
+                Text("Connecting…").font(AgentFont.caption).foregroundStyle(.secondary)
             }
         case .live:
             if let observation = console.observation {
                 StatusBadge(state: .healthy, text: observation.headline)
             }
         case .stopped:
-            Text("Stopped").font(.caption).foregroundStyle(.secondary)
+            Text("Stopped").font(AgentFont.caption).foregroundStyle(.secondary)
         case .failed:
             StatusBadge(state: .attention, text: "Did not respond")
         }
@@ -286,19 +286,19 @@ private struct MCPTestConsoleSection: View {
     // MARK: Unavailable
 
     private func unavailableBody(_ error: any Error) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: Space.lg) {
             Image(systemName: "bolt.slash").foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Space.xs) {
                 Text("A live test is not possible for this server")
-                    .font(.callout.weight(.medium))
+                    .font(AgentFont.bodyMedium)
                 Text(error.localizedDescription)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(14)
+        .padding(Space.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
         .standardPanel()
     }
@@ -309,18 +309,18 @@ private struct MCPTestConsoleSection: View {
     private func connectableBody(_ target: MCPTestTarget) -> some View {
         VStack(spacing: 0) {
             commandRow(target)
-            Divider().opacity(0.45)
+            Hairline()
             controlRow(target)
             if console.isLive, let observation = console.observation {
-                Divider().opacity(0.45)
+                Hairline()
                 MCPObservationSummary(observation: observation)
             }
             if let failure = console.failure {
-                Divider().opacity(0.45)
+                Hairline()
                 messageRow(failure, state: console.phase == .failed ? HealthState.attention : .pending)
             }
             if !console.diagnostics.isEmpty {
-                Divider().opacity(0.45)
+                Hairline()
                 diagnosticsRow
             }
         }
@@ -354,19 +354,19 @@ private struct MCPTestConsoleSection: View {
 
     private func commandRow(_ target: MCPTestTarget) -> some View {
         LabeledValueRow(target.isProcessLaunch ? "Runs" : "Contacts") {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: Space.md) {
                 Text(target.displayCommand)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(AgentFont.mono)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
+                Spacer(minLength: Space.md)
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(target.displayCommand, forType: .string)
                 } label: {
                     Image(systemName: "doc.on.doc")
                 }
-                .buttonStyle(.borderless)
+                .inlineActionStyle()
                 .controlSize(.small)
                 .accessibilityLabel("Copy the test command")
             }
@@ -375,7 +375,7 @@ private struct MCPTestConsoleSection: View {
 
     @ViewBuilder
     private func controlRow(_ target: MCPTestTarget) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.lg) {
             if console.isLive, let connectedAt = console.connectedAt {
                 MCPLiveIndicator(connectedAt: connectedAt, expiresAt: console.expiresAt)
             } else {
@@ -384,51 +384,51 @@ private struct MCPTestConsoleSection: View {
                         ? "Starts \(server.name)'s own program on this Mac. Nothing runs until you confirm."
                         : "Opens one MCP session with this endpoint. Nothing is contacted until you confirm."
                 )
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.lg)
             if console.isLive || console.phase == .connecting {
                 Button("Stop", role: .destructive) { console.stop() }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .controlSize(.small)
             } else {
                 Button(console.phase == .idle ? "Test connection…" : "Test again…") { isShowingConsent = true }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .controlSize(.small)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
     }
 
     private func messageRow(_ text: String, state: HealthState) -> some View {
-        HStack(alignment: .top, spacing: 9) {
-            StatusGlyph(state: state, size: 13)
+        HStack(alignment: .top, spacing: Space.md) {
+            StatusGlyph(state: state, size: Size.glyph)
             Text(text)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
     }
 
     private var diagnosticsRow: some View {
         DisclosureGroup {
             Text(console.diagnostics)
-                .font(.system(.caption2, design: .monospaced))
+                .font(AgentFont.mono)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 8)
+                .padding(.top, Space.md)
         } label: {
-            Text("Server output").font(.caption)
+            Text("Server output").font(AgentFont.caption)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
     }
 
     // MARK: Support

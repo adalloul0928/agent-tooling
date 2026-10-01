@@ -36,7 +36,7 @@ struct InsightsView: View {
                 Button("Scan options", systemImage: "slider.horizontal.3") { showingScanOptions.toggle() }
                     .buttonStyle(.glass)
                     .popover(isPresented: $showingScanOptions) {
-                        ScrollView { scanConfiguration.padding(18) }.frame(width: 590, height: 520)
+                        ScrollView { scanConfiguration.padding(Space.xxl) }.sheetSize(SheetSize.medium)
                     }
                 if session.isScanning {
                     Button(role: .cancel) {
@@ -61,15 +61,14 @@ struct InsightsView: View {
                     } label: {
                         Label(deepDiveButtonTitle, systemImage: "sparkles")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .disabled(!canScan || deepDiveClient == nil || session.isDeepDiving)
                     .keyboardShortcut(.return, modifiers: [.command])
                     .help(deepDiveHelp)
                     .accessibilityHint(deepDiveHelp)
                 }
             }
-            Divider()
+            Hairline()
 
             // With nothing to show yet the empty state takes the pane rather
             // than sitting at the top of a page that is otherwise blank.
@@ -114,49 +113,49 @@ struct InsightsView: View {
     private var scanConfiguration: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Scan recent work")
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 15)
+                .font(AgentFont.heading)
+                .padding(.horizontal, Space.xl)
                 .frame(minHeight: 43, alignment: .leading)
-            Divider().opacity(0.32)
+            Hairline()
 
             VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text("Look for repeated work, underused skills, and tools that may help next time.")
-                        .font(.callout)
+                        .font(AgentFont.body)
                     Text(
                         "Chat text is processed transiently. The app saves only aggregate counts and recommendations—not messages or excerpts."
                     )
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(15)
+                .padding(Space.xl)
 
-                Divider()
+                Hairline()
 
-                VStack(spacing: 14) {
+                VStack(spacing: Space.xl) {
                     configurationRow("Sources", detail: "Local history only") {
-                        VStack(alignment: .leading, spacing: 9) {
+                        VStack(alignment: .leading, spacing: Space.md) {
                             if workspace.device.isEnabled(.claude) {
                                 Toggle(isOn: $includeClaude) {
-                                    HStack(spacing: 8) {
-                                        ClientBrandIcon(client: .claude, size: 16)
+                                    HStack(spacing: Space.md) {
+                                        ClientBrandIcon(client: .claude, size: Size.brandMark)
                                         Text("Claude Code")
                                     }
                                 }
                             }
                             if workspace.device.isEnabled(.codex) {
                                 Toggle(isOn: $includeCodex) {
-                                    HStack(spacing: 8) {
-                                        ClientBrandIcon(client: .codex, size: 16)
+                                    HStack(spacing: Space.md) {
+                                        ClientBrandIcon(client: .codex, size: Size.brandMark)
                                         Text("Codex")
                                     }
                                 }
                             }
                             if workspace.device.isEnabled(.kiro) {
                                 Toggle(isOn: $includeKiro) {
-                                    HStack(spacing: 8) {
-                                        ClientBrandIcon(client: .kiro, size: 16)
+                                    HStack(spacing: Space.md) {
+                                        ClientBrandIcon(client: .kiro, size: Size.brandMark)
                                         Text("Kiro CLI")
                                     }
                                 }
@@ -165,7 +164,7 @@ struct InsightsView: View {
                         .toggleStyle(.checkbox)
                     }
 
-                    Divider()
+                    Hairline()
 
                     configurationRow("Review period", detail: "How far back to inspect") {
                         WorkspaceSegmentedPicker("Review period", selection: $lookbackDays) {
@@ -178,7 +177,7 @@ struct InsightsView: View {
                         .accessibilityLabel("Review period")
                     }
 
-                    Divider()
+                    Hairline()
 
                     configurationRow("Conversation limit", detail: "Per selected source") {
                         WorkspaceSegmentedPicker("Conversation limit", selection: $maximumConversations) {
@@ -191,10 +190,10 @@ struct InsightsView: View {
                         .accessibilityLabel("Maximum conversations per source")
                     }
 
-                    Divider()
+                    Hairline()
 
                     configurationRow("Catalog suggestions", detail: "Optional network access") {
-                        VStack(alignment: .leading, spacing: 5) {
+                        VStack(alignment: .leading, spacing: Space.xs) {
                             Toggle(
                                 "Include established plugins, skills, and MCP servers from connected catalogs",
                                 isOn: $includeCatalogSuggestions
@@ -210,20 +209,20 @@ struct InsightsView: View {
                                     ? "Leave this off to keep the scan entirely local. Turning it on sends up to four search terms to the catalogs Discover lists — chosen from a fixed vocabulary this app ships, never words taken from your conversations."
                                     : "This Mac has no catalog to ask, so a scan answers from local history alone."
                             )
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
-                .padding(15)
+                .padding(Space.xl)
 
                 if let warning = sourceWarning {
-                    Divider()
+                    Hairline()
                     Label(warning, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                        .padding(15)
+                        .padding(Space.xl)
                         .accessibilityLabel("A conversation source is required")
                 }
             }
@@ -234,18 +233,18 @@ struct InsightsView: View {
     // MARK: - States
 
     private var scanningState: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.lg) {
             ProgressView()
                 .controlSize(.small)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text("Reviewing recent work")
-                    .font(.callout.weight(.medium))
+                    .font(AgentFont.bodyMedium)
                 Text("The scan is read-only. No skill, plugin, or MCP server will be installed.")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, Space.xs)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Scanning recent work. No tools will be installed.")
     }
@@ -261,23 +260,23 @@ struct InsightsView: View {
 
     private func errorState(_ message: String) -> some View {
         InsightPanel("The scan could not finish") {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Space.lg) {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text(message)
-                        .font(.callout)
+                        .font(AgentFont.body)
                         .textSelection(.enabled)
                     Button("Try again") {
                         startScan()
                     }
-                    .buttonStyle(.link)
+                    .inlineActionStyle()
                     .disabled(!canScan)
                 }
                 Spacer()
             }
-            .padding(15)
+            .padding(Space.xl)
         }
     }
 
@@ -286,7 +285,7 @@ struct InsightsView: View {
     private func reportContent(_ report: InsightsReport) -> some View {
         VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
             reportSummary(report)
-            HStack(spacing: 10) {
+            HStack(spacing: Space.lg) {
                 WorkspaceSegmentedPicker("Insight category", selection: $selection) {
                     Text("Worth adding").tag(InsightSelection.opportunities)
                     Text("Skill health").tag(InsightSelection.skillHealth)
@@ -304,14 +303,14 @@ struct InsightsView: View {
             }
 
             DisclosureGroup("Scan coverage · \(report.conversationsScanned) conversations") {
-                coverageSection(report.coverage).padding(.top, 10)
+                coverageSection(report.coverage).padding(.top, Space.lg)
                 if let discovery = report.marketplaceDiscovery,
                     discovery.queriesAttempted > 0 || discovery.queriesFailed > 0 || discovery.wasCancelled
                 {
                     catalogDiscoverySection(discovery)
                 }
             }
-            .font(.callout).foregroundStyle(.secondary)
+            .font(AgentFont.body).foregroundStyle(.secondary)
         }
     }
 
@@ -319,42 +318,42 @@ struct InsightsView: View {
         HStack(alignment: .center, spacing: 0) {
             summaryStat(
                 report.conversationsScanned, "Conversations scanned", tint: .primary)
-            Divider().frame(height: 34).padding(.horizontal, 4)
+            Hairline().frame(height: Size.compactRowHeight).padding(.horizontal, Space.xs)
             summaryStat(
                 report.recommendations.count, "Worth adding",
-                tint: report.recommendations.isEmpty ? .secondary : AgentTheme.blue)
-            Divider().frame(height: 34).padding(.horizontal, 4)
+                tint: report.recommendations.isEmpty ? .secondary : AgentTheme.selection)
+            Hairline().frame(height: Size.compactRowHeight).padding(.horizontal, Space.xs)
             summaryStat(
                 report.qualityFindings.count, "Skill findings",
                 tint: report.qualityFindings.isEmpty ? .secondary : AgentTheme.warning)
-            Spacer(minLength: 16)
-            VStack(alignment: .trailing, spacing: 4) {
+            Spacer(minLength: Space.xl)
+            VStack(alignment: .trailing, spacing: Space.xs) {
                 Text("Last scan \(report.generatedAt, format: .relative(presentation: .named))")
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
                 Button("Clear results") {
                     isPresentingClearConfirmation = true
                 }
-                .buttonStyle(.link)
-                .font(.callout)
+                .inlineActionStyle()
+                .font(AgentFont.body)
                 .accessibilityHint("Removes the saved aggregate report after confirmation")
             }
-            .padding(.trailing, 16)
+            .padding(.trailing, Space.xl)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, Space.lg)
         .standardPanel()
     }
 
     private func summaryStat(_ count: Int, _ label: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             Text(count, format: .number)
-                .font(.system(size: 22, weight: .bold)).monospacedDigit()
+                .font(AgentFont.stat)
                 .foregroundStyle(tint)
             Text(label)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Space.xl)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label): \(count)")
     }
@@ -363,15 +362,15 @@ struct InsightsView: View {
         InsightPanel("Scan coverage") {
             if coverage.isEmpty {
                 Text("No history source reported coverage for this scan.")
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                    .padding(15)
+                    .padding(Space.xl)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(coverage.enumerated()), id: \.element.id) { index, source in
                         CoverageRow(coverage: source)
                         if index < coverage.count - 1 {
-                            Divider().padding(.leading, 45)
+                            Hairline()
                         }
                     }
                 }
@@ -384,60 +383,60 @@ struct InsightsView: View {
     @ViewBuilder private func deepDiveSection(_ report: InsightsReport) -> some View {
         if session.isDeepDiving {
             InsightPanel("Deep dive") {
-                HStack(spacing: 12) {
+                HStack(spacing: Space.lg) {
                     ProgressView().controlSize(.small)
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: Space.xxs) {
                         Text("\(deepDiveClient?.rawValue ?? "Your assistant") is reading your recent conversations…")
-                            .font(.callout.weight(.medium))
+                            .font(AgentFont.bodyMedium)
                         Text("This takes a few minutes. The findings below are the instant keyword pass; the considered read replaces them here when it lands.")
-                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            .font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
                 }
-                .padding(15)
+                .padding(Space.xl)
             }
         } else if let message = session.deepDiveMessage {
             InsightPanel("Deep dive") {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: Space.lg) {
                     Image(systemName: "exclamationmark.triangle").foregroundStyle(AgentTheme.warning)
-                    Text(message).font(.callout).fixedSize(horizontal: false, vertical: true)
+                    Text(message).font(AgentFont.body).fixedSize(horizontal: false, vertical: true)
                     Spacer()
                 }
-                .padding(15)
+                .padding(Space.xl)
             }
         } else if let dive = report.deepDive {
             InsightPanel("Deep dive — what \(dive.client.rawValue) sees in your recent work") {
                 VStack(alignment: .leading, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(dive.summary).font(.callout).fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: Space.sm) {
+                        Text(dive.summary).font(AgentFont.body).fixedSize(horizontal: false, vertical: true)
                         Text(
                             "\(dive.conversationsConsidered) conversations read · \(dive.generatedAt.formatted(.relative(presentation: .named)))"
                         )
-                        .font(.caption2).foregroundStyle(.secondary)
+                        .font(AgentFont.micro).foregroundStyle(.secondary)
                     }
-                    .padding(15)
+                    .padding(Space.xl)
                     if !dive.themes.isEmpty {
-                        Divider()
+                        Hairline()
                         ForEach(Array(dive.themes.enumerated()), id: \.element.id) { index, theme in
-                            HStack(alignment: .top, spacing: 13) {
-                                Image(systemName: "repeat").foregroundStyle(.secondary).frame(width: 28)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(theme.title).font(.callout.weight(.semibold))
-                                    Text(theme.detail).font(.caption).foregroundStyle(.secondary)
+                            HStack(alignment: .top, spacing: Space.lg) {
+                                Image(systemName: "repeat").foregroundStyle(.secondary).frame(width: Size.tile)
+                                VStack(alignment: .leading, spacing: Space.xs) {
+                                    Text(theme.title).font(AgentFont.bodySemibold)
+                                    Text(theme.detail).font(AgentFont.caption).foregroundStyle(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
-                                    Text(themeMetadata(theme)).font(.caption2).foregroundStyle(.secondary)
+                                    Text(themeMetadata(theme)).font(AgentFont.micro).foregroundStyle(.secondary)
                                 }
                                 Spacer()
                             }
-                            .padding(.horizontal, 15).padding(.vertical, 11)
-                            if index < dive.themes.count - 1 { Divider().padding(.leading, 49) }
+                            .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                            if index < dive.themes.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
                         }
                     }
                     if !dive.recommendations.isEmpty {
-                        Divider()
+                        Hairline()
                         ForEach(Array(dive.recommendations.enumerated()), id: \.element.id) { index, recommendation in
                             RecommendationRow(recommendation: recommendation) { open(recommendation) }
-                            if index < dive.recommendations.count - 1 { Divider().padding(.leading, 49) }
+                            if index < dive.recommendations.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
                         }
                     }
                 }
@@ -467,7 +466,7 @@ struct InsightsView: View {
                             open(recommendation)
                         }
                         if index < recommendations.count - 1 {
-                            Divider().padding(.leading, 49)
+                            Hairline(indent: Hairline.afterLeading(Size.tile))
                         }
                     }
                 }
@@ -477,22 +476,22 @@ struct InsightsView: View {
 
     private func catalogDiscoverySection(_ discovery: MarketplaceDiscoverySummary) -> some View {
         InsightPanel("Catalog search") {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Space.lg) {
                 Image(systemName: catalogDiscoverySymbol(discovery))
                     .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
+                    .frame(width: Size.tileSmall, height: Size.tileSmall)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text(catalogDiscoveryTitle(discovery))
-                        .font(.callout.weight(.medium))
+                        .font(AgentFont.bodyMedium)
                     Text(catalogDiscoveryDetail(discovery))
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
             }
-            .padding(15)
+            .padding(Space.xl)
             .accessibilityElement(children: .combine)
         }
     }
@@ -515,7 +514,7 @@ struct InsightsView: View {
                                 navigation.open(.skill(finding.skillID))
                             }
                             if index < findings.count - 1 {
-                                Divider().padding(.leading, 49)
+                                Hairline(indent: Hairline.afterLeading(Size.tile))
                             }
                         }
                     }
@@ -527,27 +526,27 @@ struct InsightsView: View {
                     Text(
                         "Counts are a lower bound based on the history sources listed in Scan coverage. “No observed use” is not the same as zero use."
                     )
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(15)
+                    .padding(Space.xl)
 
                     if report.skillUsage.isEmpty {
-                        Divider()
+                        Hairline()
                         Text("No installed skills were available for usage comparison.")
-                            .font(.callout)
+                            .font(AgentFont.body)
                             .foregroundStyle(.secondary)
-                            .padding(15)
+                            .padding(Space.xl)
                     } else {
                         let usage = sortedUsage(report.skillUsage)
-                        Divider()
+                        Hairline()
                         LazyVStack(spacing: 0) {
                             ForEach(Array(usage.enumerated()), id: \.element.id) { index, metric in
                                 SkillUsageRow(metric: metric) {
                                     navigation.open(.skill(metric.skillID))
                                 }
                                 if index < usage.count - 1 {
-                                    Divider().padding(.leading, 49)
+                                    Hairline(indent: Hairline.afterLeading(Size.tile))
                                 }
                             }
                         }
@@ -560,11 +559,11 @@ struct InsightsView: View {
     // MARK: - Option rows
 
     private func configurationLabel(_ title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             Text(title)
-                .font(.callout.weight(.medium))
+                .font(AgentFont.bodyMedium)
             Text(detail)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(width: 180, alignment: .leading)
@@ -575,7 +574,7 @@ struct InsightsView: View {
         detail: String,
         @ViewBuilder content: () -> some View
     ) -> some View {
-        HStack(alignment: .top, spacing: 28) {
+        HStack(alignment: .top, spacing: Space.huge) {
             configurationLabel(title, detail: detail)
             content()
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -763,10 +762,10 @@ private struct InsightPanel<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 15)
+                .font(AgentFont.heading)
+                .padding(.horizontal, Space.xl)
                 .frame(maxWidth: .infinity, minHeight: 43, alignment: .leading)
-            Divider().opacity(0.32)
+            Hairline()
             content
         }
         .standardPanel()
@@ -782,33 +781,33 @@ private struct CoverageRow: View {
     let coverage: ConversationScanCoverage
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ClientDisc(client: coverage.client, size: 30)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
+        HStack(alignment: .top, spacing: Space.lg) {
+            ClientDisc(client: coverage.client, size: Size.disc)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
                     Text(coverage.sourceName)
-                        .font(.callout.weight(.medium))
+                        .font(AgentFont.bodyMedium)
                     Label(statusText, systemImage: statusSymbol)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
                     Text("\(coverage.conversationsScanned) chats · \(coverage.itemsInspected) items")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
                 Text(coverage.detail)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let latestItemAt = coverage.latestItemAt {
                     Text("Latest item \(latestItemAt.formatted(.relative(presentation: .named)))")
-                        .font(.caption2)
+                        .font(AgentFont.micro)
                         .foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 12)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "\(coverage.sourceName), \(statusText), \(coverage.conversationsScanned) conversations, \(coverage.itemsInspected) items. \(coverage.detail)"
@@ -837,33 +836,33 @@ private struct RecommendationRow: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 13) {
-            KindTile(kind: recommendationKind, size: 28)
+        HStack(alignment: .top, spacing: Space.lg) {
+            KindTile(kind: recommendationKind, size: Size.tile)
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: Space.xs) {
                 Text(recommendation.title)
-                    .font(.callout.weight(.semibold))
+                    .font(AgentFont.bodySemibold)
                 Text(displaySummary)
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(recommendation.rationale)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(metadata)
-                    .font(.caption2)
+                    .font(AgentFont.micro)
                     .foregroundStyle(.secondary)
             }
 
-            Spacer(minLength: 20)
+            Spacer(minLength: Space.xxl)
 
             Button(actionTitle, action: action)
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .controlSize(.small)
                 .accessibilityHint(actionHint)
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 13)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
     }
 
     private var recommendationKind: ToolingKind {
@@ -930,31 +929,31 @@ private struct QualityFindingRow: View {
     let openSkill: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 13) {
+        HStack(alignment: .top, spacing: Space.lg) {
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .medium))
+                .font(AgentFont.title)
                 .foregroundStyle(severityColor)
-                .frame(width: 24, height: 24)
+                .frame(width: Size.tile, height: Size.tile)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Space.xs) {
                 Text(finding.title)
-                    .font(.callout.weight(.semibold))
+                    .font(AgentFont.bodySemibold)
                 Text(finding.detail)
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(finding.recommendedAction)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 20)
+            Spacer(minLength: Space.xxl)
             Button("Open skill", action: openSkill)
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .controlSize(.small)
                 .accessibilityHint("Opens this skill for review")
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 13)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
     }
 
     private var symbol: String {
@@ -979,30 +978,30 @@ private struct SkillUsageRow: View {
     let openSkill: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 13) {
+        HStack(alignment: .top, spacing: Space.lg) {
             Image(systemName: "chart.bar")
-                .font(.system(size: 15, weight: .regular))
+                .font(AgentFont.titleRegular)
                 .foregroundStyle(.secondary)
-                .frame(width: 24, height: 24)
+                .frame(width: Size.tile, height: Size.tile)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Space.xs) {
                 Text(metric.skillName)
-                    .font(.callout.weight(.semibold))
+                    .font(AgentFont.bodySemibold)
                 Text(metric.usageSummary)
-                    .font(.callout)
+                    .font(AgentFont.body)
                 Text(evidenceDetail)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 20)
+            Spacer(minLength: Space.xxl)
             Button("Open skill", action: openSkill)
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .controlSize(.small)
                 .accessibilityHint("Opens this skill for review")
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 13)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
     }
 
     private var evidenceDetail: String {

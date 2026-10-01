@@ -185,7 +185,7 @@ struct AppearanceSettingsView: View {
             .labelsHidden()
             .fixedSize()
         }
-        .padding(14)
+        .padding(Space.xl)
     }
 }
 
@@ -200,7 +200,7 @@ struct StartupFailureView: View {
         } description: {
             Text(message)
         } actions: {
-            Button("Try again", action: retry).buttonStyle(.borderedProminent)
+            Button("Try again", action: retry).primaryActionStyle()
         }
     }
 }

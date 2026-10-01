@@ -10,16 +10,16 @@ struct UpdateStateBadge: View {
 
     var body: some View {
         if showsWhenCurrent || !availability.isUpToDate {
-            HStack(spacing: 5) {
-                StatusGlyph(state: availability.health, size: 12)
+            HStack(spacing: Space.xs) {
+                StatusGlyph(state: availability.health, size: Size.glyphSmall)
                 Text(availability.title)
-                    .font(.caption.weight(.medium))
+                    .font(AgentFont.captionMedium)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            .padding(.horizontal, 8)
-            .frame(height: 21)
-            .background(Capsule().fill(Color.primary.opacity(0.055)))
+            .padding(.horizontal, Space.md)
+            .frame(height: Size.pillHeight)
+            .background(Capsule().fill(AgentTheme.fillSubtle))
             .help(availability.detail)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(availability.title). \(availability.detail)")

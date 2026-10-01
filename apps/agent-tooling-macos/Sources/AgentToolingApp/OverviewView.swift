@@ -9,8 +9,8 @@ private struct LibraryDestinationStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.primary.opacity(configuration.isPressed ? 0.08 : hovering && !suppressed ? 0.035 : 0))
+                RoundedRectangle.card
+                    .fill(configuration.isPressed ? AgentTheme.fillStrong : hovering && !suppressed ? AgentTheme.fillHover : Color.clear)
             }
             .onHover { hovering = $0 }
             .animation(reduceMotion ? nil : AgentMotion.quick, value: hovering)
@@ -60,7 +60,7 @@ struct OverviewView: View {
                 Button {
                     Task { await workspace.device.refresh() }
                 } label: {
-                    Image(systemName: "arrow.clockwise").frame(width: 16, height: 16)
+                    Image(systemName: "arrow.clockwise").frame(width: Size.glyphLarge, height: Size.glyphLarge)
                 }
                 .buttonStyle(.glass)
                 .disabled(workspace.device.isChecking)
@@ -81,13 +81,13 @@ struct OverviewView: View {
 
             GeometryReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: Space.xl) {
                         if showsOnboarding { onboardingCard }
                         // Two columns where they fit; one column where they don't.
                         // A narrow window stacks the same cards instead of
                         // squeezing them past legibility.
                         ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .top, spacing: 16) {
+                            HStack(alignment: .top, spacing: Space.xl) {
                                 reviewColumn(attention: attention, updates: updates)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                                     .frame(minWidth: 420)
@@ -95,7 +95,7 @@ struct OverviewView: View {
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                                     .frame(minWidth: 420)
                             }
-                            VStack(spacing: 16) {
+                            VStack(spacing: Space.xl) {
                                 reviewColumn(attention: attention, updates: updates)
                                 statusColumn
                             }
@@ -116,7 +116,7 @@ struct OverviewView: View {
                     // stacked layout can still scroll past it.
                     .frame(minHeight: proxy.size.height, alignment: .top)
                 }
-                .font(.system(size: 15))
+                .font(AgentFont.titleRegular)
                 .scrollIndicators(.hidden)
             }
         }
@@ -143,7 +143,7 @@ struct OverviewView: View {
         attention: [OverviewAttention],
         updates: [(row: WorkspaceLibraryReadModelRow, availability: UpdateAvailability)]
     ) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Space.xl) {
             reviewQueueCard(items: attention, updates: updates)
             // The recommendation card takes the slack at the bottom of the
             // column, so the page fills its height instead of leaving a band
@@ -155,11 +155,11 @@ struct OverviewView: View {
 
     /// The right column of the wide layout, and the bottom of the stacked one.
     private var statusColumn: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Space.xl) {
             setupCard
             libraryCard
             appsCard
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .top, spacing: Space.xl) {
                 readyMiniCard
                 recentChangesCard
             }
@@ -168,23 +168,23 @@ struct OverviewView: View {
     }
 
     private var onboardingCard: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: Space.xl) {
             Image(systemName: "tray.and.arrow.down")
-                .font(.system(size: 25, weight: .regular))
+                .font(.system(size: Size.heroSymbol, weight: .regular))
                 .foregroundStyle(.secondary)
-                .frame(width: 36)
-            VStack(alignment: .leading, spacing: 5) {
+                .frame(width: Size.tileLarge)
+            VStack(alignment: .leading, spacing: Space.xs) {
                 Text("Bring your existing setup into Agent Tooling")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(AgentFont.titleLarge)
                 Text("Choose the skills, plugins, and MCP servers you want to manage or track.")
-                    .font(.system(size: 14)).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
             }
-            Spacer(minLength: 16)
+            Spacer(minLength: Space.xl)
             Button("Set up your library") { navigate(.skills) }
-                .buttonStyle(.borderedProminent).controlSize(.large)
+                .primaryActionStyle().controlSize(.large)
                 .disabled(workspace.library.isBusy)
         }
-        .padding(20)
+        .padding(Space.xxl)
         .standardPanel()
     }
 
@@ -197,28 +197,28 @@ struct OverviewView: View {
             fillsHeight: true
         ) {
             if recommendations.isEmpty {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: Space.xl) {
                     Text("Explore what your apps can do")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(AgentFont.title)
                     Text("Browse skills, plugins, and connections, or review recent work in Insights.")
-                        .font(.system(size: 14))
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 10) {
+                    HStack(spacing: Space.lg) {
                         Button("Browse Discover") { navigate(.marketplace) }
-                            .buttonStyle(.borderedProminent)
+                            .primaryActionStyle()
                         Button("Open Insights") { navigate(.insights) }
                             .buttonStyle(.glass)
                     }
                 }
-                .padding(16)
+                .padding(Space.xl)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 VStack(spacing: 0) {
                     ForEach(recommendations) { recommendation in
                         recommendationRow(recommendation)
                         if recommendation.id != recommendations.last?.id {
-                            Divider().padding(.leading, 60)
+                            Hairline(indent: Hairline.afterLeading(Size.discLarge))
                         }
                     }
                 }
@@ -230,28 +230,28 @@ struct OverviewView: View {
         Button {
             open(recommendation)
         } label: {
-            HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .center, spacing: Space.lg) {
                 ToolIdentityIcon(
                     packageID: recommendationPackageID(recommendation) ?? "",
-                    fallback: recommendationKind(recommendation), size: 32)
-                VStack(alignment: .leading, spacing: 3) {
+                    fallback: recommendationKind(recommendation), size: Size.discLarge)
+                VStack(alignment: .leading, spacing: Space.xxs) {
                     Text(recommendationTitle(recommendation))
-                        .font(.system(size: 14.5, weight: .semibold))
+                        .font(AgentFont.bodySemibold)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     Text(recommendationSummary(recommendation))
-                        .font(.system(size: 13.5))
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Text(recommendationAction(recommendation))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AgentTheme.blue)
+                    .font(AgentFont.bodyMedium)
+                    .foregroundStyle(AgentTheme.selection)
                     .lineLimit(1)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
+            .padding(.horizontal, Space.xl)
+            .padding(.vertical, Space.lg)
             .contentShape(Rectangle())
         }
         .buttonStyle(LibraryDestinationStyle())
@@ -266,13 +266,13 @@ struct OverviewView: View {
             title: libraryModel.map { "Library · \($0.toolCount)" } ?? "Library",
             action: ("Open", { navigate(.skills) })
         ) {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: Space.md) {
                 libraryKindCell("Skills", count: inventory?.skills.count ?? 0, kind: .skill, section: .skills)
                 libraryKindCell("Plugins", count: inventory?.plugins.count ?? 0, kind: .plugin, section: .plugins)
                 libraryKindCell("Servers", count: inventory?.mcpServers.count ?? 0, kind: .mcpServer, section: .mcpServers)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 16)
+            .padding(.horizontal, Space.lg)
+            .padding(.vertical, Space.xl)
         }
     }
 
@@ -280,17 +280,17 @@ struct OverviewView: View {
         Button {
             navigate(section)
         } label: {
-            VStack(spacing: 8) {
-                KindTile(kind: kind, size: 40)
+            VStack(spacing: Space.md) {
+                KindTile(kind: kind, size: Size.tileLarge)
                 Text(count, format: .number)
-                    .font(.system(size: 19, weight: .bold)).monospacedDigit()
+                    .font(AgentFont.stat)
                 Text(title)
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(AgentFont.captionMedium)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.vertical, Space.sm)
+            .contentShape(RoundedRectangle.card)
         }
         .buttonStyle(LibraryDestinationStyle())
         .accessibilityLabel("Open \(title), \(count) items")
@@ -309,16 +309,16 @@ struct OverviewView: View {
     /// already re-read itself, so what shows here is what is still outstanding.
     private var readyMiniCard: some View {
         BentoCard(symbol: "arrow.down.circle", title: "Ready to install", fillsHeight: true) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Space.sm) {
                 Text(workspace.deployment.plan?.items.count ?? 0, format: .number)
-                    .font(.system(size: 30, weight: .bold)).monospacedDigit()
+                    .font(AgentFont.statLarge)
                     .foregroundStyle(
-                        (workspace.deployment.plan?.items.isEmpty ?? true) ? Color.secondary : AgentTheme.blue)
-                HStack(spacing: 8) {
+                        (workspace.deployment.plan?.items.isEmpty ?? true) ? Color.secondary : AgentTheme.selection)
+                HStack(spacing: Space.md) {
                     Text((workspace.deployment.plan?.items.count ?? 0) == 1 ? "change waiting" : "changes waiting")
-                        .font(.system(size: 12.5))
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                    Spacer(minLength: 4)
+                    Spacer(minLength: Space.xs)
                     Button(workspace.deployment.isBusy ? "Preparing…" : "Review…") { reviewChanges() }
                         .buttonStyle(.glass)
                         .controlSize(.small)
@@ -329,9 +329,9 @@ struct OverviewView: View {
                                 : "There is nothing waiting to review. Assign a tool first, then prepare a plan.")
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 14)
-            .padding(.top, 2)
+            .padding(.horizontal, Space.xl)
+            .padding(.bottom, Space.xl)
+            .padding(.top, Space.xxs)
         }
     }
 
@@ -346,34 +346,34 @@ struct OverviewView: View {
             VStack(alignment: .leading, spacing: 0) {
                 if recentReceipts.isEmpty {
                     Text("Nothing has been changed yet.")
-                        .font(.system(size: 13.5))
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 14)
-                        .padding(.top, 2)
+                        .padding(.horizontal, Space.xl)
+                        .padding(.bottom, Space.xl)
+                        .padding(.top, Space.xxs)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     ForEach(recentReceipts) { receipt in
-                        HStack(alignment: .center, spacing: 10) {
-                            StatusGlyph(state: receipt.state, size: 14)
-                            VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .center, spacing: Space.lg) {
+                            StatusGlyph(state: receipt.state, size: Size.glyph)
+                            VStack(alignment: .leading, spacing: Space.xxs) {
                                 Text(receipt.title)
-                                    .font(.system(size: 13.5, weight: .medium))
+                                    .font(AgentFont.bodyMedium)
                                     .lineLimit(1)
                                 Text(receipt.outcomeTally)
-                                    .font(.system(size: 12))
+                                    .font(AgentFont.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             Text(SnapshotTime.compact(receipt.createdAt))
-                                .font(.system(size: 12))
+                                .font(AgentFont.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 9)
+                        .padding(.horizontal, Space.xl)
+                        .padding(.vertical, Space.md)
                         if receipt.id != recentReceipts.last?.id {
-                            Divider().padding(.leading, 42)
+                            Hairline(indent: Hairline.afterLeading(Size.glyph + 2))
                         }
                     }
                 }
@@ -405,55 +405,55 @@ struct OverviewView: View {
             VStack(spacing: 0) {
                 if attentionItems.isEmpty && updateItems.isEmpty {
                     Text("Nothing is waiting on you.")
-                        .font(.system(size: 14))
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
-                        .padding(16)
+                        .padding(Space.xl)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     ForEach(attentionItems) { item in
-                        HStack(alignment: .center, spacing: 12) {
-                            StatusGlyph(state: item.state, size: 17)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(item.title).font(.system(size: 14.5, weight: .semibold)).lineLimit(1)
-                                Text(item.detail).font(.system(size: 13.5)).foregroundStyle(.secondary).lineLimit(1)
+                        HStack(alignment: .center, spacing: Space.lg) {
+                            StatusGlyph(state: item.state, size: Size.glyphLarge)
+                            VStack(alignment: .leading, spacing: Space.xxs) {
+                                Text(item.title).font(AgentFont.bodySemibold).lineLimit(1)
+                                Text(item.detail).font(AgentFont.body).foregroundStyle(.secondary).lineLimit(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             Button("Review") { navigate(item.destination) }
                                 .buttonStyle(.glass).controlSize(.small)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 11)
+                        .padding(.horizontal, Space.xl)
+                        .padding(.vertical, Space.lg)
                         if item.id != attentionItems.last?.id || !updateItems.isEmpty {
-                            Divider().padding(.leading, 47)
+                            Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2))
                         }
                     }
                     ForEach(updateItems, id: \.row.artifactID) { item in
-                        HStack(alignment: .center, spacing: 12) {
+                        HStack(alignment: .center, spacing: Space.lg) {
                             ToolIdentityIcon(
                                 packageID: item.row.nativeRoutes.first?.externalPluginID ?? "",
                                 fallback: .plugin, size: 30)
-                            VStack(alignment: .leading, spacing: 3) {
+                            VStack(alignment: .leading, spacing: Space.xxs) {
                                 Text("Update available for \(item.row.displayName)")
-                                    .font(.system(size: 14.5, weight: .semibold)).lineLimit(1)
-                                Text(item.availability.detail).font(.system(size: 13.5)).foregroundStyle(.secondary).lineLimit(1)
+                                    .font(AgentFont.bodySemibold).lineLimit(1)
+                                Text(item.availability.detail).font(AgentFont.body).foregroundStyle(.secondary).lineLimit(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             Button("Review") { openPlugin(item.row) }
                                 .buttonStyle(.glass).controlSize(.small)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 11)
+                        .padding(.horizontal, Space.xl)
+                        .padding(.vertical, Space.lg)
                         if item.row.artifactID != updateItems.last?.row.artifactID {
-                            Divider().padding(.leading, 47)
+                            Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2))
                         }
                     }
                 }
-                Divider()
+                Hairline()
                 Label("Nothing installs until you approve it here.", systemImage: "checkmark.shield")
-                    .font(.system(size: 12.5))
+                    .font(AgentFont.caption)
                     .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, Space.xl)
+                    .padding(.vertical, Space.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -529,27 +529,27 @@ struct OverviewView: View {
             symbol: "stethoscope", title: "Your setup",
             action: ("Checkup", { navigate(.checkup) })
         ) {
-            HStack(spacing: 12) {
+            HStack(spacing: Space.lg) {
                 if let checkup = setup.checkup {
                     let open = checkup.openFindings.count + checkup.openRecommendations.count
-                    StatusGlyph(state: open == 0 ? .healthy : ((checkup.audit.highestSeverity ?? .info) >= .medium ? .attention : .pending), size: 18)
-                    VStack(alignment: .leading, spacing: 3) {
+                    StatusGlyph(state: open == 0 ? .healthy : ((checkup.audit.highestSeverity ?? .info) >= .medium ? .attention : .pending), size: Size.glyphLarge)
+                    VStack(alignment: .leading, spacing: Space.xxs) {
                         Text(open == 0 ? "Nothing needs attention" : "\(open) thing\(open == 1 ? "" : "s") to look at")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(AgentFont.bodyMedium)
                         Text("Checked \(SnapshotTime.compact(checkup.completedAt))" + (setup.isStale ? " · a new checkup is due" : ""))
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(AgentFont.caption).foregroundStyle(.secondary)
                     }
                 } else {
-                    Image(systemName: "wand.and.stars").font(.system(size: 18)).foregroundStyle(.secondary).frame(width: 18)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("This Mac has not been checked yet").font(.system(size: 14, weight: .medium))
+                    Image(systemName: "wand.and.stars").font(.system(size: Size.symbol)).foregroundStyle(.secondary).frame(width: Size.glyphSlot)
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text("This Mac has not been checked yet").font(AgentFont.bodyMedium)
                         Text("Find what is broken, duplicated, or unmanaged, and have your assistant say what to do.")
-                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            .font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: Space.md)
             }
-            .padding(16)
+            .padding(Space.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -561,17 +561,17 @@ struct OverviewView: View {
         ) {
             if enabledClients.isEmpty {
                 Text("Choose your apps to see their local setup here.")
-                    .font(.system(size: 14)).foregroundStyle(.secondary)
-                    .padding(16)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
+                    .padding(Space.xl)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                HStack(alignment: .top, spacing: 6) {
+                HStack(alignment: .top, spacing: Space.sm) {
                     ForEach(enabledClients) { client in
                         appBadge(client)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 16)
+                .padding(.horizontal, Space.lg)
+                .padding(.vertical, Space.xl)
                 .frame(maxWidth: .infinity)
             }
         }
@@ -585,24 +585,24 @@ struct OverviewView: View {
         return Button {
             navigation.openClient(client)
         } label: {
-            VStack(spacing: 8) {
+            VStack(spacing: Space.md) {
                 ZStack(alignment: .bottomTrailing) {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    RoundedRectangle.card
                         .fill(AgentTheme.controlBackground)
                         .overlay {
-                            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                .strokeBorder(AgentTheme.separator.opacity(0.35), lineWidth: 0.5)
+                            RoundedRectangle.card
+                                .strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width)
                         }
-                        .frame(width: 44, height: 44)
-                        .overlay { ClientBrandIcon(client: client, size: 24) }
+                        .frame(width: Size.rowHeight, height: Size.rowHeight)
+                        .overlay { ClientBrandIcon(client: client, size: Size.tile) }
                     Circle()
                         .fill(statusDotColor(verdict.state))
-                        .frame(width: 10, height: 10)
-                        .overlay { Circle().strokeBorder(AgentTheme.controlBackground, lineWidth: 2) }
+                        .frame(width: Size.dot, height: Size.dot)
+                        .overlay { Circle().strokeBorder(AgentTheme.controlBackground, lineWidth: Hairline.ring) }
                         .offset(x: 3, y: 3)
                 }
                 Text(client.rawValue)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(AgentFont.captionMedium)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -618,7 +618,7 @@ struct OverviewView: View {
         switch state {
         case .healthy: AgentTheme.ok
         case .attention: AgentTheme.warning
-        case .pending: AgentTheme.blue
+        case .pending: AgentTheme.selection
         case .unavailable: AgentTheme.failure
         }
     }
@@ -784,29 +784,29 @@ private struct BentoCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 7) {
+            HStack(spacing: Space.sm) {
                 Image(systemName: symbol)
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(AgentFont.captionSemibold)
                     .foregroundStyle(.secondary)
                 Text(title.uppercased())
-                    .font(.system(size: 11, weight: .bold))
+                    .font(AgentFont.captionSemibold)
                     .kerning(0.7)
                     .foregroundStyle(.secondary)
-                Spacer(minLength: 8)
+                Spacer(minLength: Space.md)
                 if let action {
                     Button(action.0, action: action.1)
                         .buttonStyle(.plain)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(AgentTheme.blue)
+                        .font(AgentFont.bodyMedium)
+                        .foregroundStyle(AgentTheme.selection)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 13)
-            .padding(.bottom, 9)
+            .padding(.horizontal, Space.xl)
+            .padding(.top, Space.lg)
+            .padding(.bottom, Space.md)
             content
         }
         .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
-        .standardPanel(cornerRadius: 16)
+        .standardPanel(cornerRadius: Radius.xl)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
     }

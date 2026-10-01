@@ -45,7 +45,7 @@ struct PresetsView: View {
                 Button("Refresh", systemImage: "arrow.clockwise") { Task { await session.refresh() } }
                     .labelStyle(.iconOnly).buttonStyle(.glass).disabled(session.isBusy)
             }
-            Divider()
+            Hairline()
             if let message = session.errorMessage {
                 AttentionBanner(title: "Presets need attention", message: message)
                     .padding(WorkspaceLayout.pageInset)
@@ -102,6 +102,8 @@ struct PresetsView: View {
         }
     }
 
+    /// The same standing card, row insets and hairlines as the Skills,
+    /// Plugins and Connections tabs beside it.
     private var list: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
@@ -116,9 +118,11 @@ struct PresetsView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(preset.name)
                     .accessibilityValue(preset.id == selection ? "Selected" : "")
+                    .hairlineBottom(preset.id != selection && preset.id != presets.last?.id)
                 }
             }
         }
+        .collectionSurface()
         .paneMaterial()
     }
 
@@ -139,11 +143,11 @@ struct PresetsView: View {
     }
 
     private func header(_ preset: WorkspaceLibraryPresetReadModel) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            KindTile(kind: .collection, size: 40)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(preset.name).font(.title3.weight(.semibold))
-                Text(itemSummary(preset)).font(.callout).foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: Space.xl) {
+            KindTile(kind: .collection, size: Size.tileLarge)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(preset.name).font(AgentFont.title)
+                Text(itemSummary(preset)).font(AgentFont.body).foregroundStyle(.secondary)
             }
             Spacer()
             Menu {
@@ -177,40 +181,40 @@ struct PresetsView: View {
                 Text(
                     "Following a preset keeps its tools where you put them, even when whoever maintains it adds or removes one. It never changes anything without showing you first."
                 )
-                .font(.callout).foregroundStyle(.secondary)
-                .padding(14)
+                .font(AgentFont.body).foregroundStyle(.secondary)
+                .padding(Space.xl)
                 if let row, row.isLinked {
-                    Divider()
+                    Hairline()
                     InfoRow("Following on this Mac", detail: destinationText(row.subscription?.destinations ?? [])) {
-                        Image(systemName: "link").foregroundStyle(.secondary).frame(width: 20)
+                        Image(systemName: "link").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                     }
-                    Divider()
+                    Hairline()
                     changesSection(row)
-                    Divider()
-                    HStack(spacing: 12) {
+                    Hairline()
+                    HStack(spacing: Space.lg) {
                         Button("Catch up") { Task { await session.catchUp(preset.id) } }
-                            .buttonStyle(.borderedProminent)
+                            .primaryActionStyle()
                             .disabled(session.isBusy || !session.canWrite || !row.needsCatchUp)
                         Button("Stop following") { Task { await session.unlink(preset.id) } }
                             .disabled(session.isBusy || !session.canWrite)
                         Spacer()
                         if !session.canWrite {
-                            Text("This workspace is open for reading only.").font(.callout).foregroundStyle(.secondary)
+                            Text("This workspace is open for reading only.").font(AgentFont.body).foregroundStyle(.secondary)
                         }
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                 } else {
-                    Divider()
-                    HStack(spacing: 12) {
+                    Hairline()
+                    HStack(spacing: Space.lg) {
                         Button("Follow this preset…") { linking = preset.id }
-                            .buttonStyle(.borderedProminent)
+                            .primaryActionStyle()
                             .disabled(session.isBusy || !session.canWrite)
                         Spacer()
                         if !session.canWrite {
-                            Text("This workspace is open for reading only.").font(.callout).foregroundStyle(.secondary)
+                            Text("This workspace is open for reading only.").font(AgentFont.body).foregroundStyle(.secondary)
                         }
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                 }
             }
         }
@@ -222,9 +226,9 @@ struct PresetsView: View {
             let added = update.changes.filter { $0.kind == .add }
             let removed = update.changes.filter { $0.kind == .removeContribution }
             let kept = update.changes.filter { $0.kind == .retainedByOtherReason }
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Space.sm) {
                 if update.changes.isEmpty {
-                    Text("Up to date with this preset.").font(.callout).foregroundStyle(.secondary)
+                    Text("Up to date with this preset.").font(AgentFont.body).foregroundStyle(.secondary)
                 } else {
                     if !added.isEmpty {
                         Label(
@@ -248,13 +252,13 @@ struct PresetsView: View {
                     }
                 }
             }
-            .font(.callout)
-            .padding(14)
+            .font(AgentFont.body)
+            .padding(Space.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             Text("This preset is no longer in your library, so there is nothing to follow.")
-                .font(.callout).foregroundStyle(.secondary)
-                .padding(14)
+                .font(AgentFont.body).foregroundStyle(.secondary)
+                .padding(Space.xl)
         }
     }
 
@@ -262,14 +266,14 @@ struct PresetsView: View {
         TitledCard("Items", count: "\(preset.memberArtifactIDs.count)") {
             VStack(alignment: .leading, spacing: 0) {
                 Text("A preset's items are set when you create it. To change which tools are in it, add or remove the tools themselves in the Library.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .padding(14)
+                    .font(AgentFont.caption).foregroundStyle(.secondary)
+                    .padding(Space.xl)
                 if preset.memberArtifactIDs.isEmpty {
-                    Divider()
-                    Text("This preset has no items.").font(.callout).foregroundStyle(.secondary).padding(14)
+                    Hairline()
+                    Text("This preset has no items.").font(AgentFont.body).foregroundStyle(.secondary).padding(Space.xl)
                 } else {
                     ForEach(preset.memberArtifactIDs, id: \.self) { id in
-                        Divider()
+                        Hairline()
                         memberRow(id)
                     }
                 }
@@ -280,7 +284,7 @@ struct PresetsView: View {
     private func memberRow(_ id: ArtifactID) -> some View {
         let member = resolve(id)
         return InfoRow(member.name, detail: member.detail) {
-            KindTile(kind: member.kind, size: 24, ghost: !member.present)
+            KindTile(kind: member.kind, size: Size.tile, ghost: !member.present)
         }
         .help(member.present ? member.name : id.rawValue.uuidString)
     }
@@ -292,18 +296,18 @@ struct PresetsView: View {
             return member.present ? (id, member.name) : nil
         }
         TitledCard("Share") {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Space.lg) {
                 Label(
                     "Export writes a one-time copy. The file is a snapshot, not a live link — later edits here never reach anyone you shared it with.",
                     systemImage: "doc.badge.arrow.up"
                 )
-                .font(.callout).foregroundStyle(.secondary)
+                .font(AgentFont.body).foregroundStyle(.secondary)
                 Label("Credentials are never included in an exported package.", systemImage: "lock")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
 
                 if candidates.isEmpty {
                     Text("Nothing in this preset can be shared from this Mac yet.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
                 } else {
                     Picker("Item to share", selection: $shareSelection) {
                         ForEach(candidates, id: \.id) { candidate in
@@ -318,7 +322,7 @@ struct PresetsView: View {
                     shareActions
                 }
             }
-            .padding(14)
+            .padding(Space.xl)
         }
         .onChange(of: shareSelection) { _, _ in export.discard() }
     }
@@ -327,14 +331,14 @@ struct PresetsView: View {
     private var shareActions: some View {
         if let preview = export.preview, preview.artifactID == shareSelection {
             previewSummary(preview)
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 Button {
                     guard let destination = PackageFileExport.chooseDestinationFolder() else { return }
                     Task { await export.write(to: destination) }
                 } label: {
                     Label("Export…", systemImage: "square.and.arrow.down")
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .disabled(export.isBusy)
 
                 Button {
@@ -348,7 +352,7 @@ struct PresetsView: View {
                 } label: {
                     Label("Share…", systemImage: "square.and.arrow.up")
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .disabled(export.isBusy)
                 .overlay(alignment: .bottom) { ShareAnchorView(anchor: shareAnchor).frame(width: 1, height: 1) }
 
@@ -361,33 +365,33 @@ struct PresetsView: View {
             } label: {
                 Label("Prepare export…", systemImage: "doc.text.magnifyingglass")
             }
-            .buttonStyle(.bordered)
+            .secondaryActionStyle()
             .disabled(export.isBusy || shareSelection == nil)
         }
         if let message = export.errorMessage {
-            Text(message).font(.callout).foregroundStyle(.secondary)
+            Text(message).font(AgentFont.body).foregroundStyle(.secondary)
         }
         if let path = export.writtenPath {
-            HStack(spacing: 6) {
+            HStack(spacing: Space.sm) {
                 Image(systemName: "checkmark.circle").foregroundStyle(AgentTheme.ok)
                 Text("Written to")
                 LocationText(path: path)
             }
-            .font(.callout)
+            .font(AgentFont.body)
         }
     }
 
     private func previewSummary(_ preview: WorkspacePackageExport) -> some View {
         let unsupported = preview.compatibility.filter { !$0.isFullySupported }
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: Space.xs) {
             Text(
                 "\(preview.fileCount) file\(preview.fileCount == 1 ? "" : "s") · "
                     + ByteCountFormatter.string(fromByteCount: Int64(preview.totalFileBytes), countStyle: .file)
             )
-            .font(.callout).foregroundStyle(.secondary)
+            .font(AgentFont.body).foregroundStyle(.secondary)
             if !unsupported.isEmpty {
                 Text("Not fully supported by \(unsupported.map { $0.surface.displayName }.formatted(.list(type: .and))).")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(AgentFont.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -453,25 +457,25 @@ private struct PresetListRow: View {
     let selected: Bool
 
     var body: some View {
-        HStack(spacing: 11) {
-            KindTile(kind: .collection, size: 28)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: Space.lg) {
+            KindTile(kind: .collection, size: Size.tile)
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(preset.name)
-                    .font(.callout.weight(.medium))
+                    .font(AgentFont.bodyMedium)
                     .foregroundStyle(selected ? Color.white : Color.primary)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
                     .lineLimit(1)
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.lg)
             Text(itemSummary)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
         }
-        .padding(.horizontal, 13)
-        .frame(minHeight: 52)
+        .padding(.horizontal, Space.xl)
+        .frame(minHeight: Size.rowHeight)
         .rowSelection(selected)
         .contentShape(Rectangle())
     }
@@ -503,18 +507,18 @@ private struct PresetFollowSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Follow \(name)").font(.title3.weight(.semibold))
+                Text("Follow \(name)").font(AgentFont.title)
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
-            }.padding(20)
-            Divider()
-            VStack(alignment: .leading, spacing: 18) {
+            }.padding(Space.xxl)
+            Hairline()
+            VStack(alignment: .leading, spacing: Space.xxl) {
                 Text(
                     "Choose where this preset's tools belong. Agent Tooling keeps them there as the preset changes, and shows you each change before applying it."
                 )
                 .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Apps").font(.headline)
+                VStack(alignment: .leading, spacing: Space.md) {
+                    Text("Apps").font(AgentFont.heading)
                     ForEach(availableClients) { client in
                         Toggle(
                             client.rawValue,
@@ -525,8 +529,8 @@ private struct PresetFollowSheet: View {
                         .toggleStyle(.checkbox)
                     }
                 }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Where").font(.headline)
+                VStack(alignment: .leading, spacing: Space.md) {
+                    Text("Where").font(AgentFont.heading)
                     Picker("Where", selection: $scope) {
                         Text("Everywhere on this Mac").tag(ToolingScope.user)
                         Text("One project").tag(ToolingScope.project)
@@ -542,11 +546,11 @@ private struct PresetFollowSheet: View {
                     }
                 }
                 Spacer(minLength: 0)
-            }.padding(20)
-            Divider()
+            }.padding(Space.xxl)
+            Hairline()
             HStack {
                 Text("Following records the choice. Nothing moves until you catch up.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
                 Spacer()
                 Button("Follow") {
                     Task {
@@ -554,11 +558,11 @@ private struct PresetFollowSheet: View {
                         dismiss()
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .primaryActionStyle()
                 .disabled(!canFollow || session.isBusy)
-            }.padding(20)
+            }.padding(Space.xxl)
         }
-        .frame(width: 560, height: 500)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
     }
 
@@ -616,13 +620,13 @@ private struct PresetEditorSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(isRenaming ? "Rename preset" : "New preset").font(.title3.weight(.semibold))
+                Text(isRenaming ? "Rename preset" : "New preset").font(AgentFont.title)
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
             }
-            .padding(20)
-            Divider()
-            VStack(alignment: .leading, spacing: 16) {
+            .padding(Space.xxl)
+            Hairline()
+            VStack(alignment: .leading, spacing: Space.xl) {
                 if let message = session.errorMessage {
                     AttentionBanner(title: isRenaming ? "That preset was not renamed" : "That preset was not created", message: message)
                 }
@@ -634,25 +638,25 @@ private struct PresetEditorSheet: View {
                 if !isRenaming { memberPicker }
                 Spacer(minLength: 0)
             }
-            .padding(20)
+            .padding(Space.xxl)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            Divider()
+            Hairline()
             HStack {
                 Text(
                     isRenaming
                         ? "Renaming keeps the preset's items and its following."
                         : "Creating records the preset. Nothing is put in place until you follow it."
                 )
-                .font(.callout).foregroundStyle(.secondary)
+                .font(AgentFont.body).foregroundStyle(.secondary)
                 Spacer()
                 Button(isRenaming ? "Rename" : "Create preset") { commit() }
-                    .buttonStyle(.borderedProminent)
+                    .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canCommit)
             }
-            .padding(20)
+            .padding(Space.xxl)
         }
-        .frame(width: 560, height: 560)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
         .onAppear {
             session.clearError()
@@ -661,17 +665,17 @@ private struct PresetEditorSheet: View {
     }
 
     private var memberPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Space.md) {
             HStack {
-                Text("Items").font(.headline)
+                Text("Items").font(AgentFont.heading)
                 Spacer()
                 Text(members.count == 1 ? "1 chosen" : "\(members.count) chosen")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(AgentFont.caption).foregroundStyle(.secondary)
             }
             InventorySearchField(placeholder: "Search your library", text: $search)
             if candidates.isEmpty {
                 Text("Your library has no skills, servers, or plugins to put in a preset yet.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 ScrollView {
@@ -684,13 +688,13 @@ private struct PresetEditorSheet: View {
                             ) { on in
                                 if on { members.insert(row.artifactID) } else { members.remove(row.artifactID) }
                             }
-                            if row.artifactID != filteredCandidates.last?.artifactID { Divider().opacity(0.3) }
+                            if row.artifactID != filteredCandidates.last?.artifactID { Hairline() }
                         }
                     }
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, Space.xs)
                 }
                 .frame(maxHeight: .infinity)
-                .standardPanel(cornerRadius: 12)
+                .standardPanel()
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -762,16 +766,16 @@ private struct PresetMemberToggle: View {
 
     var body: some View {
         Toggle(isOn: Binding(get: { isMember }, set: { setMember($0) })) {
-            HStack(spacing: 9) {
-                KindTile(kind: kind, size: 22)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(row.displayName).font(.callout)
-                    Text(kindLabel(row.kind)).font(.caption2).foregroundStyle(.secondary)
+            HStack(spacing: Space.md) {
+                KindTile(kind: kind, size: Size.tileSmall)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(row.displayName).font(AgentFont.body)
+                    Text(kindLabel(row.kind)).font(AgentFont.micro).foregroundStyle(.secondary)
                 }
             }
         }
         .toggleStyle(.checkbox)
-        .padding(.vertical, 5)
+        .padding(.vertical, Space.xs)
     }
 
     /// A plain word for the item's kind, so the row reads without leaning on a

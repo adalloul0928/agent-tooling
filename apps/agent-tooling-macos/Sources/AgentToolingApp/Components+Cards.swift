@@ -25,13 +25,13 @@ struct PageToolbar<Actions: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: Space.xl) {
+                VStack(alignment: .leading, spacing: Space.xxs) {
                     Text(usesSectionTitle ? (section?.workspaceTitle ?? title) : title)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(AgentFont.pageTitle)
                     if let context {
                         Text(context)
-                            .font(.system(size: 13))
+                            .font(AgentFont.body)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -39,8 +39,8 @@ struct PageToolbar<Actions: View>: View {
 
                 Spacer()
 
-                GlassEffectContainer(spacing: 8) {
-                    HStack(spacing: 8) {
+                GlassEffectContainer(spacing: Space.md) {
+                    HStack(spacing: Space.md) {
                         actions
                     }
                 }
@@ -49,11 +49,11 @@ struct PageToolbar<Actions: View>: View {
                 .controlSize(.large)
             }
             .padding(.horizontal, WorkspaceLayout.pageInset)
-            .padding(.vertical, 10)
-            .frame(minHeight: 58)
+            .padding(.vertical, Space.lg)
+            .frame(minHeight: Size.toolbarHeight)
 
             if let section, !section.workspaceTabs.isEmpty {
-                HStack(spacing: 16) {
+                HStack(spacing: Space.xl) {
                     WorkspaceSegmentedPicker(
                         "\(section.workspaceTitle ?? title) section",
                         selection: Binding(get: { section }, set: { navigate($0) })
@@ -73,8 +73,8 @@ struct PageToolbar<Actions: View>: View {
                     }
                 }
                 .padding(.horizontal, WorkspaceLayout.pageInset)
-                .padding(.bottom, 10)
-                Divider().opacity(0.5)
+                .padding(.bottom, Space.lg)
+                Hairline()
             }
         }
     }
@@ -94,7 +94,7 @@ struct InventorySearchField: View {
     @Binding var text: String
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Space.md) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain).accessibilityLabel(placeholder)
@@ -108,12 +108,12 @@ struct InventorySearchField: View {
                 .accessibilityLabel("Clear \(placeholder.lowercased())")
             }
         }
-        .font(.system(size: 13))
-        .padding(.horizontal, 11)
-        .frame(height: 36)
-        .background(AgentTheme.panelBrightening, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(AgentTheme.separator.opacity(0.4), lineWidth: 0.5))
+        .font(AgentFont.body)
+        .padding(.horizontal, Space.lg)
+        .frame(height: Size.controlHeight)
+        .background(AgentTheme.panelBrightening, in: RoundedRectangle.control)
+        .background(.thickMaterial, in: RoundedRectangle.control)
+        .overlay(RoundedRectangle.control.strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width))
     }
 }
 
@@ -123,18 +123,18 @@ struct InspectorHeader: View {
 
     var body: some View {
         HStack {
-            Text(title).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+            Text(title).font(AgentFont.captionMedium).foregroundStyle(.secondary)
             Spacer()
             Button(action: close) {
-                Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).frame(width: 28, height: 28)
+                Image(systemName: "xmark").font(AgentFont.captionSemibold).frame(width: Size.iconButton, height: Size.iconButton)
             }
             .buttonStyle(.plain).foregroundStyle(.secondary)
             .help("Close \(title.lowercased())").accessibilityLabel("Close \(title.lowercased())")
             .keyboardShortcut(.escape, modifiers: [])
         }
-        .padding(.horizontal, 20).frame(height: 48)
+        .padding(.horizontal, WorkspaceLayout.paneInset).frame(height: Size.headerHeight)
         .background(AgentTheme.controlBackground.opacity(0.35))
-        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+        .hairlineBottom()
     }
 }
 
@@ -156,7 +156,7 @@ struct WorkspaceSegmentedPicker<Value: Hashable, Content: View>: View {
         Picker(title, selection: $selection) { content }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .font(.system(size: 13))
+            .font(AgentFont.body)
             .controlSize(.regular)
             .buttonBorderShape(.capsule)
             .tint(nil as Color?)
@@ -187,15 +187,15 @@ struct PanelHeader<Trailing: View>: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(AgentFont.heading)
             Spacer()
             trailing
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 14)
-        .frame(height: 44)
-        .overlay(alignment: .bottom) { Divider().opacity(0.3) }
+        .padding(.horizontal, Space.xl)
+        .frame(height: Size.headerHeight)
+        .hairlineBottom()
     }
 }
 
@@ -214,17 +214,17 @@ struct TitledCard<Trailing: View, Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 7) {
-                Text(title).font(.subheadline.weight(.semibold))
+        VStack(alignment: .leading, spacing: Space.md) {
+            HStack(spacing: Space.sm) {
+                Text(title).font(AgentFont.heading)
                 if let count {
-                    Text(count).font(.caption).foregroundStyle(.tertiary)
+                    Text(count).font(AgentFont.caption).foregroundStyle(.tertiary)
                 }
                 Spacer()
                 trailing
-                    .font(.caption.weight(.medium))
+                    .font(AgentFont.captionMedium)
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, Space.xxs)
             VStack(spacing: 0) {
                 content
             }
@@ -255,25 +255,25 @@ struct InfoRow<Leading: View, Trailing: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: Space.lg) {
             leading
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(title)
-                    .font(.callout.weight(.medium))
+                    .font(AgentFont.bodyMedium)
                     .lineLimit(1)
                 if let detail, !detail.isEmpty {
                     Text(detail)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.lg)
             trailing
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .frame(minHeight: 44)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.md)
+        .frame(minHeight: Size.rowHeight)
     }
 }
 
@@ -287,14 +287,14 @@ struct TagCloud: View {
     let tags: [String]
 
     var body: some View {
-        FlowLayout(spacing: 6) {
+        FlowLayout(spacing: Space.sm) {
             ForEach(tags, id: \.self) { tag in
                 Text(tag)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .lineLimit(1)
-                    .padding(.horizontal, 9)
-                    .frame(height: 22)
-                    .background(Color.primary.opacity(0.055), in: Capsule())
+                    .padding(.horizontal, Space.md)
+                    .frame(height: Size.pillHeight)
+                    .background(AgentTheme.fillSubtle, in: Capsule())
             }
         }
     }

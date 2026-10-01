@@ -10,13 +10,13 @@ struct MCPLiveIndicator: View {
 
     var body: some View {
         TimelineView(.periodic(from: connectedAt, by: 1)) { context in
-            HStack(spacing: 7) {
+            HStack(spacing: Space.sm) {
                 Circle()
                     .fill(AgentTheme.ok)
-                    .frame(width: 7, height: 7)
+                    .frame(width: Size.dot, height: Size.dot)
                     .opacity(Int(context.date.timeIntervalSince(connectedAt)) % 2 == 0 ? 1 : 0.35)
                 Text(label(at: context.date))
-                    .font(.caption.monospacedDigit())
+                    .font(AgentFont.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .ignore)
@@ -41,38 +41,38 @@ struct MCPObservationSummary: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 counter("Tools", observation.declaresTools ? "\(observation.tools.count)" : "—")
-                Divider().frame(height: 30).opacity(0.45)
+                Hairline().frame(height: Size.compactRowHeight)
                 counter("Resources", observation.declaresResources ? "\(observation.resourceCount)" : "—")
-                Divider().frame(height: 30).opacity(0.45)
+                Hairline().frame(height: Size.compactRowHeight)
                 counter("Prompts", observation.declaresPrompts ? "\(observation.promptCount)" : "—")
-                Divider().frame(height: 30).opacity(0.45)
+                Hairline().frame(height: Size.compactRowHeight)
                 counter("Handshake", "\(Int(observation.handshakeMilliseconds.rounded())) ms")
-                Divider().frame(height: 30).opacity(0.45)
+                Hairline().frame(height: Size.compactRowHeight)
                 counter("Inventory", "\(Int(observation.inventoryMilliseconds.rounded())) ms")
             }
-            .padding(.vertical, 11)
-            Divider().opacity(0.45)
+            .padding(.vertical, Space.lg)
+            Hairline()
             LabeledValueRow("Reported by server") {
                 Text(identity)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
             if observation.unannotatedToolCount > 0 || observation.destructiveToolCount > 0 {
-                Divider().opacity(0.45)
+                Hairline()
                 LabeledValueRow("Before you run") {
                     Text(warning)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Divider().opacity(0.45)
+            Hairline()
             LabeledValueRow("Recorded") {
                 Text(
                     "Nothing. This is what one connection saw at \(observation.observedAt.formatted(date: .omitted, time: .standard)), not this server's saved status."
                 )
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -80,9 +80,9 @@ struct MCPObservationSummary: View {
     }
 
     private func counter(_ title: String, _ value: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(.title3.weight(.semibold).monospacedDigit())
-            Text(title).font(.caption2).foregroundStyle(.secondary)
+        VStack(spacing: Space.xxs) {
+            Text(value).font(AgentFont.title.monospacedDigit())
+            Text(title).font(AgentFont.micro).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
@@ -116,25 +116,25 @@ struct MCPToolInventoryList: View {
     let isBusy: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: Space.sm) {
             HStack {
-                Text("Tools this connection offered").font(.subheadline.weight(.semibold))
+                Text("Tools this connection offered").font(AgentFont.heading)
                 Spacer()
-                Text("\(tools.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Text("\(tools.count)").font(AgentFont.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, Space.xxs)
 
             VStack(spacing: 0) {
                 ForEach(Array(visibleTools.enumerated()), id: \.element.id) { index, tool in
                     row(tool)
-                    if index < visibleTools.count - 1 { Divider().opacity(0.45) }
+                    if index < visibleTools.count - 1 { Hairline() }
                 }
                 if tools.count > Self.visibleLimit {
-                    Divider().opacity(0.45)
+                    Hairline()
                     Text("\(tools.count - Self.visibleLimit) more tools are not listed here.")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                        .padding(14)
+                        .padding(Space.xl)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -145,17 +145,17 @@ struct MCPToolInventoryList: View {
     private var visibleTools: [MCPLiveTool] { Array(tools.prefix(Self.visibleLimit)) }
 
     private func row(_ tool: MCPLiveTool) -> some View {
-        HStack(alignment: .top, spacing: 11) {
+        HStack(alignment: .top, spacing: Space.lg) {
             Image(systemName: tool.safety.symbolName)
-                .font(.system(size: 13, weight: .medium))
+                .font(AgentFont.bodyMedium)
                 .foregroundStyle(tool.safety == .readOnly ? Color.secondary : AgentTheme.warning)
-                .frame(width: 18)
+                .frame(width: Size.glyphSlot)
                 .padding(.top, 1)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 7) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                HStack(spacing: Space.sm) {
                     Text(tool.name)
-                        .font(.system(.callout, design: .monospaced).weight(.medium))
+                        .font(AgentFont.monoBody.weight(.medium))
                         .lineLimit(1)
                         .truncationMode(.middle)
                     MCPSafetyTag(text: tool.safety.label, isWarning: tool.safety != .readOnly)
@@ -164,22 +164,22 @@ struct MCPToolInventoryList: View {
                 }
                 if let summary = tool.summary {
                     Text(summary)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.lg)
             Button(selectedToolName == tool.name ? "Selected" : "Run…") {
                 selectedToolName = tool.name
             }
-            .buttonStyle(.bordered)
+            .secondaryActionStyle()
             .controlSize(.small)
             .disabled(isBusy || selectedToolName == tool.name)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(tool.name), \(tool.safety.label)")
     }
@@ -191,9 +191,9 @@ struct MCPSafetyTag: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.medium))
+            .font(AgentFont.microMedium)
             .foregroundStyle(isWarning ? AgentTheme.warning : Color.secondary)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, Space.sm)
             .padding(.vertical, 1)
             .background(
                 Capsule().fill((isWarning ? AgentTheme.warning : AgentTheme.graphite).opacity(0.14))
@@ -214,74 +214,74 @@ struct MCPTestConsentSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                SymbolTile(symbol: target.isProcessLaunch ? "bolt.badge.clock" : "network", size: 40)
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: Space.lg) {
+                SymbolTile(symbol: target.isProcessLaunch ? "bolt.badge.clock" : "network", size: Size.tileLarge)
+                VStack(alignment: .leading, spacing: Space.xxs) {
                     Text(target.isProcessLaunch ? "Start \(serverName) for a live test" : "Open a live test session")
-                        .font(.title3.weight(.semibold))
+                        .font(AgentFont.title)
                     Text("This is the only thing Agent Tooling will run or contact.")
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
             }
-            .padding(22)
-            Divider()
+            .padding(Space.xxxl)
+            Hairline()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 7) {
+                VStack(alignment: .leading, spacing: Space.xl) {
+                    VStack(alignment: .leading, spacing: Space.sm) {
                         SectionCaption(text: target.isProcessLaunch ? "Exact command" : "Exact endpoint")
                         Text(target.displayCommand)
-                            .font(.system(.callout, design: .monospaced))
+                            .font(AgentFont.monoBody)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(13)
+                            .padding(Space.lg)
                             .standardPanel()
                     }
 
                     Text(MCPTestConnectionPolicy.consentSummary(for: target, serverName: serverName))
-                        .font(.callout)
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
                     VStack(spacing: 0) {
                         ForEach(Array(boundaries.enumerated()), id: \.offset) { index, item in
-                            HStack(alignment: .top, spacing: 10) {
+                            HStack(alignment: .top, spacing: Space.lg) {
                                 Image(systemName: item.symbol)
                                     .foregroundStyle(.secondary)
-                                    .frame(width: 18)
+                                    .frame(width: Size.glyphSlot)
                                 Text(item.text)
-                                    .font(.caption)
+                                    .font(AgentFont.caption)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 0)
                             }
-                            .padding(13)
-                            if index < boundaries.count - 1 { Divider().opacity(0.45) }
+                            .padding(Space.lg)
+                            if index < boundaries.count - 1 { Hairline() }
                         }
                     }
                     .standardPanel()
                 }
-                .padding(22)
+                .padding(Space.xxxl)
             }
 
-            Divider()
+            Hairline()
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .keyboardShortcut(.cancelAction)
                 Button(target.isProcessLaunch ? "Start and connect" : "Connect") {
                     onConfirm()
                     dismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .primaryActionStyle()
                 .keyboardShortcut(.defaultAction)
             }
-            .padding(16)
+            .padding(Space.xl)
         }
-        .frame(width: 640, height: 560)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
     }
 

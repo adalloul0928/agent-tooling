@@ -25,16 +25,16 @@ struct SkillDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: Space.xl) {
                 heading
                 actions
                 if let explanation = skill.assignmentExplanation {
                     Text(explanation)
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if !skill.summary.isEmpty {
-                    Text(skill.summary).font(.callout).foregroundStyle(.secondary)
+                    Text(skill.summary).font(AgentFont.body).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 SkillRepositorySection(
@@ -43,19 +43,19 @@ struct SkillDetailView: View {
                 apps
                 sourceFiles
             }
-            .padding(22)
+            .padding(Space.xxxl)
         }
     }
 
     private var heading: some View {
-        HStack(spacing: 13) {
-            KindTile(kind: .skill, size: 40, ghost: !skill.isMaintainedHere)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(skill.displayName).font(.system(size: 20, weight: .semibold))
-                HStack(spacing: 6) {
+        HStack(spacing: Space.lg) {
+            KindTile(kind: .skill, size: Size.tileLarge, ghost: !skill.isMaintainedHere)
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(skill.displayName).font(AgentFont.pageTitle)
+                HStack(spacing: Space.sm) {
                     Text(managementBadge)
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .font(AgentFont.microMedium)
+                        .padding(.horizontal, Space.sm).padding(.vertical, Space.xxs)
                         .background(.quaternary, in: Capsule())
                     SkillInfoButton(text: managementNote, label: "About management")
                 }
@@ -88,35 +88,34 @@ struct SkillDetailView: View {
     }
 
     @ViewBuilder private var actions: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Space.md) {
             if skill.ownership == .centralPersonal, skill.hasCentralContent {
                 Button("Edit Source…", systemImage: "doc.text", action: onEditSource)
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .disabled(content.isBusy || !content.canWrite)
                     .accessibilityHint("Edits the complete SKILL.md while preserving scripts, references, and assets")
             }
             if skill.isAssignable {
                 Button("Choose where to use it…", systemImage: "arrow.turn.up.right", action: onAssign)
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .disabled(workspace.library.isBusy || workspace.library.access != .writable)
                     .accessibilityHint("Saves where this skill should be used. Installing is reviewed on the Apps screen")
             }
             if skill.hasCentralContent {
                 Button("Export…", systemImage: "square.and.arrow.up", action: onExport)
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
             }
             if skill.ownership == .attachedAuthoring {
                 Button("Stop managing this folder", systemImage: "folder.badge.minus") {
                     Task { await workspace.authoring.detach(skill.id, named: skill.displayName) }
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .disabled(workspace.authoring.isBusy || !workspace.authoring.canWrite)
                 .help("Removes the registration. Nothing in the folder is changed.")
             }
             if let parent = skill.parentID {
                 Button("Show plugin", systemImage: "puzzlepiece.extension") { onOpenPlugin(parent) }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
             }
         }
     }
@@ -125,9 +124,9 @@ struct SkillDetailView: View {
         GroupBox {
             VStack(spacing: 0) {
                 ForEach(Array(availableClients.enumerated()), id: \.element) { index, client in
-                    HStack(spacing: 10) {
-                        ClientBrandIcon(client: client, size: 18).frame(width: 24)
-                        Text(client.rawValue).font(.callout.weight(.medium))
+                    HStack(spacing: Space.lg) {
+                        ClientBrandIcon(client: client, size: Size.tileSmall).frame(width: Size.tile)
+                        Text(client.rawValue).font(AgentFont.bodyMedium)
                         Spacer()
                         // A verdict only where there is one. "This app does not
                         // have it" is the ordinary case for most skills, so it
@@ -135,51 +134,51 @@ struct SkillDetailView: View {
                         if let state = state(for: client) {
                             StatusBadge(state: state, text: detail(for: client))
                         } else {
-                            Text(detail(for: client)).font(.caption).foregroundStyle(.secondary)
+                            Text(detail(for: client)).font(AgentFont.caption).foregroundStyle(.secondary)
                         }
                         tryButton(for: client)
                     }
-                    .padding(.horizontal, 6).padding(.vertical, 9)
-                    if index < availableClients.count - 1 { Divider() }
+                    .padding(.horizontal, Space.sm).padding(.vertical, Space.md)
+                    if index < availableClients.count - 1 { Hairline() }
                 }
                 if let trialNotice {
-                    Divider()
-                    HStack(spacing: 8) {
+                    Hairline()
+                    HStack(spacing: Space.md) {
                         Image(systemName: trialNotice.isError ? "exclamationmark.triangle" : "terminal")
                             .foregroundStyle(trialNotice.isError ? Color.red : Color.secondary)
                         Text(trialNotice.text)
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(trialNotice.isError ? Color.red : Color.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer()
                         Button("Dismiss") { self.trialNotice = nil }
-                            .buttonStyle(.borderless).font(.caption)
+                            .inlineActionStyle().font(AgentFont.caption)
                     }
-                    .padding(.horizontal, 6).padding(.vertical, 9)
+                    .padding(.horizontal, Space.sm).padding(.vertical, Space.md)
                 }
                 if navigation != nil, availableClients.contains(where: isAskedForButAbsent) {
-                    Divider()
-                    HStack(spacing: 10) {
+                    Hairline()
+                    HStack(spacing: Space.lg) {
                         Text("Asked for, but not installed yet.")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(AgentFont.caption).foregroundStyle(.secondary)
                         Spacer()
                         Button("Install…", systemImage: "arrow.down.circle") {
                             navigation?.openScreenRequest(.reviewChanges)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .primaryActionStyle()
                         .accessibilityLabel("Install this skill from the Apps screen")
                     }
-                    .padding(.horizontal, 6).padding(.vertical, 9)
+                    .padding(.horizontal, Space.sm).padding(.vertical, Space.md)
                 }
                 if availableClients.isEmpty {
                     Text("This Mac is not managing any apps.")
-                        .font(.callout).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(6)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(Space.sm)
                 }
             }
-            .padding(6)
+            .padding(Space.sm)
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: Space.sm) {
                 Text("Apps")
                 SkillInfoButton(
                     text:
@@ -220,7 +219,7 @@ struct SkillDetailView: View {
                 Label("Try…", systemImage: "terminal")
             }
         }
-        .buttonStyle(.bordered)
+        .secondaryActionStyle()
         .controlSize(.small)
         .disabled(reason != nil || openingTrialIn != nil)
         .help(reason ?? tryHelp(for: client))
@@ -284,16 +283,16 @@ struct SkillDetailView: View {
         if content.isLoading {
             ProgressView("Reading the stored files…").controlSize(.small)
         } else if skill.hasCentralContent, content.loadedID != skill.id, let message = content.errorMessage {
-            Text(message).font(.callout).foregroundStyle(.secondary)
+            Text(message).font(AgentFont.body).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else if content.loadedID == skill.id, !content.files.isEmpty {
             DisclosureGroup("Source files") {
                 VStack(spacing: 0) {
                     ForEach(content.files, id: \.self) { file in
                         LabeledValueRow(file == "SKILL.md" ? "Definition" : "Bundled file") {
-                            Text(file).font(.system(.caption, design: .monospaced))
+                            Text(file).font(AgentFont.mono)
                         }
-                        if file != content.files.last { Divider() }
+                        if file != content.files.last { Hairline() }
                     }
                 }
             }
@@ -301,7 +300,7 @@ struct SkillDetailView: View {
             LabeledValueRow(skill.ownership == .attachedAuthoring ? "Your folder" : "Found at") {
                 LocationText(path: path)
             }
-            .standardPanel(cornerRadius: 13)
+            .standardPanel()
         }
     }
 }
@@ -321,7 +320,7 @@ struct SkillInfoButton: View {
         .accessibilityLabel(label)
         .help(text)
         .popover(isPresented: $presented) {
-            Text(text).font(.callout).padding(14).frame(width: 290, alignment: .leading)
+            Text(text).font(AgentFont.body).padding(Space.xl).frame(width: 290, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

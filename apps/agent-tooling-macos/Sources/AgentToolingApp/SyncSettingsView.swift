@@ -24,11 +24,11 @@ struct SyncSettingsView: View {
             PageToolbar(title: "Sync", context: session.statusText) {
                 if session.isConnected {
                     Button("Sync now", systemImage: "arrow.triangle.2.circlepath") { Task { await session.sync() } }
-                        .buttonStyle(.borderedProminent)
+                        .primaryActionStyle()
                         .disabled(session.isBusy)
                 }
             }
-            Divider()
+            Hairline()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                     if let message = session.errorMessage {
@@ -57,7 +57,7 @@ struct SyncSettingsView: View {
 
     private var setupCard: some View {
         TitledCard("Use the same setup on more than one Mac") {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: Space.xl) {
                 Text(
                     "Agent Tooling keeps one file describing your library and where each tool belongs. Your skills' own repositories, your app settings, and anything else on this Mac are not shared."
                 )
@@ -71,19 +71,19 @@ struct SyncSettingsView: View {
                 }
                 if kind == .git { gitSetup } else { folderSetup }
             }
-            .padding(14)
+            .padding(Space.xl)
         }
     }
 
     private var gitSetup: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Space.xl) {
             Text("A repository is not encrypted storage. Anyone with access to it can read what is published there.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(AgentFont.body).foregroundStyle(.secondary)
             LabeledContent("Repository") {
                 TextField("https://github.com/you/workspace.git", text: $remote)
                     .textFieldStyle(.roundedBorder).frame(maxWidth: 420)
             }
-            HStack(spacing: 12) {
+            HStack(spacing: Space.lg) {
                 Button("Choose folder on this Mac…") { chooseCheckout() }
                 Text(checkout?.path ?? "No folder chosen").foregroundStyle(.secondary).lineLimit(1)
             }
@@ -93,19 +93,19 @@ struct SyncSettingsView: View {
                     await session.connect(remote: remote.trimmingCharacters(in: .whitespacesAndNewlines), checkout: checkout)
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .primaryActionStyle()
             .disabled(session.isBusy || checkout == nil || remote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
     private var folderSetup: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Space.xl) {
             Text(
                 "Point this at a folder iCloud Drive, Dropbox or a network share already keeps in step between your Macs. What lands there is sealed: the service moving it cannot read your library."
             )
-            .font(.callout).foregroundStyle(.secondary)
+            .font(AgentFont.body).foregroundStyle(.secondary)
             SyncScopePanel()
-            HStack(spacing: 12) {
+            HStack(spacing: Space.lg) {
                 Button("Choose folder…") { chooseFolder() }
                 Text(folder?.path ?? "No folder chosen").foregroundStyle(.secondary).lineLimit(1)
             }
@@ -117,7 +117,7 @@ struct SyncSettingsView: View {
                 guard let folder else { return }
                 Task { await session.connectFolder(folder, phrase: phrase) }
             }
-            .buttonStyle(.borderedProminent)
+            .primaryActionStyle()
             .disabled(session.isBusy || folder == nil)
         }
     }
@@ -126,30 +126,30 @@ struct SyncSettingsView: View {
     /// reminder to move it into a password manager sits right beside it.
     private func recoveryCard(_ phrase: String) -> some View {
         TitledCard("Write this down now") {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Space.lg) {
                 Text(phrase)
-                    .font(.system(size: 15, design: .monospaced))
+                    .font(AgentFont.monoBody)
                     .textSelection(.enabled)
-                    .padding(12)
+                    .padding(Space.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(AgentTheme.fillSubtle, in: RoundedRectangle.control)
                 Text(
                     "This is the only way to open that folder from another Mac. Agent Tooling will not show it again, and cannot recover it for you."
                 )
-                .font(.callout)
+                .font(AgentFont.body)
                 .foregroundStyle(.secondary)
                 Text("Copy it to a password manager before you need it on another Mac.")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                 HStack {
                     Button(recoveryCopied ? "Copied" : "Copy") { copyRecoveryPhrase(phrase) }
-                        .buttonStyle(.bordered)
+                        .secondaryActionStyle()
                         .disabled(recoveryCopied)
                     Button("I have written it down") { session.dismissRecoveryPhrase() }
-                        .buttonStyle(.borderedProminent)
+                        .primaryActionStyle()
                 }
             }
-            .padding(14)
+            .padding(Space.xl)
         }
     }
 
@@ -158,34 +158,34 @@ struct SyncSettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 if enrollment.kind == .git {
                     InfoRow("Repository", detail: nil) {
-                        Image(systemName: "arrow.triangle.branch").foregroundStyle(.secondary).frame(width: 20)
+                        Image(systemName: "arrow.triangle.branch").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                     } trailing: {
                         Text(enrollment.remote).textSelection(.enabled).lineLimit(1)
                     }
-                    Divider()
+                    Hairline()
                     InfoRow("Branch", detail: nil) {
-                        Image(systemName: "arrow.triangle.branch").foregroundStyle(.secondary).frame(width: 20)
+                        Image(systemName: "arrow.triangle.branch").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                     } trailing: {
                         Text(enrollment.branch)
                     }
-                    Divider()
+                    Hairline()
                     InfoRow("Folder on this Mac", detail: nil) {
-                        Image(systemName: "folder").foregroundStyle(.secondary).frame(width: 20)
+                        Image(systemName: "folder").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                     } trailing: {
                         LocationText(path: enrollment.checkoutPath)
                     }
                 } else {
                     InfoRow("Shared folder", detail: "Sealed. The service moving it cannot read your library.") {
-                        Image(systemName: "lock.folder").foregroundStyle(.secondary).frame(width: 20)
+                        Image(systemName: "lock.folder").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                     } trailing: {
                         LocationText(path: enrollment.checkoutPath)
                     }
-                    Divider()
+                    Hairline()
                     SyncScopePanel()
                 }
-                Divider()
+                Hairline()
                 InfoRow("Sync on its own while the app is open", detail: session.scheduleText) {
-                    Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary).frame(width: 20)
+                    Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                 } trailing: {
                     Toggle(
                         "Sync on its own while the app is open",
@@ -195,23 +195,23 @@ struct SyncSettingsView: View {
                     .toggleStyle(.switch)
                     .disabled(session.isBusy)
                 }
-                Divider()
+                Hairline()
                 Text(
                     "Syncing shares what your library holds and where each tool belongs. It does not install or remove anything in your apps; that stays a separate reviewed step."
                 )
-                .font(.callout).foregroundStyle(.secondary)
-                .padding(14)
-                Divider()
+                .font(AgentFont.body).foregroundStyle(.secondary)
+                .padding(Space.xl)
+                Hairline()
                 InfoRow(
                     "Disconnect this Mac",
                     detail: enrollment.kind == .git
                         ? "The repository and its history are left alone."
                         : "The folder is left alone, and stays readable by any Mac that still has the phrase."
                 ) {
-                    Image(systemName: "xmark.circle").foregroundStyle(.secondary).frame(width: 20)
+                    Image(systemName: "xmark.circle").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                 } trailing: {
                     Button("Disconnect") { session.disconnect() }
-                        .buttonStyle(.bordered)
+                        .secondaryActionStyle()
                         .disabled(session.isBusy)
                 }
             }
@@ -224,11 +224,11 @@ struct SyncSettingsView: View {
                 Text(
                     "Two Macs changed the same thing differently. Nothing was changed here; open each item and choose which result to keep."
                 )
-                .font(.callout).foregroundStyle(.secondary)
-                .padding(14)
+                .font(AgentFont.body).foregroundStyle(.secondary)
+                .padding(Space.xl)
                 ForEach(Array(session.conflicts.enumerated()), id: \.offset) { index, conflict in
-                    Divider()
-                    VStack(alignment: .leading, spacing: 8) {
+                    Hairline()
+                    VStack(alignment: .leading, spacing: Space.md) {
                         Text(title(conflict.kind)).fontWeight(.medium)
                         Text(conflict.detail).foregroundStyle(.secondary)
                         if session.canDecide(index) {
@@ -246,24 +246,24 @@ struct SyncSettingsView: View {
                             .disabled(session.isBusy)
                         } else {
                             Text("This one cannot be settled by picking a Mac. Change what each item asks for, then sync again.")
-                                .font(.callout).foregroundStyle(.secondary)
+                                .font(AgentFont.body).foregroundStyle(.secondary)
                         }
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                 }
-                Divider()
+                Hairline()
                 HStack {
                     Button("Apply decisions") { Task { await session.applyDecisions() } }
-                        .buttonStyle(.borderedProminent)
+                        .primaryActionStyle()
                         .disabled(session.isBusy || session.hasUndecidedConflicts)
                     Text(
                         session.hasUndecidedConflicts
                             ? "Decide every item above before applying."
                             : "Your decisions are applied against the newest shared version."
                     )
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
                 }
-                .padding(14)
+                .padding(Space.xl)
             }
         }
     }
@@ -350,9 +350,9 @@ private struct SyncScopePanel: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("What an archive contains").font(.callout.weight(.medium))
-            HStack(alignment: .top, spacing: 22) {
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text("What an archive contains").font(AgentFont.bodyMedium)
+            HStack(alignment: .top, spacing: Space.xxxl) {
                 column(title: "Travels to another Mac", symbol: "checkmark.circle.fill", tint: AgentTheme.ok, items: Self.travels)
                 column(title: "Never leaves this Mac", symbol: "minus.circle.fill", tint: .secondary, items: Self.stays)
             }
@@ -362,12 +362,12 @@ private struct SyncScopePanel: View {
     }
 
     private func column(title: String, symbol: String, tint: Color, items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text(title).font(AgentFont.captionSemibold).foregroundStyle(.secondary)
             ForEach(items, id: \.self) { item in
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Image(systemName: symbol).font(.caption2).foregroundStyle(tint)
-                    Text(item).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+                    Image(systemName: symbol).font(AgentFont.micro).foregroundStyle(tint)
+                    Text(item).font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }

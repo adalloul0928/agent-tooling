@@ -98,8 +98,7 @@ struct SyncCenterView: View {
                         workspace.deployment.isBusy ? "Preparing…" : reviewTitle,
                         systemImage: "arrow.down.circle")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(AgentTheme.selection)
+                .primaryActionStyle()
                 .disabled(workspace.deployment.isBusy)
                 .help("See exactly what would change in each app before anything is written.")
                 .accessibilityLabel(reviewTitle)
@@ -114,14 +113,14 @@ struct SyncCenterView: View {
                         // A check that found something the library lacked has
                         // grown the library. It is news rather than a fault,
                         // so it is said plainly and goes away on the next check.
-                        HStack(spacing: 10) {
-                            StatusGlyph(state: .healthy, size: 16)
-                            Text(added).font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: Space.lg) {
+                            StatusGlyph(state: .healthy, size: Size.glyphLarge)
+                            Text(added).font(AgentFont.caption).foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: 12)
+                            Spacer(minLength: Space.lg)
                         }
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(AgentTheme.controlBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                        .background(AgentTheme.controlBackground.opacity(0.6), in: RoundedRectangle.card)
                         .accessibilityLabel(added)
                     }
 
@@ -224,7 +223,7 @@ struct SyncCenterView: View {
                 )
                 .frame(height: 180)
             } else {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: Space.lg) {
                     ForEach(enabledClients) { app in
                         AppTile(
                             client: app,
@@ -254,66 +253,66 @@ struct SyncCenterView: View {
         let paths = Array(Set(observations.flatMap(\.configurationPaths))).sorted()
         let notes = Array(Set(observations.flatMap(\.notes))).sorted()
         return VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 14) {
-                ClientDisc(client: app, size: 48)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(app.rawValue).font(.title3.weight(.semibold))
+            HStack(alignment: .top, spacing: Space.xl) {
+                ClientDisc(client: app, size: Size.discLarge)
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    HStack(spacing: Space.md) {
+                        Text(app.rawValue).font(AgentFont.title)
                         if let version = version(for: app) {
-                            Text(version).font(.callout).foregroundStyle(.secondary)
+                            Text(version).font(AgentFont.body).foregroundStyle(.secondary)
                         }
                     }
-                    HStack(spacing: 6) {
-                        StatusGlyph(state: verdict.state, size: 13)
-                        Text(verdict.text).font(.callout)
+                    HStack(spacing: Space.sm) {
+                        StatusGlyph(state: verdict.state, size: Size.glyph)
+                        Text(verdict.text).font(AgentFont.body)
                         if let checked = observations.map(\.lastScannedAt).max() {
-                            Text("· checked \(SnapshotTime.compact(checked))").font(.callout).foregroundStyle(.secondary)
+                            Text("· checked \(SnapshotTime.compact(checked))").font(AgentFont.body).foregroundStyle(.secondary)
                         }
                     }
                     if !verdict.detail.isEmpty {
-                        Text(verdict.detail).font(.caption).foregroundStyle(.secondary)
+                        Text(verdict.detail).font(AgentFont.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Spacer(minLength: 12)
+                Spacer(minLength: Space.lg)
                 if !workspace.device.isEnabled(app) {
-                    Text("Not managed here").font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
+                    Text("Not managed here").font(AgentFont.captionMedium).foregroundStyle(.secondary)
+                        .padding(.horizontal, Space.md).padding(.vertical, Space.xs)
                         .background(.quaternary, in: Capsule())
                 }
             }
-            .padding(16)
+            .padding(Space.xl)
 
-            Divider()
+            Hairline()
 
             // What the app holds, as the check saw it. Counts, not claims: an
             // app that has not been checked has no numbers, and says so.
             HStack(spacing: 0) {
                 heldColumn("Skills", count: held?.skills)
-                Divider().frame(height: 36)
+                Hairline().frame(height: Size.controlHeight)
                 heldColumn("MCP servers", count: held?.servers)
-                Divider().frame(height: 36)
+                Hairline().frame(height: Size.controlHeight)
                 heldColumn("Plugins", count: held?.plugins)
             }
-            .padding(.horizontal, 8).padding(.vertical, 10)
+            .padding(.horizontal, Space.md).padding(.vertical, Space.lg)
 
             if !paths.isEmpty || !notes.isEmpty {
-                Divider()
-                VStack(alignment: .leading, spacing: 8) {
+                Hairline()
+                VStack(alignment: .leading, spacing: Space.md) {
                     if !paths.isEmpty {
-                        Text("Keeps its configuration in").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Text("Keeps its configuration in").font(AgentFont.captionSemibold).foregroundStyle(.secondary)
                         ForEach(paths, id: \.self) { path in
-                            Text(path).font(.caption.monospaced()).foregroundStyle(.secondary)
+                            Text(path).font(AgentFont.mono).foregroundStyle(.secondary)
                                 .lineLimit(1).truncationMode(.middle)
                                 .help(path)
                         }
                     }
                     ForEach(notes, id: \.self) { note in
-                        Text(note).font(.caption).foregroundStyle(.secondary)
+                        Text(note).font(AgentFont.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .padding(16)
+                .padding(Space.xl)
             }
         }
         .standardPanel()
@@ -334,51 +333,51 @@ struct SyncCenterView: View {
             } label: {
                 Label(running ? "Reviewing…" : (review == nil ? "Review \(app.rawValue)" : "Review again"), systemImage: "sparkles")
             }
-            .buttonStyle(.borderless)
+            .inlineActionStyle()
             .disabled(running || setup.reviewClient == nil || setup.isBusy)
             .help(reviewHelp(app))
         } content: {
             VStack(alignment: .leading, spacing: 0) {
                 if running {
-                    HStack(spacing: 12) {
+                    HStack(spacing: Space.lg) {
                         ProgressView().controlSize(.small)
                         Text("Fetching \(app.rawValue)'s release notes, then having \(setup.reviewClient?.rawValue ?? "your assistant") read them against your setup. A few minutes.")
-                            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            .font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         Spacer()
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                 } else if let review {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 6) {
-                            Text(versionLine(review)).font(.callout.weight(.medium))
+                    VStack(alignment: .leading, spacing: Space.sm) {
+                        HStack(spacing: Space.sm) {
+                            Text(versionLine(review)).font(AgentFont.bodyMedium)
                             Spacer()
-                            Text(SnapshotTime.compact(review.completedAt)).font(.caption2).foregroundStyle(.tertiary)
+                            Text(SnapshotTime.compact(review.completedAt)).font(AgentFont.micro).foregroundStyle(.tertiary)
                         }
-                        if let summary = review.review?.summary { Text(summary).font(.callout).fixedSize(horizontal: false, vertical: true) }
+                        if let summary = review.review?.summary { Text(summary).font(AgentFont.body).fixedSize(horizontal: false, vertical: true) }
                         if let message = setup.clientReviewMessage {
-                            Text(message).font(.caption).foregroundStyle(AgentTheme.warning).fixedSize(horizontal: false, vertical: true)
+                            Text(message).font(AgentFont.caption).foregroundStyle(AgentTheme.warning).fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                     if !review.notes.isEmpty {
-                        Divider()
+                        Hairline()
                         DisclosureGroup("Release notes read · \(review.notes.count)") {
                             ForEach(review.notes, id: \.version) { note in
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("\(note.version)").font(.caption.weight(.semibold))
-                                    Link(note.source, destination: URL(string: note.source) ?? URL(filePath: "/")).font(.caption2).lineLimit(1)
-                                    Text(note.body.prefix(600) + (note.body.count > 600 ? "…" : "")).font(.caption2).foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: Space.xxs) {
+                                    Text("\(note.version)").font(AgentFont.captionSemibold)
+                                    Link(note.source, destination: URL(string: note.source) ?? URL(filePath: "/")).font(AgentFont.micro).lineLimit(1)
+                                    Text(note.body.prefix(600) + (note.body.count > 600 ? "…" : "")).font(AgentFont.micro).foregroundStyle(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
-                                .padding(.vertical, 6)
+                                .padding(.vertical, Space.sm)
                             }
                         }
-                        .font(.caption)
-                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .font(AgentFont.caption)
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
                     }
                     // The same compact rows the Checkup uses, one per recommendation.
                     ForEach(review.openRecommendations) { recommendation in
-                        Divider()
+                        Hairline()
                         let item = CheckupTriage.item(for: recommendation, audit: setup.checkup?.audit)
                         CheckupRow(
                             item: item, isExpanded: expandedReviewRows.contains(item.id), isBusy: setup.isApplying,
@@ -393,10 +392,10 @@ struct SyncCenterView: View {
                             onOpen: { section in navigate(section) })
                     }
                 } else if let message = setup.clientReviewMessage {
-                    Text(message).font(.callout).foregroundStyle(.secondary).padding(14)
+                    Text(message).font(AgentFont.body).foregroundStyle(.secondary).padding(Space.xl)
                 } else {
                     Text("Fetches what \(app.rawValue) has published since the version on this Mac and has your assistant read it against your configuration: settings the docs now recommend, hooks, skills, plugins, and servers worth adding, and what is deprecated. Every claim names its source.")
-                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(14)
+                        .font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(Space.xl)
                 }
             }
         }
@@ -417,9 +416,9 @@ struct SyncCenterView: View {
     }
 
     private func heldColumn(_ title: String, count: Int?) -> some View {
-        VStack(spacing: 2) {
-            Text(count.map(String.init) ?? "—").font(.title2.weight(.semibold)).monospacedDigit()
-            Text(title).font(.caption).foregroundStyle(.secondary)
+        VStack(spacing: Space.xxs) {
+            Text(count.map(String.init) ?? "—").font(AgentFont.titleLarge).monospacedDigit()
+            Text(title).font(AgentFont.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
@@ -433,26 +432,26 @@ struct SyncCenterView: View {
     private func changesCard(_ items: [WorkspaceDeploymentItem]) -> some View {
         TitledCard("Ready to install", count: "\(items.count)") {
             Button("Review…", action: onReviewChanges)
-                .buttonStyle(.borderless)
+                .inlineActionStyle()
                 .disabled(workspace.deployment.isBusy)
         } content: {
             let groups = grouped(items)
             ForEach(groups) { group in
                 InfoRow(group.client.rawValue, detail: summary(of: group.items)) {
-                    ClientDisc(client: group.client, size: 30)
+                    ClientDisc(client: group.client, size: Size.disc)
                 } trailing: {
                     Text("\(group.items.count)")
-                        .font(.caption.monospacedDigit())
+                        .font(AgentFont.caption.monospacedDigit())
                         .foregroundStyle(.tertiary)
                 }
-                if group.id != groups.last?.id { Divider().opacity(0.35) }
+                if group.id != groups.last?.id { Hairline() }
             }
             Text("Nothing has been written. The review shows each step, and what is not being installed.")
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 14)
-                .padding(.bottom, 12)
-                .padding(.top, 4)
+                .padding(.horizontal, Space.xl)
+                .padding(.bottom, Space.lg)
+                .padding(.top, Space.xs)
         }
     }
 
@@ -463,29 +462,29 @@ struct SyncCenterView: View {
             count: "\(scopedRequests.count) request\(scopedRequests.count == 1 ? "" : "s")"
         ) {
             Text("Local requests nobody has decided yet. None has changed an app.")
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
+                .padding(.horizontal, Space.xl)
+                .padding(.top, Space.lg)
             ForEach(visible) { request in
                 InfoRow(
                     request.title,
                     detail: "\(request.kind.displayName) · \(SnapshotTime.compact(request.createdAt))"
                 ) {
-                    SymbolTile(symbol: "tray.and.arrow.down", size: 30)
+                    SymbolTile(symbol: "tray.and.arrow.down", size: Size.discLarge)
                 } trailing: {
                     Button("Review") { onReviewRequest(request) }
-                        .buttonStyle(.bordered)
+                        .secondaryActionStyle()
                         .controlSize(.small)
                         .accessibilityLabel("Review \(request.title)")
                 }
-                if request.id != visible.last?.id { Divider().opacity(0.35) }
+                if request.id != visible.last?.id { Hairline() }
             }
             if scopedRequests.count > visible.count {
                 Text("\(scopedRequests.count - visible.count) more are waiting. Review these to reveal the rest.")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .padding(14)
+                    .padding(Space.xl)
             }
         }
     }
@@ -494,26 +493,26 @@ struct SyncCenterView: View {
         TitledCard("Recent changes", count: scopedReceipts.isEmpty ? nil : "\(scopedReceipts.count)") {
             if scopedReceipts.count > recentReceipts.count {
                 Button("See all", systemImage: "chevron.right") { navigate(.activity) }
-                    .buttonStyle(.borderless)
+                    .inlineActionStyle()
                     .labelStyle(.titleAndIcon)
             }
         } content: {
             if scopedReceipts.isEmpty {
                 Text(client.map { "Nothing has been changed in \($0.rawValue) yet." } ?? "Nothing has been changed yet.")
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                    .padding(14)
+                    .padding(Space.xl)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 ForEach(recentReceipts) { receipt in
                     InfoRow(receipt.title, detail: receipt.verificationSummary) {
-                        StatusGlyph(state: receipt.state, size: 16)
+                        StatusGlyph(state: receipt.state, size: Size.glyphLarge)
                     } trailing: {
                         Text(SnapshotTime.standalone(receipt.createdAt))
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.tertiary)
                     }
-                    if receipt.id != recentReceipts.last?.id { Divider().opacity(0.35) }
+                    if receipt.id != recentReceipts.last?.id { Hairline() }
                 }
             }
         }
@@ -525,34 +524,34 @@ struct SyncCenterView: View {
     private var linkedDestinationsCard: some View {
         TitledCard("Folders") {
             Button("Choose a folder…", systemImage: "folder.badge.plus") { isChoosingDestination = true }
-                .buttonStyle(.borderless)
+                .inlineActionStyle()
                 .disabled(workspace.deployment.isBusy)
         } content: {
             if workspace.deployment.linkedDestinations.isEmpty {
                 Text("Each app uses its own folder. Point one somewhere else if you keep a folder in step yourself.")
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                    .padding(14)
+                    .padding(Space.xl)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 ForEach(workspace.deployment.linkedDestinations) { destination in
                     InfoRow(
                         "\(destination.surface.displayName) · \(destination.projectName ?? destination.scope.displayName)"
                     ) {
-                        SymbolTile(symbol: "folder", size: 30)
+                        SymbolTile(symbol: "folder", size: Size.discLarge)
                     } trailing: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: Space.lg) {
                             LocationText(path: destination.path)
                             Button("Use the app's own folder") {
                                 Task { await workspace.deployment.unlinkDestination(destination.id) }
                             }
-                            .buttonStyle(.bordered)
+                            .secondaryActionStyle()
                             .controlSize(.small)
                             .disabled(workspace.deployment.isBusy)
                         }
                     }
                     if destination.id != workspace.deployment.linkedDestinations.last?.id {
-                        Divider().opacity(0.35)
+                        Hairline()
                     }
                 }
             }
@@ -675,36 +674,36 @@ private struct AppTile: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 10) {
-                    ClientDisc(client: client, size: 34)
-                    VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Space.lg) {
+                HStack(alignment: .top, spacing: Space.lg) {
+                    ClientDisc(client: client, size: Size.discLarge)
+                    VStack(alignment: .leading, spacing: Space.xxs) {
                         Text(client.rawValue)
-                            .font(.callout.weight(.semibold))
+                            .font(AgentFont.bodySemibold)
                             .lineLimit(1)
                         Text(clause)
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
-                    Spacer(minLength: 8)
-                    StatusGlyph(state: verdict.state, size: 14)
-                        .padding(.top, 2)
+                    Spacer(minLength: Space.md)
+                    StatusGlyph(state: verdict.state, size: Size.glyph)
+                        .padding(.top, Space.xxs)
                 }
-                HStack(spacing: 8) {
+                HStack(spacing: Space.md) {
                     Text(heldText)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                    Spacer(minLength: 6)
+                    Spacer(minLength: Space.sm)
                     if waiting > 0 {
                         Text("\(waiting) to install")
-                            .font(.caption.weight(.semibold))
+                            .font(AgentFont.captionSemibold)
                             .foregroundStyle(AgentTheme.selection)
                     }
                 }
             }
-            .padding(14)
+            .padding(Space.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
@@ -713,7 +712,7 @@ private struct AppTile: View {
         .standardPanel()
         .overlay {
             RoundedRectangle(cornerRadius: AgentTheme.panelCornerRadius, style: .continuous)
-                .stroke(selected ? AgentTheme.selection : Color.clear, lineWidth: 1.5)
+                .stroke(selected ? AgentTheme.selection : Color.clear, lineWidth: Hairline.ring)
         }
         .help(
             [selected ? "Show every app again" : "Show only \(client.rawValue)", verdict.detail]
@@ -743,20 +742,20 @@ private struct ManagedClientsPopover: View {
     let device: WorkspaceDeviceSession
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Clients you use").font(.headline)
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text("Clients you use").font(AgentFont.heading)
             Text(
                 "Unchecked clients are hidden throughout Agent Tooling and excluded from checks and changes. Their software and configuration stay on this Mac."
             )
-            .font(.caption).foregroundStyle(.secondary)
+            .font(AgentFont.caption).foregroundStyle(.secondary)
             ForEach(device.availableClients) { client in
                 Toggle(
                     isOn: Binding(
                         get: { device.isEnabled(client) },
                         set: { enabled in Task { await device.setEnabled(client, enabled) } })
                 ) {
-                    HStack(spacing: 10) {
-                        ClientBrandIcon(client: client, size: 20)
+                    HStack(spacing: Space.lg) {
+                        ClientBrandIcon(client: client, size: Size.tileSmall)
                         Text(client.rawValue)
                     }
                 }
@@ -766,14 +765,14 @@ private struct ManagedClientsPopover: View {
             }
             if device.enabledClients.isEmpty {
                 Text("Select a client whenever you’re ready. Your local library remains available.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(AgentFont.caption).foregroundStyle(.secondary)
             }
             if let message = device.errorMessage {
-                Text(message).font(.caption).foregroundStyle(AgentTheme.warning)
+                Text(message).font(AgentFont.caption).foregroundStyle(AgentTheme.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(16)
+        .padding(Space.xl)
     }
 }
 
@@ -791,11 +790,11 @@ private struct WorkspaceLinkDestinationSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Send an app's tools somewhere else").font(.title3.weight(.semibold))
+                Text("Send an app's tools somewhere else").font(AgentFont.title)
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
-            }.padding(20)
-            Divider()
+            }.padding(Space.xxl)
+            Hairline()
             VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                 Text(
                     "Agent Tooling normally writes into each app's own folder. Point one somewhere else and it writes there instead — into the folder you name, under each tool's own name."
@@ -804,20 +803,20 @@ private struct WorkspaceLinkDestinationSheet: View {
                 Text(
                     "Nothing already in that folder is replaced. If a tool's name is already taken there, the install stops and says so rather than writing over it."
                 )
-                .font(.callout).foregroundStyle(.secondary)
+                .font(AgentFont.body).foregroundStyle(.secondary)
                 Picker("App", selection: $client) {
                     ForEach(clients) { value in Text(value.rawValue).tag(value) }
                 }.frame(maxWidth: 280)
-                HStack(spacing: 12) {
+                HStack(spacing: Space.lg) {
                     Button("Choose folder…") { choose() }
                     Text(folder?.path ?? "No folder chosen").foregroundStyle(.secondary).lineLimit(2)
                 }
                 Spacer(minLength: 0)
-            }.padding(20)
-            Divider()
+            }.padding(Space.xxl)
+            Hairline()
             HStack {
                 Text("This records where a later install would write. Nothing moves now.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
                 Spacer()
                 Button("Use this folder") {
                     guard let folder else { return }
@@ -828,11 +827,11 @@ private struct WorkspaceLinkDestinationSheet: View {
                         dismiss()
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .primaryActionStyle()
                 .disabled(folder == nil || session.isBusy)
-            }.padding(20)
+            }.padding(Space.xxl)
         }
-        .frame(width: 580, height: 420)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
         .onAppear {
             // The stored default may be an app this Mac does not manage, which

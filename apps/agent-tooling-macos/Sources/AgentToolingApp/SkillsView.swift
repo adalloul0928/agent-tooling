@@ -100,15 +100,14 @@ struct SkillsBrowser: View {
                 } label: {
                     Label("New skill…", systemImage: "plus")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(AgentTheme.selection)
+                .primaryActionStyle()
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(workspace.library.isBusy || !canWrite)
                 .help("Create a skill with Claude Code, with Codex, or by hand")
             }
 
             filtersToolbar(skills: listed)
-            Divider()
+            Hairline()
             GeometryReader { proxy in
                 if selectedSkill != nil {
                     HSplitView {
@@ -241,21 +240,21 @@ struct SkillsBrowser: View {
     }
 
     func filtersToolbar(skills: [SkillEntry]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 20) {
+                HStack(spacing: Space.xxl) {
                     ownershipPicker
-                    Spacer(minLength: 16)
+                    Spacer(minLength: Space.xl)
                     searchField.frame(width: 220)
                 }
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: Space.lg) {
                     ownershipPicker
                     searchField
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            FlowLayout(spacing: 12) {
+            FlowLayout(spacing: Space.lg) {
                 Menu {
                     Picker("Marketplace", selection: $marketplaceFilter) {
                         Text("All marketplaces").tag("")
@@ -319,12 +318,12 @@ struct SkillsBrowser: View {
                     Button("Reset") { resetFilters() }
                         .buttonStyle(.plain).foregroundStyle(.secondary)
                 }
-                Text("\(skills.count) skills").font(.caption).foregroundStyle(.secondary).fixedSize()
+                Text("\(skills.count) skills").font(AgentFont.caption).foregroundStyle(.secondary).fixedSize()
             }
             .inventoryMenuStyle()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, 10)
+        .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, Space.lg)
     }
 
 }

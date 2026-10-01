@@ -76,7 +76,7 @@ struct SkillCreatorSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
+            Hairline()
 
             if let availability = session.availability, case .missing(let reason, let install) = availability {
                 installOffer(reason: reason, install: install)
@@ -89,7 +89,7 @@ struct SkillCreatorSheet: View {
                 }
             }
 
-            Divider()
+            Hairline()
             footer
         }
         .onAppear {
@@ -130,16 +130,16 @@ struct SkillCreatorSheet: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 13) {
-            ClientBrandIcon(client: client, size: 30)
-                .frame(width: 34, height: 34)
+        HStack(spacing: Space.lg) {
+            ClientBrandIcon(client: client, size: Size.tile)
+                .frame(width: Size.discLarge, height: Size.discLarge)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text("Create a skill with \(client.rawValue)")
-                    .font(.title2.weight(.semibold))
+                    .font(AgentFont.titleLarge)
                 Text(headerDetail)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -159,8 +159,8 @@ struct SkillCreatorSheet: View {
                 .accessibilityLabel("Assistant")
             }
         }
-        .padding(.horizontal, 24)
-        .frame(height: 78)
+        .padding(.horizontal, Space.xxxl)
+        .frame(height: Size.sheetBarHeight)
     }
 
     private var headerDetail: String {
@@ -181,36 +181,36 @@ struct SkillCreatorSheet: View {
     // MARK: - Install offer
 
     private func installOffer(reason: String, install: [SkillCreatorInstallCommand]) -> some View {
-        VStack(spacing: 18) {
+        VStack(spacing: Space.xxl) {
             Spacer()
             Image(systemName: "puzzlepiece.extension")
-                .font(.system(size: 40, weight: .light))
+                .font(.system(size: Size.heroSymbolLarge, weight: .light))
                 .foregroundStyle(.secondary)
-            VStack(spacing: 6) {
+            VStack(spacing: Space.sm) {
                 Text("\(client.rawValue) needs its skill creator first")
-                    .font(.title3.weight(.semibold))
+                    .font(AgentFont.title)
                 Text(reason)
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 520)
             }
             if install.isEmpty {
                 Text("Agent Tooling does not know a command that installs it here.")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             } else {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Space.sm) {
                     ForEach(Array(install.enumerated()), id: \.offset) { _, command in
                         Text("\(command.executable) \(command.arguments.joined(separator: " "))")
-                            .font(.system(.caption, design: .monospaced))
+                            .font(AgentFont.mono)
                             .textSelection(.enabled)
                     }
                 }
-                .padding(12)
-                .background(AgentTheme.controlBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(Space.lg)
+                .background(AgentTheme.controlBackground, in: RoundedRectangle.control)
                 Text("This runs \(client.rawValue)'s own install command and records a receipt. Nothing about your skills changes.")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 520)
@@ -221,7 +221,7 @@ struct SkillCreatorSheet: View {
                     }
                 } label: {
                     if session.isInstalling {
-                        HStack(spacing: 8) {
+                        HStack(spacing: Space.md) {
                             ProgressView().controlSize(.small)
                             Text("Installing…")
                         }
@@ -229,13 +229,13 @@ struct SkillCreatorSheet: View {
                         Text("Install the skill creator")
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .primaryActionStyle()
                 .disabled(session.isBusy || turnTask != nil)
             }
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(24)
+        .padding(Space.xxxl)
     }
 
     // MARK: - Conversation
@@ -247,7 +247,7 @@ struct SkillCreatorSheet: View {
             } else {
                 transcript
             }
-            Divider()
+            Hairline()
             composer
         }
         .background(AgentTheme.controlBackground.opacity(0.34))
@@ -255,17 +255,17 @@ struct SkillCreatorSheet: View {
 
     private var openingGuidance: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: Space.xl) {
                 Text("Describe the skill")
-                    .font(.headline)
+                    .font(AgentFont.heading)
                 Text("Say what it should accomplish, when \(client.rawValue) should reach for it, and any constraints it must follow. \(client.rawValue) may ask a few questions before it writes anything, and you can ask for changes after each draft.")
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 optionsSummary
             }
-            .padding(20)
+            .padding(Space.xxl)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
@@ -273,23 +273,23 @@ struct SkillCreatorSheet: View {
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
+                LazyVStack(alignment: .leading, spacing: Space.xl) {
                     ForEach(session.messages) { message in
                         messageRow(message)
                             .id(message.id)
                     }
                     if session.isThinking {
-                        HStack(spacing: 8) {
+                        HStack(spacing: Space.md) {
                             ProgressView().controlSize(.small)
                             Text("\(client.rawValue) is working…")
-                                .font(.callout)
+                                .font(AgentFont.body)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(.horizontal, 4)
+                        .padding(.horizontal, Space.xs)
                         .id("thinking")
                     }
                 }
-                .padding(20)
+                .padding(Space.xxl)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .onChange(of: session.messages.count) { _, _ in
@@ -307,54 +307,54 @@ struct SkillCreatorSheet: View {
         switch message.role {
         case .person:
             HStack {
-                Spacer(minLength: 40)
+                Spacer(minLength: Space.huge)
                 Text(message.text)
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .textSelection(.enabled)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(AgentTheme.selection.opacity(0.18), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(.horizontal, Space.lg)
+                    .padding(.vertical, Space.md)
+                    .background(AgentTheme.selection.opacity(0.18), in: RoundedRectangle.card)
             }
             .accessibilityLabel("You said: \(message.text)")
         case .assistant:
-            HStack(alignment: .top, spacing: 10) {
-                ClientBrandIcon(client: client, size: 18)
-                    .frame(width: 22, height: 22)
+            HStack(alignment: .top, spacing: Space.lg) {
+                ClientBrandIcon(client: client, size: Size.tileSmall)
+                    .frame(width: Size.tileSmall, height: Size.tileSmall)
                     .accessibilityHidden(true)
                 Text(message.text)
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 20)
+                Spacer(minLength: Space.xxl)
             }
             .accessibilityLabel("\(client.rawValue) said: \(message.text)")
         case .note:
             Label(message.text, systemImage: "info.circle")
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Space.md) {
             if session.hasConversation {
                 HStack {
                     Text(session.result == nil ? "Answer or add detail" : "Ask for changes")
-                        .font(.caption.weight(.semibold))
+                        .font(AgentFont.captionSemibold)
                         .foregroundStyle(.secondary)
                     Spacer()
                     if !session.messages.isEmpty {
                         Button("Start over") { startOver() }
-                            .buttonStyle(.borderless)
-                            .font(.caption)
+                            .inlineActionStyle()
+                            .font(AgentFont.caption)
                             .disabled(turnTask != nil || session.isBusy)
                     }
                 }
             } else {
                 HStack {
                     Text("Your first message")
-                        .font(.caption.weight(.semibold))
+                        .font(AgentFont.captionSemibold)
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button {
@@ -362,22 +362,22 @@ struct SkillCreatorSheet: View {
                     } label: {
                         Label(showsOptions ? "Hide options" : "Options", systemImage: "slider.horizontal.3")
                     }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
+                    .inlineActionStyle()
+                    .font(AgentFont.caption)
                     .disabled(session.isBusy)
                 }
                 if showsOptions { optionsForm }
             }
 
             TextEditor(text: $composerText)
-                .font(.body)
+                .font(AgentFont.body)
                 .scrollContentBackground(.hidden)
-                .padding(8)
+                .padding(Space.md)
                 .frame(minHeight: 72, maxHeight: 140)
-                .background(AgentTheme.contentBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(AgentTheme.contentBackground, in: RoundedRectangle.control)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(AgentTheme.separator.opacity(0.55), lineWidth: 0.5)
+                    RoundedRectangle.control
+                        .strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width)
                 }
                 .focused($composerFocused)
                 .disabled(session.isBusy)
@@ -386,12 +386,12 @@ struct SkillCreatorSheet: View {
             HStack {
                 if let validationMessage {
                     Label(validationMessage, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(composerText.isEmpty ? Color.secondary : Color.red)
                         .lineLimit(2)
                 } else {
                     Text("\(composerText.count.formatted()) / \(SkillDraftRequest.maximumInstructionCharacters.formatted())")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
@@ -401,30 +401,30 @@ struct SkillCreatorSheet: View {
                 } label: {
                     Label("Send", systemImage: "arrow.up.circle.fill")
                 }
-                .buttonStyle(.borderedProminent)
+                .primaryActionStyle()
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(turnTask != nil || session.isBusy || !canSend)
                 .help("Send (⌘↩)")
             }
         }
-        .padding(16)
+        .padding(Space.xl)
     }
 
     /// What the draft will be told about itself, shown as one line until the
     /// person wants to change it.
     private var optionsSummary: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Space.sm) {
             Text("Draft options")
-                .font(.caption.weight(.semibold))
+                .font(AgentFont.captionSemibold)
                 .foregroundStyle(.secondary)
             Text(optionsSummaryText)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
+        .padding(Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AgentTheme.contentBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(AgentTheme.contentBackground.opacity(0.6), in: RoundedRectangle.control)
     }
 
     private var optionsSummaryText: String {
@@ -437,7 +437,7 @@ struct SkillCreatorSheet: View {
     }
 
     private var optionsForm: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             configurationField(title: "Suggested name", detail: "Optional. Leave blank to let \(client.rawValue) choose.") {
                 TextField("release-readiness", text: $proposedName)
                     .textFieldStyle(.roundedBorder)
@@ -452,7 +452,7 @@ struct SkillCreatorSheet: View {
             }
             if scope == .project {
                 configurationField(title: "Project folder", detail: "The selected folder must already exist.") {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Space.md) {
                         TextField("Choose a folder", text: $projectRoot)
                             .textFieldStyle(.roundedBorder)
                             .accessibilityLabel("Project folder")
@@ -469,18 +469,18 @@ struct SkillCreatorSheet: View {
                         "This Mac is not managing any apps yet, so there is nowhere to offer the saved skill.",
                         systemImage: "exclamationmark.triangle"
                     )
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    HStack(spacing: 14) {
+                    HStack(spacing: Space.xl) {
                         ForEach(enabledClients, id: \.self) { target in
                             Toggle(isOn: targetBinding(target)) {
-                                HStack(spacing: 6) {
-                                    ClientBrandIcon(client: target, size: 16)
-                                        .frame(width: 18, height: 18)
+                                HStack(spacing: Space.sm) {
+                                    ClientBrandIcon(client: target, size: Size.brandMark)
+                                        .frame(width: Size.chipHeight, height: Size.chipHeight)
                                     Text(target.rawValue)
-                                        .font(.caption)
+                                        .font(AgentFont.caption)
                                 }
                             }
                             .toggleStyle(.checkbox)
@@ -489,8 +489,8 @@ struct SkillCreatorSheet: View {
                 }
             }
         }
-        .padding(12)
-        .background(AgentTheme.contentBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(Space.lg)
+        .background(AgentTheme.contentBackground.opacity(0.6), in: RoundedRectangle.control)
     }
 
     // MARK: - Draft
@@ -503,12 +503,12 @@ struct SkillCreatorSheet: View {
             VStack(spacing: 0) {
                 HStack {
                     Text("Draft")
-                        .font(.headline)
+                        .font(AgentFont.heading)
                     Spacer()
                 }
-                .padding(.horizontal, 20)
-                .frame(height: 54)
-                Divider()
+                .padding(.horizontal, Space.xxl)
+                .frame(height: Size.rowHeightTall)
+                Hairline()
                 if let draftIssue = session.draftIssue {
                     EmptyStateView(
                         symbol: "doc.badge.ellipsis",
@@ -532,18 +532,18 @@ struct SkillCreatorSheet: View {
     private func review(_ result: SkillDraftResult) -> some View {
         HSplitView {
             VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Space.sm) {
                     Text(result.skillName)
-                        .font(.title3.weight(.semibold))
+                        .font(AgentFont.title)
                     Text(result.description)
-                        .font(.callout)
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 14)
+                .padding(.horizontal, Space.xxl)
+                .padding(.vertical, Space.xl)
 
-                Divider()
+                Hairline()
 
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -552,34 +552,34 @@ struct SkillCreatorSheet: View {
                                 selectedReviewPath = file.relativePath
                                 reviewedPaths.insert(file.relativePath)
                             } label: {
-                                HStack(spacing: 10) {
+                                HStack(spacing: Space.lg) {
                                     Image(systemName: file.isExecutable ? "terminal" : "doc")
                                         .foregroundStyle(file.isExecutable ? Color.orange : Color.secondary)
-                                        .frame(width: 18)
-                                    VStack(alignment: .leading, spacing: 2) {
+                                        .frame(width: Size.glyphSlot)
+                                    VStack(alignment: .leading, spacing: Space.xxs) {
                                         Text(file.relativePath)
-                                            .font(.callout.weight(.medium))
+                                            .font(AgentFont.bodyMedium)
                                             .lineLimit(1)
                                             .truncationMode(.middle)
                                         Text(ByteCountFormatter.string(fromByteCount: Int64(file.byteCount), countStyle: .file))
-                                            .font(.caption)
+                                            .font(AgentFont.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                     Spacer()
                                     if file.isExecutable {
                                         Text("Executable")
-                                            .font(.caption)
+                                            .font(AgentFont.caption)
                                             .foregroundStyle(.orange)
                                     }
                                     if reviewedPaths.contains(file.relativePath) {
                                         Image(systemName: "checkmark")
-                                            .font(.caption)
+                                            .font(AgentFont.caption)
                                             .foregroundStyle(.secondary)
                                             .accessibilityLabel("Reviewed")
                                     }
                                 }
-                                .padding(.horizontal, 16)
-                                .frame(minHeight: 50)
+                                .padding(.horizontal, Space.xl)
+                                .frame(minHeight: Size.rowHeight)
                                 .contentShape(Rectangle())
                                 .background(
                                     selectedReviewPath == file.relativePath
@@ -588,7 +588,7 @@ struct SkillCreatorSheet: View {
                                 )
                             }
                             .buttonStyle(.plain)
-                            Divider()
+                            Hairline()
                         }
                     }
                 }
@@ -599,7 +599,7 @@ struct SkillCreatorSheet: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text(selectedReviewFile(in: result)?.relativePath ?? "Select a file")
-                        .font(.headline)
+                        .font(AgentFont.heading)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer()
@@ -611,7 +611,7 @@ struct SkillCreatorSheet: View {
                     } label: {
                         Label("Reveal", systemImage: "folder")
                     }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .controlSize(.small)
                     .disabled(selectedReviewFile(in: result) == nil)
 
@@ -622,22 +622,22 @@ struct SkillCreatorSheet: View {
                     } label: {
                         Label("Copy", systemImage: "doc.on.doc")
                     }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .controlSize(.small)
                     .disabled(selectedReviewContent(in: result) == nil)
                 }
-                .padding(.horizontal, 20)
-                .frame(height: 54)
+                .padding(.horizontal, Space.xxl)
+                .frame(height: Size.rowHeightTall)
 
-                Divider()
+                Hairline()
 
                 if let content = selectedReviewContent(in: result) {
                     ScrollView([.horizontal, .vertical]) {
                         Text(content)
-                            .font(.system(.callout, design: .monospaced))
+                            .font(AgentFont.monoBody)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .padding(20)
+                            .padding(Space.xxl)
                     }
                     .background(AgentTheme.contentBackground)
                 } else {
@@ -656,10 +656,10 @@ struct SkillCreatorSheet: View {
 
     @ViewBuilder
     private var footer: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Space.lg) {
             if let message = session.errorMessage {
                 Label(message, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.red)
                     .lineLimit(2)
                     .frame(maxWidth: 520, alignment: .leading)
@@ -667,27 +667,27 @@ struct SkillCreatorSheet: View {
                 ProgressView()
                     .controlSize(.small)
                 Text("\(client.rawValue) is working on the draft…")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             } else if pendingAutoStart {
                 ProgressView()
                     .controlSize(.small)
                 Text("Finishing the current library read before opening \(client.rawValue)…")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             } else if session.isSaving {
                 ProgressView()
                     .controlSize(.small)
                 Text("Saving the reviewed skill…")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             } else if let result = session.result {
                 Label(reviewProgress(for: result), systemImage: "eye")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             } else {
                 Text("Nothing is saved until you press Save.")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }
 
@@ -703,7 +703,7 @@ struct SkillCreatorSheet: View {
                 Button("Save skill and choose where it is used") {
                     save(result)
                 }
-                .buttonStyle(.borderedProminent)
+                .primaryActionStyle()
                 .disabled(
                     turnTask != nil
                         || session.isBusy
@@ -713,8 +713,8 @@ struct SkillCreatorSheet: View {
                 .help(allFilesReviewed(in: result) ? "Admits the reviewed package to your library" : reviewProgress(for: result))
             }
         }
-        .padding(.horizontal, 22)
-        .frame(height: 72)
+        .padding(.horizontal, Space.xxxl)
+        .frame(height: Size.sheetBarHeight)
     }
 
     private func configurationField<Content: View>(
@@ -722,11 +722,11 @@ struct SkillCreatorSheet: View {
         detail: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: Space.xs) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(AgentFont.captionSemibold)
             Text(detail)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             content()

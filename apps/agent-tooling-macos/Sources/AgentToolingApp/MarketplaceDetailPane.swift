@@ -8,17 +8,17 @@ extension MarketplaceView {
     var detailPane: some View {
         if let package = selectedPackage {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: Space.xl) {
+                    HStack(alignment: .top, spacing: Space.lg) {
                         ToolIdentityIcon(packageID: package.id, fallback: marketplaceKind(for: package), size: 44)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(package.presentationName).font(.system(size: 20, weight: .semibold))
-                            Text("\(package.originLabel): \(package.originName)").font(.caption).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: Space.xs) {
+                            Text(package.presentationName).font(AgentFont.pageTitle)
+                            Text("\(package.originLabel): \(package.originName)").font(AgentFont.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
                         ProvenanceBadge(verdict: MarketplaceProvenanceClassifier.classify(package))
                     }
-                    Text(package.summary).font(.callout).foregroundStyle(.secondary)
+                    Text(package.summary).font(AgentFont.body).foregroundStyle(.secondary)
 
                     if let match = session.libraryMatch(for: package) {
                         alreadyInLibrary(match, for: package)
@@ -29,22 +29,22 @@ extension MarketplaceView {
                     DisclosureGroup("Source and compatibility") {
                         VStack(spacing: 0) {
                             LabeledValueRow(package.originLabel) { Text(package.originName).foregroundStyle(.secondary) }
-                            Divider()
+                            Hairline()
                             if !package.isNativeCatalogListing, package.publisher != package.sourceName {
                                 LabeledValueRow("Publisher") { Text(package.publisher).foregroundStyle(.secondary) }
-                                Divider()
+                                Hairline()
                             }
                             LabeledValueRow("Provenance") {
                                 let verdict = MarketplaceProvenanceClassifier.classify(package)
-                                VStack(alignment: .leading, spacing: 3) {
+                                VStack(alignment: .leading, spacing: Space.xxs) {
                                     ProvenanceBadge(verdict: verdict)
                                     Text(verdict.evidence)
-                                        .font(.caption)
+                                        .font(AgentFont.caption)
                                         .foregroundStyle(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
-                            Divider()
+                            Hairline()
                             LabeledValueRow("Contents") {
                                 Text(
                                     package.components.map(\.displayName).sorted().joined(separator: ", ").nilIfEmpty
@@ -53,13 +53,13 @@ extension MarketplaceView {
                                 .foregroundStyle(.secondary)
                             }
                             if let category = package.category {
-                                Divider()
+                                Hairline()
                                 LabeledValueRow("Category") {
                                     Text("\(category.capitalized) — filed by \(package.sourceName)")
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            Divider()
+                            Hairline()
                             LabeledValueRow("Available for") {
                                 Text(
                                     package.supportedClients.map(\.rawValue).sorted().joined(separator: ", ").nilIfEmpty
@@ -67,31 +67,31 @@ extension MarketplaceView {
                                 )
                                 .foregroundStyle(.secondary)
                             }
-                            Divider()
+                            Hairline()
                             LabeledValueRow("Local state") {
                                 Text(localState(for: package))
                                     .foregroundStyle(.secondary)
                             }
                             if let installs = package.installCount {
-                                Divider()
+                                Hairline()
                                 LabeledValueRow("Installs") {
                                     Text("\(installs.formatted()) — reported by \(package.sourceName)")
                                         .foregroundStyle(.secondary)
                                 }
                             }
                             if let command = skillsShInstallCommand(for: package) {
-                                Divider()
+                                Hairline()
                                 LabeledValueRow("Install command") {
-                                    VStack(alignment: .trailing, spacing: 6) {
+                                    VStack(alignment: .trailing, spacing: Space.sm) {
                                         Text(command)
-                                            .font(.caption.monospaced())
+                                            .font(AgentFont.mono)
                                             .foregroundStyle(.secondary)
                                             .textSelection(.enabled)
                                         Button("Copy Command", systemImage: "doc.on.doc") {
                                             NSPasteboard.general.clearContents()
                                             NSPasteboard.general.setString(command, forType: .string)
                                         }
-                                        .buttonStyle(.bordered)
+                                        .secondaryActionStyle()
                                         .controlSize(.small)
                                         .help(
                                             "Copies the Skills CLI command. It runs in your terminal, outside this app — review the skill's repository first."
@@ -100,47 +100,47 @@ extension MarketplaceView {
                                 }
                             }
                             if let ownership = package.ownership {
-                                Divider()
+                                Hairline()
                                 LabeledValueRow("Ownership") {
                                     Text(ownership.displayName).foregroundStyle(.secondary)
                                 }
                             }
                             if let updateStatus = package.updateStatus {
-                                Divider()
+                                Hairline()
                                 LabeledValueRow("Updates") {
                                     Text(updateStatus.displayName).foregroundStyle(.secondary)
                                 }
                             }
-                            Divider()
+                            Hairline()
                             LabeledValueRow("Trust") { Text(package.trustSummary).foregroundStyle(.secondary) }
-                            Divider()
+                            Hairline()
                             LabeledValueRow("License") { Text(package.license ?? "Not declared").foregroundStyle(.secondary) }
                             if let revision = package.provenance?.lock?.revision ?? package.revision {
-                                Divider()
+                                Hairline()
                                 LabeledValueRow("Locked revision") {
-                                    Text(revision).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                                    Text(revision).font(AgentFont.mono).foregroundStyle(.secondary).textSelection(.enabled)
                                 }
                             }
                             if let digest = package.provenance?.lock?.digest {
-                                Divider()
+                                Hairline()
                                 LabeledValueRow("Digest") {
-                                    Text(digest).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                                    Text(digest).font(AgentFont.mono).foregroundStyle(.secondary).textSelection(.enabled)
                                 }
                             }
                             if let credentials = package.requestedCredentialNames, !credentials.isEmpty {
-                                Divider()
+                                Hairline()
                                 LabeledValueRow("Configuration names") {
                                     RequestedCredentialNames(names: credentials)
                                 }
                             }
                             if let conflicts = package.conflicts, !conflicts.isEmpty {
-                                Divider()
+                                Hairline()
                                 LabeledValueRow("Review notes") {
                                     Text(conflicts.map(\.summary).joined(separator: "\n"))
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            Divider()
+                            Hairline()
                             LabeledValueRow("Executable content") {
                                 Label(
                                     package.hasExecutableContent ? "Present — inspect before install" : "None detected",
@@ -148,9 +148,9 @@ extension MarketplaceView {
                                 )
                                 .foregroundStyle(package.hasExecutableContent ? Color.primary : Color.secondary)
                             }
-                            Divider()
+                            Hairline()
                             LabeledValueRow("Package location") {
-                                VStack(alignment: .trailing, spacing: 6) {
+                                VStack(alignment: .trailing, spacing: Space.sm) {
                                     if let pluginName = MarketplaceIdentityNaming(package.location).pluginTitle {
                                         Text(pluginName).foregroundStyle(.secondary)
                                     } else {
@@ -160,7 +160,7 @@ extension MarketplaceView {
                                         Button("Open Source", systemImage: "arrow.up.right.square") {
                                             open(package.location)
                                         }
-                                        .buttonStyle(.bordered)
+                                        .secondaryActionStyle()
                                         .controlSize(.small)
                                     }
                                 }
@@ -171,16 +171,16 @@ extension MarketplaceView {
                     DisclosureGroup("Metadata checks") {
                         VStack(spacing: 0) {
                             PackageGradeRows(verdicts: MarketplaceGrading.grades(for: package, reachability: reachability(for: package)))
-                            Divider()
+                            Hairline()
                             Text(
                                 "Every grade above measures one thing this Mac can check without running anything. Hover a line to read exactly what it measured; a line with nothing to measure stays \"Not graded\" rather than passing."
                             )
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            .padding(.horizontal, Space.xl)
+                            .padding(.vertical, Space.lg)
                         }
                     }
 
@@ -189,7 +189,7 @@ extension MarketplaceView {
                     }
 
                 }
-                .padding(22)
+                .padding(Space.xxxl)
             }
         } else {
             EmptyStateView(
@@ -201,7 +201,7 @@ extension MarketplaceView {
     /// The one thing Discover can still act on: a listing that is already in
     /// the library goes to the row that holds it. Revealing is not installing.
     func alreadyInLibrary(_ match: WorkspaceMarketplaceSession.LibraryMatch, for package: MarketplacePackage) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Space.md) {
             StatusBadge(state: .healthy, text: "Already in your library as \(match.displayName)")
             Button("Show in Library", systemImage: "books.vertical") {
                 // A server lives on the Connections tab; everything else that
@@ -209,10 +209,9 @@ extension MarketplaceView {
                 navigation.openItem(
                     match.itemID, in: package.components.contains(.mcpServer) ? .mcpServers : .plugins)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(AgentTheme.selection)
+            .primaryActionStyle()
             Text("Where this package is installed is decided on the Apps screen, not here.")
-                .font(.caption2)
+                .font(AgentFont.micro)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -250,21 +249,20 @@ extension MarketplaceView {
     func mcpServerRoutes(
         for package: MarketplacePackage, availability: ReviewedMarketplaceMCPServer.Availability
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Space.md) {
             Text("Native install route")
-                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                .font(AgentFont.captionSemibold).foregroundStyle(.secondary)
             switch availability {
             case .reviewed:
                 Button {
                     Task { await session.adoptMCPServer(package) }
                 } label: {
-                    HStack(spacing: 7) {
+                    HStack(spacing: Space.sm) {
                         Image(systemName: "tray.and.arrow.down")
                         Text("Add to Library")
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(AgentTheme.selection)
+                .primaryActionStyle()
                 .disabled(!session.canAdopt || session.isAdopting)
                 .help(session.canAdopt ? WorkspaceMarketplaceSession.adoptionNote : WorkspaceMarketplaceSession.readOnlyNote)
             case .needsManualSetup:
@@ -276,7 +274,7 @@ extension MarketplaceView {
                         + (skillsShInstallCommand(for: package) != nil
                             ? WorkspaceMarketplaceSession.mcpManualSetupCommandClause : "")
                 )
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -291,35 +289,34 @@ extension MarketplaceView {
     func pluginRoutes(for package: MarketplacePackage) -> some View {
         let scopes = Set(package.nativeInstalls.map(\.scope))
         let routes = package.nativeInstalls.filter { availableClients.contains($0.client) }
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Space.md) {
             Text(routes.isEmpty ? "No native install route" : "Native install routes")
-                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                .font(AgentFont.captionSemibold).foregroundStyle(.secondary)
             if routes.isEmpty {
                 Text(
                     package.nativeInstalls.isEmpty
                         ? "This listing publishes no verified installer for any app on this Mac."
                         : "None of the apps this Mac manages can install this listing."
                 )
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             }
             if scopes.count == 1, let scope = scopes.first {
                 InstallScopeNote(scope: scope)
             }
-            FlowLayout(spacing: 8) {
+            FlowLayout(spacing: Space.md) {
                 ForEach(routes) { route in
                     let refusal = session.adoptionRefusal(for: package, client: route.client)
                     Button {
                         Task { await session.adopt(package, client: route.client) }
                     } label: {
-                        HStack(spacing: 7) {
-                            ClientBrandIcon(client: route.client, size: 14)
+                        HStack(spacing: Space.sm) {
+                            ClientBrandIcon(client: route.client, size: Size.brandMark)
                             Text("Add to Library for \(route.client.rawValue)")
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .disabled(refusal != nil || !session.canAdopt || session.isAdopting)
                     .help(
                         refusal ?? (session.canAdopt ? nil : WorkspaceMarketplaceSession.readOnlyNote)
@@ -332,7 +329,7 @@ extension MarketplaceView {
             ForEach(routes) { route in
                 if let refusal = session.adoptionRefusal(for: package, client: route.client) {
                     Text("\(route.client.rawValue): \(refusal)")
-                        .font(.caption2)
+                        .font(AgentFont.micro)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -341,24 +338,24 @@ extension MarketplaceView {
                 // marketplace it has not added. Saying so here, with the exact
                 // command, beats a failure at apply time.
                 if let addCommand = session.marketplaceAddCommand(for: package, client: route.client) {
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: Space.xxs) {
                         Text("\(route.client.rawValue) has not added this marketplace yet, so it cannot install this plugin until you run:")
-                            .font(.caption2)
+                            .font(AgentFont.micro)
                             .foregroundStyle(AgentTheme.warning)
                         Text(addCommand)
-                            .font(.caption2.monospaced())
+                            .font(AgentFont.mono)
                             .textSelection(.enabled)
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if scopes.count > 1 {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     ForEach(routes) { route in
-                        HStack(spacing: 6) {
-                            ClientBrandIcon(client: route.client, size: 12)
+                        HStack(spacing: Space.sm) {
+                            ClientBrandIcon(client: route.client, size: Size.glyphSmall)
                             Text("\(route.client.rawValue) · \(route.scope.marketplaceInstallTitle)")
-                                .font(.caption)
+                                .font(AgentFont.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -377,7 +374,7 @@ extension MarketplaceView {
                 ? (session.adoption?.message ?? WorkspaceMarketplaceSession.adoptionNote)
                 : WorkspaceMarketplaceSession.adoptionNote
         )
-        .font(.caption2)
+        .font(AgentFont.micro)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -425,15 +422,15 @@ private struct InstallScopeNote: View {
     let scope: ToolingScope
 
     var body: some View {
-        HStack(alignment: .top, spacing: 7) {
+        HStack(alignment: .top, spacing: Space.sm) {
             Image(systemName: "person.crop.square")
-                .font(.system(size: 11, weight: .medium))
+                .font(AgentFont.captionMedium)
                 .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text("Scope: \(scope.marketplaceInstallTitle)")
-                    .font(.caption.weight(.medium))
+                    .font(AgentFont.captionMedium)
                 Text(scope.marketplaceInstallDetail)
-                    .font(.caption2)
+                    .font(AgentFont.micro)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

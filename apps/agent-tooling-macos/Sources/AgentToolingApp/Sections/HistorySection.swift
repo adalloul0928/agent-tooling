@@ -60,29 +60,37 @@ struct HistorySection: View {
                     get: { session.selectedID },
                     set: { session.select($0) })
             ) { point in
-                HStack(spacing: 12) {
+                let selected = session.selectedID == point.revisionID
+                HStack(spacing: Space.lg) {
                     Image(systemName: point.isCurrent ? "largecircle.fill.circle" : "circle")
-                        .font(.system(size: 15))
-                        .foregroundStyle(point.isCurrent ? AnyShapeStyle(AgentTheme.selection) : AnyShapeStyle(.secondary))
-                    VStack(alignment: .leading, spacing: 3) {
+                        .font(.system(size: Size.glyphLarge))
+                        .foregroundStyle(
+                            selected
+                                ? AnyShapeStyle(Color.white)
+                                : point.isCurrent ? AnyShapeStyle(AgentTheme.selection) : AnyShapeStyle(.secondary))
+                    VStack(alignment: .leading, spacing: Space.xxs) {
                         Text(point.isCurrent ? "Now" : point.createdAt.formatted(.relative(presentation: .named)))
-                            .font(.system(size: 14, weight: .medium))
-                        Text(summary(point)).font(.system(size: 13)).foregroundStyle(.secondary)
+                            .font(AgentFont.bodyMedium)
+                            .foregroundStyle(selected ? Color.white : Color.primary)
+                        Text(summary(point))
+                            .font(AgentFont.caption)
+                            .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
                     }
                 }
-                .padding(.vertical, 5)
+                .padding(.vertical, Space.sm)
                 .tag(point.revisionID)
+                .collectionRowChrome(selected: selected)
                 .help(point.createdAt.formatted(date: .abbreviated, time: .standard))
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
+            .collectionListChrome()
+            .collectionSurface()
         }
         .paneMaterial()
     }
 
     @ViewBuilder private var detail: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: Space.xxl) {
                 if let message = session.errorMessage {
                     AttentionBanner(title: "History needs attention", message: message)
                 }
@@ -90,8 +98,9 @@ struct HistorySection: View {
                     if point.isCurrent {
                         TitledCard("This is where you are") {
                             Text("Pick an earlier version on the left to see what going back to it would change.")
+                                .font(AgentFont.body)
                                 .foregroundStyle(.secondary)
-                                .padding(13)
+                                .padding(Space.xl)
                         }
                     } else if let preview = session.preview {
                         changes(preview, at: point)
@@ -103,8 +112,9 @@ struct HistorySection: View {
                         Text(
                             "Each entry is a version of your library and where you asked each tool to go. Going back to one adds it as a new version rather than erasing what came after."
                         )
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
-                        .padding(13)
+                        .padding(Space.xl)
                     }
                 }
             }
@@ -115,12 +125,13 @@ struct HistorySection: View {
 
     private func changes(_ preview: WorkspaceRestorePreview, at point: WorkspaceRestorePoint) -> some View {
         TitledCard(point.createdAt.formatted(date: .abbreviated, time: .shortened)) {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Space.xl) {
                 Text(
                     preview.isEmpty
                         ? "This version matches what you have now. Going back to it would change nothing."
                         : "Going back to this version would make these changes to your library."
                 )
+                .font(AgentFont.body)
                 .foregroundStyle(.secondary)
 
                 if !preview.isEmpty {
@@ -134,39 +145,41 @@ struct HistorySection: View {
                                 : "\(-preview.assignmentDifference) fewer \(preview.assignmentDifference == -1 ? "place" : "places") a tool is asked for",
                             systemImage: "square.grid.2x2"
                         )
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
                     }
                 }
                 if !preview.deletedSinceItems.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Space.sm) {
                         Label("Deleted since, and staying deleted", systemImage: "trash")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(AgentFont.bodyMedium)
                         Text(preview.deletedSinceItems.formatted(.list(type: .and)))
+                            .font(AgentFont.body)
                             .foregroundStyle(.secondary)
                         Text(
                             "These were in that version and have been deleted since. Going back does not bring them back, so a deletion you made on another Mac is not quietly undone."
                         )
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.caption).foregroundStyle(.secondary)
                     }
                 }
-                HStack(spacing: 12) {
+                HStack(spacing: Space.lg) {
                     Button("Go back to this version") { isConfirming = true }
-                        .buttonStyle(.borderedProminent)
+                        .primaryActionStyle()
                         .disabled(!session.canRestore || preview.isEmpty)
                     Text(restoreExplanation(preview))
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.caption).foregroundStyle(.secondary)
                 }
             }
-            .padding(16)
+            .padding(Space.xl)
         }
     }
 
     @ViewBuilder private func group(_ title: String, _ names: [String], _ symbol: String) -> some View {
         if !names.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Space.sm) {
                 Label("\(title) (\(names.count))", systemImage: symbol)
-                    .font(.system(size: 14, weight: .medium))
-                Text(names.formatted(.list(type: .and))).foregroundStyle(.secondary)
+                    .font(AgentFont.bodyMedium)
+                Text(names.formatted(.list(type: .and))).font(AgentFont.body).foregroundStyle(.secondary)
             }
         }
     }

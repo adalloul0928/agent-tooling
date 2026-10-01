@@ -36,8 +36,7 @@ struct PluginsView: View {
                 } label: {
                     Label(workspace.device.isChecking ? "Checking…" : "Check plugins", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(AgentTheme.selection)
+                .primaryActionStyle()
                 .disabled(workspace.device.isChecking)
             }
 
@@ -80,7 +79,7 @@ struct PluginsView: View {
         updates: PluginUpdateEvaluation
     ) -> some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 Picker("App", selection: $clientFilter) {
                     Text("All apps").tag(nil as ClientKind?)
                     ForEach(availableClients) { client in Text(client.rawValue).tag(client as ClientKind?) }
@@ -110,72 +109,104 @@ struct PluginsView: View {
                     }
                 }
             } else {
-                GeometryReader { geometry in
-                    if geometry.size.width < 820 {
-                        narrowTable(rows: rows)
-                    } else {
-                        wideTable(rows: rows, updates: updates)
-                    }
-                }
+                pluginList(rows: rows, updates: updates)
             }
         }
         .paneMaterial()
     }
 
-    private func narrowTable(rows: [WorkspaceLibraryReadModelRow]) -> some View {
-        Table(rows, selection: $selection) {
-            TableColumn("Plugin") { row in
-                HStack(spacing: 12) {
-                    pluginIcon(for: row, size: 30)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(row.displayName).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                        Text(row.sourceLabel.map { "From \($0)" } ?? row.ownershipLabel)
-                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }.padding(.vertical, 8)
+    /// The columns the list lays out by hand. `Table` draws its own row
+    /// separators in a colour the card cannot control, so the rows live in a
+    /// `List` (native multiple selection and keyboard travel kept) and the
+    /// columns are plain frames, the way the Skills screen already does it.
+    private struct Columns {
+        let width: CGFloat
+        var expanded: Bool { width >= 820 }
+        var name: CGFloat { expanded ? min(300, width * 0.28) : max(160, width - managed - Space.lg) }
+        let source: CGFloat = 150
+        let skills: CGFloat = 50
+        let managed: CGFloat = Size.brandMark * 4 + Space.sm * 3 + Space.sm
+        let updates: CGFloat = 130
+    }
+
+    private func pluginList(rows: [WorkspaceLibraryReadModelRow], updates: PluginUpdateEvaluation) -> some View {
+        GeometryReader { geometry in
+            // The card's inner width, less the row's own insets.
+            let columns = Columns(width: geometry.size.width - Space.xl * 2)
+            VStack(spacing: 0) {
+                CollectionColumnHeader {
+                    Text(columns.expanded ? "Name" : "Plugin").frame(width: columns.name, alignment: .leading)
+                    if columns.expanded {
+                        Text("Description").frame(maxWidth: .infinity, alignment: .leading)
+                        Text("Source").frame(width: columns.source, alignment: .leading)
+                        Text("Skills").frame(width: columns.skills, alignment: .trailing)
+                    } else {
+                        Spacer(minLength: 0)
+                    }
+                    Text("Managed by").frame(width: columns.managed, alignment: .trailing)
+                    if columns.expanded {
+                        Text("Updates").frame(width: columns.updates, alignment: .leading)
+                    }
                 }
-            }.width(min: 190, ideal: 350)
-            TableColumn("Managed by") { row in
-                TableClientMarks(clients: availableClients, present: Set(row.nativeRoutes.map(\.client)))
-            }.width(90)
+                List(rows, selection: $selection) { row in
+                    pluginRow(row, updates: updates, columns: columns)
+                        .tag(row.artifactID)
+                        .collectionRowChrome(selected: selection.contains(row.artifactID))
+                        .accessibilityLabel(row.displayName)
+                }
+                .collectionListChrome()
+            }
         }
-        .tableStyle(.inset(alternatesRowBackgrounds: false))
-        .scrollContentBackground(.hidden)
         .collectionSurface()
     }
 
-    private func wideTable(rows: [WorkspaceLibraryReadModelRow], updates: PluginUpdateEvaluation) -> some View {
-        Table(rows, selection: $selection) {
-            TableColumn("Name") { row in
-                HStack(spacing: 12) {
-                    pluginIcon(for: row, size: 30)
-                    Text(row.displayName).font(.callout.weight(.medium))
-                }.padding(.vertical, 8)
-            }.width(min: 180, ideal: 250)
-            TableColumn("Description") { row in
-                let text = description(for: row)
-                Text(text).foregroundStyle(.secondary).lineLimit(1).help(text)
-            }.width(min: 120, ideal: 360)
-            TableColumn("Source") { row in
-                Text(row.sourceLabel ?? "Not recorded").foregroundStyle(.secondary).lineLimit(1)
-            }.width(min: 120, ideal: 150)
-            TableColumn("Skills") { row in
-                Text("\(row.childCount)").monospacedDigit().foregroundStyle(.secondary)
-            }.width(50)
-            TableColumn("Managed by") { row in
-                TableClientMarks(clients: availableClients, present: Set(row.nativeRoutes.map(\.client)))
-            }.width(90)
-            TableColumn("Updates") { row in
-                let update = updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet.")
-                if update.hasUpdate {
-                    UpdateStateBadge(availability: update)
-                } else {
-                    Text(update.title).font(.caption).foregroundStyle(.secondary)
+    private func pluginRow(_ row: WorkspaceLibraryReadModelRow, updates: PluginUpdateEvaluation, columns: Columns) -> some View {
+        let selected = selection.contains(row.artifactID)
+        return HStack(spacing: Space.lg) {
+            HStack(spacing: Space.lg) {
+                pluginIcon(for: row, size: Size.tile)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(row.displayName).font(AgentFont.bodyMedium).lineLimit(1)
+                        .collectionRowForeground(selected: selected)
+                    if !columns.expanded {
+                        Text(row.sourceLabel.map { "From \($0)" } ?? row.ownershipLabel)
+                            .font(AgentFont.caption).lineLimit(1)
+                            .collectionRowForeground(selected: selected, secondary: true)
+                    }
                 }
-            }.width(min: 110, ideal: 130)
+                Spacer(minLength: 0)
+            }
+            .frame(width: columns.name, alignment: .leading)
+            if columns.expanded {
+                let text = description(for: row)
+                Text(text).font(AgentFont.body).lineLimit(1).help(text)
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(row.sourceLabel ?? "Not recorded").font(AgentFont.caption).lineLimit(1)
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .frame(width: columns.source, alignment: .leading)
+                Text("\(row.childCount)").font(AgentFont.caption.monospacedDigit())
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .frame(width: columns.skills, alignment: .trailing)
+            } else {
+                Spacer(minLength: 0)
+            }
+            TableClientMarks(clients: availableClients, present: Set(row.nativeRoutes.map(\.client)))
+                .frame(width: columns.managed, alignment: .trailing)
+            if columns.expanded {
+                let update = updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet.")
+                Group {
+                    if update.hasUpdate {
+                        UpdateStateBadge(availability: update)
+                    } else {
+                        Text(update.title).font(AgentFont.caption).lineLimit(1)
+                            .collectionRowForeground(selected: selected, secondary: true)
+                    }
+                }
+                .frame(width: columns.updates, alignment: .leading)
+            }
         }
-        .tableStyle(.inset(alternatesRowBackgrounds: false))
-        .scrollContentBackground(.hidden)
-        .collectionSurface()
+        .padding(.vertical, Space.md)
     }
 
     @ViewBuilder
@@ -302,26 +333,25 @@ private struct PluginStackPane: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 14) {
-                    KindTile(kind: .plugin, size: 40)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(rows.count) plugins selected").font(.title3.weight(.semibold))
+            VStack(alignment: .leading, spacing: Space.xl) {
+                HStack(spacing: Space.xl) {
+                    KindTile(kind: .plugin, size: Size.tileLarge)
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text("\(rows.count) plugins selected").font(AgentFont.title)
                         Text("Remove their assignment to one app through one reviewed plan.")
-                            .font(.callout)
+                            .font(AgentFont.body)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button("Review removal plan", action: review)
-                        .buttonStyle(.borderedProminent)
-                        .tint(AgentTheme.selection)
+                        .primaryActionStyle()
                         .disabled(library.isBusy || contributionIDs.isEmpty)
                 }
 
                 if let error = library.errorMessage {
                     AttentionBanner(title: "This stack cannot be planned yet", message: error) {
                         Button("Keep one", action: onClear)
-                            .buttonStyle(.bordered)
+                            .secondaryActionStyle()
                             .controlSize(.small)
                     }
                 } else if contributionIDs.isEmpty {
@@ -335,7 +365,7 @@ private struct PluginStackPane: View {
                         ForEach(availableClients) { candidate in Text(candidate.rawValue).tag(candidate) }
                     }
                     .labelsHidden()
-                    .padding(13)
+                    .padding(Space.lg)
                     .accessibilityLabel("App to remove from")
                 }
 
@@ -345,14 +375,14 @@ private struct PluginStackPane: View {
                             InfoRow(row.displayName, detail: row.ownershipLabel) {
                                 pluginIcon(for: row, size: 26)
                             } trailing: {
-                                ClientMarks(present: Set(row.nativeRoutes.map(\.client)), size: 13)
+                                ClientMarks(present: Set(row.nativeRoutes.map(\.client)), size: Size.brandMark)
                             }
-                            if row.id != rows.last?.id { Divider().opacity(0.35) }
+                            if row.id != rows.last?.id { Hairline() }
                         }
                     }
                 }
             }
-            .padding(22)
+            .padding(Space.xxxl)
         }
         .sheet(item: $removal) { request in
             WorkspaceAssignmentSheet(session: library, artifactIDs: request.artifactIDs)
@@ -394,7 +424,7 @@ private struct PluginDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Space.xl) {
                 header
                 if let message = library.errorMessage {
                     AttentionBanner(title: "This couldn't be saved", message: message)
@@ -409,7 +439,7 @@ private struct PluginDetailView: View {
                 updatesDisclosure
                 originCard
             }
-            .padding(22)
+            .padding(Space.xxxl)
         }
         .sheet(item: $removal) { request in
             WorkspaceAssignmentSheet(session: library, artifactIDs: [row.artifactID])
@@ -421,16 +451,16 @@ private struct PluginDetailView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: Space.xl) {
             pluginIcon(for: row, size: 44)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(row.displayName).font(.system(size: 20, weight: .semibold))
-                Text(row.sourceLabel ?? row.ownershipLabel).font(.callout).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(row.displayName).font(AgentFont.pageTitle)
+                Text(row.sourceLabel ?? row.ownershipLabel).font(AgentFont.body).foregroundStyle(.secondary)
             }
             Spacer()
             if availability.hasUpdate { UpdateStateBadge(availability: availability) }
             Button("Assign…", systemImage: "arrow.turn.up.right") { isAssigning = true }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .disabled(library.isBusy || !row.isAssignable)
                 .help(row.isAssignable ? "Choose where this plugin should be used." : (row.assignmentExplanation ?? ""))
         }
@@ -441,33 +471,33 @@ private struct PluginDetailView: View {
             VStack(spacing: 0) {
                 if row.nativeRoutes.isEmpty {
                     Text("Not associated with a specific app yet.")
-                        .font(.callout).foregroundStyle(.secondary)
-                        .padding(14)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
+                        .padding(Space.xl)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     ForEach(Array(row.nativeRoutes.enumerated()), id: \.offset) { index, route in
-                        HStack(spacing: 12) {
-                            ClientDisc(client: route.client, size: 30)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(route.client.rawValue).font(.callout.weight(.medium))
+                        HStack(spacing: Space.lg) {
+                            ClientDisc(client: route.client, size: Size.disc)
+                            VStack(alignment: .leading, spacing: Space.xxs) {
+                                Text(route.client.rawValue).font(AgentFont.bodyMedium)
                                 Text("Registered as \(route.externalPluginID)")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                    .font(AgentFont.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
                             if let ids = contributionIDs(for: route.client), !ids.isEmpty {
                                 Button("Remove…") { remove(contributionIDs: ids) }
-                                    .buttonStyle(.bordered)
+                                    .secondaryActionStyle()
                                     .controlSize(.small)
                                     .accessibilityLabel("Remove \(row.displayName) from \(route.client.rawValue)")
                                     .disabled(library.isBusy)
                             } else {
                                 Text("Not a saved assignment")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                    .font(AgentFont.caption).foregroundStyle(.secondary)
                                     .help("This app reported the plugin itself; this workspace has no assignment for it to take back.")
                             }
                         }
-                        .padding(12)
-                        if index < row.nativeRoutes.count - 1 { Divider() }
+                        .padding(Space.lg)
+                        if index < row.nativeRoutes.count - 1 { Hairline() }
                     }
                 }
             }
@@ -479,12 +509,12 @@ private struct PluginDetailView: View {
             VStack(spacing: 0) {
                 ForEach(includedSkills) { child in
                     HStack {
-                        Text(child.displayName).font(.callout)
+                        Text(child.displayName).font(AgentFont.body)
                         Spacer()
                     }
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 38)
-                    if child.id != includedSkills.last?.id { Divider() }
+                    .padding(.horizontal, Space.xl)
+                    .frame(minHeight: Size.compactRowHeight)
+                    if child.id != includedSkills.last?.id { Hairline() }
                 }
             }
         }
@@ -494,14 +524,14 @@ private struct PluginDetailView: View {
         GroupBox("Requested for") {
             VStack(spacing: 0) {
                 Text("These are saved choices. Installing them in an app is a separate, reviewed step.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .padding(.horizontal, 14).padding(.top, 10)
+                    .font(AgentFont.caption).foregroundStyle(.secondary)
+                    .padding(.horizontal, Space.xl).padding(.top, Space.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 ForEach(row.requestedAssignments) { assignment in
                     LabeledValueRow("\(assignment.destination.surface.displayName) · \(assignment.destination.scope.displayName)") {
                         Text(deviceScopeLabel(assignment.deviceScope)).foregroundStyle(.secondary)
                     }
-                    if assignment.id != row.requestedAssignments.last?.id { Divider() }
+                    if assignment.id != row.requestedAssignments.last?.id { Hairline() }
                 }
             }
         }
@@ -510,8 +540,8 @@ private struct PluginDetailView: View {
     private var updatesDisclosure: some View {
         DisclosureGroup("Updates and revision") {
             LabeledValueRow(availability.title) {
-                HStack(spacing: 8) {
-                    StatusGlyph(state: availability.health, size: 14)
+                HStack(spacing: Space.md) {
+                    StatusGlyph(state: availability.health, size: Size.glyph)
                     Text(availability.detail)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -524,7 +554,7 @@ private struct PluginDetailView: View {
         GroupBox("Origin") {
             VStack(spacing: 0) {
                 LabeledValueRow("Source") { Text(row.sourceLabel ?? "Not recorded").foregroundStyle(.secondary) }
-                Divider()
+                Hairline()
                 LabeledValueRow("Ownership") { Text(row.ownershipLabel).foregroundStyle(.secondary) }
             }
         }

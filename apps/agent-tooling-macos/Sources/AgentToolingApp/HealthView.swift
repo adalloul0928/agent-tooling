@@ -112,7 +112,7 @@ struct HealthView: View {
                 message: "None of the managed apps listed an MCP connection or connector.")
         } else {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: Space.xxl) {
                     filterPicker
                     if let error = session.errorMessage {
                         AttentionBanner(title: "Some connections still need attention", message: error)
@@ -168,7 +168,7 @@ struct HealthView: View {
         } else if !entries.isEmpty {
             TitledCard(result.client.rawValue, count: "\(entries.count)") {
                 ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                    if index > 0 { Divider().opacity(0.4) }
+                    if index > 0 { Hairline() }
                     HealthRow(
                         entry: entry,
                         action: session.action(for: entry),
@@ -223,38 +223,38 @@ private struct HealthRow: View {
     @State private var showingHelp = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 11) {
+        HStack(alignment: .top, spacing: Space.lg) {
             StatusGlyph(state: entry.status.healthState)
-                .padding(.top, 2)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
+                .padding(.top, Space.xxs)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                HStack(spacing: Space.md) {
                     Text(entry.displayName)
-                        .font(.callout.weight(.medium))
+                        .font(AgentFont.bodyMedium)
                         .lineLimit(1)
                     sourceBadge
                     Spacer(minLength: 0)
                 }
                 if !entry.summary.isEmpty {
                     Text(entry.summary)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .textSelection(.enabled)
                 }
                 if case .failed(let detail) = entry.status, !detail.isEmpty {
                     Text(detail)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(AgentTheme.failure)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 resultText
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.lg)
             trailing
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(minHeight: 44)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
+        .frame(minHeight: Size.rowHeight)
         .accessibilityElement(children: .combine)
         .accessibilityValue(entry.status.label)
     }
@@ -264,7 +264,7 @@ private struct HealthRow: View {
         if let plugin = entry.pluginName, !plugin.isEmpty {
             HealthBadge(text: "Plugin · \(plugin)", tint: AgentTheme.plugin)
         } else if entry.isClaudeAIConnector {
-            HealthBadge(text: "claude.ai connector", tint: AgentTheme.blue)
+            HealthBadge(text: "claude.ai connector", tint: AgentTheme.selection)
         }
     }
 
@@ -274,29 +274,29 @@ private struct HealthRow: View {
         case .idle:
             EmptyView()
         case .running:
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Label(
                     authorizationURL == nil
                         ? "Signing in… waiting for the tool to print its sign-in page."
                         : "Signing in… finish in the browser, then this row updates itself.",
                     systemImage: "arrow.triangle.2.circlepath")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                 if let host = authorizationURL?.host() {
                     Button("Open the sign-in page at \(host) again", action: onOpenAuthorizationPage)
-                        .buttonStyle(.link)
-                        .font(.caption)
+                        .inlineActionStyle()
+                        .font(AgentFont.caption)
                         .help("Opens the same authorization page the sign-in printed, in case the browser tab was closed.")
                 }
             }
         case .finished(let message):
             Text(message)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(AgentTheme.ok)
                 .fixedSize(horizontal: false, vertical: true)
         case .failed(let message):
             Text(message)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(AgentTheme.failure)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -307,30 +307,30 @@ private struct HealthRow: View {
         switch action {
         case .reauthenticate:
             Button("Re-authenticate…", action: onReauthenticate)
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .controlSize(.small)
                 .disabled(actionState == .running)
                 .help(commandText.map { "Runs \($0), then opens the sign-in page it prints in your browser. Nothing else is read or stored." }
                     ?? "Signs in to this connection again.")
         case .openClaudeAIConnectors:
             Button("Open claude.ai…", action: onOpenConnectors)
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .controlSize(.small)
                 .help("Opens https://claude.ai/customize/connectors, where a hosted connector is managed.")
         case .reconnectOnly(let guidance):
             Button("How to fix") { showingHelp = true }
-                .buttonStyle(.borderless)
+                .inlineActionStyle()
                 .controlSize(.small)
                 .help(guidance)
                 .popover(isPresented: $showingHelp, arrowEdge: .bottom) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("How to fix this").font(.callout.weight(.semibold))
+                    VStack(alignment: .leading, spacing: Space.md) {
+                        Text("How to fix this").font(AgentFont.bodySemibold)
                         Text(guidance)
-                            .font(.callout)
+                            .font(AgentFont.body)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(16)
+                    .padding(Space.xl)
                     .frame(width: 320)
                 }
         case .none:
@@ -345,10 +345,10 @@ private struct HealthBadge: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.medium))
+            .font(AgentFont.microMedium)
             .lineLimit(1)
-            .padding(.horizontal, 8)
-            .frame(height: 20)
+            .padding(.horizontal, Space.md)
+            .frame(height: Size.chipHeight)
             .background(tint.opacity(0.14), in: Capsule())
             .foregroundStyle(tint)
     }
@@ -363,20 +363,20 @@ private struct BulkReauthenticateConfirmation: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             Text("Sign in to \(entries.count) connection\(entries.count == 1 ? "" : "s")")
-                .font(.headline)
+                .font(AgentFont.heading)
             Text("Each sign-in prints a page to visit; Agent Tooling opens it in your browser, one server after another, and waits for the tool to confirm.")
-                .font(.callout)
+                .font(AgentFont.body)
                 .foregroundStyle(.secondary)
             ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Space.md) {
                     ForEach(entries) { entry in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(entry.displayName).font(.callout.weight(.medium))
+                        VStack(alignment: .leading, spacing: Space.xxs) {
+                            Text(entry.displayName).font(AgentFont.bodyMedium)
                             if let command = commandText(entry) {
                                 Text(command)
-                                    .font(.caption.monospaced())
+                                    .font(AgentFont.mono)
                                     .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
                             }
@@ -391,11 +391,10 @@ private struct BulkReauthenticateConfirmation: View {
                     .keyboardShortcut(.cancelAction)
                 Button("Sign in", action: onConfirm)
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
             }
         }
-        .padding(18)
+        .padding(Space.xxl)
         .frame(width: 420)
     }
 }

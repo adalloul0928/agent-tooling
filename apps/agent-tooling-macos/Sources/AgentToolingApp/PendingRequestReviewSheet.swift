@@ -21,34 +21,34 @@ struct PendingRequestReviewSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .top, spacing: Space.xl) {
                 Image(systemName: "tray.and.arrow.down.fill")
-                    .font(.title2)
-                    .foregroundStyle(AgentTheme.blue)
-                    .frame(width: 38, height: 38)
-                    .background(AgentTheme.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                    .font(AgentFont.titleLarge)
+                    .foregroundStyle(AgentTheme.selection)
+                    .frame(width: Size.tileLarge, height: Size.tileLarge)
+                    .background(AgentTheme.selection.opacity(0.12), in: RoundedRectangle.control)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text(request.kind.displayName)
-                        .font(.title2.weight(.semibold))
+                        .font(AgentFont.titleLarge)
                     Text(request.title)
-                        .font(.callout)
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text("Pending review")
-                    .font(.caption.weight(.medium))
+                    .font(AgentFont.captionMedium)
                     .foregroundStyle(AgentTheme.warning)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, Space.lg)
+                    .padding(.vertical, Space.xs)
                     .background(AgentTheme.warning.opacity(0.11), in: Capsule())
             }
-            .padding(24)
+            .padding(Space.xxxl)
 
-            Divider()
+            Hairline()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Space.xl) {
                     AttentionBanner(
                         title: "A local client asked for this",
                         message:
@@ -67,7 +67,7 @@ struct PendingRequestReviewSheet: View {
                         AttentionBanner(title: "Nothing was approved", message: refusal)
                     }
 
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: Space.lg) {
                         detailRow("Request", value: request.summary)
                         detailRow("Apps", value: request.targets.map(\.rawValue).joined(separator: ", "))
                         detailRow("Scope", value: request.scope.displayName)
@@ -87,17 +87,17 @@ struct PendingRequestReviewSheet: View {
                             )
                         }
                     }
-                    .padding(16)
+                    .padding(Space.xl)
                     .standardPanel()
 
                     if hasSensitiveDetails {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: Space.lg) {
                             Label("Local review details", systemImage: "lock.macwindow")
-                                .font(.headline)
+                                .font(AgentFont.heading)
                             Text(
                                 "These fields are shown only in the app and are not returned by the integration server."
                             )
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
                             if let kind = request.reviewDetails.componentKind {
                                 detailRow("Type", value: kind)
@@ -118,21 +118,21 @@ struct PendingRequestReviewSheet: View {
                                 detailRow("Instruction", value: instruction)
                             }
                         }
-                        .padding(16)
+                        .padding(Space.xl)
                         .standardPanel()
                     }
                 }
-                .padding(24)
+                .padding(Space.xxxl)
             }
 
-            Divider()
-            HStack(spacing: 10) {
+            Hairline()
+            HStack(spacing: Space.lg) {
                 Button("Not Now", action: onDefer)
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .keyboardShortcut(.cancelAction)
                     .help("Keep the request in the queue and close this review")
                 Button("Reject Request", role: .destructive, action: onReject)
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .disabled(isBusy)
                     .help("Remove this request without changing any client")
                 Spacer()
@@ -142,22 +142,22 @@ struct PendingRequestReviewSheet: View {
                     // creator instead, and stays in the queue until a draft
                     // made from it is accepted.
                     Button("Create with Codex…", action: openCreator)
-                        .buttonStyle(.borderedProminent)
+                        .primaryActionStyle()
                         .keyboardShortcut(.defaultAction)
                         .disabled(isBusy)
                         .help("Opens the Codex creator on this request; nothing is created until you accept the draft")
                 } else {
                     Button("Continue to App Review", action: onContinue)
-                        .buttonStyle(.borderedProminent)
+                        .primaryActionStyle()
                         .keyboardShortcut(.defaultAction)
                         .disabled(isBusy)
                         .help("Build an app-owned draft or plan; no change runs yet")
                 }
             }
-            .padding(.horizontal, 24)
-            .frame(height: 76)
+            .padding(.horizontal, Space.xxxl)
+            .frame(height: Size.sheetBarHeight)
         }
-        .frame(width: 760, height: 650)
+        .sheetSize(SheetSize.xlarge)
         .background(AgentTheme.contentBackground)
         .interactiveDismissDisabled(isBusy)
         .accessibilityElement(children: .contain)
@@ -190,19 +190,19 @@ struct PendingRequestReviewSheet: View {
 
     @ViewBuilder
     private func detailRow(_ label: String, value: String, monospaced: Bool = false) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 18) {
+        HStack(alignment: .firstTextBaseline, spacing: Space.xxl) {
             Text(label)
-                .font(.caption.weight(.medium))
+                .font(AgentFont.captionMedium)
                 .foregroundStyle(.secondary)
                 .frame(width: 118, alignment: .trailing)
             if monospaced {
                 Text(value)
-                    .font(.callout.monospaced())
+                    .font(AgentFont.monoBody)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Text(value)
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

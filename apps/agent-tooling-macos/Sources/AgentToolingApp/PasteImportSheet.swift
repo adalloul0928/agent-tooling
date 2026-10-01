@@ -38,16 +38,16 @@ struct PasteImportSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
+            Hairline()
             content
-            Divider()
+            Hairline()
             footer
         }
         .onAppear {
             skillDraft.selectedTargets.formIntersection(Set(availableClients))
             startNewConnectionIfNeeded()
         }
-        .frame(width: 680, height: 620)
+        .sheetSize(SheetSize.large)
         .background(AgentTheme.contentBackground)
     }
 
@@ -63,24 +63,24 @@ struct PasteImportSheet: View {
     // MARK: - Chrome
 
     private var header: some View {
-        HStack(spacing: 12) {
-            KindTile(kind: shape == .skillMarkdown ? .skill : .mcpServer, size: 40)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: Space.lg) {
+            KindTile(kind: shape == .skillMarkdown ? .skill : .mcpServer, size: Size.tileLarge)
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(mode == .newConnection ? "Add a connection" : "Paste to import")
-                    .font(.title3.weight(.semibold))
+                    .font(AgentFont.title)
                 Text(subtitle).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             if let shape {
                 Text(shape.displayName)
-                    .font(.caption.weight(.medium))
+                    .font(AgentFont.captionMedium)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 9)
-                    .frame(height: 22)
-                    .background(Capsule().fill(Color.primary.opacity(0.06)))
+                    .padding(.horizontal, Space.md)
+                    .frame(height: Size.pillHeight)
+                    .background(Capsule().fill(AgentTheme.fillHover))
             }
         }
-        .padding(22)
+        .padding(Space.xxxl)
     }
 
     private var subtitle: String {
@@ -120,28 +120,26 @@ struct PasteImportSheet: View {
         HStack {
             if shape != nil, !isSaved {
                 Button("Start over") { reset() }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
             }
             Spacer()
             if isSaving { ProgressView().controlSize(.small) }
             if !isSaved {
                 Button("Cancel") { dismiss() }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .keyboardShortcut(.cancelAction)
                 Button(primaryTitle) { performPrimaryAction() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
                     .disabled(isPrimaryDisabled)
                     .help(primaryHelp)
             } else {
                 Button("Done") { dismiss() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(16)
+        .padding(Space.xl)
     }
 
     private var primaryTitle: String {
@@ -189,45 +187,45 @@ struct PasteImportSheet: View {
     // MARK: - Input
 
     private var inputStep: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             Text(
                 "Paste one definition. Nothing is run: the text is read as data, bounded, and shown back to you "
                     + "before anything is saved."
             )
-            .font(.callout)
+            .font(AgentFont.body)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
             TextEditor(text: $text)
-                .font(.system(.caption, design: .monospaced))
+                .font(AgentFont.mono)
                 .scrollContentBackground(.hidden)
-                .padding(8)
+                .padding(Space.md)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .standardPanel()
                 .accessibilityLabel("Pasted definition")
 
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 Button {
                     readClipboard()
                 } label: {
                     Label("Paste from clipboard", systemImage: "doc.on.clipboard")
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 Spacer()
                 Text("Examples: an mcp add command, {\"mcpServers\": …}, https://…, or a SKILL.md")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
 
             if let failure {
                 Label(failure, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(22)
+        .padding(Space.xxxl)
     }
 
     // MARK: - Server review
@@ -236,16 +234,16 @@ struct PasteImportSheet: View {
         Form {
             Section {
                 Label(Self.serverIntakeExplanation, systemImage: "tray.and.arrow.down")
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
                 if let placementClause {
                     Label(placementClause, systemImage: "arrow.triangle.2.circlepath")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
                 if !canWrite {
                     Label(Self.readOnlyExplanation, systemImage: "lock")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -259,7 +257,7 @@ struct PasteImportSheet: View {
                     }
                     .accessibilityLabel("Server to show")
                     Text("\(servers.count) servers were read.")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -268,7 +266,7 @@ struct PasteImportSheet: View {
                 Section("What was understood") {
                     ForEach(currentNotes, id: \.self) { note in
                         Label(note, systemImage: "text.magnifyingglass")
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -281,7 +279,7 @@ struct PasteImportSheet: View {
                     ForEach(MCPTransport.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 TextField("Endpoint or command", text: $serverDraft.endpoint)
-                    .font(.system(.body, design: .monospaced))
+                    .font(AgentFont.monoBody)
                     .accessibilityLabel("Endpoint or command")
                 Picker("Authentication", selection: $serverDraft.authentication) {
                     ForEach(["OAuth", "API key", "Doppler", "None"], id: \.self) { Text($0).tag($0) }
@@ -300,7 +298,7 @@ struct PasteImportSheet: View {
                 }
                 if !credentialNames.isEmpty {
                     LabeledContent("Credential names", value: credentialNames.joined(separator: ", "))
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .accessibilityLabel("Credential names recorded")
                 }
@@ -316,7 +314,7 @@ struct PasteImportSheet: View {
             if let message = serverError ?? failure {
                 Section {
                     Label(message, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.red)
                 }
             }
@@ -391,12 +389,12 @@ struct PasteImportSheet: View {
             Section("What was understood") {
                 ForEach(skill?.notes ?? [], id: \.self) { note in
                     Label(note, systemImage: "text.magnifyingglass")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
                 ForEach(skill?.missingFields ?? [], id: \.self) { missing in
                     Label("\(missing) was not in the paste. Add it below.", systemImage: "pencil.line")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -423,14 +421,14 @@ struct PasteImportSheet: View {
                     "The skill is created in the managed library first. Choosing which apps use it is a separate "
                         + "reviewed step, and installing it is another one on the Apps screen."
                 )
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 if !canWrite {
                     Label(
                         "This workspace is open for review, so nothing can be saved into it.",
                         systemImage: "lock"
                     )
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                 }
             }
@@ -438,7 +436,7 @@ struct PasteImportSheet: View {
             if let failure {
                 Section {
                     Label(failure, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.red)
                 }
             }

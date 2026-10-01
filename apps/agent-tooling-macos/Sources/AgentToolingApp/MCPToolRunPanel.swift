@@ -25,74 +25,74 @@ struct MCPToolRunPanel: View {
     private var form: MCPToolInputForm { MCPToolInputForm.make(from: tool.inputSchema) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: Space.sm) {
             HStack {
-                Text("Run \(tool.name)").font(.subheadline.weight(.semibold))
+                Text("Run \(tool.name)").font(AgentFont.heading)
                 Spacer()
                 MCPSafetyTag(text: tool.safety.label, isWarning: tool.safety != .readOnly)
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, Space.xxs)
 
             VStack(spacing: 0) {
                 if tool.safety != .readOnly {
-                    HStack(alignment: .top, spacing: 9) {
-                        StatusGlyph(state: .attention, size: 13)
+                    HStack(alignment: .top, spacing: Space.md) {
+                        StatusGlyph(state: .attention, size: Size.glyph)
                         Text(tool.safety.detail)
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    Divider().opacity(0.45)
+                    .padding(.horizontal, Space.xl)
+                    .padding(.vertical, Space.lg)
+                    Hairline()
                 }
 
                 if form.takesNoArguments && !form.requiresRawObjectEditor {
                     LabeledValueRow("Arguments") {
-                        Text("This tool takes none.").font(.caption).foregroundStyle(.secondary)
+                        Text("This tool takes none.").font(AgentFont.caption).foregroundStyle(.secondary)
                     }
                 } else if form.requiresRawObjectEditor && form.fields.isEmpty {
                     rawEditor
                 } else {
                     ForEach(form.fields) { field in
                         fieldRow(field)
-                        Divider().opacity(0.45)
+                        Hairline()
                     }
                     if form.requiresRawObjectEditor { rawEditor }
                 }
 
-                Divider().opacity(0.45)
-                HStack(spacing: 10) {
+                Hairline()
+                HStack(spacing: Space.lg) {
                     if let validationError {
                         Label(validationError, systemImage: "exclamationmark.triangle")
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(AgentTheme.warning)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text("Calls the running \(serverName) server for real.")
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
                     }
-                    Spacer(minLength: 12)
+                    Spacer(minLength: Space.lg)
                     if isRunning { ProgressView().controlSize(.small) }
                     Button(needsConfirmation ? "Run tool…" : "Run tool") { attemptRun() }
-                        .buttonStyle(.borderedProminent)
+                        .primaryActionStyle()
                         .controlSize(.small)
                         .disabled(isRunning)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
+                .padding(.horizontal, Space.xl)
+                .padding(.vertical, Space.lg)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .standardPanel()
 
             if let failure {
                 Label(failure, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(AgentTheme.warning)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 2)
+                    .padding(.horizontal, Space.xxs)
             }
             if let outcome { MCPToolOutcomeView(outcome: outcome) }
         }
@@ -106,13 +106,13 @@ struct MCPToolRunPanel: View {
     private var rawEditor: some View {
         LabeledValueRow("Arguments (JSON)") {
             TextEditor(text: $rawObject)
-                .font(.system(.caption, design: .monospaced))
-                .frame(minHeight: 76)
+                .font(AgentFont.mono)
+                .frame(minHeight: Size.sheetBarHeight)
                 .scrollContentBackground(.hidden)
-                .padding(6)
+                .padding(Space.sm)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(AgentTheme.separator.opacity(0.55), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                        .strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width)
                 }
                 .accessibilityLabel("Arguments as JSON")
         }
@@ -121,11 +121,11 @@ struct MCPToolRunPanel: View {
     @ViewBuilder
     private func fieldRow(_ field: MCPToolInputField) -> some View {
         LabeledValueRow(field.displayName + (field.isRequired ? " *" : "")) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Space.xs) {
                 control(field)
                 if let summary = field.summary {
                     Text(summary)
-                        .font(.caption2)
+                        .font(AgentFont.micro)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -156,13 +156,13 @@ struct MCPToolRunPanel: View {
             .accessibilityLabel(field.displayName)
         case .text(let multiline) where multiline:
             TextEditor(text: binding)
-                .font(.system(.caption, design: .monospaced))
-                .frame(minHeight: 60)
+                .font(AgentFont.mono)
+                .frame(minHeight: Size.rowHeightTall)
                 .scrollContentBackground(.hidden)
-                .padding(6)
+                .padding(Space.sm)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(AgentTheme.separator.opacity(0.55), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                        .strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width)
                 }
                 .accessibilityLabel(field.displayName)
         case .text, .number:
@@ -172,7 +172,7 @@ struct MCPToolRunPanel: View {
         case .rawJSON:
             TextField("", text: binding, prompt: Text("JSON value"))
                 .textFieldStyle(.roundedBorder)
-                .font(.system(.caption, design: .monospaced))
+                .font(AgentFont.mono)
                 .accessibilityLabel("\(field.displayName) as JSON")
         }
     }
@@ -193,23 +193,23 @@ private struct MCPToolOutcomeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 9) {
-                StatusGlyph(state: outcome.isError ? .attention : .healthy, size: 13)
+            HStack(spacing: Space.md) {
+                StatusGlyph(state: outcome.isError ? .attention : .healthy, size: Size.glyph)
                 Text(outcome.isError ? "The server reported a tool error" : "The server answered")
-                    .font(.callout.weight(.medium))
-                Spacer(minLength: 12)
+                    .font(AgentFont.bodyMedium)
+                Spacer(minLength: Space.lg)
                 Text("\(Int(outcome.latencyMilliseconds.rounded())) ms")
-                    .font(.caption.monospacedDigit())
+                    .font(AgentFont.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
+            .padding(.horizontal, Space.xl)
+            .padding(.vertical, Space.lg)
             if !outcome.text.isEmpty {
-                Divider().opacity(0.45)
+                Hairline()
                 MCPResultText(text: outcome.text, font: .system(.caption, design: .monospaced), tint: .primary)
             }
             if let structured = outcome.structuredText {
-                Divider().opacity(0.45)
+                Hairline()
                 MCPResultText(text: structured, font: .system(.caption2, design: .monospaced), tint: .secondary)
             }
         }
@@ -238,7 +238,7 @@ private struct MCPResultText: View {
                     .frame(height: Self.scrollHeight)
             }
         }
-        .padding(14)
+        .padding(Space.xl)
     }
 
     private var content: some View {

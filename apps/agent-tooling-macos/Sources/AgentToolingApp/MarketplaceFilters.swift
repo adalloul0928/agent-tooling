@@ -5,7 +5,7 @@ import SwiftUI
 extension MarketplaceView {
 
     var wideMarketplaceControls: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Space.md) {
             componentSelector
                 .fixedSize()
             marketplaceFilterMenu(compact: false)
@@ -15,7 +15,7 @@ extension MarketplaceView {
     }
 
     var compactMarketplaceControls: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Space.md) {
             componentSelector
                 .fixedSize()
             marketplaceFilterMenu(compact: true)
@@ -25,9 +25,9 @@ extension MarketplaceView {
     }
 
     var stackedMarketplaceControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             componentSelector.fixedSize()
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 marketplaceFilterMenu(compact: false)
                 marketplaceSortMenu(compact: false)
             }
@@ -173,18 +173,18 @@ private struct MarketplaceMenuButtonLabel: View {
     var badge: Int?
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Space.sm) {
             Image(systemName: systemImage)
             if let title {
                 Text(title).lineLimit(1)
             }
             if let badge {
                 Text(badge, format: .number)
-                    .font(.caption2.monospacedDigit().weight(.semibold))
+                    .font(AgentFont.microSemibold.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
         }
-        .font(.system(size: 13))
+        .font(AgentFont.body)
     }
 }
 
@@ -195,20 +195,20 @@ struct ActiveFilterToken: View {
 
     var body: some View {
         Button(action: remove) {
-            HStack(spacing: 5) {
+            HStack(spacing: Space.xs) {
                 Text(title)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: 190, alignment: .leading)
                 Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(AgentFont.microBold)
                     .accessibilityHidden(true)
             }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(AgentTheme.blue)
-            .padding(.horizontal, 9)
-            .frame(height: 23)
-            .background(AgentTheme.blue.opacity(0.12), in: Capsule())
+            .font(AgentFont.captionMedium)
+            .foregroundStyle(AgentTheme.selection)
+            .padding(.horizontal, Space.md)
+            .frame(height: Size.pillHeight)
+            .background(AgentTheme.selection.opacity(0.12), in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)

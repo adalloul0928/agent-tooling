@@ -3,18 +3,20 @@ import SwiftUI
 
 /// Page headings, filters, and content share one leading edge.
 enum WorkspaceLayout {
-    static let pageInset: CGFloat = 24
-    static let contentTopInset: CGFloat = 12
-    static let sectionSpacing: CGFloat = 24
+    static let pageInset = Space.xxxl
+    static let contentTopInset = Space.lg
+    static let sectionSpacing = Space.xxxl
+    /// The inset of a sheet's body and an inspector's detail pane.
+    static let paneInset = Space.xxl
 }
 
 /// Content uses neutral surfaces. NavigationSplitView owns the window's native
 /// Liquid Glass sidebar, geometry, and active/inactive material behavior.
 enum AgentTheme {
-    static let blue = Color(nsColor: .systemBlue)
+    /// The one accent: selection fills, prominent buttons, links, progress.
     static let selection = dynamic(light: 0x0065D1, dark: 0x0A64CD)
 
-    static let panelCornerRadius: CGFloat = 12
+    static let panelCornerRadius = Radius.lg
 
     /// Neutral content surfaces leave the desktop's color to the native glass.
     static let contentBackground = dynamic(light: 0xF5F5F7, dark: 0x1C1C1E)
@@ -159,7 +161,7 @@ extension View {
     }
 
     /// Accent selection for collection rows, separate from the system sidebar.
-    func rowSelection(_ selected: Bool, cornerRadius: CGFloat = 8) -> some View {
+    func rowSelection(_ selected: Bool, cornerRadius: CGFloat = Radius.md) -> some View {
         modifier(RowSelectionModifier(selected: selected, cornerRadius: cornerRadius))
     }
 }
@@ -195,7 +197,7 @@ private struct HoverHighlightModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(
-                Color.primary.opacity(hovering && !suppressed ? 0.06 : 0),
+                AgentTheme.fillHover.opacity(hovering && !suppressed ? 1 : 0),
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
             .onHover { hovering = $0 }
@@ -217,17 +219,14 @@ private struct ControlSurfaceModifier: ViewModifier {
             .background(.thickMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(AgentTheme.separator.opacity(0.35), lineWidth: 0.5)
+                    .strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width)
             }
     }
 }
 
 private struct PaneMaterialModifier: ViewModifier {
     func body(content: Content) -> some View {
-        content
-            .overlay(alignment: .trailing) {
-                Rectangle().fill(AgentTheme.separator.opacity(0.45)).frame(width: 0.5)
-            }
+        content.hairlineTrailing()
     }
 }
 
@@ -241,8 +240,8 @@ private struct RowSelectionModifier: ViewModifier {
                 if selected {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(AgentTheme.selection)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, Space.sm)
+                        .padding(.vertical, Space.xxs)
                 }
             }
     }
@@ -252,11 +251,11 @@ private struct RowSelectionModifier: ViewModifier {
 /// list of rows.
 struct ControlGroupBoxStyle: GroupBoxStyle {
     func makeBody(configuration: Configuration) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: Space.md) {
             configuration.label
-                .font(.subheadline.weight(.semibold))
+                .font(AgentFont.heading)
                 .foregroundStyle(.primary)
-                .padding(.horizontal, 2)
+                .padding(.horizontal, Space.xxs)
             VStack(spacing: 0) {
                 configuration.content
             }

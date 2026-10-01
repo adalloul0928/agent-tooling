@@ -42,7 +42,7 @@ struct MarketplaceView: View {
                 Button("Sources", systemImage: "shippingbox") { showingSources.toggle() }
                     .buttonStyle(.glass)
                     .help("Look at the catalogs, registries, and folders shown in Discover")
-                    .popover(isPresented: $showingSources) { sourcePane.frame(width: 340, height: 500) }
+                    .popover(isPresented: $showingSources) { sourcePane.sheetSize(SheetSize.popover) }
                 AddCatalogSourceButton(workspace: workspace, catalogs: session)
                 Button {
                     Task { await session.refresh() }
@@ -161,28 +161,28 @@ struct MarketplaceView: View {
                             ) {
                                 selectedSourceID = selectedSourceID == source.id ? nil : source.id
                             }
-                            if source.id != sortedSources.last?.id { Divider().opacity(0.30) }
+                            if source.id != sortedSources.last?.id { Hairline() }
                         }
                     }
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, Space.sm)
                 }
             }
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Space.sm) {
                 Label("Reviewed locally", systemImage: "checkmark.shield")
-                    .font(.caption.weight(.semibold))
+                    .font(AgentFont.captionSemibold)
                 Text("Catalog installs stay with their native client. Added folders are inspected before review.")
-                    .font(.caption2)
+                    .font(AgentFont.micro)
                     .foregroundStyle(.secondary)
             }
-            .padding(13)
+            .padding(Space.lg)
         }
         .paneMaterial()
     }
 
     func packagePane(packages: [MarketplacePackage]) -> some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: Space.lg) {
+                HStack(spacing: Space.lg) {
                     InventorySearchField(
                         placeholder: "Search, or describe what you need a skill for", text: $query
                     )
@@ -191,7 +191,7 @@ struct MarketplaceView: View {
                         "Filters what is shown, and on Return asks every catalog — skills.sh answers a plain description with matching skills."
                     )
                     Text(resultCountDescription(packages.count))
-                        .font(.caption.monospacedDigit())
+                        .font(AgentFont.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .contentTransition(.numericText())
@@ -207,7 +207,7 @@ struct MarketplaceView: View {
 
                 Group {
                     if hasActiveTokenFilter {
-                        FlowLayout(spacing: 6) {
+                        FlowLayout(spacing: Space.sm) {
                             if let source = selectedSource {
                                 ActiveFilterToken(title: source.name, accessibilityName: "source") {
                                     selectedSourceID = nil
@@ -230,8 +230,8 @@ struct MarketplaceView: View {
                             }
                             Button("Clear all") { clearFilters() }
                                 .buttonStyle(.plain)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(AgentTheme.blue)
+                                .font(AgentFont.captionMedium)
+                                .foregroundStyle(AgentTheme.selection)
                                 .accessibilityLabel("Clear all marketplace filters")
                         }
                         .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
@@ -262,7 +262,7 @@ struct MarketplaceView: View {
                         } label: {
                             let count = session.catalogFailures.count
                             Text("\(count) catalog\(count == 1 ? "" : "s") could not be read — Sources")
-                                .font(.caption)
+                                .font(AgentFont.caption)
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
@@ -273,7 +273,7 @@ struct MarketplaceView: View {
                 }
             }
             .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, WorkspaceLayout.contentTopInset)
-            .overlay(alignment: .bottom) { Divider().opacity(0.35) }
+            .hairlineBottom()
 
             if packages.isEmpty {
                 EmptyStateView(
@@ -289,7 +289,7 @@ struct MarketplaceView: View {
                 ScrollView {
                     LazyVGrid(
                         columns: showingDetails ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 360, maximum: 560))],
-                        alignment: .leading, spacing: 14
+                        alignment: .leading, spacing: Space.xl
                     ) {
                         ForEach(packages) { package in
                             MarketplaceGalleryCard(

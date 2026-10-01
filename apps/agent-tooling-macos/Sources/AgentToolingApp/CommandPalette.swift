@@ -302,12 +302,12 @@ struct CommandPaletteView: View {
     var body: some View {
         VStack(spacing: 0) {
             searchField
-            Divider()
+            Hairline()
             resultList
-            Divider()
+            Hairline()
             hints
         }
-        .frame(width: 660, height: 460)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
         // The container declares the field as its default focus, and .onAppear
         // sets it again on the next run-loop turn. The palette floats in as an
@@ -327,13 +327,13 @@ struct CommandPaletteView: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Space.lg) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
+                .font(AgentFont.bodyMedium)
                 .foregroundStyle(.secondary)
             TextField("Search apps, tools, presets, projects, and actions", text: $query)
                 .textFieldStyle(.plain)
-                .font(.title3)
+                .font(AgentFont.titleRegular)
                 .focused($searchFocused)
                 .accessibilityLabel("Search everything")
                 .onSubmit(activateHighlighted)
@@ -346,25 +346,25 @@ struct CommandPaletteView: View {
                     return .handled
                 }
         }
-        .padding(.horizontal, 18)
-        .frame(height: 56)
+        .padding(.horizontal, Space.xxl)
+        .frame(height: Size.rowHeightTall)
     }
 
     @ViewBuilder
     private var resultList: some View {
         if results.isEmpty {
-            VStack(spacing: 6) {
+            VStack(spacing: Space.sm) {
                 Text("Nothing matches \(query)")
-                    .font(.callout.weight(.medium))
+                    .font(AgentFont.bodyMedium)
                 Text("Search by name, or type an action such as Check Setup.")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    LazyVStack(spacing: Space.xxs) {
                         ForEach(Array(results.enumerated()), id: \.element.id) { index, item in
                             Button {
                                 highlighted = index
@@ -379,8 +379,8 @@ struct CommandPaletteView: View {
                             .accessibilityValue(index == highlighted ? "Selected" : "")
                         }
                     }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 8)
+                    .padding(.vertical, Space.sm)
+                    .padding(.horizontal, Space.md)
                 }
                 .onChange(of: highlighted) { _, index in
                     guard results.indices.contains(index) else { return }
@@ -391,7 +391,7 @@ struct CommandPaletteView: View {
     }
 
     private var hints: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: Space.xl) {
             Label("Move", systemImage: "arrow.up.arrow.down")
             Label("Open", systemImage: "return")
             Label("Close", systemImage: "escape")
@@ -399,10 +399,10 @@ struct CommandPaletteView: View {
             Text("\(results.count) result\(results.count == 1 ? "" : "s")")
                 .monospacedDigit()
         }
-        .font(.caption)
+        .font(AgentFont.caption)
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 16)
-        .frame(height: 34)
+        .padding(.horizontal, Space.xl)
+        .frame(height: Size.compactRowHeight)
     }
 
     private func move(by offset: Int) {
@@ -421,39 +421,39 @@ private struct CommandPaletteRow: View {
     let selected: Bool
 
     var body: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: Space.lg) {
             if let client = item.client {
-                ClientBrandIcon(client: client, size: 18)
-                    .frame(width: 24, height: 24)
+                ClientBrandIcon(client: client, size: Size.tileSmall)
+                    .frame(width: Size.tile, height: Size.tile)
             } else if let kind = item.kind {
-                KindTile(kind: kind, size: 24)
+                KindTile(kind: kind, size: Size.tile)
             } else {
                 Image(systemName: item.symbol)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(AgentFont.bodyMedium)
                     .foregroundStyle(selected ? Color.white : Color.secondary)
-                    .frame(width: 24, height: 24)
+                    .frame(width: Size.tile, height: Size.tile)
             }
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(item.title)
-                    .font(.callout.weight(.medium))
+                    .font(AgentFont.bodyMedium)
                     .foregroundStyle(selected ? Color.white : Color.primary)
                     .lineLimit(1)
                 Text(item.subtitle)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
                     .lineLimit(1)
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.lg)
             Text(item.contextLabel)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary.opacity(0.75))
                 .lineLimit(1)
         }
-        .padding(.horizontal, 10)
-        .frame(height: 42)
+        .padding(.horizontal, Space.lg)
+        .frame(height: Size.rowHeight)
         .background {
             if selected {
-                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AgentTheme.blue)
+                RoundedRectangle.control.fill(AgentTheme.selection)
             }
         }
         .contentShape(Rectangle())

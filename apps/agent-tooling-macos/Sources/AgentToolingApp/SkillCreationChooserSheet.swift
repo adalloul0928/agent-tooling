@@ -17,36 +17,36 @@ struct SkillCreationChooserSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Space.xs) {
                 Text("How do you want to create this skill?")
-                    .font(.title2.weight(.semibold))
+                    .font(AgentFont.titleLarge)
                 Text("An assistant writes the draft with you in a conversation and never saves anything until you do. Writing it yourself opens the form.")
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 22)
-            .padding(.bottom, 18)
+            .padding(.horizontal, Space.xxxl)
+            .padding(.top, Space.xxxl)
+            .padding(.bottom, Space.xxl)
 
-            VStack(spacing: 10) {
+            VStack(spacing: Space.lg) {
                 option(.assistant(.claude))
                 option(.assistant(.codex))
                 option(.manual)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, Space.xxxl)
 
-            Spacer(minLength: 18)
-            Divider()
+            Spacer(minLength: Space.xxl)
+            Hairline()
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
-            .padding(.horizontal, 22)
-            .frame(height: 60)
+            .padding(.horizontal, Space.xxxl)
+            .frame(height: Size.sheetBarHeight)
         }
-        .frame(width: 520, height: 400)
+        .sheetSize(SheetSize.small)
         .background(AgentTheme.contentBackground)
     }
 
@@ -56,41 +56,41 @@ struct SkillCreationChooserSheet: View {
             onChoose(method)
             dismiss()
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: Space.xl) {
                 Group {
                     switch method {
                     case .assistant(let client):
-                        ClientBrandIcon(client: client, size: 28)
+                        ClientBrandIcon(client: client, size: Size.tile)
                     case .manual:
                         Image(systemName: "square.and.pencil")
-                            .font(.system(size: 24, weight: .medium))
+                            .font(.system(size: Size.heroSymbol, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
                 }
-                .frame(width: 34, height: 34)
+                .frame(width: Size.discLarge, height: Size.discLarge)
                 .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: Space.xxs) {
                     Text(method.title)
-                        .font(.body.weight(.semibold))
+                        .font(AgentFont.bodySemibold)
                     Text(unavailableReason ?? method.detail)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(AgentFont.captionSemibold)
                     .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, Space.xl)
+            .padding(.vertical, Space.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .background(AgentTheme.controlBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(AgentTheme.controlBackground, in: RoundedRectangle.card)
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(AgentTheme.separator.opacity(0.55), lineWidth: 0.5)
+                RoundedRectangle.card
+                    .strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width)
             }
         }
         .buttonStyle(.plain)

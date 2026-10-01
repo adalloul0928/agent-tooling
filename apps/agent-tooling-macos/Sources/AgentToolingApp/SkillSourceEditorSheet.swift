@@ -17,24 +17,24 @@ struct SkillSourceEditorSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: Space.xl) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text("Edit \(skill.displayName) source")
-                        .font(.title2.weight(.semibold))
+                        .font(AgentFont.titleLarge)
                     Text("Edit the complete SKILL.md. Every script, reference, asset, and package file is preserved.")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
                 if !isLoading {
                     Text(changeSummary)
-                        .font(.caption.monospacedDigit())
+                        .font(AgentFont.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(22)
+            .padding(Space.xxxl)
 
-            Divider()
+            Hairline()
 
             if isLoading {
                 ProgressView("Opening the stored source…")
@@ -53,30 +53,29 @@ struct SkillSourceEditorSheet: View {
                 }
             }
 
-            Divider()
+            Hairline()
             HStack {
                 Label("The saved source is checked before it replaces the stored copy.", systemImage: "checkmark.shield")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 if session.isBusy { ProgressView().controlSize(.small) }
                 Button("Cancel") { dismiss() }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .keyboardShortcut(.cancelAction)
                 Button("Save Source") {
                     Task {
                         if await session.saveSource(edited, for: skill) { dismiss() }
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(AgentTheme.selection)
+                .primaryActionStyle()
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canSave)
             }
-            .padding(.horizontal, 22)
-            .frame(height: 72)
+            .padding(.horizontal, Space.xxxl)
+            .frame(height: Size.sheetBarHeight)
         }
-        .frame(width: 980, height: 720)
+        .sheetSize(SheetSize.editor)
         .background(AgentTheme.contentBackground)
         .task(id: skill.id) {
             await session.load(skill)
@@ -95,34 +94,34 @@ struct SkillSourceEditorSheet: View {
 
     @ViewBuilder
     private func sourcePane(title: String, text: String, editable: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Space.md) {
             HStack {
-                Text(title).font(.subheadline.weight(.semibold))
+                Text(title).font(AgentFont.heading)
                 Spacer()
                 Text("\(text.split(separator: "\n", omittingEmptySubsequences: false).count) lines")
-                    .font(.caption.monospacedDigit())
+                    .font(AgentFont.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             if editable {
                 TextEditor(text: $edited)
-                    .font(.system(.body, design: .monospaced))
+                    .font(AgentFont.monoBody)
                     .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .background(AgentTheme.controlBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .padding(Space.md)
+                    .background(AgentTheme.controlBackground, in: RoundedRectangle.control)
                     .accessibilityLabel("Edited complete SKILL.md source")
             } else {
                 ScrollView([.vertical, .horizontal]) {
                     Text(text)
-                        .font(.system(.body, design: .monospaced))
+                        .font(AgentFont.monoBody)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(10)
+                        .padding(Space.lg)
                 }
-                .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(AgentTheme.fillSubtle, in: RoundedRectangle.control)
                 .accessibilityLabel("Stored complete SKILL.md source")
             }
         }
-        .padding(16)
+        .padding(Space.xl)
     }
 
     private var changeSummary: String {

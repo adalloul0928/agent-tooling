@@ -180,27 +180,27 @@ struct MarketplaceSourceRow: View {
     var onSelect: (() -> Void)?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: Space.lg) {
             Button {
                 onSelect?()
             } label: {
-                HStack(alignment: .top, spacing: 10) {
-                    SymbolTile(symbol: symbol, size: 31)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(source.name).font(.callout.weight(.semibold)).lineLimit(1)
+                HStack(alignment: .top, spacing: Space.lg) {
+                    SymbolTile(symbol: symbol, size: Size.discLarge)
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text(source.name).font(AgentFont.bodySemibold).lineLimit(1)
                         if let contents {
-                            Text(contents).font(.caption).foregroundStyle(.secondary)
+                            Text(contents).font(AgentFont.caption).foregroundStyle(.secondary)
                                 .lineLimit(3).fixedSize(horizontal: false, vertical: true)
                                 .help(contents)
                         } else {
-                            Text(source.kind.displayName).font(.caption).foregroundStyle(.secondary)
+                            Text(source.kind.displayName).font(AgentFont.caption).foregroundStyle(.secondary)
                         }
-                        Text(source.trustSummary).font(.caption2).foregroundStyle(.secondary)
+                        Text(source.trustSummary).font(AgentFont.micro).foregroundStyle(.secondary)
                             .lineLimit(3).fixedSize(horizontal: false, vertical: true)
                             .help(source.trustSummary)
                         if source.isOptionalBackup {
                             Text("Optional Git source")
-                                .font(.caption2)
+                                .font(AgentFont.micro)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -233,10 +233,10 @@ struct MarketplaceSourceRow: View {
             }
             if let removal { removal }
         }
-        .padding(12)
+        .padding(Space.lg)
         .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(selected ? AgentTheme.blue.opacity(0.14) : .clear)
+            RoundedRectangle.control
+                .fill(selected ? AgentTheme.selection.opacity(0.14) : .clear)
         )
         .animation(reduceMotion ? nil : AgentMotion.quick, value: selected)
     }
@@ -270,65 +270,65 @@ struct MarketplaceGalleryCard: View {
 
     var body: some View {
         Button(action: open) {
-            HStack(alignment: .top, spacing: compact ? 12 : 16) {
+            HStack(alignment: .top, spacing: compact ? Space.lg : Space.xl) {
                 ToolIdentityIcon(packageID: package.id, fallback: marketplaceKind(for: package), size: compact ? 36 : 44)
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(package.presentationName).font(.system(size: compact ? 16 : 17, weight: .medium)).lineLimit(1)
+                VStack(alignment: .leading, spacing: Space.sm) {
+                    HStack(alignment: .firstTextBaseline, spacing: Space.md) {
+                        Text(package.presentationName).font(compact ? AgentFont.title : AgentFont.titleLarge).lineLimit(1)
                             .help(package.presentationName)
                         Spacer(minLength: 0)
                         if let installs = package.installCount {
                             Label(CompactCountFormatter.string(for: installs), systemImage: "arrow.down.circle")
-                                .font(.system(size: 11, weight: .medium).monospacedDigit())
+                                .font(AgentFont.captionMedium.monospacedDigit())
                                 .foregroundStyle(.secondary)
                                 .labelStyle(.titleAndIcon)
                                 .help("\(installs.formatted()) installs — reported by \(package.sourceName)")
                         }
                     }
-                    Text(package.summary).font(.system(size: compact ? 14 : 15)).foregroundStyle(.secondary)
+                    Text(package.summary).font(compact ? AgentFont.body : AgentFont.titleRegular).foregroundStyle(.secondary)
                         .lineLimit(2).frame(maxWidth: .infinity, minHeight: 38, alignment: .topLeading)
-                    HStack(spacing: 8) {
+                    HStack(spacing: Space.md) {
                         ForEach(cardComponents, id: \.self) { component in
                             Text(component.displayName)
-                                .font(.system(size: 10, weight: .semibold))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Color.primary.opacity(0.06), in: Capsule())
+                                .font(AgentFont.microSemibold)
+                                .padding(.horizontal, Space.sm).padding(.vertical, Space.xxs)
+                                .background(AgentTheme.fillHover, in: Capsule())
                                 .foregroundStyle(.secondary)
                         }
                         if let category = package.category, !compact {
                             Text(category.capitalized)
-                                .font(.system(size: 10, weight: .medium))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(AgentTheme.blue.opacity(0.10), in: Capsule())
+                                .font(AgentFont.microMedium)
+                                .padding(.horizontal, Space.sm).padding(.vertical, Space.xxs)
+                                .background(AgentTheme.selection.opacity(0.10), in: Capsule())
                                 .foregroundStyle(.secondary)
                                 .help("Filed under \(category) by \(package.sourceName)")
                         }
                         Text(detail ?? "From \(package.originName)")
-                            .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                            .font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
                         Spacer(minLength: 0)
                         ForEach(package.supportedClients.sorted { $0.rawValue < $1.rawValue }) { client in
-                            ClientBrandIcon(client: client, size: 15).help("Available for \(client.rawValue)")
+                            ClientBrandIcon(client: client, size: Size.brandMark).help("Available for \(client.rawValue)")
                         }
                     }
                 }
                 Image(systemName: inLibrary ? "checkmark.circle" : "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(AgentFont.bodyMedium)
                     .foregroundStyle(.secondary)
                     .help(inLibrary ? "Already in your library; view details" : "View package details")
             }
-            .padding(compact ? 12 : 18).frame(maxWidth: .infinity, minHeight: compact ? 116 : 138, alignment: .topLeading)
+            .padding(compact ? Space.lg : Space.xxl).frame(maxWidth: .infinity, minHeight: compact ? 116 : 138, alignment: .topLeading)
             // A standing card, not floating text: material at rest, a lift on
             // hover, and the accent stroke only when this listing is open.
-            .background(Color.primary.opacity(hovering && !hoverSuppressed ? 0.06 : 0), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .background(AgentTheme.panelBrightening, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(hovering && !hoverSuppressed ? AgentTheme.fillHover : Color.clear, in: RoundedRectangle.card)
+            .background(AgentTheme.panelBrightening, in: RoundedRectangle.card)
+            .background(.thickMaterial, in: RoundedRectangle.card)
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle.card
                     .strokeBorder(
-                        selected ? AgentTheme.selection.opacity(0.65) : AgentTheme.separator.opacity(0.35),
+                        selected ? AgentTheme.selection.opacity(0.65) : AgentTheme.hairlineStroke,
                         lineWidth: selected ? 1.5 : 0.5)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .contentShape(RoundedRectangle.card)
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }

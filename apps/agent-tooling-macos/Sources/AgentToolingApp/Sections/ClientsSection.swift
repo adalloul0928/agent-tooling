@@ -97,7 +97,7 @@ struct ClientsSection: View {
                     actionTitle: "Close",
                     action: { isReviewingPlan = false }
                 )
-                .frame(width: 480, height: 320)
+                .sheetSize(SheetSize.small)
                 .background(AgentTheme.contentBackground)
             }
         }

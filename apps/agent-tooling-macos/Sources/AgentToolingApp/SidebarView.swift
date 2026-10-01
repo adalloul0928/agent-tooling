@@ -29,10 +29,10 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Space.lg) {
                 HStack {
                     Text("Agent Tooling")
-                        .font(.headline)
+                        .font(AgentFont.heading)
                         .lineLimit(1)
                     Spacer()
                     appearanceButton
@@ -40,9 +40,9 @@ struct SidebarView: View {
 
                 paletteButton
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 8)
+            .padding(.horizontal, Space.xl)
+            .padding(.top, Space.md)
+            .padding(.bottom, Space.md)
 
             List(selection: sidebarSelection) {
                 ForEach(NavigationGroup.allCases, id: \.self) { group in
@@ -117,9 +117,9 @@ struct SidebarView: View {
     private func sectionRow(_ section: AppSection) -> some View {
         HStack {
             Label(section.navigationTitle, systemImage: section.symbol)
-            Spacer(minLength: 4)
+            Spacer(minLength: Space.xs)
             if health[section] == .attention {
-                StatusGlyph(state: .attention, size: 12)
+                StatusGlyph(state: .attention, size: Size.glyphSmall)
                     .accessibilityLabel("Needs attention")
             }
         }
@@ -147,16 +147,16 @@ struct SidebarView: View {
     /// One search over every named object and action in the app.
     private var paletteButton: some View {
         Button(action: openPalette) {
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 Label("Search", systemImage: "magnifyingglass")
                 Spacer(minLength: 0)
                 Text("⌘K")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.bordered)
+        .secondaryActionStyle()
         .controlSize(.regular)
         .keyboardShortcut("k", modifiers: .command)
         .help("Search apps, tools, presets, projects, and actions")
@@ -169,7 +169,7 @@ struct SidebarView: View {
         } label: {
             Image(systemName: colorScheme == .dark ? "sun.max" : "moon")
         }
-        .buttonStyle(.borderless)
+        .inlineActionStyle()
         .foregroundStyle(.secondary)
         .help(colorScheme == .dark ? "Use light appearance" : "Use dark appearance")
         .accessibilityLabel(colorScheme == .dark ? "Use light appearance" : "Use dark appearance")
@@ -180,13 +180,13 @@ struct SidebarView: View {
     private func clientRow(_ client: ClientKind) -> some View {
         let verdict = workspace.device.verdict(for: client)
         let selected = selection.sidebarDestination == .syncCenter && navigation.selectedClient == client
-        return HStack(spacing: 8) {
-            ClientBrandIcon(client: client, size: 15)
-                .frame(width: 20)
+        return HStack(spacing: Space.md) {
+            ClientBrandIcon(client: client, size: Size.brandMark)
+                .frame(width: Size.glyphSlot)
             Text(client.rawValue)
                 .lineLimit(1)
-            Spacer(minLength: 4)
-            StatusGlyph(state: verdict.state, size: 11)
+            Spacer(minLength: Space.xs)
+            StatusGlyph(state: verdict.state, size: Size.glyphSmall)
         }
         .tag(SidebarItem.client(client))
         .contentShape(Rectangle())

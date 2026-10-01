@@ -33,7 +33,7 @@ struct EffectiveSettingsView: View {
                 Button("Refresh", systemImage: "arrow.clockwise") { refreshID = UUID() }
                     .labelStyle(.iconOnly).buttonStyle(.glass).disabled(session.isBusy)
             }
-            Divider()
+            Hairline()
             ScrollView {
                 VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                     Text("These values are read from your apps' own files. Only the few marked with a pencil can be changed here.")
@@ -42,7 +42,7 @@ struct EffectiveSettingsView: View {
                         Text(
                             "Agent Tooling was not told where an organization policy file would be on this Mac, so it cannot rule one out. If your organization sets one, it may decide a setting shown here as changeable."
                         )
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
                     }
                     if let receipt = session.lastReceipt {
                         receiptCard(receipt)
@@ -78,13 +78,13 @@ struct EffectiveSettingsView: View {
 
     private func receiptCard(_ receipt: ConfigurationEditReceipt) -> some View {
         TitledCard("Changed \(receipt.key)") {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Space.sm) {
                 Label("Now \(receipt.effectiveValue.displayText)", systemImage: "checkmark.circle")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(AgentFont.bodyMedium)
                 Text("Your original file is kept beside it as a backup.").foregroundStyle(.secondary)
                 CompactPathText(path: receipt.backupPath, lineLimit: 2)
             }
-            .padding(14)
+            .padding(Space.xl)
         }
     }
 
@@ -93,47 +93,47 @@ struct EffectiveSettingsView: View {
         TitledCard(surface.title) {
             if let message = surface.errorMessage {
                 AttentionBanner(title: "Settings need attention", message: message)
-                    .padding(14)
+                    .padding(Space.xl)
             } else if let configuration = surface.configuration {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
-                        Text(configuration.summary).font(.callout).foregroundStyle(.secondary)
+                        Text(configuration.summary).font(AgentFont.body).foregroundStyle(.secondary)
                         Spacer()
                         Text(configuration.installedClientVersion.map { "Version \($0)" } ?? "Version unknown")
-                            .font(.callout).foregroundStyle(.secondary)
+                            .font(AgentFont.body).foregroundStyle(.secondary)
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                     if configuration.rows.isEmpty {
-                        Divider()
+                        Hairline()
                         Text("No settings were found for this app on this Mac.")
                             .foregroundStyle(.secondary)
-                            .padding(14)
+                            .padding(Space.xl)
                     }
                     ForEach(configuration.rows, id: \.key) { row in
-                        Divider()
+                        Hairline()
                         settingRow(row, in: surface)
                     }
                     if !configuration.combinedBreakdowns.filter({ $0.contributingFileCount > 0 }).isEmpty {
-                        Divider()
+                        Hairline()
                         combinedSection(configuration)
                     }
                     if !configuration.inactiveLayers.isEmpty {
-                        Divider()
+                        Hairline()
                         Text("Files this version does not read: \(configuration.inactiveLayers.map(label).joined(separator: ", "))")
-                            .font(.callout).foregroundStyle(.secondary)
-                            .padding(14)
+                            .font(AgentFont.body).foregroundStyle(.secondary)
+                            .padding(Space.xl)
                     }
                     if !configuration.unrecognized.isEmpty {
-                        Divider()
+                        Hairline()
                         DisclosureGroup("\(configuration.unrecognized.count) settings this app version manages itself") {
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: Space.xs) {
                                 ForEach(configuration.unrecognized, id: \.key) { entry in
                                     Text("\(entry.key) · \(label(entry.layer))")
-                                        .font(.callout).foregroundStyle(.secondary)
+                                        .font(AgentFont.body).foregroundStyle(.secondary)
                                 }
-                            }.padding(.top, 8)
+                            }.padding(.top, Space.md)
                         }
-                        .padding(14)
+                        .padding(Space.xl)
                     }
                 }
             }
@@ -144,12 +144,12 @@ struct EffectiveSettingsView: View {
         InfoRow(row.displayName, detail: rowDetail(row)) {
             EmptyView()
         } trailing: {
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 Text(row.value.displayText)
                     .multilineTextAlignment(.trailing).lineLimit(3).textSelection(.enabled)
                 if session.isEditable(row, surface: surface.id) {
                     Button("Edit", systemImage: "pencil") { session.beginEdit(row, surface: surface) }
-                        .labelStyle(.iconOnly).buttonStyle(.borderless)
+                        .labelStyle(.iconOnly).inlineActionStyle()
                         .disabled(session.isBusy)
                         .accessibilityLabel("Edit \(row.displayName)")
                 }
@@ -172,15 +172,15 @@ struct EffectiveSettingsView: View {
     @ViewBuilder
     private func combinedSection(_ configuration: EffectiveConfiguration) -> some View {
         let breakdowns = configuration.combinedBreakdowns.filter { $0.contributingFileCount > 0 }
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Settings that add up").font(.system(size: 15, weight: .medium))
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text("Settings that add up").font(AgentFont.title)
             Text("These are not overridden by the file with the most say — every file's entries are used together.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(AgentFont.body).foregroundStyle(.secondary)
             ForEach(breakdowns, id: \.key) { breakdown in
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Space.sm) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(breakdown.displayName).fontWeight(.medium)
-                        Spacer(minLength: 12)
+                        Spacer(minLength: Space.lg)
                         Text(
                             breakdown.totalEntryCount == 1
                                 ? "1 in total, from 1 file"
@@ -193,35 +193,35 @@ struct EffectiveSettingsView: View {
                             "Hooks run commands on this Mac. Agent Tooling does not read what each one does — open a file to see for yourself.",
                             systemImage: "exclamationmark.triangle"
                         )
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
                     }
                     ForEach(Array(breakdown.contributions.enumerated()), id: \.offset) { _, entry in
                         if entry.entryCount > 0 {
-                            HStack(spacing: 10) {
+                            HStack(spacing: Space.lg) {
                                 Text(entry.entryCount == 1 ? "1 from" : "\(entry.entryCount) from").foregroundStyle(.secondary)
                                 Text(label(entry.layer))
-                                Spacer(minLength: 12)
+                                Spacer(minLength: Space.lg)
                                 if let path = entry.sourcePath {
                                     Button("Show file") { reveal(path) }
-                                        .buttonStyle(.borderless)
+                                        .inlineActionStyle()
                                         .accessibilityLabel("Show the file for \(label(entry.layer))")
                                 }
                             }
-                            .font(.callout)
+                            .font(AgentFont.body)
                         }
                     }
                 }
-                .padding(.vertical, 5)
+                .padding(.vertical, Space.xs)
             }
         }
-        .padding(14)
+        .padding(Space.xl)
     }
 
     @ViewBuilder
     private var instructionsCard: some View {
         if let inventory = session.instructions, !inventory.entries.isEmpty || !inventory.notes.isEmpty {
             TitledCard("Standing instructions") {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: Space.xl) {
                     Text(
                         "Each app reads these at the start of every session, all of them together. A file closer to your project does not replace one further out."
                     )
@@ -232,17 +232,17 @@ struct EffectiveSettingsView: View {
                     ForEach(Self.instructionSurfaces, id: \.self) { surface in
                         let entries = inventory.entries.filter { $0.surface == surface }
                         if !entries.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(surface.displayName).font(.system(size: 15, weight: .medium))
+                            VStack(alignment: .leading, spacing: Space.md) {
+                                Text(surface.displayName).font(AgentFont.title)
                                 ForEach(entries, id: \.path) { entry in
                                     instructionRow(entry)
                                 }
                             }
-                            .padding(.vertical, 4)
+                            .padding(.vertical, Space.xs)
                         }
                     }
                 }
-                .padding(14)
+                .padding(Space.xl)
             }
         }
     }
@@ -252,10 +252,10 @@ struct EffectiveSettingsView: View {
             URL(fileURLWithPath: entry.path).lastPathComponent,
             detail: "\(describe(entry.kind)) · \(describe(entry.scope))" + (entry.isEmpty ? " · empty" : "")
         ) {
-            Image(systemName: symbol(entry.kind)).foregroundStyle(.secondary).frame(width: 18)
+            Image(systemName: symbol(entry.kind)).foregroundStyle(.secondary).frame(width: Size.glyphSlot)
         } trailing: {
             Button("Show file") { reveal(entry.path) }
-                .buttonStyle(.borderless)
+                .inlineActionStyle()
                 .accessibilityLabel("Show \(entry.path)")
         }
         .help(entry.path)
@@ -318,20 +318,20 @@ private struct EffectiveSettingEditSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Change \(edit.row.displayName)").font(.title3.weight(.semibold))
+                Text("Change \(edit.row.displayName)").font(AgentFont.title)
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
-            }.padding(20)
-            Divider()
-            VStack(alignment: .leading, spacing: 18) {
+            }.padding(Space.xxl)
+            Hairline()
+            VStack(alignment: .leading, spacing: Space.xxl) {
                 Text(
                     "This writes into \(edit.surfaceTitle)'s own file. Your current file is copied beside it first, and the change is only reported as made once \(edit.surfaceTitle) would actually use it."
                 )
                 .foregroundStyle(.secondary)
                 LabeledContent("File") { Text(edit.sourcePath).textSelection(.enabled).lineLimit(2) }
                 LabeledContent("Now") { Text(edit.row.value.displayText) }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("New value").font(.headline)
+                VStack(alignment: .leading, spacing: Space.md) {
+                    Text("New value").font(AgentFont.heading)
                     switch edit.row.value {
                     case .boolean:
                         Toggle(edit.row.displayName, isOn: $flag).toggleStyle(.switch)
@@ -342,14 +342,14 @@ private struct EffectiveSettingEditSheet: View {
                 }
                 if edit.row.requiresNewSession {
                     Label("Applies to new sessions, not one already running.", systemImage: "clock.arrow.circlepath")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-            }.padding(20)
-            Divider()
+            }.padding(Space.xxl)
+            Hairline()
             HStack {
                 if let message = session.editMessage {
-                    Text(message).font(.callout).foregroundStyle(.secondary).lineLimit(3)
+                    Text(message).font(AgentFont.body).foregroundStyle(.secondary).lineLimit(3)
                 }
                 Spacer()
                 Button("Change it") {
@@ -358,11 +358,11 @@ private struct EffectiveSettingEditSheet: View {
                         if session.editMessage == nil { dismiss() }
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .primaryActionStyle()
                 .disabled(session.isBusy || !hasChange)
-            }.padding(20)
+            }.padding(Space.xxl)
         }
-        .frame(width: 620, height: 460)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
         .task {
             guard !loaded else { return }

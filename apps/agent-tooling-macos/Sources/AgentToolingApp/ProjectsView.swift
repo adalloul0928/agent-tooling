@@ -78,13 +78,13 @@ struct ProjectsView: View {
 
     private var collectionFilterBar: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 16) {
+            HStack(spacing: Space.xl) {
                 projectFilter
-                Spacer(minLength: 16)
+                Spacer(minLength: Space.xl)
                 InventorySearchField(placeholder: "Search projects", text: $query)
                     .frame(width: 320)
             }
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: Space.md) {
                 InventorySearchField(placeholder: "Search projects", text: $query)
                 HStack {
                     projectFilter
@@ -93,7 +93,7 @@ struct ProjectsView: View {
             }
         }
         .padding(.horizontal, WorkspaceLayout.pageInset)
-        .padding(.vertical, 10)
+        .padding(.vertical, Space.lg)
     }
 
     @ViewBuilder
@@ -117,8 +117,7 @@ struct ProjectsView: View {
         List(projects, selection: $selectedProjectID) { project in
             projectRow(project)
         }
-        .listStyle(.inset)
-        .scrollContentBackground(.hidden)
+        .collectionListChrome()
         .collectionSurface()
     }
 
@@ -130,7 +129,7 @@ struct ProjectsView: View {
             selected: selectedProjectID == project.id
         )
         .tag(project.id)
-        .listRowBackground(SelectionRowBackground(selected: selectedProjectID == project.id))
+        .collectionRowChrome(selected: selectedProjectID == project.id)
         .accessibilityLabel(project.name)
     }
 
@@ -271,27 +270,27 @@ private struct ProjectCollectionRow: View {
     let selected: Bool
 
     var body: some View {
-        HStack(spacing: 11) {
-            SymbolTile(symbol: assignedCount > 0 ? "folder.badge.gearshape" : "folder", size: 28)
+        HStack(spacing: Space.lg) {
+            SymbolTile(symbol: assignedCount > 0 ? "folder.badge.gearshape" : "folder", size: Size.discLarge)
                 .opacity(assignedCount > 0 ? 1 : 0.5)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(project.name)
-                    .font(.callout.weight(.medium))
+                    .font(AgentFont.bodyMedium)
                     .foregroundStyle(selected ? Color.white : Color.primary)
                     .lineLimit(1)
-                HStack(spacing: 6) {
+                HStack(spacing: Space.sm) {
                     Text(assignedCount == 1 ? "1 tool assigned" : "\(assignedCount) tools assigned")
                     if let hint = project.repositoryHints.first {
                         Text(hint).lineLimit(1).truncationMode(.middle)
                     }
                 }
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
             }
-            Spacer(minLength: 12)
-            StatusGlyph(state: hasFolder ? .healthy : .pending, size: 13, tint: selected ? Color.white : nil)
+            Spacer(minLength: Space.lg)
+            StatusGlyph(state: hasFolder ? .healthy : .pending, size: Size.glyph, tint: selected ? Color.white : nil)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, Space.sm)
         .help(hasFolder ? "This project has a folder on this Mac." : "This project has no folder on this Mac yet.")
         .accessibilityValue(
             "\(assignedCount == 1 ? "1 tool assigned" : "\(assignedCount) tools assigned"), \(hasFolder ? "on this Mac" : "not on this Mac")"
@@ -323,15 +322,15 @@ private struct ProjectDetailView: View {
             }
             .labelsHidden()
             .accessibilityLabel("Project section")
-            .padding(.horizontal, 22)
-            .padding(.bottom, 12)
-            Divider().opacity(0.4)
+            .padding(.horizontal, Space.xxxl)
+            .padding(.bottom, Space.lg)
+            Hairline()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Space.xl) {
                     componentSection(tab: tab)
                 }
-                .padding(22)
+                .padding(Space.xxxl)
             }
         }
         .sheet(isPresented: $isAdding) {
@@ -347,15 +346,15 @@ private struct ProjectDetailView: View {
     // MARK: Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 14) {
-                SymbolTile(symbol: projectRoot == nil ? "folder" : "folder.badge.gearshape", size: 40)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(project.name).font(.title3.weight(.semibold))
+        VStack(alignment: .leading, spacing: Space.lg) {
+            HStack(spacing: Space.xl) {
+                SymbolTile(symbol: projectRoot == nil ? "folder" : "folder.badge.gearshape", size: Size.tileLarge)
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text(project.name).font(AgentFont.title)
                     if let projectRoot {
                         LocationText(path: projectRoot.path).foregroundStyle(.secondary)
                     } else {
-                        Text("No folder on this Mac yet").font(.callout).foregroundStyle(.secondary)
+                        Text("No folder on this Mac yet").font(AgentFont.body).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
@@ -366,13 +365,12 @@ private struct ProjectDetailView: View {
                         if let projectRoot { declarations?.readCommitted(projectRoot: projectRoot) }
                         isDeclaring = true
                     }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .disabled(library.isBusy || library.access != .writable)
                     .help("Write what this project asks for, and what it resolved to, into its folder.")
                 }
                 Button("Add tools…", systemImage: "plus") { isAdding = true }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .disabled(library.isBusy)
             }
 
@@ -382,19 +380,19 @@ private struct ProjectDetailView: View {
 
             if projectRoot == nil {
                 Text("Project-scoped tools install into this folder's own app directories (for example .claude/skills).")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             Text(originSummary)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 22)
-        .padding(.top, 18)
-        .padding(.bottom, 14)
+        .padding(.horizontal, Space.xxxl)
+        .padding(.top, Space.xxl)
+        .padding(.bottom, Space.xl)
     }
 
     /// The one place a project's folder on this Mac is chosen, changed or
@@ -405,7 +403,7 @@ private struct ProjectDetailView: View {
         if library.access == .writable {
             if projectRoot == nil {
                 Button("Choose folder…", systemImage: "folder.badge.plus") { chooseFolder() }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .disabled(isBindingFolder || library.isBusy)
                     .help("Point this project at a folder on this Mac so project-scoped tools have somewhere to install.")
             } else {
@@ -526,25 +524,25 @@ private struct ComponentRows: View {
         LazyVStack(spacing: 0) {
             ForEach(rows) { row in
                 InfoRow(row.displayName, detail: detail(for: row)) {
-                    KindTile(kind: toolingKind(row.kind), size: 26)
+                    KindTile(kind: toolingKind(row.kind), size: Size.tile)
                 } trailing: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: Space.lg) {
                         if reviewable, row.kind == .mcpServer, row.isAssignable {
                             Button("Review…") {
                                 library.discardReview()
                                 reviewingID = row.artifactID
                                 isReviewing = true
                             }
-                            .buttonStyle(.bordered)
+                            .secondaryActionStyle()
                             .controlSize(.small)
                             .disabled(library.isBusy)
                         }
                         if !row.nativeRoutes.isEmpty {
-                            ClientMarks(present: Set(row.nativeRoutes.map(\.client)), size: 12)
+                            ClientMarks(present: Set(row.nativeRoutes.map(\.client)), size: Size.brandMark)
                         }
                     }
                 }
-                if row.id != rows.last?.id { Divider().opacity(0.45) }
+                if row.id != rows.last?.id { Hairline() }
             }
         }
         .sheet(isPresented: $isReviewing) {
@@ -576,11 +574,11 @@ private struct EmptyCardRow: View {
 
     var body: some View {
         Text(text)
-            .font(.callout)
+            .font(AgentFont.body)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.horizontal, Space.xl)
+            .padding(.vertical, Space.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -599,13 +597,13 @@ private struct WorkspaceProjectAddSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Text("Add tools to \(project.name)").font(.title3.weight(.semibold))
+            HStack(spacing: Space.lg) {
+                Text("Add tools to \(project.name)").font(AgentFont.title)
                 Spacer()
                 InventorySearchField(placeholder: "Search library", text: $query)
                     .frame(minWidth: 180, idealWidth: 240)
-            }.padding(20)
-            Divider()
+            }.padding(Space.xxl)
+            Hairline()
             if let library = session.state?.library {
                 let rows = library.filteredRows(matching: query)
                 List(rows) { row in
@@ -615,20 +613,21 @@ private struct WorkspaceProjectAddSheet: View {
                             set: { if $0 { selection.insert(row.artifactID) } else { selection.remove(row.artifactID) } }
                         )
                     ) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(row.displayName).lineLimit(1)
-                            Text(row.ownershipLabel).font(.system(size: 13)).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: Space.xxs) {
+                            Text(row.displayName).font(AgentFont.bodyMedium).lineLimit(1)
+                            Text(row.ownershipLabel).font(AgentFont.caption).foregroundStyle(.secondary)
                         }
                     }
                     .toggleStyle(.checkbox)
                     .disabled(!row.isAssignable || session.isBusy)
                     .help(row.assignmentExplanation ?? row.displayName)
+                    .collectionRowChrome(selected: false)
                 }
-                .listStyle(.plain)
+                .collectionListChrome()
             } else {
                 ProgressView("Loading library…").frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            Divider()
+            Hairline()
             HStack {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
@@ -638,11 +637,11 @@ private struct WorkspaceProjectAddSheet: View {
                     session.discardReview()
                     isReviewing = true
                 }
-                .buttonStyle(.borderedProminent)
+                .primaryActionStyle()
                 .disabled(selection.isEmpty || session.isBusy)
-            }.padding(20)
+            }.padding(Space.xxl)
         }
-        .frame(width: 720, height: 560)
+        .sheetSize(SheetSize.large)
         .sheet(
             isPresented: $isReviewing, onDismiss: { dismiss() },
             content: {
@@ -668,13 +667,13 @@ private struct WorkspaceProjectDeclarationSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Project files for \(projectName)").font(.title3.weight(.semibold))
+                Text("Project files for \(projectName)").font(AgentFont.title)
                 Spacer()
                 Button("Done") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
-            }.padding(20)
-            Divider()
+            }.padding(Space.xxl)
+            Hairline()
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Space.xl) {
                     Text(
                         "Two files, written into this project's folder for you to commit. `project.json` says what this project asks for. `project-lock.json` pins what those resolved to, so a checkout later gets the same versions."
                     )
@@ -683,11 +682,11 @@ private struct WorkspaceProjectDeclarationSheet: View {
                         AttentionBanner(title: "Nothing was written", message: message)
                     }
                     if !session.writtenPaths.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: Space.sm) {
                             Label("Written", systemImage: "checkmark.circle")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(AgentFont.bodyMedium)
                             ForEach(session.writtenPaths, id: \.self) { path in
-                                Text(path).font(.system(size: 12, design: .monospaced))
+                                Text(path).font(AgentFont.mono)
                                     .foregroundStyle(.secondary).textSelection(.enabled).lineLimit(2)
                             }
                         }
@@ -695,28 +694,28 @@ private struct WorkspaceProjectDeclarationSheet: View {
                     if let result = session.committed {
                         committedSummary(result)
                     } else if let message = session.committedMessage {
-                        Text(message).font(.callout).foregroundStyle(.secondary)
+                        Text(message).font(AgentFont.body).foregroundStyle(.secondary)
                     }
                     if let preview = session.preview {
                         summary(preview)
                     }
                 }
-                .padding(20)
+                .padding(Space.xxl)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Divider()
+            Hairline()
             HStack {
                 Text("Neither file carries a path from this Mac, a time, or anything private.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
                 Spacer()
                 Button("Write them") {
                     Task { await session.write(to: projectRoot) }
                 }
-                .buttonStyle(.borderedProminent)
+                .primaryActionStyle()
                 .disabled(session.isBusy || !session.canWrite || session.preview == nil)
-            }.padding(20)
+            }.padding(Space.xxl)
         }
-        .frame(width: 640, height: 520)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
         .onDisappear { session.discard() }
     }
@@ -726,8 +725,8 @@ private struct WorkspaceProjectDeclarationSheet: View {
     private func committedSummary(
         _ result: WorkspaceProjectDeclarationReconciliation.Result
     ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("What this project already asks for").font(.system(size: 15, weight: .medium))
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text("What this project already asks for").font(AgentFont.title)
             if result.isFullySatisfied {
                 Label(
                     "You have all of it, at the versions this project pins.",
@@ -735,20 +734,20 @@ private struct WorkspaceProjectDeclarationSheet: View {
                 ).foregroundStyle(.secondary)
             }
             ForEach(result.items, id: \.name) { item in
-                HStack(spacing: 10) {
+                HStack(spacing: Space.lg) {
                     Image(systemName: symbol(item.state)).foregroundStyle(.secondary)
-                        .frame(width: 18)
+                        .frame(width: Size.glyphSlot)
                     Text(item.name)
-                    Spacer(minLength: 12)
+                    Spacer(minLength: Space.lg)
                     Text(describe(item.state)).foregroundStyle(.secondary)
                 }
-                .font(.callout)
+                .font(AgentFont.body)
             }
             Text("This only says what you have. Getting anything you are missing stays a separate, reviewed step.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(AgentFont.body).foregroundStyle(.secondary)
         }
-        .padding(16)
-        .standardPanel(cornerRadius: 12)
+        .padding(Space.xl)
+        .standardPanel()
     }
 
     private func symbol(_ state: WorkspaceProjectDeclarationReconciliation.State) -> String {
@@ -770,7 +769,7 @@ private struct WorkspaceProjectDeclarationSheet: View {
     }
 
     private func summary(_ preview: WorkspaceProjectDeclarationSession.Preview) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             LabeledContent("Asked for") {
                 Text(
                     preview.declaration.entries.isEmpty
@@ -785,19 +784,19 @@ private struct WorkspaceProjectDeclarationSheet: View {
                         ?? "None")
             }
             if !preview.unlocked.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Label("Asked for, but not pinned", systemImage: "questionmark.circle")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(AgentFont.bodyMedium)
                     Text(preview.unlocked.formatted(.list(type: .and))).foregroundStyle(.secondary)
                     Text(
                         "These have no exact version behind them, so a lock line for one could not bring back the same files. They are in the declaration and left out of the lock."
                     )
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(16)
-        .standardPanel(cornerRadius: 12)
+        .padding(Space.xl)
+        .standardPanel()
     }
 }
 
@@ -816,13 +815,13 @@ private struct NewProjectSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("New project").font(.title3.weight(.semibold))
+                Text("New project").font(AgentFont.title)
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction).buttonStyle(.glass).keyboardShortcut(.cancelAction)
             }
-            .padding(20)
-            Divider()
-            VStack(alignment: .leading, spacing: 16) {
+            .padding(Space.xxl)
+            Hairline()
+            VStack(alignment: .leading, spacing: Space.xl) {
                 Text(
                     "A project is a name your tools are assigned to — pick skills and servers for it from the Library, and install them into each app's project scope from Apps. Creating one writes nothing anywhere else."
                 )
@@ -833,7 +832,7 @@ private struct NewProjectSheet: View {
                     AttentionBanner(title: "That project was not created", message: errorMessage)
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Space.lg) {
                     LabeledContent("Name") {
                         TextField("My service", text: $name)
                             .textFieldStyle(.roundedBorder).frame(maxWidth: 300)
@@ -841,24 +840,24 @@ private struct NewProjectSheet: View {
                             .onSubmit { if canCreate { create() } }
                     }
                 }
-                .padding(16)
-                .standardPanel(cornerRadius: 12)
+                .padding(Space.xl)
+                .standardPanel()
             }
-            .padding(20)
+            .padding(Space.xxl)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            Divider()
+            Hairline()
             HStack {
                 Spacer()
                 Button("Create Project") { create() }
-                    .buttonStyle(.borderedProminent)
+                    .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canCreate)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .padding(.horizontal, Space.xxl)
+            .padding(.vertical, Space.xl)
         }
-        .frame(width: 520, height: 320)
+        .sheetSize(SheetSize.small)
         .background(AgentTheme.contentBackground)
         .onAppear { nameFocused = true }
     }

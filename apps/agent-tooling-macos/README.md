@@ -375,6 +375,36 @@ it will not execute policy-provided scripts or fetch a policy in the background.
 - Xcode 27 or newer
 - Swift 6.2 or newer
 
+## Design tokens
+
+Every view draws from the scales in `Sources/AgentToolingApp/DesignTokens.swift`
+and nowhere else. A raw number in a view is treated the way a raw hex colour
+would be.
+
+- `AgentFont` — the type scale: `pageTitle` 20, `titleLarge` 17, `title` 15,
+  `body` 13, `caption` 11, `micro` 10, plus `heading` for card titles, `mono`
+  for paths and commands, and `stat` for a headline number.
+- `Space` — a 4-point grid (`xxs` 2 … `xxxl` 24, `huge` 32) for padding,
+  stack spacing, and insets.
+- `Radius` — `sm` 6 chips, `md` 8 controls and selection, `lg` 12 cards,
+  `xl` 16 the palette. `RoundedRectangle.card/.control/.panel` are the shapes.
+- `Size` — row and header heights, glyph, tile, disc and mark sizes, control
+  heights, the sheet bar.
+- `SheetSize` — the five sheet sizes; a sheet picks the smallest it fits in.
+- `Hairline` — the one separator. A bare `Divider()` belongs only inside a
+  menu, where the system draws it.
+- `AgentTheme.fillSubtle/fillHover/fillStrong`, `shadow`, `scrim`,
+  `hairlineStroke` — the quiet fills and strokes.
+- `primaryActionStyle()`, `secondaryActionStyle()`, `inlineActionStyle()` —
+  the three button treatments.
+
+Collections (Skills, Plugins, Connections, Presets, Projects, Activity,
+History) sit on `collectionSurface()`. Native `List`s take
+`collectionListChrome()` and each row `collectionRowChrome(selected:)`, which
+switch the system's own separators off and draw the shared hairline; `Table`
+cannot be quieted that way, so its former users lay their columns out by hand
+inside a `List` (see `Components+Collections.swift`).
+
 ## Build and open the app
 
 The packaging script compiles the executable and wraps it in a normal macOS

@@ -98,26 +98,26 @@ struct SetupWizardSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
-            VStack(alignment: .leading, spacing: 6) {
-                Text(step.title).font(.system(size: 20, weight: .semibold))
-                Text(step.subtitle).font(.system(size: 14)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Hairline()
+            VStack(alignment: .leading, spacing: Space.sm) {
+                Text(step.title).font(AgentFont.pageTitle)
+                Text(step.subtitle).font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, WorkspaceLayout.pageInset).padding(.top, 20).padding(.bottom, 16)
+            .padding(.horizontal, WorkspaceLayout.pageInset).padding(.top, Space.xxl).padding(.bottom, Space.xl)
             ScrollView {
                 VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                     if let message = session.errorMessage {
                         AttentionBanner(title: "Something did not go through", message: message)
                     }
                     if let message = session.lastApplyMessage {
-                        HStack(spacing: 10) {
-                            StatusGlyph(state: .healthy, size: 16)
-                            Text(message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: Space.lg) {
+                            StatusGlyph(state: .healthy, size: Size.glyphLarge)
+                            Text(message).font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                             Spacer()
                         }
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(AgentTheme.controlBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                        .background(AgentTheme.controlBackground.opacity(0.6), in: RoundedRectangle.card)
                     }
                     switch step {
                     case .apps: appsStep
@@ -127,10 +127,10 @@ struct SetupWizardSheet: View {
                     case .done: doneStep
                     }
                 }
-                .padding(.horizontal, WorkspaceLayout.pageInset).padding(.bottom, 24)
+                .padding(.horizontal, WorkspaceLayout.pageInset).padding(.bottom, Space.xxxl)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Divider()
+            Hairline()
             footer
         }
         .frame(minWidth: 780, idealWidth: 860, minHeight: 560, idealHeight: 640)
@@ -158,20 +158,20 @@ struct SetupWizardSheet: View {
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "wand.and.stars").font(.system(size: 17, weight: .medium)).foregroundStyle(.secondary)
-            Text("Set up this Mac").font(.system(size: 14, weight: .semibold))
+        HStack(spacing: Space.lg) {
+            Image(systemName: "wand.and.stars").font(.system(size: Size.symbol, weight: .medium)).foregroundStyle(.secondary)
+            Text("Set up this Mac").font(AgentFont.bodySemibold)
             Spacer()
             let index = steps.firstIndex(of: step) ?? 0
-            Text("Step \(index + 1) of \(steps.count)").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
-            HStack(spacing: 4) {
+            Text("Step \(index + 1) of \(steps.count)").font(AgentFont.captionMedium).foregroundStyle(.secondary)
+            HStack(spacing: Space.xs) {
                 ForEach(Array(steps.enumerated()), id: \.element) { position, _ in
-                    Capsule().fill(position <= index ? AgentTheme.selection : Color.secondary.opacity(0.18)).frame(width: 18, height: 4)
+                    Capsule().fill(position <= index ? AgentTheme.selection : Color.secondary.opacity(0.18)).frame(width: Size.glyphSlot, height: Space.xs)
                 }
             }
             .accessibilityHidden(true)
         }
-        .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, 14)
+        .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, Space.xl)
     }
 
     private var footer: some View {
@@ -182,15 +182,15 @@ struct SetupWizardSheet: View {
                 Button("Back") { step = previous }
             }
             if step == .done {
-                Button("Open Checkup") { navigate(.checkup); onClose() }.buttonStyle(.borderedProminent).tint(AgentTheme.selection)
+                Button("Open Checkup") { navigate(.checkup); onClose() }.primaryActionStyle()
             } else {
                 Button(nextTitle) { if let next = nextStep { step = next } }
-                    .buttonStyle(.borderedProminent).tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .disabled(nextStep == nil || (step == .audit && session.isAuditing) || (step == .apps && workspace.device.managedClients.isEmpty))
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, 14)
+        .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, Space.xl)
     }
 
     private var previousStep: SetupWizardStep? {
@@ -217,19 +217,19 @@ struct SetupWizardSheet: View {
     private var appsStep: some View {
         VStack(spacing: 0) {
             ForEach(Array(workspace.device.availableClients.enumerated()), id: \.element) { index, client in
-                if index > 0 { Divider().padding(.leading, 64) }
+                if index > 0 { Hairline(indent: Hairline.afterLeading(Size.tileLarge, gap: Space.xl)) }
                 Toggle(isOn: Binding(get: { workspace.device.isEnabled(client) }, set: { on in Task { await workspace.device.setEnabled(client, on) } })) {
-                    HStack(spacing: 14) {
-                        ClientBrandIcon(client: client, size: 28).frame(width: 36, height: 40)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(client.rawValue).font(.system(size: 16, weight: .semibold))
-                            Text(workspace.device.verdict(for: client).text).font(.system(size: 14)).foregroundStyle(.secondary)
+                    HStack(spacing: Space.xl) {
+                        ClientBrandIcon(client: client, size: Size.tile).frame(width: Size.tileLarge, height: Size.tileLarge)
+                        VStack(alignment: .leading, spacing: Space.xs) {
+                            Text(client.rawValue).font(AgentFont.title)
+                            Text(workspace.device.verdict(for: client).text).font(AgentFont.body).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        StatusGlyph(state: workspace.device.verdict(for: client).state, size: 14)
+                        StatusGlyph(state: workspace.device.verdict(for: client).state, size: Size.glyph)
                     }
                 }
-                .toggleStyle(.checkbox).padding(18)
+                .toggleStyle(.checkbox).padding(Space.xxl)
                 .accessibilityLabel("Have this Mac manage \(client.rawValue)")
             }
         }
@@ -238,45 +238,45 @@ struct SetupWizardSheet: View {
 
     @ViewBuilder private var auditStep: some View {
         if session.isAuditing || session.checkup == nil {
-            HStack(spacing: 12) {
+            HStack(spacing: Space.lg) {
                 ProgressView().controlSize(.small)
-                Text("Reading what each app holds…").font(.callout).foregroundStyle(.secondary)
+                Text("Reading what each app holds…").font(AgentFont.body).foregroundStyle(.secondary)
             }
-            .padding(14)
+            .padding(Space.xl)
         } else if let checkup = session.checkup {
             let open = checkup.openFindings
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Space.lg) {
                 ForEach(checkup.audit.clients) { client in
                     let count = checkup.audit.counts[client]
                     let mine = open.filter { $0.client == client }
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            ClientDisc(client: client, size: 28)
-                            Text(client.rawValue).font(.callout.weight(.semibold))
+                    VStack(alignment: .leading, spacing: Space.sm) {
+                        HStack(spacing: Space.md) {
+                            ClientDisc(client: client, size: Size.disc)
+                            Text(client.rawValue).font(AgentFont.bodySemibold)
                         }
                         Text(count.map { "\($0.skills) skills · \($0.plugins) plugins · \($0.mcpServers) servers" } ?? "Not checked")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Text(mine.isEmpty ? "Nothing to fix" : "\(mine.count) to look at").font(.caption.weight(.medium))
+                            .font(AgentFont.caption).foregroundStyle(.secondary)
+                        Text(mine.isEmpty ? "Nothing to fix" : "\(mine.count) to look at").font(AgentFont.captionMedium)
                             .foregroundStyle(mine.isEmpty ? AgentTheme.ok : AgentTheme.warning)
                     }
-                    .padding(12).frame(maxWidth: .infinity, alignment: .leading).standardPanel()
+                    .padding(Space.lg).frame(maxWidth: .infinity, alignment: .leading).standardPanel()
                 }
             }
             if open.isEmpty {
                 Text("Nothing is broken, duplicated, or unmanaged. Your assistant can still suggest improvements on the next step.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
             } else {
                 TitledCard("By kind") {
                     VStack(spacing: 0) {
                         ForEach(SetupFinding.Kind.allCases.filter { kind in open.contains { $0.kind == kind } }, id: \.self) { kind in
                             let count = open.filter { $0.kind == kind }.count
                             HStack {
-                                Text(kind.title).font(.callout)
+                                Text(kind.title).font(AgentFont.body)
                                 Spacer()
-                                Text("\(count)").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                                Text("\(count)").font(AgentFont.body.monospacedDigit()).foregroundStyle(.secondary)
                             }
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            Divider().padding(.leading, 14)
+                            .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
+                            Hairline().padding(.leading, Space.xl)
                         }
                     }
                 }
@@ -287,32 +287,32 @@ struct SetupWizardSheet: View {
     @ViewBuilder private var reviewStep: some View {
         if session.reviewClient == nil {
             Text("A review needs Claude Code or Codex; this Mac is not managing either. The audit's findings are still walked through on the next steps.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(AgentFont.body).foregroundStyle(.secondary)
         } else if session.isReviewing {
-            HStack(spacing: 12) {
+            HStack(spacing: Space.lg) {
                 ProgressView().controlSize(.small)
                 Text("\(session.reviewClient?.rawValue ?? "") is reading the audit and the apps' configuration folders. This takes a few minutes. You can walk through the findings meanwhile; its recommendations join each step when they land.")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            .padding(14)
+            .padding(Space.xl)
         } else if let message = session.reviewMessage {
             AttentionBanner(title: "The review did not finish", message: message) {
-                Button("Try again") { Task { await session.review(purpose: .setup) } }.buttonStyle(.bordered).controlSize(.small)
+                Button("Try again") { Task { await session.review(purpose: .setup) } }.secondaryActionStyle().controlSize(.small)
             }
         } else if let review = session.checkup?.review {
-            Text(review.summary).font(.callout).fixedSize(horizontal: false, vertical: true).padding(14).standardPanel()
+            Text(review.summary).font(AgentFont.body).fixedSize(horizontal: false, vertical: true).padding(Space.xl).standardPanel()
             let counts = Dictionary(grouping: session.checkup?.openRecommendations ?? [], by: \.category)
             if !counts.isEmpty {
                 TitledCard("Recommendations by step") {
                     VStack(spacing: 0) {
                         ForEach(SetupRecommendation.Category.allCases.filter { counts[$0] != nil }, id: \.self) { category in
                             HStack {
-                                Text(category.title).font(.callout)
+                                Text(category.title).font(AgentFont.body)
                                 Spacer()
-                                Text("\(counts[category]?.count ?? 0)").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                                Text("\(counts[category]?.count ?? 0)").font(AgentFont.body.monospacedDigit()).foregroundStyle(.secondary)
                             }
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            Divider().padding(.leading, 14)
+                            .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
+                            Hairline().padding(.leading, Space.xl)
                         }
                     }
                 }
@@ -329,28 +329,28 @@ struct SetupWizardSheet: View {
             }
             let fixable = CheckupTriage.fixAll(rows)
             if rows.isEmpty {
-                HStack(spacing: 10) {
-                    StatusGlyph(state: .healthy, size: 16)
-                    Text("Nothing left here.").font(.callout)
+                HStack(spacing: Space.lg) {
+                    StatusGlyph(state: .healthy, size: Size.glyphLarge)
+                    Text("Nothing left here.").font(AgentFont.body)
                     Spacer()
                 }
-                .padding(14).standardPanel()
+                .padding(Space.xl).standardPanel()
             } else {
                 if !fixable.isEmpty {
                     HStack {
-                        Text("\(fixable.total) thing\(fixable.total == 1 ? "" : "s") can be fixed here in one go.").font(.callout).foregroundStyle(.secondary)
+                        Text("\(fixable.total) thing\(fixable.total == 1 ? "" : "s") can be fixed here in one go.").font(AgentFont.body).foregroundStyle(.secondary)
                         Spacer()
                         Button("Fix all \(fixable.total)") {
                             Task { await session.applyAll(fixable.actions, settings: fixable.settings.map { ($0.client, $0.key, $0.value) }) }
                         }
-                        .buttonStyle(.borderedProminent).tint(AgentTheme.selection).disabled(session.isBusy)
+                        .primaryActionStyle().disabled(session.isBusy)
                     }
-                    .padding(.horizontal, 14).padding(.vertical, 10).standardPanel()
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.lg).standardPanel()
                 }
                 if let progress = session.applyProgress {
-                    HStack(spacing: 10) {
+                    HStack(spacing: Space.lg) {
                         ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).frame(width: 160)
-                        Text("\(progress.done) of \(progress.total) done").font(.caption).foregroundStyle(.secondary)
+                        Text("\(progress.done) of \(progress.total) done").font(AgentFont.caption).foregroundStyle(.secondary)
                         Spacer()
                     }
                 }
@@ -371,7 +371,7 @@ struct SetupWizardSheet: View {
                                         onRunOne: { action in Task { await session.apply(action) } },
                                         onDismiss: { dismiss(item) },
                                         onOpen: { section in navigate(section); onClose() })
-                                    if index < mine.count - 1 { Divider().padding(.leading, 46) }
+                                    if index < mine.count - 1 { Hairline(indent: CheckupRow.textIndent) }
                                 }
                             }
                         }
@@ -387,19 +387,19 @@ struct SetupWizardSheet: View {
     }
 
     private var doneStep: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             if let checkup = session.checkup {
                 let open = checkup.openFindings.count + checkup.openRecommendations.count
-                HStack(spacing: 10) {
-                    StatusGlyph(state: open == 0 ? .healthy : .attention, size: 18)
+                HStack(spacing: Space.lg) {
+                    StatusGlyph(state: open == 0 ? .healthy : .attention, size: Size.glyphLarge)
                     Text(open == 0 ? "Nothing is left to look at." : "\(open) item\(open == 1 ? "" : "s") left. They stay on the Checkup tab.")
-                        .font(.callout)
+                        .font(AgentFont.body)
                     Spacer()
                 }
-                .padding(14).standardPanel()
+                .padding(Space.xl).standardPanel()
             }
             Text("The checkup runs again on its own once a week when Agent Tooling opens, and each app's page has a Review button for what has changed upstream.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

@@ -27,27 +27,27 @@ struct PlanReviewSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.title2.weight(.semibold))
-                    Text(summary).font(.callout).foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: Space.xl) {
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text(title).font(AgentFont.titleLarge)
+                    Text(summary).font(AgentFont.body).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Label(executionLabel, systemImage: planRunsCommands ? "exclamationmark.shield" : "info.circle")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }
-            .padding(24)
+            .padding(Space.xxxl)
 
-            Divider()
+            Hairline()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Space.xl) {
                     LabeledContent("Applies to") {
                         Text(appliesTo)
                             .foregroundStyle(.secondary)
                     }
-                    .font(.caption)
+                    .font(AgentFont.caption)
 
                     if let headline = review?.headline {
                         AttentionBanner(title: "Before you approve", message: headline)
@@ -59,13 +59,13 @@ struct PlanReviewSheet: View {
 
                     switch reviewState {
                     case .loading:
-                        HStack(spacing: 8) {
+                        HStack(spacing: Space.md) {
                             ProgressView().controlSize(.small)
                             Text("Checking destinations and package contents…")
-                                .font(.caption)
+                                .font(AgentFont.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(14)
+                        .padding(Space.xl)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .standardPanel()
                     case .failed(let message):
@@ -98,7 +98,7 @@ struct PlanReviewSheet: View {
                         }
                     } else {
                         Text("Planned steps")
-                            .font(.headline)
+                            .font(AgentFont.heading)
                         VStack(spacing: 0) {
                             ForEach(Array(plan.items.enumerated()), id: \.offset) { index, item in
                                 PlanStepRow(
@@ -108,7 +108,7 @@ struct PlanReviewSheet: View {
                                     command: review?.command(for: item),
                                     nothingRuns: review?.reasonNothingRuns(for: item),
                                     contentRisk: review?.contentRisk(for: item))
-                                if index < plan.items.count - 1 { Divider().opacity(0.25) }
+                                if index < plan.items.count - 1 { Hairline() }
                             }
                         }
                         .standardPanel()
@@ -117,22 +117,22 @@ struct PlanReviewSheet: View {
                     if !plan.exclusions.isEmpty { excluded }
                     if !workspace.deployment.linkedDestinations.isEmpty { linkedDestinations }
 
-                    HStack(spacing: 8) {
+                    HStack(spacing: Space.md) {
                         Image(systemName: "lock.shield")
                             .foregroundStyle(.secondary)
                         Text(
                             "Commands use a fixed allowlist. File changes are limited to the managed library, supported client paths, and the folders you pointed a destination at; replaced files are saved as rollback artifacts."
                         )
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                     .standardPanel()
                 }
-                .padding(24)
+                .padding(Space.xxxl)
             }
 
-            Divider()
+            Hairline()
             HStack {
                 Button(
                     isRunning ? "Stop" : "Cancel",
@@ -144,7 +144,7 @@ struct PlanReviewSheet: View {
                         dismiss()
                     }
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .keyboardShortcut(.cancelAction)
                 Spacer()
                 Button {
@@ -165,14 +165,14 @@ struct PlanReviewSheet: View {
                         Text(installLabel)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .primaryActionStyle()
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canInstall)
             }
-            .padding(.horizontal, 24)
-            .frame(height: 78)
+            .padding(.horizontal, Space.xxxl)
+            .frame(height: Size.sheetBarHeight)
         }
-        .frame(width: 840, height: 670)
+        .sheetSize(SheetSize.xlarge)
         .background(AgentTheme.contentBackground)
         .interactiveDismissDisabled(isRunning)
         .task(id: planIdentity) {
@@ -209,54 +209,54 @@ struct PlanReviewSheet: View {
         DisclosureGroup(
             isExpanded: $exclusionsExpanded
         ) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Space.lg) {
                 Text(
                     "Asking for a tool and installing it are two different things. These were asked for and are not being installed."
                 )
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 ForEach(Array(plan.exclusions.enumerated()), id: \.offset) { _, exclusion in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(exclusionTitle(exclusion.reason)).font(.callout).fontWeight(.medium)
-                        Text(exclusion.detail).font(.caption).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text(exclusionTitle(exclusion.reason)).font(AgentFont.bodyMedium)
+                        Text(exclusion.detail).font(AgentFont.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
-            .padding(.top, 10)
+            .padding(.top, Space.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             Text("\(plan.exclusions.count) not being installed")
         }
-        .padding(14)
+        .padding(Space.xl)
         .standardPanel()
     }
 
     /// Where these go on this Mac, when that is not the app's own folder. The
     /// exact folder is the point here, so it is shown rather than hidden.
     private var linkedDestinations: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Where these go on this Mac").font(.headline)
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text("Where these go on this Mac").font(AgentFont.heading)
             Text(
                 "Agent Tooling writes only into the folder you named, and only if nothing is already there under that tool's name. Anything already in it is left exactly as it is."
             )
-            .font(.caption)
+            .font(AgentFont.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
             ForEach(workspace.deployment.linkedDestinations) { destination in
-                HStack(spacing: 10) {
+                HStack(spacing: Space.lg) {
                     Image(systemName: "folder").foregroundStyle(.secondary)
                     Text(
                         "\(destination.surface.displayName) · \(destination.projectName ?? destination.scope.displayName)"
                     )
-                    .font(.callout.weight(.medium))
-                    Spacer(minLength: 12)
+                    .font(AgentFont.bodyMedium)
+                    Spacer(minLength: Space.lg)
                     LocationText(path: destination.path)
                 }
             }
         }
-        .padding(14)
+        .padding(Space.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
         .standardPanel()
     }
@@ -381,17 +381,17 @@ private struct PlanStepRow: View {
     var contentRisk: ContentRiskReport?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Space.lg) {
             Text("\(number)")
-                .font(.caption.monospacedDigit())
+                .font(AgentFont.caption.monospacedDigit())
                 .foregroundStyle(.tertiary)
                 .frame(width: 24, alignment: .trailing)
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 7) {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                HStack(spacing: Space.sm) {
                     Image(systemName: symbol)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                    Text(item.displayName).font(.callout.weight(.semibold))
+                    Text(item.displayName).font(AgentFont.bodySemibold)
                     if contentRisk?.isComplete == false {
                         StatusBadge(state: .attention, text: "Blocked", tint: AgentTheme.failure)
                     }
@@ -400,27 +400,27 @@ private struct PlanStepRow: View {
                     }
                 }
                 Text("\(clause) · \(item.surface.displayName)")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                 if let nothingRuns {
                     Text(nothingRuns)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(AgentTheme.warning)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let command {
                     Text(command)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(AgentFont.mono)
                         .textSelection(.enabled)
-                        .padding(9)
+                        .padding(Space.md)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
-                            Color.primary.opacity(0.045),
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            AgentTheme.fillSubtle,
+                            in: RoundedRectangle.control
                         )
                         .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                            RoundedRectangle.control
+                                .stroke(AgentTheme.fillStrong, lineWidth: Hairline.width)
                         }
                 }
                 if let linkedPath {
@@ -431,7 +431,7 @@ private struct PlanStepRow: View {
                 }
             }
         }
-        .padding(15)
+        .padding(Space.xl)
     }
 
     private var symbol: String {
@@ -483,15 +483,15 @@ private struct PlanFindingPanel<Content: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: Space.md) {
             Image(systemName: symbol)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(tint)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.caption.weight(.semibold))
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(title).font(AgentFont.captionSemibold)
                 if let message {
                     Text(message)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -499,14 +499,14 @@ private struct PlanFindingPanel<Content: View>: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(10)
+        .padding(Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(tint.opacity(0.07), in: RoundedRectangle.control)
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(tint.opacity(0.28), lineWidth: 0.5)
+            RoundedRectangle.control
+                .strokeBorder(tint.opacity(0.28), lineWidth: Hairline.width)
         }
-        .padding(.top, 2)
+        .padding(.top, Space.xxs)
     }
 }
 
@@ -522,38 +522,38 @@ private struct PlanContentRiskPanel: View {
             tint: report.maliciousCount > 0 ? AgentTheme.failure : AgentTheme.warning,
             title: report.headline
         ) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Space.sm) {
                 ForEach(report.findings.prefix(Self.listLimit)) { finding in
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        HStack(spacing: Space.sm) {
                             Image(systemName: finding.category.symbolName)
-                                .font(.caption2)
+                                .font(AgentFont.micro)
                                 .foregroundStyle(.secondary)
                             Text("\(finding.severity.displayName) · \(finding.headline)")
-                                .font(.caption.weight(.medium))
+                                .font(AgentFont.captionMedium)
                         }
                         Text(finding.location)
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(AgentFont.mono)
                             .foregroundStyle(.tertiary)
                         Text(finding.evidence)
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(AgentFont.mono)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                             .textSelection(.enabled)
                         Text(finding.guidance)
-                            .font(.caption2)
+                            .font(AgentFont.micro)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 if report.findings.count > Self.listLimit {
                     Text("and \(report.findings.count - Self.listLimit) more findings")
-                        .font(.caption2)
+                        .font(AgentFont.micro)
                         .foregroundStyle(.tertiary)
                 }
                 ForEach(report.coverageNotes.prefix(Self.listLimit), id: \.self) { note in
                     Label(note, systemImage: "exclamationmark.triangle")
-                        .font(.caption2)
+                        .font(AgentFont.micro)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

@@ -127,7 +127,7 @@ struct MCPServersView: View {
 
     private var collectionPane: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 Picker("App", selection: $clientFilter) {
                     Text(Self.allApps).tag(Self.allApps)
                     ForEach(availableClients, id: \.self) { Text($0.rawValue).tag($0.rawValue) }
@@ -141,14 +141,14 @@ struct MCPServersView: View {
             .padding(.horizontal, WorkspaceLayout.pageInset)
             .padding(.top, WorkspaceLayout.contentTopInset)
 
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: Space.md) {
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Space.md) {
                         statusSelector
                         serverFilterMenu
                     }
                     .fixedSize(horizontal: true, vertical: false)
-                    VStack(alignment: .leading, spacing: 9) {
+                    VStack(alignment: .leading, spacing: Space.md) {
                         statusSelector
                         serverFilterMenu
                     }
@@ -157,13 +157,13 @@ struct MCPServersView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, WorkspaceLayout.pageInset)
-            .padding(.bottom, 12)
-            .padding(.top, 9)
+            .padding(.bottom, Space.lg)
+            .padding(.top, Space.md)
 
             if let message = workspace.library.errorMessage {
                 AttentionBanner(title: "This workspace could not be read", message: message)
                     .padding(.horizontal, WorkspaceLayout.pageInset)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, Space.lg)
             }
 
             if filteredEntries.isEmpty {
@@ -179,108 +179,135 @@ struct MCPServersView: View {
                 // reads as a known gap rather than as a missing feature the
                 // person should go looking for.
                 Text("Account connectors — apps you sign into — are not tracked here yet.")
-                    .font(.system(size: 12))
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, WorkspaceLayout.pageInset)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, Space.lg)
             }
         }
         .paneMaterial()
     }
 
+    /// The columns the list lays out by hand; see `PluginsView.Columns` for why
+    /// this is a `List` and not a `Table`.
+    private struct Columns {
+        let width: CGFloat
+        var expanded: Bool { width >= 1_050 }
+        var name: CGFloat { expanded ? min(240, width * 0.22) : max(150, width - app - Space.lg) }
+        let ownership: CGFloat = 165
+        let plugin: CGFloat = 170
+        let source: CGFloat = 150
+        /// Four brand marks and the gaps between them.
+        let app: CGFloat = Size.brandMark * 4 + Space.sm * 3 + Space.sm
+        let requested: CGFloat = 75
+        let tools: CGFloat = 100
+        let status: CGFloat = 50
+    }
+
     private var serverTable: some View {
         GeometryReader { geometry in
-            if geometry.size.width < 1_050 {
-                Table(filteredEntries, selection: $selection) {
-                    TableColumn("Server") { entry in
-                        HStack(spacing: 12) {
-                            KindTile(kind: .mcpServer, size: 30, ghost: !entry.isManaged)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(entry.displayName).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                                Text(entry.clause).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                            .padding(.vertical, 8)
-                            Spacer(minLength: 4)
-                            StatusGlyph(state: entry.verdict.state, size: 13)
-                                .accessibilityHidden(false)
-                                .accessibilityLabel(entry.verdict.text)
-                        }
+            // The card's inner width, less the row's own insets.
+            let columns = Columns(width: geometry.size.width - Space.xl * 2)
+            VStack(spacing: 0) {
+                CollectionColumnHeader {
+                    Text(columns.expanded ? "Name" : "Server").frame(width: columns.name, alignment: .leading)
+                    if columns.expanded {
+                        Text("Managed by").frame(width: columns.ownership, alignment: .leading)
+                        Text("Plugin").frame(width: columns.plugin, alignment: .leading)
+                        Text("Source").frame(width: columns.source, alignment: .leading)
+                        Spacer(minLength: 0)
+                    } else {
+                        Spacer(minLength: 0)
                     }
-                    .width(min: 150, ideal: 280)
-                    TableColumn("App") { entry in
-                        TableClientMarks(clients: availableClients, present: entry.routedClients)
+                    Text("App").frame(width: columns.app, alignment: .leading)
+                    if columns.expanded {
+                        Text("Asked for").frame(width: columns.requested, alignment: .leading)
+                        Text("Tools").frame(width: columns.tools, alignment: .leading)
+                        Text("Status").frame(width: columns.status, alignment: .center)
                     }
-                    .width(70)
                 }
-                .tableStyle(.inset(alternatesRowBackgrounds: false))
-                .scrollContentBackground(.hidden)
-                .collectionSurface()
-            } else {
-                Table(filteredEntries, selection: $selection) {
-                    TableColumn("Name") { entry in
-                        HStack(spacing: 12) {
-                            KindTile(kind: .mcpServer, size: 30, ghost: !entry.isManaged)
-                            Text(entry.displayName).font(.callout.weight(.medium)).lineLimit(1)
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    .width(min: 170, ideal: 240)
-                    TableColumn("Managed by") { entry in
-                        FilterPill(title: entry.ownershipLabel, isOn: ownershipFilter == entry.ownershipLabel) {
-                            ownershipFilter = ownershipFilter == entry.ownershipLabel ? "" : entry.ownershipLabel
-                        }
-                    }
-                    .width(min: 130, ideal: 165)
-                    TableColumn("Plugin") { entry in
-                        if let plugin = entry.parentPluginLabel {
-                            FilterPill(title: plugin, isOn: pluginFilter == plugin) {
-                                pluginFilter = pluginFilter == plugin ? "" : plugin
-                            }
-                        } else {
-                            Text("—").foregroundStyle(.tertiary)
-                        }
-                    }
-                    .width(min: 130, ideal: 170)
-                    TableColumn("Source") { entry in
-                        if let source = entry.sourceLabel {
-                            FilterPill(title: source, isOn: sourceFilter == source) {
-                                sourceFilter = sourceFilter == source ? "" : source
-                            }
-                        } else {
-                            Text("—").foregroundStyle(.tertiary)
-                        }
-                    }
-                    .width(min: 110, ideal: 150)
-                    TableColumn("App") { entry in
-                        TableClientMarks(clients: availableClients, present: entry.routedClients)
-                    }
-                    .width(70)
-                    TableColumn("Asked for") { entry in
-                        Text(entry.requestedAssignments.isEmpty ? "—" : "\(entry.requestedAssignments.count)")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .help("Saved choices about where this server should be used. Installation is checked separately.")
-                    }
-                    .width(75)
-                    TableColumn("Tools") { entry in
-                        Text(capabilities.summary(for: entry.id) ?? "—")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    .width(100)
-                    TableColumn("Status") { entry in
-                        StatusGlyph(state: entry.verdict.state, size: 13)
-                            .accessibilityHidden(false)
-                            .accessibilityLabel(entry.verdict.text)
-                    }
-                    .width(50)
+                List(filteredEntries, selection: $selection) { entry in
+                    serverRow(entry, columns: columns)
+                        .tag(entry.id)
+                        .collectionRowChrome(selected: selection.contains(entry.id))
+                        .accessibilityLabel(entry.displayName)
                 }
-                .tableStyle(.inset(alternatesRowBackgrounds: false))
-                .scrollContentBackground(.hidden)
-                .collectionSurface()
+                .collectionListChrome()
             }
         }
+        .collectionSurface()
+    }
+
+    private func serverRow(_ entry: MCPConnectionEntry, columns: Columns) -> some View {
+        let selected = selection.contains(entry.id)
+        return HStack(spacing: Space.lg) {
+            HStack(spacing: Space.lg) {
+                KindTile(kind: .mcpServer, size: Size.tile, ghost: !entry.isManaged)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(entry.displayName).font(AgentFont.bodyMedium).lineLimit(1)
+                        .collectionRowForeground(selected: selected)
+                    if !columns.expanded {
+                        Text(entry.clause).font(AgentFont.caption).lineLimit(1)
+                            .collectionRowForeground(selected: selected, secondary: true)
+                    }
+                }
+                Spacer(minLength: 0)
+                if !columns.expanded {
+                    StatusGlyph(state: entry.verdict.state, size: Size.glyph, tint: selected ? Color.white : nil)
+                        .accessibilityHidden(false)
+                        .accessibilityLabel(entry.verdict.text)
+                }
+            }
+            .frame(width: columns.name, alignment: .leading)
+            if columns.expanded {
+                FilterPill(title: entry.ownershipLabel, isOn: ownershipFilter == entry.ownershipLabel) {
+                    ownershipFilter = ownershipFilter == entry.ownershipLabel ? "" : entry.ownershipLabel
+                }
+                .frame(width: columns.ownership, alignment: .leading)
+                Group {
+                    if let plugin = entry.parentPluginLabel {
+                        FilterPill(title: plugin, isOn: pluginFilter == plugin) {
+                            pluginFilter = pluginFilter == plugin ? "" : plugin
+                        }
+                    } else {
+                        Text("—").foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(width: columns.plugin, alignment: .leading)
+                Group {
+                    if let source = entry.sourceLabel {
+                        FilterPill(title: source, isOn: sourceFilter == source) {
+                            sourceFilter = sourceFilter == source ? "" : source
+                        }
+                    } else {
+                        Text("—").foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(width: columns.source, alignment: .leading)
+                Spacer(minLength: 0)
+            } else {
+                Spacer(minLength: 0)
+            }
+            TableClientMarks(clients: availableClients, present: entry.routedClients)
+                .frame(width: columns.app, alignment: .leading)
+            if columns.expanded {
+                Text(entry.requestedAssignments.isEmpty ? "—" : "\(entry.requestedAssignments.count)")
+                    .font(AgentFont.caption.monospacedDigit())
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .help("Saved choices about where this server should be used. Installation is checked separately.")
+                    .frame(width: columns.requested, alignment: .leading)
+                Text(capabilities.summary(for: entry.id) ?? "—")
+                    .font(AgentFont.caption.monospacedDigit())
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .frame(width: columns.tools, alignment: .leading)
+                StatusGlyph(state: entry.verdict.state, size: Size.glyph, tint: selected ? Color.white : nil)
+                    .accessibilityHidden(false)
+                    .accessibilityLabel(entry.verdict.text)
+                    .frame(width: columns.status, alignment: .center)
+            }
+        }
+        .padding(.vertical, Space.md)
     }
 
     @ViewBuilder
@@ -342,7 +369,7 @@ struct MCPServersView: View {
 
     private var activeServerFilters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: Space.sm) {
                 if !ownershipFilter.isEmpty {
                     FilterPill(title: ownershipFilter, isOn: true) { ownershipFilter = "" }
                 }
@@ -678,19 +705,18 @@ struct MCPStackPane: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 14) {
-                    KindTile(kind: .mcpServer, size: 40)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(entries.count) servers selected").font(.title3.weight(.semibold))
+            VStack(alignment: .leading, spacing: Space.xl) {
+                HStack(spacing: Space.xl) {
+                    KindTile(kind: .mcpServer, size: Size.tileLarge)
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text("\(entries.count) servers selected").font(AgentFont.title)
                         Text("Review them as one assignment instead of one each.")
-                            .font(.callout)
+                            .font(AgentFont.body)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button("Review one assignment", action: onAssign)
-                        .buttonStyle(.borderedProminent)
-                        .tint(AgentTheme.selection)
+                        .primaryActionStyle()
                         .disabled(assignable.isEmpty || isBusy)
                 }
 
@@ -702,7 +728,7 @@ struct MCPStackPane: View {
                             + "so this workspace has no say in where they are used. They stay out of the review."
                     ) {
                         Button("Keep one", action: onClear)
-                            .buttonStyle(.bordered)
+                            .secondaryActionStyle()
                             .controlSize(.small)
                     }
                 }
@@ -710,11 +736,11 @@ struct MCPStackPane: View {
                 TitledCard("In this stack", count: "\(entries.count)") {
                     ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                         InfoRow(entry.displayName, detail: entry.clause) {
-                            KindTile(kind: .mcpServer, size: 26, ghost: !entry.isManaged)
+                            KindTile(kind: .mcpServer, size: Size.tile, ghost: !entry.isManaged)
                         } trailing: {
                             StatusBadge(state: entry.verdict.state, text: entry.verdict.text)
                         }
-                        if index < entries.count - 1 { Divider().opacity(0.35) }
+                        if index < entries.count - 1 { Hairline() }
                     }
                 }
 
@@ -722,11 +748,11 @@ struct MCPStackPane: View {
                     "Saves where these servers should be used. Installing them in an app is a separate reviewed step "
                         + "on the Apps screen; nothing here writes to a client."
                 )
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(22)
+            .padding(Space.xxxl)
         }
     }
 
@@ -747,7 +773,7 @@ struct MCPDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Space.xl) {
                 header
 
                 if !entry.isAssignable, let explanation = entry.assignmentExplanation {
@@ -758,7 +784,7 @@ struct MCPDetailView: View {
                     if entry.requestedAssignments.isEmpty {
                         LabeledValueRow("Assignments") {
                             Text("Nobody has asked for this server anywhere yet.")
-                                .font(.caption)
+                                .font(AgentFont.caption)
                                 .foregroundStyle(.secondary)
                         }
                     } else {
@@ -769,62 +795,61 @@ struct MCPDetailView: View {
                 TitledCard("Origin") {
                     LabeledValueRow("Managed by") { Text(entry.ownershipLabel) }
                     if let plugin = entry.parentPluginLabel {
-                        Divider().opacity(0.45)
+                        Hairline()
                         LabeledValueRow("Plugin") { Text(plugin) }
                     }
                     if let source = entry.sourceLabel {
-                        Divider().opacity(0.45)
+                        Hairline()
                         LabeledValueRow("Source") { Text(source).lineLimit(1).truncationMode(.middle) }
                     }
                     ForEach(entry.nativeRoutes, id: \.client) { route in
-                        Divider().opacity(0.45)
+                        Hairline()
                         LabeledValueRow(route.client.rawValue) {
                             Text(route.externalPluginID)
-                                .font(.system(.caption, design: .monospaced))
+                                .font(AgentFont.mono)
                                 .textSelection(.enabled)
                         }
                     }
-                    Divider().opacity(0.45)
+                    Hairline()
                     LabeledValueRow("Workspace") {
                         LocationText(path: workspaceRoot.path(percentEncoded: false), label: "This Mac's workspace")
                     }
                 }
 
-                HStack(alignment: .top, spacing: 9) {
+                HStack(alignment: .top, spacing: Space.md) {
                     Image(systemName: "info.circle").foregroundStyle(.secondary)
                     Text(
                         "How to reach \(entry.displayName) — its command or address, its transport and its "
                             + "credentials — lives in each app's own configuration file, not in this workspace. "
                             + "Agent Tooling records that the server exists and where it was asked for."
                     )
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, Space.xxs)
 
                 MCPServerCapabilitiesPane(server: entry.server)
             }
-            .padding(22)
+            .padding(Space.xxxl)
         }
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
-            KindTile(kind: .mcpServer, size: 40, ghost: !entry.isManaged)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.displayName).font(.title3.weight(.semibold))
+        HStack(spacing: Space.xl) {
+            KindTile(kind: .mcpServer, size: Size.tileLarge, ghost: !entry.isManaged)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(entry.displayName).font(AgentFont.title)
                 Text(entry.observedDescription ?? entry.clause)
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             if entry.isAssignable {
                 Button("Assign…", action: onAssign)
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .disabled(isBusy)
             }
             if !entry.requestedAssignments.isEmpty {
@@ -864,26 +889,26 @@ struct MCPRemovalReviewSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                KindTile(kind: .mcpServer, size: 40)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Stop asking for \(presentation.name)").font(.title3.weight(.semibold))
+            HStack(spacing: Space.lg) {
+                KindTile(kind: .mcpServer, size: Size.tileLarge)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text("Stop asking for \(presentation.name)").font(AgentFont.title)
                     Text(subtitle).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
             }
-            .padding(22)
-            Divider()
+            .padding(Space.xxxl)
+            Hairline()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Space.xl) {
                     if let review = session.review {
                         TitledCard("What this changes") {
                             LabeledValueRow("Requests withdrawn") {
                                 Text("\(review.preview.removals.count)").monospacedDigit()
                             }
                             if !review.preview.additions.isEmpty {
-                                Divider().opacity(0.45)
+                                Hairline()
                                 LabeledValueRow("Requests added") {
                                     Text("\(review.preview.additions.count)").monospacedDigit()
                                 }
@@ -902,22 +927,22 @@ struct MCPRemovalReviewSheet: View {
                         "Removes the record that somebody wanted this server there. Nothing is uninstalled: what an "
                             + "app already has stays until the Apps screen is asked to change it."
                     )
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(22)
+                .padding(Space.xxxl)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Divider()
+            Hairline()
             HStack {
                 Spacer()
                 Button("Cancel") {
                     session.discardReview()
                     dismiss()
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .keyboardShortcut(.cancelAction)
                 Button("Stop asking") {
                     Task {
@@ -925,14 +950,13 @@ struct MCPRemovalReviewSheet: View {
                         if session.errorMessage == nil { dismiss() }
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(AgentTheme.selection)
+                .primaryActionStyle()
                 .keyboardShortcut(.defaultAction)
                 .disabled(session.review == nil || session.isBusy)
             }
-            .padding(16)
+            .padding(Space.xl)
         }
-        .frame(width: 600, height: 480)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
         .task { await session.reviewRemoval(contributionIDs: presentation.contributionIDs) }
     }

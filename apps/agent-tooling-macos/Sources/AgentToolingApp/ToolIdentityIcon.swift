@@ -33,7 +33,7 @@ struct ToolIdentityIcon: View {
         .clipShape(RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: size * 0.23, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)
+                .strokeBorder(AgentTheme.shadow, lineWidth: Hairline.width)
         }
         .accessibilityHidden(true)
     }

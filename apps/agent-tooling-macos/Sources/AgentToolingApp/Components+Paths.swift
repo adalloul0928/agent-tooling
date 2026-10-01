@@ -11,9 +11,9 @@ struct LocationText: View {
     var label: String?
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Space.xs) {
             Text(label ?? LocationText.shortName(for: path))
-                .font(.callout)
+                .font(AgentFont.body)
                 .lineLimit(1)
                 .truncationMode(.middle)
             PathInfoButton(path: path)
@@ -45,31 +45,31 @@ struct PathInfoButton: View {
             isPresented.toggle()
         } label: {
             Image(systemName: "info.circle")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: Size.glyphSmall, weight: .medium))
                 .foregroundStyle(.tertiary)
-                .frame(width: 18, height: 18)
+                .frame(width: Size.chipHeight, height: Size.chipHeight)
         }
         .buttonStyle(.plain)
         .help(path)
         .accessibilityLabel("Show location")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Space.md) {
                 Text(isWebURL ? "Address" : "Location")
-                    .font(.caption.weight(.semibold))
+                    .font(AgentFont.captionSemibold)
                     .foregroundStyle(.secondary)
                 Text(path)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(AgentFont.mono)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                 if canReveal {
                     Button("Reveal in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
                     }
-                    .buttonStyle(.link)
-                    .font(.caption)
+                    .inlineActionStyle()
+                    .font(AgentFont.caption)
                 }
             }
-            .padding(12)
+            .padding(Space.lg)
             .frame(minWidth: 220, maxWidth: 440, alignment: .leading)
         }
     }
@@ -91,7 +91,7 @@ struct CompactPathText: View {
 
     var body: some View {
         Text(displayPath)
-            .font(.system(.caption, design: .monospaced))
+            .font(AgentFont.mono)
             .foregroundStyle(.secondary)
             .lineLimit(lineLimit)
             .truncationMode(.middle)
@@ -122,9 +122,9 @@ struct TableClientMarks: View {
     let present: Set<ClientKind>
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: Space.sm) {
             ForEach(clients) { client in
-                ClientBrandIcon(client: client, size: 15)
+                ClientBrandIcon(client: client, size: Size.brandMark)
                     .opacity(present.contains(client) ? 1 : 0.22)
                     .grayscale(present.contains(client) ? 0 : 1)
             }

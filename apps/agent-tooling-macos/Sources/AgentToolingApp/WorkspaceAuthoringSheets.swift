@@ -14,12 +14,12 @@ struct WorkspaceAttachFolderSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Attach a folder you author").font(.title3.weight(.semibold))
+                Text("Attach a folder you author").font(AgentFont.title)
                 Spacer()
                 Button("Done") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
-            }.padding(20)
-            Divider()
-            VStack(alignment: .leading, spacing: 16) {
+            }.padding(Space.xxl)
+            Hairline()
+            VStack(alignment: .leading, spacing: Space.xl) {
                 Text("Your folder stays where it is and stays the only copy you edit. Agent Tooling records that it exists and where each app should find it. Nothing is copied into your library and nothing is written back into the folder.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -27,7 +27,7 @@ struct WorkspaceAttachFolderSheet: View {
                     AttentionBanner(title: "That folder could not be used", message: message)
                 }
                 if let candidate = session.candidate {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: Space.lg) {
                         LabeledContent("Folder") {
                             Text(candidate.directory.path).textSelection(.enabled).lineLimit(2)
                         }
@@ -38,32 +38,32 @@ struct WorkspaceAttachFolderSheet: View {
                                 .textFieldStyle(.roundedBorder).frame(maxWidth: 280)
                         }
                     }
-                    .padding(16).standardPanel(cornerRadius: 12)
+                    .padding(Space.xl).standardPanel()
                     if !session.canWrite {
                         Text("This workspace is open for reading only.")
-                            .font(.callout).foregroundStyle(.secondary)
+                            .font(AgentFont.body).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } else {
                     Text("Pick the folder that holds the skill's own SKILL.md — not a whole plugin.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(20)
+            .padding(Space.xxl)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            Divider()
+            Hairline()
             // One footer, one place: the primary changes its words with the
             // state, never its position.
-            HStack(spacing: 12) {
+            HStack(spacing: Space.lg) {
                 if session.candidate != nil {
                     Button("Choose a different folder…") { choose() }.disabled(session.isBusy)
                 }
                 Spacer()
                 if session.candidate == nil {
                     Button("Choose Folder…") { choose() }
-                        .buttonStyle(.borderedProminent)
+                        .primaryActionStyle()
                         .keyboardShortcut(.defaultAction)
                         .disabled(session.isBusy)
                 } else {
@@ -73,15 +73,15 @@ struct WorkspaceAttachFolderSheet: View {
                             if session.errorMessage == nil { dismiss() }
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
                     .disabled(session.isBusy || !session.canWrite)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .padding(.horizontal, Space.xxl)
+            .padding(.vertical, Space.xl)
         }
-        .frame(width: 620, height: 460)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
         .onDisappear { session.discard() }
     }
@@ -108,20 +108,20 @@ struct WorkspacePackageExportSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Export \(itemName)").font(.title3.weight(.semibold))
+                Text("Export \(itemName)").font(AgentFont.title)
                 Spacer()
                 Button("Done") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
-            }.padding(20)
-            Divider()
+            }.padding(Space.xxl)
+            Hairline()
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: Space.xxl) {
                     if let message = session.errorMessage {
                         AttentionBanner(title: "Export needs attention", message: message)
                     }
                     if let path = session.writtenPath {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: Space.sm) {
                             Label("Written", systemImage: "checkmark.circle")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(AgentFont.bodyMedium)
                             Text(path).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(3)
                         }
                     }
@@ -132,44 +132,44 @@ struct WorkspacePackageExportSheet: View {
                         ProgressView("Reading the approved content…")
                     }
                 }
-                .padding(20)
+                .padding(Space.xxl)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Divider()
+            Hairline()
             HStack {
                 Text("The exported folder is a copy. Editing it does not change your library.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
                 Spacer()
                 Button("Write to folder…") { choose() }
-                    .buttonStyle(.borderedProminent)
+                    .primaryActionStyle()
                     .disabled(session.isBusy || session.preview == nil)
-            }.padding(20)
+            }.padding(Space.xxl)
         }
-        .frame(width: 680, height: 560)
+        .sheetSize(SheetSize.large)
         .background(AgentTheme.contentBackground)
         .onDisappear { session.discard() }
     }
 
     private func contents(_ preview: WorkspacePackageExport) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("What would be written").font(.title3.weight(.semibold))
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text("What would be written").font(AgentFont.title)
             LabeledContent("Folder name") { Text(preview.declaredName) }
             LabeledContent("Files") { Text("\(preview.fileCount)") }
             LabeledContent("Size") {
                 Text(preview.totalFileBytes.formatted(.byteCount(style: .file)))
             }
             DisclosureGroup("Every file") {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: Space.xxs) {
                     ForEach(preview.relativePaths, id: \.self) { path in
-                        Text(path).font(.system(size: 12, design: .monospaced))
+                        Text(path).font(AgentFont.mono)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 6)
+                .padding(.top, Space.sm)
             }
         }
-        .padding(16).standardPanel(cornerRadius: 12)
+        .padding(Space.xl).standardPanel()
     }
 
     @ViewBuilder private func compatibility(_ preview: WorkspacePackageExport) -> some View {
@@ -177,34 +177,34 @@ struct WorkspacePackageExportSheet: View {
             Text("This Mac has not checked what your apps support yet, so nothing can be said about where this package would work.")
                 .foregroundStyle(.secondary)
         } else {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("What your apps could do with it").font(.title3.weight(.semibold))
+            VStack(alignment: .leading, spacing: Space.lg) {
+                Text("What your apps could do with it").font(AgentFont.title)
                 ForEach(preview.compatibility, id: \.surface) { report in
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Space.sm) {
                         Label(report.surface.displayName,
                               systemImage: report.isFullySupported ? "checkmark.circle" : "exclamationmark.circle")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(AgentFont.bodyMedium)
                         if report.notes.isEmpty {
                             Text("Nothing in this package is a problem for this app.")
                                 .foregroundStyle(.secondary)
                         }
                         ForEach(Array(report.notes.enumerated()), id: \.offset) { _, note in
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline, spacing: Space.md) {
                                 Text("•").foregroundStyle(.secondary)
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: Space.xxs) {
                                     Text(note.detail).foregroundStyle(.secondary)
                                     if let path = note.relativePath {
-                                        Text(path).font(.system(size: 12, design: .monospaced))
+                                        Text(path).font(AgentFont.mono)
                                             .foregroundStyle(.tertiary)
                                     }
                                 }
                             }
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, Space.xs)
                 }
             }
-            .padding(16).standardPanel(cornerRadius: 12)
+            .padding(Space.xl).standardPanel()
         }
     }
 

@@ -16,9 +16,9 @@ extension SkillsBrowser {
         return VStack(spacing: 0) {
             if let message = workspace.library.errorMessage, assignment == nil {
                 Label(message, systemImage: "exclamationmark.circle")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, 10)
+                    .padding(.horizontal, WorkspaceLayout.pageInset).padding(.vertical, Space.lg)
             }
             if skills.isEmpty {
                 EmptyStateView(
@@ -39,7 +39,7 @@ extension SkillsBrowser {
                         describing: skills.contains { !$0.summary.isEmpty })
                     VStack(spacing: 0) {
                         header(columns)
-                        Divider()
+                        Hairline()
                         ScrollView {
                             LazyVStack(spacing: 0, pinnedViews: .sectionHeaders) {
                                 ForEach(groups) { group in
@@ -83,8 +83,8 @@ extension SkillsBrowser {
     }
 
     func header(_ columns: SkillTableColumns) -> some View {
-        HStack(spacing: 12) {
-            if isSelecting { Color.clear.frame(width: 20) }
+        HStack(spacing: Space.lg) {
+            if isSelecting { Color.clear.frame(width: Size.glyphSlot) }
             Text("Name").frame(width: columns.name, alignment: .leading)
             if columns.expanded {
                 if columns.describing {
@@ -101,9 +101,9 @@ extension SkillsBrowser {
             Text("Managed").frame(width: columns.verdict, alignment: .trailing)
                 .help("Who manages each skill: you (with the apps this app placed it in), its plugin, or nobody here.")
         }
-        .font(.caption.weight(.medium)).foregroundStyle(.secondary)
-        .padding(.horizontal, 16).frame(height: 30)
-        .background(Color.primary.opacity(0.04))
+        .font(AgentFont.captionMedium).foregroundStyle(.secondary)
+        .padding(.horizontal, Space.xl).frame(height: Size.compactRowHeight)
+        .background(AgentTheme.fillSubtle)
     }
 
     func row(_ skill: SkillEntry, assignable: Bool, columns: SkillTableColumns) -> some View {
@@ -152,9 +152,9 @@ extension SkillsBrowser {
                     onExport: { exporting = .init(artifactID: skill.id, name: skill.displayName) },
                     onOpenPlugin: { id in navigation.openItem(id.rawValue.uuidString.lowercased(), in: .plugins) }
                 )
-                Divider()
+                Hairline()
                 HStack {
-                    Text(skill.installation).font(.caption).foregroundStyle(.secondary)
+                    Text(skill.installation).font(AgentFont.caption).foregroundStyle(.secondary)
                     SkillInfoButton(text: inventory.classification(for: skill).reason, label: "Classification information")
                     Spacer()
                     Picker(
@@ -171,7 +171,7 @@ extension SkillsBrowser {
                     .labelsHidden().fixedSize().controlSize(.small).disabled(skill.isMaintainedHere)
                     .accessibilityLabel(skill.providerPluginID == nil ? "Skill classification" : "Plugin classification")
                 }
-                .padding(.horizontal, 22).padding(.vertical, 10)
+                .padding(.horizontal, Space.xxxl).padding(.vertical, Space.lg)
             }
         } else {
             EmptyStateView(
@@ -253,15 +253,15 @@ extension SkillsBrowser {
     }
 
     func groupHeader(_ group: SkillListGroup, isCollapsed: Bool) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Space.md) {
             Button {
                 var collapsed = collapsedGroups
                 if collapsed.contains(group.id) { collapsed.remove(group.id) } else { collapsed.insert(group.id) }
                 saveCollapsedGroups(collapsed)
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: Space.md) {
                     Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                        .font(.caption2.weight(.semibold)).frame(width: 10)
+                        .font(AgentFont.microSemibold).frame(width: Size.glyphSmall)
                     Text(group.title).lineLimit(1)
                     if let subtitle = group.subtitle { Text(subtitle).foregroundStyle(.tertiary).lineLimit(1) }
                     Text("\(group.skills.count)").foregroundStyle(.tertiary)
@@ -279,11 +279,11 @@ extension SkillsBrowser {
             .menuStyle(.borderlessButton).fixedSize()
             .help("Classify skills in this group without changing where they are used")
         }
-        .font(.caption.weight(.semibold))
+        .font(AgentFont.captionSemibold)
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 13)
-        .frame(height: 32)
-        .background(Color.primary.opacity(0.04))
+        .padding(.horizontal, Space.lg)
+        .frame(height: Size.compactRowHeight)
+        .background(AgentTheme.fillSubtle)
     }
 
     // MARK: - Selection
