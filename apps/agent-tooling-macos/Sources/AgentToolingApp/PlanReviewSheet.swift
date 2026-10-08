@@ -215,12 +215,12 @@ struct PlanReviewSheet: View {
                 )
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
                 ForEach(Array(plan.exclusions.enumerated()), id: \.offset) { _, exclusion in
                     VStack(alignment: .leading, spacing: Space.xxs) {
                         Text(exclusionTitle(exclusion.reason)).font(AgentFont.bodyMedium)
                         Text(exclusion.detail).font(AgentFont.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                     }
                 }
             }
@@ -243,7 +243,7 @@ struct PlanReviewSheet: View {
             )
             .font(AgentFont.caption)
             .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .wrapsLines()
             ForEach(workspace.deployment.linkedDestinations) { destination in
                 HStack(spacing: Space.lg) {
                     Image(systemName: "folder").foregroundStyle(.secondary)
@@ -406,7 +406,7 @@ private struct PlanStepRow: View {
                     Text(nothingRuns)
                         .font(AgentFont.caption)
                         .foregroundStyle(AgentTheme.warning)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
                 if let command {
                     Text(command)
@@ -493,7 +493,7 @@ private struct PlanFindingPanel<Content: View>: View {
                     Text(message)
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
                 content
             }
@@ -543,7 +543,7 @@ private struct PlanContentRiskPanel: View {
                         Text(finding.guidance)
                             .font(AgentFont.micro)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                     }
                 }
                 if report.findings.count > Self.listLimit {
@@ -555,7 +555,7 @@ private struct PlanContentRiskPanel: View {
                     Label(note, systemImage: "exclamationmark.triangle")
                         .font(AgentFont.micro)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
             }
         }

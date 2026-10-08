@@ -126,11 +126,11 @@ struct CheckupView: View {
         let fine = items.filter { $0.bucket == .fine }
         return HStack(spacing: 0) {
             bucketCount(fix.count, unit: "to fix", state: fix.isEmpty ? .healthy : ((fix.map(\.severity).max() ?? .info) >= .medium ? .attention : .pending))
-            Hairline().frame(height: Size.compactRowHeight)
+            Hairline(.vertical).frame(height: Size.compactRowHeight)
             bucketCount(decide.count, unit: "to decide", state: decide.isEmpty ? .healthy : .pending)
-            Hairline().frame(height: Size.compactRowHeight)
+            Hairline(.vertical).frame(height: Size.compactRowHeight)
             bucketCount(fine.count, unit: fine.count == 1 ? "fine as it is" : "fine as they are", state: .healthy)
-            Hairline().frame(height: Size.compactRowHeight)
+            Hairline(.vertical).frame(height: Size.compactRowHeight)
             VStack(alignment: .leading, spacing: Space.xxs) {
                 HStack(spacing: Space.sm) {
                     ForEach(checkup.audit.clients) { client in ClientBrandIcon(client: client, size: Size.brandMark) }
@@ -171,14 +171,14 @@ struct CheckupView: View {
             HStack(spacing: Space.lg) {
                 ProgressView().controlSize(.small)
                 Text("\(session.reviewClient?.rawValue ?? "Your assistant") is reading the audit and the apps' configuration folders. The list below is ready now; its advice joins it in a few minutes.")
-                    .font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
                 Spacer()
             }
             .padding(.horizontal, Space.xl).padding(.vertical, Space.lg).standardPanel()
         } else if let message = session.reviewMessage {
             HStack(alignment: .top, spacing: Space.lg) {
                 Image(systemName: "exclamationmark.triangle").foregroundStyle(AgentTheme.warning)
-                Text(message).font(AgentFont.body).fixedSize(horizontal: false, vertical: true)
+                Text(message).font(AgentFont.body).wrapsLines()
                 Spacer()
             }
             .padding(.horizontal, Space.xl).padding(.vertical, Space.lg).standardPanel()
@@ -189,7 +189,7 @@ struct CheckupView: View {
                     ClientBrandIcon(client: review.client, size: Size.brandMark).padding(.top, Space.xxs)
                     VStack(alignment: .leading, spacing: Space.xs) {
                         Text(summaryExpanded ? review.summary : (sentences.first ?? review.summary))
-                            .font(AgentFont.body).fixedSize(horizontal: false, vertical: true)
+                            .font(AgentFont.body).wrapsLines()
                         if sentences.count > 1 {
                             Button(summaryExpanded ? "Less" : "More") { withAnimation(AgentMotion.quick) { summaryExpanded.toggle() } }
                                 .inlineActionStyle().font(AgentFont.caption)
@@ -301,7 +301,7 @@ struct CheckupView: View {
     private func noticeRow(_ text: String, state: HealthState) -> some View {
         HStack(spacing: Space.lg) {
             StatusGlyph(state: state, size: Size.glyphLarge)
-            Text(text).font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(text).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
             Spacer(minLength: Space.lg)
         }
         .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
@@ -370,9 +370,9 @@ struct CheckupRow: View {
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: Space.md) {
-                    Text(item.detail).font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(item.detail).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                     if let recommendation = item.recommendation, !recommendation.rationale.isEmpty, recommendation.rationale != item.detail {
-                        Text(recommendation.rationale).font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text(recommendation.rationale).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                     }
                     if let provenance = item.provenance { ProvenanceLabel(provenance: provenance) }
                     if item.findings.count > 1 || (item.findings.count == 1 && item.recommendation == nil) {
@@ -432,7 +432,7 @@ struct FixAllSheet: View {
                 VStack(alignment: .leading, spacing: Space.xxs) {
                     Text("Fix \(plan.total) thing\(plan.total == 1 ? "" : "s")").font(AgentFont.title)
                     Text("Each runs through Agent Tooling's own reviewed path. Nothing is deleted: folders move to the workspace trash and configuration files are copied there first.")
-                        .font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
                 }
             }
             VStack(alignment: .leading, spacing: Space.sm) {

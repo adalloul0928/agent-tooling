@@ -203,7 +203,7 @@ struct OverviewView: View {
                     Text("Browse skills, plugins, and connections, or review recent work in Insights.")
                         .font(AgentFont.body)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                     HStack(spacing: Space.lg) {
                         Button("Browse Discover") { navigate(.marketplace) }
                             .primaryActionStyle()
@@ -544,7 +544,7 @@ struct OverviewView: View {
                     VStack(alignment: .leading, spacing: Space.xxs) {
                         Text("This Mac has not been checked yet").font(AgentFont.bodyMedium)
                         Text("Find what is broken, duplicated, or unmanaged, and have your assistant say what to do.")
-                            .font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                     }
                 }
                 Spacer(minLength: Space.md)

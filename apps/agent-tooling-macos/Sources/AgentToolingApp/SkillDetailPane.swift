@@ -31,11 +31,11 @@ struct SkillDetailView: View {
                 if let explanation = skill.assignmentExplanation {
                     Text(explanation)
                         .font(AgentFont.body).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
                 if !skill.summary.isEmpty {
                     Text(skill.summary).font(AgentFont.body).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
                 SkillRepositorySection(
                     skill: skill, binding: upstream?.binding, approvedRevision: upstream?.approvedRevision,
@@ -149,7 +149,7 @@ struct SkillDetailView: View {
                         Text(trialNotice.text)
                             .font(AgentFont.caption)
                             .foregroundStyle(trialNotice.isError ? Color.red : Color.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                         Spacer()
                         Button("Dismiss") { self.trialNotice = nil }
                             .inlineActionStyle().font(AgentFont.caption)
@@ -284,7 +284,7 @@ struct SkillDetailView: View {
             ProgressView("Reading the stored files…").controlSize(.small)
         } else if skill.hasCentralContent, content.loadedID != skill.id, let message = content.errorMessage {
             Text(message).font(AgentFont.body).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         } else if content.loadedID == skill.id, !content.files.isEmpty {
             DisclosureGroup("Source files") {
                 VStack(spacing: 0) {
@@ -321,7 +321,7 @@ struct SkillInfoButton: View {
         .help(text)
         .popover(isPresented: $presented) {
             Text(text).font(AgentFont.body).padding(Space.xl).frame(width: 290, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         }
     }
 }

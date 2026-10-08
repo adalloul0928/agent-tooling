@@ -116,7 +116,7 @@ struct SyncCenterView: View {
                         HStack(spacing: Space.lg) {
                             StatusGlyph(state: .healthy, size: Size.glyphLarge)
                             Text(added).font(AgentFont.caption).foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                                .wrapsLines()
                             Spacer(minLength: Space.lg)
                         }
                         .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
@@ -271,7 +271,7 @@ struct SyncCenterView: View {
                     }
                     if !verdict.detail.isEmpty {
                         Text(verdict.detail).font(AgentFont.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                     }
                 }
                 Spacer(minLength: Space.lg)
@@ -289,9 +289,9 @@ struct SyncCenterView: View {
             // app that has not been checked has no numbers, and says so.
             HStack(spacing: 0) {
                 heldColumn("Skills", count: held?.skills)
-                Hairline().frame(height: Size.controlHeight)
+                Hairline(.vertical).frame(height: Size.controlHeight)
                 heldColumn("MCP servers", count: held?.servers)
-                Hairline().frame(height: Size.controlHeight)
+                Hairline(.vertical).frame(height: Size.controlHeight)
                 heldColumn("Plugins", count: held?.plugins)
             }
             .padding(.horizontal, Space.md).padding(.vertical, Space.lg)
@@ -309,7 +309,7 @@ struct SyncCenterView: View {
                     }
                     ForEach(notes, id: \.self) { note in
                         Text(note).font(AgentFont.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                     }
                 }
                 .padding(Space.xl)
@@ -342,7 +342,7 @@ struct SyncCenterView: View {
                     HStack(spacing: Space.lg) {
                         ProgressView().controlSize(.small)
                         Text("Fetching \(app.rawValue)'s release notes, then having \(setup.reviewClient?.rawValue ?? "your assistant") read them against your setup. A few minutes.")
-                            .font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
                         Spacer()
                     }
                     .padding(Space.xl)
@@ -353,9 +353,9 @@ struct SyncCenterView: View {
                             Spacer()
                             Text(SnapshotTime.compact(review.completedAt)).font(AgentFont.micro).foregroundStyle(.tertiary)
                         }
-                        if let summary = review.review?.summary { Text(summary).font(AgentFont.body).fixedSize(horizontal: false, vertical: true) }
+                        if let summary = review.review?.summary { Text(summary).font(AgentFont.body).wrapsLines() }
                         if let message = setup.clientReviewMessage {
-                            Text(message).font(AgentFont.caption).foregroundStyle(AgentTheme.warning).fixedSize(horizontal: false, vertical: true)
+                            Text(message).font(AgentFont.caption).foregroundStyle(AgentTheme.warning).wrapsLines()
                         }
                     }
                     .padding(Space.xl)
@@ -367,7 +367,7 @@ struct SyncCenterView: View {
                                     Text("\(note.version)").font(AgentFont.captionSemibold)
                                     Link(note.source, destination: URL(string: note.source) ?? URL(filePath: "/")).font(AgentFont.micro).lineLimit(1)
                                     Text(note.body.prefix(600) + (note.body.count > 600 ? "…" : "")).font(AgentFont.micro).foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
+                                        .wrapsLines()
                                 }
                                 .padding(.vertical, Space.sm)
                             }
@@ -395,7 +395,7 @@ struct SyncCenterView: View {
                     Text(message).font(AgentFont.body).foregroundStyle(.secondary).padding(Space.xl)
                 } else {
                     Text("Fetches what \(app.rawValue) has published since the version on this Mac and has your assistant read it against your configuration: settings the docs now recommend, hooks, skills, plugins, and servers worth adding, and what is deprecated. Every claim names its source.")
-                        .font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(Space.xl)
+                        .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines().padding(Space.xl)
                 }
             }
         }
@@ -769,7 +769,7 @@ private struct ManagedClientsPopover: View {
             }
             if let message = device.errorMessage {
                 Text(message).font(AgentFont.caption).foregroundStyle(AgentTheme.warning)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
         }
         .padding(Space.xl)

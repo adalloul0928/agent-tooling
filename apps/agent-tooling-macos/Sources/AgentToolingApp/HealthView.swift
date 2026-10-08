@@ -245,7 +245,7 @@ private struct HealthRow: View {
                     Text(detail)
                         .font(AgentFont.caption)
                         .foregroundStyle(AgentTheme.failure)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
                 resultText
             }
@@ -293,12 +293,12 @@ private struct HealthRow: View {
             Text(message)
                 .font(AgentFont.caption)
                 .foregroundStyle(AgentTheme.ok)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         case .failed(let message):
             Text(message)
                 .font(AgentFont.caption)
                 .foregroundStyle(AgentTheme.failure)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         }
     }
 
@@ -328,7 +328,7 @@ private struct HealthRow: View {
                         Text(guidance)
                             .font(AgentFont.body)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                     }
                     .padding(Space.xl)
                     .frame(width: 320)

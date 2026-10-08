@@ -78,7 +78,7 @@ struct OnboardingWizard: View {
             VStack(alignment: .leading, spacing: Space.sm) {
                 Text(step.title).font(AgentFont.pageTitle)
                 Text(step.subtitle).font(AgentFont.body).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, WorkspaceLayout.pageInset).padding(.top, Space.xxl).padding(.bottom, Space.xl)

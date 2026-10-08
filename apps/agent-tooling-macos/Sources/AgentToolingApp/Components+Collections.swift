@@ -20,8 +20,6 @@ extension View {
     func collectionListChrome() -> some View {
         listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .listRowSeparator(.hidden)
-            .listSectionSeparator(.hidden)
             .environment(\.defaultMinListRowHeight, Size.rowHeight)
     }
 
@@ -29,7 +27,10 @@ extension View {
     /// hairline underneath, hidden while the row is selected so the accent
     /// fill has a clean edge.
     func collectionRowChrome(selected: Bool) -> some View {
-        listRowInsets(EdgeInsets(top: 0, leading: Space.xl, bottom: 0, trailing: Space.xl))
+        // The system separator is a row trait, so it is switched off here, on
+        // the row, where it has effect; on the list it is ignored.
+        listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 0, leading: Space.xl, bottom: 0, trailing: Space.xl))
             .frame(minHeight: Size.rowHeight)
             .listRowBackground(
                 ZStack(alignment: .bottom) {
@@ -50,6 +51,8 @@ extension View {
 }
 
 /// The title over a run of rows inside a collection list: "Today", "Pinned".
+/// It is a row of the list, not a native section header, which would draw its
+/// own rule and ground; it carries the chrome a header row needs.
 struct CollectionSectionHeader: View {
     let title: String
 
@@ -62,6 +65,10 @@ struct CollectionSectionHeader: View {
             .padding(.bottom, Space.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
             .textCase(nil)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+            .selectionDisabled()
     }
 }
 

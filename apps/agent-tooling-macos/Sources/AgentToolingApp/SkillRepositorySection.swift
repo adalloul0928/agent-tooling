@@ -55,18 +55,18 @@ struct SkillRepositorySection: View {
             if let status = session.upstreamStatus {
                 Text(status.title).font(AgentFont.bodyMedium)
                 Text(status.detail).font(AgentFont.body).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 Text("Checked \(status.checkedAt.formatted(date: .abbreviated, time: .shortened))")
                     .font(AgentFont.caption).foregroundStyle(.secondary)
             } else {
                 Text("This library has not asked the repository what it publishes now.")
                     .font(AgentFont.body).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             if let message = session.errorMessage {
                 Text(message)
                     .font(AgentFont.body).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             HStack {
                 Button("Check for updates", systemImage: "arrow.clockwise") {
@@ -88,7 +88,7 @@ struct SkillRepositorySection: View {
                 "This skill follows a repository, but this workspace no longer records which one. Nothing can be checked until that is repaired."
             )
             .font(AgentFont.body).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .wrapsLines()
         }
     }
 
@@ -97,7 +97,7 @@ struct SkillRepositorySection: View {
             .font(AgentFont.bodyMedium)
         Text("Your own folder is the only copy. Nothing here updates it, and nothing writes into it.")
             .font(AgentFont.body).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .wrapsLines()
         if let authoringPath {
             LocationText(path: authoringPath)
         }
@@ -113,7 +113,7 @@ struct SkillRepositorySection: View {
             .font(AgentFont.bodyMedium)
         Text("You hold this skill's source. Edit it here, then review where the change should be used.")
             .font(AgentFont.body).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .wrapsLines()
         if skill.hasCentralContent {
             HStack {
                 Button("Follow a repository…", systemImage: "arrow.triangle.branch") {
@@ -127,7 +127,7 @@ struct SkillRepositorySection: View {
         } else {
             Text(LinkSkillUpstreamRefusal.missingContent.reason)
                 .font(AgentFont.body).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         }
     }
 
@@ -137,7 +137,7 @@ struct SkillRepositorySection: View {
                 .font(AgentFont.bodyMedium)
             Text("This skill stays with \(plugin). Manage the whole plugin in Library → Plugins.")
                 .font(AgentFont.body).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         } else {
             Label("Source unknown", systemImage: "questionmark.folder")
                 .font(AgentFont.bodyMedium)
@@ -145,7 +145,7 @@ struct SkillRepositorySection: View {
                 "This skill stays in the app it was found in. This workspace has no way to record a repository for a skill it does not hold, so there is nothing to check for updates."
             )
             .font(AgentFont.body).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .wrapsLines()
         }
     }
 }

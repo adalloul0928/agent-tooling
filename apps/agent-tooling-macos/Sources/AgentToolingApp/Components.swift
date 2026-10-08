@@ -247,7 +247,7 @@ struct AttentionBanner<Action: View>: View {
             StatusGlyph(state: .attention, size: Size.glyphLarge)
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(title).font(AgentFont.bodySemibold)
-                Text(message).font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(message).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
             }
             Spacer(minLength: Space.lg)
             action

@@ -381,7 +381,7 @@ struct MCPServersView: View {
                 }
             }
         }
-        .fixedSize(horizontal: false, vertical: true)
+        .wrapsLines()
     }
 
     // MARK: - Data
@@ -750,7 +750,7 @@ struct MCPStackPane: View {
                 )
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             }
             .padding(Space.xxxl)
         }
@@ -825,7 +825,7 @@ struct MCPDetailView: View {
                     )
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, Space.xxs)
@@ -844,7 +844,7 @@ struct MCPDetailView: View {
                 Text(entry.observedDescription ?? entry.clause)
                     .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             Spacer()
             if entry.isAssignable {
@@ -929,7 +929,7 @@ struct MCPRemovalReviewSheet: View {
                     )
                     .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 }
                 .padding(Space.xxxl)
                 .frame(maxWidth: .infinity, alignment: .leading)

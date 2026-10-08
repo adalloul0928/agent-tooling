@@ -188,7 +188,7 @@ struct AddCatalogSourceSheet: View {
                     "Discover reads the catalog and lists what it publishes. Adding one records where to look — nothing is fetched now, nothing is installed, and each package is still added to your library one at a time."
                 )
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
 
                 if let message = session.errorMessage {
                     AttentionBanner(title: "That catalog was not recorded", message: message)
@@ -233,7 +233,7 @@ struct AddCatalogSourceSheet: View {
                     "The folder stays where it is and is only ever read. Its path is this Mac's own — your other Macs see the catalog and bind it to their own copy."
                 )
                 .font(AgentFont.body).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             }
             .padding(Space.xxl)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -352,7 +352,7 @@ struct RemoveCatalogSourceConfirmation: View {
             Text("Remove \(source.name)?").font(AgentFont.bodySemibold)
             Text(session.errorMessage ?? Self.consequence)
                 .font(AgentFont.body).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             HStack(spacing: Space.lg) {
                 Spacer()
                 Button("Keep") { close() }.keyboardShortcut(.cancelAction)

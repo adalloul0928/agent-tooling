@@ -60,7 +60,7 @@ struct PathInfoButton: View {
                 Text(path)
                     .font(AgentFont.mono)
                     .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 if canReveal {
                     Button("Reveal in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])

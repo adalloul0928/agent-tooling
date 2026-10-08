@@ -96,9 +96,6 @@ struct ActivityView: View {
                 List(selection: $selectedID) {
                     ForEach(activityGroups) { group in
                         CollectionSectionHeader(title: group.title)
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
-                            .selectionDisabled()
                         ForEach(group.receipts) { receipt in
                             ActivityCollectionRow(receipt: receipt, selected: selectedID == receipt.id)
                                 .tag(receipt.id)
@@ -279,7 +276,7 @@ private struct InstallDriftNotice: View {
                 )
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             }
             Spacer(minLength: 0)
         }
@@ -409,7 +406,7 @@ private struct ItemOutcomeRow: View {
                 Text(outcome.reason)
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                     .textSelection(.enabled)
             }
             Spacer(minLength: 0)

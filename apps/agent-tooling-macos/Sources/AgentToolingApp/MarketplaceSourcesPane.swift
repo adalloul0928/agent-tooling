@@ -190,13 +190,13 @@ struct MarketplaceSourceRow: View {
                         Text(source.name).font(AgentFont.bodySemibold).lineLimit(1)
                         if let contents {
                             Text(contents).font(AgentFont.caption).foregroundStyle(.secondary)
-                                .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                                .lineLimit(3).wrapsLines()
                                 .help(contents)
                         } else {
                             Text(source.kind.displayName).font(AgentFont.caption).foregroundStyle(.secondary)
                         }
                         Text(source.trustSummary).font(AgentFont.micro).foregroundStyle(.secondary)
-                            .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(3).wrapsLines()
                             .help(source.trustSummary)
                         if source.isOptionalBackup {
                             Text("Optional Git source")

@@ -22,7 +22,7 @@ struct WorkspaceAttachFolderSheet: View {
             VStack(alignment: .leading, spacing: Space.xl) {
                 Text("Your folder stays where it is and stays the only copy you edit. Agent Tooling records that it exists and where each app should find it. Nothing is copied into your library and nothing is written back into the folder.")
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 if let message = session.errorMessage {
                     AttentionBanner(title: "That folder could not be used", message: message)
                 }
@@ -42,12 +42,12 @@ struct WorkspaceAttachFolderSheet: View {
                     if !session.canWrite {
                         Text("This workspace is open for reading only.")
                             .font(AgentFont.body).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                     }
                 } else {
                     Text("Pick the folder that holds the skill's own SKILL.md — not a whole plugin.")
                         .font(AgentFont.body).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
             }
             .padding(Space.xxl)

@@ -253,7 +253,7 @@ struct SkillUpstreamLinkSheet: View {
                         "Following a repository changes where this skill's next version comes from. It does not change the version you have now, and nothing is ever written into the repository."
                     )
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                     repository
                     if let message = session.errorMessage {
                         AttentionBanner(title: "That repository could not be followed", message: message)
@@ -313,7 +313,7 @@ struct SkillUpstreamLinkSheet: View {
                 .disabled(!session.canCheck)
                 Text("Reads the repository and reports what it publishes. Nothing is changed by checking.")
                     .font(AgentFont.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
         }
         .padding(Space.xl).standardPanel()
@@ -341,13 +341,13 @@ struct SkillUpstreamLinkSheet: View {
                     "Following it records where the next version comes from. The files in your library stay exactly as they are."
                 )
                 .font(AgentFont.body).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             } else {
                 // The refusal's own words, because they name both ways out of
                 // it and this screen must not paraphrase either one.
                 Text(LinkSkillUpstreamRefusal.contentDiffersFromUpstream.reason)
                     .font(AgentFont.body).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 Button("Use the repository's version…", systemImage: "arrow.down.circle") {
                     isReplacing = true
                 }

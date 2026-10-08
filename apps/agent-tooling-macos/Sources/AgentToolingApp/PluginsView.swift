@@ -544,7 +544,7 @@ private struct PluginDetailView: View {
                     StatusGlyph(state: availability.health, size: Size.glyph)
                     Text(availability.detail)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
             }
         }

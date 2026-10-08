@@ -23,7 +23,7 @@ struct SkillCreationChooserSheet: View {
                 Text("An assistant writes the draft with you in a conversation and never saves anything until you do. Writing it yourself opens the form.")
                     .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             .padding(.horizontal, Space.xxxl)
             .padding(.top, Space.xxxl)
@@ -76,7 +76,7 @@ struct SkillCreationChooserSheet: View {
                     Text(unavailableReason ?? method.detail)
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
                 Spacer()
                 Image(systemName: "chevron.right")

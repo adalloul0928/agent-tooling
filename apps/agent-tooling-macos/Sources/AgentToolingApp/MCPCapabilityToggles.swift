@@ -122,7 +122,7 @@ struct MCPCapabilitySection: View {
                         Text(emptyMessage)
                             .font(AgentFont.body)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                         Spacer(minLength: 0)
                     }
                     .padding(Space.xl)
@@ -143,7 +143,7 @@ struct MCPCapabilitySection: View {
                         Text(MCPCapabilityIntent.enforcementNotice)
                             .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                         if let recordPath = capabilities.recordPath {
                             LocationText(path: recordPath)
                         }

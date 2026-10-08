@@ -127,7 +127,7 @@ struct InsightsView: View {
                     )
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 }
                 .padding(Space.xl)
 
@@ -200,7 +200,7 @@ struct InsightsView: View {
                             )
                             .toggleStyle(.checkbox)
                             .disabled(!session.canReachCatalog)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                             // Offering a switch that reaches nothing would be a
                             // claim this build cannot keep, so it stays off
                             // until a catalog exists to ask.
@@ -211,7 +211,7 @@ struct InsightsView: View {
                             )
                             .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                         }
                     }
                 }
@@ -318,11 +318,11 @@ struct InsightsView: View {
         HStack(alignment: .center, spacing: 0) {
             summaryStat(
                 report.conversationsScanned, "Conversations scanned", tint: .primary)
-            Hairline().frame(height: Size.compactRowHeight).padding(.horizontal, Space.xs)
+            Hairline(.vertical).frame(height: Size.compactRowHeight).padding(.horizontal, Space.xs)
             summaryStat(
                 report.recommendations.count, "Worth adding",
                 tint: report.recommendations.isEmpty ? .secondary : AgentTheme.selection)
-            Hairline().frame(height: Size.compactRowHeight).padding(.horizontal, Space.xs)
+            Hairline(.vertical).frame(height: Size.compactRowHeight).padding(.horizontal, Space.xs)
             summaryStat(
                 report.qualityFindings.count, "Skill findings",
                 tint: report.qualityFindings.isEmpty ? .secondary : AgentTheme.warning)
@@ -389,7 +389,7 @@ struct InsightsView: View {
                         Text("\(deepDiveClient?.rawValue ?? "Your assistant") is reading your recent conversations…")
                             .font(AgentFont.bodyMedium)
                         Text("This takes a few minutes. The findings below are the instant keyword pass; the considered read replaces them here when it lands.")
-                            .font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                     }
                     Spacer()
                 }
@@ -399,7 +399,7 @@ struct InsightsView: View {
             InsightPanel("Deep dive") {
                 HStack(alignment: .top, spacing: Space.lg) {
                     Image(systemName: "exclamationmark.triangle").foregroundStyle(AgentTheme.warning)
-                    Text(message).font(AgentFont.body).fixedSize(horizontal: false, vertical: true)
+                    Text(message).font(AgentFont.body).wrapsLines()
                     Spacer()
                 }
                 .padding(Space.xl)
@@ -408,7 +408,7 @@ struct InsightsView: View {
             InsightPanel("Deep dive — what \(dive.client.rawValue) sees in your recent work") {
                 VStack(alignment: .leading, spacing: 0) {
                     VStack(alignment: .leading, spacing: Space.sm) {
-                        Text(dive.summary).font(AgentFont.body).fixedSize(horizontal: false, vertical: true)
+                        Text(dive.summary).font(AgentFont.body).wrapsLines()
                         Text(
                             "\(dive.conversationsConsidered) conversations read · \(dive.generatedAt.formatted(.relative(presentation: .named)))"
                         )
@@ -423,7 +423,7 @@ struct InsightsView: View {
                                 VStack(alignment: .leading, spacing: Space.xs) {
                                     Text(theme.title).font(AgentFont.bodySemibold)
                                     Text(theme.detail).font(AgentFont.caption).foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
+                                        .wrapsLines()
                                     Text(themeMetadata(theme)).font(AgentFont.micro).foregroundStyle(.secondary)
                                 }
                                 Spacer()
@@ -487,7 +487,7 @@ struct InsightsView: View {
                     Text(catalogDiscoveryDetail(discovery))
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
                 Spacer()
             }
@@ -528,7 +528,7 @@ struct InsightsView: View {
                     )
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                     .padding(Space.xl)
 
                     if report.skillUsage.isEmpty {
@@ -798,7 +798,7 @@ private struct CoverageRow: View {
                 Text(coverage.detail)
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 if let latestItemAt = coverage.latestItemAt {
                     Text("Latest item \(latestItemAt.formatted(.relative(presentation: .named)))")
                         .font(AgentFont.micro)
@@ -844,11 +844,11 @@ private struct RecommendationRow: View {
                     .font(AgentFont.bodySemibold)
                 Text(displaySummary)
                     .font(AgentFont.body)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 Text(recommendation.rationale)
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 Text(metadata)
                     .font(AgentFont.micro)
                     .foregroundStyle(.secondary)
@@ -940,11 +940,11 @@ private struct QualityFindingRow: View {
                     .font(AgentFont.bodySemibold)
                 Text(finding.detail)
                     .font(AgentFont.body)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 Text(finding.recommendedAction)
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             Spacer(minLength: Space.xxl)
             Button("Open skill", action: openSkill)
@@ -992,7 +992,7 @@ private struct SkillUsageRow: View {
                 Text(evidenceDetail)
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             Spacer(minLength: Space.xxl)
             Button("Open skill", action: openSkill)

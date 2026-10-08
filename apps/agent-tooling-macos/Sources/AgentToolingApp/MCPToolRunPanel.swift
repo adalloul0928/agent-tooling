@@ -40,7 +40,7 @@ struct MCPToolRunPanel: View {
                         Text(tool.safety.detail)
                             .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, Space.xl)
@@ -68,7 +68,7 @@ struct MCPToolRunPanel: View {
                         Label(validationError, systemImage: "exclamationmark.triangle")
                             .font(AgentFont.caption)
                             .foregroundStyle(AgentTheme.warning)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                     } else {
                         Text("Calls the running \(serverName) server for real.")
                             .font(AgentFont.caption)
@@ -91,7 +91,7 @@ struct MCPToolRunPanel: View {
                 Label(failure, systemImage: "exclamationmark.triangle")
                     .font(AgentFont.caption)
                     .foregroundStyle(AgentTheme.warning)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                     .padding(.horizontal, Space.xxs)
             }
             if let outcome { MCPToolOutcomeView(outcome: outcome) }
@@ -127,7 +127,7 @@ struct MCPToolRunPanel: View {
                     Text(summary)
                         .font(AgentFont.micro)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
             }
         }
@@ -246,7 +246,7 @@ private struct MCPResultText: View {
             .font(font)
             .foregroundStyle(tint)
             .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
+            .wrapsLines()
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 

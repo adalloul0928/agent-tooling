@@ -382,13 +382,13 @@ private struct ProjectDetailView: View {
                 Text("Project-scoped tools install into this folder's own app directories (for example .claude/skills).")
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
 
             Text(originSummary)
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         }
         .padding(.horizontal, Space.xxxl)
         .padding(.top, Space.xxl)
@@ -576,7 +576,7 @@ private struct EmptyCardRow: View {
         Text(text)
             .font(AgentFont.body)
             .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .wrapsLines()
             .padding(.horizontal, Space.xl)
             .padding(.vertical, Space.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -826,7 +826,7 @@ private struct NewProjectSheet: View {
                     "A project is a name your tools are assigned to — pick skills and servers for it from the Library, and install them into each app's project scope from Apps. Creating one writes nothing anywhere else."
                 )
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
 
                 if let errorMessage {
                     AttentionBanner(title: "That project was not created", message: errorMessage)

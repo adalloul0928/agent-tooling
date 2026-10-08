@@ -194,7 +194,7 @@ struct PasteImportSheet: View {
             )
             .font(AgentFont.body)
             .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .wrapsLines()
 
             TextEditor(text: $text)
                 .font(AgentFont.mono)
@@ -222,7 +222,7 @@ struct PasteImportSheet: View {
                 Label(failure, systemImage: "exclamationmark.triangle")
                     .font(AgentFont.caption)
                     .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
         }
         .padding(Space.xxxl)

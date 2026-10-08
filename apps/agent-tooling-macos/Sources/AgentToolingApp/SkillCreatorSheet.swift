@@ -261,7 +261,7 @@ struct SkillCreatorSheet: View {
                 Text("Say what it should accomplish, when \(client.rawValue) should reach for it, and any constraints it must follow. \(client.rawValue) may ask a few questions before it writes anything, and you can ask for changes after each draft.")
                     .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
 
                 optionsSummary
             }
@@ -324,7 +324,7 @@ struct SkillCreatorSheet: View {
                 Text(message.text)
                     .font(AgentFont.body)
                     .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 Spacer(minLength: Space.xxl)
             }
             .accessibilityLabel("\(client.rawValue) said: \(message.text)")
@@ -332,7 +332,7 @@ struct SkillCreatorSheet: View {
             Label(message.text, systemImage: "info.circle")
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         }
     }
 
@@ -420,7 +420,7 @@ struct SkillCreatorSheet: View {
             Text(optionsSummaryText)
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         }
         .padding(Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -471,7 +471,7 @@ struct SkillCreatorSheet: View {
                     )
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 } else {
                     HStack(spacing: Space.xl) {
                         ForEach(enabledClients, id: \.self) { target in
@@ -538,7 +538,7 @@ struct SkillCreatorSheet: View {
                     Text(result.description)
                         .font(AgentFont.body)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
                 .padding(.horizontal, Space.xxl)
                 .padding(.vertical, Space.xl)
@@ -728,7 +728,7 @@ struct SkillCreatorSheet: View {
             Text(detail)
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             content()
         }
     }

@@ -101,7 +101,7 @@ struct SetupWizardSheet: View {
             Hairline()
             VStack(alignment: .leading, spacing: Space.sm) {
                 Text(step.title).font(AgentFont.pageTitle)
-                Text(step.subtitle).font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(step.subtitle).font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, WorkspaceLayout.pageInset).padding(.top, Space.xxl).padding(.bottom, Space.xl)
@@ -113,7 +113,7 @@ struct SetupWizardSheet: View {
                     if let message = session.lastApplyMessage {
                         HStack(spacing: Space.lg) {
                             StatusGlyph(state: .healthy, size: Size.glyphLarge)
-                            Text(message).font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            Text(message).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                             Spacer()
                         }
                         .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
@@ -292,7 +292,7 @@ struct SetupWizardSheet: View {
             HStack(spacing: Space.lg) {
                 ProgressView().controlSize(.small)
                 Text("\(session.reviewClient?.rawValue ?? "") is reading the audit and the apps' configuration folders. This takes a few minutes. You can walk through the findings meanwhile; its recommendations join each step when they land.")
-                    .font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
             }
             .padding(Space.xl)
         } else if let message = session.reviewMessage {
@@ -300,7 +300,7 @@ struct SetupWizardSheet: View {
                 Button("Try again") { Task { await session.review(purpose: .setup) } }.secondaryActionStyle().controlSize(.small)
             }
         } else if let review = session.checkup?.review {
-            Text(review.summary).font(AgentFont.body).fixedSize(horizontal: false, vertical: true).padding(Space.xl).standardPanel()
+            Text(review.summary).font(AgentFont.body).wrapsLines().padding(Space.xl).standardPanel()
             let counts = Dictionary(grouping: session.checkup?.openRecommendations ?? [], by: \.category)
             if !counts.isEmpty {
                 TitledCard("Recommendations by step") {
@@ -399,7 +399,7 @@ struct SetupWizardSheet: View {
                 .padding(Space.xl).standardPanel()
             }
             Text("The checkup runs again on its own once a week when Agent Tooling opens, and each app's page has a Review button for what has changed upstream.")
-                .font(AgentFont.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
         }
     }
 }

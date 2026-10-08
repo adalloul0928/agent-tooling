@@ -391,8 +391,15 @@ would be.
 - `Size` — row and header heights, glyph, tile, disc and mark sizes, control
   heights, the sheet bar.
 - `SheetSize` — the five sheet sizes; a sheet picks the smallest it fits in.
-- `Hairline` — the one separator. A bare `Divider()` belongs only inside a
-  menu, where the system draws it.
+- `Hairline` — the one separator, drawn in `AgentTheme.hairline` (primary at
+  10%) so it lifts in dark mode and shades in light on any material; a
+  `Divider` darkens on a vibrant card. `Hairline(.vertical)` between cells.
+  A bare `Divider()` belongs only inside a menu, where the system draws it.
+- `wrapsLines()` — for text that may wrap onto more lines. Never use
+  `fixedSize(horizontal: false, vertical: true)`: when such a view appears
+  after the window has laid out, AppKit measures the content's minimum size at
+  zero width, the text answers one word per line, and the split view grows
+  past the window (`LateContentLayoutTests` guards this).
 - `AgentTheme.fillSubtle/fillHover/fillStrong`, `shadow`, `scrim`,
   `hairlineStroke` — the quiet fills and strokes.
 - `primaryActionStyle()`, `secondaryActionStyle()`, `inlineActionStyle()` —

@@ -294,7 +294,7 @@ private struct MCPTestConsoleSection: View {
                 Text(error.localizedDescription)
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             Spacer(minLength: 0)
         }
@@ -358,7 +358,7 @@ private struct MCPTestConsoleSection: View {
                 Text(target.displayCommand)
                     .font(AgentFont.mono)
                     .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 Spacer(minLength: Space.md)
                 Button {
                     NSPasteboard.general.clearContents()
@@ -386,7 +386,7 @@ private struct MCPTestConsoleSection: View {
                 )
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             }
             Spacer(minLength: Space.lg)
             if console.isLive || console.phase == .connecting {
@@ -409,7 +409,7 @@ private struct MCPTestConsoleSection: View {
             Text(text)
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Space.xl)

@@ -215,6 +215,10 @@ extension AgentTheme {
 
     /// The stroke around a card or control.
     static let hairlineStroke = separator.opacity(0.35)
+    /// The line between two rows. Drawn from `primary` so it reads as a
+    /// faint lift in dark mode and a faint shadow in light, whatever material
+    /// it crosses; the system separator darkens on a vibrant card.
+    static let hairline = Color.primary.opacity(0.1)
 }
 
 // MARK: - Hairline
@@ -226,9 +230,32 @@ struct Hairline: View {
     /// at the text column, so a row's leading tile stays joined to the row
     /// above instead of being boxed in.
     var indent: CGFloat = 0
+    /// Horizontal between rows; vertical between the cells of one row.
+    var axis: Axis = .horizontal
+
+    init(indent: CGFloat = 0, axis: Axis = .horizontal) {
+        self.indent = indent
+        self.axis = axis
+    }
+
+    init(_ axis: Axis) {
+        self.init(indent: 0, axis: axis)
+    }
 
     var body: some View {
-        Divider().opacity(Hairline.opacity).padding(.leading, indent)
+        // Not a `Divider`: on a material its system colour blends darker than
+        // the surface, which is the opposite of what a separator should do.
+        switch axis {
+        case .horizontal:
+            Rectangle()
+                .fill(AgentTheme.hairline)
+                .frame(height: Hairline.width)
+                .padding(.leading, indent)
+        case .vertical:
+            Rectangle()
+                .fill(AgentTheme.hairline)
+                .frame(width: Hairline.width)
+        }
     }
 
     /// The text column of a row with the standard inset, a leading element
@@ -237,10 +264,8 @@ struct Hairline: View {
         Space.xl + width + gap
     }
 
-    /// The hairline's presence against the material it sits on.
-    static let opacity: Double = 0.45
-    /// The stroke width of a drawn border.
-    static let width: CGFloat = 0.5
+    /// The stroke width of a drawn border and of the line itself.
+    static let width: CGFloat = 1
     /// The stroke of a selection ring around a card or disc.
     static let ring: CGFloat = 1.5
 }
@@ -257,8 +282,45 @@ extension View {
     /// A hairline along the trailing edge: a pane beside another pane.
     func hairlineTrailing() -> some View {
         overlay(alignment: .trailing) {
-            Rectangle().fill(AgentTheme.separator.opacity(Hairline.opacity)).frame(width: Hairline.width)
+            Rectangle().fill(AgentTheme.hairline).frame(width: Hairline.width)
         }
+    }
+}
+
+// MARK: - Wrapping text
+
+extension View {
+    /// Lets a line of text grow downward as it wraps instead of truncating.
+    ///
+    /// This is what `fixedSize(horizontal: false, vertical: true)` is for, and
+    /// it must be used instead of it. When a view appears after the window has
+    /// laid out — a banner arriving with a result — AppKit re-measures the
+    /// window's content at a zero-width proposal to learn its minimum size. A
+    /// vertically fixed text answers that probe by wrapping every word onto
+    /// its own line, several hundred points tall, and that becomes the
+    /// window's minimum: the whole split view grows past the window and is
+    /// centred in it, so everything shifts up out of frame. This layout only
+    /// frees the height once it has a real width to wrap in.
+    func wrapsLines() -> some View {
+        WrappingTextLayout { self }
+    }
+}
+
+struct WrappingTextLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let view = subviews.first else { return .zero }
+        if let width = proposal.width, width > 0 {
+            return view.sizeThatFits(ProposedViewSize(width: width, height: nil))
+        }
+        // The minimum (zero) and ideal (nil) probes: answer as plain text
+        // would, one line, rather than as a column of single words.
+        return view.sizeThatFits(proposal)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(
+            at: bounds.origin, anchor: .topLeading,
+            proposal: ProposedViewSize(width: bounds.width, height: nil))
     }
 }
 

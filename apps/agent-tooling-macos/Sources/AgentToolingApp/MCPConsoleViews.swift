@@ -41,13 +41,13 @@ struct MCPObservationSummary: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 counter("Tools", observation.declaresTools ? "\(observation.tools.count)" : "—")
-                Hairline().frame(height: Size.compactRowHeight)
+                Hairline(.vertical).frame(height: Size.compactRowHeight)
                 counter("Resources", observation.declaresResources ? "\(observation.resourceCount)" : "—")
-                Hairline().frame(height: Size.compactRowHeight)
+                Hairline(.vertical).frame(height: Size.compactRowHeight)
                 counter("Prompts", observation.declaresPrompts ? "\(observation.promptCount)" : "—")
-                Hairline().frame(height: Size.compactRowHeight)
+                Hairline(.vertical).frame(height: Size.compactRowHeight)
                 counter("Handshake", "\(Int(observation.handshakeMilliseconds.rounded())) ms")
-                Hairline().frame(height: Size.compactRowHeight)
+                Hairline(.vertical).frame(height: Size.compactRowHeight)
                 counter("Inventory", "\(Int(observation.inventoryMilliseconds.rounded())) ms")
             }
             .padding(.vertical, Space.lg)
@@ -64,7 +64,7 @@ struct MCPObservationSummary: View {
                     Text(warning)
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
             }
             Hairline()
@@ -74,7 +74,7 @@ struct MCPObservationSummary: View {
                 )
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             }
         }
     }
@@ -167,7 +167,7 @@ struct MCPToolInventoryList: View {
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
             }
             Spacer(minLength: Space.lg)
@@ -234,7 +234,7 @@ struct MCPTestConsentSheet: View {
                         Text(target.displayCommand)
                             .font(AgentFont.monoBody)
                             .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(Space.lg)
                             .standardPanel()
@@ -243,7 +243,7 @@ struct MCPTestConsentSheet: View {
                     Text(MCPTestConnectionPolicy.consentSummary(for: target, serverName: serverName))
                         .font(AgentFont.body)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
 
                     VStack(spacing: 0) {
                         ForEach(Array(boundaries.enumerated()), id: \.offset) { index, item in
@@ -254,7 +254,7 @@ struct MCPTestConsentSheet: View {
                                 Text(item.text)
                                     .font(AgentFont.caption)
                                     .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                    .wrapsLines()
                                 Spacer(minLength: 0)
                             }
                             .padding(Space.lg)

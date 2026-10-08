@@ -307,7 +307,7 @@ struct MCPRuntimesSheet: View {
                                     )
                                     .font(AgentFont.caption)
                                     .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                    .wrapsLines()
                                 }
                             } else {
                                 ForEach(Array(session.workloads.enumerated()), id: \.element.id) { index, workload in
@@ -328,7 +328,7 @@ struct MCPRuntimesSheet: View {
                         )
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                     }
                 }
                 .padding(Space.xxxl)

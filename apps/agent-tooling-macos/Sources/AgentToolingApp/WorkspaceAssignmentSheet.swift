@@ -226,7 +226,7 @@ struct WorkspaceAssignmentSheet: View {
                     Text("No apps are managed on this Mac. Choose apps on the Apps screen.")
                         .font(AgentFont.body)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(Space.xl)
                         .standardPanel()
@@ -276,7 +276,7 @@ struct WorkspaceAssignmentSheet: View {
                             Text("Installing waits until this project has a folder on this Mac. Choose one on the Projects screen.")
                                 .font(AgentFont.caption)
                                 .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                                .wrapsLines()
                         }
                     }
                 }
@@ -305,7 +305,7 @@ struct WorkspaceAssignmentSheet: View {
                 Text(reviewTargetSummary(review))
                     .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             HStack(spacing: Space.lg) {
                 reviewCount("Additions", count: review.preview.additions.count, symbol: "plus.circle")
@@ -316,7 +316,7 @@ struct WorkspaceAssignmentSheet: View {
             Text("Saves these choices to your workspace. Installing them in apps is a separate step.")
                 .font(AgentFont.body)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             if !isWritable {
                 AttentionBanner(
                     title: "Read-only workspace",

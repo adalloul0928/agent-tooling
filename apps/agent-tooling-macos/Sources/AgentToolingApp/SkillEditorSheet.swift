@@ -32,7 +32,7 @@ struct SkillEditorSheet: View {
             HStack(spacing: 0) {
                 stepList
                     .frame(width: 205)
-                Hairline()
+                Hairline(.vertical)
                 stepContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -210,7 +210,7 @@ struct SkillEditorSheet: View {
             )
             .font(AgentFont.caption)
             .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .wrapsLines()
         }
     }
 
@@ -400,7 +400,7 @@ private struct StepHeading: View {
         VStack(alignment: .leading, spacing: Space.xs) {
             Text(title).font(AgentFont.title)
             Text(message).font(AgentFont.body).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         }
     }
 }

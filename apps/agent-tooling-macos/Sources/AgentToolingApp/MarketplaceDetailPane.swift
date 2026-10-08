@@ -41,7 +41,7 @@ extension MarketplaceView {
                                     Text(verdict.evidence)
                                         .font(AgentFont.caption)
                                         .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
+                                        .wrapsLines()
                                 }
                             }
                             Hairline()
@@ -177,7 +177,7 @@ extension MarketplaceView {
                             )
                             .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, Space.xl)
                             .padding(.vertical, Space.lg)
@@ -213,7 +213,7 @@ extension MarketplaceView {
             Text("Where this package is installed is decided on the Apps screen, not here.")
                 .font(AgentFont.micro)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         }
     }
 
@@ -276,7 +276,7 @@ extension MarketplaceView {
                 )
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             adoptionMessage(for: package)
         }
@@ -300,7 +300,7 @@ extension MarketplaceView {
                 )
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             }
             if scopes.count == 1, let scope = scopes.first {
                 InstallScopeNote(scope: scope)
@@ -331,7 +331,7 @@ extension MarketplaceView {
                     Text("\(route.client.rawValue): \(refusal)")
                         .font(AgentFont.micro)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
                 // Adding to the library records the intent; the install itself
                 // runs later through the client, which refuses a plugin from a
@@ -346,7 +346,7 @@ extension MarketplaceView {
                             .font(AgentFont.mono)
                             .textSelection(.enabled)
                     }
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 }
             }
             if scopes.count > 1 {
@@ -376,7 +376,7 @@ extension MarketplaceView {
         )
         .font(AgentFont.micro)
         .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
+        .wrapsLines()
     }
 
     /// What the last refresh could say about the catalog behind a package.
@@ -432,7 +432,7 @@ private struct InstallScopeNote: View {
                 Text(scope.marketplaceInstallDetail)
                     .font(AgentFont.micro)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
         }
         .accessibilityElement(children: .combine)

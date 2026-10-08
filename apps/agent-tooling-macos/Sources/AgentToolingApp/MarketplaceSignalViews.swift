@@ -105,7 +105,7 @@ struct PackageGradeRows: View {
                     Text(verdict.detail)
                         .font(AgentFont.body)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                         .frame(maxWidth: .infinity, alignment: .leading)
                     GradeChip(verdict: verdict)
                 }
@@ -141,7 +141,7 @@ struct DeclaredToolsCard: View {
                     )
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, Space.xl)
                     .padding(.vertical, Space.lg)
@@ -152,7 +152,7 @@ struct DeclaredToolsCard: View {
                 )
                 .font(AgentFont.body)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(Space.xl)
             }
@@ -177,7 +177,7 @@ private struct DeclaredToolRow: View {
                 Text(summary)
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             if tool.annotations.isEmpty {
                 Text("No annotations declared for this tool.")
@@ -351,7 +351,7 @@ struct RequestedCredentialNames: View {
             Text("Names only. Values are entered in the client and are never stored, displayed, or placed in a plan by Agent Tooling.")
                 .font(AgentFont.micro)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         }
     }
 }

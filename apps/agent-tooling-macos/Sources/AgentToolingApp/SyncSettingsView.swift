@@ -367,7 +367,7 @@ private struct SyncScopePanel: View {
             ForEach(items, id: \.self) { item in
                 HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
                     Image(systemName: symbol).font(AgentFont.micro).foregroundStyle(tint)
-                    Text(item).font(AgentFont.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(item).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                 }
             }
         }
