@@ -44,6 +44,12 @@ struct AppShellView: View {
                 .environment(\.workspaceSelection, selection)
                 .environment(\.workspaceNavigate, navigate)
                 .environment(\.availableClients, enabledClients)
+                // What an Install button needs beyond the library: the planner
+                // and executor, each app's status, and the service. With these
+                // in the environment, choosing apps and installing is one step.
+                .environment(\.installPipeline, InstallPipeline(
+                    deployment: workspace.deployment, device: workspace.device,
+                    service: workspace.service, homeRoot: workspace.homeRoot))
                 // Relative times ("checked 9m ago") re-tick about once a minute
                 // here; the launch scan lives on the split view's own `.task`
                 // below, outside this wrapper, so a redraw is never a re-scan.

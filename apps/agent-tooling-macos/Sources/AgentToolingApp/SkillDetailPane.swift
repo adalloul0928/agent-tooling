@@ -96,10 +96,10 @@ struct SkillDetailView: View {
                     .accessibilityHint("Edits the complete SKILL.md while preserving scripts, references, and assets")
             }
             if skill.isAssignable {
-                Button("Choose where to use it…", systemImage: "arrow.turn.up.right", action: onAssign)
+                Button("Install…", systemImage: "arrow.down.circle", action: onAssign)
                     .primaryActionStyle()
                     .disabled(workspace.library.isBusy || workspace.library.access != .writable)
-                    .accessibilityHint("Saves where this skill should be used. Installing is reviewed on the Apps screen")
+                    .accessibilityHint("Choose the apps that should have this skill; they get it right away")
             }
             if skill.hasCentralContent {
                 Button("Export…", systemImage: "square.and.arrow.up", action: onExport)
@@ -156,17 +156,15 @@ struct SkillDetailView: View {
                     }
                     .padding(.horizontal, Space.sm).padding(.vertical, Space.md)
                 }
-                if navigation != nil, availableClients.contains(where: isAskedForButAbsent) {
+                if availableClients.contains(where: isAskedForButAbsent) {
                     Hairline()
                     HStack(spacing: Space.lg) {
                         Text("Asked for, but not installed yet.")
                             .font(AgentFont.caption).foregroundStyle(.secondary)
                         Spacer()
-                        Button("Install…", systemImage: "arrow.down.circle") {
-                            navigation?.openScreenRequest(.reviewChanges)
-                        }
-                        .primaryActionStyle()
-                        .accessibilityLabel("Install this skill from the Apps screen")
+                        Button("Install now", systemImage: "arrow.down.circle", action: onAssign)
+                            .primaryActionStyle()
+                            .accessibilityLabel("Install this skill in the apps that asked for it")
                     }
                     .padding(.horizontal, Space.sm).padding(.vertical, Space.md)
                 }
@@ -182,7 +180,7 @@ struct SkillDetailView: View {
                 Text("Apps")
                 SkillInfoButton(
                     text:
-                        "Found means the last check of this Mac saw this skill in that app. Asked for means somebody saved that choice here; installing it is a separate, reviewed step on the Apps screen. Try opens Terminal with that app running and the skill invoked, so you can see what it does.",
+                        "Found means the last check of this Mac saw this skill in that app. Asked for means somebody saved that choice here but the files are not there yet; Install now puts them there. Try opens Terminal with that app running and the skill invoked, so you can see what it does.",
                     label: "About app availability")
             }
         }

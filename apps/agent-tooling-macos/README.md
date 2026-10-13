@@ -86,9 +86,30 @@ The wizard has three steps, **Found → Apps → Assign**:
 - **Apps** chooses which local clients this Mac keeps in sync. This only sets
   Agent Tooling's client visibility preference; what is already installed in
   each app does not change.
-- **Assign** records where you want a tool. Choosing tools here writes down the
-  intent only — putting a tool into an app stays a separate, reviewed step on
-  the Apps screen. You can finish without assigning anything.
+- **Assign** picks tools and the apps that should have them, then installs
+  them the way the Install button does everywhere else (below). You can finish
+  without assigning anything.
+
+### Installing
+
+**Install…** on a skill, plugin, MCP server, project, or preset opens one
+dialog: the managed apps as rows (found on this Mac or not, the folder the
+files would land in, whether the app already has it), a This Mac / One project
+switch, and an Install button. Pressing it saves the assignment, plans what
+that means for this Mac, and applies the plan — the same assign → plan →
+safety review → execute → receipt pipeline the Apps screen runs, without the
+hop to it. The outcome names each app, and **Undo** takes the install back out
+of the apps it was just put in (the assignment and the copies), nothing else.
+
+The plan is shown first, in the same dialog, only when it would do more than
+the button said (`OperationPlanRiskClassifier`): content a scan flagged, a
+removal, a change to a connection an app already has, more than five steps,
+anything the planner had to leave out, or a request that came from an agent
+rather than a click. Bulk changes and Sync between apps keep the Apps screen's
+full review. One case is not a decision at all: a step that would replace files
+Agent Tooling cannot prove it installed (a hand-made skill folder, say) is
+listed as *left alone* and skipped, because the executor refuses it regardless.
+Adopting the existing copy from Checkup, or removing it, is the way through.
 
 Skill metadata supports standard YAML, including multiline descriptions and
 quoted names. Managed copies use the name declared in `SKILL.md`, even when the

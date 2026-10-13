@@ -6,6 +6,93 @@ public struct DeviceProjectRootBinding: Codable, Hashable, Sendable {
     public init(projectID: ArtifactID, rootPath: String) { self.projectID = projectID; self.rootPath = rootPath }
 }
 
+/// How often this Mac looks for newer versions of what the library holds.
+public enum UpdateCheckCadence: String, Codable, CaseIterable, Hashable, Sendable {
+    /// Each time the app opens, alongside the launch scan.
+    case onOpen
+    /// Once a day at most, on the first open after the previous check aged out.
+    case daily
+    /// Only when somebody presses Check.
+    case manual
+
+    public var title: String {
+        switch self {
+        case .onOpen: "When the app opens"
+        case .daily: "Once a day"
+        case .manual: "Only when I ask"
+        }
+    }
+
+    /// Whether a check that last ran at `last` is due at `now`.
+    public func isDue(lastChecked last: Date?, now: Date) -> Bool {
+        switch self {
+        case .manual: false
+        case .onOpen: true
+        case .daily: last.map { now.timeIntervalSince($0) >= 24 * 60 * 60 } ?? true
+        }
+    }
+}
+
+/// What happens once an update for one kind of tool is known about.
+public enum UpdateInstallPolicy: String, Codable, CaseIterable, Hashable, Sendable {
+    /// Install it, leave a receipt, say so afterwards.
+    case automatic
+    /// Show it and wait for the person to press Update.
+    case ask
+
+    public var title: String {
+        switch self {
+        case .automatic: "Install automatically"
+        case .ask: "Ask me first"
+        }
+    }
+}
+
+/// The update policy, one setting per kind of tool so a person can let skills
+/// flow and keep a hand on connections, or the other way round. Each kind has
+/// its own entry because the risk of a silent update differs: a skill is text
+/// an agent reads, a connection is a program an agent talks to.
+public struct UpdatePolicy: Codable, Hashable, Sendable {
+    public var cadence: UpdateCheckCadence
+    public var skills: UpdateInstallPolicy
+    public var plugins: UpdateInstallPolicy
+    public var mcpServers: UpdateInstallPolicy
+
+    public init(
+        cadence: UpdateCheckCadence = .onOpen,
+        skills: UpdateInstallPolicy = .ask,
+        plugins: UpdateInstallPolicy = .ask,
+        mcpServers: UpdateInstallPolicy = .ask
+    ) {
+        self.cadence = cadence
+        self.skills = skills
+        self.plugins = plugins
+        self.mcpServers = mcpServers
+    }
+
+    public func policy(for kind: ToolingItemKind) -> UpdateInstallPolicy {
+        switch kind {
+        case .skill: skills
+        case .plugin: plugins
+        case .mcpServer: mcpServers
+        }
+    }
+
+    public mutating func setPolicy(_ policy: UpdateInstallPolicy, for kind: ToolingItemKind) {
+        switch kind {
+        case .skill: skills = policy
+        case .plugin: plugins = policy
+        case .mcpServer: mcpServers = policy
+        }
+    }
+
+    /// Whether any kind installs on its own, which is what decides if a check
+    /// may write anything without a person watching.
+    public var installsAnythingAutomatically: Bool {
+        [skills, plugins, mcpServers].contains(.automatic)
+    }
+}
+
 public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
     public var automaticallyCheckHealth: Bool
     public var enabledClients: [ClientKind]
@@ -19,18 +106,30 @@ public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
     /// the fixed install roots the locator always checks. Absolute paths only;
     /// recorded through a reviewed action, never inferred from `PATH` silently.
     public var customToolDirectories: [String]?
+    /// When to look for updates and what to do with them. `nil` in a store
+    /// written before the setting existed, and read as the default then.
+    public var updatePolicy: UpdatePolicy?
+    /// When this Mac last looked for updates, for the daily cadence.
+    public var lastUpdateCheck: Date?
 
     public init(
         automaticallyCheckHealth: Bool = true,
         enabledClients: [ClientKind] = ClientKind.allCases,
         chosenClients: [ClientKind]? = nil,
-        customToolDirectories: [String]? = nil
+        customToolDirectories: [String]? = nil,
+        updatePolicy: UpdatePolicy? = nil,
+        lastUpdateCheck: Date? = nil
     ) {
         self.automaticallyCheckHealth = automaticallyCheckHealth
         self.enabledClients = enabledClients.sorted { $0.rawValue < $1.rawValue }
         self.chosenClients = chosenClients?.sorted { $0.rawValue < $1.rawValue }
         self.customToolDirectories = customToolDirectories
+        self.updatePolicy = updatePolicy
+        self.lastUpdateCheck = lastUpdateCheck
     }
+
+    /// The policy in force: what was chosen, else the default.
+    public var effectiveUpdatePolicy: UpdatePolicy { updatePolicy ?? UpdatePolicy() }
 
     public init(_ value: WorkspacePreferences) {
         self.init(automaticallyCheckHealth: value.automaticallyCheckHealth, enabledClients: Array(value.enabledClients))

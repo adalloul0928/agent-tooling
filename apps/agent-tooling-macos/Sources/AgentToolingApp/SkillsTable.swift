@@ -195,7 +195,7 @@ enum SkillManagement: Equatable {
         case .placed:
             "Yours. This app placed it in the apps shown. Whether each install is in place is checked on the Apps screen."
         case .yoursUnplaced:
-            "Yours, in this library, but not placed in any app yet. Choose where to use it from its details."
+            "Yours, in this library, but not placed in any app yet. Install it from its details."
         case .byPlugin:
             "Came with a plugin. The plugin is what gets installed or removed; this library lists the skill so you can find it, see where it is, and try it."
         case .notByThisApp:

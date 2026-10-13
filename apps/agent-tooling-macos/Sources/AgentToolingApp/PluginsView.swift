@@ -329,7 +329,7 @@ private struct PluginStackPane: View {
     let availableClients: [ClientKind]
     @Binding var client: ClientKind
     let onClear: () -> Void
-    @State private var removal: RemovalRequest?
+    @State private var removal: AssignmentRemovalPresentation?
 
     var body: some View {
         ScrollView {
@@ -385,7 +385,7 @@ private struct PluginStackPane: View {
             .padding(Space.xxxl)
         }
         .sheet(item: $removal) { request in
-            WorkspaceAssignmentSheet(session: library, artifactIDs: request.artifactIDs)
+            AssignmentRemovalSheet(session: library, presentation: request)
         }
     }
 
@@ -401,25 +401,19 @@ private struct PluginStackPane: View {
     private func review() {
         let ids = contributionIDs
         guard !ids.isEmpty else { return }
-        Task {
-            await library.reviewRemoval(contributionIDs: ids)
-            if library.review != nil {
-                removal = RemovalRequest(artifactIDs: rows.map(\.artifactID))
-            }
-        }
+        removal = .init(
+            kind: .plugin,
+            name: rows.count == 1 ? (rows.first?.displayName ?? "plugin") : "\(rows.count) plugins",
+            contributionIDs: ids)
     }
 
-    private struct RemovalRequest: Identifiable {
-        let id = UUID()
-        let artifactIDs: [ArtifactID]
-    }
 }
 
 private struct PluginDetailView: View {
     let row: WorkspaceLibraryReadModelRow
     let availability: UpdateAvailability
     let library: WorkspaceLibrarySession
-    @State private var removal: RemovalRequest?
+    @State private var removal: AssignmentRemovalPresentation?
     @State private var isAssigning = false
 
     var body: some View {
@@ -442,8 +436,7 @@ private struct PluginDetailView: View {
             .padding(Space.xxxl)
         }
         .sheet(item: $removal) { request in
-            WorkspaceAssignmentSheet(session: library, artifactIDs: [row.artifactID])
-                .task { await library.reviewRemoval(contributionIDs: request.contributionIDs) }
+            AssignmentRemovalSheet(session: library, presentation: request)
         }
         .sheet(isPresented: $isAssigning) {
             WorkspaceAssignmentSheet(session: library, artifactIDs: [row.artifactID])
@@ -570,18 +563,9 @@ private struct PluginDetailView: View {
     }
 
     private func remove(contributionIDs: [WorkspaceObjectID]) {
-        Task {
-            await library.reviewRemoval(contributionIDs: contributionIDs)
-            if library.review != nil {
-                removal = RemovalRequest(contributionIDs: contributionIDs)
-            }
-        }
+        removal = .init(kind: .plugin, name: row.displayName, contributionIDs: contributionIDs)
     }
 
-    private struct RemovalRequest: Identifiable {
-        let id = UUID()
-        let contributionIDs: [WorkspaceObjectID]
-    }
 }
 
 /// The device scope a saved assignment covers. Kept local to this file: the

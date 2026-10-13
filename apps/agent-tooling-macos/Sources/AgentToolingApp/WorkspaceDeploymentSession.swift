@@ -13,6 +13,9 @@ final class WorkspaceDeploymentSession {
     struct Result: Identifiable {
         let id = UUID()
         let title: String
+        /// The apps this operation wrote to. One operation is one app, so an
+        /// outcome can be attributed to the app it belongs to.
+        var surfaces: [TargetSurface] = []
         let succeeded: Int
         let failed: Int
         let outputs: [String]
@@ -29,6 +32,10 @@ final class WorkspaceDeploymentSession {
 
     private(set) var linkedDestinations: [LinkedDestination] = []
     private(set) var plan: WorkspaceDeploymentPlan?
+    /// Destinations the last plan proved this app installed. Kept so the
+    /// install picker can tell an update of our own copy from somebody else's
+    /// files without measuring the disk a second time.
+    private(set) var provenInstalls: Set<WorkspaceDeploymentInstallKey> = []
     private(set) var results: [Result] = []
     private(set) var isBusy = false
     private(set) var errorMessage: String?
@@ -224,6 +231,7 @@ final class WorkspaceDeploymentSession {
         // Only destinations this app can prove it installed may be offered for
         // removal; anything else is somebody else's.
         let proven = Self.provenInstalls(snapshot: snapshot, targets: captured, store: store)
+        provenInstalls = proven
         // Measure what is actually at each destination now, so "already there"
         // is an observation rather than an assumption.
         let observations =
@@ -659,9 +667,69 @@ final class WorkspaceDeploymentSession {
         return paths
     }
 
+    /// The prepared plan narrowed to some items: what installing just those
+    /// would do on this Mac. Exclusions that name one of the items are kept, so
+    /// "cannot be carried out" still shows for the thing somebody just chose;
+    /// removals and other items' work are left out, because they are not what
+    /// the button said.
+    func plan(
+        for artifactIDs: Set<ArtifactID>, includingRemovals: Bool = false,
+        excluding heldBack: Set<WorkspaceDeploymentInstallKey> = []
+    ) -> WorkspaceDeploymentPlan? {
+        guard let plan else { return nil }
+        return WorkspaceDeploymentPlan(
+            items: plan.items.filter { item in
+                if case .removeContent = item.action, !includingRemovals { return false }
+                if heldBack.contains(Self.installKey(item)) { return false }
+                return artifactIDs.contains(item.artifactID)
+            },
+            exclusions: plan.exclusions.filter { $0.artifactID.map(artifactIDs.contains) ?? false },
+            requirements: plan.requirements, resolvedTargets: plan.resolvedTargets)
+    }
+
+    /// Whether installing just these items can run from the button that asked
+    /// for it, and if not, why a person should look first.
+    func risk(for artifactIDs: Set<ArtifactID>, requestedByAgent: Bool = false) -> OperationPlanRiskClassifier.Verdict? {
+        guard let scoped = plan(for: artifactIDs) else { return nil }
+        return OperationPlanRiskClassifier.classify(
+            scoped,
+            context: .init(provenInstalls: provenInstalls, requestedByAgent: requestedByAgent))
+    }
+
+    /// Applies only the items for these artifacts, through the same staged,
+    /// receipted path `apply()` uses. The caller has already decided, from
+    /// `risk(for:)`, that nobody needs to look first.
+    func apply(
+        only artifactIDs: Set<ArtifactID>, includingRemovals: Bool = false,
+        excluding heldBack: Set<WorkspaceDeploymentInstallKey> = []
+    ) async {
+        guard let scoped = plan(for: artifactIDs, includingRemovals: includingRemovals, excluding: heldBack),
+              !scoped.items.isEmpty else { return }
+        await apply(plan: scoped)
+    }
+
+    /// Whether the executor will refuse this step no matter who approves it:
+    /// it would replace files at a place Agent Tooling cannot prove it
+    /// installed (somebody's hand-made skill folder, for example). The engine
+    /// checks the same thing again right before writing; this lets a caller
+    /// say so up front and leave the step out instead of watching it fail.
+    func cannotOverwrite(_ item: WorkspaceDeploymentItem) -> Bool {
+        guard case .updateContent = item.action else { return false }
+        return !provenInstalls.contains(Self.installKey(item))
+    }
+
+    static func installKey(_ item: WorkspaceDeploymentItem) -> WorkspaceDeploymentInstallKey {
+        .init(artifactID: item.artifactID, physicalDestinationID: item.physicalDestinationID)
+    }
+
     /// Applies the prepared plan through the reviewed operation path.
     func apply() async {
-        guard canApply, let plan, let contentStore else { return }
+        guard let plan else { return }
+        await apply(plan: plan)
+    }
+
+    private func apply(plan: WorkspaceDeploymentPlan) async {
+        guard canApply, let contentStore else { return }
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
@@ -707,6 +775,7 @@ final class WorkspaceDeploymentSession {
                 let receipt = await executor.execute(operation)
                 collected.append(.init(
                     title: operation.title,
+                    surfaces: operation.targetSurfaces,
                     succeeded: receipt.results.filter { $0.status == .succeeded }.count,
                     failed: receipt.results.filter { $0.status == .failed }.count,
                     outputs: receipt.results.filter { $0.status == .failed }.map(\.output)))

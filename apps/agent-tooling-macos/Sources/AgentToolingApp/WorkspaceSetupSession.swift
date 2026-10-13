@@ -504,7 +504,7 @@ final class WorkspaceSetupSession {
         else { throw SetupApplyError.notTracked(prepared.frontmatter.name) }
         _ = try await service.adoptTrackedSkill(
             .init(expectedRevisionID: snapshot.document.revision.id, artifactID: artifact.identity.id, prepared: prepared), prepared: prepared)
-        return "\(prepared.frontmatter.name) is in the library now. Choose where to use it from its details."
+        return "\(prepared.frontmatter.name) is in the library now. Install it from its details."
     }
 
     private func remove(path: String, client: ClientKind) async throws -> String {

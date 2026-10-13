@@ -70,7 +70,7 @@ extension SkillsBrowser {
             if isSelecting, !selection.isEmpty {
                 SelectionActionBar(
                     count: selection.count,
-                    actionTitle: "Choose where to use \(selection.count)…",
+                    actionTitle: "Install \(selection.count)…",
                     isActionEnabled: !workspace.library.isBusy && canWrite,
                     action: assignSelection,
                     clear: { selection = [] }
@@ -121,7 +121,7 @@ extension SkillsBrowser {
         .contextMenu {
             Button("Show details", systemImage: "info.circle") { selectedID = skill.id }
             if assignable {
-                Button("Choose where to use it…", systemImage: "arrow.turn.up.right") {
+                Button("Install…", systemImage: "arrow.down.circle") {
                     workspace.library.discardReview()
                     assignment = .init(artifactIDs: [skill.id])
                 }

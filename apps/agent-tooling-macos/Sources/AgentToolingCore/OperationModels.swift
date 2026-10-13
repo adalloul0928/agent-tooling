@@ -5,7 +5,10 @@ public enum OperationKind: String, Codable, CaseIterable, Sendable {
     case createSkill
     case installSkill
     case installPlugin
+    case updateSkill
+    case updatePlugin
     case configureMCP
+    case updateMCP
     case importSource
     case exportBackup
     case restoreBackup

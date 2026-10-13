@@ -87,7 +87,7 @@ struct MCPServersView: View {
             WorkspaceAssignmentSheet(session: workspace.library, artifactIDs: presentation.artifactIDs)
         }
         .sheet(item: $removal) { presentation in
-            MCPRemovalReviewSheet(session: workspace.library, presentation: presentation)
+            AssignmentRemovalSheet(session: workspace.library, presentation: presentation)
         }
         .task(id: refreshID) { await workspace.library.refresh() }
         .task { capabilities.activate(workspaceRoot: workspaceRoot) }
@@ -684,11 +684,15 @@ private struct MCPAssignmentPresentation: Identifiable {
     let artifactIDs: [ArtifactID]
 }
 
-struct MCPRemovalPresentation: Identifiable {
+/// A reviewed withdrawal of saved requests, for any kind of item.
+struct AssignmentRemovalPresentation: Identifiable {
     let id = UUID()
+    var kind: ToolingKind = .mcpServer
     let name: String
     let contributionIDs: [WorkspaceObjectID]
 }
+
+typealias MCPRemovalPresentation = AssignmentRemovalPresentation
 
 // MARK: - Stack
 
@@ -882,15 +886,15 @@ struct MCPDetailView: View {
 /// Nothing here touches a client: it removes the record that somebody wanted
 /// this server in that app. What is already installed stays installed until the
 /// Apps screen is asked to change it.
-struct MCPRemovalReviewSheet: View {
+struct AssignmentRemovalSheet: View {
     @Environment(\.dismiss) private var dismiss
     let session: WorkspaceLibrarySession
-    let presentation: MCPRemovalPresentation
+    let presentation: AssignmentRemovalPresentation
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: Space.lg) {
-                KindTile(kind: .mcpServer, size: Size.tileLarge)
+                KindTile(kind: presentation.kind, size: Size.tileLarge)
                 VStack(alignment: .leading, spacing: Space.xxs) {
                     Text("Stop asking for \(presentation.name)").font(AgentFont.title)
                     Text(subtitle).foregroundStyle(.secondary).lineLimit(1)
@@ -924,8 +928,8 @@ struct MCPRemovalReviewSheet: View {
                     }
 
                     Text(
-                        "Removes the record that somebody wanted this server there. Nothing is uninstalled: what an "
-                            + "app already has stays until the Apps screen is asked to change it."
+                        "Removes the record that somebody wanted this \(presentation.kind == .mcpServer ? "server" : "item") there. "
+                            + "Nothing is uninstalled: what an app already has stays until the Apps screen is asked to change it."
                     )
                     .font(AgentFont.body)
                     .foregroundStyle(.secondary)
