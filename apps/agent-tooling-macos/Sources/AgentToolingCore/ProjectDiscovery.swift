@@ -115,12 +115,18 @@ public struct ProjectFileDescriptor: Identifiable, Hashable, Codable, Sendable {
         ProjectFileDescriptor(
             relativePath: ".gemini/extensions", title: "Gemini project extensions", client: .gemini, role: .plugins,
             sharing: .committed, isDirectory: true),
+        ProjectFileDescriptor(
+            relativePath: ".kiro/settings/mcp.json", title: "Kiro project MCP servers", client: .kiro, role: .mcpDefinitions,
+            sharing: .committed),
+        ProjectFileDescriptor(
+            relativePath: ".kiro/skills", title: "Kiro project skills", client: .kiro, role: .skills, sharing: .committed,
+            isDirectory: true),
     ]
 
     /// Client folders searched for additional `*.local.*` files. Anything named
     /// that way is machine-local by convention even when Agent Tooling has
     /// never heard of the specific file.
-    public static let localFileSearchRoots = [".claude", ".codex", ".gemini", ".agents"]
+    public static let localFileSearchRoots = [".claude", ".codex", ".gemini", ".agents", ".kiro"]
 }
 
 public struct ProjectFilePresence: Identifiable, Hashable, Codable, Sendable {
@@ -181,6 +187,10 @@ public struct DiscoveredProject: Identifiable, Hashable, Codable, Sendable {
     /// the folder is not a Git working tree.
     public var gitBranch: String?
     public var isDetachedHead: Bool
+    /// The repository this folder is a checkout of, as the workspace spells a
+    /// hint (`RepositoryIdentity`), read from the checkout's `origin` remote.
+    /// `nil` for a folder that is not a Git checkout or has no remote.
+    public var repositoryHint: String?
     public var origins: Set<ProjectDiscoveryOrigin>
     public var files: [ProjectFilePresence]
     public var skills: [ProjectComponentRecord]
@@ -200,6 +210,7 @@ public struct DiscoveredProject: Identifiable, Hashable, Codable, Sendable {
         name: String,
         gitBranch: String? = nil,
         isDetachedHead: Bool = false,
+        repositoryHint: String? = nil,
         origins: Set<ProjectDiscoveryOrigin> = [],
         files: [ProjectFilePresence] = [],
         skills: [ProjectComponentRecord] = [],
@@ -212,6 +223,7 @@ public struct DiscoveredProject: Identifiable, Hashable, Codable, Sendable {
         self.name = name
         self.gitBranch = gitBranch
         self.isDetachedHead = isDetachedHead
+        self.repositoryHint = repositoryHint
         self.origins = origins
         self.files = files
         self.skills = skills
@@ -405,12 +417,12 @@ private extension String {
 
 // MARK: - Discovery
 
-struct ProjectDiscoveryOptions: Hashable, Sendable {
-    var maximumSessionIndexEntries: Int
-    var maximumScannedChildren: Int
-    var maximumProjects: Int
+public struct ProjectDiscoveryOptions: Hashable, Sendable {
+    public var maximumSessionIndexEntries: Int
+    public var maximumScannedChildren: Int
+    public var maximumProjects: Int
 
-    init(
+    public init(
         maximumSessionIndexEntries: Int = 400,
         maximumScannedChildren: Int = 400,
         maximumProjects: Int = 500
@@ -421,10 +433,10 @@ struct ProjectDiscoveryOptions: Hashable, Sendable {
     }
 }
 
-enum ProjectDiscovery {
+public enum ProjectDiscovery {
     /// Reads Claude Code's own session index. Regular files, dangling entries,
     /// and names that do not resolve to a directory on this Mac are ignored.
-    static func sessionIndexRoots(
+    public static func sessionIndexRoots(
         homeURL: URL,
         fileManager: FileManager = .default,
         options: ProjectDiscoveryOptions = ProjectDiscoveryOptions()
@@ -450,7 +462,7 @@ enum ProjectDiscovery {
     }
 
     /// Immediate children of a folder such as `~/ws` that look like projects.
-    static func scannedRoots(
+    public static func scannedRoots(
         under root: URL,
         fileManager: FileManager = .default,
         options: ProjectDiscoveryOptions = ProjectDiscoveryOptions()
@@ -477,7 +489,7 @@ enum ProjectDiscovery {
     /// The home folder is not a project. Its `.claude` and `.agents` folders
     /// are exactly the user-scope installation everything else inherits from,
     /// so listing it would make every project look overridden.
-    static func isEligibleProjectRoot(_ url: URL, homeURL: URL) -> Bool {
+    public static func isEligibleProjectRoot(_ url: URL, homeURL: URL) -> Bool {
         let candidate = ProjectPath.canonical(url)
         guard candidate != "/", !candidate.isEmpty else { return false }
         return !(ProjectPath.canonical(homeURL) + "/").hasPrefix(candidate + "/")
@@ -486,7 +498,7 @@ enum ProjectDiscovery {
     /// A folder counts as a project when it is a Git working tree or already
     /// holds agent configuration. Any folder the user picks by hand is
     /// accepted regardless.
-    static func isProjectDirectory(_ url: URL, fileManager: FileManager = .default) -> Bool {
+    public static func isProjectDirectory(_ url: URL, fileManager: FileManager = .default) -> Bool {
         let root = url.standardizedFileURL
         if fileManager.fileExists(atPath: root.appending(path: ".git").path(percentEncoded: false)) { return true }
         return ProjectFileDescriptor.manifest.contains { descriptor in
@@ -496,7 +508,7 @@ enum ProjectDiscovery {
 
     /// Builds the full record for one project. Every value is read from disk;
     /// nothing is written and no command is run.
-    static func inspect(
+    public static func inspect(
         root: URL,
         origins: Set<ProjectDiscoveryOrigin>,
         clients: Set<ClientKind> = Set(ClientKind.allCases),
@@ -550,6 +562,8 @@ enum ProjectDiscovery {
             name: standardized.lastPathComponent,
             gitBranch: head?.name,
             isDetachedHead: head?.isDetached ?? false,
+            repositoryHint: gitRemote(root: standardized, fileManager: fileManager)
+                .flatMap(RepositoryIdentity.hint(fromRemote:)),
             origins: origins,
             files: files,
             skills: deduplicated(skills),
@@ -778,23 +792,69 @@ enum ProjectDiscovery {
 
     /// Reads `HEAD` directly. Running `git` for a label the user only glances
     /// at would spawn a process per project on every scan.
-    static func gitHead(root: URL, fileManager: FileManager = .default) -> GitHead? {
+    /// The checkout's Git directory: `.git` itself, or where a `.git` pointer
+    /// file (a worktree, a submodule) says it is. `nil` when the folder is not
+    /// a checkout.
+    static func gitDirectory(root: URL, fileManager: FileManager = .default) -> URL? {
         let pointer = root.appending(path: ".git")
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: pointer.path(percentEncoded: false), isDirectory: &isDirectory) else { return nil }
+        guard !isDirectory.boolValue else { return pointer }
+        guard let contents = try? BoundedFileAccess.readUTF8(at: pointer, maximumBytes: 8_192) else { return nil }
+        let prefix = "gitdir:"
+        guard let line = contents.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix(prefix) }) else { return nil }
+        let raw = line.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
+        guard !raw.isEmpty else { return nil }
+        return raw.hasPrefix("/")
+            ? URL(fileURLWithPath: raw, isDirectory: true)
+            : root.appending(path: raw, directoryHint: .isDirectory).standardizedFileURL
+    }
 
-        var gitDirectory = pointer
-        if !isDirectory.boolValue {
-            guard let contents = try? BoundedFileAccess.readUTF8(at: pointer, maximumBytes: 8_192) else { return nil }
-            let prefix = "gitdir:"
-            guard let line = contents.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix(prefix) }) else { return nil }
-            let raw = line.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
-            guard !raw.isEmpty else { return nil }
-            gitDirectory =
-                raw.hasPrefix("/")
-                ? URL(fileURLWithPath: raw, isDirectory: true)
-                : root.appending(path: raw, directoryHint: .isDirectory).standardizedFileURL
+    /// The `origin` remote's URL, read from the checkout's own config file the
+    /// way Git writes it. A worktree keeps its remotes in the main checkout's
+    /// directory, which its `commondir` file names. No command runs; a config
+    /// this cannot read yields `nil`, never a guess.
+    static func gitRemote(root: URL, name: String = "origin", fileManager: FileManager = .default) -> String? {
+        guard var directory = gitDirectory(root: root, fileManager: fileManager) else { return nil }
+        let commonPointer = directory.appending(path: "commondir")
+        if let common = try? BoundedFileAccess.readUTF8(at: commonPointer, maximumBytes: 8_192) {
+            let raw = common.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !raw.isEmpty {
+                directory = raw.hasPrefix("/")
+                    ? URL(fileURLWithPath: raw, isDirectory: true)
+                    : directory.appending(path: raw, directoryHint: .isDirectory).standardizedFileURL
+            }
         }
+        guard let config = try? BoundedFileAccess.readUTF8(
+            at: directory.appending(path: "config"), maximumBytes: BoundedFileAccess.maximumConfigurationBytes)
+        else { return nil }
+        return remoteURL(named: name, inGitConfig: config)
+    }
+
+    /// Finds `url` under `[remote "<name>"]` in Git's INI-like config. Sections
+    /// and keys are case-insensitive; the remote's name is not.
+    static func remoteURL(named name: String, inGitConfig config: String) -> String? {
+        var inSection = false
+        for rawLine in config.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("[") {
+                let header = line.dropFirst().prefix { $0 != "]" }.trimmingCharacters(in: .whitespaces)
+                let parts = header.split(separator: " ", maxSplits: 1).map(String.init)
+                inSection = parts.count == 2 && parts[0].lowercased() == "remote"
+                    && parts[1].trimmingCharacters(in: CharacterSet(charactersIn: "\"")) == name
+                continue
+            }
+            guard inSection, let equals = line.firstIndex(of: "=") else { continue }
+            let key = line[..<equals].trimmingCharacters(in: .whitespaces).lowercased()
+            guard key == "url" else { continue }
+            let value = line[line.index(after: equals)...].trimmingCharacters(in: .whitespaces)
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
+
+    static func gitHead(root: URL, fileManager: FileManager = .default) -> GitHead? {
+        guard let gitDirectory = gitDirectory(root: root, fileManager: fileManager) else { return nil }
 
         let headURL = gitDirectory.appending(path: "HEAD")
         guard let head = try? BoundedFileAccess.readUTF8(at: headURL, maximumBytes: 8_192) else { return nil }

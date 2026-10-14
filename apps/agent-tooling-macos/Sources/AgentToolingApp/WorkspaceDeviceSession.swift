@@ -103,6 +103,8 @@ final class WorkspaceDeviceSession {
     private(set) var updatePolicy: UpdatePolicy
     /// When this Mac last compared its managed items with their sources.
     private(set) var lastUpdateCheck: Date?
+    /// Folders this Mac looks in for projects, besides where Claude Code ran.
+    private(set) var projectScanRoots: [String] = []
 
     /// Every app this build knows how to speak to, in the registry's own order,
     /// so every list and picker offers them the same way round.
@@ -156,6 +158,7 @@ final class WorkspaceDeviceSession {
         automaticallyCheckHealth = preferences?.automaticallyCheckHealth ?? true
         updatePolicy = preferences?.effectiveUpdatePolicy ?? UpdatePolicy()
         lastUpdateCheck = preferences?.lastUpdateCheck
+        projectScanRoots = preferences?.projectScanRoots ?? []
         ClientExecutableLocator.registerAdditionalRoots(preferences?.customToolDirectories ?? [])
     }
 
@@ -317,6 +320,19 @@ final class WorkspaceDeviceSession {
             return
         }
         await library.refresh()
+    }
+
+    /// Records the folders this Mac looks in for projects. Saved before it is
+    /// shown, like every device choice here.
+    func setProjectScanRoots(_ roots: [String]) async throws {
+        let previous = projectScanRoots
+        projectScanRoots = roots
+        do {
+            try await commitPreferences { $0.projectScanRoots = roots }
+        } catch {
+            projectScanRoots = previous
+            throw error
+        }
     }
 
     /// Stamps the time of a finished update check. A check that could not

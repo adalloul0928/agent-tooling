@@ -37,6 +37,9 @@ struct WorkspaceLaunch {
         /// The report the last scan kept. Home reports it and Insights produces
         /// it; a scan started on one is finished on both.
         let insights: WorkspaceInsightsSession
+        /// The project folders on this Mac and what the workspace makes of
+        /// them. The Projects screen scans and tracks through it.
+        let projectDiscovery: WorkspaceProjectDiscoverySession
         /// The review queue. Home counts it and Apps decides it, and a request
         /// decided on one is gone from the other without a second read.
         let requests: WorkspaceRequestSession
@@ -189,6 +192,8 @@ struct WorkspaceLaunch {
                 library: library, deployment: deployment, device: device, marketplace: marketplace,
                 service: service, store: store, homeRoot: homeRoot),
             insights: insights,
+            projectDiscovery: WorkspaceProjectDiscoverySession(
+                library: library, device: device, service: service, homeRoot: homeRoot),
             requests: WorkspaceRequestSession(
                 store: store, library: library, device: device, queue: requestQueue),
             setup: WorkspaceSetupSession(

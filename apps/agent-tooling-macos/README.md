@@ -207,11 +207,40 @@ manual button is unaffected by the setting.
 
 ## Projects and project folders
 
-A project can be given a folder on this Mac from the Projects screen with
-**Choose folder…**. Until it has one, a project-scoped install has nowhere to
-write, so it waits: the plan names the project and points you at the Projects
-screen to choose a folder rather than failing silently. Choosing a folder never
-moves or rewrites what is already in it.
+A project is two things. The shared half is a name and the repositories it is
+a checkout of (`repositoryHints`), which travel with the workspace. The local
+half is the folder on this Mac that backs it, which does not travel: a path
+here means nothing on another Mac.
+
+The Projects screen finds project folders on this Mac: the folders Claude Code
+has run in (its own session index) and the children of any folder chosen under
+**Where to look**. Each one is read for its agent files (`CLAUDE.md`,
+`AGENTS.md`, `.mcp.json`, `.claude/skills`, `.agents/skills`, `.gemini/…`,
+`.kiro/…`) and its Git `origin`; nothing is written and no command runs. A
+found folder the workspace does not track yet appears under **Found on this
+Mac** with two possible answers:
+
+- **Track** makes it a project of its own, named after the folder, carrying its
+  repository, and bound to the folder on this Mac.
+- **Use for <project>** appears when the folder is a checkout of a repository
+  one of your projects names and that project has no folder here. That is how
+  a project set up on one Mac finds its folder on the next: clone the same
+  repository and it is recognised, instead of being an unattached name with a
+  bare Choose folder… button. A project detail with no folder offers the same
+  recognition as **Use this folder** when a checkout is found.
+
+A project can still be given any folder with **Choose folder…**. When that
+folder is a checkout, the project learns its repository then, so the
+recognition carries to the next Mac. **New Project…** can start from a folder
+the same way. Until a project has a folder here, a project-scoped install has
+nowhere to write, so it waits and says so.
+
+The detail shows three things apart: **Assigned to this project** (library
+items you assigned here; what Install puts into the folder), **In the folder**
+(what the folder itself holds for each app, whoever put it there, marked
+shared-with-the-repository or machine-local), and **Inherited from this Mac**
+(library items assigned with no project). Adopting a folder's own skills into
+the library is a separate step this screen does not take.
 
 ## Presets
 

@@ -120,6 +120,11 @@ public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
     public var updatePolicy: UpdatePolicy?
     /// When this Mac last looked for updates, for the daily cadence.
     public var lastUpdateCheck: Date?
+    /// Folders this Mac looks in for projects, besides the ones Claude Code has
+    /// run in: each one's immediate children that look like projects (a Git
+    /// checkout, or agent configuration at the top). Device-local, like the
+    /// folder bindings: paths on this Mac mean nothing on another.
+    public var projectScanRoots: [String]?
 
     public init(
         automaticallyCheckHealth: Bool = true,
@@ -127,7 +132,8 @@ public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
         chosenClients: [ClientKind]? = nil,
         customToolDirectories: [String]? = nil,
         updatePolicy: UpdatePolicy? = nil,
-        lastUpdateCheck: Date? = nil
+        lastUpdateCheck: Date? = nil,
+        projectScanRoots: [String]? = nil
     ) {
         self.automaticallyCheckHealth = automaticallyCheckHealth
         self.enabledClients = enabledClients.sorted { $0.rawValue < $1.rawValue }
@@ -135,6 +141,7 @@ public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
         self.customToolDirectories = customToolDirectories
         self.updatePolicy = updatePolicy
         self.lastUpdateCheck = lastUpdateCheck
+        self.projectScanRoots = projectScanRoots
     }
 
     /// The policy in force: what was chosen, else the default.

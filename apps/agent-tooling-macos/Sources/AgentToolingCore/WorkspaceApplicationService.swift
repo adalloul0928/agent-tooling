@@ -266,14 +266,52 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
                     $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
                 })
             else { throw WorkspaceDomainValidationError.duplicate("project name") }
+            let hints = try Self.normalizedRepositoryHints(command.repositoryHints)
             let projectID = ArtifactID()
             document.artifacts.append(
                 .init(
                     identity: .init(id: projectID, kind: .logicalProject, displayName: name),
                     authority: .centralPersonal))
-            document.logicalProjects.append(.init(id: projectID, name: name))
+            document.logicalProjects.append(.init(id: projectID, name: name, repositoryHints: hints))
             return [projectID]
         }
+    }
+
+    /// Records that a project is a checkout of one more repository. The hint
+    /// is normalised the way every hint is, so two spellings of one remote
+    /// never become two hints; a hint the project already carries is a no-op.
+    public func addProjectRepositoryHint(_ command: AddProjectRepositoryHintCommand) throws -> WorkspaceCommandReceipt {
+        let digest = try command.inputDigest()
+        return try store.commitMetadata(
+            expectedRevisionID: command.expectedRevisionID,
+            idempotencyKey: command.idempotencyKey,
+            inputDigest: digest,
+            writerID: writerID
+        ) { document in
+            guard let index = document.logicalProjects.firstIndex(where: { $0.id == command.projectID }) else {
+                throw WorkspaceRevisionStoreError.missingArtifact
+            }
+            guard let hint = RepositoryIdentity.hint(fromRemote: command.repository) else {
+                throw WorkspaceDomainValidationError.invalidField("repository hint")
+            }
+            if !document.logicalProjects[index].repositoryHints.contains(where: { RepositoryIdentity.matches($0, hint) }) {
+                document.logicalProjects[index].repositoryHints.append(hint)
+            }
+            return [command.projectID]
+        }
+    }
+
+    /// Hints as the document stores them: normalised, unique, sorted; anything
+    /// that is not a repository is refused rather than silently dropped.
+    static func normalizedRepositoryHints(_ raw: [String]) throws -> [String] {
+        var hints: [String] = []
+        for value in raw {
+            guard let hint = RepositoryIdentity.hint(fromRemote: value) else {
+                throw WorkspaceDomainValidationError.invalidField("repository hint")
+            }
+            if !hints.contains(where: { RepositoryIdentity.matches($0, hint) }) { hints.append(hint) }
+        }
+        return hints.sorted()
     }
 
     public func renameArtifact(_ command: RenameArtifactCommand) throws -> WorkspaceCommandReceipt {
@@ -306,20 +344,51 @@ public struct CreateProjectCommand: Codable, Sendable, Equatable {
     public let expectedRevisionID: WorkspaceObjectID
     public let idempotencyKey: WorkspaceObjectID
     public let name: String
+    /// The repositories this project is a checkout of, as `RepositoryIdentity`
+    /// spells them. They travel with the project, so another Mac that finds a
+    /// checkout of the same repository can recognise it as this project.
+    public var repositoryHints: [String] = []
 
     public init(
         expectedRevisionID: WorkspaceObjectID, idempotencyKey: WorkspaceObjectID = WorkspaceObjectID(),
-        name: String
+        name: String, repositoryHints: [String] = []
     ) {
         self.expectedRevisionID = expectedRevisionID
         self.idempotencyKey = idempotencyKey
         self.name = name
+        self.repositoryHints = repositoryHints
     }
 
     func inputDigest() throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         var bytes = Data("agent-tooling.create-project.v1\n".utf8)
+        bytes.append(try encoder.encode(self))
+        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+public struct AddProjectRepositoryHintCommand: Codable, Sendable, Equatable {
+    public let expectedRevisionID: WorkspaceObjectID
+    public let idempotencyKey: WorkspaceObjectID
+    public let projectID: ArtifactID
+    /// A remote as Git spells it, or a hint; normalised on apply.
+    public let repository: String
+
+    public init(
+        expectedRevisionID: WorkspaceObjectID, idempotencyKey: WorkspaceObjectID = WorkspaceObjectID(),
+        projectID: ArtifactID, repository: String
+    ) {
+        self.expectedRevisionID = expectedRevisionID
+        self.idempotencyKey = idempotencyKey
+        self.projectID = projectID
+        self.repository = repository
+    }
+
+    func inputDigest() throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        var bytes = Data("agent-tooling.add-project-repository-hint.v1\n".utf8)
         bytes.append(try encoder.encode(self))
         return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
     }

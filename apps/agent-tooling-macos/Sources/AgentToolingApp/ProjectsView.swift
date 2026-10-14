@@ -34,11 +34,29 @@ struct ProjectsView: View {
                 Button("Refresh", systemImage: "arrow.clockwise") { refreshID = UUID() }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.glass)
-                    .disabled(workspace.library.isBusy)
+                    .disabled(workspace.library.isBusy || workspace.projectDiscovery.isScanning)
+                    .help("Read the library again and look for project folders on this Mac.")
+                Menu {
+                    Button("Look in a folder…", systemImage: "folder.badge.gearshape") { addScanRoot() }
+                    if !workspace.projectDiscovery.scanRoots.isEmpty {
+                        Section("Looking in") {
+                            ForEach(workspace.projectDiscovery.scanRoots, id: \.self) { root in
+                                Button("Stop looking in \(abbreviated(root))") {
+                                    Task { await workspace.projectDiscovery.removeScanRoot(root) }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Where to look", systemImage: "binoculars")
+                }
+                .menuStyle(.button)
+                .buttonStyle(.glass)
+                .help("Besides the folders Claude Code has run in, look through these folders' children for projects.")
                 Button("New Project…", systemImage: "plus") { isCreatingProject = true }
                     .buttonStyle(.glass)
                     .disabled(workspace.library.access != .writable)
-                    .help("Name a project to assign tools to. Nothing is scanned or installed.")
+                    .help("Name a project, or start one from a folder on this Mac.")
             }
 
             if selectedProjectID == nil {
@@ -54,7 +72,10 @@ struct ProjectsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .task(id: refreshID) { await workspace.library.refresh() }
+        .task(id: refreshID) {
+            await workspace.library.refresh()
+            await workspace.projectDiscovery.refresh()
+        }
         .onChange(of: listed.map(\.id)) { _, ids in
             if let selectedProjectID, !ids.contains(selectedProjectID) {
                 self.selectedProjectID = nil
@@ -98,9 +119,10 @@ struct ProjectsView: View {
 
     @ViewBuilder
     private func collectionBody(projects: [WorkspaceLibraryProjectReadModel]) -> some View {
+        let found = query.isEmpty && filter == .all ? workspace.projectDiscovery.untrackedFolders : []
         if workspace.library.state == nil, workspace.library.isBusy {
             ProgressView("Loading projects…").frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if projects.isEmpty {
+        } else if projects.isEmpty, found.isEmpty {
             EmptyStateView(
                 symbol: "folder.badge.gearshape",
                 title: emptyStateTitle,
@@ -109,16 +131,83 @@ struct ProjectsView: View {
                 action: emptyStateAction
             )
         } else {
-            projectList(projects)
+            projectList(projects, found: found)
         }
     }
 
-    private func projectList(_ projects: [WorkspaceLibraryProjectReadModel]) -> some View {
-        List(projects, selection: $selectedProjectID) { project in
-            projectRow(project)
+    /// The workspace's projects, then the folders on this Mac it does not
+    /// track yet. A found folder is a row with two possible answers: make it a
+    /// project, or hand it to the project whose repository it is a checkout of.
+    private func projectList(_ projects: [WorkspaceLibraryProjectReadModel], found: [WorkspaceProjectDiscoverySession.Match]) -> some View {
+        List(selection: $selectedProjectID) {
+            if !projects.isEmpty {
+                Section {
+                    ForEach(projects) { project in projectRow(project) }
+                } header: {
+                    if !found.isEmpty { listHeader("In your workspace", count: projects.count) }
+                }
+            }
+            if !found.isEmpty {
+                Section {
+                    ForEach(found) { match in
+                        DiscoveredFolderRow(
+                            match: match,
+                            projectName: match.projectID.flatMap { id in projects.first { $0.id == id }?.name },
+                            isBusy: workspace.projectDiscovery.isBusy || workspace.library.access != .writable,
+                            track: { Task { await track(match) } },
+                            attach: { id in Task { await attach(match, to: id) } })
+                        .collectionRowChrome(selected: false)
+                    }
+                } header: {
+                    listHeader("Found on this Mac", count: found.count,
+                               detail: workspace.projectDiscovery.lastScan == nil ? "Looking…" : nil)
+                }
+            }
+            if let message = workspace.projectDiscovery.errorMessage {
+                AttentionBanner(title: "That could not be recorded", message: message)
+                    .listRowSeparator(.hidden)
+            }
         }
         .collectionListChrome()
         .collectionSurface()
+    }
+
+    private func listHeader(_ title: String, count: Int, detail: String? = nil) -> some View {
+        HStack(spacing: Space.md) {
+            Text(title).font(AgentFont.captionMedium)
+            Text("\(count)").font(AgentFont.caption).foregroundStyle(.tertiary).monospacedDigit()
+            if let detail { Text("· \(detail)").font(AgentFont.caption).foregroundStyle(.tertiary) }
+        }
+        .foregroundStyle(.secondary)
+        .textCase(nil)
+    }
+
+    private func track(_ match: WorkspaceProjectDiscoverySession.Match) async {
+        if let id = await workspace.projectDiscovery.track(match.project) {
+            selectedProjectID = id
+        }
+    }
+
+    private func attach(_ match: WorkspaceProjectDiscoverySession.Match, to projectID: ArtifactID) async {
+        if await workspace.projectDiscovery.attach(match.project, to: projectID) {
+            selectedProjectID = projectID
+        }
+    }
+
+    private func addScanRoot() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Look Here"
+        panel.message = "Agent Tooling will look through this folder's children for projects."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await workspace.projectDiscovery.addScanRoot(url) }
+    }
+
+    private func abbreviated(_ path: String) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
     }
 
     private func projectRow(_ project: WorkspaceLibraryProjectReadModel) -> some View {
@@ -146,7 +235,8 @@ struct ProjectsView: View {
         if let id = selectedProjectID, let project = allProjects.first(where: { $0.id == id }) {
             ProjectDetailView(
                 workspace: workspace, project: project, library: workspace.library,
-                declarations: workspace.declarations, projectRoot: projectRoot(for: project.id))
+                declarations: workspace.declarations, projectRoot: projectRoot(for: project.id),
+                discovery: workspace.projectDiscovery)
         } else {
             EmptyStateView(
                 symbol: "folder.badge.gearshape",
@@ -180,7 +270,10 @@ struct ProjectsView: View {
 
     private func toolbarContext(_ projects: [WorkspaceLibraryProjectReadModel]) -> String {
         let assigned = projects.filter { assignedCount($0.id) > 0 }.count
-        return "\(projects.count) found · \(assigned) with tools assigned"
+        let found = workspace.projectDiscovery.untrackedFolders.count
+        var parts = ["\(projects.count) in your workspace", "\(assigned) with tools assigned"]
+        if found > 0 { parts.append("\(found) found on this Mac") }
+        return parts.joined(separator: " · ")
     }
 
     private var emptyStateTitle: String {
@@ -192,7 +285,8 @@ struct ProjectsView: View {
     private var emptyStateMessage: String {
         if !query.isEmpty { return "Try a different search term." }
         if filter == .assigned { return "Assign a tool to a project to see it here." }
-        return "Create a project, then assign skills and servers to it from the Library."
+        if workspace.projectDiscovery.lastScan == nil { return "Looking for project folders on this Mac…" }
+        return "No project folders were found where Claude Code has run. Create a project, or choose a folder to look in."
     }
 
     private var emptyStateActionTitle: String? {
@@ -298,6 +392,58 @@ private struct ProjectCollectionRow: View {
     }
 }
 
+/// A folder the scan found that the workspace does not track here. Says what
+/// is in it, and offers the one or two things that can be done with it.
+private struct DiscoveredFolderRow: View {
+    let match: WorkspaceProjectDiscoverySession.Match
+    /// The project this folder is a checkout of, when it matches one.
+    let projectName: String?
+    let isBusy: Bool
+    let track: () -> Void
+    let attach: (ArtifactID) -> Void
+
+    var body: some View {
+        HStack(spacing: Space.lg) {
+            SymbolTile(symbol: "folder.badge.questionmark", size: Size.discLarge)
+                .opacity(0.7)
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(match.project.name).font(AgentFont.bodyMedium).lineLimit(1)
+                HStack(spacing: Space.sm) {
+                    Text(summary).lineLimit(1)
+                    if let hint = match.project.repositoryHint {
+                        Text("·").foregroundStyle(.tertiary)
+                        Text(hint.replacingOccurrences(of: "https://", with: "")).lineLimit(1).truncationMode(.middle)
+                    }
+                }
+                .font(AgentFont.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: Space.lg)
+            if case .matches(let projectID) = match.standing, let projectName {
+                Button("Use for \(projectName)") { attach(projectID) }
+                    .primaryActionStyle().controlSize(.small).disabled(isBusy)
+                    .help("This folder is a checkout of \(projectName)'s repository. Make it that project's folder on this Mac.")
+            }
+            Button("Track") { track() }
+                .secondaryActionStyle().controlSize(.small).disabled(isBusy)
+                .help("Make this folder a project of its own, named after the folder.")
+        }
+        .padding(.vertical, Space.sm)
+        .help(match.project.path)
+        .accessibilityLabel("\(match.project.name), found on this Mac")
+    }
+
+    private var summary: String {
+        let project = match.project
+        var parts: [String] = []
+        if !project.skills.isEmpty { parts.append(project.skills.count == 1 ? "1 skill" : "\(project.skills.count) skills") }
+        if !project.mcpServers.isEmpty { parts.append(project.mcpServers.count == 1 ? "1 server" : "\(project.mcpServers.count) servers") }
+        if !project.plugins.isEmpty { parts.append(project.plugins.count == 1 ? "1 plugin" : "\(project.plugins.count) plugins") }
+        if parts.isEmpty { parts.append(project.instructionFileTitles.isEmpty ? "No agent files" : project.instructionFileTitles.joined(separator: ", ")) }
+        if let branch = project.gitBranch { parts.append(project.isDetachedHead ? "at \(branch)" : "on \(branch)") }
+        return parts.joined(separator: " · ")
+    }
+}
+
 // MARK: - Detail
 
 private struct ProjectDetailView: View {
@@ -306,6 +452,7 @@ private struct ProjectDetailView: View {
     let library: WorkspaceLibrarySession
     var declarations: WorkspaceProjectDeclarationSession?
     let projectRoot: URL?
+    var discovery: WorkspaceProjectDiscoverySession?
     @State private var tab: ProjectDetailTab = .skills
     @State private var isAdding = false
     @State private var isDeclaring = false
@@ -379,10 +526,18 @@ private struct ProjectDetailView: View {
             }
 
             if projectRoot == nil {
-                Text("Project-scoped tools install into this folder's own app directories (for example .claude/skills).")
-                    .font(AgentFont.caption)
-                    .foregroundStyle(.secondary)
-                    .wrapsLines()
+                if let discovery, !discovery.candidates(for: project.id).isEmpty {
+                    candidatesBanner(discovery.candidates(for: project.id), discovery: discovery)
+                } else {
+                    Text(noFolderExplanation)
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                        .wrapsLines()
+                }
+            }
+
+            if let message = discovery?.errorMessage {
+                AttentionBanner(title: "That folder was not set", message: message)
             }
 
             Text(originSummary)
@@ -435,6 +590,15 @@ private struct ProjectDetailView: View {
         folderError = nil
         Task { @MainActor in
             defer { isBindingFolder = false }
+            // Through discovery when it is here: the folder is read first, so a
+            // checkout's repository is recorded on the project along with the
+            // binding and the next Mac can recognise its own clone.
+            if let discovery, let folder = ProjectDiscovery.inspect(root: url, origins: [.pinned]) {
+                if !(await discovery.attach(folder, to: project.id)) {
+                    folderError = discovery.errorMessage
+                }
+                return
+            }
             do {
                 guard let head = try await workspace.service.snapshot()?.document.revision.id else {
                     throw WorkspaceRevisionStoreError.notInitialized
@@ -472,8 +636,48 @@ private struct ProjectDetailView: View {
         }
     }
 
+    /// The folders on this Mac that are checkouts of this project's repository.
+    /// One is a recognition; several is a choice.
+    private func candidatesBanner(_ candidates: [DiscoveredProject], discovery: WorkspaceProjectDiscoverySession) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.lg) {
+            StatusGlyph(state: .pending, size: Size.glyph)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(candidates.count == 1
+                     ? "A checkout of this project's repository is on this Mac."
+                     : "\(candidates.count) checkouts of this project's repository are on this Mac.")
+                    .font(AgentFont.bodyMedium)
+                ForEach(candidates) { candidate in
+                    HStack(spacing: Space.md) {
+                        Text(abbreviated(candidate.path)).font(AgentFont.mono).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: Space.md)
+                        Button("Use this folder") { Task { await discovery.attach(candidate, to: project.id) } }
+                            .primaryActionStyle().controlSize(.small)
+                            .disabled(discovery.isBusy || library.access != .writable)
+                    }
+                }
+            }
+        }
+        .padding(Space.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .standardPanel()
+    }
+
+    private var noFolderExplanation: String {
+        project.repositoryHints.isEmpty
+            ? "Project tools install into the folder's own app directories (for example .claude/skills). Choose the folder, or track it from the list when it is found on this Mac."
+            : "This project is a checkout of \(project.repositoryHints.map { $0.replacingOccurrences(of: "https://", with: "") }.formatted(.list(type: .or))). Clone it here and it is recognised; or choose its folder."
+    }
+
     private var originSummary: String {
-        "Appears because a tool was assigned to it. Project folders do not travel: they are stripped on export, so a project-scoped item restored on a second Mac arrives unattached and has to be pointed at a folder there."
+        project.repositoryHints.isEmpty
+            ? "A project is a name tools are assigned to. Its folder is this Mac's business and does not travel; recording the repository it comes from (track it from a checkout) is what lets another Mac recognise it."
+            : "The repository travels with the project; the folder does not. Another Mac that has a checkout of the same repository recognises it as this project."
+    }
+
+    private func abbreviated(_ path: String) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
     }
 
     // MARK: Component tabs
@@ -483,14 +687,19 @@ private struct ProjectDetailView: View {
         let local = (library.state?.library.rows(inProject: project.id) ?? []).filter { tab.kinds.contains($0.kind) }
         let inherited = (library.state?.library.globallyAssignedRows ?? []).filter { tab.kinds.contains($0.kind) }
 
-        TitledCard("In this project", count: "\(local.count)") {
+        TitledCard("Assigned to this project", count: "\(local.count)") {
             if local.isEmpty {
-                EmptyCardRow(
-                    text: inherited.isEmpty
-                        ? "This project has no \(tab.noun) of its own."
-                        : "This project has no \(tab.noun) of its own. Everything below comes from this Mac.")
+                EmptyCardRow(text: "No \(tab.noun) from the library are assigned to this project. Add tools… assigns some.")
             } else {
                 ComponentRows(rows: local, library: library, project: project, reviewable: tab == .mcpServers)
+            }
+        }
+
+        if let folder = projectRoot.flatMap({ _ in discovery?.folder(for: project.id) }) {
+            inFolderCard(folder, tab: tab)
+        } else if projectRoot != nil, discovery?.lastScan == nil {
+            TitledCard("In the folder") {
+                EmptyCardRow(text: "Looking at what the folder holds…")
             }
         }
 
@@ -503,6 +712,69 @@ private struct ProjectDetailView: View {
         }
 
         SectionCaption(text: tab.caption)
+    }
+
+    /// What the folder itself holds for this kind, read from disk: the files
+    /// each app reads from a checkout, whoever put them there. This is the
+    /// repo's own configuration, distinct from what the library assigned.
+    private func inFolderCard(_ folder: DiscoveredProject, tab: ProjectDetailTab) -> some View {
+        let records: [ProjectComponentRecord] = switch tab {
+        case .skills: folder.skills
+        case .mcpServers: folder.mcpServers
+        case .plugins: folder.plugins
+        }
+        let files = folder.files.filter { file in
+            switch tab {
+            case .skills: file.descriptor.role == .skills || file.descriptor.role == .instructions
+            case .mcpServers: file.descriptor.role == .mcpDefinitions
+            case .plugins: file.descriptor.role == .plugins || file.descriptor.role == .settings
+            }
+        }
+        return TitledCard("In the folder", count: "\(records.count)") {
+            if records.isEmpty, files.isEmpty {
+                EmptyCardRow(text: "The folder holds no \(tab.noun) of its own. The apps use what this Mac has.")
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
+                        HStack(spacing: Space.lg) {
+                            if let client = record.client {
+                                ClientBrandIcon(client: client, size: Size.tileSmall).frame(width: Size.tile, height: Size.tile)
+                            } else {
+                                KindTile(kind: .skill, size: Size.tileSmall)
+                            }
+                            VStack(alignment: .leading, spacing: Space.xxs) {
+                                Text(record.name).font(AgentFont.bodyMedium)
+                                Text(record.sourceRelativePath).font(AgentFont.mono).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer()
+                            if let sharing = record.sharing {
+                                StatusBadge(state: sharing == .committed ? .healthy : .pending, text: sharing.displayName)
+                            }
+                        }
+                        .padding(.horizontal, Space.xl).frame(minHeight: Size.rowHeight)
+                        if index < records.count - 1 || !files.isEmpty { Hairline(indent: Hairline.afterLeading(Size.tile)) }
+                    }
+                    ForEach(Array(files.filter { $0.descriptor.role != .skills || records.isEmpty }.enumerated()), id: \.element.id) { index, file in
+                        HStack(spacing: Space.lg) {
+                            Image(systemName: file.descriptor.isDirectory ? "folder" : "doc.text")
+                                .foregroundStyle(.secondary).frame(width: Size.tile)
+                            VStack(alignment: .leading, spacing: Space.xxs) {
+                                Text(file.descriptor.title).font(AgentFont.bodyMedium)
+                                Text(file.descriptor.relativePath).font(AgentFont.mono).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer()
+                            StatusBadge(state: file.descriptor.sharing == .committed ? .healthy : .pending, text: file.descriptor.sharing.displayName)
+                        }
+                        .padding(.horizontal, Space.xl).frame(minHeight: Size.rowHeight)
+                        if index < files.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
+                    }
+                    Hairline()
+                    Text("Read from the folder. These are what the apps use in this project whether or not the library placed them; adopting them into the library is a separate step.")
+                        .font(AgentFont.caption).foregroundStyle(.tertiary).wrapsLines()
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
+                }
+            }
+        }
     }
 }
 
@@ -810,6 +1082,9 @@ private struct NewProjectSheet: View {
     @State private var name = ""
     @State private var errorMessage: String?
     @State private var isBusy = false
+    /// A folder on this Mac the project starts from: it names the project,
+    /// its repository travels with it, and it is bound here at once.
+    @State private var folder: DiscoveredProject?
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -823,7 +1098,7 @@ private struct NewProjectSheet: View {
             Hairline()
             VStack(alignment: .leading, spacing: Space.xl) {
                 Text(
-                    "A project is a name your tools are assigned to — pick skills and servers for it from the Library, and install them into each app's project scope from Apps. Creating one writes nothing anywhere else."
+                    "A project is a name your tools are assigned to; Install puts them into the project's folder for each app. Starting from a folder records which repository it is, so another Mac with the same checkout recognises it."
                 )
                 .foregroundStyle(.secondary)
                 .wrapsLines()
@@ -838,6 +1113,27 @@ private struct NewProjectSheet: View {
                             .textFieldStyle(.roundedBorder).frame(maxWidth: 300)
                             .focused($nameFocused)
                             .onSubmit { if canCreate { create() } }
+                    }
+                    LabeledContent("Folder") {
+                        HStack(spacing: Space.md) {
+                            if let folder {
+                                VStack(alignment: .leading, spacing: Space.xxs) {
+                                    Text(folder.path).font(AgentFont.mono).lineLimit(1).truncationMode(.middle)
+                                    if let hint = folder.repositoryHint {
+                                        Text(hint.replacingOccurrences(of: "https://", with: ""))
+                                            .font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    } else {
+                                        Text("Not a Git checkout with a remote; the folder is bound on this Mac only.")
+                                            .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
+                                    }
+                                }
+                                Button("Change…") { chooseFolder() }.inlineActionStyle()
+                            } else {
+                                Button("Choose…", systemImage: "folder") { chooseFolder() }.secondaryActionStyle()
+                                Text("Optional. Names the project after the folder and binds it on this Mac.")
+                                    .font(AgentFont.caption).foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
                 .padding(Space.xl)
@@ -857,7 +1153,7 @@ private struct NewProjectSheet: View {
             .padding(.horizontal, Space.xxl)
             .padding(.vertical, Space.xl)
         }
-        .sheetSize(SheetSize.small)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
         .onAppear { nameFocused = true }
     }
@@ -867,12 +1163,37 @@ private struct NewProjectSheet: View {
             && workspace.library.access == .writable
     }
 
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Use Folder"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard ProjectDiscovery.isEligibleProjectRoot(url, homeURL: workspace.homeRoot) else {
+            errorMessage = "Your home folder is where this Mac's own skills and servers live. Choose a project folder inside it."
+            return
+        }
+        folder = ProjectDiscovery.inspect(root: url, origins: [.pinned])
+        if let folder, name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { name = folder.name }
+    }
+
     private func create() {
         guard canCreate else { return }
         isBusy = true
         errorMessage = nil
         Task { @MainActor in
             defer { isBusy = false }
+            if let folder {
+                // The same recorded steps the list's Track button runs.
+                if await workspace.projectDiscovery.track(folder, named: name) != nil {
+                    onCreated()
+                    dismiss()
+                } else {
+                    errorMessage = workspace.projectDiscovery.errorMessage
+                }
+                return
+            }
             do {
                 guard let head = try await workspace.service.snapshot()?.document.revision.id else {
                     throw WorkspaceRevisionStoreError.notInitialized
