@@ -75,7 +75,11 @@ enum CheckupTriage {
         // plugins both carry and a loose copy beside a plugin's are different
         // rows: one has nothing to do, the other has a button.
         let rest = checkup.openFindings.filter { !covered.contains($0.id) }
-        let groups = Dictionary(grouping: rest) { GroupKey(kind: $0.kind, client: $0.client, removable: $0.kind == .duplicateSkillInClient ? !$0.actions.isEmpty : true) }
+        let groups = Dictionary(grouping: rest) {
+            GroupKey(
+                kind: $0.kind, client: $0.client,
+                removable: [.duplicateSkillInClient, .mcpServerDefinedSeveralTimes].contains($0.kind) ? !$0.actions.isEmpty : true)
+        }
         for (key, group) in groups {
             items.append(item(for: key, group: group.sorted { $0.subject < $1.subject }))
         }
@@ -158,12 +162,13 @@ enum CheckupTriage {
             // carry is the plugins' business.
             guard key.removable else {
                 return CheckupItem(
-                    id: id, bucket: .fine, client: client, title: count == 1 ? "A skill two plugins both carry" : "\(count) skills two plugins both carry",
-                    detail: "Each of these comes with two plugins, so both copies are the plugins' and there is nothing here to remove. \(client?.rawValue ?? "The app") uses whichever it loads first.",
+                    id: id, bucket: .fine, client: client,
+                    title: count == 1 ? "A skill more than one plugin carries" : "\(count) skills more than one plugin carries",
+                    detail: "Each copy comes with a plugin, or was placed by a tool that keeps it in step, so there is nothing here to remove. \(client?.rawValue ?? "The app") lists every copy.",
                     findings: group, recommendation: nil, actions: [], settings: [], primaryTitle: nil, provenance: .audit(findingID: group[0].id), opens: nil)
             }
             return CheckupItem(
-                id: id, bucket: .fix, client: client, title: count == 1 ? "A loose copy of a plugin's skill" : "\(count) loose copies of plugins' skills",
+                id: id, bucket: .fix, client: client, title: count == 1 ? "A loose copy of a skill" : "\(count) loose copies of skills",
                 detail: groupDetail(key.kind, client: client),
                 findings: group, recommendation: nil, actions: actions, settings: [], primaryTitle: bulkTitle(actions),
                 provenance: .audit(findingID: group[0].id), opens: nil)
@@ -184,6 +189,21 @@ enum CheckupTriage {
                 id: id, bucket: .decide, client: nil, title: groupTitle(key.kind, count: count), detail: groupDetail(key.kind, client: nil),
                 findings: group, recommendation: nil, actions: [], settings: [], primaryTitle: nil,
                 provenance: .audit(findingID: group[0].id), opens: .mcpServers)
+        case .mcpServerDefinedSeveralTimes:
+            // Only a copy in the app's own configuration is a person's to
+            // remove; servers that only plugins bring are the plugins'.
+            return CheckupItem(
+                id: id, bucket: key.removable ? .decide : .fine, client: client, title: groupTitle(key.kind, count: count),
+                detail: key.removable
+                    ? groupDetail(key.kind, client: client)
+                    : "\(client?.rawValue ?? "The app") gets each of these from more than one plugin. Each plugin's copy is the plugin's, so there is nothing here to remove.",
+                findings: group, recommendation: nil, actions: [], settings: [], primaryTitle: nil,
+                provenance: .audit(findingID: group[0].id), opens: key.removable ? .mcpServers : nil)
+        case .pluginSkillsOverlap:
+            return CheckupItem(
+                id: id, bucket: .decide, client: client, title: groupTitle(key.kind, count: count), detail: groupDetail(key.kind, client: client),
+                findings: group, recommendation: nil, actions: [], settings: [], primaryTitle: nil,
+                provenance: .audit(findingID: group[0].id), opens: .plugins)
         }
     }
 
@@ -202,6 +222,8 @@ enum CheckupTriage {
         case .neverChecked: "Never checked"
         case .skillWithoutDefinition: one ? "An empty skill folder" : "\(count) empty skill folders"
         case .mcpServerRepeatedAcrossClients: one ? "A server configured in several apps" : "\(count) servers configured in several apps"
+        case .mcpServerDefinedSeveralTimes: one ? "A server the app gets from several places" : "\(count) servers the app gets from several places"
+        case .pluginSkillsOverlap: one ? "Two plugins that carry the same skills" : "\(count) pairs of plugins that carry the same skills"
         }
     }
 
@@ -218,6 +240,8 @@ enum CheckupTriage {
         case .neverChecked: return "This Mac manages \(app) but has never read what it holds."
         case .skillWithoutDefinition: return "Folders in \(app)'s skills folder with no SKILL.md. \(app) does not load them. Removing moves them to Agent Tooling's trash."
         case .mcpServerRepeatedAcrossClients: return "Each app has its own copy of these servers' configuration. Managed from the library, each would be one definition placed in every app."
+        case .mcpServerDefinedSeveralTimes: return "\(app) gets each of these servers from its own configuration and from a plugin. Unless the two are configured identically, it runs both and lists both sets of tools. If the plugin's copy does what you need, the configured one can go."
+        case .pluginSkillsOverlap: return "\(app) lists each plugin's copy of a shared skill, so these appear twice. Removing a plugin takes its other skills and servers with it, so that is yours to decide on the Plugins screen."
         }
     }
 

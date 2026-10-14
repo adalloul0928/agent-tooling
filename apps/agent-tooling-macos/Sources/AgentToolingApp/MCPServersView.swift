@@ -411,7 +411,8 @@ struct MCPServersView: View {
                         observedDescription: row.observedDescription,
                         requestedAssignments: row.requestedAssignments, nativeRoutes: row.nativeRoutes,
                         isAssignable: row.isAssignable, assignmentExplanation: row.assignmentExplanation,
-                        server: server))
+                        server: server,
+                        definedBy: MCPDefinitionSources.found(named: row.declaredName, in: workspace.device.observations)))
             case .nativePlugin, .package:
                 for child in row.includedChildren where child.kind == .mcpServer {
                     let id = child.artifactID.rawValue.uuidString.lowercased()
@@ -436,7 +437,8 @@ struct MCPServersView: View {
                             isAssignable: false,
                             assignmentExplanation:
                                 "\(row.displayName) brings this server with it. Assign the plugin to choose where it is used.",
-                            server: server))
+                            server: server,
+                            definedBy: MCPDefinitionSources.found(named: child.declaredName, in: workspace.device.observations)))
                 }
             case .skill, .preset, .logicalProject:
                 continue
@@ -557,6 +559,33 @@ struct MCPServersView: View {
 
 // MARK: - Row model
 
+/// Where one app gets a server by one name, as the last check found it.
+struct MCPDefinitionSources: Equatable, Identifiable {
+    let client: ClientKind
+    /// "Claude Code configuration", or a plugin's `plugin@marketplace` id.
+    let sources: [String]
+
+    var id: ClientKind { client }
+
+    /// Every source in observations for the server this app knows by `name`.
+    static func found(named name: String?, in observations: [TargetObservation]) -> [Self] {
+        guard let name, !name.isEmpty else { return [] }
+        return observations
+            .compactMap { observation -> Self? in
+                guard let client = observation.surface.client, let metadata = observation.mcpMetadata[name] else { return nil }
+                return Self(client: client, sources: metadata.allSources)
+            }
+            .sorted { $0.client.rawValue < $1.client.rawValue }
+    }
+
+    /// A source in words: a plugin by its name, a configuration as it is.
+    static func label(_ source: String) -> String {
+        let identity = SkillOrganization.SourceIdentity(source)
+        guard let plugin = identity.pluginTitle else { return source }
+        return [plugin, identity.marketplaceTitle].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
 /// One connection the workspace knows about.
 ///
 /// `nativeRoutes` is what an app's own package list said; `requestedAssignments`
@@ -578,6 +607,10 @@ struct MCPConnectionEntry: Identifiable, Equatable {
     /// The same item in the shape the live-test console and the capability
     /// switches speak, from `VersionedInventoryProjection`.
     let server: MCPServer
+    /// Every place each app was last found to get a server by this name: its
+    /// own configuration, and each plugin that brings one. More than one in an
+    /// app means more than one definition of it there.
+    var definedBy: [MCPDefinitionSources] = []
 
     var id: String { server.id }
 
@@ -796,6 +829,8 @@ struct MCPDetailView: View {
                     }
                 }
 
+                if !entry.definedBy.isEmpty { definedByCard }
+
                 TitledCard("Origin") {
                     LabeledValueRow("Managed by") { Text(entry.ownershipLabel) }
                     if let plugin = entry.parentPluginLabel {
@@ -837,6 +872,40 @@ struct MCPDetailView: View {
                 MCPServerCapabilitiesPane(server: entry.server)
             }
             .padding(Space.xxxl)
+        }
+    }
+
+    /// Where each app gets this server. An app that gets it from several
+    /// places runs each one separately unless they are configured identically,
+    /// so that case is called out rather than left in a list.
+    private var definedByCard: some View {
+        let repeated = entry.definedBy.filter { $0.sources.count > 1 }
+        return TitledCard("Defined by") {
+            ForEach(Array(entry.definedBy.enumerated()), id: \.element.id) { index, found in
+                if index > 0 { Hairline() }
+                LabeledValueRow(found.client.rawValue) {
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        ForEach(found.sources, id: \.self) { source in
+                            Text(MCPDefinitionSources.label(source)).lineLimit(1).truncationMode(.middle).help(source)
+                        }
+                    }
+                }
+            }
+            if !repeated.isEmpty {
+                Hairline()
+                HStack(alignment: .top, spacing: Space.md) {
+                    Image(systemName: "square.on.square").foregroundStyle(AgentTheme.warning)
+                    Text(
+                        "\(repeated.map(\.client.rawValue).joined(separator: " and ")) "
+                            + "\(repeated.count == 1 ? "gets" : "get") this server from more than one place. "
+                            + "Unless two definitions are identical, each one starts its own process and lists its own tools. "
+                            + "A copy in the app's own configuration is yours to remove; a plugin's comes and goes with the plugin."
+                    )
+                    .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, Space.lg).padding(.vertical, Space.md)
+            }
         }
     }
 

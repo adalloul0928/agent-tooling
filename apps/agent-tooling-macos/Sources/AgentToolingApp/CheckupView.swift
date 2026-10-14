@@ -517,6 +517,8 @@ extension SetupFinding.Kind {
         case .neverChecked: "Apps never checked"
         case .skillWithoutDefinition: "Skill folders with no definition"
         case .mcpServerRepeatedAcrossClients: "Servers configured in several apps"
+        case .mcpServerDefinedSeveralTimes: "Servers an app gets from several places"
+        case .pluginSkillsOverlap: "Plugins that carry the same skills"
         }
     }
 }

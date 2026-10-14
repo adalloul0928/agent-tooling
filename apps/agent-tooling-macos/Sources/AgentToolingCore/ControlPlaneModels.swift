@@ -135,12 +135,42 @@ public struct ObservedSkillMetadata: Codable, Hashable, Sendable {
     public var path: String
     public var source: String
     public var providerPluginID: String?
+    /// `ToolCopyIdentity.definitionDigest` of the folder when the check could
+    /// read it: equal for copies that differ only in a packaging stamp. Nil is
+    /// "not compared", never "the same". Older observations decode without it.
+    public var definitionDigest: String?
+    /// The tool that placed this folder and keeps it in step, when it left a
+    /// record saying so. Only ever set for a standalone folder; a plugin's
+    /// member is its plugin's.
+    public var externalManager: ObservedExternalManager?
 
-    public init(path: String, source: String, providerPluginID: String? = nil) {
+    public init(
+        path: String, source: String, providerPluginID: String? = nil, definitionDigest: String? = nil,
+        externalManager: ObservedExternalManager? = nil
+    ) {
         self.path = path
         self.source = source
         self.providerPluginID = providerPluginID
+        self.definitionDigest = definitionDigest
+        self.externalManager = externalManager
     }
+}
+
+/// Another tool that put a skill folder where a client reads it, and the
+/// package it says the folder came from.
+public struct ObservedExternalManager: Codable, Hashable, Sendable {
+    /// The tool, as people call it: "AIM".
+    public var tool: String
+    /// The package the tool placed it from, when its record names one.
+    public var package: String?
+
+    public init(tool: String, package: String? = nil) {
+        self.tool = tool
+        self.package = package
+    }
+
+    /// "AIM · DalloulPersonalAI", or just "AIM".
+    public var label: String { [tool, package].compactMap { $0 }.joined(separator: " · ") }
 }
 
 public struct ObservedPluginMetadata: Codable, Hashable, Sendable {
@@ -176,12 +206,31 @@ public struct ObservedMCPMetadata: Codable, Hashable, Sendable {
     public var authentication: String
     public var source: String
     public var enabled: Bool
+    /// Other places in the same client that define a server by this name: the
+    /// client's own configuration, or other plugins. One entry per server name
+    /// is all `mcpMetadata` can hold, so without this the rest were lost. Nil
+    /// when `source` is the only one. Older observations decode without it.
+    public var additionalSources: [String]?
 
-    public init(transport: String, authentication: String, source: String, enabled: Bool = true) {
+    public init(
+        transport: String, authentication: String, source: String, enabled: Bool = true, additionalSources: [String]? = nil
+    ) {
         self.transport = transport
         self.authentication = authentication
         self.source = source
         self.enabled = enabled
+        self.additionalSources = additionalSources
+    }
+
+    /// Every place this client defines the server, `source` first.
+    public var allSources: [String] { [source] + (additionalSources ?? []) }
+
+    /// This record with `other` folded in as one more place that defines it.
+    func adding(source other: String) -> Self {
+        guard other != source, !(additionalSources ?? []).contains(other) else { return self }
+        var copy = self
+        copy.additionalSources = ((additionalSources ?? []) + [other]).sorted()
+        return copy
     }
 }
 

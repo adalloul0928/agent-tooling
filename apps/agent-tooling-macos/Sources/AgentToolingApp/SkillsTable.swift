@@ -47,10 +47,39 @@ struct SkillTableColumns {
     var marketplace: CGFloat { min(180, width * 0.15) }
 }
 
+/// How many copies of one skill the library holds, for the badge beside its
+/// name. Nil, and no badge, when there is only the one.
+struct SkillCopySummary: Equatable {
+    let copies: Int
+    /// Different contents among them that the last check could compare.
+    let versions: Int
+
+    init?(copies: Int, versions: Int) {
+        guard copies > 1 else { return nil }
+        self.copies = copies
+        self.versions = versions
+    }
+
+    var label: String { versions > 1 ? "\(versions) versions" : "\(copies) copies" }
+
+    var explanation: String {
+        versions > 1
+            ? "\(copies) copies of this skill, and they are not all the same: \(versions) different versions. An app uses the copy it has. Open it to see which is where."
+            : "\(copies) copies of this skill, from different plugins or folders. Open it to see each one and where it was found."
+    }
+}
+
 struct SkillCollectionRow: View {
     let skill: SkillEntry
     let presentation: SkillPresentation
     let observed: Set<ClientKind>
+    /// Who manages this copy. The index decides, since only it knows which
+    /// copies another tool placed.
+    let management: SkillManagement
+    /// Other copies of the same skill, when there are any.
+    var copies: SkillCopySummary? = nil
+    /// How many other copies in this section the row also stands for.
+    var moreSources = 0
     let selected: Bool
     var selecting = false
     var isAssignable = false
@@ -76,11 +105,6 @@ struct SkillCollectionRow: View {
         (columns.describing ? 1 : 0) + (origin == nil ? 0 : 1)
     }
 
-    /// Who manages this skill, which is a different claim from where it was
-    /// found. Where this app placed it, the apps are shown; otherwise the
-    /// words say who does manage it, so a row never reads as "not available".
-    private var management: SkillManagement { SkillManagement(skill) }
-
     var body: some View {
         HStack(spacing: Space.lg) {
             Button(action: activate) {
@@ -94,6 +118,16 @@ struct SkillCollectionRow: View {
                         VStack(alignment: .leading, spacing: Space.xxs) {
                             HStack(spacing: Space.md) {
                                 Text(skill.displayName).font(AgentFont.bodyMedium).lineLimit(1)
+                                if let copies {
+                                    Text(copies.label)
+                                        .font(AgentFont.microMedium).lineLimit(1).fixedSize()
+                                        .padding(.horizontal, Space.sm).padding(.vertical, Space.xxs)
+                                        .background(.quaternary, in: Capsule())
+                                        .foregroundStyle(
+                                            selected ? Color.white.opacity(0.85) : copies.versions > 1 ? AgentTheme.warning : Color.secondary)
+                                        .help(copies.explanation)
+                                        .accessibilityLabel(copies.label)
+                                }
                                 if let update, update.hasUpdate { UpdateStateBadge(availability: update) }
                             }
                             if !columns.expanded {
@@ -116,7 +150,7 @@ struct SkillCollectionRow: View {
                         } else {
                             Spacer(minLength: 0)
                         }
-                        Text(presentation.pluginName ?? skill.parentPluginLabel ?? "Standalone")
+                        Text((presentation.pluginName ?? skill.parentPluginLabel ?? "Standalone") + (moreSources > 0 ? " +\(moreSources)" : ""))
                             .font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
                             .frame(width: columns.plugin, alignment: .leading)
                         Text(presentation.marketplaceName ?? skill.sourceLabel ?? "—")
@@ -160,7 +194,7 @@ struct SkillCollectionRow: View {
 }
 
 
-/// The Managed column's four answers. "Found in" says where a skill is;
+/// The Managed column's answers. "Found in" says where a skill is;
 /// this says who put it there and who can change it.
 enum SkillManagement: Equatable {
     /// Yours, and this app placed it in these apps.
@@ -169,14 +203,20 @@ enum SkillManagement: Equatable {
     case yoursUnplaced
     /// Came with a plugin. The plugin is what an app installs or removes.
     case byPlugin
+    /// Found in an app's folder, put there by another tool that keeps it in
+    /// step (AIM copies its skills into Kiro's folder this way). That tool
+    /// owns it: a change made here would be undone at its next sync.
+    case byTool(ObservedExternalManager)
     /// Found in an app's folder; this app did not put it there and holds no
     /// copy, so it can show and try it, not place, edit, or update it.
     case notByThisApp
 
-    init(_ skill: SkillEntry) {
+    init(_ skill: SkillEntry, placedBy manager: ObservedExternalManager? = nil) {
         let placed = skill.requestedClients
         if !placed.isEmpty {
             self = .placed(placed)
+        } else if skill.ownership == .trackedOnly, let manager {
+            self = .byTool(manager)
         } else if skill.ownership == .trackedOnly {
             self = .notByThisApp
         } else if skill.ownership == .nativeOwned {
@@ -192,6 +232,7 @@ enum SkillManagement: Equatable {
         switch self {
         case .placed, .yoursUnplaced: "Yours"
         case .byPlugin: "Plugin"
+        case .byTool(let manager): manager.tool
         case .notByThisApp: "Unmanaged"
         }
     }
@@ -204,6 +245,8 @@ enum SkillManagement: Equatable {
             "Yours, in this library, but not placed in any app yet. Install it from its details."
         case .byPlugin:
             "Came with a plugin. The plugin is what gets installed or removed; this library lists the skill so you can find it, see where it is, and try it."
+        case .byTool(let manager):
+            "Placed by \(manager.label), which keeps it in step. Change or remove it there: anything changed here would be undone at its next sync."
         case .notByThisApp:
             "Found in an app's folder, but this app did not put it there and holds no copy. It can show and try it, not place, edit, or update it."
         }

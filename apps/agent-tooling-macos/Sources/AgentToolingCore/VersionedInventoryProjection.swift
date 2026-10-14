@@ -58,9 +58,14 @@ public enum VersionedInventoryProjection {
 
     // MARK: - Records
 
+    // A skill's `name` is the one a client calls it by — the declared name
+    // without a plugin's namespace — so recent work that names a skill can be
+    // matched to it, and copies of one skill share it. A skill with nothing
+    // declared keeps its display name.
     private static func skill(_ row: WorkspaceLibraryReadModelRow) -> Skill {
         .init(
-            id: row.artifactID.rawValue.uuidString.lowercased(), name: row.displayName,
+            id: row.artifactID.rawValue.uuidString.lowercased(),
+            name: ToolCopyIdentity.bareName(row.declaredName) ?? row.displayName,
             displayName: row.displayName, summary: row.observedDescription ?? "",
             bundle: row.sourceLabel ?? "", scope: scope(row.requestedAssignments),
             owned: owns(row.ownership), triggers: [], negativeTrigger: "", files: [],
@@ -69,7 +74,8 @@ public enum VersionedInventoryProjection {
 
     private static func skill(_ item: WorkspaceLibraryIncludedItem, parentLabel: String) -> Skill {
         .init(
-            id: item.artifactID.rawValue.uuidString.lowercased(), name: item.displayName,
+            id: item.artifactID.rawValue.uuidString.lowercased(),
+            name: ToolCopyIdentity.bareName(item.declaredName) ?? item.displayName,
             displayName: item.displayName, summary: item.observedDescription ?? "",
             bundle: parentLabel, scope: scope(item.requestedAssignments),
             owned: owns(item.ownership), triggers: [], negativeTrigger: "", files: [],

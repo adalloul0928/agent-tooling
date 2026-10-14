@@ -263,11 +263,11 @@ struct OverviewView: View {
     private var libraryCard: some View {
         BentoCard(
             symbol: "books.vertical",
-            title: libraryModel.map { "Library · \($0.toolCount)" } ?? "Library",
+            title: inventory.map { "Library · \(distinctSkillCount + $0.plugins.count + $0.mcpServers.count)" } ?? "Library",
             action: ("Open", { navigate(.skills) })
         ) {
             HStack(alignment: .top, spacing: Space.md) {
-                libraryKindCell("Skills", count: inventory?.skills.count ?? 0, kind: .skill, section: .skills)
+                libraryKindCell("Skills", count: distinctSkillCount, kind: .skill, section: .skills)
                 libraryKindCell("Plugins", count: inventory?.plugins.count ?? 0, kind: .plugin, section: .plugins)
                 libraryKindCell("Servers", count: inventory?.mcpServers.count ?? 0, kind: .mcpServer, section: .mcpServers)
             }
@@ -691,6 +691,12 @@ struct OverviewView: View {
     /// The library in the shape the surviving services already speak. Absent
     /// until the library has been read once; there is no empty one to stand in
     /// for it, and pretending otherwise would report a real library as empty.
+    /// Skills by the name a client calls them, so a skill three plugins
+    /// re-ship counts once, as it does on the Skills screen.
+    private var distinctSkillCount: Int {
+        Set((inventory?.skills ?? []).map { ToolCopyIdentity.callableName($0.name).map { "name:" + $0 } ?? "id:" + $0.id }).count
+    }
+
     private var inventory: VersionedInventoryProjection.Inventory? {
         libraryModel.map(VersionedInventoryProjection.inventory)
     }
@@ -706,7 +712,7 @@ struct OverviewView: View {
     /// These are stored Insights findings; Home never fabricates a personal
     /// recommendation and never starts a scan to get one.
     private var recommendations: [ToolRecommendation] {
-        Array((insights.report?.recommendations ?? []).prefix(4))
+        Array(ToolRecommendation.distinct(insights.report?.recommendations ?? []).prefix(4))
     }
 
     // MARK: - Acting

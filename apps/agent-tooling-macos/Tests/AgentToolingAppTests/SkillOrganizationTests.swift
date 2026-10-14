@@ -245,6 +245,34 @@ struct SkillInventoryIndexTests {
         #expect(index.observedClients[skill] == nil)
     }
 
+    /// Two plugins re-ship one skill and AIM copies it into Kiro's folder:
+    /// three entries, one skill. The list shows one row, the copies say where
+    /// each one is and whether they match, and AIM's copy is AIM's.
+    @Test func copiesOfOneSkillAreOneRowWithTheirDifferencesKept() throws {
+        let scenario = try SkillCopiesScenario()
+        let index = scenario.index
+        let (wootSkill, coreSkill, loose) = (scenario.wootSkill, scenario.coreSkill, scenario.loose)
+        let entry = try #require(index.skills.first { $0.id == loose })
+        let copies = index.copies(of: entry)
+        #expect(copies.map(\.id).first == wootSkill, "the copy found in the most apps leads")
+        #expect(Set(copies.map(\.id)) == [wootSkill, coreSkill, loose])
+        #expect(index.distinctCount == 1)
+        #expect(index.versions(among: copies).map(\.count) == [2, 1], "two match, AIM's Kiro copy differs")
+        #expect(index.management(of: entry) == .byTool(.init(tool: "AIM", package: "core-skills")))
+        #expect(index.management(of: entry).label == "AIM")
+
+        let flat = SkillListPresentation.groups(
+            skills: index.skills, grouping: .none, presentation: index.presentation(for:), copies: index.copies(of:))
+        #expect(flat.flatMap(\.skills).map(\.id) == [wootSkill], "one row")
+        #expect(flat.first?.members(of: copies[0]).count == 3)
+        let byPlugin = SkillListPresentation.groups(
+            skills: index.skills, grouping: .plugin, presentation: index.presentation(for:), copies: index.copies(of:))
+        #expect(byPlugin.flatMap(\.skills).count == 3, "grouped by plugin, each plugin still shows its own copy")
+        #expect(SkillCopySummary(copies: 3, versions: 2)?.label == "2 versions")
+        #expect(SkillCopySummary(copies: 3, versions: 1)?.label == "3 copies")
+        #expect(SkillCopySummary(copies: 1, versions: 1) == nil)
+    }
+
     private static func snapshot(artifacts: [ArtifactRecord]) throws -> WorkspaceApplicationSnapshot {
         let workspaceID = WorkspaceObjectID()
         let document = try WorkspaceDocumentCoding.seal(

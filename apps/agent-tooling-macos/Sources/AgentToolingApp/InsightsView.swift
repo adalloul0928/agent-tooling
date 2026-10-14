@@ -297,7 +297,7 @@ struct InsightsView: View {
             switch selection {
             case .opportunities:
                 deepDiveSection(report)
-                opportunitiesSection(report.recommendations)
+                opportunitiesSection(ToolRecommendation.distinct(report.recommendations))
             case .skillHealth:
                 skillHealthSection(report)
             }
@@ -320,7 +320,7 @@ struct InsightsView: View {
                 report.conversationsScanned, "Conversations scanned", tint: .primary)
             Hairline(.vertical).frame(height: Size.compactRowHeight).padding(.horizontal, Space.xs)
             summaryStat(
-                report.recommendations.count, "Worth adding",
+                ToolRecommendation.distinct(report.recommendations).count, "Worth adding",
                 tint: report.recommendations.isEmpty ? .secondary : AgentTheme.selection)
             Hairline(.vertical).frame(height: Size.compactRowHeight).padding(.horizontal, Space.xs)
             summaryStat(

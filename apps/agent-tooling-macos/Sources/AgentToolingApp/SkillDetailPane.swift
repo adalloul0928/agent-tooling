@@ -18,6 +18,8 @@ struct SkillDetailView: View {
     let onAssign: () -> Void
     let onExport: () -> Void
     let onOpenPlugin: (ArtifactID) -> Void
+    /// Shows another copy of this skill in this pane.
+    var onSelectCopy: (ArtifactID) -> Void = { _ in }
 
     private var upstream: SkillUpstreamBinding.Resolved? {
         SkillUpstreamBinding.resolve(skill, in: workspace.library.state?.snapshot.document)
@@ -41,6 +43,7 @@ struct SkillDetailView: View {
                     skill: skill, binding: upstream?.binding, approvedRevision: upstream?.approvedRevision,
                     authoringPath: inventory.authoringPaths[skill.id], session: content, workspace: workspace)
                 apps
+                copiesSection
                 sourceFiles
             }
             .padding(Space.xxxl)
@@ -72,7 +75,7 @@ struct SkillDetailView: View {
         case .centralUpstream: "Yours · repository"
         case .attachedAuthoring: "Yours · linked folder"
         case .nativeOwned: skill.parentID == nil ? "Its app" : "Plugin"
-        case .trackedOnly: "Unmanaged"
+        case .trackedOnly: inventory.externalManagers[skill.id]?.label ?? "Unmanaged"
         }
     }
 
@@ -83,8 +86,73 @@ struct SkillDetailView: View {
         case .nativeOwned:
             SkillManagement.byPlugin.explanation
         case .trackedOnly:
-            SkillManagement.notByThisApp.explanation
+            inventory.management(of: skill).explanation
         }
+    }
+
+    // MARK: - Copies
+
+    /// Every copy of this skill in the library, with where it came from, who
+    /// manages it, where it was found, and whether its contents match the
+    /// others. Shown only when there is more than one.
+    @ViewBuilder private var copiesSection: some View {
+        let copies = inventory.copies(of: skill)
+        if copies.count > 1 {
+            let versions = inventory.versions(among: copies)
+            GroupBox {
+                VStack(spacing: 0) {
+                    ForEach(Array(copies.enumerated()), id: \.element.id) { index, copy in
+                        copyRow(copy, version: versionLabel(for: copy, in: versions))
+                        if index < copies.count - 1 { Hairline() }
+                    }
+                }
+                .padding(Space.sm)
+            } label: {
+                HStack(spacing: Space.sm) {
+                    Text(versions.count > 1 ? "\(copies.count) copies · \(versions.count) versions" : "\(copies.count) copies")
+                    SkillInfoButton(text: copiesNote(versions: versions.count), label: "About copies")
+                }
+            }
+        }
+    }
+
+    private func copyRow(_ copy: SkillEntry, version: String?) -> some View {
+        let origin = inventory.presentation(for: copy)
+        let isThis = copy.id == skill.id
+        return HStack(spacing: Space.lg) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(origin.pluginName ?? copy.parentPluginLabel ?? "Standalone").font(AgentFont.bodyMedium).lineLimit(1)
+                Text([inventory.management(of: copy).label, version].compactMap { $0 }.joined(separator: " · "))
+                    .font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
+            ClientMarks(present: inventory.observedClients[copy.id] ?? [], size: Size.brandMark)
+            if isThis {
+                Text("Shown").font(AgentFont.caption).foregroundStyle(.secondary).frame(minWidth: 52, alignment: .trailing)
+            } else {
+                Button("Show") { onSelectCopy(copy.id) }
+                    .secondaryActionStyle().controlSize(.small)
+                    .frame(minWidth: 52, alignment: .trailing)
+                    .accessibilityLabel("Show the copy from \(origin.pluginName ?? copy.parentPluginLabel ?? "a standalone folder")")
+            }
+        }
+        .padding(.horizontal, Space.sm).padding(.vertical, Space.md)
+    }
+
+    /// "Same as 2 others", "Version 2 of 3", or nil when the last check could
+    /// not compare this copy.
+    private func versionLabel(for copy: SkillEntry, in versions: [[SkillEntry]]) -> String? {
+        guard let index = versions.firstIndex(where: { $0.contains { $0.id == copy.id } }) else { return "Not compared" }
+        if versions.count == 1 { return "Same content" }
+        return "Version \(index + 1) of \(versions.count)"
+    }
+
+    private func copiesNote(versions: Int) -> String {
+        let base =
+            "Each plugin that ships this skill, and each app folder it was copied into, is a copy. An app uses the copy it has; the marks say where each one was found. Content is compared with each package's build stamp ignored."
+        return versions > 1
+            ? base + " These copies are not all the same, so the skill can behave differently depending on which copy an app loads."
+            : base
     }
 
     @ViewBuilder private var actions: some View {

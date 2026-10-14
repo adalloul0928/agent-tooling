@@ -272,7 +272,9 @@ final class WorkspaceInsightsSession {
         // judge what the SKILL.md actually says instead of the placeholders.
         let requests = Self.libraryContentRequests(state.library)
         let facts = requests.isEmpty ? [:] : await services.libraryContent(for: requests)
-        let skills = projected.map { skill -> Skill in
+        // Collapsed here as well as in the scan, so the deep dive is handed
+        // the same one-per-skill list the fast pass judged.
+        let skills = ToolCopyIdentity.collapsingCopies(projected.map { skill -> Skill in
             guard let fact = facts[skill.id] else { return skill }
             var enriched = skill
             if let description = fact.description { enriched.summary = description }
@@ -281,7 +283,7 @@ final class WorkspaceInsightsSession {
             // file list is now known — even when the tree genuinely holds none.
             enriched.filesKnown = true
             return enriched
-        }
+        })
         generation &+= 1
         let token = generation
         isScanning = true
@@ -349,7 +351,7 @@ final class WorkspaceInsightsSession {
         guard let state = library.state else { return [] }
         let clients = Set(InsightScanOptions().clients)
         guard !clients.isEmpty else { return [] }
-        let skills = VersionedInventoryProjection.inventory(state.library).skills
+        let skills = ToolCopyIdentity.collapsingCopies(VersionedInventoryProjection.inventory(state.library).skills)
         return await services.scanWithDigests(options: InsightScanOptions(clients: clients), skills: skills, homeURL: homeRoot).digests
     }
 

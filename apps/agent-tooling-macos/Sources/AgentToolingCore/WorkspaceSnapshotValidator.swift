@@ -357,7 +357,7 @@ enum WorkspaceSnapshotValidator {
         }
     }
 
-    private static func validate(_ observation: TargetObservation) throws {
+    static func validate(_ observation: TargetObservation) throws {
         let collections = [
             observation.configurationPaths,
             observation.discoveredSkills,
@@ -394,6 +394,16 @@ enum WorkspaceSnapshotValidator {
             try validateText(
                 metadata.providerPluginID ?? "", field: "skill provider plugin identifier", maximum: Limit.identifierCharacters)
             try requireRedacted(metadata.source, field: "observed skill source")
+            if let digest = metadata.definitionDigest {
+                guard digest.count == 64, digest.allSatisfy({ $0.isHexDigit && !$0.isUppercase }) else {
+                    throw WorkspaceSnapshotValidationError.invalidField("observed skill definition digest")
+                }
+            }
+            if let manager = metadata.externalManager {
+                try validateText(manager.tool, field: "skill manager", maximum: Limit.shortTextCharacters, required: true)
+                try validateText(manager.package ?? "", field: "skill manager package", maximum: Limit.shortTextCharacters)
+                try requireRedacted(manager.label, field: "skill manager")
+            }
         }
         for (id, metadata) in observation.pluginMetadata {
             try validateText(id, field: "observed plugin identifier", maximum: Limit.identifierCharacters, required: true)
@@ -415,6 +425,13 @@ enum WorkspaceSnapshotValidator {
             try validateText(metadata.source, field: "observed MCP source", maximum: Limit.pathCharacters)
             try requireRedacted(metadata.authentication, field: "observed MCP authentication")
             try requireRedacted(metadata.source, field: "observed MCP source")
+            let others = metadata.additionalSources ?? []
+            guard others.count <= Limit.childRecords else { throw WorkspaceSnapshotValidationError.tooManyRecords }
+            try requireUnique(others, field: "observed MCP sources")
+            for other in others {
+                try validateText(other, field: "observed MCP source", maximum: Limit.pathCharacters, required: true)
+                try requireRedacted(other, field: "observed MCP source")
+            }
         }
         try validateDate(observation.lastScannedAt, field: "target scan timestamp")
     }

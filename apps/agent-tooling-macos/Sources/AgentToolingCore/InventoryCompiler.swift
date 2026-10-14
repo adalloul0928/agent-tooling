@@ -270,6 +270,12 @@ enum LocalTargetScan {
             }
         }
         skillMetadata.merge(native.skillMetadata) { _, native in native }
+        // A standalone folder another tool placed is that tool's, not loose.
+        let managers = ExternalSkillManagerIndex.load(homeURL: homeURL, fileManager: fileManager)
+        for (id, metadata) in skillMetadata where metadata.providerPluginID == nil {
+            skillMetadata[id]?.externalManager = managers.manager(
+                forSkillAt: URL(fileURLWithPath: metadata.path), fileManager: fileManager)
+        }
 
         var pluginMetadata = native.pluginMetadata
         let configuredPlugins = configurationDocuments.flatMap(pluginNames(from:))
@@ -288,7 +294,12 @@ enum LocalTargetScan {
         for document in configurationDocuments {
             mcpMetadata.merge(mcpRecords(from: document, source: "\(surface.displayName) configuration")) { current, _ in current }
         }
-        mcpMetadata.merge(native.mcpMetadata) { _, native in native }
+        // A plugin's server beside one the client was configured with by
+        // hand is two definitions, and both are kept. The client's own
+        // listing of its configuration is not: it is the same definition.
+        mcpMetadata.merge(native.mcpMetadata) { configured, native in
+            native.source.contains("@") ? native.adding(source: configured.source) : native
+        }
         let installed =
             probe.available || !existingConfig.isEmpty
             || skillRoots.contains {
@@ -397,7 +408,13 @@ enum LocalTargetScan {
                 for (rawServerID, value) in servers.prefix(BoundedFileAccess.maximumDirectoryEntries) {
                     guard let serverID = boundedIdentifier(rawServerID) else { continue }
                     mcpIDs.append(serverID)
-                    inventory.mcpMetadata[serverID] = mcpMetadata(from: value, source: id)
+                    // Several plugins can each bring a server by one name;
+                    // the first keeps the record and the rest are listed on it.
+                    if let earlier = inventory.mcpMetadata[serverID] {
+                        inventory.mcpMetadata[serverID] = earlier.adding(source: id)
+                    } else {
+                        inventory.mcpMetadata[serverID] = mcpMetadata(from: value, source: id)
+                    }
                 }
             }
             inventory.pluginMetadata[id] = ObservedPluginMetadata(
@@ -463,7 +480,9 @@ enum LocalTargetScan {
             guard BoundedFileAccess.isRegularFile(url.appending(path: "SKILL.md")) else { continue }
             let id = namespace.map { "\($0):\(url.lastPathComponent)" } ?? url.lastPathComponent
             guard boundedIdentifier(id) != nil else { continue }
-            records[id] = ObservedSkillMetadata(path: url.path(percentEncoded: false), source: source, providerPluginID: providerPluginID)
+            records[id] = ObservedSkillMetadata(
+                path: url.path(percentEncoded: false), source: source, providerPluginID: providerPluginID,
+                definitionDigest: ToolCopyIdentity.definitionDigest(ofSkillAt: url, fileManager: fileManager))
         }
         return records
     }

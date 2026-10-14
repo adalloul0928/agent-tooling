@@ -318,7 +318,9 @@ struct SkillsBrowser: View {
                     Button("Reset") { resetFilters() }
                         .buttonStyle(.plain).foregroundStyle(.secondary)
                 }
-                Text("\(skills.count) skills").font(AgentFont.caption).foregroundStyle(.secondary).fixedSize()
+                // Copies of one skill are one row, so they are one in the count.
+                Text("\(Set(skills.map(SkillInventoryIndex.copyKey(for:))).count) skills")
+                    .font(AgentFont.caption).foregroundStyle(.secondary).fixedSize()
             }
             .inventoryMenuStyle()
         }

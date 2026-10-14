@@ -29,6 +29,11 @@ public struct SetupFinding: Identifiable, Codable, Hashable, Sendable {
         /// The same MCP server configured in more than one client by hand,
         /// each copy separately.
         case mcpServerRepeatedAcrossClients
+        /// One client gets a server by one name from more than one place:
+        /// its own configuration and plugins, or several plugins.
+        case mcpServerDefinedSeveralTimes
+        /// Two plugins in one client carry many of the same skills.
+        case pluginSkillsOverlap
     }
 
     public enum Severity: String, Codable, Comparable, Sendable {
@@ -234,7 +239,7 @@ public struct SetupAuditor: Sendable {
             findings += pluginFindings(client: client, observation: observation)
             findings += mcpFindings(client: client, observation: observation)
             for server in observation.discoveredMCPServers
-            where observation.mcpMetadata[server]?.source.hasSuffix("configuration") == true {
+            where observation.mcpMetadata[server]?.allSources.contains(where: { $0.hasSuffix("configuration") }) == true {
                 mcpOwners[server, default: []].append(client)
             }
         }
@@ -290,29 +295,48 @@ public struct SetupAuditor: Sendable {
         }
 
         // One skill name reachable by more than one path in this client.
-        var byName: [String: [String]] = [:]
+        var byName: [String: [ObservedSkillMetadata]] = [:]
         for (id, metadata) in observation.skillMetadata {
             let bare = id.split(separator: ":").last.map(String.init) ?? id
-            byName[bare, default: []].append(metadata.path)
+            byName[bare, default: []].append(metadata)
         }
-        for (name, paths) in byName where paths.count > 1 {
+        for (name, copies) in byName where copies.count > 1 {
+            let paths = copies.map(\.path)
             let distinct = Set(paths.map { resolvedPath($0) })
-            let plugins = paths.compactMap { path in observation.skillMetadata.first { $0.value.path == path }?.value.providerPluginID }
-            let standalone = paths.filter { path in observation.skillMetadata.first { $0.value.path == path }?.value.providerPluginID == nil }
+            let plugins = copies.compactMap(\.providerPluginID).sorted()
+            // Only a loose copy is offered for removal. A plugin's copy is the
+            // plugin's, and one another tool placed comes back on its next sync.
+            let removable = copies.filter { $0.providerPluginID == nil && $0.externalManager == nil }.map(\.path).sorted()
+            let placed = copies.compactMap(\.externalManager).map(\.label)
+            let digests = copies.map(\.definitionDigest)
+            let compared = !digests.contains(nil)
+            let identical = compared && Set(digests).count == 1
+            let comparison = identical
+                ? " The copies are identical apart from their packaging stamp."
+                : Set(digests.compactMap { $0 }).count > 1 ? " The copies differ, so what the skill does depends on which one loads." : ""
+            let detail: String
+            if distinct.count == 1 {
+                detail = "Two entries point at the same files. Harmless, but one is enough."
+            } else if copies.allSatisfy({ $0.providerPluginID != nil }) {
+                detail = "Each of \(plugins.joined(separator: ", ")) brings its own copy, and \(client.rawValue) lists every one." + comparison
+            } else {
+                detail = "Two different copies answer to the same name" + (plugins.isEmpty ? "." : ", one of them inside \(plugins.joined(separator: ", ")).")
+                    + " Which one \(client.rawValue) uses depends on its load order." + comparison
+                    + (placed.isEmpty ? "" : " The loose copy was placed by \(placed.joined(separator: ", ")), which keeps it in step, so it is left alone.")
+            }
             findings.append(
                 SetupFinding(
-                    kind: .duplicateSkillInClient, severity: distinct.count > 1 ? .medium : .low, client: client, subject: name,
+                    kind: .duplicateSkillInClient, severity: distinct.count > 1 && !identical ? .medium : .low, client: client, subject: name,
                     title: "\(client.rawValue) can reach \(name) \(paths.count) ways",
-                    detail: distinct.count > 1
-                        ? "Two different copies answer to the same name" + (plugins.isEmpty ? "." : ", one of them inside \(plugins.joined(separator: ", ")).") + " Which one \(client.rawValue) uses depends on its load order."
-                        : "Two entries point at the same files. Harmless, but one is enough.",
+                    detail: detail,
                     evidence: paths.sorted().map(redact),
-                    actions: standalone.map { .removeSkillCopy(path: normalized($0), client: client) }))
+                    actions: removable.map { .removeSkillCopy(path: normalized($0), client: client) }))
         }
 
-        // Standalone skills the library does not manage.
+        // Standalone skills the library does not manage. One another tool
+        // placed and keeps in step is managed, just not by this app.
         for (id, metadata) in observation.skillMetadata.sorted(by: { $0.key < $1.key })
-        where metadata.providerPluginID == nil && !library.managedSkillNames.contains(id) {
+        where metadata.providerPluginID == nil && metadata.externalManager == nil && !library.managedSkillNames.contains(id) {
             findings.append(
                 SetupFinding(
                     kind: .unmanagedSkill, severity: .info, client: client, subject: id,
@@ -383,6 +407,43 @@ public struct SetupAuditor: Sendable {
                 }
             }
         }
+        findings += pluginOverlapFindings(client: client, observation: observation)
+        return findings
+    }
+
+    /// Two plugins whose skills are largely the same ones: at least three
+    /// shared, and at least half of the smaller plugin. The client lists each
+    /// plugin's copy, so every shared skill appears twice. Removing a plugin
+    /// takes its other skills and servers with it, so nothing is offered.
+    private func pluginOverlapFindings(client: ClientKind, observation: TargetObservation) -> [SetupFinding] {
+        let skills = observation.pluginMetadata.compactMapValues { plugin -> Set<String>? in
+            let names = Set(plugin.skillIDs.map { $0.split(separator: ":").last.map(String.init) ?? $0 })
+            return plugin.enabled && !names.isEmpty ? names : nil
+        }
+        let ids = skills.keys.sorted()
+        var findings: [SetupFinding] = []
+        for (index, left) in ids.enumerated() {
+            for right in ids[(index + 1)...] {
+                guard let a = skills[left], let b = skills[right] else { continue }
+                let shared = a.intersection(b)
+                let smaller = min(a.count, b.count)
+                guard shared.count >= 3, shared.count * 2 >= smaller else { continue }
+                // The smaller plugin is named first: it is the one whose skills
+                // are all, or mostly, somewhere else already.
+                let (small, large) = a.count <= b.count ? (left, right) : (right, left)
+                let smallName = observation.pluginMetadata[small]?.name ?? small
+                let largeName = observation.pluginMetadata[large]?.name ?? large
+                let contained = shared.count == smaller
+                findings.append(
+                    SetupFinding(
+                        kind: .pluginSkillsOverlap, severity: .info, client: client, subject: "\(small)|\(large)",
+                        title: contained
+                            ? "Every skill in \(smallName) also comes with \(largeName)"
+                            : "\(smallName) and \(largeName) share \(shared.count) skills",
+                        detail: "\(client.rawValue) lists each plugin's copy, so these \(shared.count) skills appear twice. Removing a plugin is a decision about all of it: its other skills and servers go with it.",
+                        evidence: shared.sorted(), actions: []))
+            }
+        }
         return findings
     }
 
@@ -398,6 +459,26 @@ public struct SetupAuditor: Sendable {
 
     private func mcpFindings(client: ClientKind, observation: TargetObservation) -> [SetupFinding] {
         var findings: [SetupFinding] = []
+        // A plugin's server is its own server unless it is configured exactly
+        // like one already defined, so the same name from several places can
+        // mean several processes and the same tools listed more than once.
+        // https://github.com/anthropics/claude-code/issues/85862
+        for (server, metadata) in observation.mcpMetadata.sorted(by: { $0.key < $1.key }) where metadata.allSources.count > 1 {
+            let sources = metadata.allSources
+            let configured = sources.filter { !$0.contains("@") }
+            let plugins = sources.filter { $0.contains("@") }.sorted()
+            let from = (configured.isEmpty ? [] : ["its own configuration"]) + plugins
+            findings.append(
+                SetupFinding(
+                    kind: .mcpServerDefinedSeveralTimes, severity: .low, client: client, subject: server,
+                    title: "\(client.rawValue) gets \(server) from \(sources.count) places",
+                    detail: "\(server) is defined by \(from.joined(separator: ", ")). \(client.rawValue) treats each one as its own server unless two are configured identically, so each can start its own process and list its own tools."
+                        + (configured.isEmpty
+                            ? " Each copy comes with a plugin, so there is nothing here to remove."
+                            : " If a plugin's copy does what you need, the one in \(client.rawValue)'s configuration can go."),
+                    evidence: sources.map(redact),
+                    actions: configured.isEmpty ? [] : [.inspectMCPServer(name: server, client: client)]))
+        }
         let commands = configuredCommands(client: client, configurationPaths: observation.configurationPaths)
         for (server, metadata) in observation.mcpMetadata.sorted(by: { $0.key < $1.key }) where metadata.transport == "stdio" {
             guard let command = commands[server] else { continue }

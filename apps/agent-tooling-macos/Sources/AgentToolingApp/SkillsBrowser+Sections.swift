@@ -11,7 +11,8 @@ extension SkillsBrowser {
     func collectionPane(skills: [SkillEntry]) -> some View {
         let assignable = assignableIDs
         let groups = SkillListPresentation.groups(
-            skills: skills, grouping: resolvedGrouping, presentation: inventory.presentation(for:))
+            skills: skills, grouping: resolvedGrouping, presentation: inventory.presentation(for:),
+            copies: inventory.copies(of:))
         let collapsed = query.isEmpty ? collapsedGroups : []
         return VStack(spacing: 0) {
             if let message = workspace.library.errorMessage, assignment == nil {
@@ -47,7 +48,9 @@ extension SkillsBrowser {
                                     Section {
                                         if resolvedGrouping == .none || !isCollapsed {
                                             ForEach(group.skills) { skill in
-                                                row(skill, assignable: assignable.contains(skill.id), columns: columns)
+                                                row(
+                                                    skill, members: group.members(of: skill),
+                                                    assignable: assignable.contains(skill.id), columns: columns)
                                             }
                                         }
                                     } header: {
@@ -106,12 +109,20 @@ extension SkillsBrowser {
         .background(AgentTheme.fillSubtle)
     }
 
-    func row(_ skill: SkillEntry, assignable: Bool, columns: SkillTableColumns) -> some View {
-        SkillCollectionRow(
+    /// One row for a skill and the copies of it in this section. The marks
+    /// say where any of those copies was found, and the row stays selected
+    /// while the detail pane shows any one of them.
+    func row(_ skill: SkillEntry, members: [SkillEntry], assignable: Bool, columns: SkillTableColumns) -> some View {
+        let everyCopy = inventory.copies(of: skill)
+        let observed = members.reduce(into: Set<ClientKind>()) { $0.formUnion(inventory.observedClients[$1.id] ?? []) }
+        return SkillCollectionRow(
             skill: skill,
             presentation: inventory.presentation(for: skill),
-            observed: inventory.observedClients[skill.id] ?? [],
-            selected: isSelecting ? selection.contains(skill.id) : skill.id == selectedID,
+            observed: observed,
+            management: inventory.management(of: skill),
+            copies: SkillCopySummary(copies: everyCopy.count, versions: inventory.versions(among: everyCopy).count),
+            moreSources: members.count - 1,
+            selected: isSelecting ? selection.contains(skill.id) : members.contains { $0.id == selectedID },
             selecting: isSelecting,
             isAssignable: assignable,
             columns: columns,
@@ -151,7 +162,8 @@ extension SkillsBrowser {
                         assignment = .init(artifactIDs: [skill.id])
                     },
                     onExport: { exporting = .init(artifactID: skill.id, name: skill.displayName) },
-                    onOpenPlugin: { id in navigation.openItem(id.rawValue.uuidString.lowercased(), in: .plugins) }
+                    onOpenPlugin: { id in navigation.openItem(id.rawValue.uuidString.lowercased(), in: .plugins) },
+                    onSelectCopy: { id in selectedID = id }
                 )
                 Hairline()
                 HStack {
@@ -250,7 +262,8 @@ extension SkillsBrowser {
 
     var groupedSkills: [SkillListGroup] {
         SkillListPresentation.groups(
-            skills: filteredSkills, grouping: resolvedGrouping, presentation: inventory.presentation(for:))
+            skills: filteredSkills, grouping: resolvedGrouping, presentation: inventory.presentation(for:),
+            copies: inventory.copies(of:))
     }
 
     func groupHeader(_ group: SkillListGroup, isCollapsed: Bool) -> some View {
@@ -331,7 +344,7 @@ extension SkillsBrowser {
     }
 
     var toolbarContext: String {
-        "\(inventory.skills.count) skills · \(inventory.mineCount) mine · \(inventory.unknownCount) unclassified"
+        "\(inventory.distinctCount) skills · \(inventory.mineCount) mine · \(inventory.unknownCount) unclassified"
     }
 
     func clearHiddenSelection() {

@@ -216,6 +216,114 @@ struct SetupAuditTests {
         #expect(report.findings.contains { $0.kind == .duplicateSkillInClient })
     }
 
+    /// AIM copies its skills into Kiro's folder. Those copies are AIM's:
+    /// not loose, not offered for adoption, and not offered for removal.
+    @Test func aCopyAnotherToolPlacedIsNeitherUnmanagedNorRemovable() throws {
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "SetupAuditTests-aim-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let aim = ObservedExternalManager(tool: "AIM", package: "core-skills")
+        let digest = String(repeating: "a", count: 64)
+        let observation = TargetObservation(
+            surface: .claudeCode, installed: true, commandAvailable: true, version: "2",
+            configurationPaths: [], discoveredSkills: ["brazil", "Core:brazil"], discoveredPlugins: [], discoveredMCPServers: [],
+            skillMetadata: [
+                "brazil": .init(
+                    path: root.appending(path: ".claude/skills/brazil").path(percentEncoded: false), source: "s",
+                    definitionDigest: digest, externalManager: aim),
+                "Core:brazil": .init(
+                    path: root.appending(path: "plugins/Core/skills/brazil").path(percentEncoded: false), source: "Core@aim",
+                    providerPluginID: "Core@aim", definitionDigest: digest),
+            ],
+            pluginMetadata: [:], mcpMetadata: [:], capabilities: Home.capabilities, notes: [])
+        let report = SetupAuditor(homeURL: root).audit(observations: [observation], managed: [.claude], library: .init(managedSkillNames: []))
+        #expect(!report.findings.contains { $0.kind == .unmanagedSkill })
+        let duplicate = try #require(report.findings.first { $0.kind == .duplicateSkillInClient })
+        #expect(duplicate.actions.isEmpty, "removing AIM's copy would be undone at its next sync")
+        #expect(duplicate.severity == .low, "identical copies cannot behave differently")
+        #expect(duplicate.detail.contains("identical"))
+        #expect(duplicate.detail.contains("AIM · core-skills"))
+    }
+
+    @Test func copiesWithDifferentContentAreSaidToDiffer() throws {
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "SetupAuditTests-variants-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let observation = TargetObservation(
+            surface: .claudeCode, installed: true, commandAvailable: true, version: "2",
+            configurationPaths: [], discoveredSkills: ["A:sop", "B:sop"], discoveredPlugins: [], discoveredMCPServers: [],
+            skillMetadata: [
+                "A:sop": .init(path: "/p/A/sop", source: "A@aim", providerPluginID: "A@aim", definitionDigest: String(repeating: "a", count: 64)),
+                "B:sop": .init(path: "/p/B/sop", source: "B@aim", providerPluginID: "B@aim", definitionDigest: String(repeating: "b", count: 64)),
+            ],
+            pluginMetadata: [:], mcpMetadata: [:], capabilities: Home.capabilities, notes: [])
+        let report = SetupAuditor(homeURL: root).audit(observations: [observation], managed: [.claude], library: .init(managedSkillNames: []))
+        let duplicate = try #require(report.findings.first { $0.kind == .duplicateSkillInClient })
+        #expect(duplicate.severity == .medium)
+        #expect(duplicate.detail.contains("A@aim, B@aim"))
+        #expect(duplicate.detail.contains("differ"))
+    }
+
+    /// Claude Code keeps a plugin's server apart from one configured by hand
+    /// unless the two are identical, so one name from several places is
+    /// reported, with a way in only where a person's own copy is one of them.
+    @Test func aServerDefinedInSeveralPlacesIsReported() throws {
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "SetupAuditTests-mcp-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let observation = TargetObservation(
+            surface: .claudeCode, installed: true, commandAvailable: true, version: "2",
+            configurationPaths: [], discoveredSkills: [], discoveredPlugins: [], discoveredMCPServers: ["builder", "jira"],
+            skillMetadata: [:], pluginMetadata: [:],
+            mcpMetadata: [
+                "builder": .init(
+                    transport: "stdio", authentication: "", source: "Woot-all@aim",
+                    additionalSources: ["Atlas-all@aim", "Claude Code configuration"]),
+                "jira": .init(transport: "stdio", authentication: "", source: "Woot-all@aim", additionalSources: ["Atlas-all@aim"]),
+            ],
+            capabilities: Home.capabilities, notes: [])
+        let codex = TargetObservation(
+            surface: .codexCLI, installed: true, commandAvailable: true, version: "1",
+            configurationPaths: [], discoveredSkills: [], discoveredPlugins: [], discoveredMCPServers: ["builder"],
+            skillMetadata: [:], pluginMetadata: [:],
+            mcpMetadata: ["builder": .init(transport: "stdio", authentication: "", source: "Codex CLI configuration")],
+            capabilities: Home.capabilities, notes: [])
+        let report = SetupAuditor(homeURL: root, searchPath: [])
+            .audit(observations: [observation, codex], managed: [.claude, .codex], library: .init(managedSkillNames: []))
+        let several = report.findings.filter { $0.kind == .mcpServerDefinedSeveralTimes }
+        let builder = try #require(several.first { $0.subject == "builder" })
+        #expect(builder.title == "Claude Code gets builder from 3 places")
+        #expect(builder.actions == [.inspectMCPServer(name: "builder", client: .claude)])
+        let jira = try #require(several.first { $0.subject == "jira" })
+        #expect(jira.actions.isEmpty, "only plugins bring it: nothing here is a person's to remove")
+        // The hand-configured copy behind a plugin's still counts as one.
+        #expect(report.findings.contains { $0.kind == .mcpServerRepeatedAcrossClients && $0.subject == "builder" })
+    }
+
+    @Test func pluginsThatCarryTheSameSkillsAreNamed() throws {
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "SetupAuditTests-overlap-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shared = ["brazil", "crux", "wiki-edit"]
+        let observation = TargetObservation(
+            surface: .claudeCode, installed: true, commandAvailable: true, version: "2",
+            configurationPaths: [], discoveredSkills: [], discoveredPlugins: ["Core@aim", "Woot@aim", "Other@aim"], discoveredMCPServers: [],
+            skillMetadata: [:],
+            pluginMetadata: [
+                "Core@aim": .init(name: "Core", source: "Core", scope: "User", enabled: true, skillIDs: shared.map { "Core:\($0)" }),
+                "Woot@aim": .init(
+                    name: "Woot", source: "Woot", scope: "User", enabled: true, skillIDs: (shared + ["mcm", "oncall"]).map { "Woot:\($0)" }),
+                "Other@aim": .init(name: "Other", source: "Other", scope: "User", enabled: true, skillIDs: ["Other:brazil", "Other:x", "Other:y"]),
+            ],
+            mcpMetadata: [:], capabilities: Home.capabilities, notes: [])
+        let report = SetupAuditor(homeURL: root).audit(observations: [observation], managed: [.claude], library: .init(managedSkillNames: []))
+        let overlaps = report.findings.filter { $0.kind == .pluginSkillsOverlap }
+        #expect(overlaps.map(\.subject) == ["Core@aim|Woot@aim"], "one shared skill is not an overlap")
+        #expect(overlaps.first?.title == "Every skill in Core also comes with Woot")
+        #expect(overlaps.first?.evidence == shared)
+        #expect(overlaps.first?.actions.isEmpty == true)
+    }
+
     @Test func findingIdentifiersAreStableAcrossRuns() throws {
         let home = try Home()
         defer { home.remove() }

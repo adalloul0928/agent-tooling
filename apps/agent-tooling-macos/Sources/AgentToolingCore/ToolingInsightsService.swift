@@ -30,6 +30,9 @@ public struct ToolingInsightsService: Sendable {
         homeURL: URL,
         marketplaceProviders: [any MarketplaceProvider] = []
     ) async -> (report: InsightsReport, digests: [ConversationDigest]) {
+        // Copies of one skill are one skill to recent work: a client records
+        // the name it used, not which copy, so each is judged once.
+        let skills = ToolCopyIdentity.collapsingCopies(skills)
         let now = Date.now
         let artifact = scanner.scan(options: options, skills: skills, homeURL: homeURL, now: now)
         let discovery = await discoverMarketplacePackages(

@@ -296,6 +296,21 @@ public struct ToolRecommendation: Identifiable, Codable, Hashable, Sendable {
         self.sourceName = sourceName
         self.draftInstruction = draftInstruction
     }
+
+    /// Recommendations with each local skill offered once.
+    ///
+    /// A report written before copies were collapsed holds one "Use X" per
+    /// copy of X, each with its own skill id. They read the same, so the first
+    /// of each title is kept and the order is otherwise left alone.
+    public static func distinct(_ recommendations: [ToolRecommendation]) -> [ToolRecommendation] {
+        var seen = Set<String>()
+        return recommendations.filter { recommendation in
+            guard recommendation.kind == .useExistingSkill else { return seen.insert("id:" + recommendation.id).inserted }
+            let title = recommendation.title.folding(
+                options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            return seen.insert("skill:" + title).inserted
+        }
+    }
 }
 
 public struct InsightsReport: Identifiable, Codable, Hashable, Sendable {

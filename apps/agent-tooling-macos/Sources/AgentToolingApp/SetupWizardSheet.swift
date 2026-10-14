@@ -59,7 +59,7 @@ extension SetupFinding.Kind {
     var category: SetupRecommendation.Category {
         switch self {
         case .brokenSkillLink, .skillWithoutDefinition, .stalePluginCache, .missingPluginInstall: .cleanup
-        case .duplicateSkillInClient: .duplicates
+        case .duplicateSkillInClient, .mcpServerDefinedSeveralTimes, .pluginSkillsOverlap: .duplicates
         case .unmanagedSkill: .unmanaged
         case .unreachableMCPCommand, .mcpServerRepeatedAcrossClients: .connections
         case .toolUnavailable, .neverChecked: .settings

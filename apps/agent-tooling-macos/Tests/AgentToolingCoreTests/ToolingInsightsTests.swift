@@ -369,6 +369,51 @@ struct ToolingInsightsTests {
         #expect(secondUsage.evidenceLevel == .noObservedUse)
     }
 
+    @Test func copiesOfOneSkillAreJudgedOnceAndCreditedByName() async throws {
+        let home = try TemporaryInsightsHome()
+        defer { home.remove() }
+        let now = Date.now.timeIntervalSince1970 * 1_000
+        try home.createCodexHistory(
+            rows: [
+                (
+                    "copy-thread", "userMessage",
+                    [
+                        "type": "userMessage", "fixtureTurnID": "copy-turn",
+                        "content": [["type": "text", "text": "Use $review"]],
+                    ],
+                    now
+                )
+            ]
+        )
+        // Two plugins re-ship one skill: same name, same description.
+        let first = makeSkill(
+            id: "plugin-one:review", displayName: "Review", summary: "Reviews a change.",
+            triggers: ["Review this change"], negativeTrigger: "")
+        let second = makeSkill(
+            id: "plugin-two:review", displayName: "Review", summary: "Reviews a change.",
+            triggers: ["Review this change"], negativeTrigger: "")
+
+        let report = await ToolingInsightsService().scan(
+            options: InsightScanOptions(clients: [.codex]), skills: [first, second], marketplacePackages: [], homeURL: home.url)
+
+        #expect(report.skillUsage.count == 1, "one skill, one line")
+        let usage = try #require(report.skillUsage.first)
+        #expect(usage.inferredObservedUses + usage.exactObservedUses == 1, "the bare name is no longer ambiguous")
+        #expect(!report.recommendations.contains { $0.kind == .useExistingSkill }, "a used skill is not recommended")
+    }
+
+    @Test func aSavedReportOffersEachLocalSkillOnce() {
+        func use(_ id: String) -> ToolRecommendation {
+            ToolRecommendation(
+                id: "local-skill:\(id)", kind: .useExistingSkill, title: "Use Thermo Nuclear Code Quality Review", summary: "",
+                rationale: "", confidence: .medium, supportingConversationCount: 2, skillID: id)
+        }
+        let custom = ToolRecommendation(
+            id: "custom:release", kind: .createCustomSkill, title: "Create a release skill", summary: "", rationale: "",
+            confidence: .medium, supportingConversationCount: 2)
+        #expect(ToolRecommendation.distinct([use("a"), custom, use("b")]).map(\.id) == ["local-skill:a", "custom:release"])
+    }
+
     @Test func boundedScansKeepNewestItemsAndMarkCoverageDegraded() async throws {
         let home = try TemporaryInsightsHome()
         defer { home.remove() }

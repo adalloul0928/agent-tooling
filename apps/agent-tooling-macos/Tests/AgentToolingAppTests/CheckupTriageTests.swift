@@ -52,7 +52,7 @@ struct CheckupTriageTests {
         let loose = item("group:duplicateSkillInClient:Claude Code")
         #expect(loose?.bucket == .fix)
         #expect(loose?.count == 1)
-        #expect(loose?.title == "A loose copy of a plugin's skill")
+        #expect(loose?.title == "A loose copy of a skill")
         #expect(loose?.actions.count == 1)
         let plugins = item("group:duplicateSkillInClient:Claude Code:plugins")
         #expect(plugins?.bucket == .fine, "two plugins carrying one skill is nothing this app can change")
