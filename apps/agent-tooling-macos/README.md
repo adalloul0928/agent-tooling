@@ -348,9 +348,11 @@ that points at nothing, a plugin the app lists whose install folder is gone, a
 skill one app can reach by two paths, a skill this library does not manage, an
 MCP server whose command is not on disk or the login shell's PATH, old plugin
 versions beside the one in use, a skill folder with no SKILL.md, an app whose
-tool could not be run, and a server configured by hand in several apps. Every
-finding carries the actions the app can take for it. It runs in a moment and
-gives the same answer every time.
+tool could not be run, a server configured by hand in several apps, a server
+one app gets from several places (its own configuration and plugins), and two
+plugins that carry most of the same skills. Every finding carries the actions
+the app can take for it. It runs in a moment and gives the same answer every
+time.
 
 **The review** hands the audit to Claude Code (or Codex when Claude Code is not
 managed) in a command the operation policy holds to one shape: it may read the
@@ -570,6 +572,34 @@ control the whole plugin via `enabledPlugins`. These are user preferences on thi
 Mac, not effective project/organization policy or live session state. Restart the
 client after changes. Config edits preserve unrelated entries, keep private local
 backups, and refuse symlinked settings or unsupported configuration syntax.
+
+### Copies of one skill
+
+Several plugins often re-ship the same skill, and AIM copies its skills into
+Kiro CLI's folder as plain folders. Each copy is its own entry in the library,
+but the Skills list shows one row per skill: the name a client calls it by,
+without a plugin's `plugin:` prefix. Grouped by plugin, each plugin still shows
+its own copy. A row with copies carries a badge: **3 copies**, or **2
+versions** when their contents differ. Contents are compared by a hash of each
+skill folder taken during the device check, with the package's build stamp
+(the frontmatter `metadata:` block) ignored. A folder the check could not read
+is shown as not compared, never as a match. The skill's details list every
+copy with where it came from, who manages it, its version, and the apps it was
+found in, and switch to any of them.
+
+A standalone folder that AIM placed and keeps in step is shown as managed by
+AIM (read from `~/.aim/state/skills/*.json`, `.aim-core-skills.json`, or the
+folder's `.aim-managed` marker), and Checkup offers neither adopting nor
+removing it: AIM would undo either at its next sync.
+
+Insights judge copies once. A client records which skill it used, not which
+copy, so usage of a skill's plain name is credited to it and each skill is
+recommended at most once. Two different skills that share a name, told apart
+by their descriptions, stay separate.
+
+A server's details on Connections list, per app, every place that app gets a
+server by that name. Claude Code runs a plugin's server alongside one with the
+same name in its configuration unless the two are configured identically.
 
 ### Connections and compact browsers
 
