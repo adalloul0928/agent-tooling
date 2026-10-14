@@ -132,6 +132,19 @@ struct AppShellView: View {
             // Updates, on the cadence Settings chose. Kinds set to install
             // automatically are installed here; the rest wait on Home.
             await workspace.updates.checkIfDue()
+            // Other Macs. A pass on open, then whenever the library changes
+            // here, each time asking the scheduler whether now is a moment.
+            await syncPass()
+        }
+        .onChange(of: workspace.library.lastReceipt?.committedRevisionID) { _, _ in
+            // A write landed. Share it, after the burst of writes a single
+            // action can make has settled.
+            syncAfterWrite?.cancel()
+            syncAfterWrite = Task {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                await syncPass()
+            }
         }
         .onAppear(perform: applyExternalNavigation)
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
@@ -141,6 +154,29 @@ struct AppShellView: View {
             navigation.showAllClients()
         }
         .environment(navigation)
+    }
+
+    @State private var syncAfterWrite: Task<Void, Never>?
+
+    /// One scheduled sync pass, then whatever arrived gets installed by
+    /// policy. The scheduler decides whether a pass runs at all; this only
+    /// makes sure the two halves run in order.
+    private func syncPass() async {
+        guard let sync = workspace.sync else { return }
+        sync.load()
+        if sync.statusProvider == nil {
+            sync.statusProvider = { [weak device = workspace.device, weak library = workspace.library, weak deployment = workspace.deployment] in
+                await MainActor.run {
+                    guard let device, let library, let deployment else { return nil }
+                    return PublishedDeviceStatus.current(device: device, library: library, deployment: deployment)
+                }
+            }
+        }
+        let before = sync.lastArrival
+        _ = await sync.runScheduledPass()
+        if let arrival = sync.lastArrival, arrival != before {
+            await workspace.incoming.review()
+        }
     }
 
     /// What the marks on a row are allowed to show: the apps this Mac manages,

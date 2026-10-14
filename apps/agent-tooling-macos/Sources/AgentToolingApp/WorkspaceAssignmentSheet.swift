@@ -19,6 +19,9 @@ struct WorkspaceAssignmentSheet: View {
     /// Apps to tick before anyone touches a row. Defaults to the apps the
     /// person chose the last time, or none.
     var initialClients: Set<ClientKind> = []
+    /// Macs to assign to, when the sheet is opened for specific Macs (from
+    /// another Mac's summary). Empty means the default, every Mac.
+    var initialDevices: Set<WorkspaceObjectID> = []
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppNavigationState.self) private var navigation: AppNavigationState?
@@ -32,6 +35,10 @@ struct WorkspaceAssignmentSheet: View {
     @State private var selectedClients: Set<ClientKind>
     @State private var scope: ToolingScope
     @State private var selectedProjectID: ArtifactID?
+    /// Which Macs a user-scope install is for. Every Mac is the default: the
+    /// point of a shared library is that one decision reaches all of them.
+    @State private var placement: InstallWhere = .everyMac
+    @State private var chosenDevices: Set<WorkspaceObjectID> = []
     @State private var install: WorkspaceInstallSession?
     @State private var fallbackRequest: FallbackRequest?
 
@@ -41,6 +48,7 @@ struct WorkspaceAssignmentSheet: View {
         presetID: ArtifactID? = nil,
         initialProjectID: ArtifactID? = nil,
         initialClients: Set<ClientKind> = [],
+        initialDevices: Set<WorkspaceObjectID> = [],
         installSession: WorkspaceInstallSession? = nil
     ) {
         self.session = session
@@ -48,7 +56,10 @@ struct WorkspaceAssignmentSheet: View {
         self.presetID = presetID
         self.initialProjectID = initialProjectID
         self.initialClients = initialClients
+        self.initialDevices = initialDevices
         _scope = State(initialValue: initialProjectID == nil ? .user : .project)
+        _placement = State(initialValue: initialProjectID != nil ? .project : (initialDevices.isEmpty ? .everyMac : .chooseMacs))
+        _chosenDevices = State(initialValue: initialDevices)
         _selectedProjectID = State(initialValue: initialProjectID)
         _selectedClients = State(initialValue: initialClients)
         _install = State(initialValue: installSession)
@@ -186,11 +197,21 @@ struct WorkspaceAssignmentSheet: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Apps").font(AgentFont.heading)
                     Spacer()
-                    WorkspaceSegmentedPicker("Where", selection: $scope) {
-                        Text("This Mac").tag(ToolingScope.user)
-                        Text("One project").tag(ToolingScope.project)
+                    WorkspaceSegmentedPicker("Where", selection: $placement) {
+                        if otherDevices.isEmpty {
+                            Text("This Mac").tag(InstallWhere.everyMac)
+                        } else {
+                            Text("Every Mac").tag(InstallWhere.everyMac)
+                            Text("This Mac only").tag(InstallWhere.thisMac)
+                            Text("Choose Macs…").tag(InstallWhere.chooseMacs)
+                        }
+                        Text("One project").tag(InstallWhere.project)
                     }
                     .fixedSize()
+                    .onChange(of: placement) { _, value in scope = value == .project ? .project : .user }
+                }
+                if placement == .chooseMacs {
+                    deviceChooser
                 }
                 if availableClients.isEmpty {
                     Text("No apps are managed on this Mac. Choose apps on the Apps screen.")
@@ -224,11 +245,68 @@ struct WorkspaceAssignmentSheet: View {
                         }
                     }
                 } else {
-                    Text("For every project on this Mac.").font(AgentFont.caption).foregroundStyle(.secondary)
+                    Text(whereExplanation).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                 }
             }
         }
         .disabled(isBusy)
+    }
+
+    /// Macs this Mac knows about through the shared registry, besides itself.
+    private var otherDevices: [DeviceRecord] {
+        (session.state?.snapshot.document.deviceRegistry ?? [])
+            .filter { $0.id != session.deviceID && !$0.isRetired }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    private var thisDeviceName: String {
+        session.state?.snapshot.document.deviceRegistry.first { $0.id == session.deviceID }?.name ?? "This Mac"
+    }
+
+    private var whereExplanation: String {
+        switch placement {
+        case .everyMac:
+            return otherDevices.isEmpty
+                ? "For every project on this Mac. Other Macs that join this library get it too."
+                : "For every project, on this Mac and \(otherDevices.count == 1 ? otherDevices[0].name : "\(otherDevices.count) other Macs"). A Mac set to take only what names it is left out."
+        case .thisMac: return "For every project on this Mac. Other Macs are left out."
+        case .chooseMacs: return "Only the Macs ticked above."
+        case .project: return "For one project only."
+        }
+    }
+
+    /// Checkboxes for this Mac and each other Mac. A limited Mac can be named
+    /// here; that is the one way shared intent reaches it.
+    private var deviceChooser: some View {
+        VStack(spacing: 0) {
+            deviceRow(id: session.deviceID, name: thisDeviceName, detail: "This Mac", limited: false)
+            ForEach(otherDevices) { device in
+                Hairline(indent: Hairline.afterLeading(Size.tile))
+                deviceRow(id: device.id, name: device.name,
+                          detail: device.lastSeenAt.map { "Last seen \(SnapshotTime.compact($0))" } ?? "Not seen yet",
+                          limited: !device.receivesSharedAssignments)
+            }
+        }
+        .standardPanel()
+    }
+
+    private func deviceRow(id: WorkspaceObjectID, name: String, detail: String, limited: Bool) -> some View {
+        Button {
+            if chosenDevices.contains(id) { chosenDevices.remove(id) } else { chosenDevices.insert(id) }
+        } label: {
+            HStack(spacing: Space.lg) {
+                Image(systemName: "desktopcomputer").foregroundStyle(.secondary).frame(width: Size.tile)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(name).font(AgentFont.bodyMedium)
+                    Text(limited ? "\(detail) · Takes only what names it" : detail).font(AgentFont.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: Space.lg)
+                SelectionCheckbox(selected: chosenDevices.contains(id), enabled: true)
+                    .foregroundStyle(chosenDevices.contains(id) ? AgentTheme.selection : Color.secondary)
+            }
+            .padding(.horizontal, Space.xl).frame(minHeight: Size.rowHeight).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// One app: logo, name, what would happen there, and the tick.
@@ -611,6 +689,7 @@ struct WorkspaceAssignmentSheet: View {
 
     private var canInstall: Bool {
         guard !selectedClients.isEmpty else { return false }
+        if placement == .chooseMacs, chosenDevices.isEmpty { return false }
         if scope == .project {
             guard let selectedProjectID,
                   session.state?.library.projects.contains(where: { $0.id == selectedProjectID }) == true else { return false }
@@ -626,11 +705,17 @@ struct WorkspaceAssignmentSheet: View {
     }
 
     private var destinations: [PortableDestination] {
-        selectedClients.sorted { $0.rawValue < $1.rawValue }.compactMap { client in
+        // A project folder is one Mac's; a project install stays on this Mac.
+        let deviceIDs: [WorkspaceObjectID]? = switch placement {
+        case .everyMac: nil
+        case .thisMac, .project: [session.deviceID]
+        case .chooseMacs: chosenDevices.sorted()
+        }
+        return selectedClients.sorted { $0.rawValue < $1.rawValue }.compactMap { client in
             guard let surface = client.userSurface else { return nil }
             return .init(surface: surface, scope: scope,
                          logicalProjectID: scope == .project ? selectedProjectID : nil,
-                         deviceIDs: [session.deviceID])
+                         deviceIDs: deviceIDs)
         }
     }
 
@@ -698,6 +783,11 @@ struct WorkspaceAssignmentSheet: View {
         case review([PortableDestination])
         case save
     }
+}
+
+/// Which Macs an install is for.
+enum InstallWhere: Hashable {
+    case everyMac, thisMac, chooseMacs, project
 }
 
 /// The sessions an install needs beyond the library: the planner/executor, the

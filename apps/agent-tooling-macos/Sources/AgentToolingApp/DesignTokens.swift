@@ -156,6 +156,10 @@ enum Size {
     /// A menu picker at the trailing edge of a settings row, wide enough for
     /// its longest title so the column of pickers lines up.
     static let pickerWidth: CGFloat = 200
+    /// A short text field (a branch name, a port).
+    static let fieldNarrow: CGFloat = 160
+    /// The form on the first-launch screen.
+    static let firstLaunchFormWidth: CGFloat = 520
 
     /// A client brand mark on a row.
     static let brandMark: CGFloat = 15

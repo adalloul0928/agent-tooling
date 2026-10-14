@@ -144,6 +144,9 @@ struct OverviewView: View {
         updates: [OverviewUpdate]
     ) -> some View {
         VStack(spacing: Space.xl) {
+            if workspace.incoming.hasWork || !workspace.incoming.installedAutomatically.isEmpty {
+                incomingCard
+            }
             reviewQueueCard(items: attention, updates: updates)
             // The recommendation card takes the slack at the bottom of the
             // column, so the page fills its height instead of leaving a band
@@ -390,6 +393,83 @@ struct OverviewView: View {
     /// empty, which reads the same as a Mac that has changed nothing yet.
     private func loadRecentReceipts() async {
         recentReceipts = (try? workspace.store.operationReceipts(limit: 3)) ?? []
+    }
+
+    // MARK: - From your other Macs
+
+    /// What other Macs asked for on this one. Kinds set to install
+    /// automatically were installed when they arrived and are named here once;
+    /// the rest wait for a press, or for a look when the plan said so.
+    private var incomingCard: some View {
+        let incoming = workspace.incoming
+        let installAll: () -> Void = { Task { @MainActor in await incoming.installAll() } }
+        let checkAgain: () -> Void = { Task { @MainActor in await incoming.review(installingAutomatically: false) } }
+        let action: (String, () -> Void) = incoming.waiting.count > 1 ? ("Install all", installAll) : ("Check again", checkAgain)
+        return BentoCard(symbol: "laptopcomputer.and.arrow.down", title: "From your other Macs", action: action) {
+            VStack(spacing: 0) {
+                if !incoming.installedAutomatically.isEmpty {
+                    HStack(alignment: .top, spacing: Space.lg) {
+                        StatusGlyph(state: .healthy, size: Size.glyphLarge)
+                        Text("Installed on arrival: \(incoming.installedAutomatically.formatted(.list(type: .and))).")
+                            .font(AgentFont.body).wrapsLines()
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                    if incoming.hasWork { Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2)) }
+                }
+                ForEach(incoming.waiting) { arrival in
+                    HStack(spacing: Space.lg) {
+                        KindTile(kind: arrival.kind == .mcpServer ? .mcpServer : (arrival.kind == .plugin ? .plugin : .skill), size: Size.disc)
+                        VStack(alignment: .leading, spacing: Space.xxs) {
+                            Text(arrival.displayName).font(AgentFont.bodySemibold).lineLimit(1)
+                            Text("Asked for in \(arrival.clients.map(\.rawValue).formatted(.list(type: .and)))")
+                                .font(AgentFont.body).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Button(incoming.isWorking ? "Installing…" : "Install") { Task { await incoming.install(arrival.artifactID) } }
+                            .buttonStyle(.glass).controlSize(.small).disabled(incoming.isWorking)
+                    }
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                    if arrival.id != incoming.waiting.last?.id || !incoming.heldForReview.isEmpty {
+                        Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2))
+                    }
+                }
+                ForEach(incoming.heldForReview) { arrival in
+                    HStack(spacing: Space.lg) {
+                        StatusGlyph(state: .attention, size: Size.glyphLarge)
+                        VStack(alignment: .leading, spacing: Space.xxs) {
+                            Text(arrival.displayName).font(AgentFont.bodySemibold).lineLimit(1)
+                            Text("Needs a look before installing here.").font(AgentFont.body).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("Review") { reviewChanges() }.buttonStyle(.glass).controlSize(.small)
+                    }
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                    if arrival.id != incoming.heldForReview.last?.id { Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2)) }
+                }
+                if let message = incoming.errorMessage {
+                    Hairline()
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(AgentFont.caption).foregroundStyle(AgentTheme.warning).wrapsLines()
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Hairline()
+                Label(incomingFooter, systemImage: "checkmark.shield")
+                    .font(AgentFont.caption).foregroundStyle(.tertiary)
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var incomingFooter: String {
+        let policy = workspace.device.updatePolicy
+        if !policy.installsAnythingAutomatically {
+            return "Nothing from another Mac installs here until you press Install."
+        }
+        let automatic = ToolingItemKind.allCases.filter { policy.policy(for: $0) == .automatic }
+        return "Arriving \(automatic.map { $0.displayName.lowercased() }.formatted(.list(type: .and))) install on their own (Settings › Updates). The rest wait here."
     }
 
     // MARK: - Waiting for your review

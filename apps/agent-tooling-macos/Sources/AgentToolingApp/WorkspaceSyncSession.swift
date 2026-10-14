@@ -28,20 +28,51 @@ final class WorkspaceSyncSession {
     private let keyStore: WorkspaceFolderKeyStore?
     private let writerID: WorkspaceObjectID
     private let workspaceID: WorkspaceObjectID
+    private let contentStore: CentralPackageContentStore?
     private var transport: (any WorkspaceRevisionTransport)?
+    /// Builds this Mac's published summary at publish time. Set by the shell,
+    /// which knows the scan and the plan; nil publishes no status.
+    var statusProvider: (@Sendable () async -> PublishedDeviceStatus?)?
+
+    /// When the last pass finished, whatever it did.
+    private(set) var lastSynced: Date?
+    /// Every other Mac's last published summary, as of the last pass.
+    private(set) var otherDeviceStatuses: [PublishedDeviceStatus] = []
+    /// What the last pass moved besides the document.
+    private(set) var lastContentReport = WorkspaceSyncCoordinator.ContentReport()
+    /// The heads before and after the last pass that brought anything in.
+    /// Changing is the signal the shell uses to look at what arrived.
+    struct Arrival: Equatable {
+        let from: WorkspaceObjectID
+        let to: WorkspaceObjectID
+    }
+    private(set) var lastArrival: Arrival?
 
     init(
         store: WorkspaceRevisionStore,
         enrollmentStore: WorkspaceSyncEnrollmentStore,
         workspaceID: WorkspaceObjectID,
         writerID: WorkspaceObjectID,
-        keyStore: WorkspaceFolderKeyStore? = nil
+        keyStore: WorkspaceFolderKeyStore? = nil,
+        contentStore: CentralPackageContentStore? = nil
     ) {
         self.store = store
         self.enrollmentStore = enrollmentStore
         self.workspaceID = workspaceID
         self.writerID = writerID
         self.keyStore = keyStore
+        self.contentStore = contentStore
+    }
+
+    var deviceID: WorkspaceObjectID { store.deviceID }
+
+    /// The registry as this Mac's store has it.
+    var devices: [DeviceRecord] { (try? store.snapshot())?.document.deviceRegistry ?? [] }
+    var thisDevice: DeviceRecord? { devices.first { $0.id == store.deviceID } }
+    var otherDevices: [DeviceRecord] { devices.filter { $0.id != store.deviceID && !$0.isRetired } }
+
+    func status(of device: WorkspaceObjectID) -> PublishedDeviceStatus? {
+        otherDeviceStatuses.first { $0.deviceID == device }
     }
 
     /// Shown once, right after a folder connection is made: this is the only
@@ -258,11 +289,25 @@ final class WorkspaceSyncSession {
         do {
             let transport = try transport ?? makeTransport(for: enrollment)
             self.transport = transport
-            let coordinator = WorkspaceSyncCoordinator(store: store, transport: transport, writerID: writerID)
+            await registerThisDeviceIfNeeded()
+            let before = try store.snapshot()?.document.revision.id
+            let coordinator = WorkspaceSyncCoordinator(
+                store: store, transport: transport, writerID: writerID, contentStore: contentStore, status: statusProvider)
             let outcome = try await coordinator.sync()
             lastOutcome = outcome
+            lastSynced = now
+            lastContentReport = await coordinator.lastContentReport
+            otherDeviceStatuses = await coordinator.deviceStatuses.filter { $0.deviceID != store.deviceID }
             conflicts = if case .needsResolution(let values) = outcome { values } else { [] }
             choices = [:]
+            switch outcome {
+            case .merged, .adopted:
+                if let before, let after = try store.snapshot()?.document.revision.id, before != after {
+                    lastArrival = Arrival(from: before, to: after)
+                }
+            case .upToDate, .published, .needsResolution, .remoteMovedDuringSync:
+                break
+            }
             // A pass that finished is a pass that worked, even when it ended in
             // questions. Only an unreachable repository is a failure to back
             // off from.
@@ -271,6 +316,45 @@ final class WorkspaceSyncSession {
             consecutiveFailures += 1
             errorMessage = "This Mac could not reach the workspace repository. Nothing was changed."
         }
+    }
+
+    /// Makes sure this Mac is in the registry before it publishes, so other
+    /// Macs see a named device. Idempotent; a registered Mac is left alone.
+    private func registerThisDeviceIfNeeded() async {
+        guard thisDevice == nil, let head = try? store.snapshot()?.document.revision.id else { return }
+        let name = Host.current().localizedName ?? "This Mac"
+        let service = WorkspaceApplicationService(store: store, writerID: writerID, contentStore: contentStore)
+        _ = try? await service.registerDevice(.init(expectedRevisionID: head, deviceID: store.deviceID, name: name))
+    }
+
+    /// One registry change, then a pass so every Mac learns of it.
+    func updateDevice(_ id: WorkspaceObjectID, _ change: DeviceRegistryChange) async {
+        guard !isBusy, let head = try? store.snapshot()?.document.revision.id else { return }
+        errorMessage = nil
+        let service = WorkspaceApplicationService(store: store, writerID: writerID, contentStore: contentStore)
+        do {
+            _ = try await service.updateDevice(.init(expectedRevisionID: head, deviceID: id, change: change))
+        } catch let error as DeviceRegistryError {
+            errorMessage = error.localizedDescription
+            return
+        } catch {
+            errorMessage = "This Mac could not record that change. Nothing was changed."
+            return
+        }
+        if isConnected { await sync() }
+    }
+
+    func renameDevice(_ id: WorkspaceObjectID, to name: String) async { await updateDevice(id, .rename(name)) }
+    func retireDevice(_ id: WorkspaceObjectID) async { await updateDevice(id, .retire) }
+    func setReceivesSharedAssignments(_ value: Bool, for id: WorkspaceObjectID) async {
+        await updateDevice(id, .receivesSharedAssignments(value))
+    }
+
+    /// Takes the registered device that a join or a first run made, so the
+    /// settings screen shows this Mac at once.
+    func adopt(enrollment: WorkspaceSyncEnrollment) {
+        self.enrollment = enrollment
+        transport = nil
     }
 
     /// Rebuilds the transport this connection describes.
@@ -300,6 +384,21 @@ final class WorkspaceSyncSession {
         case .tooSoon(let next):
             "Next automatic sync \(next.formatted(.relative(presentation: .named)))."
         }
+    }
+
+    /// One line for the window: when, and what the other Macs last said.
+    var statusLine: String? {
+        guard isConnected else { return nil }
+        var parts: [String] = []
+        if let lastSynced { parts.append("Synced \(SnapshotTime.compact(lastSynced))") } else { parts.append("Not synced yet") }
+        for device in otherDevices.prefix(3) {
+            if let seen = status(of: device.id)?.publishedAt ?? device.lastSeenAt {
+                parts.append("\(device.name) last seen \(SnapshotTime.compact(seen))")
+            } else {
+                parts.append("\(device.name) not seen yet")
+            }
+        }
+        return parts.joined(separator: " · ")
     }
 
     /// What the last pass did, in the person's terms.

@@ -153,3 +153,49 @@ extension WorkspaceApplicationService {
         }
     }
 }
+
+/// Changes which Macs a shared ("every Mac") assignment leaves out. Only a
+/// shared destination has exclusions; one that names Macs is edited by
+/// re-assigning. The merge treats exclusions as a set, so two Macs adding
+/// different exceptions apart both land.
+public struct SetAssignmentExclusionsCommand: Codable, Sendable, Equatable {
+    public let expectedRevisionID: WorkspaceObjectID
+    public let idempotencyKey: WorkspaceObjectID
+    public let contributionID: WorkspaceObjectID
+    public let excludedDeviceIDs: [WorkspaceObjectID]
+
+    public init(
+        expectedRevisionID: WorkspaceObjectID, idempotencyKey: WorkspaceObjectID = WorkspaceObjectID(),
+        contributionID: WorkspaceObjectID, excludedDeviceIDs: [WorkspaceObjectID]
+    ) {
+        self.expectedRevisionID = expectedRevisionID
+        self.idempotencyKey = idempotencyKey
+        self.contributionID = contributionID
+        self.excludedDeviceIDs = excludedDeviceIDs
+    }
+
+    func inputDigest() throws -> String { try deviceCommandDigest(self, operation: "exclusions") }
+}
+
+extension WorkspaceApplicationService {
+    public func setAssignmentExclusions(_ command: SetAssignmentExclusionsCommand) throws -> WorkspaceCommandReceipt {
+        let digest = try command.inputDigest()
+        return try store.commitMetadata(
+            expectedRevisionID: command.expectedRevisionID,
+            idempotencyKey: command.idempotencyKey,
+            inputDigest: digest,
+            writerID: writerID
+        ) { document in
+            guard let index = document.assignments.firstIndex(where: { $0.id == command.contributionID }) else {
+                throw WorkspaceAssignmentCommandError.missingContribution
+            }
+            guard document.assignments[index].destination.deviceIDs == nil else {
+                throw WorkspaceAssignmentCommandError.unsupportedReason
+            }
+            let known = Set(document.deviceRegistry.map(\.id))
+            let excluded = Array(Set(command.excludedDeviceIDs).filter(known.contains)).sorted()
+            document.assignments[index].destination.excludedDeviceIDs = excluded.isEmpty ? nil : excluded
+            return [document.assignments[index].artifactID]
+        }
+    }
+}

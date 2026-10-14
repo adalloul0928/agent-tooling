@@ -241,6 +241,23 @@ struct SkillDetailView: View {
                         .font(AgentFont.body).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(Space.sm)
                 }
+                let requested = skill.requestedAssignments.filter(\.desiredPresence)
+                if !requested.isEmpty {
+                    Hairline()
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text("Which Macs").font(AgentFont.captionMedium).foregroundStyle(.secondary)
+                        ForEach(requested) { assignment in
+                            HStack(spacing: Space.md) {
+                                Text("\(assignment.destination.surface.displayName) · \(assignment.destination.scope.displayName)")
+                                    .font(AgentFont.caption)
+                                Spacer()
+                                AssignmentDeviceScopeMenu(assignment: assignment, workspace: workspace)
+                                    .font(AgentFont.caption)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, Space.sm).padding(.vertical, Space.md)
+                }
             }
             .padding(Space.sm)
         } label: {

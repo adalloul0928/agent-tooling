@@ -22,6 +22,11 @@ struct AgentToolingApplication: App {
                         navigation: navigation)
                 } else if let startupError {
                     StartupFailureView(message: startupError) { Task { await load() } }
+                } else if needsFirstLaunchChoice {
+                    FirstLaunchChooser(
+                        start: { Task { await load(createIfNeeded: true) } },
+                        join: { remote, branch in Task { await join(remote: remote, branch: branch) } },
+                        isBusy: isJoining, error: joinError)
                 } else {
                     // A first run scans the installed clients, which takes a
                     // moment and is worth saying rather than showing an empty
@@ -102,10 +107,21 @@ struct AgentToolingApplication: App {
     /// Failure is shown rather than swallowed: an app that opens to an empty
     /// library after failing to read one looks exactly like an app whose
     /// library is empty.
-    private func load() async {
+    /// A Mac with no workspace yet is asked whether this is its first Mac or
+    /// its second, instead of silently becoming a workspace of its own.
+    @State private var needsFirstLaunchChoice = false
+    @State private var isJoining = false
+    @State private var joinError: String?
+
+    private func load(createIfNeeded: Bool = false) async {
         guard workspace == nil else { return }
+        let context = LaunchContext.current
+        if !createIfNeeded, !WorkspaceLaunch.hasWorkspace(supportRoot: context.workspaceRoot) {
+            needsFirstLaunchChoice = true
+            return
+        }
+        needsFirstLaunchChoice = false
         do {
-            let context = LaunchContext.current
             workspace = try await WorkspaceLaunch.open(
                 supportRoot: context.workspaceRoot,
                 homeRoot: context.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
@@ -116,6 +132,28 @@ struct AgentToolingApplication: App {
         } catch {
             workspace = nil
             startupError = error.localizedDescription
+        }
+    }
+
+    private func join(remote: String, branch: String) async {
+        guard workspace == nil, !isJoining else { return }
+        isJoining = true
+        joinError = nil
+        defer { isJoining = false }
+        let context = LaunchContext.current
+        do {
+            workspace = try await WorkspaceLaunch.join(
+                remote: remote, branch: branch.isEmpty ? "main" : branch,
+                supportRoot: context.workspaceRoot,
+                homeRoot: context.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
+            needsFirstLaunchChoice = false
+            startupError = nil
+        } catch let error as WorkspaceJoinError {
+            joinError = error.localizedDescription
+        } catch GitWorkspaceTransportError.invalidRemote {
+            joinError = WorkspaceJoinError.invalidRemote.localizedDescription
+        } catch {
+            joinError = "That repository could not be read from this Mac. Check the address and your access. (\(error.localizedDescription))"
         }
     }
 
@@ -190,6 +228,66 @@ struct AppearanceSettingsView: View {
 }
 
 /// Shown when the workspace could not be opened at all.
+/// The first thing a Mac with no workspace sees: is this your first Mac, or
+/// does another Mac already have your library?
+struct FirstLaunchChooser: View {
+    let start: () -> Void
+    let join: (String, String) -> Void
+    let isBusy: Bool
+    let error: String?
+    @State private var remote = ""
+    @State private var branch = "main"
+    @State private var showsJoin = false
+
+    var body: some View {
+        VStack(spacing: Space.xxl) {
+            Image(systemName: "laptopcomputer.and.iphone")
+                .font(.system(size: Size.heroSymbolLarge))
+                .foregroundStyle(.secondary)
+            VStack(spacing: Space.sm) {
+                Text("Welcome to Agent Tooling").font(AgentFont.pageTitle)
+                Text("Is this your first Mac, or does another Mac already have your library?")
+                    .font(AgentFont.body).foregroundStyle(.secondary).multilineTextAlignment(.center).wrapsLines()
+            }
+            if showsJoin {
+                VStack(alignment: .leading, spacing: Space.lg) {
+                    Text("Paste the repository address the other Mac is connected to (Settings › Sync on that Mac).")
+                        .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
+                    TextField("git@github.com:you/agent-tooling-workspace.git", text: $remote)
+                        .textFieldStyle(.roundedBorder)
+                    HStack {
+                        Text("Branch").font(AgentFont.caption).foregroundStyle(.secondary)
+                        TextField("main", text: $branch).textFieldStyle(.roundedBorder).frame(width: Size.fieldNarrow)
+                    }
+                    if let error { AttentionBanner(title: "Couldn’t join", message: error) }
+                    HStack {
+                        Button("Back") { showsJoin = false }.secondaryActionStyle().disabled(isBusy)
+                        Spacer()
+                        Button(isBusy ? "Joining…" : "Join") { join(remote, branch) }
+                            .primaryActionStyle().disabled(isBusy || remote.trimmingCharacters(in: .whitespaces).isEmpty)
+                            .keyboardShortcut(.defaultAction)
+                    }
+                }
+                .padding(Space.xl)
+                .frame(width: Size.firstLaunchFormWidth)
+                .standardPanel()
+            } else {
+                HStack(spacing: Space.lg) {
+                    Button("Start here", systemImage: "sparkles") { start() }.primaryActionStyle().keyboardShortcut(.defaultAction)
+                    Button("Join another Mac’s workspace", systemImage: "arrow.triangle.2.circlepath") { showsJoin = true }
+                        .secondaryActionStyle()
+                }
+                Text("Starting here scans this Mac’s apps and builds a library from them. Joining takes the library another Mac already shares, and this Mac becomes one of its Macs.")
+                    .font(AgentFont.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center).wrapsLines()
+                    .frame(maxWidth: Size.firstLaunchFormWidth)
+            }
+        }
+        .padding(Space.xxxl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AgentTheme.contentBackground)
+    }
+}
+
 struct StartupFailureView: View {
     let message: String
     var retry: () -> Void

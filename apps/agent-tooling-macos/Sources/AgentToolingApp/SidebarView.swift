@@ -35,6 +35,7 @@ struct SidebarView: View {
                         .font(AgentFont.heading)
                         .lineLimit(1)
                     Spacer()
+                    DeviceSwitcher(workspace: workspace)
                     appearanceButton
                 }
 
@@ -57,6 +58,19 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+            if let line = workspace.sync?.statusLine {
+                Hairline()
+                HStack(spacing: Space.sm) {
+                    Image(systemName: workspace.sync?.isBusy == true ? "arrow.triangle.2.circlepath" : "checkmark.icloud")
+                        .foregroundStyle(.secondary)
+                        .symbolEffect(.rotate, isActive: workspace.sync?.isBusy == true)
+                    Text(line).font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(2)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
+                .help("Other Macs sharing this library. Settings › Sync has the details.")
+                .onTapGesture { navigation.open(.section(.settings)) }
+            }
         }
         // No background or glass overlay: NavigationSplitView owns the
         // sidebar material, including its adaptive foreground appearance.

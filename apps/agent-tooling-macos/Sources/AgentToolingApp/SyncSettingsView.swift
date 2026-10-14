@@ -37,6 +37,7 @@ struct SyncSettingsView: View {
                     if let recovery = session.recoveryPhrase { recoveryCard(recovery) }
                     if let enrollment = session.enrollment { connectedCard(enrollment) } else { setupCard }
                     if !session.conflicts.isEmpty { conflictsCard }
+                    if session.isConnected || session.devices.count > 1 { macsCard }
                 }
                 .padding(WorkspaceLayout.pageInset)
             }
@@ -59,7 +60,7 @@ struct SyncSettingsView: View {
         TitledCard("Use the same setup on more than one Mac") {
             VStack(alignment: .leading, spacing: Space.xl) {
                 Text(
-                    "Agent Tooling keeps one file describing your library and where each tool belongs. Your skills' own repositories, your app settings, and anything else on this Mac are not shared."
+                    "Agent Tooling shares your library and where each tool belongs. Through a repository it also carries the files of skills you wrote here, so another Mac can install them. Your app settings and anything else on this Mac are not shared."
                 )
                 .foregroundStyle(.secondary)
                 if session.supportsEncryptedFolder {
@@ -197,7 +198,9 @@ struct SyncSettingsView: View {
                 }
                 Hairline()
                 Text(
-                    "Syncing shares what your library holds and where each tool belongs. It does not install or remove anything in your apps; that stays a separate reviewed step."
+                    enrollment.kind == .git
+                        ? "Syncing shares your library — including the files of skills you wrote here — and where each tool belongs. Installing on each Mac is that Mac's own step, by its own Updates policy."
+                        : "Syncing shares what your library holds and where each tool belongs. The sealed folder carries no skill files; a skill you wrote here reaches another Mac only if it also follows a repository."
                 )
                 .font(AgentFont.body).foregroundStyle(.secondary)
                 .padding(Space.xl)
@@ -216,6 +219,107 @@ struct SyncSettingsView: View {
                 }
             }
         }
+    }
+
+    @State private var renaming: DeviceRecord?
+    @State private var renameText = ""
+
+    /// Every Mac in the workspace: this one first. Rename, take-shared, retire.
+    private var macsCard: some View {
+        let devices = session.devices.filter { !$0.isRetired }
+        let retired = session.devices.filter(\.isRetired)
+        return TitledCard("Macs", count: "\(devices.count)") {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(devices.sorted { lhs, rhs in
+                    if lhs.id == session.deviceID { return true }
+                    if rhs.id == session.deviceID { return false }
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                }) { device in
+                    macRow(device)
+                    Hairline(indent: Hairline.afterLeading(Size.glyphSlot))
+                }
+                if !retired.isEmpty {
+                    Text("Retired: \(retired.map(\.name).formatted(.list(type: .and))). Kept for history; they take nothing.")
+                        .font(AgentFont.caption).foregroundStyle(.tertiary).wrapsLines()
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
+                    Hairline()
+                }
+                Text("Every Mac keeps its own apps. Turning off shared assignments makes a Mac opt-in: it gets only what names it, and nothing on it is marked missing.")
+                    .font(AgentFont.caption).foregroundStyle(.tertiary).wrapsLines()
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
+            }
+        }
+        .sheet(item: $renaming) { device in
+            renameSheet(device)
+        }
+    }
+
+    private func macRow(_ device: DeviceRecord) -> some View {
+        let isThis = device.id == session.deviceID
+        let status = session.status(of: device.id)
+        return InfoRow(
+            isThis ? "\(device.name) (this Mac)" : device.name,
+            detail: macDetail(device, status: status)
+        ) {
+            Image(systemName: isThis ? "desktopcomputer" : "laptopcomputer").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
+        } trailing: {
+            HStack(spacing: Space.md) {
+                Toggle("Takes shared assignments", isOn: Binding(
+                    get: { device.receivesSharedAssignments },
+                    set: { value in Task { await session.setReceivesSharedAssignments(value, for: device.id) } }))
+                    .labelsHidden().toggleStyle(.switch).disabled(session.isBusy)
+                    .help("Off: this Mac gets only items assigned to it by name.")
+                Menu {
+                    Button("Rename…") { renameText = device.name; renaming = device }
+                    if !isThis {
+                        Button("Retire this Mac", role: .destructive) { Task { await session.retireDevice(device.id) } }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.button).buttonStyle(.glass).disabled(session.isBusy)
+            }
+        }
+    }
+
+    private func macDetail(_ device: DeviceRecord, status: PublishedDeviceStatus?) -> String {
+        var parts: [String] = []
+        if device.id == session.deviceID {
+            parts.append(session.lastSynced.map { "Synced \(SnapshotTime.compact($0))" } ?? "Not synced yet")
+        } else if let status {
+            parts.append("Published \(SnapshotTime.compact(status.publishedAt))")
+            let installed = status.apps.filter(\.installed)
+            if !installed.isEmpty {
+                parts.append(installed.map { "\($0.surface.displayName) \($0.skillCount) skills" }.joined(separator: ", "))
+            }
+            if !status.pending.isEmpty { parts.append("\(status.pending.count) pending") }
+        } else if let seen = device.lastSeenAt {
+            parts.append("Last seen \(SnapshotTime.compact(seen))")
+        } else {
+            parts.append("Not seen yet")
+        }
+        if !device.receivesSharedAssignments { parts.append("Takes only what names it") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func renameSheet(_ device: DeviceRecord) -> some View {
+        VStack(alignment: .leading, spacing: Space.xl) {
+            Text("Rename \(device.name)").font(AgentFont.title)
+            TextField("Name", text: $renameText).textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button("Cancel") { renaming = nil }.secondaryActionStyle().keyboardShortcut(.cancelAction)
+                Button("Rename") {
+                    let name = renameText
+                    renaming = nil
+                    Task { await session.renameDevice(device.id, to: name) }
+                }
+                .primaryActionStyle().keyboardShortcut(.defaultAction)
+                .disabled(renameText.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(Space.xxl)
+        .sheetSize(SheetSize.small)
     }
 
     private var conflictsCard: some View {
@@ -338,14 +442,14 @@ struct SyncSettingsView: View {
 /// session has nothing further to report until the folder is connected.
 private struct SyncScopePanel: View {
     private static let travels = [
-        "Your library: skills, plugins, servers and presets",
-        "Where each tool is assigned, and to which apps",
-        "Attached authoring sources",
+        "Your library's records: skills, plugins, servers, presets, projects",
+        "Where each tool is assigned, to which apps and which Macs",
+        "The names of the Macs sharing the library",
     ]
 
     private static let stays = [
         "The encryption key — Keychain only",
-        "Package content this Mac has not approved",
+        "Skill files — a sealed folder carries records only; a repository carries the files too",
         "This Mac's own observed state and receipts",
         "Project folders and local sources",
     ]

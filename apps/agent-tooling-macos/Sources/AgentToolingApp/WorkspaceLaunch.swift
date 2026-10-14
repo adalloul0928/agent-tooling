@@ -40,6 +40,9 @@ struct WorkspaceLaunch {
         /// The project folders on this Mac and what the workspace makes of
         /// them. The Projects screen scans and tracks through it.
         let projectDiscovery: WorkspaceProjectDiscoverySession
+        /// What other Macs asked for here, installed by policy or waiting on
+        /// Home. Runs after a sync pass brings anything in.
+        let incoming: WorkspaceIncomingSession
         /// The review queue. Home counts it and Apps decides it, and a request
         /// decided on one is gone from the other without a second read.
         let requests: WorkspaceRequestSession
@@ -68,6 +71,62 @@ struct WorkspaceLaunch {
         /// The home directory this workspace was opened against; tests point it
         /// at a scratch folder so nothing reads the real one.
         let homeRoot: URL
+    }
+
+    /// Whether this Mac has a workspace record. A first launch without one is
+    /// where the person chooses between starting here and joining another Mac.
+    static func hasWorkspace(supportRoot: URL? = nil) -> Bool {
+        let root: URL
+        if let supportRoot {
+            root = supportRoot.standardizedFileURL
+        } else if let defaultRoot = try? WorkspaceLocator.defaultRoot() {
+            root = defaultRoot
+        } else {
+            return false
+        }
+        guard let locator = try? WorkspaceLocator(root: root) else { return false }
+        // An unreadable record is treated as present: starting a second
+        // workspace beside one this build cannot read would be the worse error,
+        // and open() will say what is wrong with it.
+        guard let record = try? locator.read() else { return true }
+        return record != nil
+    }
+
+    /// The second Mac's first run: joins the workspace another Mac published,
+    /// and opens it. The store, locator and enrollment are written by the
+    /// join itself; this only wires the sessions on top.
+    static func join(
+        remote: String,
+        branch: String = "main",
+        supportRoot: URL? = nil,
+        homeRoot: URL = FileManager.default.homeDirectoryForCurrentUser,
+        deviceObserver: any DeviceObserving = LiveDeviceObserver(),
+        marketplaceProviders: (MarketplaceCatalogContext) -> [any MarketplaceProvider] =
+            MarketplaceCatalogs.live,
+        insightsServices: (URL) -> any InsightsServicing = { LiveInsightsServices(container: $0) },
+        requestQueue: any PendingRequestQueuing = LivePendingRequestQueue(),
+        setupServices: (URL) -> any SetupServicing = { LiveSetupServices(container: $0) }
+    ) async throws -> Workspace {
+        let root = try supportRoot?.standardizedFileURL ?? WorkspaceLocator.defaultRoot()
+        let locator = try WorkspaceLocator(root: root)
+        // The content store the joined workspace will use, so the join can
+        // bring the other Mac's skill bytes across in the same pass.
+        let contentDirectory = root.appending(path: "content", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(
+            at: contentDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let contentStore = try? CentralPackageContentStore(directory: contentDirectory)
+        let joined = try await WorkspaceJoin.join(
+            remote: remote, checkout: root.appending(path: "sync-checkout", directoryHint: .isDirectory),
+            branch: branch, containerRoot: root, homeURL: homeRoot,
+            runner: ProcessCommandRunner(timeout: .seconds(120), homeURL: homeRoot),
+            contentStore: contentStore, locator: locator)
+        // The enrollment lives beside the store, where the sync session reads it.
+        let container = joined.store.databaseURL.deletingLastPathComponent()
+        try WorkspaceSyncEnrollmentStore(containerRoot: container).write(joined.enrollment)
+        return sessions(
+            store: joined.store, homeRoot: homeRoot, isFirstRun: false, deviceObserver: deviceObserver,
+            marketplaceProviders: marketplaceProviders, insightsServices: insightsServices,
+            requestQueue: requestQueue, setupServices: setupServices)
     }
 
     static func open(
@@ -146,7 +205,8 @@ struct WorkspaceLaunch {
             sync = WorkspaceSyncSession(
                 store: store, enrollmentStore: enrollmentStore,
                 workspaceID: store.workspaceID, writerID: writerID,
-                keyStore: try? WorkspaceFolderKeyStore(containerRoot: container))
+                keyStore: try? WorkspaceFolderKeyStore(containerRoot: container),
+                contentStore: contentStore)
         } catch {
             sync = nil
             syncUnavailableReason = error.localizedDescription
@@ -194,6 +254,8 @@ struct WorkspaceLaunch {
             insights: insights,
             projectDiscovery: WorkspaceProjectDiscoverySession(
                 library: library, device: device, service: service, homeRoot: homeRoot),
+            incoming: WorkspaceIncomingSession(
+                library: library, deployment: deployment, device: device, service: service, sync: sync),
             requests: WorkspaceRequestSession(
                 store: store, library: library, device: device, queue: requestQueue),
             setup: WorkspaceSetupSession(

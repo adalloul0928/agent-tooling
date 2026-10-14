@@ -224,7 +224,8 @@ struct PluginsView: View {
             PluginDetailView(
                 row: row,
                 availability: updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet."),
-                library: workspace.library
+                library: workspace.library,
+                workspace: workspace
             )
         } else {
             EmptyStateView(
@@ -413,6 +414,7 @@ private struct PluginDetailView: View {
     let row: WorkspaceLibraryReadModelRow
     let availability: UpdateAvailability
     let library: WorkspaceLibrarySession
+    var workspace: WorkspaceLaunch.Workspace?
     @State private var removal: AssignmentRemovalPresentation?
     @State private var isAssigning = false
 
@@ -522,7 +524,11 @@ private struct PluginDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 ForEach(row.requestedAssignments) { assignment in
                     LabeledValueRow("\(assignment.destination.surface.displayName) · \(assignment.destination.scope.displayName)") {
-                        Text(deviceScopeLabel(assignment.deviceScope)).foregroundStyle(.secondary)
+                        if let workspace {
+                            AssignmentDeviceScopeMenu(assignment: assignment, workspace: workspace)
+                        } else {
+                            Text(deviceScopeLabel(assignment.deviceScope)).foregroundStyle(.secondary)
+                        }
                     }
                     if assignment.id != row.requestedAssignments.last?.id { Hairline() }
                 }

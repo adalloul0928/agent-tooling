@@ -431,13 +431,41 @@ remote. `Inspect backup` compares skills, profiles, and sources before a
 restore; conflicting desired state must be explicitly accepted, and the prior
 managed library is retained as a rollback artifact.
 
-`Encrypted folder sync` is the separate multi-device option. It writes one
-AES-GCM encrypted `agent-tooling.encrypted.json` file to a folder the user
-chooses (for example iCloud Drive, a private cloud folder, or a NAS). The
-32-byte key lives in the macOS Keychain; the user can copy/import its Base64
-recovery key through the UI for a second Mac. The archive contains portable
-desired state and managed package files only—never OAuth tokens, client caches,
-operation receipts, or observed machine state.
+## More than one Mac
+
+Every Mac has a complete workspace of its own: the shared library, its own
+device state, its own content store, its own receipts. Macs converge through a
+private Git repository you connect (Settings › Sync) that acts as a mailbox:
+each Mac reads what is there, merges in its own engine, and publishes on top of
+exactly what it read. Nothing is force-pushed; no Mac depends on another being
+awake. The repository carries the library's records, the files of skills you
+wrote here (so another Mac can install them), and each Mac's own one-page
+status. It never carries credentials, observed state, receipts, or folders.
+
+**Second Mac.** On first launch choose *Join another Mac's workspace* and
+paste the repository address. The Mac adopts the shared library, scans itself,
+registers under its computer name, and shows up under Settings › Sync › Macs
+on every Mac.
+
+**Where an install goes.** The install picker asks *Every Mac* (the default),
+*This Mac only*, *Choose Macs…*, or *One project*. A Mac can be set to take
+only what names it (Settings › Sync › Macs, the toggle); that is how one Mac
+keeps a deliberately smaller set. An item's detail shows which Macs it is for
+and lets you leave one out (*Except*).
+
+**Arrivals.** When a sync brings something another Mac asked for here, Home
+shows it under *From your other Macs*. Kinds set to *Install automatically* in
+Settings › Updates install on arrival; the rest wait for Install. Nothing runs
+on another Mac from this one: assigning to a Mac saves what it should have, and
+it installs on its next sync.
+
+The sidebar's foot says when this Mac last synced and when the others were
+last seen. The Macs menu beside the app title opens another Mac's last report.
+Design: [docs/multi-mac-sync-v1.md](../../docs/multi-mac-sync-v1.md).
+
+`Encrypted folder sync` remains as a second transport for a folder a file-sync
+service keeps in step. It carries records only, never skill files, and has not
+had a two-Mac run.
 
 Organizations can also distribute a reviewed local `agent-tooling-policy/v1`
 JSON manifest through that folder or a checkout. It is data only: the app can
