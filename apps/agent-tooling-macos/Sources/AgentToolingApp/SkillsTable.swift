@@ -55,6 +55,9 @@ struct SkillCollectionRow: View {
     var selecting = false
     var isAssignable = false
     let columns: SkillTableColumns
+    /// What the last update check said about this skill, when it follows a
+    /// repository and the check had something to say.
+    var update: UpdateAvailability? = nil
     let activate: () -> Void
 
     private var summary: String {
@@ -89,7 +92,10 @@ struct SkillCollectionRow: View {
                         KindTile(kind: .skill, size: Size.tileSmall, ghost: !skill.isMaintainedHere)
                             .foregroundStyle(selected ? Color.white.opacity(0.7) : Color.secondary)
                         VStack(alignment: .leading, spacing: Space.xxs) {
-                            Text(skill.displayName).font(AgentFont.bodyMedium).lineLimit(1)
+                            HStack(spacing: Space.md) {
+                                Text(skill.displayName).font(AgentFont.bodyMedium).lineLimit(1)
+                                if let update, update.hasUpdate { UpdateStateBadge(availability: update) }
+                            }
                             if !columns.expanded {
                                 if columns.describing {
                                     Text(summary).font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)

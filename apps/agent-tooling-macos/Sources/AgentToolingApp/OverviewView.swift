@@ -141,7 +141,7 @@ struct OverviewView: View {
     /// The left column of the wide layout, and the top of the stacked one.
     private func reviewColumn(
         attention: [OverviewAttention],
-        updates: [(row: WorkspaceLibraryReadModelRow, availability: UpdateAvailability)]
+        updates: [OverviewUpdate]
     ) -> some View {
         VStack(spacing: Space.xl) {
             reviewQueueCard(items: attention, updates: updates)
@@ -396,11 +396,14 @@ struct OverviewView: View {
 
     private func reviewQueueCard(
         items attentionItems: [OverviewAttention],
-        updates updateItems: [(row: WorkspaceLibraryReadModelRow, availability: UpdateAvailability)]
+        updates updateItems: [OverviewUpdate]
     ) -> some View {
-        BentoCard(
+        let installable = updateItems.filter { $0.canUpdate }
+        return BentoCard(
             symbol: "eye", title: "Waiting for your review",
-            action: ("Open queue", { navigate(.syncCenter) })
+            action: installable.count > 1
+                ? ("Update all", { Task { await workspace.updates.updateAll() } })
+                : ("Open queue", { navigate(.syncCenter) })
         ) {
             VStack(spacing: 0) {
                 if attentionItems.isEmpty && updateItems.isEmpty {
@@ -427,29 +430,55 @@ struct OverviewView: View {
                             Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2))
                         }
                     }
-                    ForEach(updateItems, id: \.row.artifactID) { item in
+                    ForEach(updateItems) { item in
                         HStack(alignment: .center, spacing: Space.lg) {
-                            ToolIdentityIcon(
-                                packageID: item.row.nativeRoutes.first?.externalPluginID ?? "",
-                                fallback: .plugin, size: 30)
+                            if item.row.kind == .nativePlugin || item.row.kind == .package {
+                                ToolIdentityIcon(
+                                    packageID: item.row.nativeRoutes.first?.externalPluginID ?? "",
+                                    fallback: .plugin, size: Size.disc)
+                            } else {
+                                KindTile(kind: item.row.kind == .mcpServer ? .mcpServer : .skill, size: Size.disc)
+                            }
                             VStack(alignment: .leading, spacing: Space.xxs) {
                                 Text("Update available for \(item.row.displayName)")
                                     .font(AgentFont.bodySemibold).lineLimit(1)
-                                Text(item.availability.detail).font(AgentFont.body).foregroundStyle(.secondary).lineLimit(1)
+                                Text(item.cannotUpdate ?? item.availability.detail)
+                                    .font(AgentFont.body).foregroundStyle(.secondary).lineLimit(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            Button("Review") { openPlugin(item.row) }
+                            if item.canUpdate {
+                                Button(workspace.updates.updating.contains(item.id) ? "Updating…" : "Update") {
+                                    Task { await workspace.updates.update(item.id) }
+                                }
                                 .buttonStyle(.glass).controlSize(.small)
+                                .disabled(workspace.updates.isBusy)
+                            } else {
+                                Button("Review") { open(item.row) }
+                                    .buttonStyle(.glass).controlSize(.small)
+                            }
                         }
                         .padding(.horizontal, Space.xl)
                         .padding(.vertical, Space.lg)
-                        if item.row.artifactID != updateItems.last?.row.artifactID {
+                        if item.id != updateItems.last?.id {
                             Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2))
                         }
                     }
                 }
+                if let message = workspace.updates.errorMessage {
+                    Hairline()
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(AgentFont.caption).foregroundStyle(AgentTheme.warning).wrapsLines()
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if let notice = workspace.updates.notice {
+                    Hairline()
+                    Label(notice, systemImage: "hand.raised")
+                        .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 Hairline()
-                Label("Nothing installs until you approve it here.", systemImage: "checkmark.shield")
+                Label(updatesFooter, systemImage: "checkmark.shield")
                     .font(AgentFont.caption)
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, Space.xl)
@@ -457,6 +486,27 @@ struct OverviewView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+
+    /// What this card can promise about installing, given the policy.
+    private var updatesFooter: String {
+        let policy = workspace.device.updatePolicy
+        if !policy.installsAnythingAutomatically {
+            return "Nothing installs until you approve it here."
+        }
+        let automatic = ToolingItemKind.allCases.filter { policy.policy(for: $0) == .automatic }
+        let names = automatic.map { $0.displayName.lowercased() }.formatted(.list(type: .and))
+        return "Updates to \(names) install on their own (Settings). Everything else waits here."
+    }
+
+    /// One update Home can show: the row, the verdict, and whether the button
+    /// on it can do the work or has to send the person to the item.
+    struct OverviewUpdate: Identifiable {
+        let row: WorkspaceLibraryReadModelRow
+        let availability: UpdateAvailability
+        let cannotUpdate: String?
+        var id: ArtifactID { row.artifactID }
+        var canUpdate: Bool { cannotUpdate == nil }
     }
 
     /// What the last check and the review queue say is waiting, worst first.
@@ -502,11 +552,22 @@ struct OverviewView: View {
 
     /// Plugins a catalog says have something newer. Before any catalog has been
     /// asked this is empty, because "not checked" is not news.
-    private var updateItems: [(row: WorkspaceLibraryReadModelRow, availability: UpdateAvailability)] {
+    /// Found updates, three at most. After a check has run, every kind the
+    /// update session compared; before one, the catalog's word on plugins, so a
+    /// first open is not blank where Discover already knows something.
+    private var updateItems: [OverviewUpdate] {
+        let rows = Dictionary((libraryModel?.rows ?? []).map { ($0.artifactID, $0) }, uniquingKeysWith: { first, _ in first })
+        let found = workspace.updates.available
+        if !found.isEmpty || workspace.device.lastUpdateCheck != nil {
+            return found.prefix(3).compactMap { entry in
+                rows[entry.id].map { OverviewUpdate(row: $0, availability: entry.availability, cannotUpdate: entry.cannotUpdate) }
+            }
+        }
         let evaluation = updateEvaluation
-        let rows = evaluation.rowsWithUpdates(in: libraryModel?.rows ?? [])
-        return rows.prefix(3).compactMap { row in
-            evaluation.availability[row.artifactID].map { (row, $0) }
+        return evaluation.rowsWithUpdates(in: libraryModel?.rows ?? []).prefix(3).compactMap { row in
+            evaluation.availability[row.artifactID].map {
+                OverviewUpdate(row: row, availability: $0, cannotUpdate: "Check for updates to install this from here.")
+            }
         }
     }
 
@@ -661,8 +722,16 @@ struct OverviewView: View {
     }
 
     /// Reveals one plugin on the Plugins tab. Revealing is not acting on it.
-    private func openPlugin(_ row: WorkspaceLibraryReadModelRow) {
-        navigation.openItem(row.artifactID.rawValue.uuidString.lowercased(), in: .plugins)
+    private func openPlugin(_ row: WorkspaceLibraryReadModelRow) { open(row) }
+
+    /// The row's own screen: Plugins, MCP Servers, or Skills by kind.
+    private func open(_ row: WorkspaceLibraryReadModelRow) {
+        let section: AppSection = switch row.kind {
+        case .nativePlugin, .package: .plugins
+        case .mcpServer: .mcpServers
+        case .skill, .preset, .logicalProject: .skills
+        }
+        navigation.openItem(row.artifactID.rawValue.uuidString.lowercased(), in: section)
     }
 
     private func recommendationSummary(_ recommendation: ToolRecommendation) -> String {

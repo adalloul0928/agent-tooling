@@ -115,6 +115,7 @@ extension SkillsBrowser {
             selecting: isSelecting,
             isAssignable: assignable,
             columns: columns,
+            update: workspace.updates.availability(for: skill.id),
             activate: { activate(skill, isAssignable: assignable) }
         )
         .accessibilityValue(accessibilityValue(for: skill, isAssignable: assignable))

@@ -129,6 +129,9 @@ struct AppShellView: View {
             // The weekly checkup, after the deep dive so the two do not both
             // hold the assistant at once. Audit first, fast; review behind it.
             await workspace.setup.runScheduledCheckupIfStale()
+            // Updates, on the cadence Settings chose. Kinds set to install
+            // automatically are installed here; the rest wait on Home.
+            await workspace.updates.checkIfDue()
         }
         .onAppear(perform: applyExternalNavigation)
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }

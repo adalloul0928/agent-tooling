@@ -58,12 +58,20 @@ struct SkillRepositorySection: View {
                     .wrapsLines()
                 Text("Checked \(status.checkedAt.formatted(date: .abbreviated, time: .shortened))")
                     .font(AgentFont.caption).foregroundStyle(.secondary)
+            } else if let found = workspace.updates.availability(for: skill.id) {
+                // The scheduled check already asked; say what it heard.
+                Text(found.title).font(AgentFont.bodyMedium)
+                Text(found.detail).font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
+                if let last = workspace.device.lastUpdateCheck {
+                    Text("Checked \(last.formatted(date: .abbreviated, time: .shortened))")
+                        .font(AgentFont.caption).foregroundStyle(.secondary)
+                }
             } else {
                 Text("This library has not asked the repository what it publishes now.")
                     .font(AgentFont.body).foregroundStyle(.secondary)
                     .wrapsLines()
             }
-            if let message = session.errorMessage {
+            if let message = session.errorMessage ?? workspace.updates.errorMessage {
                 Text(message)
                     .font(AgentFont.body).foregroundStyle(.secondary)
                     .wrapsLines()
@@ -74,11 +82,24 @@ struct SkillRepositorySection: View {
                 }
                 .buttonStyle(.glass)
                 if session.upstreamStatus?.isUpToDate == false {
-                    Button("Review update…", systemImage: "arrow.down.circle") {
-                        Task { await session.applyUpstream(for: skill) }
+                    // The library takes the content; the apps that have the
+                    // skill get the new copy too, through the same install path.
+                    Button("Update", systemImage: "arrow.down.circle") {
+                        Task {
+                            if await session.applyUpstream(for: skill) {
+                                await workspace.deployment.prepare()
+                                await workspace.deployment.replaceProvenCopies(of: [skill.id])
+                            }
+                        }
                     }
                     .primaryActionStyle()
                     .disabled(!session.canWrite)
+                } else if workspace.updates.availability(for: skill.id)?.hasUpdate == true {
+                    Button(workspace.updates.updating.contains(skill.id) ? "Updating…" : "Update", systemImage: "arrow.down.circle") {
+                        Task { await workspace.updates.update(skill.id) }
+                    }
+                    .primaryActionStyle()
+                    .disabled(!session.canWrite || workspace.updates.isBusy)
                 }
                 Spacer(minLength: 0)
             }

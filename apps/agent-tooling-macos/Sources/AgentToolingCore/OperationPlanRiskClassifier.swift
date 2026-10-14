@@ -44,6 +44,10 @@ public enum OperationPlanRiskClassifier {
     public enum Reason: Hashable, Sendable, Comparable {
         /// A step would replace files this app cannot prove it installed.
         case replacesUnprovenContent(count: Int)
+        /// A step would replace a copy this app installed that somebody has
+        /// edited since. Theirs now, in the way that matters: overwriting it
+        /// loses work.
+        case replacesEditedCopies(count: Int)
         /// A step removes an install.
         case removesContent(count: Int)
         /// A step rewrites a connection the app already has configured. Adding
@@ -64,11 +68,12 @@ public enum OperationPlanRiskClassifier {
             switch self {
             case .contentFlagged: 0
             case .replacesUnprovenContent: 1
-            case .removesContent: 2
-            case .reconfiguresConnection: 3
-            case .requestedByAgent: 4
-            case .exclusions: 5
-            case .bulk: 6
+            case .replacesEditedCopies: 2
+            case .removesContent: 3
+            case .reconfiguresConnection: 4
+            case .requestedByAgent: 5
+            case .exclusions: 6
+            case .bulk: 7
             }
         }
 
@@ -79,6 +84,8 @@ public enum OperationPlanRiskClassifier {
             switch self {
             case .replacesUnprovenContent(let count):
                 plural(count, "step", "replaces", "replace") + " files Agent Tooling did not put there."
+            case .replacesEditedCopies(let count):
+                plural(count, "step", "replaces", "replace") + " a copy that was edited after Agent Tooling installed it."
             case .removesContent(let count):
                 plural(count, "step", "removes", "remove") + " an installed tool."
             case .reconfiguresConnection(let count):
@@ -105,6 +112,9 @@ public enum OperationPlanRiskClassifier {
         /// at one of these is an update of our own copy; anywhere else it is
         /// somebody else's files.
         public var provenInstalls: Set<WorkspaceDeploymentInstallKey>
+        /// Proven installs whose files no longer match what was installed:
+        /// somebody edited them. Replacing one is a loss, not an update.
+        public var editedInstalls: Set<WorkspaceDeploymentInstallKey>
         /// Steps the review found content findings for, or could not scan.
         public var flaggedContent: Set<WorkspaceDeploymentInstallKey>
         /// Connections the destination app already has configured under the
@@ -118,11 +128,13 @@ public enum OperationPlanRiskClassifier {
 
         public init(
             provenInstalls: Set<WorkspaceDeploymentInstallKey> = [],
+            editedInstalls: Set<WorkspaceDeploymentInstallKey> = [],
             flaggedContent: Set<WorkspaceDeploymentInstallKey> = [],
             configuredConnections: Set<WorkspaceDeploymentInstallKey> = [],
             requestedByAgent: Bool = false
         ) {
             self.provenInstalls = provenInstalls
+            self.editedInstalls = editedInstalls
             self.flaggedContent = flaggedContent
             self.configuredConnections = configuredConnections
             self.requestedByAgent = requestedByAgent
@@ -132,6 +144,7 @@ public enum OperationPlanRiskClassifier {
     public static func classify(_ plan: WorkspaceDeploymentPlan, context: Context = .init()) -> Verdict {
         var reasons: [Reason] = []
         var unproven = 0
+        var edited = 0
         var removals = 0
         var reconfigured = 0
         var flagged = 0
@@ -148,7 +161,11 @@ public enum OperationPlanRiskClassifier {
             case .updateContent:
                 // Replacing is an update when it is our copy, and somebody
                 // else's files when it is not.
-                if !context.provenInstalls.contains(key) { unproven += 1 }
+                if !context.provenInstalls.contains(key) {
+                    unproven += 1
+                } else if context.editedInstalls.contains(key) {
+                    edited += 1
+                }
             case .removeContent:
                 removals += 1
             case .installNativePackage:
@@ -163,6 +180,7 @@ public enum OperationPlanRiskClassifier {
 
         if flagged > 0 { reasons.append(.contentFlagged(count: flagged)) }
         if unproven > 0 { reasons.append(.replacesUnprovenContent(count: unproven)) }
+        if edited > 0 { reasons.append(.replacesEditedCopies(count: edited)) }
         if removals > 0 { reasons.append(.removesContent(count: removals)) }
         if reconfigured > 0 { reasons.append(.reconfiguresConnection(count: reconfigured)) }
         if context.requestedByAgent { reasons.append(.requestedByAgent) }

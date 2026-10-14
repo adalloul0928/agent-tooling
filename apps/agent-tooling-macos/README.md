@@ -111,6 +111,29 @@ Agent Tooling cannot prove it installed (a hand-made skill folder, say) is
 listed as *left alone* and skipped, because the executor refuses it regardless.
 Adopting the existing copy from Checkup, or removing it, is the way through.
 
+### Updates
+
+Settings › General › Updates sets how this Mac looks for updates to what it
+manages and what it does with one. One cadence (when the app opens, once a
+day, only on request) and, per kind, **Install automatically** or **Ask me
+first**. The default is to ask. A check compares each item with its source and
+changes nothing:
+
+- skills that follow a repository, with what the repository publishes now;
+- native plugins, with the catalog Discover kept;
+- MCP servers, with the catalog entry of the same name, when there is one.
+
+A found update appears on Home with an **Update** button (and on its row in the
+Library), unless its kind is set to install automatically, in which case the
+check installs it and Home says so. Installing a skill update is the same path
+as installing the skill: the library takes the content, then every copy this
+app proved it installed is replaced. A copy somebody edited since it was
+installed is left alone and waits on the Apps screen's review, where a person
+can decide. A native plugin is updated by its own app's command (`claude plugin
+update`, the only one recorded); an app with no recorded update command keeps
+its packages up to date itself, and the row says so instead of offering a
+button.
+
 Skill metadata supports standard YAML, including multiline descriptions and
 quoted names. Managed copies use the name declared in `SKILL.md`, even when the
 source folder has a different name; source files are preserved.

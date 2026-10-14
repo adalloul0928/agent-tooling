@@ -19,9 +19,26 @@ public struct NativePluginInstallCommand: Hashable, Sendable {
     public let executable: String
     public let installArguments: [String]
     public let removeArguments: [String]
+    /// The command that moves an installed package to what its marketplace
+    /// publishes now. `nil` where none has been read from the tool's own help:
+    /// that client's packages are updated in that client, not from here.
+    public var updateArguments: [String]? = nil
     /// The client release this was checked against, and where it was read.
     public let verifiedAgainstVersion: String
     public let source: String
+
+    public init(
+        client: ClientKind, executable: String, installArguments: [String], removeArguments: [String],
+        updateArguments: [String]? = nil, verifiedAgainstVersion: String, source: String
+    ) {
+        self.client = client
+        self.executable = executable
+        self.installArguments = installArguments
+        self.removeArguments = removeArguments
+        self.updateArguments = updateArguments
+        self.verifiedAgainstVersion = verifiedAgainstVersion
+        self.source = source
+    }
 }
 
 public enum NativePluginInstallRegister {
@@ -41,6 +58,7 @@ public enum NativePluginInstallRegister {
                 client: .claude, executable: "claude",
                 installArguments: ["plugin", "install", externalPluginID, "--scope", "user"],
                 removeArguments: ["plugin", "uninstall", externalPluginID],
+                updateArguments: ["plugin", "update", externalPluginID, "--scope", "user"],
                 verifiedAgainstVersion: "2.1.263",
                 source: "claude plugin install --help; https://code.claude.com/docs/en/discover-plugins")
         case .codex:

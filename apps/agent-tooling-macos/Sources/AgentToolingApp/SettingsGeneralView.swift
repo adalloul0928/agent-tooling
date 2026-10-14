@@ -20,6 +20,7 @@ struct SettingsGeneralView: View {
                     appearanceCard
                     runtimesCard
                     behaviorCard
+                    updatesCard
                     managedPolicyCard
                 }
                 .padding(WorkspaceLayout.pageInset)
@@ -160,6 +161,85 @@ struct SettingsGeneralView: View {
                 }
             }
         }
+    }
+
+    /// How this Mac handles updates to what it manages. One cadence, and per
+    /// kind the choice between installing a found update at once and leaving
+    /// it on Home with an Update button.
+    private var updatesCard: some View {
+        let policy = workspace.device.updatePolicy
+        let updates = workspace.updates
+        return TitledCard("Updates") {
+            VStack(alignment: .leading, spacing: 0) {
+                InfoRow(
+                    "Check for updates",
+                    detail: updatesCheckDetail
+                ) {
+                    Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
+                } trailing: {
+                    HStack(spacing: Space.md) {
+                        Button(updates.isChecking ? "Checking…" : "Check now") {
+                            Task { await updates.check() }
+                        }
+                        .secondaryActionStyle()
+                        .disabled(updates.isBusy)
+                        Picker("Check for updates", selection: binding(\.cadence)) {
+                            ForEach(UpdateCheckCadence.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        .labelsHidden()
+                        .frame(width: Size.pickerWidth)
+                    }
+                }
+                Hairline()
+                policyRow(
+                    "Skills", kind: .skill, symbol: "doc.text",
+                    detail: "Skills that follow a repository. Installing replaces the copies this app put in your apps.")
+                Hairline()
+                policyRow(
+                    "Plugins", kind: .plugin, symbol: "puzzlepiece.extension",
+                    detail: "Compared with their catalog. Installing asks the app to update its own package.")
+                Hairline()
+                policyRow(
+                    "MCP servers", kind: .mcpServer, symbol: "point.3.connected.trianglepath.dotted",
+                    detail: "Compared with the catalog entry of the same name, when there is one.")
+            }
+        }
+    }
+
+    private var updatesCheckDetail: String {
+        if let last = workspace.device.lastUpdateCheck {
+            return "Last checked \(SnapshotTime.compact(last)). \(workspace.device.updatePolicy.cadence.detail)"
+        }
+        return "Not checked yet. \(workspace.device.updatePolicy.cadence.detail)"
+    }
+
+    private func policyRow(_ title: String, kind: ToolingItemKind, symbol: String, detail: String) -> some View {
+        InfoRow(title, detail: detail) {
+            Image(systemName: symbol).foregroundStyle(.secondary).frame(width: Size.glyphSlot)
+        } trailing: {
+            Picker(title, selection: Binding(
+                get: { workspace.device.updatePolicy.policy(for: kind) },
+                set: { value in
+                    var policy = workspace.device.updatePolicy
+                    policy.setPolicy(value, for: kind)
+                    Task { await workspace.device.setUpdatePolicy(policy) }
+                })
+            ) {
+                ForEach(UpdateInstallPolicy.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .labelsHidden()
+            .frame(width: Size.pickerWidth)
+        }
+    }
+
+    private func binding<Value>(_ keyPath: WritableKeyPath<UpdatePolicy, Value>) -> Binding<Value> {
+        Binding(
+            get: { workspace.device.updatePolicy[keyPath: keyPath] },
+            set: { value in
+                var policy = workspace.device.updatePolicy
+                policy[keyPath: keyPath] = value
+                Task { await workspace.device.setUpdatePolicy(policy) }
+            })
     }
 
     @ViewBuilder

@@ -36,6 +36,10 @@ final class WorkspaceDeploymentSession {
     /// install picker can tell an update of our own copy from somebody else's
     /// files without measuring the disk a second time.
     private(set) var provenInstalls: Set<WorkspaceDeploymentInstallKey> = []
+    /// Proven installs whose files no longer match the fingerprint recorded
+    /// when they were installed: somebody edited them. Replacing one without
+    /// asking would lose that work, so the direct paths leave these alone.
+    private(set) var editedInstalls: Set<WorkspaceDeploymentInstallKey> = []
     private(set) var results: [Result] = []
     private(set) var isBusy = false
     private(set) var errorMessage: String?
@@ -230,8 +234,9 @@ final class WorkspaceDeploymentSession {
     ) async -> WorkspaceDeploymentPlan {
         // Only destinations this app can prove it installed may be offered for
         // removal; anything else is somebody else's.
-        let proven = Self.provenInstalls(snapshot: snapshot, targets: captured, store: store)
+        let (proven, edited) = Self.provenInstalls(snapshot: snapshot, targets: captured, store: store)
         provenInstalls = proven
+        editedInstalls = edited
         // Measure what is actually at each destination now, so "already there"
         // is an observation rather than an assumption.
         let observations =
@@ -450,20 +455,27 @@ final class WorkspaceDeploymentSession {
         snapshot: WorkspaceApplicationSnapshot,
         targets: [CapturedSkillAssignmentTarget],
         store: WorkspaceRevisionStore
-    ) -> Set<WorkspaceDeploymentInstallKey> {
+    ) -> (proven: Set<WorkspaceDeploymentInstallKey>, edited: Set<WorkspaceDeploymentInstallKey>) {
         let authority = ManagedInstallAuthority.fromStore(store)
         var keys = Set<WorkspaceDeploymentInstallKey>()
+        var edited = Set<WorkspaceDeploymentInstallKey>()
         for artifact in snapshot.document.artifacts {
             guard artifact.identity.parentPackageID == nil,
                   let name = artifact.declaredName, !name.isEmpty else { continue }
             for captured in targets {
                 let folder = captured.plannedDirectory.appending(path: name, directoryHint: .isDirectory)
-                guard authority.proof(forDestination: folder.path) != nil else { continue }
-                keys.insert(.init(artifactID: artifact.identity.id,
-                                  physicalDestinationID: captured.target.physicalDestinationID))
+                guard let proof = authority.proof(forDestination: folder.path) else { continue }
+                let key = WorkspaceDeploymentInstallKey(
+                    artifactID: artifact.identity.id, physicalDestinationID: captured.target.physicalDestinationID)
+                keys.insert(key)
+                // The same comparison the setup check makes: the tree on disk
+                // against the fingerprint approved at install.
+                if case .modifiedSinceReview = InstalledPackageDriftInspector.drift(for: proof.record).state {
+                    edited.insert(key)
+                }
             }
         }
-        return keys
+        return (keys, edited)
     }
 
     /// Routes whose install command this build has recorded, with the client
@@ -693,7 +705,7 @@ final class WorkspaceDeploymentSession {
         guard let scoped = plan(for: artifactIDs) else { return nil }
         return OperationPlanRiskClassifier.classify(
             scoped,
-            context: .init(provenInstalls: provenInstalls, requestedByAgent: requestedByAgent))
+            context: .init(provenInstalls: provenInstalls, editedInstalls: editedInstalls, requestedByAgent: requestedByAgent))
     }
 
     /// Applies only the items for these artifacts, through the same staged,
@@ -706,6 +718,27 @@ final class WorkspaceDeploymentSession {
         guard let scoped = plan(for: artifactIDs, includingRemovals: includingRemovals, excluding: heldBack),
               !scoped.items.isEmpty else { return }
         await apply(plan: scoped)
+    }
+
+    /// Replaces the copies of these artifacts this app proved it installed,
+    /// and nothing it cannot prove. The path an update takes after the library
+    /// has new content: no review, because replacing a proven copy with the
+    /// approved version is what the person asked for when they followed it.
+    /// Returns the steps it left alone: copies it cannot prove, and copies
+    /// somebody edited since they were installed. Both wait on the Apps
+    /// screen's review, where a person can decide.
+    @discardableResult
+    func replaceProvenCopies(of artifactIDs: Set<ArtifactID>) async -> [WorkspaceDeploymentItem] {
+        guard let scoped = plan(for: artifactIDs) else { return [] }
+        let leftAlone = scoped.items.filter { cannotOverwrite($0) || editedSinceInstall($0) }
+        await apply(only: artifactIDs, excluding: Set(leftAlone.map(Self.installKey)))
+        return leftAlone
+    }
+
+    /// Whether this step would replace a copy of ours that was edited since.
+    func editedSinceInstall(_ item: WorkspaceDeploymentItem) -> Bool {
+        guard case .updateContent = item.action else { return false }
+        return editedInstalls.contains(Self.installKey(item))
     }
 
     /// Whether the executor will refuse this step no matter who approves it:

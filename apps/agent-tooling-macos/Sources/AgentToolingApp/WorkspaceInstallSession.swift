@@ -128,9 +128,15 @@ final class WorkspaceInstallSession {
         }
         addedContributionIDs = review.command.additions.map(\.id)
         await library.applyReviewedAssignments()
-        guard library.lastReceipt != nil else {
+        guard let receipt = library.lastReceipt else {
             fail(library.errorMessage ?? "The assignments could not be saved.")
             return
+        }
+        // A read that was already in flight when the save landed is a read of
+        // the library before it; planning over that would find nothing to
+        // install. Read again until the state carries the commit.
+        if library.state?.snapshot.document.revision.id != receipt.committedRevisionID {
+            await library.refresh()
         }
 
         // 2. Plan over this Mac, then look only at what was just asked for.

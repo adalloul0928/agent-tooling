@@ -153,6 +153,10 @@ enum Size {
     /// The tile in a detail header.
     static let tileLarge: CGFloat = 40
 
+    /// A menu picker at the trailing edge of a settings row, wide enough for
+    /// its longest title so the column of pickers lines up.
+    static let pickerWidth: CGFloat = 200
+
     /// A client brand mark on a row.
     static let brandMark: CGFloat = 15
     /// A client disc on a row.

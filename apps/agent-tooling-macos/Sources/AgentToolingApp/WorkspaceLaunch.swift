@@ -30,6 +30,10 @@ struct WorkspaceLaunch {
         /// verdict read the same answer, so asking a registry once is what the
         /// whole app has asked it.
         let marketplace: WorkspaceMarketplaceSession
+        /// Updates to what this Mac manages: found on the policy's cadence,
+        /// installed by policy or by a press. Home counts them, Settings sets
+        /// the policy, and the Library rows wear the badges.
+        let updates: WorkspaceUpdateSession
         /// The report the last scan kept. Home reports it and Insights produces
         /// it; a scan started on one is finished on both.
         let insights: WorkspaceInsightsSession
@@ -162,23 +166,28 @@ struct WorkspaceLaunch {
             service: service, library: library, store: store,
             homeRoot: homeRoot, observer: deviceObserver)
         let health = WorkspaceHealthSession(device: device, homeRoot: homeRoot)
+        let deployment = WorkspaceDeploymentSession(
+            service: service, library: library, store: store,
+            homeRoot: homeRoot, contentStore: contentStore)
+        let marketplace = WorkspaceMarketplaceSession(
+            providers: marketplaceProviders(
+                MarketplaceCatalogContext(homeRoot: homeRoot, store: store)),
+            service: service, library: library, store: store)
         let insights = WorkspaceInsightsSession(library: library, homeRoot: homeRoot, services: insightsServices(container))
         return .init(
             library: library, sync: sync,
             settings: WorkspaceSettingsSession(homeRoot: homeRoot, library: library),
-            deployment: WorkspaceDeploymentSession(
-                service: service, library: library, store: store,
-                homeRoot: homeRoot, contentStore: contentStore),
+            deployment: deployment,
             device: device,
             health: health,
             history: WorkspaceHistorySession(store: store, library: library,
                                              writerID: writerID, access: .writable),
             authoring: WorkspaceAuthoringSession(service: service, library: library),
             export: WorkspacePackageExportSession(library: library, contentStore: contentStore),
-            marketplace: WorkspaceMarketplaceSession(
-                providers: marketplaceProviders(
-                    MarketplaceCatalogContext(homeRoot: homeRoot, store: store)),
-                service: service, library: library, store: store),
+            marketplace: marketplace,
+            updates: WorkspaceUpdateSession(
+                library: library, deployment: deployment, device: device, marketplace: marketplace,
+                service: service, store: store, homeRoot: homeRoot),
             insights: insights,
             requests: WorkspaceRequestSession(
                 store: store, library: library, device: device, queue: requestQueue),

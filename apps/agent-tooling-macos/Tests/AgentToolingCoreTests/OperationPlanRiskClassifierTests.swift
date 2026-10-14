@@ -30,6 +30,18 @@ struct OperationPlanRiskClassifierTests {
         #expect(verdict.reasons.first?.summary == "1 step replaces files Agent Tooling did not put there.")
     }
 
+    @Test func replacingACopySomebodyEditedSinceWeInstalledItNeedsReview() {
+        let plan = plan([item(.updateContent(from: digest("e"), to: digest("a")))])
+        let context = OperationPlanRiskClassifier.Context(provenInstalls: [key()], editedInstalls: [key()])
+        let verdict = OperationPlanRiskClassifier.classify(plan, context: context)
+        #expect(verdict == .needsReview([.replacesEditedCopies(count: 1)]))
+        #expect(verdict.reasons.first?.summary == "1 step replaces a copy that was edited after Agent Tooling installed it.")
+        // An edit only counts on a copy we can prove is ours; otherwise it is
+        // the stronger reason, once.
+        let unproven = OperationPlanRiskClassifier.Context(editedInstalls: [key()])
+        #expect(OperationPlanRiskClassifier.classify(plan, context: unproven) == .needsReview([.replacesUnprovenContent(count: 1)]))
+    }
+
     @Test func anyRemovalNeedsReview() {
         let plan = plan([
             item(.installContent(digest: digest("a"))),

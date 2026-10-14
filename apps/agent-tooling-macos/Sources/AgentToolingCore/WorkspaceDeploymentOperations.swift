@@ -252,7 +252,9 @@ public enum WorkspaceDeploymentOperations {
                 }
                 return OperationPlan(
                     id: identifiers(),
-                    kind: .installSkill,
+                    // A plan that only replaces what an app already has is an
+                    // update, and history says so.
+                    kind: updates == count && removals == 0 ? .updateSkill : .installSkill,
                     title: title,
                     summary: "Only what you reviewed changes. Nothing else in that folder is touched.",
                     targetSurfaces: [key.client.primarySurface],

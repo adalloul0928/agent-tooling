@@ -97,6 +97,12 @@ final class WorkspaceDeviceSession {
     /// `enabledClients`, and just as inert to read: nothing here starts a
     /// check by itself.
     private(set) var automaticallyCheckHealth: Bool
+    /// How this Mac looks for updates to what it manages, and what it does
+    /// with one: per kind, install it or wait to be asked. Kept on the device
+    /// record, so another Mac sharing the library decides for itself.
+    private(set) var updatePolicy: UpdatePolicy
+    /// When this Mac last compared its managed items with their sources.
+    private(set) var lastUpdateCheck: Date?
 
     /// Every app this build knows how to speak to, in the registry's own order,
     /// so every list and picker offers them the same way round.
@@ -148,6 +154,8 @@ final class WorkspaceDeviceSession {
             preferences: preferences, observations: device?.observations ?? [])
         hasExplicitClientChoice = preferences?.chosenClients != nil
         automaticallyCheckHealth = preferences?.automaticallyCheckHealth ?? true
+        updatePolicy = preferences?.effectiveUpdatePolicy ?? UpdatePolicy()
+        lastUpdateCheck = preferences?.lastUpdateCheck
         ClientExecutableLocator.registerAdditionalRoots(preferences?.customToolDirectories ?? [])
     }
 
@@ -292,6 +300,43 @@ final class WorkspaceDeviceSession {
             return
         }
         await library.refresh()
+    }
+
+    /// Records how this Mac handles updates. Saved before it is shown as the
+    /// rule, for the same reason the health toggle is.
+    func setUpdatePolicy(_ policy: UpdatePolicy) async {
+        guard updatePolicy != policy else { return }
+        let previous = updatePolicy
+        updatePolicy = policy
+        errorMessage = nil
+        do {
+            try await commitPreferences { $0.updatePolicy = policy }
+        } catch {
+            updatePolicy = previous
+            errorMessage = "This Mac could not record that choice. Nothing was changed."
+            return
+        }
+        await library.refresh()
+    }
+
+    /// Stamps the time of a finished update check. A check that could not
+    /// run is not stamped, so the next open tries again.
+    func recordUpdateCheck(at date: Date = .now) async {
+        lastUpdateCheck = date
+        try? await commitPreferences { $0.lastUpdateCheck = date }
+    }
+
+    private func commitPreferences(_ change: @escaping @Sendable (inout DeviceWorkspacePreferences) throws -> Void) async throws {
+        guard let head = try await service.snapshot()?.document.revision.id else {
+            throw WorkspaceRevisionStoreError.notInitialized
+        }
+        _ = try await service.commitDeviceChange(expectedRevisionID: head) { device in
+            guard var application = device.applicationState else {
+                throw WorkspaceRevisionStoreError.notInitialized
+            }
+            try change(&application.preferences)
+            device.applicationState = application
+        }
     }
 
     /// Checks this Mac's apps. Reads only.

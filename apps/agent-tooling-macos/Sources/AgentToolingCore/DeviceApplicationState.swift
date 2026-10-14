@@ -23,6 +23,15 @@ public enum UpdateCheckCadence: String, Codable, CaseIterable, Hashable, Sendabl
         }
     }
 
+    /// The rule in a sentence, for the settings row that holds the picker.
+    public var detail: String {
+        switch self {
+        case .onOpen: "Sources are compared each time Agent Tooling opens."
+        case .daily: "Sources are compared at most once a day, when Agent Tooling opens."
+        case .manual: "Sources are compared only when you press Check now."
+        }
+    }
+
     /// Whether a check that last ran at `last` is due at `now`.
     public func isDue(lastChecked last: Date?, now: Date) -> Bool {
         switch self {
