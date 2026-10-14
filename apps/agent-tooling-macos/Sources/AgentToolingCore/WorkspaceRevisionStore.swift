@@ -122,6 +122,26 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         }
     }
 
+    /// Starts this store from a revision another Mac published, as the first
+    /// revision it holds. The joining Mac's history begins at that head, which
+    /// is enough: merges need the newest common ancestor, and both Macs hold
+    /// every revision from here on. Parents the remote revision names are not
+    /// required to be present; ancestry walks stop at what this store has.
+    public func initializeFromRemote(document: PortableWorkspaceDocument, device: DeviceWorkspaceState) throws {
+        let documentBytes = try WorkspaceDocumentCoding.encode(document)
+        try device.validateStructure(against: document)
+        let deviceBytes = try WorkspaceDocumentCoding.encodeDeviceState(device)
+        guard document.workspaceID == workspaceID, device.workspaceID == workspaceID, device.deviceID == deviceID else {
+            throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice
+        }
+        try transaction(write: true) { database in
+            guard try readSnapshot(database) == nil else { throw WorkspaceRevisionStoreError.alreadyInitialized }
+            try insertRevision(document, bytes: documentBytes, database)
+            try run("INSERT INTO device_state(id, payload) VALUES(1, ?)", [.data(deviceBytes)], database)
+            try run("INSERT INTO workspace_head(id, revision_id) VALUES(1, ?)", [.text(document.revision.id.storageKey)], database)
+        }
+    }
+
     public func snapshot() throws -> WorkspaceApplicationSnapshot? {
         try transaction(write: false) { try readSnapshot($0) }
     }

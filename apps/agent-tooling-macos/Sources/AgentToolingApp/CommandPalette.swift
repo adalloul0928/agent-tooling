@@ -295,6 +295,13 @@ struct CommandPaletteView: View {
     @State private var query = ""
     @State private var items: [CommandPaletteItem] = []
     @State private var highlighted = 0
+    /// Where the pointer last was, in window coordinates. Hover follows the
+    /// pointer only when it moves: a row that scrolls under a still pointer
+    /// (after an arrow key) must not take the highlight back.
+    @State private var lastPointer: CGPoint?
+    /// Set when the pointer moved the highlight, so the list does not scroll
+    /// to a row that is already under it.
+    @State private var highlightedByPointer = false
     @FocusState private var searchFocused: Bool
 
     private var results: [CommandPaletteItem] { CommandPaletteMatcher.rank(items, query: query) }
@@ -373,6 +380,15 @@ struct CommandPaletteView: View {
                                 CommandPaletteRow(item: item, selected: index == highlighted)
                             }
                             .buttonStyle(.plain)
+                            .onContinuousHover(coordinateSpace: .global) { phase in
+                                guard case .active(let location) = phase else { return }
+                                // The first report is where the pointer already
+                                // was when the palette opened, not a movement.
+                                defer { lastPointer = location }
+                                guard let lastPointer, lastPointer != location, highlighted != index else { return }
+                                highlightedByPointer = true
+                                highlighted = index
+                            }
                             .id(item.id)
                             .help("Open \(item.title) in \(item.contextLabel)")
                             .accessibilityLabel("\(item.title), \(item.subtitle)")
@@ -383,6 +399,10 @@ struct CommandPaletteView: View {
                     .padding(.horizontal, Space.md)
                 }
                 .onChange(of: highlighted) { _, index in
+                    if highlightedByPointer {
+                        highlightedByPointer = false
+                        return
+                    }
                     guard results.indices.contains(index) else { return }
                     withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(results[index].id, anchor: .center) }
                 }

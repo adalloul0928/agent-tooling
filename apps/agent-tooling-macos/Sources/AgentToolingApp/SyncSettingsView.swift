@@ -321,6 +321,7 @@ struct SyncSettingsView: View {
         case .subscriptionContentMismatch: "Linked on one Mac, edited on another"
         case .catalogSource: "Two different catalogs recorded as one"
         case .projectField: "Two different project names"
+        case .deviceField: "Two different settings for one Mac"
         case .unsupportedVersion: "A newer format than this app can read"
         case .invalidResult: "The combined setup did not pass its own checks"
         }

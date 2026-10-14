@@ -27,7 +27,7 @@ extension WorkspaceMergeConflictKind {
             false
         case .artifactField, .artifactContent, .deleteVersusEdit, .ownership, .sourcePolicy,
             .subscriptionLock, .subscriptionContentMismatch, .assignmentEnablement, .assignmentField,
-            .catalogSource, .projectField:
+            .catalogSource, .projectField, .deviceField:
             true
         }
     }
@@ -146,6 +146,17 @@ private extension WorkspaceConflictResolver {
             } else {
                 ancestor.artifacts.append(losing)
             }
+
+        case .deviceField:
+            guard let id = resolution.objectID,
+                  let losing = loser.deviceRegistry.first(where: { $0.id == id }) else { return }
+            var devices = ancestor.deviceRegistry
+            if let index = devices.firstIndex(where: { $0.id == id }) {
+                devices[index] = losing
+            } else {
+                devices.append(losing)
+            }
+            ancestor.devices = devices
 
         case .sourcePolicy, .subscriptionLock:
             guard let id = resolution.objectID else { return }

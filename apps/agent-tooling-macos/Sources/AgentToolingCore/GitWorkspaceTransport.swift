@@ -12,6 +12,9 @@ public enum GitWorkspaceTransportError: Error, Equatable, Sendable {
     case remoteAdvanced(remoteHead: String)
     case unrelatedWorkingTreeChanges
     case notEnrolled
+    /// A content tree in the repository does not hash to the digest it is
+    /// filed under. It is refused; nothing is imported from it.
+    case contentMismatch(ContentDigest)
 }
 
 /// A remote workspace head, as observed. A missing head means an empty
@@ -19,10 +22,20 @@ public enum GitWorkspaceTransportError: Error, Equatable, Sendable {
 public struct GitWorkspaceRemoteState: Hashable, Sendable {
     public let head: String?
     public let document: PortableWorkspaceDocument?
+    /// Content trees the remote holds, by digest. Empty for a transport that
+    /// does not carry content.
+    public let contentDigests: Set<ContentDigest>
+    /// Every Mac's published summary the remote holds, newest commit's version.
+    public let deviceStatuses: [PublishedDeviceStatus]
 
-    public init(head: String?, document: PortableWorkspaceDocument?) {
+    public init(
+        head: String?, document: PortableWorkspaceDocument?,
+        contentDigests: Set<ContentDigest> = [], deviceStatuses: [PublishedDeviceStatus] = []
+    ) {
         self.head = head
         self.document = document
+        self.contentDigests = contentDigests
+        self.deviceStatuses = deviceStatuses
     }
 }
 
@@ -44,12 +57,19 @@ public struct GitWorkspacePublishReceipt: Hashable, Sendable {
 /// readable by anyone with access to that repository.
 public actor GitWorkspaceTransport {
     public static let documentFileName = "workspace.json"
+    public static let contentDirectoryName = "content"
+    public static let statusDirectoryName = "status"
+    public nonisolated var carriesContent: Bool { true }
     private static let outputLimit = 1 << 20
     private static let documentLimit = 32 << 20
+    private static let statusLimit = 256 << 10
     private static let prefix = [
         "--no-optional-locks", "--no-pager", "-c", "core.fsmonitor=false",
         "-c", "core.hooksPath=/dev/null",
     ]
+    /// Used only when the person has no Git identity of their own; see
+    /// `commitIdentityArguments`.
+    private static let identityFallback = ["user.name=Agent Tooling", "user.email=agent-tooling@localhost"]
 
     private let checkout: URL
     private let branch: String
@@ -93,13 +113,95 @@ public actor GitWorkspaceTransport {
         guard let head else { return .init(head: nil, document: nil) }
         let blob = try await git(["show", "\(head):\(Self.documentFileName)"], allowing: [0, 128])
         guard blob.status == 0 else { return .init(head: head, document: nil) }
-        return .init(head: head, document: try Self.decode(blob.standardOutput))
+        return .init(
+            head: head, document: try Self.decode(blob.standardOutput),
+            contentDigests: try await contentDigests(at: head),
+            deviceStatuses: try await deviceStatuses(at: head))
+    }
+
+    /// Which content trees the head commit holds: the digest directories under
+    /// `content/<algorithm>/`. Listed from the commit, not the working tree,
+    /// so a half-written checkout cannot claim content it does not have.
+    func contentDigests(at head: String) async throws -> Set<ContentDigest> {
+        let listing = try await git(["ls-tree", "--name-only", "-r", "-d", head, "--", Self.contentDirectoryName], allowing: [0, 128])
+        guard listing.status == 0 else { return [] }
+        var digests = Set<ContentDigest>()
+        for line in listing.standardOutput.split(separator: "\n") {
+            let parts = line.split(separator: "/").map(String.init)
+            guard parts.count == 3, parts[0] == Self.contentDirectoryName,
+                  let algorithm = ContentDigestAlgorithm(rawValue: parts[1]),
+                  Self.isDigestPathComponent(parts[2]) else { continue }
+            digests.insert(.init(algorithm: algorithm, value: parts[2]))
+        }
+        return digests
+    }
+
+    func deviceStatuses(at head: String) async throws -> [PublishedDeviceStatus] {
+        let listing = try await git(["ls-tree", "--name-only", head, "--", Self.statusDirectoryName + "/"], allowing: [0, 128])
+        guard listing.status == 0 else { return [] }
+        var statuses: [PublishedDeviceStatus] = []
+        for line in listing.standardOutput.split(separator: "\n").prefix(256) {
+            let path = String(line)
+            guard path.hasSuffix(".json"), path.hasPrefix(Self.statusDirectoryName + "/") else { continue }
+            let blob = try await git(["show", "\(head):\(path)"], allowing: [0, 128])
+            guard blob.status == 0, blob.standardOutput.utf8.count <= Self.statusLimit,
+                  let status = try? AgentToolingCoding.decoder().decode(PublishedDeviceStatus.self, from: Data(blob.standardOutput.utf8)),
+                  status.formatVersion == PublishedDeviceStatus.formatVersion,
+                  path == Self.statusPath(for: status.deviceID) else { continue }
+            statuses.append(status)
+        }
+        return statuses.sorted { $0.deviceID < $1.deviceID }
+    }
+
+    /// One content tree from the head commit, re-captured from a private
+    /// extraction and verified against the digest it is filed under. A tree
+    /// that does not hash to its own name is refused, never trusted.
+    public func content(for digest: ContentDigest) async throws -> CapturedPackageTree? {
+        guard Self.isDigestPathComponent(digest.value) else { return nil }
+        try await git(["fetch", "--quiet", "--no-tags", "origin", branch], allowing: [0, 128])
+        guard let head = try await revision("refs/remotes/origin/\(branch)") else { return nil }
+        let relative = Self.contentPath(for: digest)
+        let probe = try await git(["ls-tree", "--name-only", head, "--", relative], allowing: [0, 128])
+        guard probe.status == 0, !probe.standardOutput.isEmpty else { return nil }
+        // Extract the subtree into a scratch folder inside the checkout's own
+        // private area; `git archive` writes exactly what the commit holds.
+        let scratch = checkout.appending(path: ".git/agent-tooling-extract-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let archive = scratch.appending(path: "tree.tar")
+        let result = try await runner.run(
+            executable: "/bin/sh", arguments: ["-c", "exec /usr/bin/git --no-pager archive --format=tar -o \"$0\" \"$1\" -- \"$2\"",
+                                             archive.path, head, relative],
+            currentDirectory: checkout)
+        guard result.status == 0 else { throw GitWorkspaceTransportError.commandFailed }
+        let extracted = scratch.appending(path: "extracted", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: extracted, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let untar = try await runner.run(
+            executable: "/usr/bin/tar", arguments: ["-xf", archive.path, "-C", extracted.path], currentDirectory: checkout)
+        guard untar.status == 0 else { throw GitWorkspaceTransportError.commandFailed }
+        let tree = try await PackageTreeCapture().capture(directory: extracted.appending(path: relative, directoryHint: .isDirectory))
+        guard tree.digest == digest else { throw GitWorkspaceTransportError.contentMismatch(digest) }
+        return tree
+    }
+
+    static func contentPath(for digest: ContentDigest) -> String {
+        "\(contentDirectoryName)/\(digest.algorithm.rawValue)/\(digest.value)"
+    }
+
+    static func statusPath(for deviceID: WorkspaceObjectID) -> String {
+        "\(statusDirectoryName)/\(deviceID.rawValue.uuidString.lowercased()).json"
+    }
+
+    nonisolated static func isDigestPathComponent(_ value: String) -> Bool {
+        value.count == 64 && value.allSatisfy { ($0.isNumber || ("a"..."f").contains($0)) }
     }
 
     /// Writes the document, commits only that file and pushes fast-forward.
     /// A rejected push reports the remote head rather than overwriting it.
     public func publish(
         document: PortableWorkspaceDocument,
+        content: [CapturedPackageTree],
+        status: PublishedDeviceStatus?,
         expectedRemoteHead: String?
     ) async throws -> GitWorkspacePublishReceipt {
         let bytes = try Self.encode(document)
@@ -108,15 +210,37 @@ public actor GitWorkspaceTransport {
             throw GitWorkspaceTransportError.remoteAdvanced(remoteHead: observed ?? "")
         }
         try await resetToRemote(head: observed)
-        // Only this file may be committed. Anything else in the checkout is not
+        // Only our files may be committed. Anything else in the checkout is not
         // ours to publish, and its presence is a reason to stop.
         try await requireOnlyDocumentChanges()
         try bytes.write(to: checkout.appending(path: Self.documentFileName), options: .atomic)
-        try await git(["add", "--", Self.documentFileName])
+        var paths = [Self.documentFileName]
+        for tree in content {
+            let relative = Self.contentPath(for: tree.digest)
+            let destination = checkout.appending(path: relative, directoryHint: .isDirectory)
+            // Immutable by digest: a tree already there is the same bytes.
+            if !FileManager.default.fileExists(atPath: destination.path) {
+                try WorkspacePackageExporter.write(tree: tree, to: destination)
+                // An empty directory in the tree would not be committed by Git;
+                // the capture tolerates its absence on the way back, and the
+                // digest is over file content, so the round trip holds.
+            }
+            paths.append(relative)
+        }
+        if let status {
+            let statusURL = checkout.appending(path: Self.statusPath(for: status.deviceID))
+            try FileManager.default.createDirectory(
+                at: statusURL.deletingLastPathComponent(), withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
+            let encoder = AgentToolingCoding.encoder()
+            try encoder.encode(status).write(to: statusURL, options: .atomic)
+            paths.append(Self.statusPath(for: status.deviceID))
+        }
+        try await git(["add", "--"] + paths)
         try await requireOnlyDocumentChanges(staged: true)
         let message = "Workspace revision \(document.revision.id.rawValue.uuidString.lowercased())"
-        let commit = try await git(["commit", "--quiet", "--only", "--message", message,
-                                    "--", Self.documentFileName], allowing: [0, 1])
+        let identity = try await commitIdentityArguments()
+        let commit = try await git(identity + ["commit", "--quiet", "--only", "--message", message, "--"] + paths, allowing: [0, 1])
         guard commit.status == 0 else { throw GitWorkspaceTransportError.commandFailed }
         guard let created = try await revision("HEAD") else {
             throw GitWorkspaceTransportError.commandFailed
@@ -160,12 +284,29 @@ extension GitWorkspaceTransport {
     func requireOnlyDocumentChanges(staged: Bool = false) async throws {
         let status = try await git(["status", "--porcelain=v1", "--untracked-files=all"])
         for line in status.standardOutput.split(separator: "\n") {
-            let path = line.dropFirst(3)
-            guard path == Self.documentFileName else {
+            let path = String(line.dropFirst(3))
+            guard path == Self.documentFileName
+                || path.hasPrefix(Self.contentDirectoryName + "/")
+                || path.hasPrefix(Self.statusDirectoryName + "/") else {
                 throw GitWorkspaceTransportError.unrelatedWorkingTreeChanges
             }
             _ = staged
         }
+    }
+
+    /// A commit needs an author. A Mac that never set one up still gets to
+    /// publish, under a name that says what wrote it.
+    func commitIdentityArguments() async throws -> [String] {
+        let name = try await git(["config", "--get", "user.name"], allowing: [0, 1])
+        let email = try await git(["config", "--get", "user.email"], allowing: [0, 1])
+        var arguments: [String] = []
+        if name.status != 0 || name.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            arguments += ["-c", Self.identityFallback[0]]
+        }
+        if email.status != 0 || email.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            arguments += ["-c", Self.identityFallback[1]]
+        }
+        return arguments
     }
 
     func revision(_ reference: String) async throws -> String? {

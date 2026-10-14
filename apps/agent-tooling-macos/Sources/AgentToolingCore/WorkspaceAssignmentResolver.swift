@@ -203,7 +203,8 @@ public enum WorkspaceAssignmentResolver {
         mcpDefinitions: [MCPAssignmentDefinitionEvidence] = [],
         contentEvidence: [AssignmentContentEvidence] = [],
         portableMCPDefinitions: [PortableMCPDefinitionRecord] = [],
-        deviceMCPBindings: [DeviceMCPDefinitionBinding] = []
+        deviceMCPBindings: [DeviceMCPDefinitionBinding] = [],
+        deviceRegistry: [DeviceRecord] = []
     ) -> WorkspaceAssignmentResolution {
         let artifactsByID = Dictionary(grouping: artifacts, by: { $0.identity.id })
         let contributionGroups = Dictionary(grouping: contributions, by: \.id)
@@ -236,7 +237,7 @@ public enum WorkspaceAssignmentResolver {
                 ))
                 continue
             }
-            guard applies(contribution.destination.deviceIDs, to: currentDeviceID) else {
+            guard contribution.destination.applies(to: currentDeviceID, registry: deviceRegistry) else {
                 ignored.insert(contributionID)
                 continue
             }
@@ -551,12 +552,13 @@ public enum WorkspaceAssignmentResolver {
         var physicalDestinationID: WorkspaceObjectID
     }
 
-    private static func applies(_ deviceIDs: [WorkspaceObjectID]?, to currentDeviceID: WorkspaceObjectID) -> Bool {
-        deviceIDs?.contains(currentDeviceID) ?? true
-    }
-
     private static func validSelector(_ destination: PortableDestination) -> Bool {
         if let deviceIDs = destination.deviceIDs, Set(deviceIDs).count != deviceIDs.count { return false }
+        if let excluded = destination.excludedDeviceIDs {
+            // Exclusions only qualify "every Mac"; beside an explicit list they
+            // are a contradiction, and duplicates are a malformed record.
+            if destination.deviceIDs != nil || Set(excluded).count != excluded.count { return false }
+        }
         return switch destination.scope {
         case .project, .localProject: destination.logicalProjectID != nil
         case .user, .workspace, .managed, .account, .session: destination.logicalProjectID == nil
@@ -636,7 +638,8 @@ public enum WorkspaceAssignmentResolver {
 
     private static func destinationKey(_ value: PortableDestination) -> [String] {
         [value.surface.rawValue, value.scope.rawValue, value.logicalProjectID?.rawValue.uuidString ?? "",
-         value.deviceIDs?.map { $0.rawValue.uuidString }.sorted().joined(separator: ",") ?? "*"]
+         value.deviceIDs?.map { $0.rawValue.uuidString }.sorted().joined(separator: ",") ?? "*",
+         value.excludedDeviceIDs?.map { $0.rawValue.uuidString }.sorted().joined(separator: ",") ?? ""]
     }
 
     private static func requirementKeyOrder(_ lhs: RequirementKey, _ rhs: RequirementKey) -> Bool {

@@ -201,7 +201,9 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
         contributions.map {
             let scope: WorkspaceLibraryDeviceScope
             switch $0.destination.deviceIDs {
-            case nil: scope = .allEnrolledDevices
+            case nil:
+                scope = $0.destination.excludedDeviceIDs?.contains(deviceID) == true
+                    ? .otherDevices : .allEnrolledDevices
             case []: scope = .noDevices
             case let ids?:
                 let containsCurrent = ids.contains(deviceID)

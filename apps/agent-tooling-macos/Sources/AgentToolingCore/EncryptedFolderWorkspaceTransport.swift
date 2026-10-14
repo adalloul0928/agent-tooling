@@ -172,4 +172,20 @@ public actor EncryptedFolderWorkspaceTransport {
     }
 }
 
-extension EncryptedFolderWorkspaceTransport: WorkspaceRevisionTransport {}
+extension EncryptedFolderWorkspaceTransport: WorkspaceRevisionTransport {
+    /// The sealed box holds the document only. Content and status do not
+    /// travel this way; the caller sees `carriesContent == false` and keeps
+    /// them local.
+    public nonisolated var carriesContent: Bool { false }
+
+    public func publish(
+        document: PortableWorkspaceDocument,
+        content: [CapturedPackageTree],
+        status: PublishedDeviceStatus?,
+        expectedRemoteHead: String?
+    ) async throws -> GitWorkspacePublishReceipt {
+        try await publish(document: document, expectedRemoteHead: expectedRemoteHead)
+    }
+
+    public func content(for digest: ContentDigest) async throws -> CapturedPackageTree? { nil }
+}

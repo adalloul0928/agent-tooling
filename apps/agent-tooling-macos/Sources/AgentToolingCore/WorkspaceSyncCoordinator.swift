@@ -27,15 +27,94 @@ public enum WorkspaceSyncOutcome: Sendable {
 /// Arriving shared intent is not evidence that any native client file changed.
 /// Deployment stays a separate reviewed step.
 public actor WorkspaceSyncCoordinator {
+    /// What one pass moved besides the document.
+    public struct ContentReport: Sendable, Equatable {
+        /// Trees this Mac copied into its own content store from the remote.
+        public var imported: [ContentDigest] = []
+        /// Trees this Mac added to the remote.
+        public var published: [ContentDigest] = []
+        /// Trees the document names that neither side could supply.
+        public var missing: [ContentDigest] = []
+        public init() {}
+    }
+
     private let store: WorkspaceRevisionStore
     private let transport: any WorkspaceRevisionTransport
     private let writerID: WorkspaceObjectID
+    private let contentStore: CentralPackageContentStore?
+    private let status: (@Sendable () async -> PublishedDeviceStatus?)?
+    /// What the most recent pass did with content. Read after a pass.
+    public private(set) var lastContentReport = ContentReport()
+    /// Every other Mac's published summary, as of the most recent read.
+    public private(set) var deviceStatuses: [PublishedDeviceStatus] = []
 
     public init(store: WorkspaceRevisionStore, transport: any WorkspaceRevisionTransport,
-                writerID: WorkspaceObjectID) {
+                writerID: WorkspaceObjectID, contentStore: CentralPackageContentStore? = nil,
+                status: (@Sendable () async -> PublishedDeviceStatus?)? = nil) {
         self.store = store
         self.transport = transport
         self.writerID = writerID
+        self.contentStore = contentStore
+        self.status = status
+    }
+
+    // MARK: Content
+
+    /// Digests the document names for content this library authored, which is
+    /// the content that travels. Followed skills are re-fetched from their
+    /// repository on each Mac; native plugins are installed by their app.
+    static func travellingDigests(in document: PortableWorkspaceDocument) -> Set<ContentDigest> {
+        Set(document.artifacts.compactMap { artifact in
+            guard case .centralPersonal = artifact.authority else { return nil }
+            return artifact.contentDigest
+        })
+    }
+
+    /// Copies into this Mac's content store every travelling tree the document
+    /// names that the store lacks and the remote has. Verified on the way in.
+    private func importContent(for document: PortableWorkspaceDocument, remote: GitWorkspaceRemoteState) async {
+        guard let contentStore, transport.carriesContent else { return }
+        for digest in Self.travellingDigests(in: document).sorted(by: { $0.value < $1.value }) {
+            if (try? await contentStore.read(digest)) != nil { continue }
+            guard remote.contentDigests.contains(digest) else {
+                lastContentReport.missing.append(digest)
+                continue
+            }
+            guard let tree = try? await transport.content(for: digest), tree.digest == digest else {
+                lastContentReport.missing.append(digest)
+                continue
+            }
+            if (try? await contentStore.store(tree)) != nil { lastContentReport.imported.append(digest) }
+        }
+    }
+
+    /// The travelling trees the document names that this Mac holds and the
+    /// remote does not yet: what goes up with the next publish.
+    private func contentToPublish(for document: PortableWorkspaceDocument, remote: GitWorkspaceRemoteState) async -> [CapturedPackageTree] {
+        guard let contentStore, transport.carriesContent else { return [] }
+        var trees: [CapturedPackageTree] = []
+        for digest in Self.travellingDigests(in: document).sorted(by: { $0.value < $1.value })
+        where !remote.contentDigests.contains(digest) {
+            if let tree = try? await contentStore.read(digest) {
+                trees.append(tree)
+                lastContentReport.published.append(digest)
+            }
+        }
+        return trees
+    }
+
+    private func publish(
+        _ document: PortableWorkspaceDocument, remote: GitWorkspaceRemoteState
+    ) async throws -> GitWorkspacePublishReceipt {
+        let content = await contentToPublish(for: document, remote: remote)
+        let status = await status?()
+        return try await transport.publish(
+            document: document, content: content, status: status, expectedRemoteHead: remote.head)
+    }
+
+    private func beginPass(_ remote: GitWorkspaceRemoteState) {
+        lastContentReport = ContentReport()
+        deviceStatuses = remote.deviceStatuses
     }
 
     /// Applies a person's conflict decisions against freshly read state, then
@@ -54,6 +133,7 @@ public actor WorkspaceSyncCoordinator {
         guard let remoteDocument = remote.document, let remoteHead = remote.head else {
             return try await sync(idempotencyKey: idempotencyKey)
         }
+        beginPass(remote)
         if remoteDocument.revision.id == local.document.revision.id { return .upToDate(head: remoteHead) }
         try store.importRemoteRevision(remoteDocument)
         let ancestor = try store.commonAncestor(withRemote: remoteDocument)
@@ -74,8 +154,9 @@ public actor WorkspaceSyncCoordinator {
         guard let committed = try store.revision(receipt.committedRevisionID) else {
             throw WorkspaceRevisionStoreError.corruptState
         }
+        await importContent(for: committed, remote: remote)
         do {
-            let published = try await transport.publish(document: committed, expectedRemoteHead: remoteHead)
+            let published = try await publish(committed, remote: remote)
             return .merged(receipt: receipt, published: published)
         } catch GitWorkspaceTransportError.remoteAdvanced {
             return .remoteMovedDuringSync
@@ -87,12 +168,21 @@ public actor WorkspaceSyncCoordinator {
             throw WorkspaceRevisionStoreError.notInitialized
         }
         let remote = try await transport.remoteState()
+        beginPass(remote)
 
         guard let remoteDocument = remote.document, let remoteHead = remote.head else {
-            let receipt = try await transport.publish(document: local.document, expectedRemoteHead: remote.head)
+            let receipt = try await publish(local.document, remote: remote)
             return .published(receipt)
         }
         if remoteDocument.revision.id == local.document.revision.id {
+            // Same revision both sides; content may still be owed either way,
+            // and this Mac's status is refreshed when something is.
+            await importContent(for: local.document, remote: remote)
+            let owed = await contentToPublish(for: local.document, remote: remote)
+            if !owed.isEmpty || status != nil {
+                _ = try? await transport.publish(
+                    document: local.document, content: owed, status: await status?(), expectedRemoteHead: remoteHead)
+            }
             return .upToDate(head: remoteHead)
         }
 
@@ -109,6 +199,14 @@ public actor WorkspaceSyncCoordinator {
                 expectedLocalHead: local.document.revision.id,
                 idempotencyKey: idempotencyKey,
                 inputDigest: try Self.inputDigest(remoteHead, local.document.revision.id))
+            await importContent(for: remoteDocument, remote: remote)
+            // Adopting changes no document, but this Mac's status and any content
+            // it alone holds still go up.
+            let owed = await contentToPublish(for: remoteDocument, remote: remote)
+            if !owed.isEmpty || status != nil {
+                _ = try? await transport.publish(
+                    document: remoteDocument, content: owed, status: await status?(), expectedRemoteHead: remoteHead)
+            }
             return .adopted(receipt)
         }
 
@@ -126,8 +224,9 @@ public actor WorkspaceSyncCoordinator {
         guard let committed = try store.revision(receipt.committedRevisionID) else {
             throw WorkspaceRevisionStoreError.corruptState
         }
+        await importContent(for: committed, remote: remote)
         do {
-            let published = try await transport.publish(document: committed, expectedRemoteHead: remoteHead)
+            let published = try await publish(committed, remote: remote)
             return .merged(receipt: receipt, published: published)
         } catch GitWorkspaceTransportError.remoteAdvanced {
             // The merged revision is committed here and will publish on the

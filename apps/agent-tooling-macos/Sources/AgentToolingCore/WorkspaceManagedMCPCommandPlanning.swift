@@ -96,7 +96,8 @@ public enum WorkspaceManagedMCPCommandPlanning {
             targets: resolvedTargets,
             capabilityEvidence: device.capabilityEvidence,
             portableMCPDefinitions: document.mcpDefinitions ?? [],
-            deviceMCPBindings: device.mcpBindings ?? [])
+            deviceMCPBindings: device.mcpBindings ?? [],
+            deviceRegistry: document.deviceRegistry)
         // Only this destination's issues count, plus any the resolver could not
         // pin to a destination; a connection asked for elsewhere too is judged
         // there. See the same rule in `WorkspaceNativePluginCommandPlanning`.

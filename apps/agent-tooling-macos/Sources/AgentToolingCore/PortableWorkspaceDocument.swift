@@ -41,6 +41,10 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
     public var configurationState: WorkspaceConfigurationState?
     /// Absent from schema 1/2; an explicit array in schema 3.
     public var mcpDefinitions: [PortableMCPDefinitionRecord]?
+    /// The Macs sharing this workspace. Absent in documents written before any
+    /// Mac registered, which reads as an empty registry: every device then
+    /// takes shared assignments.
+    public var devices: [DeviceRecord]?
 
     public init(
         schemaVersion: UInt = Self.currentSchemaVersion,
@@ -56,7 +60,8 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         presets: [PresetRecord] = [],
         tombstones: [ArtifactTombstone] = [],
         configurationState: WorkspaceConfigurationState? = .init(),
-        mcpDefinitions: [PortableMCPDefinitionRecord]? = nil
+        mcpDefinitions: [PortableMCPDefinitionRecord]? = nil,
+        devices: [DeviceRecord]? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.minimumReaderVersion = minimumReaderVersion
@@ -72,7 +77,11 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         self.tombstones = tombstones
         self.configurationState = configurationState
         self.mcpDefinitions = mcpDefinitions ?? (schemaVersion >= 3 ? [] : nil)
+        self.devices = (devices?.isEmpty ?? true) ? nil : devices
     }
+
+    /// The registry, empty when no Mac has registered.
+    public var deviceRegistry: [DeviceRecord] { devices ?? [] }
 
     public func validateStructure() throws {
         guard (1...Self.currentSchemaVersion).contains(schemaVersion),
@@ -98,6 +107,10 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         try requireUnique(sources.map(\.id), field: "source IDs")
         try requireUnique(subscriptions.map(\.id), field: "subscription IDs")
         try requireUnique(logicalProjects.map(\.id), field: "logical project IDs")
+        try requireUnique(deviceRegistry.map(\.id), field: "device IDs")
+        for device in deviceRegistry {
+            try WorkspaceDomainValidation.requireText(device.name, field: "device name", maximum: 256)
+        }
         try requireUnique(assignments.map(\.id), field: "assignment IDs")
         try requireUnique(presets.map(\.id), field: "preset IDs")
         try requireUnique(tombstones.map(\.artifactID), field: "tombstone IDs")
@@ -264,9 +277,20 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
             project.repositoryHints.sort()
             return project
         }.sorted { $0.id < $1.id }
+        value.devices = value.devices.map { devices in
+            devices.map { device in
+                var device = device
+                device.registeredAt = WorkspaceDomainValidation.canonicalDate(device.registeredAt)
+                device.lastSeenAt = device.lastSeenAt.map(WorkspaceDomainValidation.canonicalDate)
+                device.retiredAt = device.retiredAt.map(WorkspaceDomainValidation.canonicalDate)
+                return device
+            }.sorted { $0.id < $1.id }
+        }
         value.assignments = value.assignments.map { assignment in
             var assignment = assignment
             assignment.destination.deviceIDs?.sort()
+            assignment.destination.excludedDeviceIDs?.sort()
+            if assignment.destination.excludedDeviceIDs?.isEmpty == true { assignment.destination.excludedDeviceIDs = nil }
             return assignment
         }.sorted { $0.id < $1.id }
         value.presets = value.presets.map { preset in

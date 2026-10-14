@@ -184,7 +184,8 @@ public enum WorkspaceDeploymentPlanner {
             capabilityEvidence: device.capabilityEvidence,
             contentEvidence: availableContent,
             portableMCPDefinitions: document.mcpDefinitions ?? [],
-            deviceMCPBindings: device.mcpBindings ?? [])
+            deviceMCPBindings: device.mcpBindings ?? [],
+            deviceRegistry: document.deviceRegistry)
 
         for issue in resolution.issues {
             // A `missingResolvedTarget` for an artifact whose selector this Mac

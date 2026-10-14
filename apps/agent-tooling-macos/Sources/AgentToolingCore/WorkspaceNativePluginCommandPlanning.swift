@@ -94,7 +94,8 @@ public enum WorkspaceNativePluginCommandPlanning {
             contributions: artifactContributions,
             currentDeviceID: device.deviceID,
             targets: resolvedTargets,
-            capabilityEvidence: device.capabilityEvidence)
+            capabilityEvidence: device.capabilityEvidence,
+            deviceRegistry: document.deviceRegistry)
         // Only this destination's issues count, plus any the resolver could not
         // pin to a destination. The package may be asked for elsewhere too, and
         // a destination with no route for it (a Claude Code package asked for
