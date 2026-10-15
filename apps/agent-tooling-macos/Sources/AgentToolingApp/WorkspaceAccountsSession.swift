@@ -92,6 +92,25 @@ final class WorkspaceAccountsSession {
 
     func sharedValue(_ key: AccountPreferenceKey) -> AccountPreferenceValue? { preferences.value(for: key) }
 
+    /// Whether one shared choice is waiting to be applied here, and whether
+    /// this Mac cannot apply it and why. The one place the rows and the banner
+    /// ask "is this key not applied yet, and is it held", so they cannot drift
+    /// on what that means.
+    struct KeyStatus: Equatable {
+        /// A planned change for this key that has not been applied here yet.
+        var pending: Bool
+        /// Set when this Mac cannot follow the choice by editing its file; the
+        /// reason is the one the plan recorded.
+        var held: AccountPreferencePlan.Held?
+    }
+
+    func status(of key: AccountPreferenceKey) -> KeyStatus {
+        let plan = plans[key.provider]
+        return KeyStatus(
+            pending: plan?.changes.contains { $0.key == key } == true,
+            held: plan?.held.first { $0.key == key })
+    }
+
     /// When the oldest of the current readings was taken.
     var lastReadAt: Date? { observations.values.map(\.observedAt).min() }
 

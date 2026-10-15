@@ -317,9 +317,9 @@ private struct LocalValueLine: View {
     var body: some View {
         let observation = session.observation(key.provider)
         let local = observation?.effectiveValue(of: key)
-        let plan = session.plan(key.provider)
-        let held = plan?.held.first { $0.key == key }
-        let pending = plan?.changes.contains { $0.key == key } == true
+        let status = session.status(of: key)
+        let held = status.held
+        let pending = status.pending
         HStack(spacing: Space.xs) {
             if pending || held != nil {
                 StatusGlyph(state: .attention, size: Size.glyphSmall)
@@ -447,7 +447,7 @@ private struct ItemRow: View {
                 ForEach(item.facts, id: \.self) { fact in
                     Text(fact).font(AgentFont.micro).foregroundStyle(.tertiary).lineLimit(1)
                 }
-                if let key = item.preferenceKey, session.sharedValue(key) != nil || session.plan(item.provider)?.held.contains(where: { $0.key == key }) == true {
+                if let key = item.preferenceKey, session.sharedValue(key) != nil || session.status(of: key).held != nil {
                     LocalValueLine(key: key, session: session)
                 }
             }
