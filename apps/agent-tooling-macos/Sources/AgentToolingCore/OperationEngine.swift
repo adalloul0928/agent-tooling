@@ -677,7 +677,10 @@ public actor OperationExecutor {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
-        return formatter.string(from: .now) + "-" + UUID().uuidString.prefix(8).lowercased()
+        // UTC, with a trailing Z, so dated trash folders sort by instant across
+        // a DST change and are comparable across Macs in a synced workspace.
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        return formatter.string(from: .now) + "Z-" + UUID().uuidString.prefix(8).lowercased()
     }
 
     private func commandWorkingDirectory(_ rawPath: String?, authorizedProjectRootPath: String?) throws -> URL? {
