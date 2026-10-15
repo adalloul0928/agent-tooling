@@ -183,5 +183,5 @@ func skillCommandDigest<T: Encodable>(_ command: T, operation: String) throws ->
     var bytes = Data("agent-tooling.standalone-skill-\(operation).v1\n".utf8)
     bytes.append(try encoder.encode(command))
     guard bytes.count <= WorkspaceDocumentCoding.maximumDocumentBytes else { throw WorkspaceRevisionStoreError.recordTooLarge }
-    return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+    return SHA256.hash(data: bytes).lowercaseHex
 }

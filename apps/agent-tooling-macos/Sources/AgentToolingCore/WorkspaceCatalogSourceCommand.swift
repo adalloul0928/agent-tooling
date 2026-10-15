@@ -163,7 +163,7 @@ public struct WorkspaceCatalogSourceCommand: Sendable {
             let value = $0.precomposedStringWithCanonicalMapping
             return String(value.utf8.count) + ":" + value
         }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
     }
 
     /// The portable half, and what this Mac's half needs to finish the same

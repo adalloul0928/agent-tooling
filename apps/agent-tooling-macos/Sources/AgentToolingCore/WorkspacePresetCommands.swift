@@ -99,7 +99,7 @@ public struct CreatePresetCommand: Sendable {
             let value = $0.precomposedStringWithCanonicalMapping
             return String(value.utf8.count) + ":" + value
         }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
     }
 
     func apply(to document: inout PortableWorkspaceDocument) throws -> [ArtifactID] {
@@ -166,7 +166,7 @@ public struct RenamePresetCommand: Sendable {
             let value = $0.precomposedStringWithCanonicalMapping
             return String(value.utf8.count) + ":" + value
         }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
     }
 
     func apply(to document: inout PortableWorkspaceDocument) throws -> [ArtifactID] {
@@ -216,7 +216,7 @@ public struct DeletePresetCommand: Sendable {
             idempotencyKey.rawValue.uuidString.lowercased(),
             presetID.rawValue.uuidString.lowercased(),
         ].joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
     }
 
     func apply(to document: inout PortableWorkspaceDocument) throws -> [ArtifactID] {

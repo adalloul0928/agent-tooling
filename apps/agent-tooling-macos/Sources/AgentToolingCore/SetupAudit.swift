@@ -89,7 +89,7 @@ public struct SetupFinding: Identifiable, Codable, Hashable, Sendable {
     static func identifier(kind: Kind, client: ClientKind?, subject: String) -> String {
         let text = "\(kind.rawValue)|\(client?.rawValue ?? "-")|\(subject)"
         let digest = SHA256.hash(data: Data(text.utf8))
-        return digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+        return digest.prefix(8).lowercaseHex
     }
 }
 

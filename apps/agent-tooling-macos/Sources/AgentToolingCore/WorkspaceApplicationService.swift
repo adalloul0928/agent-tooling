@@ -364,7 +364,7 @@ public struct CreateProjectCommand: Codable, Sendable, Equatable {
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         var bytes = Data("agent-tooling.create-project.v1\n".utf8)
         bytes.append(try encoder.encode(self))
-        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: bytes).lowercaseHex
     }
 }
 
@@ -390,7 +390,7 @@ public struct AddProjectRepositoryHintCommand: Codable, Sendable, Equatable {
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         var bytes = Data("agent-tooling.add-project-repository-hint.v1\n".utf8)
         bytes.append(try encoder.encode(self))
-        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: bytes).lowercaseHex
     }
 }
 
@@ -417,7 +417,7 @@ public struct RenameArtifactCommand: Codable, Sendable, Equatable {
         // payload from accidentally sharing an idempotency identity.
         var bytes = Data("agent-tooling.rename-artifact.v1\n".utf8)
         bytes.append(try encoder.encode(self))
-        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: bytes).lowercaseHex
     }
 }
 

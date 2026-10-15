@@ -212,7 +212,7 @@ public struct ManagedMCPServerIntakeCommand: Sendable {
             let value = $0.precomposedStringWithCanonicalMapping
             return String(value.utf8.count) + ":" + value
         }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
     }
 
     // MARK: - The transaction's two halves

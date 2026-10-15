@@ -696,6 +696,6 @@ public struct PublishedAccountSummary: Codable, Hashable, Sendable {
             bytes.append(Data("\(field.utf8.count):".utf8))
             bytes.append(Data(field.utf8))
         }
-        return SHA256.hash(data: bytes).prefix(12).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: bytes).prefix(12).lowercaseHex
     }
 }

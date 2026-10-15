@@ -82,7 +82,7 @@ public enum ToolCopyIdentity {
             // was measured, and its digest would describe neither.
             guard read == sizes[relative] else { return nil }
         }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        return hasher.finalize().lowercaseHex
     }
 
     /// The definition without its frontmatter's top-level `metadata:` mapping.

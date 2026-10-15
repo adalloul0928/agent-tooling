@@ -173,7 +173,7 @@ public struct CapturedPackageTree: Hashable, Sendable {
                 appendBytes(Data(target.utf8), to: &hash)
             }
         }
-        return .init(value: hash.finalize().map { String(format: "%02x", $0) }.joined())
+        return .init(value: hash.finalize().lowercaseHex)
     }
 
     private static func appendInteger(_ value: Int, to hash: inout SHA256) {

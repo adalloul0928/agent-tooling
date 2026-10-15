@@ -76,7 +76,7 @@ private func deviceCommandDigest<T: Encodable>(_ command: T, operation: String) 
     encoder.dateEncodingStrategy = .iso8601
     var bytes = Data("agent-tooling.device-\(operation).v1\n".utf8)
     bytes.append(try encoder.encode(command))
-    return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+    return SHA256.hash(data: bytes).lowercaseHex
 }
 
 extension WorkspaceApplicationService {

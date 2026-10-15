@@ -145,7 +145,7 @@ public actor EncryptedFolderWorkspaceTransport {
     }
 
     private static func digest(_ bytes: Data) -> String {
-        SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        SHA256.hash(data: bytes).lowercaseHex
     }
 
     private static func encode(_ document: PortableWorkspaceDocument) throws -> Data {

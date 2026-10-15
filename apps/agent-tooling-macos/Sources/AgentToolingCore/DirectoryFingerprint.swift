@@ -82,7 +82,7 @@ public enum DirectoryFingerprint {
                 throw DirectoryFingerprintError.changedWhileReading(entry.relativePath)
             }
         }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        return hasher.finalize().lowercaseHex
     }
 
     private static func isExecutable(at url: URL, fileManager: FileManager) throws -> Bool {

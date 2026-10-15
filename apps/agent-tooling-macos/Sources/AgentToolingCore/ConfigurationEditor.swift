@@ -89,7 +89,7 @@ public struct ConfigurationEditor: Sendable {
     public func fingerprint(of path: String) throws -> String? {
         guard FileManager.default.fileExists(atPath: path) else { return nil }
         let bytes = try read(path)
-        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: bytes).lowercaseHex
     }
 
     public func apply(

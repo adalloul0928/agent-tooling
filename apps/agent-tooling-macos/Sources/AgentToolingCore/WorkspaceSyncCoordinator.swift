@@ -255,6 +255,6 @@ private extension WorkspaceSyncCoordinator {
     static func inputDigest(_ remoteHead: String, _ localHead: WorkspaceObjectID) throws -> String {
         let payload = Data(("workspace-sync.v1\u{0}" + remoteHead + "\u{0}"
             + localHead.rawValue.uuidString.lowercased()).utf8)
-        return SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: payload).lowercaseHex
     }
 }

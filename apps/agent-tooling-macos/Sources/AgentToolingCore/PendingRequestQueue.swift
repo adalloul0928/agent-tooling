@@ -239,6 +239,6 @@ public enum PendingRequestQueueService {
     ) -> String {
         let canonical = ([kind.rawValue, scope.rawValue] + targets.map(\.rawValue).sorted() + inputs)
             .joined(separator: "\u{001F}")
-        return SHA256.hash(data: Data(canonical.utf8)).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: Data(canonical.utf8)).lowercaseHex
     }
 }
