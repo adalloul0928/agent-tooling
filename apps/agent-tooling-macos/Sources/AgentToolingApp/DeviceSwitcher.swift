@@ -188,7 +188,7 @@ private struct AssignToDeviceSheet: View {
 
     private var rows: [WorkspaceLibraryReadModelRow] {
         (workspace.library.state?.library.rows ?? [])
-            .filter { $0.isAssignable && ($0.kind == .skill || $0.kind == .mcpServer || $0.kind == .nativePlugin) }
+            .filter { $0.isAssignable && [.skill, .mcpServer, .nativePlugin, .package].contains($0.kind) }
             .filter { query.isEmpty || $0.displayName.localizedCaseInsensitiveContains(query) }
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }

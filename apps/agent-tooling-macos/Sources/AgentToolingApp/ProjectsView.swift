@@ -796,7 +796,7 @@ private struct ComponentRows: View {
         LazyVStack(spacing: 0) {
             ForEach(rows) { row in
                 InfoRow(row.displayName, detail: detail(for: row)) {
-                    KindTile(kind: toolingKind(row.kind), size: Size.tile)
+                    KindTile(kind: ToolingKind(row.kind), size: Size.tile)
                 } trailing: {
                     HStack(spacing: Space.lg) {
                         if reviewable, row.kind == .mcpServer, row.isAssignable {
@@ -830,15 +830,6 @@ private struct ComponentRows: View {
             : row.ownershipLabel
     }
 
-    private func toolingKind(_ kind: ArtifactKind) -> ToolingKind {
-        switch kind {
-        case .skill: .skill
-        case .mcpServer: .mcpServer
-        case .package, .nativePlugin: .plugin
-        case .preset: .profile
-        case .logicalProject: .library
-        }
-    }
 }
 
 private struct EmptyCardRow: View {

@@ -156,7 +156,7 @@ struct WorkspaceAssignmentSheet: View {
         case .undoing: return "Taking it back out…"
         case .choosing, .none:
             if pipeline == nil, session.lastReceipt != nil {
-                return "Saved to your workspace. Installing is reviewed on the Apps screen."
+                return "Saved to your workspace. Open it from the Apps screen to install."
             }
             return "Choose the apps that should have \(presetID == nil && artifactIDs.count == 1 ? "it" : "them")."
         }
@@ -416,7 +416,7 @@ struct WorkspaceAssignmentSheet: View {
         return VStack(spacing: 0) {
             ForEach(Array(items.prefix(3).enumerated()), id: \.element.id) { index, item in
                 HStack(spacing: Space.lg) {
-                    KindTile(kind: toolingKind(item.kind), size: Size.tile)
+                    KindTile(kind: ToolingKind(item.kind), size: Size.tile)
                     VStack(alignment: .leading, spacing: Space.xxs) {
                         Text(item.name).font(AgentFont.bodyMedium)
                         Text(item.detail).font(AgentFont.caption).foregroundStyle(.secondary)
@@ -596,9 +596,9 @@ struct WorkspaceAssignmentSheet: View {
         ContentUnavailableView {
             Label("Assignments saved", systemImage: "checkmark.circle")
         } description: {
-            Text("Saved to your workspace. Nothing is installed until you review it on the Apps screen.")
+            Text("Saved to your workspace. Open it from the Apps screen to install.")
         }
-        .frame(maxWidth: .infinity, minHeight: 200)
+        .frame(maxWidth: .infinity, minHeight: Size.emptyStateMinHeight)
     }
 
     // MARK: Footer
@@ -752,15 +752,6 @@ struct WorkspaceAssignmentSheet: View {
         }
     }
 
-    private func toolingKind(_ kind: ArtifactKind) -> ToolingKind {
-        switch kind {
-        case .skill: .skill
-        case .mcpServer: .mcpServer
-        case .package, .nativePlugin: .plugin
-        case .preset: .profile
-        case .logicalProject: .library
-        }
-    }
 
     private func ownershipLabel(_ ownership: WorkspaceLibraryOwnership) -> String {
         switch ownership {

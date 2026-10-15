@@ -238,7 +238,7 @@ struct WorkspaceMarketplaceSessionTests {
         await session.adoptMCPServer(listing)
 
         #expect(session.adoption?.packageID == listing.id)
-        #expect(session.adoption?.message == "Added to your library. Choose where it goes on the Apps screen.")
+        #expect(session.adoption?.message == "Added to your library. Install picks the apps and writes it.")
         let document = try #require(try fixture.store.snapshot()).document
         // Recorded as a managed MCP connection: one artifact and one definition,
         // named by the server's short install identifier.

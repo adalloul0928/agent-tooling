@@ -31,8 +31,12 @@ public actor WorkspaceSyncCoordinator {
     public struct ContentReport: Sendable, Equatable {
         /// Trees this Mac copied into its own content store from the remote.
         public var imported: [ContentDigest] = []
-        /// Trees this Mac added to the remote.
+        /// Trees this Mac added to the remote. Listed once the publish returned.
         public var published: [ContentDigest] = []
+        /// Trees this Mac holds and owes the remote but could not send on this
+        /// pass: the publish that rides along with an up-to-date or adopted
+        /// pass failed. The documents are in step; the next pass tries again.
+        public var unpublished: [ContentDigest] = []
         /// Trees the document names that neither side could supply.
         public var missing: [ContentDigest] = []
         public init() {}
@@ -95,10 +99,7 @@ public actor WorkspaceSyncCoordinator {
         var trees: [CapturedPackageTree] = []
         for digest in Self.travellingDigests(in: document).sorted(by: { $0.value < $1.value })
         where !remote.contentDigests.contains(digest) {
-            if let tree = try? await contentStore.read(digest) {
-                trees.append(tree)
-                lastContentReport.published.append(digest)
-            }
+            if let tree = try? await contentStore.read(digest) { trees.append(tree) }
         }
         return trees
     }
@@ -108,8 +109,27 @@ public actor WorkspaceSyncCoordinator {
     ) async throws -> GitWorkspacePublishReceipt {
         let content = await contentToPublish(for: document, remote: remote)
         let status = await status?()
-        return try await transport.publish(
+        let receipt = try await transport.publish(
             document: document, content: content, status: status, expectedRemoteHead: remote.head)
+        lastContentReport.published.append(contentsOf: content.map(\.digest))
+        return receipt
+    }
+
+    /// The publish that rides along when the document itself needs nothing:
+    /// owed content and this Mac's status. Its failure does not fail the pass,
+    /// because the documents are in step; it is recorded instead.
+    private func publishSide(
+        document: PortableWorkspaceDocument, remote: GitWorkspaceRemoteState, remoteHead: String
+    ) async {
+        let owed = await contentToPublish(for: document, remote: remote)
+        guard !owed.isEmpty || status != nil else { return }
+        do {
+            _ = try await transport.publish(
+                document: document, content: owed, status: await status?(), expectedRemoteHead: remoteHead)
+            lastContentReport.published.append(contentsOf: owed.map(\.digest))
+        } catch {
+            lastContentReport.unpublished.append(contentsOf: owed.map(\.digest))
+        }
     }
 
     private func beginPass(_ remote: GitWorkspaceRemoteState) {
@@ -178,11 +198,7 @@ public actor WorkspaceSyncCoordinator {
             // Same revision both sides; content may still be owed either way,
             // and this Mac's status is refreshed when something is.
             await importContent(for: local.document, remote: remote)
-            let owed = await contentToPublish(for: local.document, remote: remote)
-            if !owed.isEmpty || status != nil {
-                _ = try? await transport.publish(
-                    document: local.document, content: owed, status: await status?(), expectedRemoteHead: remoteHead)
-            }
+            await publishSide(document: local.document, remote: remote, remoteHead: remoteHead)
             return .upToDate(head: remoteHead)
         }
 
@@ -202,11 +218,7 @@ public actor WorkspaceSyncCoordinator {
             await importContent(for: remoteDocument, remote: remote)
             // Adopting changes no document, but this Mac's status and any content
             // it alone holds still go up.
-            let owed = await contentToPublish(for: remoteDocument, remote: remote)
-            if !owed.isEmpty || status != nil {
-                _ = try? await transport.publish(
-                    document: remoteDocument, content: owed, status: await status?(), expectedRemoteHead: remoteHead)
-            }
+            await publishSide(document: remoteDocument, remote: remote, remoteHead: remoteHead)
             return .adopted(receipt)
         }
 

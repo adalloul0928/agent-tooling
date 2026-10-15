@@ -16,21 +16,26 @@ struct AssignmentDeviceScopeMenu: View {
 
     private var isShared: Bool { assignment.destination.deviceIDs == nil }
 
+    @State private var errorMessage: String?
+
     var body: some View {
         if isShared, registry.count > 1 {
             Menu {
                 Section("Except") {
                     ForEach(registry.filter { !$0.isRetired }) { device in
-                        Toggle(isOn: Binding(
-                            get: { assignment.destination.excludedDeviceIDs?.contains(device.id) == true },
-                            set: { excluded in Task { await setExcluded(device.id, excluded) } }
-                        )) {
-                            Text(device.id == workspace.library.deviceID ? "\(device.name) (this Mac)" : device.name)
-                        }
+                        ExceptToggle(
+                            title: device.id == workspace.library.deviceID ? "\(device.name) (this Mac)" : device.name,
+                            isExcluded: assignment.destination.excludedDeviceIDs?.contains(device.id) == true,
+                            set: { excluded in await setExcluded(device.id, excluded) })
                     }
                 }
             } label: {
-                Text(label).foregroundStyle(.secondary)
+                HStack(spacing: Space.xs) {
+                    Text(label).foregroundStyle(.secondary)
+                    if let errorMessage {
+                        Text(errorMessage).font(AgentFont.caption).foregroundStyle(AgentTheme.failure)
+                    }
+                }
             }
             .menuStyle(.button)
             .buttonStyle(.plain)
@@ -58,9 +63,30 @@ struct AssignmentDeviceScopeMenu: View {
     private func setExcluded(_ device: WorkspaceObjectID, _ excluded: Bool) async {
         var set = Set(assignment.destination.excludedDeviceIDs ?? [])
         if excluded { set.insert(device) } else { set.remove(device) }
-        guard let head = try? await workspace.service.snapshot()?.document.revision.id else { return }
-        _ = try? await workspace.service.setAssignmentExclusions(.init(
-            expectedRevisionID: head, contributionID: assignment.id, excludedDeviceIDs: set.sorted()))
+        errorMessage = nil
+        do {
+            guard let head = try await workspace.service.snapshot()?.document.revision.id else { return }
+            _ = try await workspace.service.setAssignmentExclusions(.init(
+                expectedRevisionID: head, contributionID: assignment.id, excludedDeviceIDs: set.sorted()))
+        } catch {
+            // Most often the library moved under us; the menu shows the saved
+            // scope again once the refresh lands, and the person can retry.
+            errorMessage = "That change was not saved. Try again."
+        }
         await workspace.library.refresh()
+    }
+}
+
+/// One Mac's row in the Except menu. A separate view so the toggle's binding
+/// is typed once, where the compiler can see it.
+private struct ExceptToggle: View {
+    let title: String
+    let isExcluded: Bool
+    let set: @MainActor @Sendable (Bool) async -> Void
+
+    var body: some View {
+        Toggle(title, isOn: Binding(
+            get: { isExcluded },
+            set: { excluded in Task { await set(excluded) } }))
     }
 }

@@ -37,11 +37,14 @@ final class WorkspaceInstallSession {
         /// says which one and why.
         var skipped: [String]
         var canUndo: Bool
+        /// Nothing to write: every app asked for already had it.
+        var alreadyPresent = false
 
         var summary: String {
             let names = installed.sorted { $0.rawValue < $1.rawValue }.map(\.rawValue)
+            if alreadyPresent { return "Every app asked for already has it. Nothing was written." }
             switch (installed.count, failed.count + skipped.count) {
-            case (0, 0): return "Every app asked for already has it."
+            case (0, 0): return "Nothing was installed."
             case (0, let rest): return rest == 1 ? "One step was left alone." : "\(rest) steps were left alone."
             case (_, 0): return "Installed to \(names.formatted(.list(type: .and)))."
             default: return "Installed to \(installed.count) of \(installed.count + failed.count + skipped.count) apps."
@@ -54,9 +57,9 @@ final class WorkspaceInstallSession {
     /// The plan the review shows, when there is one to show.
     private(set) var reviewPlan: WorkspaceDeploymentPlan?
     /// Steps that will not run whatever anyone presses: they would replace
-    /// files Agent Tooling did not put there. The review lists them apart, and
-    /// Install leaves them out. Adopting the existing copy (Checkup) or
-    /// removing it is the way through, not a button here.
+    /// files Agent Tooling did not put there, or a copy of its own that was
+    /// edited since. The review lists them apart, and Install leaves them
+    /// out. Adopting or removing the copy (Checkup) is the way through.
     private(set) var heldBack: [WorkspaceDeploymentItem] = []
 
     /// The review's steps that will run when approved.
@@ -151,13 +154,13 @@ final class WorkspaceInstallSession {
         }
         if scoped.items.isEmpty, scoped.exclusions.isEmpty {
             // Already there everywhere it was asked for. The assignment is
-            // saved, which is all there was to do.
-            phase = .finished(.init(installed: destinations.compactMap(\.surface.client), failed: [:], skipped: [], canUndo: false))
+            // saved, which is all there was to do; nothing was written.
+            phase = .finished(.init(installed: [], failed: [:], skipped: [], canUndo: false, alreadyPresent: true))
             return
         }
 
         // 3. Decide.
-        heldBack = scoped.items.filter(deployment.cannotOverwrite)
+        heldBack = deployment.heldBack(in: scoped)
         switch deployment.risk(for: targetArtifactIDs, requestedByAgent: requestedByAgent) ?? .direct {
         case .direct:
             await apply(scoped)

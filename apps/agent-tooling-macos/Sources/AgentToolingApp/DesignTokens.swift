@@ -158,6 +158,8 @@ enum Size {
     static let pickerWidth: CGFloat = 200
     /// A short text field (a branch name, a port).
     static let fieldNarrow: CGFloat = 160
+    /// The least height an empty state keeps so its symbol and text sit clear of the edges.
+    static let emptyStateMinHeight: CGFloat = 200
     /// The form on the first-launch screen.
     static let firstLaunchFormWidth: CGFloat = 520
 

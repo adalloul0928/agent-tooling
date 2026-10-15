@@ -97,7 +97,7 @@ final class WorkspaceMarketplaceSession {
     /// What adding a listing does, and what it deliberately does not do.
     /// Stated once here so the button and the line under it cannot disagree.
     static let adoptionNote =
-        "Adding a package puts it in your library. Where it is installed is decided on the Apps screen."
+        "Adding a package puts it in your library. Install, on the package, picks the apps and writes it."
 
     /// Said when the workspace itself cannot be written to, so a disabled
     /// control is never disabled without a reason. The words the rest of the
@@ -201,7 +201,7 @@ final class WorkspaceMarketplaceSession {
                 .init(expectedRevisionID: head, package: package, client: client))
             adoption = .init(
                 packageID: package.id,
-                message: "Added to your library. Choose where it goes on the Apps screen.")
+                message: "Added to your library. Install picks the apps and writes it.")
         } catch {
             adoption = .init(packageID: package.id, message: Self.message(for: error))
         }
@@ -260,7 +260,7 @@ final class WorkspaceMarketplaceSession {
             _ = try await service.intakeManagedMCPServer(command)
             adoption = .init(
                 packageID: package.id,
-                message: "Added to your library. Choose where it goes on the Apps screen.")
+                message: "Added to your library. Install picks the apps and writes it.")
         } catch {
             adoption = .init(packageID: package.id, message: Self.message(for: error))
         }

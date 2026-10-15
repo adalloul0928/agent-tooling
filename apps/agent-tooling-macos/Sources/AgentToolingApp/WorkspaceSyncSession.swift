@@ -62,13 +62,21 @@ final class WorkspaceSyncSession {
         self.writerID = writerID
         self.keyStore = keyStore
         self.contentStore = contentStore
+        refreshDevices()
     }
 
     var deviceID: WorkspaceObjectID { store.deviceID }
 
     /// The registry as this Mac's store has it.
-    var devices: [DeviceRecord] { (try? store.snapshot())?.document.deviceRegistry ?? [] }
+    /// The registry as of the last pass or registry write, read from the
+    /// store then rather than on every redraw.
+    private(set) var devices: [DeviceRecord] = []
     var thisDevice: DeviceRecord? { devices.first { $0.id == store.deviceID } }
+
+    /// Re-reads the registry from this Mac's store.
+    func refreshDevices() {
+        devices = (try? store.snapshot())?.document.deviceRegistry ?? []
+    }
     var otherDevices: [DeviceRecord] { devices.filter { $0.id != store.deviceID && !$0.isRetired } }
 
     func status(of device: WorkspaceObjectID) -> PublishedDeviceStatus? {
@@ -276,7 +284,7 @@ final class WorkspaceSyncSession {
                 choices = [:]
             }
         } catch {
-            errorMessage = "This Mac could not reach the workspace repository. Nothing was changed."
+            errorMessage = Self.passFailureMessage(error)
         }
     }
 
@@ -285,7 +293,10 @@ final class WorkspaceSyncSession {
         isBusy = true
         errorMessage = nil
         lastAttempt = now
-        defer { isBusy = false }
+        defer {
+            isBusy = false
+            refreshDevices()   // the pass may have brought other Macs' registry edits
+        }
         do {
             let transport = try transport ?? makeTransport(for: enrollment)
             self.transport = transport
@@ -314,17 +325,19 @@ final class WorkspaceSyncSession {
             consecutiveFailures = 0
         } catch {
             consecutiveFailures += 1
-            errorMessage = "This Mac could not reach the workspace repository. Nothing was changed."
+            errorMessage = Self.passFailureMessage(error)
         }
     }
 
     /// Makes sure this Mac is in the registry before it publishes, so other
     /// Macs see a named device. Idempotent; a registered Mac is left alone.
     private func registerThisDeviceIfNeeded() async {
+        refreshDevices()
         guard thisDevice == nil, let head = try? store.snapshot()?.document.revision.id else { return }
         let name = Host.current().localizedName ?? "This Mac"
         let service = WorkspaceApplicationService(store: store, writerID: writerID, contentStore: contentStore)
         _ = try? await service.registerDevice(.init(expectedRevisionID: head, deviceID: store.deviceID, name: name))
+        refreshDevices()
     }
 
     /// One registry change, then a pass so every Mac learns of it.
@@ -334,6 +347,7 @@ final class WorkspaceSyncSession {
         let service = WorkspaceApplicationService(store: store, writerID: writerID, contentStore: contentStore)
         do {
             _ = try await service.updateDevice(.init(expectedRevisionID: head, deviceID: id, change: change))
+            refreshDevices()
         } catch let error as DeviceRegistryError {
             errorMessage = error.localizedDescription
             return
@@ -354,6 +368,7 @@ final class WorkspaceSyncSession {
     /// settings screen shows this Mac at once.
     func adopt(enrollment: WorkspaceSyncEnrollment) {
         self.enrollment = enrollment
+        refreshDevices()
         transport = nil
     }
 
@@ -387,6 +402,17 @@ final class WorkspaceSyncSession {
     }
 
     /// One line for the window: when, and what the other Macs last said.
+    /// A pass's failure, named. The transport's errors say what was wrong
+    /// with the remote; anything else is quoted, so a local cause (a store
+    /// that would not write, a tree that would not read) is not passed off
+    /// as the network.
+    static func passFailureMessage(_ error: Error) -> String {
+        if let described = error as? LocalizedError, let message = described.errorDescription {
+            return message + " Nothing was changed."
+        }
+        return "This Mac could not finish syncing (\(error)). Nothing was changed."
+    }
+
     var statusLine: String? {
         guard isConnected else { return nil }
         var parts: [String] = []

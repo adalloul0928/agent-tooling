@@ -57,7 +57,7 @@ public enum NativePluginInstallRegister {
             return .init(
                 client: .claude, executable: "claude",
                 installArguments: ["plugin", "install", externalPluginID, "--scope", "user"],
-                removeArguments: ["plugin", "uninstall", externalPluginID],
+                removeArguments: ["plugin", "uninstall", externalPluginID, "--scope", "user"],
                 updateArguments: ["plugin", "update", externalPluginID, "--scope", "user"],
                 verifiedAgainstVersion: "2.1.263",
                 source: "claude plugin install --help; https://code.claude.com/docs/en/discover-plugins")

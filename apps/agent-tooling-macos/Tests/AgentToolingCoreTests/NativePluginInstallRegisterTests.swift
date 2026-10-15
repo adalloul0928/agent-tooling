@@ -34,7 +34,9 @@ struct NativePluginInstallRegisterTests {
         let claude = try #require(
             NativePluginInstallRegister.command(for: .claude, externalPluginID: "browser"))
         #expect(claude.installArguments == ["plugin", "install", "browser", "--scope", "user"])
-        #expect(claude.removeArguments == ["plugin", "uninstall", "browser"])
+        // Uninstall takes the same scope as install; without it Claude asks
+        // which scope, and the policy refuses the shorter form.
+        #expect(claude.removeArguments == ["plugin", "uninstall", "browser", "--scope", "user"])
 
         let codex = try #require(
             NativePluginInstallRegister.command(for: .codex, externalPluginID: "browser"))
@@ -59,8 +61,11 @@ struct NativePluginInstallRegisterTests {
         for client in [ClientKind.claude, .codex] {
             let command = try #require(
                 NativePluginInstallRegister.command(for: client, externalPluginID: "browser"))
-            #expect(throws: Never.self) {
-                try policy.validate(executable: command.executable, arguments: command.installArguments)
+            // Install, remove and update alike: a plan may carry any of them.
+            for arguments in [command.installArguments, command.removeArguments, command.updateArguments].compactMap({ $0 }) {
+                #expect(throws: Never.self, "\(client) \(arguments)") {
+                    try policy.validate(executable: command.executable, arguments: arguments)
+                }
             }
         }
     }

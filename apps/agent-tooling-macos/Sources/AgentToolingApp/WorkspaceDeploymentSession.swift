@@ -720,19 +720,30 @@ final class WorkspaceDeploymentSession {
         await apply(plan: scoped)
     }
 
-    /// Replaces the copies of these artifacts this app proved it installed,
-    /// and nothing it cannot prove. The path an update takes after the library
-    /// has new content: no review, because replacing a proven copy with the
-    /// approved version is what the person asked for when they followed it.
-    /// Returns the steps it left alone: copies it cannot prove, and copies
-    /// somebody edited since they were installed. Both wait on the Apps
-    /// screen's review, where a person can decide.
+    /// The steps a direct path must leave alone: copies this app cannot prove
+    /// it installed, and copies somebody edited since. One rule, so the
+    /// install, update and arrival paths cannot disagree about it.
+    func heldBack(in plan: WorkspaceDeploymentPlan) -> [WorkspaceDeploymentItem] {
+        plan.items.filter { cannotOverwrite($0) || editedSinceInstall($0) }
+    }
+
+    /// Applies only these artifacts' steps that a direct path may run, and
+    /// returns the steps it left alone. The one call every direct path makes.
     @discardableResult
-    func replaceProvenCopies(of artifactIDs: Set<ArtifactID>) async -> [WorkspaceDeploymentItem] {
+    func applyDirect(_ artifactIDs: Set<ArtifactID>) async -> [WorkspaceDeploymentItem] {
         guard let scoped = plan(for: artifactIDs) else { return [] }
-        let leftAlone = scoped.items.filter { cannotOverwrite($0) || editedSinceInstall($0) }
+        let leftAlone = heldBack(in: scoped)
         await apply(only: artifactIDs, excluding: Set(leftAlone.map(Self.installKey)))
         return leftAlone
+    }
+
+    /// Replaces the copies of these artifacts this app proved it installed
+    /// and nobody edited since. The path an update takes after the library has
+    /// new content. Returns the steps it left alone, which wait on the Apps
+    /// screen's review.
+    @discardableResult
+    func replaceProvenCopies(of artifactIDs: Set<ArtifactID>) async -> [WorkspaceDeploymentItem] {
+        await applyDirect(artifactIDs)
     }
 
     /// Whether this step would replace a copy of ours that was edited since.

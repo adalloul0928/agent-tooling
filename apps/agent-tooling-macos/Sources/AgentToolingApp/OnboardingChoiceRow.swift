@@ -19,7 +19,7 @@ struct OnboardingChoiceRow: View {
                 .labelsHidden().toggleStyle(.checkbox)
                 .disabled(!row.isAssignable)
                 .accessibilityLabel("Assign \(row.displayName)")
-            KindTile(kind: toolingKind(row.kind), size: Size.tile)
+            KindTile(kind: ToolingKind(row.kind), size: Size.tile)
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(row.displayName).font(AgentFont.bodyMedium).lineLimit(1)
                 if row.childCount > 0 {
@@ -70,13 +70,4 @@ struct OnboardingChoiceRow: View {
         .frame(width: 320, height: min(320, CGFloat(row.includedChildren.count * 26 + 90)))
     }
 
-    private func toolingKind(_ kind: ArtifactKind) -> ToolingKind {
-        switch kind {
-        case .skill: .skill
-        case .mcpServer: .mcpServer
-        case .package, .nativePlugin: .plugin
-        case .preset: .profile
-        case .logicalProject: .library
-        }
-    }
 }

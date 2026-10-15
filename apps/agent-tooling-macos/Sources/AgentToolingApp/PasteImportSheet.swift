@@ -98,15 +98,15 @@ struct PasteImportSheet: View {
                 symbol: "checkmark.circle",
                 title: "\(savedSkillName) is in your library",
                 message:
-                    "The skill was created in the managed library. Choosing where it is used is a separate reviewed "
-                    + "step, and installing it in an app is another one on the Apps screen.")
+                    "The skill was created in the managed library. Install, on the skill, picks the apps and writes it; "
+                    + "anything that would change files you did not put there is shown first.")
         } else if let savedServerName {
             EmptyStateView(
                 symbol: "checkmark.circle",
                 title: "\(savedServerName) is in your library",
                 message:
-                    "The connection was recorded. Nothing was started, signed in to, or contacted. Choosing which "
-                    + "apps use it is a separate reviewed step, and putting it in one is another on the Apps screen.")
+                    "The connection was recorded. Nothing was started, signed in to, or contacted. Install, on the "
+                    + "connection, picks the apps and writes it.")
         } else if shape == .skillMarkdown {
             skillReview
         } else if !servers.isEmpty {
@@ -418,8 +418,7 @@ struct PasteImportSheet: View {
 
             Section("Where it goes") {
                 Text(
-                    "The skill is created in the managed library first. Choosing which apps use it is a separate "
-                        + "reviewed step, and installing it is another one on the Apps screen."
+                    "The skill goes into your library first. Install, on the skill, then picks the apps and writes it."
                 )
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)

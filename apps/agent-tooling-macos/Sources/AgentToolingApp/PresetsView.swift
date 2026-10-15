@@ -412,26 +412,17 @@ struct PresetsView: View {
         if let row = libraryModel.rows.first(where: { $0.artifactID == id }) {
             return .init(
                 name: row.displayName, detail: row.sourceLabel ?? row.observedDescription ?? "",
-                kind: toolingKind(row.kind), present: true)
+                kind: ToolingKind(row.kind), present: true)
         }
         for row in libraryModel.rows {
             if let child = row.includedChildren.first(where: { $0.artifactID == id }) {
                 return .init(
-                    name: child.displayName, detail: "In \(row.displayName)", kind: toolingKind(child.kind), present: true)
+                    name: child.displayName, detail: "In \(row.displayName)", kind: ToolingKind(child.kind), present: true)
             }
         }
         return .init(name: "Item no longer in this library", detail: "", kind: .skill, present: false)
     }
 
-    private func toolingKind(_ kind: ArtifactKind) -> ToolingKind {
-        switch kind {
-        case .skill: .skill
-        case .mcpServer: .mcpServer
-        case .nativePlugin, .package: .plugin
-        case .preset: .collection
-        case .logicalProject: .library
-        }
-    }
 
     private func destinationText(_ destinations: [PortableDestination]) -> String {
         let names = destinations.map { "\($0.surface.displayName) · \($0.scope.displayName)" }.sorted()
@@ -684,7 +675,7 @@ private struct PresetEditorSheet: View {
                             PresetMemberToggle(
                                 row: row,
                                 isMember: members.contains(row.artifactID),
-                                kind: toolingKind(row.kind)
+                                kind: ToolingKind(row.kind)
                             ) { on in
                                 if on { members.insert(row.artifactID) } else { members.remove(row.artifactID) }
                             }
@@ -744,15 +735,6 @@ private struct PresetEditorSheet: View {
         }
     }
 
-    private func toolingKind(_ kind: ArtifactKind) -> ToolingKind {
-        switch kind {
-        case .skill: .skill
-        case .mcpServer: .mcpServer
-        case .nativePlugin, .package: .plugin
-        case .preset: .collection
-        case .logicalProject: .library
-        }
-    }
 }
 
 /// One checkable library item in the preset editor's member list. Extracted so

@@ -100,7 +100,7 @@ struct ClaudePluginsOfficialCatalogProviderTests {
         #expect(
             install.arguments
                 == ["plugin", "install", "42crunch-api-security-testing@claude-plugins-official", "--scope", "user"])
-        #expect(install.removalArguments == ["plugin", "uninstall", "42crunch-api-security-testing@claude-plugins-official"])
+        #expect(install.removalArguments == ["plugin", "uninstall", "42crunch-api-security-testing@claude-plugins-official", "--scope", "user"])
 
         // A bare-string author is read into the one name shown; a git-subdir
         // object yields the source URL as the location when no homepage exists.

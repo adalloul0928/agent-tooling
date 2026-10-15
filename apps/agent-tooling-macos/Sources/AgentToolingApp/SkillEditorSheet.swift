@@ -206,7 +206,7 @@ struct SkillEditorSheet: View {
             .standardPanel()
 
             Text(
-                "Where a skill is used is a saved choice, not an installation. Putting it into an app is reviewed separately on the Apps screen."
+                "Saving changes the skill in your library. Where it is installed is chosen with Install, on the skill, which writes it."
             )
             .font(AgentFont.caption)
             .foregroundStyle(.secondary)

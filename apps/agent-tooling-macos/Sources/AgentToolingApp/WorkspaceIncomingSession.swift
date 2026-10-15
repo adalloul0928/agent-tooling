@@ -89,12 +89,10 @@ final class WorkspaceIncomingSession {
             // is already saved; only the plan and the executor run.
             switch deployment.risk(for: [arrival.artifactID]) ?? .direct {
             case .direct:
-                await deployment.apply(only: [arrival.artifactID], excluding: Set(
-                    (deployment.plan(for: [arrival.artifactID])?.items ?? [])
-                        .filter { deployment.cannotOverwrite($0) || deployment.editedSinceInstall($0) }
-                        .map(WorkspaceDeploymentSession.installKey)))
+                await deployment.applyDirect([arrival.artifactID])
                 if let message = deployment.errorMessage {
-                    errorMessage = message
+                    // Every failure is kept, not just the last one.
+                    errorMessage = [errorMessage, message].compactMap { $0 }.joined(separator: " ")
                     remaining.append(arrival)
                 } else {
                     installedAutomatically.append(arrival.displayName)
@@ -116,10 +114,7 @@ final class WorkspaceIncomingSession {
         await deployment.prepare()
         switch deployment.risk(for: [artifactID]) ?? .direct {
         case .direct:
-            await deployment.apply(only: [artifactID], excluding: Set(
-                (deployment.plan(for: [artifactID])?.items ?? [])
-                    .filter { deployment.cannotOverwrite($0) || deployment.editedSinceInstall($0) }
-                    .map(WorkspaceDeploymentSession.installKey)))
+            await deployment.applyDirect([artifactID])
             if let message = deployment.errorMessage { errorMessage = message; return }
             waiting.removeAll { $0.artifactID == artifactID }
         case .needsReview:
@@ -160,18 +155,19 @@ final class WorkspaceIncomingSession {
             byArtifact[item.artifactID, default: []].insert(client)
         }
         return byArtifact.compactMap { id, clients in
-            guard let row = rows[id] else { return nil }
+            guard let row = rows[id], let kind = Self.kind(of: row.kind) else { return nil }
             return Arrival(
-                artifactID: id, displayName: row.displayName, kind: Self.kind(of: row.kind),
+                artifactID: id, displayName: row.displayName, kind: kind,
                 clients: clients.sorted { $0.rawValue < $1.rawValue })
         }.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
 
-    private static func kind(of kind: ArtifactKind) -> ToolingItemKind {
+    private static func kind(of kind: ArtifactKind) -> ToolingItemKind? {
         switch kind {
         case .mcpServer: .mcpServer
         case .nativePlugin, .package: .plugin
-        case .skill, .preset, .logicalProject: .skill
+        case .skill: .skill
+        case .preset, .logicalProject: nil
         }
     }
 }

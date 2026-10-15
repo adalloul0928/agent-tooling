@@ -167,7 +167,7 @@ struct OnboardingWizard: View {
 
     private func foundLibraryRow(_ row: WorkspaceLibraryReadModelRow) -> some View {
         InfoRow(row.displayName, detail: row.ownershipLabel) {
-            KindTile(kind: toolingKind(row.kind), size: Size.tile)
+            KindTile(kind: ToolingKind(row.kind), size: Size.tile)
         }
     }
 
@@ -380,15 +380,6 @@ struct OnboardingWizard: View {
         workspaceNavigate(.checkup)
     }
 
-    private func toolingKind(_ kind: ArtifactKind) -> ToolingKind {
-        switch kind {
-        case .skill: .skill
-        case .mcpServer: .mcpServer
-        case .package, .nativePlugin: .plugin
-        case .preset: .profile
-        case .logicalProject: .library
-        }
-    }
 
     private func clientScope(_ client: ClientKind) -> String {
         switch client {

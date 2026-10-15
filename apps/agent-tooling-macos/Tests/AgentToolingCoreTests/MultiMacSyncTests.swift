@@ -235,6 +235,25 @@ struct MultiMacSyncTests {
         }
     }
 
+    @Test func theContentReportListsOnlyTreesTheRemoteAccepted() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let a = try await fixture.firstMac("Studio")
+        let skill = try await author(a, name: "release-check", body: "Version one")
+        let digest = try #require(try a.document.artifacts.first { $0.identity.id == skill }?.contentDigest)
+
+        _ = try await a.coordinator.sync()
+        // Listed as published, and the remote really has it.
+        #expect(await a.coordinator.lastContentReport.published == [digest])
+        #expect(try await a.transport.remoteState().contentDigests.contains(digest))
+
+        // A pass with nothing to send claims nothing.
+        let again = try await a.coordinator.sync()
+        guard case .upToDate = again else { Issue.record("expected up to date, got \(again)"); return }
+        #expect(await a.coordinator.lastContentReport.published.isEmpty)
+        #expect(await a.coordinator.lastContentReport.unpublished.isEmpty)
+    }
+
     @Test func aMacWithAWorkspaceCannotJoinAnotherAndAnEmptyRemoteCannotBeJoined() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

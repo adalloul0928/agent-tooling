@@ -9,6 +9,18 @@ import SwiftUI
 enum ToolingKind {
     case skill, plugin, mcpServer, profile, collection, library, activity, source, connection, account, settings
 
+    /// The one mapping from a library record's kind to how it is drawn.
+    /// Presets draw as collections everywhere, matching their own screen.
+    init(_ kind: ArtifactKind) {
+        self = switch kind {
+        case .skill: .skill
+        case .mcpServer: .mcpServer
+        case .package, .nativePlugin: .plugin
+        case .preset: .collection
+        case .logicalProject: .library
+        }
+    }
+
     var color: Color {
         switch self {
         case .skill: AgentTheme.skill

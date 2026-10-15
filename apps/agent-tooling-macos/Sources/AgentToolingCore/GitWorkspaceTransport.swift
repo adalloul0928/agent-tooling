@@ -63,9 +63,13 @@ public actor GitWorkspaceTransport {
     private static let outputLimit = 1 << 20
     private static let documentLimit = 32 << 20
     private static let statusLimit = 256 << 10
+    private static let maximumDeviceStatuses = 256
     private static let prefix = [
         "--no-optional-locks", "--no-pager", "-c", "core.fsmonitor=false",
         "-c", "core.hooksPath=/dev/null",
+        // Paths come back as written, so a non-ASCII or space-bearing name is
+        // compared as itself rather than as a quoted escape.
+        "-c", "core.quotePath=false",
     ]
     /// Used only when the person has no Git identity of their own; see
     /// `commitIdentityArguments`.
@@ -140,9 +144,9 @@ public actor GitWorkspaceTransport {
         let listing = try await git(["ls-tree", "--name-only", head, "--", Self.statusDirectoryName + "/"], allowing: [0, 128])
         guard listing.status == 0 else { return [] }
         var statuses: [PublishedDeviceStatus] = []
-        for line in listing.standardOutput.split(separator: "\n").prefix(256) {
-            let path = String(line)
-            guard path.hasSuffix(".json"), path.hasPrefix(Self.statusDirectoryName + "/") else { continue }
+        let paths = listing.standardOutput.split(separator: "\n").map(String.init)
+            .filter { $0.hasSuffix(".json") && $0.hasPrefix(Self.statusDirectoryName + "/") }
+        for path in paths.prefix(Self.maximumDeviceStatuses) {
             let blob = try await git(["show", "\(head):\(path)"], allowing: [0, 128])
             guard blob.status == 0, blob.standardOutput.utf8.count <= Self.statusLimit,
                   let status = try? AgentToolingCoding.decoder().decode(PublishedDeviceStatus.self, from: Data(blob.standardOutput.utf8)),
@@ -169,11 +173,8 @@ public actor GitWorkspaceTransport {
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         defer { try? FileManager.default.removeItem(at: scratch) }
         let archive = scratch.appending(path: "tree.tar")
-        let result = try await runner.run(
-            executable: "/bin/sh", arguments: ["-c", "exec /usr/bin/git --no-pager archive --format=tar -o \"$0\" \"$1\" -- \"$2\"",
-                                             archive.path, head, relative],
-            currentDirectory: checkout)
-        guard result.status == 0 else { throw GitWorkspaceTransportError.commandFailed }
+        // Through the same hardened invocation every other Git call uses.
+        try await git(["archive", "--format=tar", "-o", archive.path, head, "--", relative])
         let extracted = scratch.appending(path: "extracted", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: extracted, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let untar = try await runner.run(
@@ -281,17 +282,37 @@ extension GitWorkspaceTransport {
     /// Refuses to publish while the checkout holds anything but our document.
     /// A dedicated workspace repository should never carry other edits, and
     /// committing them on someone's behalf is not this transport's business.
+    /// With `staged`, the index is checked instead of the working tree: what
+    /// `git add` took must be ours and nothing else.
     func requireOnlyDocumentChanges(staged: Bool = false) async throws {
-        let status = try await git(["status", "--porcelain=v1", "--untracked-files=all"])
-        for line in status.standardOutput.split(separator: "\n") {
-            let path = String(line.dropFirst(3))
-            guard path == Self.documentFileName
-                || path.hasPrefix(Self.contentDirectoryName + "/")
-                || path.hasPrefix(Self.statusDirectoryName + "/") else {
-                throw GitWorkspaceTransportError.unrelatedWorkingTreeChanges
+        let output: String
+        if staged {
+            output = try await git(["diff", "--cached", "--name-only", "-z"]).standardOutput
+                .split(separator: "\0").map(String.init).joined(separator: "\n")
+        } else {
+            // Porcelain v1 with -z: each record is "XY path", NUL-terminated,
+            // and a rename carries its source as a second NUL-terminated field.
+            let records = try await git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]).standardOutput
+                .split(separator: "\0", omittingEmptySubsequences: true).map(String.init)
+            var paths: [String] = []
+            var index = 0
+            while index < records.count {
+                let record = records[index]
+                paths.append(String(record.dropFirst(3)))
+                if record.hasPrefix("R") || record.hasPrefix("C") { index += 1 }   // skip the source path
+                index += 1
             }
-            _ = staged
+            output = paths.joined(separator: "\n")
         }
+        for path in output.split(separator: "\n").map(String.init) where !path.isEmpty {
+            guard Self.isOurs(path) else { throw GitWorkspaceTransportError.unrelatedWorkingTreeChanges }
+        }
+    }
+
+    nonisolated static func isOurs(_ path: String) -> Bool {
+        path == documentFileName
+            || path.hasPrefix(contentDirectoryName + "/")
+            || path.hasPrefix(statusDirectoryName + "/")
     }
 
     /// A commit needs an author. A Mac that never set one up still gets to

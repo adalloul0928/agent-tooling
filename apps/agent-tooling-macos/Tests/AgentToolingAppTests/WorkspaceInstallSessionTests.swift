@@ -105,6 +105,54 @@ struct WorkspaceInstallSessionTests {
         #expect(String(decoding: try Data(contentsOf: folder.appending(path: "SKILL.md")), as: UTF8.self) == "# Theirs\n")
     }
 
+    @Test func aCopyEditedByHandIsHeldBackByTheOneRuleEveryDirectPathUses() async throws {
+        // Install, edit the installed copy by hand, then change the library's
+        // version. The deployment plan offers the replacement; the shared
+        // held-back rule must list the edited copy, and the direct apply must
+        // leave the file as the person left it.
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let skill = try await heldSkill(in: fixture)
+        let first = session(fixture)
+        await first.install(artifactIDs: [skill], destinations: [.init(surface: .claudeCode, scope: .user)])
+        guard case .finished = first.phase else { Issue.record("first install: \(first.phase)"); return }
+
+        let file = claudeSkillFolder(fixture, "release-readiness").appending(path: "SKILL.md")
+        try Data("# Mine now\n".utf8).write(to: file)
+
+        let tree = try CapturedPackageTree(entries: [
+            .init(relativePath: "SKILL.md", kind: .file(bytes: Data("""
+                ---
+                name: release-readiness
+                description: Check whether a release is ready to ship.
+                ---
+
+                # release-readiness
+
+                Version two.
+                """.utf8), executable: false)),
+        ])
+        let prepared = try WorkspaceSkillPreparation.personal(tree: tree)
+        await fixture.workspace.library.refresh()
+        let state = try #require(fixture.workspace.library.state)
+        let row = try #require(state.library.rows.first { $0.artifactID == skill })
+        _ = try await fixture.workspace.service.updateStandaloneSkill(
+            .init(expectedRevisionID: state.snapshot.document.revision.id, artifactID: skill,
+                  expectedContentDigest: try #require(row.contentDigest), prepared: prepared),
+            prepared: prepared)
+        await fixture.workspace.library.refresh()
+        await fixture.workspace.deployment.prepare()
+
+        let deployment = fixture.workspace.deployment
+        let plan = try #require(deployment.plan(for: [skill]))
+        #expect(plan.items.contains { if case .updateContent = $0.action { return true }; return false })
+        #expect(deployment.heldBack(in: plan).map(\.artifactID) == [skill])
+
+        let leftAlone = await deployment.applyDirect([skill])
+        #expect(leftAlone.map(\.artifactID) == [skill])
+        #expect(String(decoding: try Data(contentsOf: file), as: UTF8.self) == "# Mine now\n")
+    }
+
     @Test func undoTakesTheFilesBackOutAndWithdrawsTheAssignment() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
