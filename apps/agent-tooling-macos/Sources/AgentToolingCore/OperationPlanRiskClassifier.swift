@@ -173,8 +173,10 @@ public enum OperationPlanRiskClassifier {
                 // rules. The person chose that app; this is the install they
                 // asked for.
                 break
-            case .configureManagedConnection:
-                if context.configuredConnections.contains(key) { reconfigured += 1 }
+            case .configureManagedConnection(_, let replacesExisting):
+                // The planner saw the connection already there, or the caller
+                // knows it is configured; either way a change is not an add.
+                if replacesExisting || context.configuredConnections.contains(key) { reconfigured += 1 }
             }
         }
 

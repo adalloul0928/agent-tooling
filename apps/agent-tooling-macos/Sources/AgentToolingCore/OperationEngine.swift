@@ -390,8 +390,7 @@ public actor OperationExecutor {
                 try fileManager.createDirectory(at: trash, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
                 try Data(existing.utf8).write(to: trash.appending(path: destination.lastPathComponent), options: .atomic)
             }
-            try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(updated.utf8).write(to: destination, options: .atomic)
+            try writeConfiguration(updated, existing: existing, to: destination, planStepID: step.id)
             return (.succeeded, edit.summary + ".")
 
         case .replaceManagedLibrary:
@@ -801,6 +800,28 @@ public actor OperationExecutor {
         }
     }
 
+    /// A client configuration file, written the way every other destination
+    /// is: staged beside it, then swapped in only after the destination is
+    /// checked again to be the plain file whose text the edit was computed
+    /// from. A link or a changed file appearing between read and write is
+    /// refused rather than followed or overwritten.
+    private func writeConfiguration(_ updated: String, existing: String, to destination: URL, planStepID: UUID) throws {
+        let parent = destination.deletingLastPathComponent()
+        try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+        let staged = parent.appending(path: ".agent-tooling-config-\(UUID().uuidString)", directoryHint: .notDirectory)
+        defer { removeStagingItemIfPresent(staged) }
+        try Data(updated.utf8).write(to: staged, options: .atomic)
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: staged.path(percentEncoded: false))
+        try commitPreparedItem(staged, to: destination, planStepID: planStepID) {
+            let path = destination.path(percentEncoded: false)
+            guard self.fileManager.fileExists(atPath: path) else { return }   // new file: nothing to check
+            let values = try destination.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            guard values.isSymbolicLink != true, values.isRegularFile == true,
+                  (try? String(contentsOf: destination, encoding: .utf8)) == existing
+            else { throw OperationEngineError.unsafeDestination(path) }
+        }
+    }
+
     private func replaceManagedLibrary(at destination: URL, files: [EncryptedLibraryFile], planStepID: UUID) throws {
         let parent = destination.deletingLastPathComponent()
         try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
@@ -865,6 +886,10 @@ public actor OperationExecutor {
             .appending(path: planStepID.uuidString, directoryHint: .isDirectory)
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
             .appending(path: destination.lastPathComponent, directoryHint: .isDirectory)
+        // The receipts root must exist to be resolved against; a store that has
+        // not written a receipt yet still gets its rollback copy.
+        try fileManager.createDirectory(at: store.receiptsURL, withIntermediateDirectories: true,
+                                        attributes: [.posixPermissions: 0o700])
         try validateContainedPath(rollback.deletingLastPathComponent(), within: store.receiptsURL)
         try fileManager.createDirectory(at: rollback.deletingLastPathComponent(), withIntermediateDirectories: true)
         try fileManager.copyItem(at: destination, to: rollback)

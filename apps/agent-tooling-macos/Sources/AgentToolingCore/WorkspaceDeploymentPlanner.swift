@@ -34,7 +34,9 @@ public enum WorkspaceDeploymentAction: Hashable, Sendable {
     /// Ask the native client to install a whole package it owns.
     case installNativePackage(route: NativePackageRoute)
     /// Add or reconfigure a managed connection this device holds locally.
-    case configureManagedConnection(transport: MCPTransport)
+    /// `replacesExisting` is true when the client already has a connection
+    /// under this name and the step changes it, which a person should see.
+    case configureManagedConnection(transport: MCPTransport, replacesExisting: Bool = false)
     /// Remove a copy this app installed that is no longer requested here.
     case removeContent(installed: ContentDigest)
 }
@@ -279,7 +281,8 @@ public enum WorkspaceDeploymentPlanner {
                             "This connection is already set up here as requested.")
                     continue
                 }
-                action = .configureManagedConnection(transport: definition.connection.transport)
+                action = .configureManagedConnection(
+                    transport: definition.connection.transport, replacesExisting: current?.isPresent == true)
             }
 
             items.append(.init(

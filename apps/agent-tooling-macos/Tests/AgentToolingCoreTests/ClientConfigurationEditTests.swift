@@ -154,4 +154,35 @@ struct ClientConfigurationEditTests {
         let mismatched = ClientConfigurationEdit(file: .claudeSettings, keyPath: ["x"], value: .bool(true))
         #expect((await engine.execute(try plan(file.path(percentEncoded: false), mismatched))).results.first?.status == .failed)
     }
+
+    @Test func aConfigurationPathThatIsALinkIsRefusedAndTheTargetIsLeftAlone() async throws {
+        // The edit is computed from what the path reads as; the write must not
+        // follow a link that points the path somewhere else.
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "ClientConfigurationEditTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let home = root.appending(path: "home", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: home.appending(path: ".kiro/settings"), withIntermediateDirectories: true)
+        let elsewhere = root.appending(path: "elsewhere.json")
+        try #"{"mcpServers":{"memory":{"command":"gone.sh"}}}"#.write(to: elsewhere, atomically: true, encoding: .utf8)
+        let file = home.appending(path: ".kiro/settings/mcp.json")
+        try FileManager.default.createSymbolicLink(at: file, withDestinationURL: elsewhere)
+
+        let document = try WorkspaceDocumentCoding.seal(.init(workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+        let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
+        let store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "workspace"), workspaceID: document.workspaceID, deviceID: device.deviceID)
+        try store.initialize(document: document, device: device)
+        let engine = OperationEngine(store: store, homeURL: home)
+        let edit = ClientConfigurationEdit(file: .kiroMCP, keyPath: ["mcpServers", "memory", "disabled"], value: .bool(true))
+        let plan = OperationPlan(kind: .configureMCP, title: "t", summary: "s", steps: [
+            .init(kind: .editClientConfiguration, title: "e", detail: edit.summary,
+                  destinationPath: file.path(percentEncoded: false), contents: try edit.encoded()),
+        ])
+
+        let receipt = await engine.execute(plan)
+
+        #expect(receipt.results.first?.status == .failed)
+        #expect(try String(contentsOf: elsewhere, encoding: .utf8) == #"{"mcpServers":{"memory":{"command":"gone.sh"}}}"#)
+        #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: file.path(percentEncoded: false))) != nil)
+    }
 }

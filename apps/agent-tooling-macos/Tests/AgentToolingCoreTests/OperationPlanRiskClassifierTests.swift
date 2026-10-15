@@ -62,6 +62,12 @@ struct OperationPlanRiskClassifierTests {
             == .needsReview([.reconfiguresConnection(count: 1)]))
     }
 
+    @Test func aConnectionThePlannerSawAlreadyThereNeedsReviewWithoutAnyContext() {
+        // The planner is the one that measured the client; its word is enough.
+        let plan = plan([item(.configureManagedConnection(transport: .http, replacesExisting: true))])
+        #expect(OperationPlanRiskClassifier.classify(plan) == .needsReview([.reconfiguresConnection(count: 1)]))
+    }
+
     @Test func handingAPackageToTheAppsOwnInstallerRunsDirectly() {
         let route = NativePackageRoute(client: .codex, externalPluginID: "browser")
         let plan = plan([item(.installNativePackage(route: route))])
