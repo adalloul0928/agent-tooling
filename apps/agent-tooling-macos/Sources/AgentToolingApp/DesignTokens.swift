@@ -158,8 +158,18 @@ enum Size {
     static let pickerWidth: CGFloat = 200
     /// A short text field (a branch name, a port).
     static let fieldNarrow: CGFloat = 160
+    /// A medium field or menu picker: wider than a port, narrower than a URL.
+    static let fieldMedium: CGFloat = 360
+    /// A wide text field, a search box, or a compact confirmation popover.
+    static let fieldWide: CGFloat = 420
     /// The least height an empty state keeps so its symbol and text sit clear of the edges.
     static let emptyStateMinHeight: CGFloat = 200
+    /// The fixed height a full-page empty-state card fills, so its symbol and
+    /// text sit with room above and below rather than hugging the top.
+    static let emptyStatePaneHeight: CGFloat = 220
+    /// The height a bounded scroll area inside a sheet or popover keeps before
+    /// its own content scrolls, instead of growing the surface to fit.
+    static let sheetScrollCap: CGFloat = 200
     /// The form on the first-launch screen.
     static let firstLaunchFormWidth: CGFloat = 520
 
@@ -174,6 +184,12 @@ enum Size {
     static let iconButton: CGFloat = 28
     /// The label column of a key/value row.
     static let labelColumn: CGFloat = 132
+    /// A narrower, trailing-aligned label column for a sheet's detail rows,
+    /// where the value column wants more room than `labelColumn` leaves.
+    static let compactLabelColumn: CGFloat = 118
+    /// The trailing-aligned column a step number sits in, so a list of steps
+    /// keeps its numbers aligned down one edge.
+    static let indexBadge: CGFloat = 24
     /// A standalone symbol beside a sheet or wizard heading.
     static let symbol: CGFloat = 18
     /// The hero symbol in an empty state or a done screen.

@@ -377,7 +377,7 @@ private struct PlanStepRow: View {
             Text("\(number)")
                 .font(AgentFont.caption.monospacedDigit())
                 .foregroundStyle(.tertiary)
-                .frame(width: 24, alignment: .trailing)
+                .frame(width: Size.indexBadge, alignment: .trailing)
             VStack(alignment: .leading, spacing: Space.xs) {
                 HStack(spacing: Space.sm) {
                     Image(systemName: symbol)

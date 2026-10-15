@@ -86,7 +86,7 @@ struct PluginsView: View {
                 }.inventoryMenuStyle().fixedSize()
                 Spacer()
                 InventorySearchField(placeholder: "Search plugins", text: $query)
-                    .frame(maxWidth: 420)
+                    .frame(maxWidth: Size.fieldWide)
                     .accessibilityLabel("Search plugins")
             }
             .padding(.horizontal, WorkspaceLayout.pageInset)

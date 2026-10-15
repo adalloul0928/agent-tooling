@@ -82,7 +82,7 @@ struct SyncSettingsView: View {
                 .font(AgentFont.body).foregroundStyle(.secondary)
             LabeledContent("Repository") {
                 TextField("https://github.com/you/workspace.git", text: $remote)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 420)
+                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldWide)
             }
             HStack(spacing: Space.lg) {
                 Button("Choose folder on this Mac…") { chooseCheckout() }
@@ -112,7 +112,7 @@ struct SyncSettingsView: View {
             }
             LabeledContent("Phrase from your other Mac") {
                 TextField("Leave empty on your first Mac", text: $phrase)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 420)
+                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldWide)
             }
             Button("Connect") {
                 guard let folder else { return }

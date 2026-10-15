@@ -186,7 +186,7 @@ struct PendingRequestReviewSheet: View {
             Text(label)
                 .font(AgentFont.captionMedium)
                 .foregroundStyle(.secondary)
-                .frame(width: 118, alignment: .trailing)
+                .frame(width: Size.compactLabelColumn, alignment: .trailing)
             if monospaced {
                 Text(value)
                     .font(AgentFont.monoBody)

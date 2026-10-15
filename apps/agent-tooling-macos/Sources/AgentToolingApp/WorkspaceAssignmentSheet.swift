@@ -238,7 +238,7 @@ struct WorkspaceAssignmentSheet: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        .frame(maxWidth: 360, alignment: .leading)
+                        .frame(maxWidth: Size.fieldMedium, alignment: .leading)
                         if let selectedProjectID, !projectHasFolder(selectedProjectID) {
                             Text("Installing waits until this project has a folder on this Mac.")
                                 .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()

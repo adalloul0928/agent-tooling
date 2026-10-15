@@ -544,7 +544,7 @@ private struct ShareSettingsConfirmation: View {
                     }
                 }
             }
-            .frame(maxHeight: 200)
+            .frame(maxHeight: Size.sheetScrollCap)
             HStack {
                 Spacer()
                 Button("Cancel", action: onCancel).keyboardShortcut(.cancelAction)
@@ -552,7 +552,7 @@ private struct ShareSettingsConfirmation: View {
             }
         }
         .padding(Space.xxl)
-        .frame(width: 420)
+        .frame(width: Size.fieldWide)
     }
 }
 

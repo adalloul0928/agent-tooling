@@ -83,7 +83,7 @@ struct CheckupView: View {
                             symbol: "stethoscope", title: "No checkup yet",
                             message: "Find what is broken, duplicated, or not yet managed, then have your assistant say what to do.",
                             actionTitle: "Audit this Mac", action: { Task { await session.audit() } })
-                        .frame(height: 220)
+                        .frame(height: Size.emptyStatePaneHeight)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -290,7 +290,7 @@ struct CheckupView: View {
 
     private func progressRow(_ progress: (done: Int, total: Int)) -> some View {
         HStack(spacing: Space.lg) {
-            ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).frame(width: 160)
+            ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).frame(width: Size.fieldNarrow)
             Text("\(progress.done) of \(progress.total) done").font(AgentFont.caption).foregroundStyle(.secondary).monospacedDigit()
             Spacer()
         }
@@ -453,7 +453,7 @@ struct FixAllSheet: View {
             }
         }
         .padding(Space.xxxl)
-        .frame(width: 520)
+        .frame(width: SheetSize.small.width)
     }
 }
 

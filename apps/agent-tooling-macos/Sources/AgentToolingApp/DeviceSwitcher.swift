@@ -126,7 +126,7 @@ struct OtherMacSheet: View {
                         ContentUnavailableView(
                             "Nothing reported yet", systemImage: "laptopcomputer.slash",
                             description: Text("\(device.name) has not published its state. It will on its next sync."))
-                            .frame(maxWidth: .infinity, minHeight: 200)
+                            .frame(maxWidth: .infinity, minHeight: Size.emptyStateMinHeight)
                     }
                     TitledCard("Assigned to \(device.name)", count: "\(assigned.count)") {
                         if assigned.isEmpty {
