@@ -278,7 +278,7 @@ enum LocalTargetScan {
         let managers = ExternalSkillManagerIndex.load(homeURL: homeURL, fileManager: fileManager)
         for (id, metadata) in skillMetadata where metadata.providerPluginID == nil {
             skillMetadata[id]?.externalManager = managers.manager(
-                forSkillAt: URL(fileURLWithPath: metadata.path), fileManager: fileManager)
+                forSkillAt: URL(fileURLWithPath: metadata.path))
         }
 
         var pluginMetadata = native.pluginMetadata

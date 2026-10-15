@@ -47,7 +47,7 @@ public enum VersionedInventoryProjection {
                     skills.append(skill(child, parentLabel: row.displayName))
                 }
                 for child in row.includedChildren where child.kind == .mcpServer {
-                    servers.append(server(child, parentLabel: row.displayName))
+                    servers.append(server(child))
                 }
             case .preset, .logicalProject:
                 continue
@@ -99,7 +99,7 @@ public enum VersionedInventoryProjection {
             definitionOrigin: owns(row.ownership) ? .managed : .observed)
     }
 
-    private static func server(_ item: WorkspaceLibraryIncludedItem, parentLabel: String) -> MCPServer {
+    private static func server(_ item: WorkspaceLibraryIncludedItem) -> MCPServer {
         let connection = item.connection
         return .init(
             id: item.artifactID.rawValue.uuidString.lowercased(), name: item.displayName,

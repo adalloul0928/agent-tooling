@@ -71,7 +71,7 @@ public enum AgentInstructionInventory {
         var notes: [Note] = []
 
         func add(_ surface: TargetSurface, _ kind: Kind, _ scope: Scope, _ url: URL) {
-            guard let size = regularFileSize(url, fileManager) else { return }
+            guard let size = regularFileSize(url) else { return }
             entries.append(.init(surface: surface, kind: kind, scope: scope,
                                  path: url.standardizedFileURL.path, byteCount: size))
         }
@@ -102,7 +102,7 @@ public enum AgentInstructionInventory {
                 $0.surface == .claudeCode && $0.kind == .instructions && $0.scope != .user
                     && $0.scope != .managedPolicy
             }
-            if !hasClaude, regularFileSize(projectRoot.appending(path: "AGENTS.md"), fileManager) != nil {
+            if !hasClaude, regularFileSize(projectRoot.appending(path: "AGENTS.md")) != nil {
                 notes.append(.init(surface: .claudeCode,
                     detail: "This project has an AGENTS.md but no CLAUDE.md. Claude Code reads CLAUDE.md and will not read AGENTS.md, so none of it reaches Claude Code."))
             }
@@ -112,7 +112,7 @@ public enum AgentInstructionInventory {
         // from the project root down, every directory contributes.
         for name in ["AGENTS.override.md", "AGENTS.md"] {
             let url = homeRoot.appending(path: ".codex").appending(path: name)
-            guard let size = regularFileSize(url, fileManager), size > 0 else { continue }
+            guard let size = regularFileSize(url), size > 0 else { continue }
             entries.append(.init(surface: .codexCLI, kind: .instructions, scope: .user,
                                  path: url.standardizedFileURL.path, byteCount: size))
             break
@@ -120,7 +120,7 @@ public enum AgentInstructionInventory {
         if let projectRoot {
             for name in ["AGENTS.override.md", "AGENTS.md", "TEAM_GUIDE.md", ".agents.md"] {
                 let url = projectRoot.appending(path: name)
-                guard let size = regularFileSize(url, fileManager), size > 0 else { continue }
+                guard let size = regularFileSize(url), size > 0 else { continue }
                 entries.append(.init(surface: .codexCLI, kind: .instructions, scope: .project,
                                      path: url.standardizedFileURL.path, byteCount: size))
                 break
@@ -132,7 +132,7 @@ public enum AgentInstructionInventory {
 
     /// Only a regular file, and only after following any link. A directory or a
     /// dangling link where a client expects a file is not an instruction file.
-    private static func regularFileSize(_ url: URL, _ fileManager: FileManager) -> Int? {
+    private static func regularFileSize(_ url: URL) -> Int? {
         let resolved = url.resolvingSymlinksInPath().standardizedFileURL
         guard let values = try? resolved.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
               values.isRegularFile == true else { return nil }

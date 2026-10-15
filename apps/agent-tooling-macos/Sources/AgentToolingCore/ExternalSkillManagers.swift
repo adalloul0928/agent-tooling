@@ -58,7 +58,7 @@ public struct ExternalSkillManagerIndex: Sendable, Equatable {
     }
 
     /// Who placed the skill folder at `folder`, or nil when nothing says.
-    public func manager(forSkillAt folder: URL, fileManager: FileManager = .default) -> ObservedExternalManager? {
+    public func manager(forSkillAt folder: URL) -> ObservedExternalManager? {
         if let placed = placements[Self.standardized(folder)] { return placed }
         // The marker inside the folder names its owner on its first line.
         let marker = folder.appending(path: ".aim-managed")
