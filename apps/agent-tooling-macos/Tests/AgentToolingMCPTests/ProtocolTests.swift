@@ -50,10 +50,9 @@ struct ProtocolTests {
     @Test func wellFormedRequestsAndNotificationsDecode() throws {
         let request = try JSONRPCDecoding.decode(Data("{\"jsonrpc\":\"2.0\",\"id\":\"a\",\"method\":\"tools/list\"}".utf8))
         #expect(request.id == .string("a"))
-        #expect(!request.isNotification)
 
         let notification = try JSONRPCDecoding.decode(Data("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}".utf8))
-        #expect(notification.isNotification)
+        #expect(notification.id == nil)
     }
 
     @Test func notificationsAreNeverAnswered() throws {

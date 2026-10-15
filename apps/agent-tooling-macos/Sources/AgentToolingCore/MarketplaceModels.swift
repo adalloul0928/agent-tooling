@@ -354,13 +354,6 @@ public enum SecretFieldMasking {
         return tokens(in: name).contains { secretTokens.contains($0) }
     }
 
-    /// A masked rendering for anything that could be a value. Values are never
-    /// stored, so this exists to keep a stray one out of a display.
-    public static func maskedValue(_ value: String?) -> String {
-        _ = value
-        return placeholder
-    }
-
     private static func tokens(in name: String) -> [String] {
         var tokens: [String] = []
         var current = ""

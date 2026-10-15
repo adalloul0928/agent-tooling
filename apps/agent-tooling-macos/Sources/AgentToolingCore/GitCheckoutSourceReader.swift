@@ -12,8 +12,6 @@ public struct GitCheckoutObservation: Hashable, Sendable {
     public let remotes: [GitRemoteSourceObservation]
     public let upstream: GitCheckoutUpstream?
     public let diagnostics: [GitCheckoutSourceDiagnostic]
-
-    public var isLinkedWorktree: Bool { gitDirectory != commonGitDirectory }
     // No clean/dirty or publication assertion is made by these metadata-only reads.
 }
 
