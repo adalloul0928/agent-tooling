@@ -1,4 +1,5 @@
 import Foundation
+import AgentToolingTestSupport
 import Testing
 
 @testable import AgentToolingCore
@@ -280,23 +281,9 @@ struct CodexAccountReaderTests {
 
 // MARK: - The Claude reader
 
-/// Answers by argument list, and remembers what it was asked.
-final class ArgumentScriptedRunner: CommandRunning, @unchecked Sendable {
-    private let lock = NSLock()
-    private let outputs: [[String]: CommandOutput]
-    private var asked: [[String]] = []
-
-    init(_ outputs: [[String]: String]) {
-        self.outputs = outputs.mapValues { CommandOutput(status: 0, standardOutput: $0, standardError: "") }
-    }
-
-    var calls: [[String]] { lock.withLock { asked } }
-
-    func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput {
-        lock.withLock { asked.append(arguments) }
-        return outputs[arguments] ?? CommandOutput(status: 1, standardOutput: "", standardError: "not scripted")
-    }
-}
+/// The scripted runner for these suites is the shared `ScriptedCommandRunner`
+/// (answers by exact argument list, records calls, unscripted calls return
+/// status 1).
 
 @Suite("Accounts · reading the claude.ai account through Claude Code")
 struct ClaudeAccountReaderTests {
@@ -342,7 +329,7 @@ struct ClaudeAccountReaderTests {
         claude.ai Drive: https://drive.example.com/mcp - ✔ Connected
         """
 
-    func reader(_ home: Home, runner: ArgumentScriptedRunner, located: Bool = true) -> ClaudeAccountReader {
+    func reader(_ home: Home, runner: ScriptedCommandRunner, located: Bool = true) -> ClaudeAccountReader {
         ClaudeAccountReader(
             runner: runner, homeURL: home.home,
             locate: { _, _ in located ? URL(filePath: "/opt/homebrew/bin/claude") : nil },
@@ -358,7 +345,7 @@ struct ClaudeAccountReaderTests {
         try home.write(".claude/skills/synced/pdf/SKILL.md", "---\nname: pdf\ndescription: Fill PDF forms.\n---\n")
         try home.write(".claude/skills/review/SKILL.md", "---\nname: review\ndescription: Local, not the account's.\n---\n")
         try Data(#"{"deniedMcpServers":[{"serverName":"claude.ai Slack"}]}"#.utf8).write(to: home.managed)
-        let runner = ArgumentScriptedRunner([
+        let runner = ScriptedCommandRunner(standardOutput: [
             ["--version"]: "2.1.300 (Claude Code)",
             ClaudeAccountCommands.authStatus: home.authStatus(),
             ClaudeAccountCommands.pluginList: Self.pluginList,
@@ -397,21 +384,21 @@ struct ClaudeAccountReaderTests {
         let home = try Home()
         defer { home.remove() }
         try home.write(".claude/settings.json", #"{"syncClaudeAiSkills":false}"#)
-        let runner = ArgumentScriptedRunner([
+        let runner = ScriptedCommandRunner(standardOutput: [
             ["--version"]: "2.1.300", ClaudeAccountCommands.authStatus: home.authStatus(),
         ])
         let observation = await reader(home, runner: runner).read(contents: false)
         #expect(!observation.contentsRead)
         #expect(observation.items.isEmpty)
         #expect(observation.switches[.init(.skillSync)] == .off)
-        #expect(!runner.calls.contains(["mcp", "list"]))
-        #expect(!runner.calls.contains(ClaudeAccountCommands.pluginList))
+        #expect(!(await runner.calls).contains(["mcp", "list"]))
+        #expect(!(await runner.calls).contains(ClaudeAccountCommands.pluginList))
     }
 
     @Test func aSignInThatIsNotTheSubscriptionIsSaid() async throws {
         let home = try Home()
         defer { home.remove() }
-        let runner = ArgumentScriptedRunner([
+        let runner = ScriptedCommandRunner(standardOutput: [
             ClaudeAccountCommands.authStatus: #"{"loggedIn":true,"authMethod":"third_party","apiProvider":"bedrock"}"#,
             ClaudeAccountCommands.pluginList: "[]", ["mcp", "list"]: "",
         ])
@@ -424,7 +411,7 @@ struct ClaudeAccountReaderTests {
     @Test func aConfigurationFolderElsewhereBlocksWrites() async throws {
         let home = try Home()
         defer { home.remove() }
-        let runner = ArgumentScriptedRunner([ClaudeAccountCommands.authStatus: home.authStatus(configDirectory: "/Volumes/work/.claude")])
+        let runner = ScriptedCommandRunner(standardOutput: [ClaudeAccountCommands.authStatus: home.authStatus(configDirectory: "/Volumes/work/.claude")])
         let observation = await reader(home, runner: runner).read(contents: false)
         #expect(observation.writeBlocker?.contains("/Volumes/work/.claude") == true)
     }
@@ -432,7 +419,7 @@ struct ClaudeAccountReaderTests {
     @Test func aMissingClaudeCodeIsReportedRatherThanRead() async throws {
         let home = try Home()
         defer { home.remove() }
-        let observation = await reader(home, runner: ArgumentScriptedRunner([:]), located: false).read(contents: true)
+        let observation = await reader(home, runner: ScriptedCommandRunner(standardOutput: [:]), located: false).read(contents: true)
         #expect(observation.unavailableReason?.contains("not found") == true)
     }
 }

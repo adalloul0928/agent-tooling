@@ -35,15 +35,16 @@ public actor ScriptedCommandRunner: CommandRunning {
     }
 }
 
-/// A runner for a client that is not installed: every command is refused.
+/// A runner for a client whose CLI is absent: every command answers as the
+/// shell does for a missing executable (status 127, "command not found").
 ///
-/// Matches the "refuse everything" doubles that answer status 1 for any
-/// command. Runners that must report a different status (for example `command
-/// not found` as 127) stay bespoke in their own suite.
+/// Matches the "refuse everything" doubles that stand in for an uninstalled
+/// tool. Runners that must report a different status (for example a signed-out
+/// `--version` returning 3) stay bespoke in their own suite.
 public struct RefusingCommandRunner: CommandRunning {
     public init() {}
 
     public func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput {
-        CommandOutput(status: 1, standardOutput: "", standardError: "refused")
+        CommandOutput(status: 127, standardOutput: "", standardError: "command not found: \(executable)")
     }
 }

@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -68,7 +69,7 @@ struct MarketplaceCatalogsTests {
     /// catalog now answers only for Codex — the Claude row is folded into
     /// `ClaudeMarketplaceCatalog` — so Codex is what it is asked about here.
     @Test func aClientCatalogThatCouldNotBeReadKeepsWhatWasKeptBefore() async throws {
-        let catalog = NativeClientCatalog(runner: RefusingRunner(), clients: { [.codex] })
+        let catalog = NativeClientCatalog(runner: RefusingCommandRunner(), clients: { [.codex] })
 
         let page = try await catalog.search(MarketplaceQuery(limit: 10))
 
@@ -101,7 +102,7 @@ struct MarketplaceCatalogsTests {
     /// rather than the next launch.
     @Test func whichClientsAreAskedIsReadAtRefreshTimeAndNotCaptured() async throws {
         let managed = ManagedClients()
-        let catalog = NativeClientCatalog(runner: RefusingRunner(), clients: { managed.value })
+        let catalog = NativeClientCatalog(runner: RefusingCommandRunner(), clients: { managed.value })
 
         _ = try await catalog.search(MarketplaceQuery(limit: 10))
         #expect(await catalog.lastReport().incompletePackagePrefixes == ["codex:"])
@@ -152,7 +153,7 @@ struct MarketplaceCatalogsTests {
         let https = StubOfficialCatalog(
             packages: [Self.officialListing(name: "review-buddy"), Self.officialListing(name: "test-helper")])
         let catalog = ClaudeMarketplaceCatalog(
-            httpsCatalog: https, runner: RefusingRunner(), claudeManaged: { true })
+            httpsCatalog: https, runner: RefusingCommandRunner(), claudeManaged: { true })
 
         let page = try await catalog.search(MarketplaceQuery(limit: 100))
 
@@ -171,7 +172,7 @@ struct MarketplaceCatalogsTests {
     @Test func theClaudeRowKeepsTheFailureWhenBothTheCLIAndTheCatalogFail() async throws {
         let https = StubOfficialCatalog(packages: [], fails: true)
         let catalog = ClaudeMarketplaceCatalog(
-            httpsCatalog: https, runner: RefusingRunner(), claudeManaged: { true })
+            httpsCatalog: https, runner: RefusingCommandRunner(), claudeManaged: { true })
 
         let page = try await catalog.search(MarketplaceQuery(limit: 100))
 
@@ -186,7 +187,7 @@ struct MarketplaceCatalogsTests {
     @Test func theClaudeRowIsNotReadWhenTheWorkspaceDoesNotManageClaude() async throws {
         let https = StubOfficialCatalog(packages: [Self.officialListing(name: "review-buddy")])
         let catalog = ClaudeMarketplaceCatalog(
-            httpsCatalog: https, runner: RefusingRunner(), claudeManaged: { false })
+            httpsCatalog: https, runner: RefusingCommandRunner(), claudeManaged: { false })
 
         let page = try await catalog.search(MarketplaceQuery(limit: 100))
 
@@ -304,12 +305,7 @@ private final class ManagedClients: @unchecked Sendable {
     }
 }
 
-/// A command runner that answers as an absent CLI does, without launching one.
-private struct RefusingRunner: CommandRunning {
-    func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput {
-        CommandOutput(status: 127, standardOutput: "", standardError: "command not found: \(executable)")
-    }
-}
+/// An absent CLI is modeled by the shared `RefusingCommandRunner`.
 
 /// Claude Code with no marketplace added: the catalog command succeeds and
 /// lists nothing at all.

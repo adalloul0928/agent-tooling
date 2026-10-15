@@ -1,4 +1,5 @@
 import AgentToolingCore
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -85,9 +86,6 @@ struct MarketplaceProviderRegistryTests {
     }
 }
 
-/// A client CLI that is not installed. Nothing here launches a process.
-private struct RefusingCommandRunner: CommandRunning {
-    func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput {
-        CommandOutput(status: 127, standardOutput: "", standardError: "command not found: \(executable)")
-    }
-}
+/// A client CLI that is not installed is modeled by the shared
+/// `RefusingCommandRunner` in the test-support target.
+
