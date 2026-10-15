@@ -1,7 +1,4 @@
 import Foundation
-import SQLite3
-
-private let insightsSQLiteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 public struct LocalConversationScanner: Sendable {
     private let maximumClaudeTranscriptBytes: Int
@@ -672,90 +669,6 @@ struct ConversationScanArtifact: Sendable {
     }
 }
 
-/// Builds one conversation's digest as its items stream past: the first few
-/// things the person asked, the tools and skills that answered, and where the
-/// work happened. Every string is redacted the way the token pass redacts it,
-/// and every list is capped, so the digest is short enough to send in bulk and
-/// carries no secret or home path.
-struct ConversationDigestBuilder {
-    static let maximumUserMessages = 4
-    static let maximumUserMessageCharacters = 400
-    static let maximumTools = 12
-
-    let conversationID: String
-    let client: ClientKind
-    var startedAt: Date?
-    var endedAt: Date?
-    var title: String?
-    var workingDirectory: String?
-    private var userMessages: [String] = []
-    private var userMessageCount = 0
-    private var tools: [String] = []
-    private var skills: Set<String> = []
-
-    init(conversationID: String, client: ClientKind) {
-        self.conversationID = conversationID
-        self.client = client
-    }
-
-    mutating func noteUserMessage(_ text: String, at date: Date) {
-        note(date)
-        userMessageCount += 1
-        // The first message says what the person came for; a couple of later
-        // ones say where it went. The middle is left out.
-        let redacted = String(sanitizeConversationText(text).prefix(Self.maximumUserMessageCharacters))
-        guard !redacted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        if userMessages.count < Self.maximumUserMessages {
-            userMessages.append(redacted)
-        } else {
-            userMessages[Self.maximumUserMessages - 1] = redacted
-        }
-    }
-
-    mutating func noteTool(_ name: String, at date: Date) {
-        note(date)
-        let trimmed = String(name.prefix(64))
-        guard !trimmed.isEmpty, !tools.contains(trimmed), tools.count < Self.maximumTools else { return }
-        tools.append(trimmed)
-    }
-
-    mutating func noteSkill(_ id: String, at date: Date) {
-        note(date)
-        skills.insert(String(id.prefix(128)))
-    }
-
-    private mutating func note(_ date: Date) {
-        startedAt = startedAt.map { min($0, date) } ?? date
-        endedAt = endedAt.map { max($0, date) } ?? date
-    }
-
-    /// Nil when the conversation had nothing a person said in it.
-    /// A conversation with nothing to learn from: the person said only a few
-    /// words in total ("ping", "whoami", "hi") and asked for no tool or skill.
-    /// Sending it would spend the budget on noise and tempt the reader to
-    /// count it.
-    var isTrivial: Bool {
-        userMessages.reduce(0) { $0 + $1.count } < 24 && tools.isEmpty && skills.isEmpty
-    }
-
-    var digest: ConversationDigest? {
-        guard !userMessages.isEmpty, !isTrivial, let startedAt, let endedAt else { return nil }
-        return ConversationDigest(
-            conversationID: conversationID, client: client, startedAt: startedAt, endedAt: endedAt,
-            title: title.map { String(sanitizeConversationText($0).prefix(160)) },
-            workingDirectory: workingDirectory.map(Self.projectName),
-            userMessages: userMessages, userMessageCount: userMessageCount,
-            toolsUsed: tools, skillsUsed: skills.sorted())
-    }
-
-    /// The last path component only: what the project was called, not where
-    /// on the disk it lives.
-    static func projectName(_ path: String) -> String {
-        let trimmed = path.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        return String((trimmed.split(separator: "/").last.map(String.init) ?? trimmed).prefix(80))
-    }
-}
-
 struct UsageEvidence: Hashable, Sendable {
     enum Precision: Hashable, Sendable {
         case exact
@@ -778,49 +691,9 @@ struct TokenizedConversationMessage: Sendable {
     var tokens: Set<String>
 }
 
-private struct SkillNameLookup {
-    private var aliases: [String: Set<String>]
-    private var skills: [Skill]
-
-    init(skills: [Skill]) {
-        self.skills = skills
-        var aliases: [String: Set<String>] = [:]
-        for skill in skills {
-            for candidate in [skill.id, skill.name, skill.displayName] {
-                let normalized = normalizeSkillReference(candidate)
-                guard !normalized.isEmpty else { continue }
-                aliases[normalized, default: []].insert(skill.id)
-                if let suffix = normalized.split(separator: ":").last {
-                    aliases[String(suffix), default: []].insert(skill.id)
-                }
-            }
-        }
-        self.aliases = aliases
-    }
-
-    func resolve(_ value: String) -> String? {
-        let normalized = normalizeSkillReference(value)
-        if let exact = uniqueValue(in: aliases[normalized]) { return exact }
-        if let suffix = normalized.split(separator: ":").last,
-            let match = uniqueValue(in: aliases[String(suffix)])
-        {
-            return match
-        }
-        let pathMatches = Set(
-            skills.compactMap { skill -> String? in
-                let name = normalizeSkillReference(skill.name)
-                return !name.isEmpty && normalized.contains("/\(name)/skill.md") ? skill.id : nil
-            })
-        return uniqueValue(in: pathMatches)
-    }
-
-    private func uniqueValue(in values: Set<String>?) -> String? {
-        guard let values, values.count == 1 else { return nil }
-        return values.first
-    }
-}
-
-private func normalizeSkillReference(_ value: String) -> String {
+/// Not `private`: `SkillNameLookup` moved to its own file and normalises
+/// references through this helper.
+func normalizeSkillReference(_ value: String) -> String {
     value
         .trimmingCharacters(in: .whitespacesAndNewlines)
         .trimmingCharacters(in: CharacterSet(charactersIn: "$`\"'"))
@@ -1034,7 +907,9 @@ private func parseJSONObject(_ text: String) -> Any? {
     return try? JSONSerialization.jsonObject(with: Data(text.utf8), options: [.fragmentsAllowed])
 }
 
-private func sanitizeConversationText(_ text: String) -> String {
+/// Not `private`: `ConversationDigestBuilder` moved to its own file and
+/// redacts its strings through this helper.
+func sanitizeConversationText(_ text: String) -> String {
     var result = text
     let containerNames = [
         "app-context", "in-app-browser-context", "environment_context", "system", "developer", "recommended_plugins",
@@ -1130,7 +1005,10 @@ private func recentJSONLFiles(under root: URL, containedBy homeURL: URL, limit: 
     }.prefix(limit).map(\.0)
 }
 
-private func isContained(_ child: URL, by root: URL) -> Bool {
+/// Shared by the scanner and the read-only SQLite reader to keep every path
+/// inside the home root. Not `private`: `ReadOnlyInsightsDatabase` lives in its
+/// own file and calls this.
+func isContained(_ child: URL, by root: URL) -> Bool {
     let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     let childPath = child.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
@@ -1143,175 +1021,4 @@ private func skippedItemDetail(_ count: Int, suffix: String) -> String {
 private func maxDate(_ lhs: Date?, _ rhs: Date) -> Date {
     guard let lhs else { return rhs }
     return max(lhs, rhs)
-}
-
-private struct DatabaseConversation {
-    var id: String
-    var timestamp: Double
-}
-
-private struct DatabaseRow {
-    var kind: String
-    var payload: String
-    var timestamp: Double
-    var turnID: String?
-
-    func date(milliseconds: Bool) -> Date {
-        Date(timeIntervalSince1970: milliseconds ? timestamp / 1_000 : timestamp)
-    }
-}
-
-private final class ReadOnlyInsightsDatabase {
-    enum Error: Swift.Error {
-        case missing
-        case unsafePath
-        case open
-        case query
-    }
-
-    private var handle: OpaquePointer?
-
-    init(url: URL, containedBy homeURL: URL) throws {
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: url.path(percentEncoded: false)) else { throw Error.missing }
-        let directValues = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-        let resolvedHome = homeURL.resolvingSymlinksInPath().standardizedFileURL
-        let resolvedURL = url.resolvingSymlinksInPath().standardizedFileURL
-        guard directValues.isRegularFile == true,
-            directValues.isSymbolicLink != true,
-            directValues.fileSize.map({ $0 >= 0 && $0 <= 8 * 1_024 * 1_024 * 1_024 }) == true,
-            isContained(resolvedURL, by: resolvedHome)
-        else { throw Error.unsafePath }
-
-        var database: OpaquePointer?
-        guard
-            sqlite3_open_v2(
-                resolvedURL.path(percentEncoded: false),
-                &database,
-                SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX,
-                nil
-            ) == SQLITE_OK, let database
-        else {
-            if database != nil { sqlite3_close(database) }
-            throw Error.open
-        }
-        handle = database
-        guard sqlite3_busy_timeout(database, 1_000) == SQLITE_OK,
-            sqlite3_exec(database, "PRAGMA query_only = ON", nil, nil, nil) == SQLITE_OK
-        else {
-            sqlite3_close(database)
-            handle = nil
-            throw Error.open
-        }
-    }
-
-    deinit {
-        if let handle { sqlite3_close(handle) }
-    }
-
-    func queryConversationIDs(sql: String, cutoff: Double, limit: Int) throws -> [DatabaseConversation] {
-        guard let handle else { throw Error.open }
-        var statement: OpaquePointer?
-        defer { sqlite3_finalize(statement) }
-        guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK,
-            sqlite3_bind_double(statement, 1, cutoff) == SQLITE_OK,
-            sqlite3_bind_int64(statement, 2, Int64(limit)) == SQLITE_OK
-        else { throw Error.query }
-        var result: [DatabaseConversation] = []
-        while sqlite3_step(statement) == SQLITE_ROW {
-            guard let id = boundedText(statement, column: 0, maximumBytes: 8 * 1_024) else { continue }
-            result.append(.init(id: id, timestamp: sqlite3_column_double(statement, 1)))
-        }
-        guard sqlite3_errcode(handle) == SQLITE_OK || sqlite3_errcode(handle) == SQLITE_DONE else { throw Error.query }
-        return result
-    }
-
-    func queryRows(
-        sql: String,
-        conversationID: String,
-        cutoff: Double,
-        limit: Int,
-        maximumTextBytes: Int
-    ) throws -> [DatabaseRow?] {
-        try queryRows(
-            sql: sql,
-            bindings: [.text(conversationID), .double(cutoff), .integer(limit)],
-            maximumTextBytes: maximumTextBytes
-        )
-    }
-
-    func queryRows(
-        sql: String,
-        repeatedConversationID: String,
-        repeatedCutoff: Double,
-        limit: Int,
-        maximumTextBytes: Int
-    ) throws -> [DatabaseRow?] {
-        try queryRows(
-            sql: sql,
-            bindings: [
-                .text(repeatedConversationID), .double(repeatedCutoff),
-                .text(repeatedConversationID), .double(repeatedCutoff), .integer(limit),
-            ],
-            maximumTextBytes: maximumTextBytes
-        )
-    }
-
-    private enum Binding {
-        case text(String)
-        case double(Double)
-        case integer(Int)
-    }
-
-    private func queryRows(sql: String, bindings: [Binding], maximumTextBytes: Int) throws -> [DatabaseRow?] {
-        guard let handle else { throw Error.open }
-        var statement: OpaquePointer?
-        defer { sqlite3_finalize(statement) }
-        guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else { throw Error.query }
-        for (offset, binding) in bindings.enumerated() {
-            let index = Int32(offset + 1)
-            let result: Int32
-            switch binding {
-            case .text(let value):
-                result = sqlite3_bind_text(statement, index, value, -1, insightsSQLiteTransient)
-            case .double(let value):
-                result = sqlite3_bind_double(statement, index, value)
-            case .integer(let value):
-                result = sqlite3_bind_int64(statement, index, Int64(value))
-            }
-            guard result == SQLITE_OK else { throw Error.query }
-        }
-
-        var rows: [DatabaseRow?] = []
-        while sqlite3_step(statement) == SQLITE_ROW {
-            guard let kind = boundedText(statement, column: 0, maximumBytes: 256),
-                let payload = boundedText(statement, column: 1, maximumBytes: maximumTextBytes)
-            else {
-                rows.append(nil)
-                continue
-            }
-            let turnID =
-                sqlite3_column_count(statement) > 3
-                ? boundedText(statement, column: 3, maximumBytes: 8 * 1_024)
-                : nil
-            rows.append(
-                DatabaseRow(
-                    kind: kind,
-                    payload: payload,
-                    timestamp: sqlite3_column_double(statement, 2),
-                    turnID: turnID
-                )
-            )
-        }
-        guard sqlite3_errcode(handle) == SQLITE_OK || sqlite3_errcode(handle) == SQLITE_DONE else { throw Error.query }
-        return rows
-    }
-
-    private func boundedText(_ statement: OpaquePointer?, column: Int32, maximumBytes: Int) -> String? {
-        let byteCount = Int(sqlite3_column_bytes(statement, column))
-        guard byteCount >= 0, byteCount <= maximumBytes,
-            let pointer = sqlite3_column_text(statement, column)
-        else { return nil }
-        return String(bytes: UnsafeBufferPointer(start: pointer, count: byteCount), encoding: .utf8)
-    }
 }
