@@ -15,16 +15,19 @@ public enum ConnectionHealthReport {
     public static func parse(client: ClientKind, text: String) -> [ConnectionHealthEntry] {
         switch client {
         case .claude: parseClaude(text)
-        case .codex: parseCodexText(text)
-        case .kiro: parseKiro(text)
+        case .codex: parseNameFirstTable(text, client: .codex, unknownText: codexUnknownText)
+        case .kiro: parseNameFirstTable(text, client: .kiro, unknownText: kiroUnknownText)
         case .gemini: []
         }
     }
 
+    private static let codexUnknownText = "Codex does not report connection health in its listing."
+    private static let kiroUnknownText = "Kiro CLI lists servers without a connection health check."
+
     /// Parses Codex's `mcp list --json` when it answered JSON, falling back to
     /// the text table when it did not. Codex reports no health in either shape,
     /// so every server is `.unknown` here; a status only arrives from `mcp get`.
-    public static func parseCodex(client: ClientKind = .codex, jsonOrText text: String) -> [ConnectionHealthEntry] {
+    public static func parseCodex(jsonOrText text: String) -> [ConnectionHealthEntry] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("{") || trimmed.hasPrefix("["),
             let data = trimmed.data(using: .utf8),
@@ -32,7 +35,7 @@ public enum ConnectionHealthReport {
         {
             return entries
         }
-        return parseCodexText(text)
+        return parseNameFirstTable(text, client: .codex, unknownText: codexUnknownText)
     }
 
     // MARK: - Claude
@@ -78,7 +81,7 @@ public enum ConnectionHealthReport {
         let statusText = String(remainder[separator.upperBound...]).trimmingCharacters(in: .whitespaces)
         let status = claudeStatus(from: statusText)
         let source = claudeSource(name: name, summary: summary, statusText: statusText)
-        let displayName = displayName(from: name, source: source)
+        let displayName = displayName(from: name)
         return ConnectionHealthEntry(
             client: .claude,
             name: name,
@@ -185,9 +188,14 @@ public enum ConnectionHealthReport {
             rawLine: name)
     }
 
-    /// Reads Codex's plain-text table. Each server line begins with the server
-    /// name; a header row and separators are skipped. No health is inferred.
-    private static func parseCodexText(_ text: String) -> [ConnectionHealthEntry] {
+    /// Reads a name-first table that carries no health, which is how both Codex
+    /// and Kiro CLI list their servers: the first field on a line is the server
+    /// name and the rest is the summary, with a header row and any rule of
+    /// dashes skipped. Every entry is `.unknown` carrying `unknownText`, since a
+    /// status only arrives later from a per-server query.
+    private static func parseNameFirstTable(
+        _ text: String, client: ClientKind, unknownText: String
+    ) -> [ConnectionHealthEntry] {
         text
             .split(whereSeparator: \.isNewline)
             .compactMap { rawLine in
@@ -201,38 +209,11 @@ public enum ConnectionHealthReport {
                 guard let name = fields.first, !name.hasPrefix("-") else { return nil }
                 let summary = fields.dropFirst().joined(separator: " ")
                 return ConnectionHealthEntry(
-                    client: .codex,
+                    client: client,
                     name: name,
                     displayName: name,
                     source: .unknown,
-                    status: .unknown(rawText: "Codex does not report connection health in its listing."),
-                    summary: SensitiveValueRedactor.redact(summary),
-                    rawLine: String(rawLine))
-            }
-    }
-
-    // MARK: - Kiro
-
-    /// Kiro CLI lists servers without any health check, so every entry is
-    /// `.unknown`. The name is the first field on a line; a header is skipped.
-    private static func parseKiro(_ text: String) -> [ConnectionHealthEntry] {
-        text
-            .split(whereSeparator: \.isNewline)
-            .compactMap { rawLine in
-                let line = String(rawLine).trimmingCharacters(in: .whitespaces)
-                guard !line.isEmpty else { return nil }
-                let lowered = line.lowercased()
-                if lowered.hasPrefix("name") && lowered.contains("command") { return nil }
-                if line.allSatisfy({ $0 == "-" || $0 == " " || $0 == "|" }) { return nil }
-                let fields = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
-                guard let name = fields.first, !name.hasPrefix("-") else { return nil }
-                let summary = fields.dropFirst().joined(separator: " ")
-                return ConnectionHealthEntry(
-                    client: .kiro,
-                    name: name,
-                    displayName: name,
-                    source: .unknown,
-                    status: .unknown(rawText: "Kiro CLI lists servers without a connection health check."),
+                    status: .unknown(rawText: unknownText),
                     summary: SensitiveValueRedactor.redact(summary),
                     rawLine: String(rawLine))
             }
@@ -242,7 +223,7 @@ public enum ConnectionHealthReport {
 
     /// Strips a `plugin:` prefix down to the server's own name for display,
     /// leaving anything else as it was printed.
-    private static func displayName(from name: String, source: ConnectionHealthSource) -> String {
+    private static func displayName(from name: String) -> String {
         if isClaudeAIConnectorName(name) { return String(name.dropFirst(claudeAIConnectorPrefix.count)) }
         guard name.hasPrefix("plugin:") else { return name }
         let parts = name.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
