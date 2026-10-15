@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -162,10 +163,7 @@ struct AgentInstructionInventoryTests {
         }
 
         func write(_ relativePath: String, in base: URL, _ contents: String) throws {
-            let url = base.appending(path: relativePath)
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                    withIntermediateDirectories: true)
-            try Data(contents.utf8).write(to: url)
+            try AgentToolingTestSupport.write(base.appending(path: relativePath), contents)
         }
 
         func scan() -> AgentInstructionInventory.Result {

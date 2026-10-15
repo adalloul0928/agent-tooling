@@ -1,4 +1,5 @@
 import Foundation
+import AgentToolingTestSupport
 import Testing
 
 @testable import AgentToolingCore
@@ -378,8 +379,9 @@ struct AccountSurfaceParsingTests {
         try AgentToolingCoding.decoder().decode(JSONValue.self, from: Data(text.utf8))
     }
 
+    /// A thin forwarder to the shared write helper, kept so other suites can
+    /// still call `AccountSurfaceParsingTests.write`.
     static func write(_ url: URL, _ text: String) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data(text.utf8).write(to: url)
+        try AgentToolingTestSupport.write(url, text)
     }
 }

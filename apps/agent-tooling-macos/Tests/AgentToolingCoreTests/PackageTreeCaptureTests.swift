@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Darwin
 import Foundation
 import Testing
@@ -265,8 +266,7 @@ struct PackageTreeCaptureTests {
     }
 
     private func write(_ value: String, to url: URL) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data(value.utf8).write(to: url)
+        try AgentToolingTestSupport.write(url, value)
     }
 
     private func file(_ tree: CapturedPackageTree, _ path: String) -> Data? {
