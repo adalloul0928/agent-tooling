@@ -167,7 +167,6 @@ struct SettingsGeneralView: View {
     /// kind the choice between installing a found update at once and leaving
     /// it on Home with an Update button.
     private var updatesCard: some View {
-        let policy = workspace.device.updatePolicy
         let updates = workspace.updates
         return TitledCard("Updates") {
             VStack(alignment: .leading, spacing: 0) {

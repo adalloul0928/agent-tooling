@@ -221,7 +221,8 @@ final class WorkspaceProjectDiscoverySession {
     }
 
     private func setScanRoots(_ roots: [String]) async {
-        await write {
+        // Failure is reported through errorMessage; the screen re-reads either way.
+        _ = await write {
             try await self.device.setProjectScanRoots(roots)
             return true
         }
