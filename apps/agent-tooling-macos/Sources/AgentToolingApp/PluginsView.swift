@@ -44,7 +44,7 @@ struct PluginsView: View {
                 Group {
                     if showingDetails, !selection.isEmpty {
                         HSplitView {
-                            collectionPane(rows: listed, inventory: inventory, updates: updates)
+                            collectionPane(rows: listed, updates: updates)
                                 .frame(minWidth: 340, idealWidth: proxy.size.width * 0.55)
                             VStack(spacing: 0) {
                                 InspectorHeader(title: "Plugin details") { showingDetails = false }
@@ -53,7 +53,7 @@ struct PluginsView: View {
                             .frame(minWidth: 400, idealWidth: proxy.size.width * 0.45)
                         }
                     } else {
-                        collectionPane(rows: listed, inventory: inventory, updates: updates)
+                        collectionPane(rows: listed, updates: updates)
                     }
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
@@ -75,7 +75,7 @@ struct PluginsView: View {
     // MARK: Collection
 
     private func collectionPane(
-        rows: [WorkspaceLibraryReadModelRow], inventory: PluginInventoryIndex,
+        rows: [WorkspaceLibraryReadModelRow],
         updates: PluginUpdateEvaluation
     ) -> some View {
         VStack(spacing: 0) {

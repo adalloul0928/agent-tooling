@@ -48,9 +48,6 @@ struct ComponentsRenderTests {
             ),
             ("CommandDisclosure", AnyView(CommandDisclosure(title: "Repair command", command: "codex mcp repair").frame(width: 420))),
             ("ClientStatusRows", AnyView(ClientStatusRows(clients: Self.clients).frame(width: 420))),
-            ("TagCloud", AnyView(TagCloud(tags: ["review", "writing", "shell"]).frame(width: 320))),
-            ("CollectionPills", AnyView(CollectionPills(names: ["Writing", "Review", "Shell"]))),
-            ("TagPills", AnyView(TagPills(tags: ["review", "writing", "shell", "swift"]))),
             ("FilterPill", AnyView(FilterPill(title: "Untagged", count: 4, isOn: true, action: {}))),
             ("LocationText", AnyView(LocationText(path: "/Users/example/Library/Application Support/agent-tooling"))),
             ("CompactPathText", AnyView(CompactPathText(path: "/Users/example/Library/Application Support/agent-tooling"))),
@@ -86,15 +83,6 @@ struct ComponentsRenderTests {
                         actionTitle: "New preset", action: {}
                     )
                     .frame(width: 460, height: 320))
-            ),
-            (
-                "TagFilterBar",
-                AnyView(
-                    TagFilterBar(
-                        tags: ["review", "writing"], untaggedCount: 4,
-                        selection: .constant(["review"]), untaggedOnly: .constant(false)
-                    )
-                    .frame(width: 360))
             ),
         ]
 

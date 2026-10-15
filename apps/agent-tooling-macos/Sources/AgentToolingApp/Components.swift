@@ -52,16 +52,6 @@ enum ToolingKind {
     }
 }
 
-extension ToolingKind {
-    init(_ kind: ToolingItemKind) {
-        switch kind {
-        case .skill: self = .skill
-        case .plugin: self = .plugin
-        case .mcpServer: self = .mcpServer
-        }
-    }
-}
-
 extension AgentTheme {
     static let collection = graphite
 }

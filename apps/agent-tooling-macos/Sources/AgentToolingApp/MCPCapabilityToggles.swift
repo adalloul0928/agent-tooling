@@ -68,28 +68,6 @@ final class MCPCapabilityModel {
     }
 }
 
-/// The "3/4 enabled" mark on a collection row. Absent until a live test has
-/// told the app what the server actually exposes.
-struct MCPCapabilityBadge: View {
-    @Environment(MCPCapabilityModel.self) private var capabilities
-    let serverID: String
-    var selected = false
-
-    var body: some View {
-        if let summary = capabilities.summary(for: serverID) {
-            Text(summary)
-                .font(AgentFont.microMedium.monospacedDigit())
-                .foregroundStyle(selected ? Color.white.opacity(0.9) : Color.secondary)
-                .padding(.horizontal, Space.sm)
-                .padding(.vertical, Space.xxs)
-                .background(
-                    Capsule().fill(selected ? Color.white.opacity(0.18) : AgentTheme.fillStrong)
-                )
-                .accessibilityLabel("\(summary) capabilities")
-        }
-    }
-}
-
 /// Per-tool switches for one server, with the enforcement boundary stated in
 /// the same card rather than in a tooltip.
 struct MCPCapabilitySection: View {

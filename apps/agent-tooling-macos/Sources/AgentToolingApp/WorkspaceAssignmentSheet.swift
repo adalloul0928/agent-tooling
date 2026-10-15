@@ -170,7 +170,7 @@ struct WorkspaceAssignmentSheet: View {
             VStack(alignment: .leading, spacing: Space.xxxl) {
                 switch install?.phase {
                 case .reviewing(let reasons):
-                    reviewContent(reasons: reasons, library: library)
+                    reviewContent(reasons: reasons)
                 case .finished(let outcome):
                     outcomeContent(outcome)
                 default:
@@ -437,7 +437,7 @@ struct WorkspaceAssignmentSheet: View {
 
     // MARK: Review (in place)
 
-    private func reviewContent(reasons: [OperationPlanRiskClassifier.Reason], library: WorkspaceLibraryReadModel) -> some View {
+    private func reviewContent(reasons: [OperationPlanRiskClassifier.Reason]) -> some View {
         VStack(alignment: .leading, spacing: Space.xxl) {
             VStack(alignment: .leading, spacing: Space.sm) {
                 ForEach(reasons, id: \.self) { reason in

@@ -283,20 +283,3 @@ extension InfoRow where Trailing == EmptyView {
     }
 }
 
-struct TagCloud: View {
-    let tags: [String]
-
-    var body: some View {
-        FlowLayout(spacing: Space.sm) {
-            ForEach(tags, id: \.self) { tag in
-                Text(tag)
-                    .font(AgentFont.caption)
-                    .lineLimit(1)
-                    .padding(.horizontal, Space.md)
-                    .frame(height: Size.pillHeight)
-                    .background(AgentTheme.fillSubtle, in: Capsule())
-            }
-        }
-    }
-}
-

@@ -2,78 +2,7 @@ import AgentToolingCore
 import AppKit
 import SwiftUI
 
-// MARK: - Collections and tags
-
-/// Membership pills for an inventory row, so a person can see which shelves an
-/// item sits on without opening every collection.
-///
-/// Overlap is normal: one skill can belong to three collections, and the row
-/// says so rather than pretending there is a single owner.
-struct CollectionPills: View {
-    let names: [String]
-    var selected = false
-    var limit = 2
-
-    var body: some View {
-        if !names.isEmpty {
-            HStack(spacing: Space.xs) {
-                ForEach(names.prefix(limit), id: \.self) { name in
-                    Label(name, systemImage: ToolingKind.collection.symbol)
-                        .labelStyle(.titleAndIcon)
-                        .font(AgentFont.microMedium)
-                        .imageScale(.small)
-                        .lineLimit(1)
-                        .foregroundStyle(selected ? Color.white : AgentTheme.collection)
-                        .padding(.horizontal, Space.sm)
-                        .frame(height: Size.chipHeight)
-                        .background(
-                            Capsule().fill(selected ? Color.white.opacity(0.22) : AgentTheme.collection.opacity(0.13))
-                        )
-                }
-                if names.count > limit {
-                    Text("+\(names.count - limit)")
-                        .font(AgentFont.microMedium)
-                        .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("In collections \(names.formatted(.list(type: .and)))")
-        }
-    }
-}
-
-/// Tag pills. Deliberately quieter than a collection pill, because a tag
-/// filters and a collection applies; the row must not suggest otherwise.
-struct TagPills: View {
-    let tags: [String]
-    var selected = false
-    var limit = 3
-
-    var body: some View {
-        if !tags.isEmpty {
-            HStack(spacing: Space.xs) {
-                ForEach(tags.prefix(limit), id: \.self) { tag in
-                    Text(tag)
-                        .font(AgentFont.micro)
-                        .lineLimit(1)
-                        .foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
-                        .padding(.horizontal, Space.sm)
-                        .frame(height: Size.chipHeight)
-                        .background(
-                            Capsule().fill(selected ? Color.white.opacity(0.16) : AgentTheme.fillSubtle)
-                        )
-                }
-                if tags.count > limit {
-                    Text("+\(tags.count - limit)")
-                        .font(AgentFont.micro)
-                        .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Tagged \(tags.formatted(.list(type: .and)))")
-        }
-    }
-}
+// MARK: - Tag filtering
 
 /// One filter pill. Kept separate so the Untagged pill is the same object as
 /// every other pill rather than a special case bolted on the end.
@@ -104,43 +33,6 @@ struct FilterPill: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isOn ? [.isSelected] : [])
-    }
-}
-
-/// Tags filter; they never change what is installed. `Untagged` always
-/// appears, so the unsorted pile stays one click away instead of being the
-/// one thing a tag list cannot express.
-struct TagFilterBar: View {
-    let tags: [String]
-    var untaggedCount: Int?
-    @Binding var selection: Set<String>
-    @Binding var untaggedOnly: Bool
-
-    var body: some View {
-        FlowLayout(spacing: Space.sm) {
-            FilterPill(title: "Untagged", count: untaggedCount, isOn: untaggedOnly) {
-                untaggedOnly.toggle()
-                if untaggedOnly { selection.removeAll() }
-            }
-            ForEach(tags, id: \.self) { tag in
-                FilterPill(title: tag, isOn: selection.contains(tag)) {
-                    if selection.contains(tag) { selection.remove(tag) } else { selection.insert(tag) }
-                    if !selection.isEmpty { untaggedOnly = false }
-                }
-            }
-            if !selection.isEmpty || untaggedOnly {
-                Button("Clear") {
-                    selection.removeAll()
-                    untaggedOnly = false
-                }
-                .buttonStyle(.plain)
-                .font(AgentFont.caption)
-                .foregroundStyle(AgentTheme.selection)
-                .padding(.horizontal, Space.sm)
-                .frame(height: Size.pillHeight)
-            }
-        }
-        .accessibilityLabel("Filter by tag")
     }
 }
 
