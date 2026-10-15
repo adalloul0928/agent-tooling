@@ -33,6 +33,9 @@ public enum WorkspaceMergeConflictKind: String, Hashable, Sendable, CaseIterable
     /// Both sides renamed or re-rooted the same logical project.
     case projectField
     case deviceField
+    /// Both Macs set one shared account choice differently, or one let it go
+    /// while the other changed it. The object identity is the switch's key.
+    case accountPreference
     /// A document version this build cannot merge.
     case unsupportedVersion
     /// The merged graph does not satisfy the workspace contract.
@@ -236,7 +239,12 @@ public enum WorkspaceMergeEngine {
                     remote: remote.configurationState, report: conflict)
                 : nil,
             mcpDefinitions: definitions,
-            devices: devices.isEmpty ? nil : devices
+            devices: devices.isEmpty ? nil : devices,
+            accountPreferences: schemaVersion >= PortableWorkspaceDocument.accountPreferencesSchemaVersion
+                ? mergeAccountPreferences(
+                    base: base?.accountPreferences, local: local.accountPreferences,
+                    remote: remote.accountPreferences, report: conflict)
+                : nil
         )
         document = document.canonicalized()
         do { try document.validateStructure() }

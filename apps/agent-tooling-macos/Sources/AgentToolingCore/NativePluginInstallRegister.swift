@@ -52,6 +52,10 @@ public enum NativePluginInstallRegister {
         for client: ClientKind, externalPluginID: String
     ) -> NativePluginInstallCommand? {
         guard OperationCommandPolicy.isSafePluginIdentifier(externalPluginID) else { return nil }
+        // `@synced`, `@inline` and `@skills-dir` are origins no marketplace
+        // can use, so a marketplace install, update, or removal of one has no
+        // honest meaning. The account's plugins are changed on claude.ai.
+        if client == .claude, ClaudeAccountSync.hasReservedOrigin(externalPluginID) { return nil }
         switch client {
         case .claude:
             return .init(

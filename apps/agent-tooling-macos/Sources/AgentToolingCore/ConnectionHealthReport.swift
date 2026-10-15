@@ -56,9 +56,12 @@ public enum ConnectionHealthReport {
         // "https://" colon comes later in the summary.
         guard let nameSeparator = line.range(of: ": ") else { return nil }
         let name = String(line[line.startIndex..<nameSeparator.lowerBound]).trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty, !name.contains(" ") else {
+        guard !name.isEmpty, !name.contains(" ") || isClaudeAIConnectorName(name) else {
             // A sentence ("Checking MCP server health…") has spaces before its
-            // first ": ", if it has one at all. A server name does not.
+            // first ": ", if it has one at all. A server name does not, with
+            // one documented exception: Claude Code names each claude.ai
+            // connector `claude.ai <display name>`, and a display name such as
+            // "Google Calendar" has spaces of its own.
             return nil
         }
         let remainder = String(line[nameSeparator.upperBound...]).trimmingCharacters(in: .whitespaces)
@@ -67,8 +70,11 @@ public enum ConnectionHealthReport {
         guard let separator = remainder.range(of: " - ", options: .backwards) else {
             return nil
         }
-        let summary = String(remainder[remainder.startIndex..<separator.lowerBound])
+        var summary = String(remainder[remainder.startIndex..<separator.lowerBound])
             .trimmingCharacters(in: .whitespaces)
+        // Claude Code prints "- Not configured" as a status, so the line reads
+        // "url - - Not configured" and the summary would keep a stray dash.
+        if summary.hasSuffix(" -") { summary = String(summary.dropLast(2)).trimmingCharacters(in: .whitespaces) }
         let statusText = String(remainder[separator.upperBound...]).trimmingCharacters(in: .whitespaces)
         let status = claudeStatus(from: statusText)
         let source = claudeSource(name: name, summary: summary, statusText: statusText)
@@ -93,6 +99,8 @@ public enum ConnectionHealthReport {
         if lowered.contains("needs authentication") { return .needsAuthentication }
         if lowered.contains("pending approval") { return .pendingApproval }
         if lowered.contains("disabled") { return .disabled }
+        if lowered.contains("not configured") { return .notConfigured }
+        if lowered.contains("connection error") { return .failed(detail: failureDetail(from: statusText)) }
         if lowered.contains("failed to connect") {
             // The reason is printed after the em dash (or a hyphen fallback).
             let detail = failureDetail(from: statusText)
@@ -120,11 +128,23 @@ public enum ConnectionHealthReport {
             if parts.count >= 2 { return .plugin(String(parts[1])) }
             return .plugin("")
         }
+        if isClaudeAIConnectorName(name) { return .claudeAI }
         let haystack = (summary + " " + statusText).lowercased()
         if haystack.contains("claude.ai") || haystack.contains("connector") {
             return .claudeAI
         }
         return .unknown
+    }
+
+    /// The prefix Claude Code gives every connector it fetches from claude.ai,
+    /// verified against Claude Code 2.1.300: the server is listed as
+    /// `claude.ai <display name>`, with ` (2)` appended on a name collision.
+    /// The same string is what a `deniedMcpServers` `serverName` entry
+    /// matches, so it is kept whole as the entry's name.
+    public static let claudeAIConnectorPrefix = "claude.ai "
+
+    public static func isClaudeAIConnectorName(_ name: String) -> Bool {
+        name.hasPrefix(claudeAIConnectorPrefix) && name.count > claudeAIConnectorPrefix.count
     }
 
     // MARK: - Codex
@@ -223,6 +243,7 @@ public enum ConnectionHealthReport {
     /// Strips a `plugin:` prefix down to the server's own name for display,
     /// leaving anything else as it was printed.
     private static func displayName(from name: String, source: ConnectionHealthSource) -> String {
+        if isClaudeAIConnectorName(name) { return String(name.dropFirst(claudeAIConnectorPrefix.count)) }
         guard name.hasPrefix("plugin:") else { return name }
         let parts = name.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
         // `plugin:<plugin>:<server>` shows the server; a shorter shape shows

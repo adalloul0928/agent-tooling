@@ -14,6 +14,10 @@ enum AppSection: String, CaseIterable, Identifiable {
     case plugins = "Plugins"
     case presets = "Presets"
     case syncCenter = "Clients"
+    /// What the claude.ai and ChatGPT accounts put in front of this Mac's
+    /// clients. The name was an earlier screen's; that screen recorded
+    /// connections by hand and is gone, and this one reads the accounts.
+    case accounts = "Accounts"
     case appSettings = "App settings"
     case health = "Health"
     case checkup = "Checkup"
@@ -52,7 +56,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     var sidebarDestination: AppSection {
         switch self {
         case .plugins, .mcpServers, .presets: .skills
-        case .appSettings, .health, .checkup: .syncCenter
+        case .appSettings, .health, .checkup, .accounts: .syncCenter
         case .history: .activity
         case .sync: .settings
         default: self
@@ -62,7 +66,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     var workspaceTabs: [AppSection] {
         switch self {
         case .skills, .plugins, .mcpServers, .presets: [.skills, .plugins, .mcpServers, .presets]
-        case .syncCenter, .appSettings, .health, .checkup: [.syncCenter, .checkup, .appSettings, .health]
+        case .syncCenter, .accounts, .appSettings, .health, .checkup: [.syncCenter, .accounts, .checkup, .appSettings, .health]
         case .activity, .history: [.activity, .history]
         case .settings, .sync: [.settings, .sync]
         default: []
@@ -74,7 +78,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     var workspaceTitle: String? {
         switch self {
         case .skills, .plugins, .mcpServers, .presets: "Library"
-        case .syncCenter, .appSettings, .health: "Apps"
+        case .syncCenter, .accounts, .appSettings, .health: "Apps"
         case .activity, .history: "Activity"
         case .settings, .sync: "Settings"
         default: nil
@@ -91,6 +95,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .plugins: "puzzlepiece.extension"
         case .presets: "square.stack"
         case .syncCenter: "desktopcomputer"
+        case .accounts: "person.badge.key"
         case .appSettings: "slider.horizontal.3"
         case .health: "waveform.path.ecg"
         case .checkup: "stethoscope"

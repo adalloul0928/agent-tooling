@@ -627,7 +627,18 @@ struct OverviewView: View {
                 detail: "Sign in again or reconnect on the Health tab.",
                 state: .attention, destination: .health)
         ]
-        return Array((connections + clients + queued).prefix(3))
+        // What the account check found, once one has run: a client signed in
+        // some other way, a different account from the other Macs, shared
+        // choices this Mac does not follow yet.
+        let accountFindings = workspace.accounts.attentionFindings
+        let accounts: [OverviewAttention] = accountFindings.isEmpty ? [] : [
+            OverviewAttention(
+                id: "accounts",
+                title: accountFindings.count == 1 ? accountFindings[0].title : "\(accountFindings.count) account settings need attention",
+                detail: accountFindings.count == 1 ? accountFindings[0].detail : "Open Accounts to see what each app gets from your accounts.",
+                state: accountFindings.contains { $0.severity >= .medium } ? .attention : .pending, destination: .accounts)
+        ]
+        return Array((connections + accounts + clients + queued).prefix(3))
     }
 
     /// Plugins a catalog says have something newer. Before any catalog has been

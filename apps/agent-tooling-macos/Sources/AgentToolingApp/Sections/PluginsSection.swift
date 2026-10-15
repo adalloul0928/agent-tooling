@@ -7,6 +7,9 @@ struct PluginsSection: View {
     let workspace: WorkspaceLaunch.Workspace
 
     var body: some View {
-        PluginsView(workspace: workspace)
+        VStack(spacing: 0) {
+            PluginsView(workspace: workspace)
+            AccountContentsStrip(session: workspace.accounts, kinds: [.plugin])
+        }
     }
 }

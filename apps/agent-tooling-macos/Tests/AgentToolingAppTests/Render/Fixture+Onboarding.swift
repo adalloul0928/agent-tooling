@@ -75,7 +75,8 @@ extension ShellRenderFixture {
             containerRoot: container, workspaceID: document.workspaceID, deviceID: device.deviceID)
         try store.initialize(document: document, device: device)
         workspace = WorkspaceLaunch.sessions(
-            store: store, homeRoot: home, isFirstRun: true, deviceObserver: StubDeviceObserver())
+            store: store, homeRoot: home, isFirstRun: true, deviceObserver: StubDeviceObserver(),
+            accountReader: { _ in StubAccountReader() })
         await workspace.library.refresh()
     }
 

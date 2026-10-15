@@ -20,6 +20,7 @@ struct SectionContent: View {
         case .marketplace: DiscoverSection(workspace: workspace)
         case .projects: ProjectsSection(workspace: workspace)
         case .syncCenter: ClientsSection(workspace: workspace)
+        case .accounts: AccountsSection(workspace: workspace)
         case .appSettings: AppSettingsSection(workspace: workspace)
         case .health: HealthSection(workspace: workspace)
         case .checkup: CheckupSection(workspace: workspace)

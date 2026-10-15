@@ -171,10 +171,11 @@ struct AppShellView: View {
         guard let sync = workspace.sync else { return }
         sync.load()
         if sync.statusProvider == nil {
-            sync.statusProvider = { [weak device = workspace.device, weak library = workspace.library, weak deployment = workspace.deployment] in
+            sync.statusProvider = { [weak device = workspace.device, weak library = workspace.library, weak deployment = workspace.deployment, weak accounts = workspace.accounts] in
                 await MainActor.run {
                     guard let device, let library, let deployment else { return nil }
-                    return PublishedDeviceStatus.current(device: device, library: library, deployment: deployment)
+                    return PublishedDeviceStatus.current(
+                        device: device, library: library, deployment: deployment, accounts: accounts)
                 }
             }
         }

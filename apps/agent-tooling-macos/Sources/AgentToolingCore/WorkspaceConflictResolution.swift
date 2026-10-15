@@ -27,7 +27,7 @@ extension WorkspaceMergeConflictKind {
             false
         case .artifactField, .artifactContent, .deleteVersusEdit, .ownership, .sourcePolicy,
             .subscriptionLock, .subscriptionContentMismatch, .assignmentEnablement, .assignmentField,
-            .catalogSource, .projectField, .deviceField:
+            .catalogSource, .projectField, .deviceField, .accountPreference:
             true
         }
     }
@@ -157,6 +157,17 @@ private extension WorkspaceConflictResolver {
                 devices.append(losing)
             }
             ancestor.devices = devices
+
+        case .accountPreference:
+            // The losing side's value for this one switch becomes the
+            // ancestor's, absent included, so the chosen side is the only one
+            // that moved it.
+            guard let id = resolution.objectID else { return }
+            var entries = (ancestor.accountPreferences?.entries ?? []).filter { $0.key.objectID != id }
+            if let losing = loser.accountPreferences?.entries.first(where: { $0.key.objectID == id }) {
+                entries.append(losing)
+            }
+            ancestor.accountPreferences = AccountPreferences(entries: entries)
 
         case .sourcePolicy, .subscriptionLock:
             guard let id = resolution.objectID else { return }

@@ -265,9 +265,13 @@ enum LocalTargetScan {
         let native = await nativeInventory
         var skillMetadata: [String: ObservedSkillMetadata] = [:]
         for root in skillRoots {
-            skillMetadata.merge(skillRecords(under: root, source: "Standalone \(surface.displayName) skill", fileManager: fileManager)) {
-                current, _ in current
-            }
+            // Claude Code keeps the skills it downloads from a claude.ai
+            // account in `~/.claude/skills/synced`. They are the account's,
+            // not loose skills on this Mac, so they never enter the inventory
+            // (and from there the library, the audit, or a removal).
+            let records = skillRecords(under: root, source: "Standalone \(surface.displayName) skill", fileManager: fileManager)
+                .filter { !ClaudeAccountSync.isInsideSyncedSkills(URL(fileURLWithPath: $0.value.path), homeURL: homeURL) }
+            skillMetadata.merge(records) { current, _ in current }
         }
         skillMetadata.merge(native.skillMetadata) { _, native in native }
         // A standalone folder another tool placed is that tool's, not loose.
@@ -391,6 +395,10 @@ enum LocalTargetScan {
         var inventory = NativeInventory()
         for entry in entries.prefix(BoundedFileAccess.maximumDirectoryEntries) {
             guard let id = boundedIdentifier(entry["id"] as? String) else { continue }
+            // `<name>@synced` is a plugin the claude.ai account supplies. It
+            // is read on the Accounts screen, never recorded as a package this
+            // Mac installed, so nothing here can offer to reinstall or remove it.
+            if ClaudeAccountSync.isSyncedPluginID(id) { continue }
             let name = displayName(forPluginID: id)
             let source = boundedText(entry["installPath"] as? String, maximum: 8_192) ?? "Claude plugin inventory"
             let scope = boundedText((entry["scope"] as? String)?.capitalized, maximum: 4_096) ?? "This Mac"

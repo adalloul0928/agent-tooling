@@ -160,11 +160,13 @@ final class WorkspaceSetupSession {
     @ObservationIgnored private let store: WorkspaceRevisionStore
     @ObservationIgnored private let homeRoot: URL
     @ObservationIgnored private let services: any SetupServicing
+    @ObservationIgnored private let accounts: WorkspaceAccountsSession?
     @ObservationIgnored private var generation: UInt64 = 0
 
     init(
         service: WorkspaceApplicationService, library: WorkspaceLibrarySession, device: WorkspaceDeviceSession,
-        insights: WorkspaceInsightsSession, store: WorkspaceRevisionStore, homeRoot: URL, services: any SetupServicing
+        insights: WorkspaceInsightsSession, store: WorkspaceRevisionStore, homeRoot: URL, services: any SetupServicing,
+        accounts: WorkspaceAccountsSession? = nil
     ) {
         self.service = service
         self.library = library
@@ -173,6 +175,7 @@ final class WorkspaceSetupSession {
         self.store = store
         self.homeRoot = homeRoot
         self.services = services
+        self.accounts = accounts
         checkup = services.lastCheckup()
         clientReviews = services.lastClientReviews()
     }
@@ -211,12 +214,23 @@ final class WorkspaceSetupSession {
                 .compactMap(\.declaredName))
         let homeRoot = self.homeRoot
         let services = self.services
-        let report = await Task.detached(priority: .userInitiated) {
+        let local = await Task.detached(priority: .userInitiated) {
             let searchPath = await services.searchPath(homeURL: homeRoot)
             return SetupAuditor(homeURL: homeRoot, searchPath: searchPath)
                 .audit(observations: observations, managed: managed, library: .init(managedSkillNames: managedNames))
         }.value
         guard token == generation else { return }
+        // How each client signs in to its hosted account, read lightly the
+        // first time and reused after, joins the same report, so one Checkup
+        // says everything this Mac has to look at.
+        var report = local
+        if let accounts {
+            await accounts.readIfNeverRead(depth: .signInOnly)
+            guard token == generation else { return }
+            report = SetupAuditReport(
+                generatedAt: local.generatedAt, clients: local.clients,
+                findings: local.findings + accounts.findings, counts: local.counts)
+        }
         var next = checkup ?? SetupCheckup(audit: report)
         next.audit = report
         // A finding dismissed once stays dismissed while it persists; one that
@@ -361,6 +375,12 @@ final class WorkspaceSetupSession {
     /// re-audits so the screen shows what is true now. One action at a time:
     /// the person reads each before it runs.
     func apply(_ action: SetupAction) async {
+        // Opening the vendor's page changes nothing here, so it is not run
+        // through the apply loop that re-checks the Mac afterwards.
+        if case .openAccountSite(let provider, let kind) = action {
+            accounts?.openSite(provider, kind: kind)
+            return
+        }
         await applyAll([action])
     }
 
@@ -433,8 +453,15 @@ final class WorkspaceSetupSession {
         case .locateTool:
             await device.smartFindTools()
             return device.smartFindMessage ?? "Looked for the tool."
-        case .inspectMCPServer, .manageMCPServer:
+        case .inspectMCPServer, .manageMCPServer, .openAccounts:
             return "Opened."
+        case .openAccountSite(let provider, let kind):
+            accounts?.openSite(provider, kind: kind)
+            return "Opened \(provider.accountName)."
+        case .applyAccountChoices(let provider):
+            guard let accounts else { throw SetupApplyError.unsupported("Account choices are not available here.") }
+            if let message = await accounts.apply(provider) { return message }
+            throw SetupApplyError.stepFailed(accounts.errorMessage ?? "The shared \(provider.accountName) choices were not applied.")
         }
     }
 

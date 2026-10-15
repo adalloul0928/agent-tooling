@@ -95,6 +95,9 @@ struct OperationCommandPolicy: Sendable {
         // Read-only listing and per-server lookup, plus the OAuth login flow.
         // The login opens the browser itself; the app never handles a token.
         if arguments == ["mcp", "list"] { return }
+        // The account reader's read-only questions: how Claude Code signs in,
+        // and which plugins it loads (the `@synced` rows are the account's).
+        if arguments == ClaudeAccountCommands.authStatus || arguments == ClaudeAccountCommands.pluginList { return }
         if arguments.count == 3,
             arguments[0] == "mcp",
             ["get", "login"].contains(arguments[1]),
@@ -115,7 +118,8 @@ struct OperationCommandPolicy: Sendable {
             arguments[0] == "plugin",
             arguments[3] == "--scope",
             arguments[4] == "user",
-            Self.isSafePluginIdentifier(arguments[2])
+            Self.isSafePluginIdentifier(arguments[2]),
+            !ClaudeAccountSync.hasReservedOrigin(arguments[2])
         {
             return
         }

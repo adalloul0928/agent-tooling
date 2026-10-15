@@ -88,7 +88,7 @@ struct AppNavigationStateTests {
         #expect(AppSection.health.tabTitle == "Health")
         #expect(AppSection.health.sidebarDestination == .syncCenter)
         #expect(AppSection.health.workspaceTitle == "Apps")
-        #expect(AppSection.health.workspaceTabs == [.syncCenter, .checkup, .appSettings, .health])
+        #expect(AppSection.health.workspaceTabs == [.syncCenter, .accounts, .checkup, .appSettings, .health])
         // The family's other members offer the same tab row, so Health is
         // reachable from Clients and from Settings within Apps.
         #expect(AppSection.syncCenter.workspaceTabs.contains(.health))
@@ -212,8 +212,8 @@ struct AppNavigationStateTests {
     }
 
     /// The two screens that no longer exist still have live external routes.
-    /// Neither may dead-end: Configurations asked what a scope requires, which
-    /// is now Projects, and Accounts has no screen, so it stops at Apps.
+    /// None may dead-end: Configurations asked what a scope requires, which is
+    /// now Projects, and Accounts is a tab of Apps again.
     @Test("Every external route reaches a section that still exists")
     @MainActor
     func everyExternalRouteLands() {
@@ -231,7 +231,7 @@ struct AppNavigationStateTests {
 
         let accounts = AppNavigationState()
         accounts.open(.section(.accounts))
-        #expect(accounts.requestedSection == .syncCenter)
+        #expect(accounts.requestedSection == .accounts)
     }
 }
 
@@ -249,8 +249,18 @@ struct AppSectionTests {
     func retiredSectionsAreAbsent() {
         let names = AppSection.allCases.map(\.rawValue)
         #expect(!names.contains("Configurations"))
-        #expect(!names.contains("Accounts"))
         #expect(Set(names).count == names.count)
+    }
+
+    /// Accounts reads the hosted accounts; it is a tab of Apps, lit by the
+    /// Apps row, and the old external `accounts` route lands on it.
+    @Test("Accounts belongs to the Apps family")
+    func accountsIsATabOfTheAppsFamily() {
+        #expect(AppSection.accounts.rawValue == "Accounts")
+        #expect(AppSection.accounts.tabTitle == "Accounts")
+        #expect(AppSection.accounts.sidebarDestination == .syncCenter)
+        #expect(AppSection.accounts.workspaceTitle == "Apps")
+        #expect(AppSection.syncCenter.workspaceTabs.contains(.accounts))
     }
 
     @Test("A sidebar row says where it goes, not what it holds")
@@ -267,7 +277,7 @@ struct AppSectionTests {
     func tabFamiliesAreSymmetric() {
         let families: [[AppSection]] = [
             [.skills, .plugins, .mcpServers, .presets],
-            [.syncCenter, .checkup, .appSettings, .health],
+            [.syncCenter, .accounts, .checkup, .appSettings, .health],
             [.activity, .history],
             [.settings, .sync],
         ]

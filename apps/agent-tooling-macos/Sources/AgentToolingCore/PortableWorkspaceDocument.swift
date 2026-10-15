@@ -23,7 +23,9 @@ public struct WorkspaceRevision: Codable, Hashable, Sendable {
 }
 
 public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
-    public static let currentSchemaVersion: UInt = 5
+    public static let currentSchemaVersion: UInt = 6
+    /// The first schema that carries `accountPreferences`.
+    public static let accountPreferencesSchemaVersion: UInt = 6
 
     public var schemaVersion: UInt
     public var minimumReaderVersion: UInt
@@ -45,6 +47,11 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
     /// Mac registered, which reads as an empty registry: every device then
     /// takes shared assignments.
     public var devices: [DeviceRecord]?
+    /// The person's choices about what their claude.ai and ChatGPT accounts
+    /// put in front of Claude Code and Codex, applied the same way on every
+    /// Mac. Absent before schema 6; an explicit record from schema 6 on. What
+    /// the accounts hold is never stored here: each account syncs itself.
+    public var accountPreferences: AccountPreferences?
 
     public init(
         schemaVersion: UInt = Self.currentSchemaVersion,
@@ -61,7 +68,8 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         tombstones: [ArtifactTombstone] = [],
         configurationState: WorkspaceConfigurationState? = .init(),
         mcpDefinitions: [PortableMCPDefinitionRecord]? = nil,
-        devices: [DeviceRecord]? = nil
+        devices: [DeviceRecord]? = nil,
+        accountPreferences: AccountPreferences? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.minimumReaderVersion = minimumReaderVersion
@@ -78,6 +86,24 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         self.configurationState = configurationState
         self.mcpDefinitions = mcpDefinitions ?? (schemaVersion >= 3 ? [] : nil)
         self.devices = (devices?.isEmpty ?? true) ? nil : devices
+        self.accountPreferences = accountPreferences
+            ?? (schemaVersion >= Self.accountPreferencesSchemaVersion ? AccountPreferences() : nil)
+    }
+
+    /// Moves a document to the first schema that can carry account choices.
+    /// Everything a later schema adds only widens what is allowed, so a
+    /// document that was valid before is valid after.
+    public mutating func raiseToAccountPreferencesSchema() {
+        guard schemaVersion < Self.accountPreferencesSchemaVersion else {
+            if accountPreferences == nil { accountPreferences = AccountPreferences() }
+            return
+        }
+        schemaVersion = Self.accountPreferencesSchemaVersion
+        minimumReaderVersion = Self.accountPreferencesSchemaVersion
+        minimumWriterVersion = Self.accountPreferencesSchemaVersion
+        if configurationState == nil { configurationState = WorkspaceConfigurationState() }
+        if mcpDefinitions == nil { mcpDefinitions = [] }
+        if accountPreferences == nil { accountPreferences = AccountPreferences() }
     }
 
     /// The registry, empty when no Mac has registered.
@@ -94,8 +120,10 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         guard minimumReaderVersion == schemaVersion, minimumWriterVersion == schemaVersion,
             ((schemaVersion == 1 && configurationState == nil && mcpDefinitions == nil)
             || (schemaVersion == 2 && configurationState != nil && mcpDefinitions == nil)
-            || (schemaVersion >= 3 && configurationState != nil && mcpDefinitions != nil))
+            || (schemaVersion >= 3 && configurationState != nil && mcpDefinitions != nil)),
+            (schemaVersion >= Self.accountPreferencesSchemaVersion) == (accountPreferences != nil)
         else { throw WorkspaceDomainValidationError.invalidField("workspace schema feature version") }
+        try accountPreferences?.validate()
 
         try WorkspaceDomainValidation.requireDigest(revision.documentDigest.value, field: "revision.documentDigest")
         try requireUnique(revision.parentIDs, field: "revision.parentIDs")
@@ -253,6 +281,7 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
     func canonicalized() -> Self {
         var value = self
         value.configurationState = value.configurationState?.canonicalized()
+        value.accountPreferences = value.accountPreferences?.canonicalized()
         value.mcpDefinitions?.sort { $0.artifactID < $1.artifactID }
         value.revision.createdAt = WorkspaceDomainValidation.canonicalDate(value.revision.createdAt)
         value.revision.parentIDs.sort()

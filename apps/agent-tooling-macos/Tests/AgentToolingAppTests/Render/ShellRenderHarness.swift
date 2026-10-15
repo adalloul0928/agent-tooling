@@ -126,6 +126,33 @@ struct StubDeviceObserver: DeviceObserving {
 /// the catalog answers from memory, the scan is a canned report and the review
 /// queue is a list. A test that wants different answers hands them to this
 /// initializer, and no screen can reach past what it was given.
+/// Answers an account read from a script, so no test runs Claude Code or
+/// Codex, or starts a login shell, on the Mac that runs it.
+final class StubAccountReader: AccountSurfaceReading, @unchecked Sendable {
+    private let lock = NSLock()
+    private let answers: [AccountProvider: AccountObservation]
+    private var reads: [(providers: [AccountProvider], depth: AccountSurfaceProbe.Depth)] = []
+
+    init(answers: [AccountProvider: AccountObservation] = [:]) {
+        self.answers = answers
+    }
+
+    var readCount: Int { lock.withLock { reads.count } }
+    var lastDepth: AccountSurfaceProbe.Depth? { lock.withLock { reads.last?.depth } }
+
+    func read(_ providers: [AccountProvider], depth: AccountSurfaceProbe.Depth, now: Date) async -> [AccountObservation] {
+        lock.withLock { reads.append((providers, depth)) }
+        return providers.map { provider in
+            var observation = answers[provider] ?? AccountObservation(
+                provider: provider, observedAt: now,
+                unavailableReason: "Not read in tests.")
+            observation.observedAt = now
+            if depth == .signInOnly { observation.contentsRead = false; observation.items = [] }
+            return observation
+        }
+    }
+}
+
 @MainActor struct ShellRenderFixture {
     static let plugin = ArtifactID()
     static let child = ArtifactID()
@@ -145,6 +172,7 @@ struct StubDeviceObserver: DeviceObserving {
             answer: ShellRenderFixture.insightsReport()),
         requestQueue: any PendingRequestQueuing = StubPendingRequestQueue(),
         setupServices: any SetupServicing = StubSetupServices(),
+        accountReader: any AccountSurfaceReading = StubAccountReader(),
         readsLibrary: Bool = true
     ) async throws {
         root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
@@ -207,7 +235,7 @@ struct StubDeviceObserver: DeviceObserving {
             store: store, homeRoot: home, isFirstRun: true, deviceObserver: deviceObserver,
             marketplaceProviders: { _ in marketplaceProviders },
             insightsServices: { _ in insightsServices }, requestQueue: requestQueue,
-            setupServices: { _ in setupServices })
+            setupServices: { _ in setupServices }, accountReader: { _ in accountReader })
         // A test of the cold launch itself wants the library still unread.
         if readsLibrary { await workspace.library.refresh() }
     }

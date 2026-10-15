@@ -49,6 +49,10 @@ struct WorkspaceLaunch {
         /// The audit of this Mac's tooling and the assistant's reading of it.
         /// The setup wizard, the weekly checkup, and a client review all run it.
         let setup: WorkspaceSetupSession
+        /// What the claude.ai and ChatGPT accounts put in front of this Mac's
+        /// clients, the choices every Mac shares about them, and the reviewed
+        /// plan that makes this Mac follow them. Reads nothing until asked.
+        let accounts: WorkspaceAccountsSession
         /// Absent when this Mac's linked-preset file could not be prepared. The
         /// workspace still opens; only following a preset is unavailable.
         let presets: WorkspacePresetsSession?
@@ -105,7 +109,8 @@ struct WorkspaceLaunch {
             MarketplaceCatalogs.live,
         insightsServices: (URL) -> any InsightsServicing = { LiveInsightsServices(container: $0) },
         requestQueue: any PendingRequestQueuing = LivePendingRequestQueue(),
-        setupServices: (URL) -> any SetupServicing = { LiveSetupServices(container: $0) }
+        setupServices: (URL) -> any SetupServicing = { LiveSetupServices(container: $0) },
+        accountReader: (URL) -> any AccountSurfaceReading = { WorkspaceLaunch.liveAccountReader(homeRoot: $0) }
     ) async throws -> Workspace {
         let root = try supportRoot?.standardizedFileURL ?? WorkspaceLocator.defaultRoot()
         let locator = try WorkspaceLocator(root: root)
@@ -126,7 +131,7 @@ struct WorkspaceLaunch {
         return sessions(
             store: joined.store, homeRoot: homeRoot, isFirstRun: false, deviceObserver: deviceObserver,
             marketplaceProviders: marketplaceProviders, insightsServices: insightsServices,
-            requestQueue: requestQueue, setupServices: setupServices)
+            requestQueue: requestQueue, setupServices: setupServices, accountReader: accountReader)
     }
 
     static func open(
@@ -137,7 +142,8 @@ struct WorkspaceLaunch {
             MarketplaceCatalogs.live,
         insightsServices: (URL) -> any InsightsServicing = { LiveInsightsServices(container: $0) },
         requestQueue: any PendingRequestQueuing = LivePendingRequestQueue(),
-        setupServices: (URL) -> any SetupServicing = { LiveSetupServices(container: $0) }
+        setupServices: (URL) -> any SetupServicing = { LiveSetupServices(container: $0) },
+        accountReader: (URL) -> any AccountSurfaceReading = { WorkspaceLaunch.liveAccountReader(homeRoot: $0) }
     ) async throws -> Workspace {
         let locator = try WorkspaceLocator(
             root: supportRoot?.standardizedFileURL ?? (try WorkspaceLocator.defaultRoot()))
@@ -145,14 +151,14 @@ struct WorkspaceLaunch {
             return sessions(
                 store: existing, homeRoot: homeRoot, isFirstRun: false, deviceObserver: deviceObserver,
                 marketplaceProviders: marketplaceProviders, insightsServices: insightsServices,
-                requestQueue: requestQueue, setupServices: setupServices)
+                requestQueue: requestQueue, setupServices: setupServices, accountReader: accountReader)
         }
         let created = try await locator.openOrCreate(
             homeURL: homeRoot, runner: ProcessCommandRunner(homeURL: homeRoot))
         return sessions(
             store: created, homeRoot: homeRoot, isFirstRun: true, deviceObserver: deviceObserver,
             marketplaceProviders: marketplaceProviders, insightsServices: insightsServices,
-            requestQueue: requestQueue, setupServices: setupServices)
+            requestQueue: requestQueue, setupServices: setupServices, accountReader: accountReader)
     }
 
     /// Everything that reaches outside this app is a parameter with a live
@@ -169,7 +175,8 @@ struct WorkspaceLaunch {
             MarketplaceCatalogs.live,
         insightsServices: (URL) -> any InsightsServicing = { LiveInsightsServices(container: $0) },
         requestQueue: any PendingRequestQueuing = LivePendingRequestQueue(),
-        setupServices: (URL) -> any SetupServicing = { LiveSetupServices(container: $0) }
+        setupServices: (URL) -> any SetupServicing = { LiveSetupServices(container: $0) },
+        accountReader: (URL) -> any AccountSurfaceReading = { WorkspaceLaunch.liveAccountReader(homeRoot: $0) }
     ) -> Workspace {
         let container = store.databaseURL.deletingLastPathComponent()
         let writerID = WorkspaceObjectID()
@@ -237,6 +244,9 @@ struct WorkspaceLaunch {
                 MarketplaceCatalogContext(homeRoot: homeRoot, store: store)),
             service: service, library: library, store: store)
         let insights = WorkspaceInsightsSession(library: library, homeRoot: homeRoot, services: insightsServices(container))
+        let accounts = WorkspaceAccountsSession(
+            library: library, device: device, service: service, store: store, sync: sync,
+            homeRoot: homeRoot, reader: accountReader(homeRoot))
         return .init(
             library: library, sync: sync,
             settings: WorkspaceSettingsSession(homeRoot: homeRoot, library: library),
@@ -260,7 +270,8 @@ struct WorkspaceLaunch {
                 store: store, library: library, device: device, queue: requestQueue),
             setup: WorkspaceSetupSession(
                 service: service, library: library, device: device, insights: insights, store: store,
-                homeRoot: homeRoot, services: setupServices(container)),
+                homeRoot: homeRoot, services: setupServices(container), accounts: accounts),
+            accounts: accounts,
             presets: presets,
             presetsUnavailableReason: presetsUnavailableReason,
             syncUnavailableReason: syncUnavailableReason,
@@ -268,5 +279,12 @@ struct WorkspaceLaunch {
             declarations: WorkspaceProjectDeclarationSession(library: library),
             isFirstRun: isFirstRun,
             store: store, service: service, contentStore: contentStore, homeRoot: homeRoot)
+    }
+
+    /// The reader the app uses: each client's own tool, plus the login shell
+    /// asked once which overriding variables it exports.
+    nonisolated static func liveAccountReader(homeRoot: URL) -> any AccountSurfaceReading {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1"
+        return AccountSurfaceProbe.live(homeURL: homeRoot, appVersion: version)
     }
 }

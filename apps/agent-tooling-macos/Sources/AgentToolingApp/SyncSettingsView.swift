@@ -426,6 +426,7 @@ struct SyncSettingsView: View {
         case .catalogSource: "Two different catalogs recorded as one"
         case .projectField: "Two different project names"
         case .deviceField: "Two different settings for one Mac"
+        case .accountPreference: "Two different account choices"
         case .unsupportedVersion: "A newer format than this app can read"
         case .invalidResult: "The combined setup did not pass its own checks"
         }

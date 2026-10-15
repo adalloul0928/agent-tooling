@@ -122,6 +122,8 @@ private struct DigestDocument: Encodable {
     var tombstones: [ArtifactTombstone]
     var configurationState: WorkspaceConfigurationState?
     var mcpDefinitions: [PortableMCPDefinitionRecord]?
+    /// Optional, so a document before schema 6 digests exactly as it did.
+    var accountPreferences: AccountPreferences?
 
     init(document: PortableWorkspaceDocument) {
         schemaVersion = document.schemaVersion
@@ -138,6 +140,7 @@ private struct DigestDocument: Encodable {
         tombstones = document.tombstones
         configurationState = document.configurationState
         mcpDefinitions = document.mcpDefinitions
+        accountPreferences = document.accountPreferences
     }
 }
 

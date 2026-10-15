@@ -399,6 +399,8 @@ struct CheckupRow: View {
                         switch action {
                         case .inspectMCPServer, .manageMCPServer:
                             Button(action.title) { onOpen(.mcpServers) }.inlineActionStyle().controlSize(.mini)
+                        case .openAccounts:
+                            Button(action.title) { onOpen(.accounts) }.inlineActionStyle().controlSize(.mini)
                         default:
                             Button(action.title) { onRunOne(action) }.inlineActionStyle().controlSize(.mini).disabled(isBusy)
                         }
@@ -519,6 +521,11 @@ extension SetupFinding.Kind {
         case .mcpServerRepeatedAcrossClients: "Servers configured in several apps"
         case .mcpServerDefinedSeveralTimes: "Servers an app gets from several places"
         case .pluginSkillsOverlap: "Plugins that carry the same skills"
+        case .accountSignIn: "Apps not signed in with their accounts"
+        case .accountShellOverride: "Shell variables that change an app's sign-in"
+        case .accountChoicesNotFollowed: "Shared account choices not applied here"
+        case .accountDiffersFromOtherMacs: "Accounts that differ from your other Macs"
+        case .accountConnectorNeedsSignIn: "Account connectors that need attention"
         }
     }
 }

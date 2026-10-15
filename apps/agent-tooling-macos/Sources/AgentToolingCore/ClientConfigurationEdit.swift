@@ -65,6 +65,13 @@ public struct ClientConfigurationEdit: Codable, Hashable, Sendable {
         case appendToList(String)
         /// Take one string out of the list at the key.
         case removeFromList(String)
+        /// Add `{field: value}` to the list of objects at the key, unless an
+        /// entry with exactly that one field and value is already there.
+        /// JSON only: Claude Code's `deniedMcpServers` is such a list.
+        case appendObjectToList(field: String, value: String)
+        /// Take every `{field: value}` entry with exactly that one field and
+        /// value out of the list of objects at the key. Other entries stay.
+        case removeObjectFromList(field: String, value: String)
 
         /// "true"/"false" become booleans, a number a number, anything else
         /// a string. What the model or a person typed is never run.
@@ -106,6 +113,8 @@ public struct ClientConfigurationEdit: Codable, Hashable, Sendable {
             && {
                 switch value {
                 case .string(let text), .appendToList(let text), .removeFromList(let text): return text.count <= 4_096
+                case .appendObjectToList(let field, let text), .removeObjectFromList(let field, let text):
+                    return !file.isTOML && Self.isSafeKeyComponent(field) && text.count <= 4_096
                 default: return true
                 }
             }()
@@ -121,6 +130,8 @@ public struct ClientConfigurationEdit: Codable, Hashable, Sendable {
         case .remove: return "Remove \(key) from \(file.relativePath)"
         case .appendToList(let item): return "Add \(item) to \(key) in \(file.relativePath)"
         case .removeFromList(let item): return "Take \(item) out of \(key) in \(file.relativePath)"
+        case .appendObjectToList(let field, let item): return "Add {\"\(field)\": \"\(item)\"} to \(key) in \(file.relativePath)"
+        case .removeObjectFromList(let field, let item): return "Take {\"\(field)\": \"\(item)\"} out of \(key) in \(file.relativePath)"
         }
     }
 
@@ -195,6 +206,17 @@ public enum ClientConfigurationEditor {
                 guard object[key] != nil else { break }
                 guard let list = object[key] as? [Any] else { throw ClientConfigurationEditError.notAList(key) }
                 object[key] = list.filter { ($0 as? String) != item }
+            case .appendObjectToList(let field, let item):
+                if object[key] == nil { object[key] = [[field: item]]; break }
+                guard var list = object[key] as? [Any] else { throw ClientConfigurationEditError.notAList(key) }
+                if !list.contains(where: { Self.isSingleFieldEntry($0, field: field, value: item) }) {
+                    list.append([field: item])
+                }
+                object[key] = list
+            case .removeObjectFromList(let field, let item):
+                guard object[key] != nil else { break }
+                guard let list = object[key] as? [Any] else { throw ClientConfigurationEditError.notAList(key) }
+                object[key] = list.filter { !Self.isSingleFieldEntry($0, field: field, value: item) }
             }
             return object
         }
@@ -202,6 +224,11 @@ public enum ClientConfigurationEditor {
         guard existing == nil || existing is [String: Any] else { throw ClientConfigurationEditError.notAnObject(key) }
         object[key] = try mutate((existing as? [String: Any]) ?? [:], path: path.dropFirst(), value: value)
         return object
+    }
+
+    private static func isSingleFieldEntry(_ entry: Any, field: String, value: String) -> Bool {
+        guard let fields = entry as? [String: Any], fields.count == 1 else { return false }
+        return (fields[field] as? String) == value
     }
 
     // MARK: TOML
@@ -241,6 +268,8 @@ public enum ClientConfigurationEditor {
             return line.hasPrefix(key) && line.dropFirst(key.count).trimmingCharacters(in: .whitespaces).hasPrefix("=")
         }
         switch edit.value {
+        case .appendObjectToList, .removeObjectFromList:
+            throw ClientConfigurationEditError.unsafeEdit
         case .remove:
             if let keyIndex { lines.remove(at: keyIndex) }
         case .appendToList(let item), .removeFromList(let item):
@@ -276,7 +305,7 @@ public enum ClientConfigurationEditor {
     }
 
     /// `[a."b c"]` and `[a.b]` both name `a.b c` / `a.b`.
-    private static func headerName(_ line: String) -> String? {
+    static func headerName(_ line: String) -> String? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard isHeader(trimmed), !trimmed.hasPrefix("[[") else { return nil }
         return String(trimmed.dropFirst().dropLast()).replacingOccurrences(of: "\"", with: "").trimmingCharacters(in: .whitespaces)

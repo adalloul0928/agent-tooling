@@ -204,6 +204,27 @@ enum CheckupTriage {
                 id: id, bucket: .decide, client: client, title: groupTitle(key.kind, count: count), detail: groupDetail(key.kind, client: client),
                 findings: group, recommendation: nil, actions: [], settings: [], primaryTitle: nil,
                 provenance: .audit(findingID: group[0].id), opens: .plugins)
+        case .accountChoicesNotFollowed:
+            // Applying is a reviewed edit of the app's own settings file. A
+            // choice this Mac cannot follow by editing one is the person's to
+            // look at on the Accounts tab.
+            let applies = actions.filter { if case .applyAccountChoices = $0 { return true }; return false }
+            return CheckupItem(
+                id: id, bucket: applies.isEmpty ? .decide : .fix, client: client,
+                title: group.count == 1 ? group[0].title : groupTitle(key.kind, count: count),
+                detail: group.count == 1 ? group[0].detail : groupDetail(key.kind, client: client),
+                findings: group, recommendation: nil, actions: applies, settings: [],
+                primaryTitle: applies.isEmpty ? "Open Accounts" : bulkTitle(applies),
+                provenance: .audit(findingID: group[0].id), opens: .accounts)
+        case .accountSignIn, .accountShellOverride, .accountDiffersFromOtherMacs, .accountConnectorNeedsSignIn:
+            // Signing in, a shell profile, and an account connector are all
+            // changed outside this app, so these rows open Accounts.
+            return CheckupItem(
+                id: id, bucket: .decide, client: client,
+                title: group.count == 1 ? group[0].title : groupTitle(key.kind, count: count),
+                detail: group.count == 1 ? group[0].detail : groupDetail(key.kind, client: client),
+                findings: group, recommendation: nil, actions: [], settings: [], primaryTitle: "Open Accounts",
+                provenance: .audit(findingID: group[0].id), opens: .accounts)
         }
     }
 
@@ -224,6 +245,11 @@ enum CheckupTriage {
         case .mcpServerRepeatedAcrossClients: one ? "A server configured in several apps" : "\(count) servers configured in several apps"
         case .mcpServerDefinedSeveralTimes: one ? "A server the app gets from several places" : "\(count) servers the app gets from several places"
         case .pluginSkillsOverlap: one ? "Two plugins that carry the same skills" : "\(count) pairs of plugins that carry the same skills"
+        case .accountSignIn: one ? "An app not signed in with its account" : "\(count) apps not signed in with their accounts"
+        case .accountShellOverride: one ? "A shell variable that changes an app's sign-in" : "\(count) shell variables that change an app's sign-in"
+        case .accountChoicesNotFollowed: one ? "Shared account choices not applied here" : "Shared account choices not applied in \(count) apps"
+        case .accountDiffersFromOtherMacs: one ? "A different account from your other Macs" : "\(count) accounts that differ from your other Macs"
+        case .accountConnectorNeedsSignIn: one ? "Account connectors that need attention" : "Account connectors in \(count) accounts that need attention"
         }
     }
 
@@ -242,6 +268,11 @@ enum CheckupTriage {
         case .mcpServerRepeatedAcrossClients: return "Each app has its own copy of these servers' configuration. Managed from the library, each would be one definition placed in every app."
         case .mcpServerDefinedSeveralTimes: return "\(app) gets each of these servers from its own configuration and from a plugin. Unless the two are configured identically, it runs both and lists both sets of tools. If the plugin's copy does what you need, the configured one can go."
         case .pluginSkillsOverlap: return "\(app) lists each plugin's copy of a shared skill, so these appear twice. Removing a plugin takes its other skills and servers with it, so that is yours to decide on the Plugins screen."
+        case .accountSignIn: return "Only a subscription sign-in brings an account's connectors, skills, plugins and apps to the app. Sign in again from a terminal."
+        case .accountShellOverride: return "Your login shell exports variables that change how the app signs in when it runs in a terminal. Agent Tooling reads only their names."
+        case .accountChoicesNotFollowed: return "Every Mac shares these choices. Applying them changes each app's own settings file after backing it up."
+        case .accountDiffersFromOtherMacs: return "Each Mac gets the contents of the account it signs in with, so these Macs do not have the same ones."
+        case .accountConnectorNeedsSignIn: return "Account connectors are connected and signed in on the vendor's site, not from this Mac."
         }
     }
 
@@ -259,6 +290,9 @@ enum CheckupTriage {
         case .checkClient: return "Check now"
         case .locateTool: return "Find the tool"
         case .inspectMCPServer, .manageMCPServer: return "Open Connections"
+        case .applyAccountChoices: return n == 1 ? "Apply" : "Apply in all \(n)"
+        case .openAccountSite(let provider, _): return "Open \(provider.accountName)"
+        case .openAccounts: return "Open Accounts"
         }
     }
 
@@ -266,7 +300,8 @@ enum CheckupTriage {
         switch (lhs, rhs) {
         case (.adoptSkill, .adoptSkill), (.removeSkillCopy, .removeSkillCopy), (.removeBrokenLink, .removeBrokenLink),
             (.reinstallPlugin, .reinstallPlugin), (.pruneStalePluginCache, .pruneStalePluginCache), (.inspectMCPServer, .inspectMCPServer),
-            (.disableMCPServer, .disableMCPServer), (.locateTool, .locateTool), (.checkClient, .checkClient), (.manageMCPServer, .manageMCPServer):
+            (.disableMCPServer, .disableMCPServer), (.locateTool, .locateTool), (.checkClient, .checkClient), (.manageMCPServer, .manageMCPServer),
+            (.applyAccountChoices, .applyAccountChoices), (.openAccountSite, .openAccountSite), (.openAccounts, .openAccounts):
             true
         default: false
         }
@@ -282,6 +317,7 @@ enum CheckupTriage {
     private static func opensScreen(_ action: SetupAction?) -> AppSection? {
         switch action {
         case .inspectMCPServer, .manageMCPServer: .mcpServers
+        case .openAccounts, .openAccountSite: .accounts
         default: nil
         }
     }
@@ -315,7 +351,8 @@ enum CheckupTriage {
                 case .disableMCPServer: add("Turn an MCP server off in its app's configuration (backed up first)")
                 case .checkClient: add("Check an app")
                 case .locateTool: add("Look for an app's command")
-                case .inspectMCPServer, .manageMCPServer: break
+                case .applyAccountChoices: add("Change an app's account settings in its own settings file (backed up first)")
+                case .inspectMCPServer, .manageMCPServer, .openAccountSite, .openAccounts: break
                 }
             }
             for _ in settings { add("Change a setting in an app's configuration file (backed up first)") }

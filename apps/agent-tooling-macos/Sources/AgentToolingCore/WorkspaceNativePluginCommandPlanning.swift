@@ -136,7 +136,10 @@ public enum WorkspaceNativePluginCommandPlanning {
               artifact.identity.parentPackageID == nil,
               artifact.authority == .nativeOwned,
               artifact.nativeRoutes.filter({ $0.client == client }) == [route],
-              OperationCommandPolicy.isSafePluginIdentifier(route.externalPluginID) else {
+              OperationCommandPolicy.isSafePluginIdentifier(route.externalPluginID),
+              // An account plugin (`@synced`) or a session-only one has no
+              // marketplace to install it from; it is never planned here.
+              !(client == .claude && ClaudeAccountSync.hasReservedOrigin(route.externalPluginID)) else {
             throw WorkspaceNativePluginCommandPlanningError.invalidRequirement
         }
 

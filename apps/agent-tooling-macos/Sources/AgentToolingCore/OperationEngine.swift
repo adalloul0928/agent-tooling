@@ -643,6 +643,9 @@ public actor OperationExecutor {
         }
         guard OperationCommandPolicy.isSafeMCPIdentifier(destination.lastPathComponent),
             roots.contains(where: { Self.samePath(destination.deletingLastPathComponent(), $0) }),
+            // Claude Code's own folder of account skills is never a copy this
+            // app may move: the next sync would only download it again.
+            !ClaudeAccountSync.isInsideSyncedSkills(destination, homeURL: homeURL),
             !Self.samePath(destination, store.libraryURL),
             !destination.standardizedFileURL.path(percentEncoded: false).hasPrefix(store.rootURL.standardizedFileURL.path(percentEncoded: false))
         else { throw OperationEngineError.unsafeDestination(rawPath) }

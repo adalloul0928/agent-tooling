@@ -164,10 +164,9 @@ final class AppNavigationState {
 }
 
 extension AppSection {
-    /// External routes outlive the screens they were named for. Two of them now
-    /// land somewhere else: what Configurations used to answer — what a scope
-    /// requires — is Projects, and Accounts has no screen at all, so its route
-    /// stops at the Apps pane rather than at a dead end.
+    /// External routes outlive the screens they were named for. One of them now
+    /// lands somewhere else: what Configurations used to answer — what a scope
+    /// requires — is Projects. Accounts is a tab of Apps again.
     fileprivate init(_ section: ExternalAppSection) {
         switch section {
         case .overview: self = .overview
@@ -179,7 +178,7 @@ extension AppSection {
         case .configurations: self = .projects
         case .sync: self = .syncCenter
         case .activity: self = .activity
-        case .accounts: self = .syncCenter
+        case .accounts: self = .accounts
         case .settings: self = .settings
         case .checkup: self = .checkup
         }

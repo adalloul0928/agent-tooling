@@ -7,7 +7,8 @@ extension PublishedDeviceStatus {
     /// sessions that already hold the facts; nothing is scanned to build it.
     @MainActor
     static func current(
-        device: WorkspaceDeviceSession, library: WorkspaceLibrarySession, deployment: WorkspaceDeploymentSession
+        device: WorkspaceDeviceSession, library: WorkspaceLibrarySession, deployment: WorkspaceDeploymentSession,
+        accounts: WorkspaceAccountsSession? = nil
     ) -> PublishedDeviceStatus? {
         guard let state = library.state else { return nil }
         let registry = state.snapshot.document.deviceRegistry
@@ -29,6 +30,9 @@ extension PublishedDeviceStatus {
         return PublishedDeviceStatus(
             deviceID: library.deviceID, name: name, lastScan: device.lastCheckedAt,
             apps: apps, pending: Array(Set(pending)).sorted(),
-            revisionID: state.snapshot.document.revision.id)
+            revisionID: state.snapshot.document.revision.id,
+            // How each client signs in and whether it follows the shared
+            // choices, never an address or a list of what an account holds.
+            accounts: accounts?.publishedSummaries())
     }
 }

@@ -425,6 +425,11 @@ private struct PluginDetailView: View {
                 if let message = library.errorMessage {
                     AttentionBanner(title: "This couldn't be saved", message: message)
                 }
+                if let accountRoute {
+                    AttentionBanner(
+                        title: "This plugin comes from your claude.ai account",
+                        message: "Claude Code loads it from the account as \(accountRoute). Add, remove and update it on claude.ai; turn it off on every Mac from Apps › Accounts.")
+                }
                 managedByCard
                 if !includedSkills.isEmpty {
                     includedSkillsCard
@@ -456,8 +461,10 @@ private struct PluginDetailView: View {
             if availability.hasUpdate { UpdateStateBadge(availability: availability) }
             Button("Assign…", systemImage: "arrow.turn.up.right") { isAssigning = true }
                 .secondaryActionStyle()
-                .disabled(library.isBusy || !row.isAssignable)
-                .help(row.isAssignable ? "Choose where this plugin should be used." : (row.assignmentExplanation ?? ""))
+                .disabled(library.isBusy || !row.isAssignable || accountRoute != nil)
+                .help(accountRoute != nil
+                    ? "An account plugin is placed by claude.ai, not by an assignment."
+                    : row.isAssignable ? "Choose where this plugin should be used." : (row.assignmentExplanation ?? ""))
         }
     }
 
@@ -484,7 +491,7 @@ private struct PluginDetailView: View {
                                     .secondaryActionStyle()
                                     .controlSize(.small)
                                     .accessibilityLabel("Remove \(row.displayName) from \(route.client.rawValue)")
-                                    .disabled(library.isBusy)
+                                    .disabled(library.isBusy || ClaudeAccountSync.hasReservedOrigin(route.externalPluginID))
                             } else {
                                 Text("Not a saved assignment")
                                     .font(AgentFont.caption).foregroundStyle(.secondary)
@@ -561,6 +568,13 @@ private struct PluginDetailView: View {
 
     private var includedSkills: [WorkspaceLibraryIncludedItem] {
         row.includedChildren.filter { $0.kind == .skill }
+    }
+
+    /// A library recorded before account plugins were kept out of it can
+    /// still hold a `<name>@synced` row. It is the account's: say so, and
+    /// offer nothing that would ask Claude Code to install or remove it.
+    private var accountRoute: String? {
+        row.nativeRoutes.first { $0.client == .claude && ClaudeAccountSync.hasReservedOrigin($0.externalPluginID) }?.externalPluginID
     }
 
     private func contributionIDs(for client: ClientKind) -> [WorkspaceObjectID]? {

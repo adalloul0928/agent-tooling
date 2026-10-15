@@ -48,6 +48,12 @@ public enum NativeSkillDestination {
         projectRoot: URL?
     ) throws -> URL {
         try validateSkillID(skillID)
+        // Claude Code skips an authored skill at a reserved name, and writing
+        // one into `~/.claude/skills/synced` would land inside the folder it
+        // overwrites from the account.
+        if client == .claude, ClaudeAccountSync.isReservedSkillFolderName(skillID) {
+            throw NativeSkillDestinationError.invalidSkillID
+        }
         return try directory(client: client, homeURL: homeURL, scope: scope, projectRoot: projectRoot)
             .appending(path: skillID, directoryHint: .isDirectory)
     }

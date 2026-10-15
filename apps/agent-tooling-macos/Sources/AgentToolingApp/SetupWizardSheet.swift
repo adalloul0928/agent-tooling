@@ -63,6 +63,11 @@ extension SetupFinding.Kind {
         case .unmanagedSkill: .unmanaged
         case .unreachableMCPCommand, .mcpServerRepeatedAcrossClients: .connections
         case .toolUnavailable, .neverChecked: .settings
+        // How each app signs in to its account, and the switches every Mac
+        // shares, are settings of the app rather than tools it holds.
+        case .accountSignIn, .accountShellOverride, .accountChoicesNotFollowed, .accountDiffersFromOtherMacs,
+             .accountConnectorNeedsSignIn:
+            .settings
         }
     }
 }

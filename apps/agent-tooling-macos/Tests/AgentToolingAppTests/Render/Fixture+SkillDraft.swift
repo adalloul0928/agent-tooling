@@ -39,7 +39,8 @@ extension ShellRenderFixture {
                 .appending(path: "content", directoryHint: .isDirectory),
             withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let opened = WorkspaceLaunch.sessions(
-            store: store, homeRoot: home, isFirstRun: false, deviceObserver: StubDeviceObserver())
+            store: store, homeRoot: home, isFirstRun: false, deviceObserver: StubDeviceObserver(),
+            accountReader: { _ in StubAccountReader() })
         await opened.library.refresh()
         return opened
     }

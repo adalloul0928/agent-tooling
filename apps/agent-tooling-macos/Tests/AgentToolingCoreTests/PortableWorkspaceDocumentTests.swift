@@ -156,8 +156,9 @@ struct PortableWorkspaceDocumentTests {
     @Test func decoderRejectsUnknownRootAndNestedFieldsInsteadOfErasingThem() throws {
         let sealed = try WorkspaceDocumentCoding.seal(try fixture())
         let text = String(decoding: try WorkspaceDocumentCoding.encode(sealed), as: UTF8.self)
-        let rootUnknown = Data(text.replacingOccurrences(
-            of: "{\"artifacts\":", with: "{\"addedRootField\":true,\"artifacts\":").utf8)
+        // Inserted as the first key, whichever key the canonical encoding
+        // happens to sort first.
+        let rootUnknown = Data(("{\"addedRootField\":true," + text.dropFirst()).utf8)
         let nestedUnknown = Data(text.replacingOccurrences(
             of: "\"displayName\":\"Review\"", with: "\"addedNestedField\":true,\"displayName\":\"Review\"").utf8)
 

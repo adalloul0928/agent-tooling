@@ -83,10 +83,15 @@ public struct PublishedDeviceStatus: Codable, Hashable, Sendable {
     public var pending: [String]
     /// The revision this device held when it published.
     public var revisionID: WorkspaceObjectID
+    /// How each client on this device signs in to its hosted account, and
+    /// whether it follows the shared account choices. Absent from devices
+    /// that published before accounts were read; an older reader ignores it.
+    public var accounts: [PublishedAccountSummary]?
 
     public init(
         deviceID: WorkspaceObjectID, name: String, lastScan: Date?, publishedAt: Date = .now,
-        apps: [AppSummary], pending: [String], revisionID: WorkspaceObjectID
+        apps: [AppSummary], pending: [String], revisionID: WorkspaceObjectID,
+        accounts: [PublishedAccountSummary]? = nil
     ) {
         formatVersion = Self.formatVersion
         self.deviceID = deviceID
@@ -96,6 +101,7 @@ public struct PublishedDeviceStatus: Codable, Hashable, Sendable {
         self.apps = apps
         self.pending = pending
         self.revisionID = revisionID
+        self.accounts = (accounts?.isEmpty ?? true) ? nil : accounts
     }
 }
 

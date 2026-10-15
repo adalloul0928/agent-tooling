@@ -34,6 +34,19 @@ public struct SetupFinding: Identifiable, Codable, Hashable, Sendable {
         case mcpServerDefinedSeveralTimes
         /// Two plugins in one client carry many of the same skills.
         case pluginSkillsOverlap
+        /// A client is not signed in with the subscription, so the hosted
+        /// account's connectors, skills, plugins or apps do not reach it.
+        case accountSignIn
+        /// The login shell exports a variable that changes what a client does
+        /// in a terminal: a key that replaces the subscription, another folder.
+        case accountShellOverride
+        /// This Mac's client settings do not yet follow the account choices
+        /// every Mac shares.
+        case accountChoicesNotFollowed
+        /// This Mac and another one are signed in to different accounts.
+        case accountDiffersFromOtherMacs
+        /// An account connector needs signing in again on the vendor's site.
+        case accountConnectorNeedsSignIn
     }
 
     public enum Severity: String, Codable, Comparable, Sendable {
@@ -105,6 +118,13 @@ public enum SetupAction: Codable, Hashable, Sendable {
     /// Put a hand-configured MCP server into the library once and place it
     /// from there.
     case manageMCPServer(name: String, clients: [ClientKind])
+    /// Change this Mac's client settings so they follow the shared account
+    /// choices, through the reviewed plan the Accounts tab shows.
+    case applyAccountChoices(provider: AccountProvider)
+    /// Open the account's own page on the vendor's site. Changes nothing here.
+    case openAccountSite(provider: AccountProvider, kind: AccountItemKind?)
+    /// Open the Accounts tab. Changes nothing here.
+    case openAccounts(provider: AccountProvider)
 
     public var title: String {
         switch self {
@@ -118,6 +138,9 @@ public enum SetupAction: Codable, Hashable, Sendable {
         case .locateTool: "Find the tool"
         case .checkClient: "Check this app"
         case .manageMCPServer: "Manage from the library"
+        case .applyAccountChoices: "Apply the shared choices"
+        case .openAccountSite(let provider, _): "Open \(provider.accountName)"
+        case .openAccounts: "Open Accounts"
         }
     }
 
@@ -125,7 +148,7 @@ public enum SetupAction: Codable, Hashable, Sendable {
     /// does not; anything else goes through a reviewed plan.
     public var changesFiles: Bool {
         switch self {
-        case .inspectMCPServer, .locateTool, .checkClient: false
+        case .inspectMCPServer, .locateTool, .checkClient, .openAccountSite, .openAccounts: false
         default: true
         }
     }
@@ -265,7 +288,9 @@ public struct SetupAuditor: Sendable {
         // saw, and this pass looks at the entries it could not turn into skills.
         for root in Self.standaloneSkillRoots(client: client, homeURL: homeURL) {
             guard let entries = try? fileManager.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isSymbolicLinkKey, .isDirectoryKey]) else { continue }
-            for entry in entries.prefix(BoundedFileAccess.maximumDirectoryEntries) where !entry.lastPathComponent.hasPrefix(".") {
+            for entry in entries.prefix(BoundedFileAccess.maximumDirectoryEntries)
+            where !entry.lastPathComponent.hasPrefix(".")
+                && !(client == .claude && ClaudeAccountSync.isReservedSkillFolderName(entry.lastPathComponent)) {
                 let values = try? entry.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
                 if values?.isSymbolicLink == true {
                     let target = (try? fileManager.destinationOfSymbolicLink(atPath: entry.path(percentEncoded: false))) ?? ""
