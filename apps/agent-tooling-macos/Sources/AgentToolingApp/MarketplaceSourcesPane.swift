@@ -265,11 +265,95 @@ struct MarketplaceGalleryCard: View {
     /// claim: a listing does not get to say what is in your library.
     let inLibrary: Bool
     let compact: Bool
+    /// What Install can do for this listing here, or nil when no app on this
+    /// Mac can take it and the details say why.
+    var install: MarketplaceView.InstallAffordance? = nil
+    /// Whether this listing is being added right now.
+    var busy = false
+    var onInstall: (ClientKind?) -> Void = { _ in }
     let open: () -> Void
     @State private var hovering = false
 
     var body: some View {
-        Button(action: open) {
+        // The card is one button that opens the details; the Install control
+        // sits beside that button rather than inside it, so a press on it is
+        // never also a press on the card.
+        HStack(alignment: .top, spacing: compact ? Space.lg : Space.xl) {
+            Button(action: open) {
+                cardContent
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilitySummary)
+            .accessibilityHint("Open package details")
+            trailing
+        }
+        .padding(compact ? Space.lg : Space.xxl).frame(maxWidth: .infinity, minHeight: compact ? 116 : 138, alignment: .topLeading)
+        // A standing card, not floating text: material at rest, a lift on
+        // hover, and the accent stroke only when this listing is open.
+        .background(hovering && !hoverSuppressed ? AgentTheme.fillHover : Color.clear, in: RoundedRectangle.card)
+        .background(AgentTheme.panelBrightening, in: RoundedRectangle.card)
+        .background(.thickMaterial, in: RoundedRectangle.card)
+        .overlay(
+            RoundedRectangle.card
+                .strokeBorder(
+                    selected ? AgentTheme.selection.opacity(0.65) : AgentTheme.hairlineStroke,
+                    lineWidth: selected ? 1.5 : 0.5)
+        )
+        .onHover { hovering = $0 }
+    }
+
+    /// Install, when there is a way; the chevron that says "there is more"
+    /// otherwise. A listing already in the library still installs: the picker
+    /// opens on its row.
+    @ViewBuilder
+    private var trailing: some View {
+        VStack(alignment: .trailing, spacing: Space.xs) {
+            if busy {
+                ProgressView().controlSize(.small)
+                    .frame(height: Size.compactRowHeight)
+                    .accessibilityLabel("Adding to your library")
+            } else {
+                switch install {
+                case .install(let client):
+                    Button("Install") { onInstall(client) }
+                        .secondaryActionStyle()
+                        .controlSize(.small)
+                        .help(client.map { "Install for \($0.rawValue)" } ?? "Choose the apps and install")
+                case .choose(let clients):
+                    Menu("Install") {
+                        ForEach(clients) { client in
+                            Button {
+                                onInstall(client)
+                            } label: {
+                                Label("For \(client.rawValue)", systemImage: "arrow.down.circle")
+                            }
+                        }
+                    }
+                    .menuStyle(.button)
+                    .controlSize(.small)
+                    .fixedSize()
+                    .help("This listing installs through an app's own installer; choose which")
+                case nil:
+                    Button(action: open) {
+                        Image(systemName: "chevron.right")
+                            .font(AgentFont.bodyMedium)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("View package details")
+                }
+            }
+            if inLibrary {
+                Label("In library", systemImage: "checkmark.circle")
+                    .font(AgentFont.micro)
+                    .foregroundStyle(.secondary)
+                    .labelStyle(.titleAndIcon)
+            }
+        }
+    }
+
+    private var cardContent: some View {
             HStack(alignment: .top, spacing: compact ? Space.lg : Space.xl) {
                 ToolIdentityIcon(packageID: package.id, fallback: marketplaceKind(for: package), size: compact ? 36 : 44)
                 VStack(alignment: .leading, spacing: Space.sm) {
@@ -311,29 +395,8 @@ struct MarketplaceGalleryCard: View {
                         }
                     }
                 }
-                Image(systemName: inLibrary ? "checkmark.circle" : "chevron.right")
-                    .font(AgentFont.bodyMedium)
-                    .foregroundStyle(.secondary)
-                    .help(inLibrary ? "Already in your library; view details" : "View package details")
             }
-            .padding(compact ? Space.lg : Space.xxl).frame(maxWidth: .infinity, minHeight: compact ? 116 : 138, alignment: .topLeading)
-            // A standing card, not floating text: material at rest, a lift on
-            // hover, and the accent stroke only when this listing is open.
-            .background(hovering && !hoverSuppressed ? AgentTheme.fillHover : Color.clear, in: RoundedRectangle.card)
-            .background(AgentTheme.panelBrightening, in: RoundedRectangle.card)
-            .background(.thickMaterial, in: RoundedRectangle.card)
-            .overlay(
-                RoundedRectangle.card
-                    .strokeBorder(
-                        selected ? AgentTheme.selection.opacity(0.65) : AgentTheme.hairlineStroke,
-                        lineWidth: selected ? 1.5 : 0.5)
-            )
-            .contentShape(RoundedRectangle.card)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .accessibilityLabel(accessibilitySummary)
-        .accessibilityHint("Open package details and installation options")
+            .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     /// The component chips a card has room for: every kind when there are a

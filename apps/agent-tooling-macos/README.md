@@ -45,6 +45,12 @@ skill.
   MCP Registry server to the library goes through the same reviewed intake as
   pasting one by hand: Discover builds the connection from the listing's
   reviewed transport, records one connection, and starts or contacts nothing.
+  Every card and the detail pane carry **Install**: it puts the listing in the
+  library (a plugin through the client it is for, chosen first when more than
+  one could take it), then opens the same picker the Library uses. A skills.sh
+  skill is fetched from its GitHub repository at the default branch, from the
+  folder named for the skill (or the one whose SKILL.md declares that name),
+  and kept as a skill that follows that repository, so Updates can check it.
 - **Connections:** the app records ownership, expected surfaces, and optional
   secret *reference names* only. OAuth tokens, API keys, and cloud connectors
   remain in their owning client, account, keychain, provider, or admin system.

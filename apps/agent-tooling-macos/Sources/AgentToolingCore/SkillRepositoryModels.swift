@@ -52,6 +52,13 @@ public struct SkillRepositoryBinding: Codable, Hashable, Sendable {
         if let lastCheckError, lastCheckError.count > 2_048 { throw SkillRepositoryError.invalidRepository }
     }
 
+    /// How two spellings of one skill's name compare: without case, and with
+    /// hyphens and underscores read alike, which is how registries and folders
+    /// usually differ for the same skill.
+    public static func comparableSkillName(_ name: String) -> String {
+        name.lowercased().replacingOccurrences(of: "_", with: "-").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     static func safeRelativePath(_ value: String, allowEmpty: Bool = false) -> Bool {
         if value.isEmpty { return allowEmpty }
         return value.count <= 8_192 && !value.hasPrefix("/") && !value.contains("\\")

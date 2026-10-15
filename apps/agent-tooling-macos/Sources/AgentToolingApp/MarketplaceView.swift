@@ -20,6 +20,9 @@ struct MarketplaceView: View {
     // Inspector selection is transient, just like its presentation state.
     // Persistent filters restore the browsing context without reopening a panel.
     @State var selectedPackageID: String?
+    /// The library row Install is picking apps for, once a listing is in the
+    /// library. Set by `install(_:client:)` and cleared when the picker closes.
+    @State var installRequest: InstallRequest?
     @SceneStorage("agentTooling.marketplace.query") var query = ""
     @SceneStorage("agentTooling.marketplace.component") var componentFilter: MarketplaceComponentFilter = .all
     @SceneStorage("agentTooling.marketplace.client") var clientFilter: MarketplaceClientFilter = .all
@@ -79,6 +82,12 @@ struct MarketplaceView: View {
         .onAppear { if !workspace.device.isEnabled(clientFilter.client) { clientFilter = .all } }
         .onChange(of: workspace.device.enabledClients) { _, _ in
             if !workspace.device.isEnabled(clientFilter.client) { clientFilter = .all }
+        }
+        // Install from Discover is the same picker the Library uses, opened on
+        // the row the listing became. Choosing apps and writing is its job.
+        .sheet(item: $installRequest) { request in
+            WorkspaceAssignmentSheet(
+                session: workspace.library, artifactIDs: [request.id], initialClients: request.clients)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
@@ -296,7 +305,10 @@ struct MarketplaceView: View {
                                 package: package, selected: showingDetails && selectedPackageID == package.id,
                                 detail: [.recentlyUpdated, .installs].contains(sortOrder) ? rowDetail(for: package) : nil,
                                 inLibrary: session.libraryMatch(for: package) != nil,
-                                compact: showingDetails
+                                compact: showingDetails,
+                                install: installAffordance(for: package),
+                                busy: session.adoptingPackageID == package.id,
+                                onInstall: { client in Task { await install(package, client: client) } }
                             ) {
                                 selectedPackageID = package.id
                                 showingDetails = true
@@ -313,4 +325,54 @@ struct MarketplaceView: View {
         .paneMaterial()
     }
 
+
+    // MARK: - Install
+
+    /// What Install does for one listing: nothing to offer (no app on this Mac
+    /// can take it), one press that knows where it goes, or a choice of app
+    /// first because the listing installs through a client's own installer and
+    /// more than one client here could take it.
+    enum InstallAffordance: Equatable {
+        case install(ClientKind?)
+        case choose([ClientKind])
+    }
+
+    struct InstallRequest: Identifiable {
+        let id: ArtifactID
+        let clients: Set<ClientKind>
+    }
+
+    func installAffordance(for package: MarketplacePackage) -> InstallAffordance? {
+        if session.libraryMatch(for: package) != nil { return .install(nil) }
+        if WorkspaceMarketplaceSession.skillsShListing(package) != nil { return .install(nil) }
+        if package.components.contains(.mcpServer),
+           case .reviewed = ReviewedMarketplaceMCPServer.availability(for: package) {
+            return .install(nil)
+        }
+        let routes = package.nativeInstalls
+            .map(\.client)
+            .filter { availableClients.contains($0) && session.adoptionRefusal(for: package, client: $0) == nil }
+        switch routes.count {
+        case 0: return nil
+        case 1: return .install(routes[0])
+        default: return .choose(routes.sorted { $0.rawValue < $1.rawValue })
+        }
+    }
+
+    /// Puts the listing in the library if it is not there yet, then opens the
+    /// picker on that row. The library write is the session's; the client
+    /// writes are the picker's; nothing here touches a client.
+    func install(_ package: MarketplacePackage, client: ClientKind?) async {
+        if session.libraryMatch(for: package) == nil {
+            if WorkspaceMarketplaceSession.skillsShListing(package) != nil {
+                await session.adoptSkill(package)
+            } else if package.components.contains(.mcpServer), package.nativeInstalls.isEmpty {
+                await session.adoptMCPServer(package)
+            } else if let client {
+                await session.adopt(package, client: client)
+            }
+        }
+        guard let match = session.libraryMatch(for: package) else { return }
+        installRequest = InstallRequest(id: match.artifactID, clients: client.map { [$0] } ?? [])
+    }
 }

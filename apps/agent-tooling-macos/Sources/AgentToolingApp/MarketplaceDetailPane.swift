@@ -203,18 +203,23 @@ extension MarketplaceView {
     func alreadyInLibrary(_ match: WorkspaceMarketplaceSession.LibraryMatch, for package: MarketplacePackage) -> some View {
         VStack(alignment: .leading, spacing: Space.md) {
             StatusBadge(state: .healthy, text: "Already in your library as \(match.displayName)")
-            Button("Show in Library", systemImage: "books.vertical") {
-                // A server lives on the Connections tab; everything else that
-                // can be matched here is a package on the Plugins tab.
-                navigation.openItem(
-                    match.itemID, in: package.components.contains(.mcpServer) ? .mcpServers : .plugins)
+            HStack(spacing: Space.md) {
+                // The same picker the Library offers, on this row.
+                installButton(for: package, client: nil)
+                Button("Show in Library", systemImage: "books.vertical") {
+                    navigation.openItem(match.itemID, in: Self.librarySection(for: package))
+                }
+                .secondaryActionStyle()
             }
-            .primaryActionStyle()
-            Text("Where this package is installed is decided on the Apps screen, not here.")
-                .font(AgentFont.micro)
-                .foregroundStyle(.secondary)
-                .wrapsLines()
         }
+    }
+
+    /// Where a listing's library row lives: a server on Connections, a skill
+    /// on Skills, anything else on Plugins.
+    static func librarySection(for package: MarketplacePackage) -> AppSection {
+        if package.components.contains(.mcpServer) { return .mcpServers }
+        if WorkspaceMarketplaceSession.skillsShListing(package) != nil { return .skills }
+        return .plugins
     }
 
     /// Install routes state the scope the client would use in its own words,
@@ -234,11 +239,54 @@ extension MarketplaceView {
     /// than only in a tooltip nobody hovers.
     @ViewBuilder
     func installRoutes(for package: MarketplacePackage) -> some View {
-        if let availability = session.mcpAvailability(for: package) {
+        if let listing = WorkspaceMarketplaceSession.skillsShListing(package) {
+            skillRoutes(for: package, listing: listing)
+        } else if let availability = session.mcpAvailability(for: package) {
             mcpServerRoutes(for: package, availability: availability)
         } else {
             pluginRoutes(for: package)
         }
+    }
+
+    /// One Install for a registry skill. The registry names the repository
+    /// and the skill; Install finds the skill's folder on the repository's
+    /// default branch, adds it to the library as a skill that follows that
+    /// repository, and opens the picker to choose the apps.
+    @ViewBuilder
+    func skillRoutes(for package: MarketplacePackage, listing: (repository: String, skillID: String)) -> some View {
+        VStack(alignment: .leading, spacing: Space.md) {
+            Text("Install route")
+                .font(AgentFont.captionSemibold).foregroundStyle(.secondary)
+            Text("Fetched from github.com/\(listing.repository) at its default branch and kept in your library as a skill that follows that repository, so Updates can check it. Then you choose the apps.")
+                .font(AgentFont.caption)
+                .foregroundStyle(.secondary)
+                .wrapsLines()
+            installButton(for: package, client: nil)
+            adoptionMessage(for: package)
+        }
+    }
+
+    /// The Install control every route section shares: busy while this listing
+    /// is being added, disabled with its reason otherwise.
+    func installButton(for package: MarketplacePackage, client: ClientKind?, refusal: String? = nil) -> some View {
+        let busy = session.adoptingPackageID == package.id
+        return Button {
+            Task { await install(package, client: client) }
+        } label: {
+            HStack(spacing: Space.sm) {
+                if busy {
+                    ProgressView().controlSize(.small)
+                } else if let client {
+                    ClientBrandIcon(client: client, size: Size.brandMark)
+                } else {
+                    Image(systemName: "arrow.down.circle")
+                }
+                Text(client.map { "Install for \($0.rawValue)…" } ?? "Install…")
+            }
+        }
+        .primaryActionStyle()
+        .disabled(refusal != nil || !session.canAdopt || session.isAdopting)
+        .help(refusal ?? (session.canAdopt ? WorkspaceMarketplaceSession.adoptionNote : WorkspaceMarketplaceSession.readOnlyNote))
     }
 
     /// One button for an MCP-server listing with a reviewed route, or one plain
@@ -254,17 +302,7 @@ extension MarketplaceView {
                 .font(AgentFont.captionSemibold).foregroundStyle(.secondary)
             switch availability {
             case .reviewed:
-                Button {
-                    Task { await session.adoptMCPServer(package) }
-                } label: {
-                    HStack(spacing: Space.sm) {
-                        Image(systemName: "tray.and.arrow.down")
-                        Text("Add to Library")
-                    }
-                }
-                .primaryActionStyle()
-                .disabled(!session.canAdopt || session.isAdopting)
-                .help(session.canAdopt ? WorkspaceMarketplaceSession.adoptionNote : WorkspaceMarketplaceSession.readOnlyNote)
+                installButton(for: package, client: nil)
             case .needsManualSetup:
                 // Only promise a command below when the detail pane actually
                 // renders one for this listing; a credentials-only registry
@@ -307,21 +345,8 @@ extension MarketplaceView {
             }
             FlowLayout(spacing: Space.md) {
                 ForEach(routes) { route in
-                    let refusal = session.adoptionRefusal(for: package, client: route.client)
-                    Button {
-                        Task { await session.adopt(package, client: route.client) }
-                    } label: {
-                        HStack(spacing: Space.sm) {
-                            ClientBrandIcon(client: route.client, size: Size.brandMark)
-                            Text("Add to Library for \(route.client.rawValue)")
-                        }
-                    }
-                    .primaryActionStyle()
-                    .disabled(refusal != nil || !session.canAdopt || session.isAdopting)
-                    .help(
-                        refusal ?? (session.canAdopt ? nil : WorkspaceMarketplaceSession.readOnlyNote)
-                            ?? ("\(route.detail) Scope: \(route.scope.marketplaceInstallTitle). "
-                                + WorkspaceMarketplaceSession.adoptionNote))
+                    installButton(for: package, client: route.client,
+                                  refusal: session.adoptionRefusal(for: package, client: route.client))
                 }
             }
             // A client that refused says so in a readable line, so a disabled

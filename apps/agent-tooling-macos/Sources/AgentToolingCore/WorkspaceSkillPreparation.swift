@@ -77,6 +77,28 @@ public enum WorkspaceSkillPreparation {
         try await fetchUpstream(binding: binding, cacheURL: cacheURL, runner: ProcessCommandRunner())
     }
 
+    /// The binding for a skill a registry named by repository and name alone:
+    /// the repository's default branch and the folder that holds the skill.
+    /// Fetch it with `fetchUpstream(binding:cacheURL:)` afterwards.
+    public static func locateUpstream(
+        skillID: String,
+        repositoryURL: String,
+        cacheURL: URL
+    ) async throws -> SkillRepositoryBinding {
+        try await locateUpstream(skillID: skillID, repositoryURL: repositoryURL, cacheURL: cacheURL, runner: ProcessCommandRunner())
+    }
+
+    static func locateUpstream(
+        skillID: String,
+        repositoryURL: String,
+        cacheURL: URL,
+        runner: any CommandRunning
+    ) async throws -> SkillRepositoryBinding {
+        try Task.checkCancellation()
+        return try await SkillRepositoryService(cacheURL: cacheURL, runner: runner)
+            .locate(skillID: skillID, repositoryURL: repositoryURL)
+    }
+
     static func fetchUpstream(
         binding: SkillRepositoryBinding,
         cacheURL: URL,
