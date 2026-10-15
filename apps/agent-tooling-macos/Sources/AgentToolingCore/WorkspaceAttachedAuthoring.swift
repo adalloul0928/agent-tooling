@@ -70,11 +70,7 @@ public struct AttachedAuthoringIntakeCommand: Sendable {
                       sourceID.rawValue.uuidString.lowercased(),
                       displayName, declaredName, directoryPath]
         fields += aliases.flatMap { [$0.namespace, $0.value] }
-        let framed = fields.map {
-            let value = $0.precomposedStringWithCanonicalMapping
-            return String(value.utf8.count) + ":" + value
-        }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
+        return framedDigest(fields: fields)
     }
 
     func apply(to document: inout PortableWorkspaceDocument) throws -> [ArtifactID] {

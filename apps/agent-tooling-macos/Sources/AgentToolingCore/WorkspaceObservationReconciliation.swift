@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// Brings the library up to date with what a later check of this Mac found.
@@ -178,11 +177,7 @@ public struct WorkspaceObservationReconciliationCommand: Codable, Sendable, Equa
             fields.append(addition.packageRelativePath ?? "")
             fields.append(String(describing: addition.authority))
         }
-        let framed = fields.map {
-            let value = $0.precomposedStringWithCanonicalMapping
-            return String(value.utf8.count) + ":" + value
-        }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
+        return framedDigest(fields: fields)
     }
 
     func apply(to document: inout PortableWorkspaceDocument) throws -> [ArtifactID] {

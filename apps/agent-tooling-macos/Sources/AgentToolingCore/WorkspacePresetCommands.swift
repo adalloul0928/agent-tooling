@@ -95,11 +95,7 @@ public struct CreatePresetCommand: Sendable {
             name,
         ]
         fields += memberArtifactIDs.map { $0.rawValue.uuidString.lowercased() }
-        let framed = fields.map {
-            let value = $0.precomposedStringWithCanonicalMapping
-            return String(value.utf8.count) + ":" + value
-        }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
+        return framedDigest(fields: fields)
     }
 
     func apply(to document: inout PortableWorkspaceDocument) throws -> [ArtifactID] {
@@ -156,17 +152,13 @@ public struct RenamePresetCommand: Sendable {
     }
 
     func inputDigest() -> String {
-        let framed = [
+        return framedDigest(fields: [
             "preset.rename.v1",
             expectedRevisionID.rawValue.uuidString.lowercased(),
             idempotencyKey.rawValue.uuidString.lowercased(),
             presetID.rawValue.uuidString.lowercased(),
             name,
-        ].map {
-            let value = $0.precomposedStringWithCanonicalMapping
-            return String(value.utf8.count) + ":" + value
-        }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
+        ])
     }
 
     func apply(to document: inout PortableWorkspaceDocument) throws -> [ArtifactID] {

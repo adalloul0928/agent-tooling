@@ -185,3 +185,17 @@ func skillCommandDigest<T: Encodable>(_ command: T, operation: String) throws ->
     guard bytes.count <= WorkspaceDocumentCoding.maximumDocumentBytes else { throw WorkspaceRevisionStoreError.recordTooLarge }
     return SHA256.hash(data: bytes).lowercaseHex
 }
+
+/// The `|`-joined, length-prefixed framed digest: each field is NFC-normalized,
+/// prefixed with its UTF-8 byte count and a colon, joined with `|`, then
+/// SHA-256 hashed. The length prefix is what makes the join unambiguous, so a
+/// field containing `|` cannot be confused with a field boundary. The digest is
+/// a persisted idempotency identity, so this byte layout must not change; the
+/// field list and its order are each caller's own contract.
+func framedDigest(fields: [String]) -> String {
+    let framed = fields.map {
+        let value = $0.precomposedStringWithCanonicalMapping
+        return String(value.utf8.count) + ":" + value
+    }.joined(separator: "|")
+    return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
+}

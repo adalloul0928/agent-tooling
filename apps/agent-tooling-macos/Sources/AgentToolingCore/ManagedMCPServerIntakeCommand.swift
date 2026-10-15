@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// Why a connection was not recorded, in the words the screen shows.
@@ -208,11 +207,7 @@ public struct ManagedMCPServerIntakeCommand: Sendable {
         case nil: fields.append("noDestination")
         }
         fields += credentialRequirementNames
-        let framed = fields.map {
-            let value = $0.precomposedStringWithCanonicalMapping
-            return String(value.utf8.count) + ":" + value
-        }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
+        return framedDigest(fields: fields)
     }
 
     // MARK: - The transaction's two halves

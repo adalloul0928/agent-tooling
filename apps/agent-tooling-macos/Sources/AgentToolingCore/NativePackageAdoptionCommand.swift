@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// Why a catalog listing was not added to the library.
@@ -153,11 +152,7 @@ public struct NativePackageAdoptionCommand: Codable, Sendable, Equatable {
             externalPluginID,
             displayName,
         ]
-        let framed = fields.map {
-            let value = $0.precomposedStringWithCanonicalMapping
-            return String(value.utf8.count) + ":" + value
-        }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
+        return framedDigest(fields: fields)
     }
 
     /// Writes the one record, or refuses and names the row already here.
