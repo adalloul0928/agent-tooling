@@ -253,10 +253,6 @@ public enum WorkspaceSkillTargetCapture {
             withUnsafeBytes(of: &length) { bytes.append(contentsOf: $0) }
             bytes.append(content)
         }
-        var hash = Array(SHA256.hash(data: bytes).prefix(16))
-        hash[6] = (hash[6] & 0x0f) | 0x80
-        hash[8] = (hash[8] & 0x3f) | 0x80
-        return WorkspaceObjectID(UUID(uuid: (hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
-            hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15])))
+        return WorkspaceObjectID.stampingVersion8(digestPrefix: Array(SHA256.hash(data: bytes).prefix(16)))
     }
 }

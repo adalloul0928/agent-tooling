@@ -481,13 +481,7 @@ public struct AccountPreferenceKey: Codable, Hashable, Sendable, Comparable {
             bytes.append(Data("\(field.utf8.count):".utf8))
             bytes.append(Data(field.utf8))
         }
-        var digest = Array(SHA256.hash(data: bytes).prefix(16))
-        digest[6] = (digest[6] & 0x0F) | 0x80  // version 8
-        digest[8] = (digest[8] & 0x3F) | 0x80  // RFC 4122 variant
-        let uuid = UUID(uuid: (
-            digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6], digest[7],
-            digest[8], digest[9], digest[10], digest[11], digest[12], digest[13], digest[14], digest[15]))
-        return WorkspaceObjectID(rawValue: uuid)
+        return WorkspaceObjectID.stampingVersion8(digestPrefix: Array(SHA256.hash(data: bytes).prefix(16)))
     }
 
     /// The switch in words, for a plan step and a conflict.

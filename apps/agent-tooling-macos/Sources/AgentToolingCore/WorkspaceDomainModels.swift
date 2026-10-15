@@ -23,6 +23,22 @@ public struct WorkspaceObjectID: RawRepresentable, Codable, Hashable, Comparable
     public static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.rawValue.uuidString.lowercased() < rhs.rawValue.uuidString.lowercased()
     }
+
+    /// Stamps 16 digest bytes into a deterministic version-8, RFC 4122 variant
+    /// object ID. Each caller frames its own input and hashes it; this is the
+    /// shared tail from the first 16 SHA-256 bytes to the ID, so two call sites
+    /// that frame the same bytes land on the same identity. The caller passes
+    /// the first 16 bytes of its digest.
+    static func stampingVersion8(digestPrefix bytes: [UInt8]) -> WorkspaceObjectID {
+        precondition(bytes.count == 16, "a version-8 object ID needs 16 digest bytes")
+        var digest = bytes
+        digest[6] = (digest[6] & 0x0F) | 0x80  // version 8
+        digest[8] = (digest[8] & 0x3F) | 0x80  // RFC 4122 variant
+        let uuid = UUID(uuid: (
+            digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6], digest[7],
+            digest[8], digest[9], digest[10], digest[11], digest[12], digest[13], digest[14], digest[15]))
+        return WorkspaceObjectID(rawValue: uuid)
+    }
 }
 
 public struct ArtifactID: RawRepresentable, Codable, Hashable, Comparable, Sendable {
