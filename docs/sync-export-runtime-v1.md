@@ -1,9 +1,13 @@
 # Git transport, package export and ToolHive actions v1
 
-Status: three foundations implemented and fixture-tested. The Git transport is
+Superseded by docs/multi-mac-sync-v1.md for sync; kept for the export + ToolHive
+sections.
+
+Status: the Git transport, revision-store sync lifecycle, package export and
+ToolHive actions are implemented and fixture-tested. The Git transport is
 exercised against real local repositories; the ToolHive actions are exercised
-against a scripted `thv`, never a live runtime. No two-Mac pilot, no live
-ToolHive qualification and no export UI exist yet.
+against a scripted `thv`, never a live runtime. The two-Mac acceptance pilot and
+live ToolHive qualification remain open.
 
 ## Git workspace transport
 
@@ -97,8 +101,11 @@ publish, adopt whole, independent edits on both sides converging on one head,
 and a conflicting rename that commits and publishes nothing. Two stores are not
 two Macs; the two-Mac pilot remains a required gate.
 
-## Not yet implemented
+## Still open
 
-There is no sync outbox, background scheduler, enrollment flow, conflict inbox,
-devices UI, export UI or lifecycle UI. No adapter or runtime action has been
-checked against a live installation, and no encrypted-folder transport exists.
+The scheduler, enrollment flow, devices UI, conflict inbox and package export
+session are implemented (see multi-mac-sync-v1.md and
+`WorkspacePackageExportSession`), and the encrypted-folder transport exists
+(`EncryptedFolderWorkspaceTransport`, encrypted-folder-sync-v1.md). What remains
+open is the sync outbox and recovery journal, live ToolHive qualification
+against a real installation, and the two-Mac acceptance pilot.

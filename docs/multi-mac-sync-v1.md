@@ -1,7 +1,8 @@
 # Multi-Mac sync — contract v1
 
-Status: specified; implementation in progress. No two-Mac run yet (see
-"Pilot" at the end — the pilot is run by hand on two real Macs).
+Status: implemented (commits fdb7c9c core, 9220dcc app, 85494df + f2ea17e
+fixes); two-Mac acceptance pilot pending (see "Pilot" at the end, run by hand
+on two real Macs).
 
 ## Shape
 
@@ -45,6 +46,14 @@ Followed skills (`centralUpstream`) are re-fetched from their repository on
 each Mac; native plugins are installed by their app; tracked-only items have no
 content. Publishing happens with the document, in the same commit.
 
+**Content report.** Each pass records a `ContentReport` of what it moved
+besides the document: `imported` (trees this Mac copied in from the remote),
+`published` (trees this Mac added to the remote, listed only after the remote
+accepted the push), `unpublished` (trees this Mac owes the remote but a side
+publish failed on this pass; the documents are in step and the next pass
+retries), and `missing` (trees the document names that neither side could
+supply).
+
 **`status/<deviceID>.json`** is written only by the Mac it names, after each
 scan or apply. It is a small summary — device name, last scan, what is
 installed per app, what is pending — for other Macs to *show*. It is never read
@@ -53,6 +62,13 @@ trivially because only one writer exists per file. A missing or stale file is
 shown as "last seen …", never as an error.
 
 Anything else in the checkout stops a publish, as today.
+
+Every Git call, including the `git archive` that extracts a content tree, runs
+through one hardened invocation: `core.hooksPath=/dev/null`,
+`core.fsmonitor=false`, `core.quotePath=false`, `--no-optional-locks` and
+`--no-pager`. Working-tree status is read as porcelain v1 `-z` records (a rename
+or copy carries its source as a second NUL-terminated field), and the status
+listing at a head is filtered to `status/*.json` and then bounded to 256 files.
 
 ## Device identity
 

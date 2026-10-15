@@ -1,9 +1,9 @@
 # Effective native settings v1
 
-Status: the resolver and two versioned vendor adapters are implemented and
-fixture-tested. No file reader, inspector UI or editor exists yet, and no
-adapter has been checked against a live installed client, so this does not
-establish effective-settings coverage for any real setup.
+Status: the resolver, two versioned vendor adapters, the file reader and the
+inspector UI are implemented and fixture-tested. No adapter has been checked
+against a live installed client, and the inspector is read-only, so this does
+not establish effective-settings coverage for every real setup.
 
 ## Contract
 
@@ -89,10 +89,11 @@ An MCP tool, `get_effective_settings`, reports the same explanation to an agent.
 It reads the agent's own files and writes nothing; settings this build does not
 interpret are listed separately and never presented as effective.
 
-## Not yet implemented
+## Still open
 
-Project trust gating, Claude Desktop MCP discovery, an editing UI, hooks/agents/
-instructions views, and the dated compatibility register with upstream
-schema-change detection all remain open. Gemini has no adapter; its current TOML
-discovery must not be presented as effective-settings support. No adapter has
-been checked against a live installed client.
+The inspector is read-only: an editing UI, and hooks/agents/instructions views,
+remain open. Project trust gating, Claude Desktop MCP discovery, and the dated
+compatibility register with upstream schema-change detection also remain open.
+Gemini has no adapter; its current TOML discovery must not be presented as
+effective-settings support. No adapter has been checked against a live installed
+client.

@@ -49,3 +49,21 @@ behavior belongs in native adapter manifests.
   Git-SHA versioning produces a warning.
 - Review the Git diff and scan for secrets before committing.
 - Do not commit or push unless the user explicitly asks.
+
+## macOS app
+
+- App code lives in `apps/agent-tooling-macos` (SwiftUI). The targets are the
+  library `AgentToolingCore` and the executables `AgentToolingApp`,
+  `AgentToolingMCP`, and `AgentToolingCLI`.
+- Build and test with `swift build --disable-sandbox` and
+  `swift test --disable-sandbox`.
+- Design tokens live in `Sources/AgentToolingApp/DesignTokens.swift`. A raw
+  number in a view is a bug; draw from the scales instead.
+- Never use `fixedSize(horizontal: false, vertical: true)`; use `.wrapsLines()`
+  for text that may wrap (`LateContentLayoutTests` guards this).
+- Every client write is a reviewed plan driven by `OperationEngine` against
+  `OperationCommandPolicy`.
+- Secrets never enter the portable document; `AgentToolingMCP` sweeps responses
+  through `ResponseRedaction`.
+- `docs/README.md` is the index of contracts and marks which are historical.
+- Commit after a passing build. Never push.

@@ -1,6 +1,6 @@
 # Versioned workspace store and service
 
-Status: D2/D3 foundation under integration, September 8, 2026. This additive implementation does not replace `WorkspaceStore`, migrate a live workspace, or authorize native operations.
+Status: implemented. The packaged app writes through `WorkspaceApplicationService` as its launch-time writer. This additive implementation runs alongside `WorkspaceStore` without replacing it or migrating a live workspace in place.
 
 ## Store isolation
 
@@ -14,7 +14,7 @@ The SQLite application ID, schema version, workspace ID and device ID are checke
 
 `WorkspaceApplicationService` is a Swift actor whose initial operation changes a library display label. It preserves declared names, aliases, content authority, package membership, source locks, native routes and physical files. Logical project and preset records retain the same display label as their artifact record.
 
-The actor is an integration boundary, not an authentication mechanism. It is not exposed through MCP. Existing MCP tools remain request-only. It now also supports [central standalone intake and content updates](central-skill-intake-v1.md), with immutable reviewed content and source metadata. Assignment and native actions still need reviewed planner/service integration.
+The actor is an integration boundary, not an authentication mechanism. It is not exposed through MCP. Existing MCP tools remain request-only. It now also supports [central standalone intake and content updates](central-skill-intake-v1.md), with immutable reviewed content and source metadata. The packaged app constructs it as its launch-time writer in `WorkspaceLaunch` and writes through it.
 
 Each command contains an expected revision and idempotency key. Core computes a domain-separated canonical input digest. A SQLite `BEGIN IMMEDIATE` transaction serializes mutation across independent connections/processes; per-process actor serialization is insufficient on its own.
 
@@ -31,7 +31,7 @@ A retried older command returns its original result even after newer commands ad
 ## Integration and recovery still required
 
 - D2 now has explicit identity/reference mapping and a [validated in-memory candidate](workspace-migration-assembly-v1.md), including local metadata retention. A [consistent raw checkpoint and immutable archive](workspace-legacy-checkpoints-v1.md) are also implemented separately. Resolver/destination comparison, final freshness checks and a rollback receipt remain required. No launch-time conversion is implemented here.
-- D3 must integrate rename and central skill intake/update with actual GUI/CLI entry points and the existing trusted operation executor. The service is not yet the packaged app's active writer.
+- D3 integrates rename and central skill intake/update with the GUI/CLI entry points and the trusted operation executor; the service is the packaged app's active writer. History import, outbox acknowledgment and a power-loss recovery journal remain open.
 - S3/Y2 must journal complete content staging and filesystem/database recovery. SQLite metadata atomicity alone does not make native filesystem changes atomic.
 - Y1/Y2/Y3 must add history import, merge publication, outbox acknowledgment, retention and restore-as-a-new-revision semantics.
 - Private directories and no-follow checks reject ordinary database/directory/sidecar symlinks. They are not proof against every same-user path-swap race; filesystem mutation/journal work needs descriptor-based destination validation.
