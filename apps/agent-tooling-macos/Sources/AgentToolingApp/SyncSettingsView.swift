@@ -293,12 +293,10 @@ struct SyncSettingsView: View {
                 parts.append(installed.map { "\($0.surface.displayName) \($0.skillCount) skills" }.joined(separator: ", "))
             }
             if !status.pending.isEmpty { parts.append("\(status.pending.count) pending") }
-        } else if let seen = device.lastSeenAt {
-            parts.append("Last seen \(SnapshotTime.compact(seen))")
         } else {
-            parts.append("Not seen yet")
+            parts.append(device.lastSeenText)
         }
-        if !device.receivesSharedAssignments { parts.append("Takes only what names it") }
+        if !device.receivesSharedAssignments { parts.append(DeviceLabels.limitedMac) }
         return parts.joined(separator: " · ")
     }
 

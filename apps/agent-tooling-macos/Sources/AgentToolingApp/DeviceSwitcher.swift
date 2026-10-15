@@ -25,7 +25,7 @@ struct DeviceSwitcher: View {
                             Label {
                                 Text(device.name)
                                 if let seen = sync.status(of: device.id)?.publishedAt ?? device.lastSeenAt {
-                                    Text("Last seen \(SnapshotTime.compact(seen))")
+                                    Text(DeviceLabels.lastSeen(seen))
                                 }
                             } icon: {
                                 Image(systemName: "laptopcomputer")
@@ -76,7 +76,7 @@ struct OtherMacSheet: View {
                 }
                 Spacer()
                 if !device.receivesSharedAssignments {
-                    StatusBadge(state: .pending, text: "Takes only what names it")
+                    StatusBadge(state: .pending, text: DeviceLabels.limitedMac)
                 }
             }
             .padding(.horizontal, Space.xxxl)
@@ -173,7 +173,7 @@ struct OtherMacSheet: View {
 
     private var asOf: String {
         if let status { return "As of \(SnapshotTime.compact(status.publishedAt)) · \(status.name)'s own report" }
-        if let seen = device.lastSeenAt { return "Last seen \(SnapshotTime.compact(seen)) · nothing reported yet" }
+        if let seen = device.lastSeenAt { return "\(DeviceLabels.lastSeen(seen)) · nothing reported yet" }
         return "Not seen since it joined"
     }
 }

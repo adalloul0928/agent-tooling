@@ -283,7 +283,7 @@ struct WorkspaceAssignmentSheet: View {
             ForEach(otherDevices) { device in
                 Hairline(indent: Hairline.afterLeading(Size.tile))
                 deviceRow(id: device.id, name: device.name,
-                          detail: device.lastSeenAt.map { "Last seen \(SnapshotTime.compact($0))" } ?? "Not seen yet",
+                          detail: device.lastSeenText,
                           limited: !device.receivesSharedAssignments)
             }
         }
@@ -298,7 +298,7 @@ struct WorkspaceAssignmentSheet: View {
                 Image(systemName: "desktopcomputer").foregroundStyle(.secondary).frame(width: Size.tile)
                 VStack(alignment: .leading, spacing: Space.xxs) {
                     Text(name).font(AgentFont.bodyMedium)
-                    Text(limited ? "\(detail) · Takes only what names it" : detail).font(AgentFont.caption).foregroundStyle(.secondary)
+                    Text(limited ? "\(detail) · \(DeviceLabels.limitedMac)" : detail).font(AgentFont.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: Space.lg)
                 SelectionCheckbox(selected: chosenDevices.contains(id), enabled: true)
