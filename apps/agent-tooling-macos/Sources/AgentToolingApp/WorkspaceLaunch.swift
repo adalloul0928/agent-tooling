@@ -89,11 +89,18 @@ struct WorkspaceLaunch {
             return false
         }
         guard let locator = try? WorkspaceLocator(root: root) else { return false }
+        // read() returns nil only when there is no record, and throws when one
+        // exists but this build cannot read it. A do/catch keeps those apart:
+        // `try?` would fold the throw into the same nil as the absence and
+        // report a first run on a Mac that already has an unreadable workspace.
         // An unreadable record is treated as present: starting a second
         // workspace beside one this build cannot read would be the worse error,
         // and open() will say what is wrong with it.
-        guard let record = try? locator.read() else { return true }
-        return record != nil
+        do {
+            return try locator.read() != nil
+        } catch {
+            return true
+        }
     }
 
     /// The second Mac's first run: joins the workspace another Mac published,
