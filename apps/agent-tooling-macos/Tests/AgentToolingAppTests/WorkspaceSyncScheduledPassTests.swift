@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -124,7 +125,7 @@ struct WorkspaceSyncScheduledPassTests {
             remote = root.appending(path: "remote.git")
             try FileManager.default.createDirectory(at: remote, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
-            try Self.git(["init", "--bare", "--initial-branch", "main", remote.path], in: root)
+            try GitTestFixture.git(["init", "--bare", "--initial-branch", "main", remote.path], in: root)
 
             workspaceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e5")!)
             let document = try WorkspaceDocumentCoding.seal(.init(
@@ -141,7 +142,7 @@ struct WorkspaceSyncScheduledPassTests {
                                       device: .init(workspaceID: workspaceID, deviceID: otherStore.deviceID))
             other = WorkspaceSyncCoordinator(
                 store: otherStore,
-                transport: try await Self.enroll(remote: remote, checkout: root.appending(path: "checkout-other")),
+                transport: try await GitTestFixture.enroll(remote: remote, checkout: root.appending(path: "checkout-other")),
                 writerID: WorkspaceObjectID())
             enrollmentStore = try WorkspaceSyncEnrollmentStore(containerRoot: root)
         }
@@ -149,7 +150,7 @@ struct WorkspaceSyncScheduledPassTests {
         /// Prepares this Mac's own checkout and records the connection.
         func connect() async throws {
             let checkout = root.appending(path: "checkout")
-            _ = try await Self.enroll(remote: remote, checkout: checkout)
+            _ = try await GitTestFixture.enroll(remote: remote, checkout: checkout)
             try enrollmentStore.write(.init(workspaceID: workspaceID, remote: remote.path,
                                             checkoutPath: checkout.standardizedFileURL.path))
         }
@@ -178,24 +179,6 @@ struct WorkspaceSyncScheduledPassTests {
         func session() -> WorkspaceSyncSession {
             WorkspaceSyncSession(store: store, enrollmentStore: enrollmentStore,
                                  workspaceID: workspaceID, writerID: WorkspaceObjectID())
-        }
-
-        static func enroll(remote: URL, checkout: URL) async throws -> GitWorkspaceTransport {
-            let transport = try await GitWorkspaceTransport.enroll(remote: remote.path, checkout: checkout)
-            try git(["config", "user.email", "fixture@example.com"], in: checkout)
-            try git(["config", "user.name", "Fixture"], in: checkout)
-            return transport
-        }
-
-        static func git(_ arguments: [String], in directory: URL) throws {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-            process.arguments = arguments
-            process.currentDirectoryURL = directory
-            process.standardOutput = Pipe()
-            process.standardError = Pipe()
-            try process.run()
-            process.waitUntilExit()
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }

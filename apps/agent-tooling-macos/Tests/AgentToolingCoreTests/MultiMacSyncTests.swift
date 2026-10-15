@@ -1,4 +1,5 @@
 import Foundation
+import AgentToolingTestSupport
 import Testing
 
 @testable import AgentToolingCore
@@ -30,7 +31,7 @@ struct MultiMacSyncTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appending(path: "multi-mac-\(UUID())")
             remote = root.appending(path: "remote.git")
             try FileManager.default.createDirectory(at: remote, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            try Self.git(["init", "--bare", "--initial-branch", "main", remote.path], in: root)
+            try GitTestFixture.git(["init", "--bare", "--initial-branch", "main", remote.path], in: root)
         }
 
         /// A Mac's home with a Git identity, so commits have an author the way a
@@ -84,17 +85,6 @@ struct MultiMacSyncTests {
             #expect(try locator.read()?.workspaceID == joined.store.workspaceID)
             return .init(name: name, home: home, container: container, store: joined.store, service: service,
                          contentStore: contentStore, coordinator: coordinator, transport: transport)
-        }
-
-        static func git(_ arguments: [String], in directory: URL) throws {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-            process.arguments = arguments
-            process.currentDirectoryURL = directory
-            process.standardOutput = Pipe()
-            process.standardError = Pipe()
-            try process.run()
-            process.waitUntilExit()
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }
