@@ -51,7 +51,6 @@ final class WorkspaceAccountsSession {
     @ObservationIgnored private let homeRoot: URL
     @ObservationIgnored private let reader: any AccountSurfaceReading
     @ObservationIgnored private let openURL: @Sendable (URL) -> Void
-    @ObservationIgnored private var generation: UInt64 = 0
     /// Callers waiting for every read in flight to finish.
     @ObservationIgnored private var readWaiters: [CheckedContinuation<Void, Never>] = []
 
@@ -133,8 +132,6 @@ final class WorkspaceAccountsSession {
         readingProviders.formUnion(fresh)
         readingDepth = depth
         errorMessage = nil
-        generation &+= 1
-        let token = generation
         let reader = self.reader
         let read = await Task.detached(priority: .userInitiated) {
             await reader.read(fresh, depth: depth, now: .now)
@@ -147,9 +144,10 @@ final class WorkspaceAccountsSession {
             readWaiters = []
             for waiter in waiters { waiter.resume() }
         }
-        if token == generation || readingProviders.isEmpty {
-            await replan()
-        }
+        // This call wrote observations, so recompute plans from them. A
+        // superseded read used to skip this while another read was still
+        // running, leaving plans lagging observations until the next read.
+        await replan()
     }
 
     /// Returns once no read is in flight.
@@ -300,6 +298,10 @@ final class WorkspaceAccountsSession {
         let receipt = await OperationExecutor(store: store, homeURL: homeRoot).execute(operation)
         let failed = receipt.results.filter { $0.status == .failed }
         let depth: AccountSurfaceProbe.Depth = observations[provider]?.contentsRead == true ? .contents : .signInOnly
+        // Wait for any read already covering this provider to finish, then read
+        // the file this apply just wrote. Reading straight away would be
+        // coalesced away by an in-flight read and leave the rows pre-apply.
+        await finishReads()
         await read([provider], depth: depth)
         await device.refresh()
         if let first = failed.first {
