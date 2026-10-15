@@ -20,10 +20,28 @@ struct ConnectionHealthProbeTests {
 
     private let home = URL(fileURLWithPath: "/tmp/connection-health-probe-home", isDirectory: true)
 
-    /// Records what a scripted flow was asked to run, safely across tasks.
+    /// Records what a scripted flow was asked to run, safely across tasks, and
+    /// lets a waiter block until a given number of calls have landed so a test
+    /// need not sleep and hope a detached recording Task has run.
     private actor Recorder {
         private(set) var calls: [(String, [String])] = []
-        func record(_ executable: String, _ arguments: [String]) { calls.append((executable, arguments)) }
+        private var waiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
+
+        func record(_ executable: String, _ arguments: [String]) {
+            calls.append((executable, arguments))
+            let reached = waiters.filter { calls.count >= $0.count }
+            waiters.removeAll { calls.count >= $0.count }
+            for waiter in reached { waiter.continuation.resume() }
+        }
+
+        /// Suspends until at least `count` calls have been recorded, resuming
+        /// immediately if that many already have.
+        func waitUntilCount(_ count: Int) async {
+            if calls.count >= count { return }
+            await withCheckedContinuation { continuation in
+                waiters.append((count, continuation))
+            }
+        }
     }
 
     /// A located tool whose listing parses into entries.
@@ -109,7 +127,7 @@ struct ConnectionHealthProbeTests {
         #expect(calls[0].0 == "/opt/homebrew/bin/claude")
         #expect(calls[0].1 == ["mcp", "login", "linear", "--no-browser"])
         #expect(login.commandText(client: .claude, serverID: "linear") == "claude mcp login linear --no-browser")
-        try await Task.sleep(for: .milliseconds(50))
+        await opened.waitUntilCount(1)
         #expect(await opened.calls.map(\.0) == ["https://mcp.linear.app/oauth/authorize?state=abc"])
     }
 
