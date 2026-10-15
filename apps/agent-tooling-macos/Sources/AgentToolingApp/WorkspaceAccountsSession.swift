@@ -195,7 +195,7 @@ final class WorkspaceAccountsSession {
             var plans: [AccountProvider: AccountPreferencePlan] = [:]
             for (provider, observation) in observations {
                 let file = ClientConfigurationFile.settings(for: provider.client).url(homeURL: home)
-                let text = try? String(contentsOf: file, encoding: .utf8)
+                let text = Self.boundedText(at: file)
                 plans[provider] = AccountPreferencePlanner.plan(
                     preferences: preferences, observation: observation, configurationText: text)
             }
@@ -348,11 +348,22 @@ final class WorkspaceAccountsSession {
         return status
     }
 
+    /// The text of a settings file, read with a byte cap so a pathological
+    /// file cannot be loaded whole into memory on a hot path. Nil when the
+    /// file is missing, unreadable, or over the cap — the readers in
+    /// AgentToolingCore use the same 4 MB configuration bound.
+    nonisolated static func boundedText(at url: URL) -> String? {
+        let maximumBytes = 4 * 1_024 * 1_024
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        return try? BoundedInputReader.readUTF8(from: handle, maximumBytes: maximumBytes)
+    }
+
     /// The source Claude Code recorded for a marketplace, from its own
     /// `known_marketplaces.json`. Read only, and only the repository name.
     static func knownMarketplaceSource(named name: String, homeURL: URL) -> String? {
         let url = homeURL.appending(path: ".claude/plugins/known_marketplaces.json")
-        guard let text = try? String(contentsOf: url, encoding: .utf8), text.utf8.count <= 4 * 1_024 * 1_024,
+        guard let text = boundedText(at: url),
               let data = text.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let entry = root[name] as? [String: Any],
