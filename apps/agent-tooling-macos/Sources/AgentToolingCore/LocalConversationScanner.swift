@@ -403,7 +403,6 @@ public struct LocalConversationScanner: Sendable {
 
             for conversation in conversations {
                 if Task.isCancelled { break }
-                var digest = ConversationDigestBuilder(conversationID: conversation.id, client: .codex)
                 let queriedRows = try database.queryRows(
                     sql: """
                         SELECT kind, message, timestamp
