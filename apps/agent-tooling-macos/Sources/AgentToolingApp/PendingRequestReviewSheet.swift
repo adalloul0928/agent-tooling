@@ -20,7 +20,7 @@ struct PendingRequestReviewSheet: View {
     let onContinue: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        ReviewSheetLayout(size: SheetSize.xlarge) {
             HStack(alignment: .top, spacing: Space.xl) {
                 Image(systemName: "tray.and.arrow.down.fill")
                     .font(AgentFont.titleLarge)
@@ -44,88 +44,83 @@ struct PendingRequestReviewSheet: View {
                     .background(AgentTheme.warning.opacity(0.11), in: Capsule())
             }
             .padding(Space.xxxl)
+        } content: {
+            VStack(alignment: .leading, spacing: Space.xl) {
+                AttentionBanner(
+                    title: "A local client asked for this",
+                    message:
+                        "Client identity and request text are self-reported. Continuing only asks Agent Tooling to build its own reviewable draft or plan; it does not approve or run the change."
+                )
 
-            Hairline()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.xl) {
+                if isSkillDraft {
                     AttentionBanner(
-                        title: "A local client asked for this",
+                        title: "This asks for a skill that does not exist yet",
                         message:
-                            "Client identity and request text are self-reported. Continuing only asks Agent Tooling to build its own reviewable draft or plan; it does not approve or run the change."
+                            "Opening the creator runs Codex in an isolated draft folder. Your library is unchanged until you have read the generated files and saved them, and this request stays in the queue until you do."
                     )
+                }
 
-                    if isSkillDraft {
-                        AttentionBanner(
-                            title: "This asks for a skill that does not exist yet",
-                            message:
-                                "Opening the creator runs Codex in an isolated draft folder. Your library is unchanged until you have read the generated files and saved them, and this request stays in the queue until you do."
+                if let refusal {
+                    AttentionBanner(title: "Nothing was approved", message: refusal)
+                }
+
+                VStack(alignment: .leading, spacing: Space.lg) {
+                    detailRow("Request", value: request.summary)
+                    detailRow("Apps", value: request.targets.map(\.rawValue).joined(separator: ", "))
+                    detailRow("Scope", value: request.scope.displayName)
+                    if let componentID = request.componentID {
+                        detailRow("Component", value: componentID, monospaced: true)
+                    }
+                    if let reason = request.reason, !reason.isEmpty {
+                        detailRow("Reason", value: reason)
+                    }
+                    detailRow(
+                        "Requested by", value: request.requestedByLabels.joined(separator: ", "))
+                    if request.repeatCount > 1 {
+                        detailRow(
+                            "Repeated",
+                            value:
+                                "\(request.repeatCount) matching requests · last \(request.lastRequestedAt.formatted(.relative(presentation: .named)))"
                         )
                     }
+                }
+                .padding(Space.xl)
+                .standardPanel()
 
-                    if let refusal {
-                        AttentionBanner(title: "Nothing was approved", message: refusal)
-                    }
-
+                if hasSensitiveDetails {
                     VStack(alignment: .leading, spacing: Space.lg) {
-                        detailRow("Request", value: request.summary)
-                        detailRow("Apps", value: request.targets.map(\.rawValue).joined(separator: ", "))
-                        detailRow("Scope", value: request.scope.displayName)
-                        if let componentID = request.componentID {
-                            detailRow("Component", value: componentID, monospaced: true)
+                        Label("Local review details", systemImage: "lock.macwindow")
+                            .font(AgentFont.heading)
+                        Text(
+                            "These fields are shown only in the app and are not returned by the integration server."
+                        )
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                        if let kind = request.reviewDetails.componentKind {
+                            detailRow("Type", value: kind)
                         }
-                        if let reason = request.reason, !reason.isEmpty {
-                            detailRow("Reason", value: reason)
+                        if let transport = request.reviewDetails.transport {
+                            detailRow("Transport", value: transport)
                         }
-                        detailRow(
-                            "Requested by", value: request.requestedByLabels.joined(separator: ", "))
-                        if request.repeatCount > 1 {
-                            detailRow(
-                                "Repeated",
-                                value:
-                                    "\(request.repeatCount) matching requests · last \(request.lastRequestedAt.formatted(.relative(presentation: .named)))"
-                            )
+                        if let endpoint = request.reviewDetails.endpoint {
+                            detailRow("Endpoint or command", value: endpoint, monospaced: true)
+                        }
+                        if let projectRoot = request.reviewDetails.projectRoot {
+                            detailRow("Project", value: projectRoot, monospaced: true)
+                        }
+                        if let source = request.reviewDetails.source {
+                            detailRow("Catalog source", value: source)
+                        }
+                        if let instruction = request.reviewDetails.instruction {
+                            detailRow("Instruction", value: instruction)
                         }
                     }
                     .padding(Space.xl)
                     .standardPanel()
-
-                    if hasSensitiveDetails {
-                        VStack(alignment: .leading, spacing: Space.lg) {
-                            Label("Local review details", systemImage: "lock.macwindow")
-                                .font(AgentFont.heading)
-                            Text(
-                                "These fields are shown only in the app and are not returned by the integration server."
-                            )
-                            .font(AgentFont.caption)
-                            .foregroundStyle(.secondary)
-                            if let kind = request.reviewDetails.componentKind {
-                                detailRow("Type", value: kind)
-                            }
-                            if let transport = request.reviewDetails.transport {
-                                detailRow("Transport", value: transport)
-                            }
-                            if let endpoint = request.reviewDetails.endpoint {
-                                detailRow("Endpoint or command", value: endpoint, monospaced: true)
-                            }
-                            if let projectRoot = request.reviewDetails.projectRoot {
-                                detailRow("Project", value: projectRoot, monospaced: true)
-                            }
-                            if let source = request.reviewDetails.source {
-                                detailRow("Catalog source", value: source)
-                            }
-                            if let instruction = request.reviewDetails.instruction {
-                                detailRow("Instruction", value: instruction)
-                            }
-                        }
-                        .padding(Space.xl)
-                        .standardPanel()
-                    }
                 }
-                .padding(Space.xxxl)
             }
-
-            Hairline()
+            .padding(Space.xxxl)
+        } footer: {
             HStack(spacing: Space.lg) {
                 Button("Not Now", action: onDefer)
                     .secondaryActionStyle()
@@ -154,10 +149,7 @@ struct PendingRequestReviewSheet: View {
                         .help("Build an app-owned draft or plan; no change runs yet")
                 }
             }
-            .padding(.horizontal, Space.xxxl)
-            .frame(height: Size.sheetBarHeight)
         }
-        .sheetSize(SheetSize.xlarge)
         .background(AgentTheme.contentBackground)
         .interactiveDismissDisabled(isBusy)
         .accessibilityElement(children: .contain)

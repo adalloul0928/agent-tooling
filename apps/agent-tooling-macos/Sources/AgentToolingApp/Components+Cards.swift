@@ -283,3 +283,41 @@ extension InfoRow where Trailing == EmptyView {
     }
 }
 
+/// The shape every review sheet takes: a header, the review that scrolls
+/// between two hairlines, and a footer bar pinned to one height. Each sheet
+/// supplies its own already-padded header and content and its own footer row
+/// (the buttons differ); the scaffold owns the dividers, the footer-bar inset
+/// and height, and the sheet's size so the four review sheets cannot drift
+/// apart on them the way they had begun to.
+struct ReviewSheetLayout<Header: View, Content: View, Footer: View>: View {
+    let size: CGSize
+    @ViewBuilder let header: Header
+    @ViewBuilder let content: Content
+    @ViewBuilder let footer: Footer
+
+    init(
+        size: CGSize,
+        @ViewBuilder header: () -> Header,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.size = size
+        self.header = header()
+        self.content = content()
+        self.footer = footer()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Hairline()
+            ScrollView { content }
+            Hairline()
+            footer
+                .padding(.horizontal, Space.xxxl)
+                .frame(height: Size.sheetBarHeight)
+        }
+        .sheetSize(size)
+    }
+}
+

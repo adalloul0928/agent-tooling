@@ -566,7 +566,7 @@ struct AccountChangesReviewSheet: View {
     let onClose: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        ReviewSheetLayout(size: SheetSize.medium) {
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text("Apply shared \(plan.provider.accountName) choices to \(plan.provider.client.rawValue)")
                     .font(AgentFont.titleLarge)
@@ -575,47 +575,41 @@ struct AccountChangesReviewSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Space.xxxl)
-
-            Hairline()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.xl) {
-                    if let message = session.errorMessage {
-                        AttentionBanner(title: "Nothing was changed", message: message)
+        } content: {
+            VStack(alignment: .leading, spacing: Space.xl) {
+                if let message = session.errorMessage {
+                    AttentionBanner(title: "Nothing was changed", message: message)
+                }
+                TitledCard("Changes", count: "\(plan.changes.count)") {
+                    ForEach(Array(plan.changes.enumerated()), id: \.element.id) { index, change in
+                        if index > 0 { Hairline() }
+                        VStack(alignment: .leading, spacing: Space.xs) {
+                            Text(change.summary).font(AgentFont.bodyMedium).wrapsLines()
+                            ForEach(change.edits, id: \.self) { edit in
+                                Text(edit.summary).font(AgentFont.mono).foregroundStyle(.secondary)
+                                    .textSelection(.enabled).wrapsLines()
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
                     }
-                    TitledCard("Changes", count: "\(plan.changes.count)") {
-                        ForEach(Array(plan.changes.enumerated()), id: \.element.id) { index, change in
+                }
+                if !plan.held.isEmpty {
+                    TitledCard("Not changed here", count: "\(plan.held.count)") {
+                        ForEach(Array(plan.held.enumerated()), id: \.element.id) { index, held in
                             if index > 0 { Hairline() }
-                            VStack(alignment: .leading, spacing: Space.xs) {
-                                Text(change.summary).font(AgentFont.bodyMedium).wrapsLines()
-                                ForEach(change.edits, id: \.self) { edit in
-                                    Text(edit.summary).font(AgentFont.mono).foregroundStyle(.secondary)
-                                        .textSelection(.enabled).wrapsLines()
-                                }
+                            VStack(alignment: .leading, spacing: Space.xxs) {
+                                Text(held.key.label.capitalizedFirst).font(AgentFont.bodyMedium)
+                                Text(held.reason).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
                         }
                     }
-                    if !plan.held.isEmpty {
-                        TitledCard("Not changed here", count: "\(plan.held.count)") {
-                            ForEach(Array(plan.held.enumerated()), id: \.element.id) { index, held in
-                                if index > 0 { Hairline() }
-                                VStack(alignment: .leading, spacing: Space.xxs) {
-                                    Text(held.key.label.capitalizedFirst).font(AgentFont.bodyMedium)
-                                    Text(held.reason).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
-                            }
-                        }
-                    }
                 }
-                .padding(Space.xxxl)
             }
-
-            Hairline()
-
+            .padding(Space.xxxl)
+        } footer: {
             HStack {
                 Spacer()
                 Button("Cancel", action: onClose).keyboardShortcut(.cancelAction)
@@ -628,9 +622,7 @@ struct AccountChangesReviewSheet: View {
                 .primaryActionStyle()
                 .disabled(session.applyingProvider != nil || plan.changes.isEmpty)
             }
-            .padding(Space.xxl)
         }
-        .frame(width: SheetSize.medium.width, height: SheetSize.medium.height)
     }
 }
 

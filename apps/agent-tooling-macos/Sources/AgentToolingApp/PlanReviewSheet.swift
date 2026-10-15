@@ -26,7 +26,7 @@ struct PlanReviewSheet: View {
     @State private var exclusionsExpanded = false
 
     var body: some View {
-        VStack(spacing: 0) {
+        ReviewSheetLayout(size: SheetSize.xlarge) {
             HStack(alignment: .top, spacing: Space.xl) {
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text(title).font(AgentFont.titleLarge)
@@ -38,101 +38,96 @@ struct PlanReviewSheet: View {
                     .foregroundStyle(.secondary)
             }
             .padding(Space.xxxl)
-
-            Hairline()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.xl) {
-                    LabeledContent("Applies to") {
-                        Text(appliesTo)
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(AgentFont.caption)
-
-                    if let headline = review?.headline {
-                        AttentionBanner(title: "Before you approve", message: headline)
-                    }
-
-                    if let message = workspace.deployment.errorMessage {
-                        AttentionBanner(title: "Nothing was installed", message: message)
-                    }
-
-                    switch reviewState {
-                    case .loading:
-                        HStack(spacing: Space.md) {
-                            ProgressView().controlSize(.small)
-                            Text("Checking destinations and package contents…")
-                                .font(AgentFont.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(Space.xl)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .standardPanel()
-                    case .failed(let message):
-                        AttentionBanner(title: "This plan cannot be reviewed", message: message)
-                    case .ready:
-                        EmptyView()
-                    }
-
-                    if plan.items.isEmpty {
-                        if plan.exclusions.isEmpty {
-                            EmptyStateView(
-                                symbol: "checkmark.circle",
-                                title: "Nothing to install",
-                                message: "Your apps already match what you asked for."
-                            )
-                            .frame(height: 200)
-                        } else {
-                            // Things were asked for, and none can be installed
-                            // right now. Say so plainly and show the reasons,
-                            // rather than implying everything already matches.
-                            EmptyStateView(
-                                symbol: "exclamationmark.triangle",
-                                title: "Nothing can be installed right now",
-                                message:
-                                    "\(plan.exclusions.count) requested "
-                                    + "\(plan.exclusions.count == 1 ? "item is" : "items are") "
-                                    + "not being installed. The reasons are listed below."
-                            )
-                            .frame(height: 200)
-                        }
-                    } else {
-                        Text("Planned steps")
-                            .font(AgentFont.heading)
-                        VStack(spacing: 0) {
-                            ForEach(Array(plan.items.enumerated()), id: \.offset) { index, item in
-                                PlanStepRow(
-                                    number: index + 1,
-                                    item: item,
-                                    linkedPath: linkedPath(for: item),
-                                    command: review?.command(for: item),
-                                    nothingRuns: review?.reasonNothingRuns(for: item),
-                                    contentRisk: review?.contentRisk(for: item))
-                                if index < plan.items.count - 1 { Hairline() }
-                            }
-                        }
-                        .standardPanel()
-                    }
-
-                    if !plan.exclusions.isEmpty { excluded }
-                    if !workspace.deployment.linkedDestinations.isEmpty { linkedDestinations }
-
-                    HStack(spacing: Space.md) {
-                        Image(systemName: "lock.shield")
-                            .foregroundStyle(.secondary)
-                        Text(
-                            "Commands use a fixed allowlist. File changes are limited to the managed library, supported client paths, and the folders you pointed a destination at; replaced files are saved as rollback artifacts."
-                        )
-                        .font(AgentFont.caption)
+        } content: {
+            VStack(alignment: .leading, spacing: Space.xl) {
+                LabeledContent("Applies to") {
+                    Text(appliesTo)
                         .foregroundStyle(.secondary)
+                }
+                .font(AgentFont.caption)
+
+                if let headline = review?.headline {
+                    AttentionBanner(title: "Before you approve", message: headline)
+                }
+
+                if let message = workspace.deployment.errorMessage {
+                    AttentionBanner(title: "Nothing was installed", message: message)
+                }
+
+                switch reviewState {
+                case .loading:
+                    HStack(spacing: Space.md) {
+                        ProgressView().controlSize(.small)
+                        Text("Checking destinations and package contents…")
+                            .font(AgentFont.caption)
+                            .foregroundStyle(.secondary)
                     }
                     .padding(Space.xl)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .standardPanel()
+                case .failed(let message):
+                    AttentionBanner(title: "This plan cannot be reviewed", message: message)
+                case .ready:
+                    EmptyView()
+                }
+
+                if plan.items.isEmpty {
+                    if plan.exclusions.isEmpty {
+                        EmptyStateView(
+                            symbol: "checkmark.circle",
+                            title: "Nothing to install",
+                            message: "Your apps already match what you asked for."
+                        )
+                        .frame(height: Size.emptyStateMinHeight)
+                    } else {
+                        // Things were asked for, and none can be installed
+                        // right now. Say so plainly and show the reasons,
+                        // rather than implying everything already matches.
+                        EmptyStateView(
+                            symbol: "exclamationmark.triangle",
+                            title: "Nothing can be installed right now",
+                            message:
+                                "\(plan.exclusions.count) requested "
+                                + "\(plan.exclusions.count == 1 ? "item is" : "items are") "
+                                + "not being installed. The reasons are listed below."
+                        )
+                        .frame(height: Size.emptyStateMinHeight)
+                    }
+                } else {
+                    Text("Planned steps")
+                        .font(AgentFont.heading)
+                    VStack(spacing: 0) {
+                        ForEach(Array(plan.items.enumerated()), id: \.offset) { index, item in
+                            PlanStepRow(
+                                number: index + 1,
+                                item: item,
+                                linkedPath: linkedPath(for: item),
+                                command: review?.command(for: item),
+                                nothingRuns: review?.reasonNothingRuns(for: item),
+                                contentRisk: review?.contentRisk(for: item))
+                            if index < plan.items.count - 1 { Hairline() }
+                        }
+                    }
                     .standardPanel()
                 }
-                .padding(Space.xxxl)
-            }
 
-            Hairline()
+                if !plan.exclusions.isEmpty { excluded }
+                if !workspace.deployment.linkedDestinations.isEmpty { linkedDestinations }
+
+                HStack(spacing: Space.md) {
+                    Image(systemName: "lock.shield")
+                        .foregroundStyle(.secondary)
+                    Text(
+                        "Commands use a fixed allowlist. File changes are limited to the managed library, supported client paths, and the folders you pointed a destination at; replaced files are saved as rollback artifacts."
+                    )
+                    .font(AgentFont.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(Space.xl)
+                .standardPanel()
+            }
+            .padding(Space.xxxl)
+        } footer: {
             HStack {
                 Button(
                     isRunning ? "Stop" : "Cancel",
@@ -169,10 +164,7 @@ struct PlanReviewSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canInstall)
             }
-            .padding(.horizontal, Space.xxxl)
-            .frame(height: Size.sheetBarHeight)
         }
-        .sheetSize(SheetSize.xlarge)
         .background(AgentTheme.contentBackground)
         .interactiveDismissDisabled(isRunning)
         .task(id: planIdentity) {
