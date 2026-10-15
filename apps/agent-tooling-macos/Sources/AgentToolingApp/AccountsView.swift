@@ -634,14 +634,6 @@ struct AccountChangesReviewSheet: View {
     }
 }
 
-extension String {
-    /// The first letter capitalised, the rest left as written.
-    var capitalizedFirst: String {
-        guard let first else { return self }
-        return first.uppercased() + dropFirst()
-    }
-}
-
 // MARK: - Library strip
 
 /// A line under a Library tab saying what the accounts add that the library
