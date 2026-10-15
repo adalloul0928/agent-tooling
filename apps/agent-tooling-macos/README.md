@@ -578,6 +578,15 @@ Set `AGENT_TOOLING_CONFIGURATION=debug` when packaging for debugging.
 swift test --disable-sandbox
 ```
 
+The three test targets share one plain `AgentToolingTestSupport` target
+(`Tests/AgentToolingTestSupport`), not a product. It holds test scaffolding the
+suites would otherwise copy: a self-cleaning `TemporaryFolder`, a `write(_:_:)`
+file helper, real-git fixtures (`GitTestFixture`), and `ScriptedCommandRunner` /
+`RefusingCommandRunner`. It imports only Foundation and the public
+`AgentToolingCore` API — no `import Testing`, no `@testable import` — so it
+builds clean under CI's release gate
+(`swift build --configuration release -Xswiftc -warnings-as-errors`).
+
 The opt-in inventory benchmark uses an isolated synthetic workspace with 500
 skills, 100 plugins, and 100 MCP servers. Run it alone, with no concurrent builds
 or tests, and compare the same configuration and machine:
