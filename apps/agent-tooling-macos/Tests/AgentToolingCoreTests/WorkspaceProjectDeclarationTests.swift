@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -191,10 +192,7 @@ struct WorkspaceProjectDeclarationTests {
         let store: WorkspaceProjectDeclarationStore
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "project-declaration-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("project-declaration").url
             store = try WorkspaceProjectDeclarationStore(projectRoot: root)
         }
 

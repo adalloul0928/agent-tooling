@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -154,10 +155,7 @@ struct WorkspaceLinkedDestinationTests {
         let root: URL
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "linked-destination-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("linked-destination").url
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }

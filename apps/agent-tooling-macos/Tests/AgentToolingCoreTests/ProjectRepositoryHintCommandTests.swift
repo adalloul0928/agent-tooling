@@ -1,4 +1,5 @@
 import Foundation
+import AgentToolingTestSupport
 import Testing
 
 @testable import AgentToolingCore
@@ -13,9 +14,7 @@ struct ProjectRepositoryHintCommandTests {
         let service: WorkspaceApplicationService
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "project-hints-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("project-hints").url
             let writerID = WorkspaceObjectID()
             let document = try WorkspaceDocumentCoding.seal(.init(revision: .init(writerID: writerID)))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)

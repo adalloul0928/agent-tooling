@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -124,10 +125,7 @@ struct ConfigurationEditorTests {
         let path: String
 
         init(_ contents: String) throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "configuration-editor-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("configuration-editor").url
             path = root.appending(path: "settings.json").path
             try Data(contents.utf8).write(to: URL(fileURLWithPath: path))
         }

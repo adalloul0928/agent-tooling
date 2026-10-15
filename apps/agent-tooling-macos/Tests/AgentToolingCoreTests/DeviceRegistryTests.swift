@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -150,8 +151,7 @@ struct DeviceRegistryCommandTests {
         let deviceID: WorkspaceObjectID
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appending(path: "devices-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("devices").url
             let writer = WorkspaceObjectID()
             let document = try WorkspaceDocumentCoding.seal(.init(revision: .init(writerID: writer)))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)

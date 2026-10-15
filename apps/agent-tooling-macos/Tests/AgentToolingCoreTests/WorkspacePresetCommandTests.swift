@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -134,10 +135,7 @@ struct WorkspacePresetCommandTests {
         let destination = PortableDestination(surface: .claudeCode, scope: .user)
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "preset-command-\(UUID())")
-            try FileManager.default.createDirectory(
-                at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("preset-command").url
             let document = try WorkspaceDocumentCoding.seal(
                 .init(
                     revision: .init(writerID: writerID),

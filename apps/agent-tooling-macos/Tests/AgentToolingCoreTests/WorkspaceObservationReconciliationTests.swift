@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -279,10 +280,7 @@ struct WorkspaceObservationReconciliationTests {
         let service: WorkspaceApplicationService
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "observation-reconciliation-\(UUID())")
-            try FileManager.default.createDirectory(
-                at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("observation-reconciliation").url
             let writerID = WorkspaceObjectID()
             let document = try Self.document(
                 artifacts: [
