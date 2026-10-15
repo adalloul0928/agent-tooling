@@ -38,17 +38,22 @@ let package = Package(
             name: "AgentToolingMCP",
             dependencies: ["AgentToolingCore"]
         ),
+        .target(
+            name: "AgentToolingTestSupport",
+            dependencies: ["AgentToolingCore"],
+            path: "Tests/AgentToolingTestSupport"
+        ),
         .testTarget(
             name: "AgentToolingCoreTests",
-            dependencies: ["AgentToolingCore"]
+            dependencies: ["AgentToolingCore", "AgentToolingTestSupport"]
         ),
         .testTarget(
             name: "AgentToolingMCPTests",
-            dependencies: ["AgentToolingMCP", "AgentToolingCore"]
+            dependencies: ["AgentToolingMCP", "AgentToolingCore", "AgentToolingTestSupport"]
         ),
         .testTarget(
             name: "AgentToolingAppTests",
-            dependencies: ["AgentToolingApp", "AgentToolingCore"]
+            dependencies: ["AgentToolingApp", "AgentToolingCore", "AgentToolingTestSupport"]
         ),
     ]
 )
