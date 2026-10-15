@@ -14,6 +14,18 @@ public enum ClientKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case kiro = "Kiro CLI"
 
     public var id: String { rawValue }
+
+    /// The surface a bare client maps to when a channel is not specified.
+    /// `TargetSurface.client` owns the inverse (surface → client); this is the
+    /// forward default every client-to-surface switch had re-derived by hand.
+    public var defaultSurface: TargetSurface {
+        switch self {
+        case .claude: .claudeCode
+        case .codex: .codexCLI
+        case .gemini: .geminiCLI
+        case .kiro: .kiroCLI
+        }
+    }
 }
 
 public enum SkillAuthoringOrigin: String, Codable, Hashable, Sendable {

@@ -83,13 +83,7 @@ struct LiveSkillCreatorInstalling: SkillCreatorInstalling {
     let homeRoot: URL
 
     func install(_ commands: [SkillCreatorInstallCommand], for client: ClientKind) async throws -> String {
-        let surface: TargetSurface =
-            switch client {
-            case .claude: .claudeCode
-            case .codex: .codexCLI
-            case .gemini: .geminiCLI
-            case .kiro: .kiroCLI
-            }
+        let surface = client.defaultSurface
         let plan = OperationPlan(
             kind: .installPlugin,
             title: "Install the skill creator in \(client.rawValue)",

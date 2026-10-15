@@ -40,10 +40,7 @@ public enum AccountProvider: String, Codable, CaseIterable, Identifiable, Sendab
     }
 
     public var surface: TargetSurface {
-        switch self {
-        case .claude: .claudeCode
-        case .chatGPT: .codexCLI
-        }
+        client.defaultSurface
     }
 
     /// Where the account's contents are added, connected and removed.

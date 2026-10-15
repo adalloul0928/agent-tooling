@@ -257,7 +257,7 @@ public enum WorkspaceDeploymentOperations {
                     kind: updates == count && removals == 0 ? .updateSkill : .installSkill,
                     title: title,
                     summary: "Only what you reviewed changes. Nothing else in that folder is touched.",
-                    targetSurfaces: [key.client.primarySurface],
+                    targetSurfaces: [key.client.defaultSurface],
                     scope: key.scope,
                     steps: steps)
             }
@@ -316,16 +316,5 @@ public enum WorkspaceDeploymentOperations {
     private struct DestinationKey: Hashable {
         let client: ClientKind
         let scope: ToolingScope
-    }
-}
-
-private extension ClientKind {
-    var primarySurface: TargetSurface {
-        switch self {
-        case .claude: .claudeCode
-        case .codex: .codexCLI
-        case .gemini: .geminiCLI
-        case .kiro: .kiroCLI
-        }
     }
 }

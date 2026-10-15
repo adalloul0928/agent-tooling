@@ -822,7 +822,7 @@ private struct WorkspaceLinkDestinationSheet: View {
                     guard let folder else { return }
                     Task {
                         await session.linkDestination(
-                            surface: surface, scope: .user,
+                            surface: client.defaultSurface, scope: .user,
                             projectID: nil, to: folder)
                         dismiss()
                     }
@@ -837,15 +837,6 @@ private struct WorkspaceLinkDestinationSheet: View {
             // The stored default may be an app this Mac does not manage, which
             // would leave the picker showing a choice not in its own list.
             if !clients.contains(client), let first = clients.first { client = first }
-        }
-    }
-
-    private var surface: TargetSurface {
-        switch client {
-        case .claude: .claudeCode
-        case .codex: .codexCLI
-        case .gemini: .geminiCLI
-        case .kiro: .kiroCLI
         }
     }
 

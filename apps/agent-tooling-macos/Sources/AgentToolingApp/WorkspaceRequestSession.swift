@@ -264,7 +264,7 @@ final class WorkspaceRequestSession {
             }
             let destinations = request.targets.sorted { $0.rawValue < $1.rawValue }.map { client in
                 PortableDestination(
-                    surface: surface(client), scope: request.scope,
+                    surface: client.defaultSurface, scope: request.scope,
                     logicalProjectID: nil, deviceIDs: [library.deviceID])
             }
             return .assign(row.artifactID, destinations)
@@ -286,15 +286,6 @@ final class WorkspaceRequestSession {
             case "plugin": [.nativePlugin, .package]
             default: nil
             }
-        }
-    }
-
-    private func surface(_ client: ClientKind) -> TargetSurface {
-        switch client {
-        case .claude: .claudeCode
-        case .codex: .codexCLI
-        case .gemini: .geminiCLI
-        case .kiro: .kiroCLI
         }
     }
 

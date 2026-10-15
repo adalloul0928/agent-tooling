@@ -565,20 +565,9 @@ private struct PresetFollowSheet: View {
     private var destinations: [PortableDestination] {
         clients.sorted { $0.rawValue < $1.rawValue }.map { client in
             .init(
-                surface: client.primarySurface, scope: scope,
+                surface: client.defaultSurface, scope: scope,
                 logicalProjectID: scope == .project ? projectID : nil,
                 deviceIDs: [library.deviceID])
-        }
-    }
-}
-
-private extension ClientKind {
-    var primarySurface: TargetSurface {
-        switch self {
-        case .claude: .claudeCode
-        case .codex: .codexCLI
-        case .gemini: .geminiCLI
-        case .kiro: .kiroCLI
         }
     }
 }

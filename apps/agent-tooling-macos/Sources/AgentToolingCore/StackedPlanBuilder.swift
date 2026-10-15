@@ -88,7 +88,7 @@ public enum StackedPlanBuilder {
             title: "Configure \(selection.count) MCP server\(selection.count == 1 ? "" : "s")",
             summary:
                 "\(serverNames.joined(separator: ", ")) in \(targets.count) app\(targets.count == 1 ? "" : "s"), reviewed as one plan. Secrets and OAuth tokens are never placed in the plan or copied between apps.",
-            targetSurfaces: targets.sorted(by: { $0.rawValue < $1.rawValue }).map(surface(for:)),
+            targetSurfaces: targets.sorted(by: { $0.rawValue < $1.rawValue }).map(\.defaultSurface),
             scope: scope,
             steps: steps
         )
@@ -138,7 +138,7 @@ public enum StackedPlanBuilder {
             title: "Remove \(selection.count) plugin\(selection.count == 1 ? "" : "s") from \(client.rawValue)",
             summary:
                 "\(selection.map(\.name).joined(separator: ", ")) removed through \(client.rawValue)'s own plugin manager, reviewed as one plan.",
-            targetSurfaces: [surface(for: client)],
+            targetSurfaces: [client.defaultSurface],
             scope: .user,
             steps: steps
         )
@@ -199,14 +199,5 @@ public enum StackedPlanBuilder {
 
     private static func executable(for client: ClientKind) -> String {
         MCPClientCommand.executable(for: client)
-    }
-
-    private static func surface(for client: ClientKind) -> TargetSurface {
-        switch client {
-        case .claude: .claudeCode
-        case .codex: .codexCLI
-        case .gemini: .geminiCLI
-        case .kiro: .kiroCLI
-        }
     }
 }
