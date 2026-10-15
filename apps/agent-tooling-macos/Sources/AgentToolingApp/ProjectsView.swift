@@ -206,8 +206,7 @@ struct ProjectsView: View {
     }
 
     private func abbreviated(_ path: String) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
-        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+        PathDisplay.abbreviatingHome(path, home: FileManager.default.homeDirectoryForCurrentUser)
     }
 
     private func projectRow(_ project: WorkspaceLibraryProjectReadModel) -> some View {

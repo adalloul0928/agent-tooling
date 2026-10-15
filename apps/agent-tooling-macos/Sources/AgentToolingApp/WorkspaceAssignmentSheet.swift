@@ -406,9 +406,7 @@ struct WorkspaceAssignmentSheet: View {
         guard let pipeline,
               let url = try? NativeSkillDestination.directory(client: client, homeURL: pipeline.homeRoot, scope: .user, projectRoot: nil)
         else { return nil }
-        let home = pipeline.homeRoot.path(percentEncoded: false).trimmingSuffix("/")
-        let path = url.path(percentEncoded: false).trimmingSuffix("/")
-        return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+        return PathDisplay.abbreviatingHome(url.path(percentEncoded: false), home: pipeline.homeRoot)
     }
 
     private func itemsSummary(_ library: WorkspaceLibraryReadModel) -> some View {
@@ -793,10 +791,4 @@ struct InstallPipeline {
 
 extension EnvironmentValues {
     @Entry var installPipeline: InstallPipeline? = nil
-}
-
-private extension String {
-    func trimmingSuffix(_ suffix: String) -> String {
-        hasSuffix(suffix) ? String(dropLast(suffix.count)) : self
-    }
 }

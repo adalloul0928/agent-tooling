@@ -7,11 +7,14 @@ public enum PathDisplay {
     /// home and an absolute input are standardized first, and a `/private`
     /// prefix is folded, so the temporary folder resolved either way still
     /// matches a home given the other way. A relative input is left untouched.
+    ///
+    /// Only a whole folder matches: `/Users/me2` is not inside `/Users/me`.
     public static func abbreviatingHome(_ path: String, home: URL) -> String {
         var root = normalized(home.path(percentEncoded: false))
         if root.hasSuffix("/") { root.removeLast() }
         let candidate = path.hasPrefix("/") ? normalized(path) : path
-        return candidate.hasPrefix(root) ? "~" + candidate.dropFirst(root.count) : candidate
+        guard candidate == root || candidate.hasPrefix(root + "/") else { return candidate }
+        return "~" + candidate.dropFirst(root.count)
     }
 
     /// Standardizes a path and folds the `/private` the temporary folder
