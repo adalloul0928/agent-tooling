@@ -127,10 +127,6 @@ public struct SourceEvidenceResolution: Hashable, Sendable {
     public var proposedFetchGroups: [SourceEvidenceFetchGroup]
     public var diagnostics: [SourceEvidenceResolverDiagnostic]
 
-    public var unresolvedArtifactIDs: [ArtifactID] {
-        Array(Set(unresolved.map(\.artifactID))).sorted()
-    }
-
     public init(
         confirmedBindings: [ConfirmedSourceBinding], candidates: [SourceEvidenceCandidate],
         conflicts: [SourceEvidenceConflict], unresolved: [SourceEvidenceUnresolved],

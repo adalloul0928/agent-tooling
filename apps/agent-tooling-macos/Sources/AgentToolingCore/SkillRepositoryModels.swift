@@ -80,14 +80,6 @@ public struct SkillRepositoryBinding: Codable, Hashable, Sendable {
     }
 }
 
-public struct SkillRepositoryUpdate: Sendable {
-    public let skillID: String
-    public let plan: OperationPlan
-    public let stagingURL: URL
-    public let revision: String
-    public let fingerprint: String
-}
-
 public enum SkillRepositoryError: LocalizedError, Equatable {
     case invalidRepository, invalidRef, invalidPath, invalidRevision
     case unavailable, unsupportedInstallation, sourceMissing, changedInstallation, nameMismatch, unsafeTree

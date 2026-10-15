@@ -146,15 +146,6 @@ public struct ManagedInstallAuthority: Sendable {
         return result
     }
 
-    /// Identifies a step by the plan it belongs to as well as by itself. Step
-    /// identifiers are decoded from plan files, so they are attacker-chosen;
-    /// pairing on the identifier alone would let a receipt for one plan vouch
-    /// for a step in another that simply reused it.
-    private struct PlanStepIdentity: Hashable {
-        var planID: UUID
-        var stepID: UUID
-    }
-
 }
 
 /// Honest states for an installed copy, compared against the tree the operator

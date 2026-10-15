@@ -41,7 +41,6 @@ public struct InteractiveLoginProcess: Sendable {
     /// Bounds on what is kept from the terminal, so a chatty tool cannot grow
     /// memory without limit while a person is away.
     private static let maximumTranscriptBytes = 262_144
-    private static let readChunkBytes = 4_096
 
     private let homeURL: URL
     private let timeout: Duration

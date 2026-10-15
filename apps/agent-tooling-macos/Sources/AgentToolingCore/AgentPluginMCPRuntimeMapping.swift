@@ -60,10 +60,6 @@ public struct AgentPluginMCPRouteResult: Hashable, Sendable {
 /// This maps; it does not launch. Nothing here starts a process or opens a
 /// connection, and a resolved route is not evidence that the server works.
 public enum AgentPluginMCPRuntimeMapper {
-    /// The two variables the client owns. A package cannot set them — that is
-    /// refused at parse time — and here they always win over anything declared.
-    public static let clientOwnedVariables = ["PLUGIN_ROOT", "PLUGIN_DATA"]
-
     /// `dataRoot` is the package's persistent folder. It belongs to the client
     /// and survives updates, which is what makes it different from the package
     /// root: content is replaced on update, data is not.

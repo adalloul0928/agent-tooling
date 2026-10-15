@@ -66,7 +66,6 @@ enum AgentTheme {
 /// keep navigation legible without making data-heavy screens feel delayed.
 enum AgentMotion {
     static let selection = Animation.snappy(duration: 0.22, extraBounce: 0)
-    static let content = Animation.smooth(duration: 0.16)
     static let quick = Animation.easeOut(duration: 0.12)
 }
 

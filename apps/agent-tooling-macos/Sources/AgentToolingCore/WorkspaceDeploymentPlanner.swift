@@ -109,7 +109,6 @@ public struct WorkspaceDeploymentPlan: Sendable {
     /// the thing being approved is the thing that was resolved.
     public let requirements: [EffectiveAssignmentRequirement]
     public let resolvedTargets: [ResolvedAssignmentTarget]
-    public var isEmpty: Bool { items.isEmpty }
 
     public init(
         items: [WorkspaceDeploymentItem],

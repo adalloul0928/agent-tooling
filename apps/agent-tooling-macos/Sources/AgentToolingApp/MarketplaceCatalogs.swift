@@ -62,9 +62,6 @@ enum NativeCatalogRows {
     static let byClient: [ClientKind: SourceKind] = [
         .claude: .claudeMarketplace, .codex: .openAIPluginDirectory,
     ]
-    static let byPrefix: [String: SourceKind] = [
-        "claude:": .claudeMarketplace, "codex:": .openAIPluginDirectory,
-    ]
     static let prefixByClient: [ClientKind: String] = [.claude: "claude:", .codex: "codex:"]
 }
 

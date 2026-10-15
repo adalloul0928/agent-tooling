@@ -43,7 +43,4 @@ public struct VersionedInventorySource: Sendable {
             operationReceipts: try store.operationReceipts(limit: receiptLimit),
             targetObservations: snapshot.device.observations)
     }
-
-    /// The queue an agent adds to and a person answers.
-    public var requestStore: WorkspaceRevisionStore { store }
 }

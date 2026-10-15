@@ -3,7 +3,6 @@ import AppKit
 import SwiftUI
 
 struct SkillDetailView: View {
-    @Environment(AppNavigationState.self) private var navigation: AppNavigationState?
     @Environment(\.skillTrialOpening) private var trialOpening
     /// The client being opened in Terminal right now, if any.
     @State private var openingTrialIn: ClientKind?
