@@ -818,9 +818,6 @@ struct OverviewView: View {
         navigation.openScreenRequest(.reviewChanges)
     }
 
-    /// Reveals one plugin on the Plugins tab. Revealing is not acting on it.
-    private func openPlugin(_ row: WorkspaceLibraryReadModelRow) { open(row) }
-
     /// The row's own screen: Plugins, MCP Servers, or Skills by kind.
     private func open(_ row: WorkspaceLibraryReadModelRow) {
         let section: AppSection = switch row.kind {
