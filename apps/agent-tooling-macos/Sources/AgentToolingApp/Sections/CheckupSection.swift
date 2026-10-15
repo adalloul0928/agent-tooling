@@ -1,4 +1,3 @@
-import AgentToolingCore
 import SwiftUI
 
 /// Checkup: the audit of this Mac's tooling and the assistant's reading of it.
