@@ -232,6 +232,21 @@ public struct ProfileCheck: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+/// Saved with a configuration so a setup captured from one Mac does not turn
+/// into an instruction to install every item into every enabled client.
+public struct OnboardingTargetBinding: Identifiable, Codable, Hashable, Sendable {
+    public var id: String { "\(item.id):\(client.rawValue)" }
+    public let item: ToolingItemReference
+    public let client: ClientKind
+    public let enabled: Bool?
+
+    public init(item: ToolingItemReference, client: ClientKind, enabled: Bool? = nil) {
+        self.item = item
+        self.client = client
+        self.enabled = enabled
+    }
+}
+
 public struct ToolingProfile: Identifiable, Codable, Hashable, Sendable {
     public let id: String
     public var name: String
