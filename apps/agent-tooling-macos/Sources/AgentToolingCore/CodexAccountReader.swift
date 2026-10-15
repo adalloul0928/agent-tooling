@@ -53,9 +53,14 @@ public enum CodexAccountParsing {
         public var isEnabled: Bool
     }
 
-    public static func appList(_ result: JSONValue) -> AppListPage? {
+    /// The requested page size for `app/list`, and the matching cap on how
+    /// many rows are parsed from one page so the parser never keeps more than
+    /// was asked for.
+    public static let appListPageLimit = 100
+
+    public static func appList(_ result: JSONValue, limit: Int = appListPageLimit) -> AppListPage? {
         guard let rows = result["data"]?.arrayValue else { return nil }
-        let apps = rows.prefix(1_000).compactMap { row -> CodexApp? in
+        let apps = rows.prefix(limit).compactMap { row -> CodexApp? in
             guard let id = row["id"]?.stringValue, !id.isEmpty, id.count <= 256 else { return nil }
             let name = ClaudeAccountParsing.bounded(row["name"]?.stringValue) ?? id
             let url = row["installUrl"]?.stringValue.flatMap(URL.init(string:)).flatMap { url in
@@ -234,14 +239,23 @@ public struct CodexAccountReader: Sendable {
     private func readApps(session: CodexAppServerSession, into observation: inout AccountObservation) async throws {
         var apps: [CodexAccountParsing.CodexApp] = []
         var cursor: JSONValue = .null
+        // A person's account holds a few dozen apps; this ceiling is far above
+        // any real directory while still bounding a server that answers with
+        // large pages, so the kept set never grows to the 10×page product.
+        let maximumKept = 1_000
+        let pageLimit = CodexAccountParsing.appListPageLimit
         for _ in 0..<10 {
             let page = try await session.request(
-                "app/list", params: .object(["cursor": cursor, "limit": .number(100), "forceRefetch": .bool(false)]),
+                "app/list", params: .object(["cursor": cursor, "limit": .number(Double(pageLimit)), "forceRefetch": .bool(false)]),
                 timeout: .seconds(60))
-            guard let parsed = CodexAccountParsing.appList(page) else {
+            guard let parsed = CodexAccountParsing.appList(page, limit: pageLimit) else {
                 throw CodexAppServerError.malformedResponse("app/list")
             }
             apps += parsed.apps
+            guard apps.count < maximumKept else {
+                apps = Array(apps.prefix(maximumKept))
+                break
+            }
             guard let next = parsed.nextCursor, !next.isEmpty else { break }
             cursor = .string(next)
         }
