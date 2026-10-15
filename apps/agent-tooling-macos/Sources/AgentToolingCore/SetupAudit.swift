@@ -504,7 +504,7 @@ public struct SetupAuditor: Sendable {
                     evidence: sources.map(redact),
                     actions: configured.isEmpty ? [] : [.inspectMCPServer(name: server, client: client)]))
         }
-        let commands = configuredCommands(client: client, configurationPaths: observation.configurationPaths)
+        let commands = configuredCommands(configurationPaths: observation.configurationPaths)
         for (server, metadata) in observation.mcpMetadata.sorted(by: { $0.key < $1.key }) where metadata.transport == "stdio" {
             guard let command = commands[server] else { continue }
             if !commandIsReachable(command) {
@@ -547,7 +547,7 @@ public struct SetupAuditor: Sendable {
     /// The `command` of every stdio server in the client's own configuration
     /// files. Reads the same files the check read; understands the two
     /// formats the clients use (JSON `mcpServers`, TOML `[mcp_servers.x]`).
-    func configuredCommands(client: ClientKind, configurationPaths: [String]) -> [String: String] {
+    func configuredCommands(configurationPaths: [String]) -> [String: String] {
         var commands: [String: String] = [:]
         for path in configurationPaths {
             guard let text = try? BoundedFileAccess.readUTF8(at: URL(filePath: path), maximumBytes: BoundedFileAccess.maximumConfigurationBytes) else { continue }
@@ -607,9 +607,6 @@ public struct SetupAuditor: Sendable {
     }
 
     private func redact(_ text: String) -> String {
-        var home = normalized(homeURL.path(percentEncoded: false))
-        if home.hasSuffix("/") { home.removeLast() }
-        let path = text.hasPrefix("/") ? normalized(text) : text
-        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+        PathDisplay.abbreviatingHome(text, home: homeURL)
     }
 }

@@ -354,9 +354,9 @@ struct SetupAuditTests {
         let home = try Home()
         defer { home.remove() }
         let auditor = SetupAuditor(homeURL: home.root, searchPath: [home.root.appending(path: ".local/bin")])
-        let json = auditor.configuredCommands(client: .claude, configurationPaths: [home.root.appending(path: ".claude.json").path(percentEncoded: false)])
+        let json = auditor.configuredCommands(configurationPaths: [home.root.appending(path: ".claude.json").path(percentEncoded: false)])
         #expect(json == ["present": "present-mcp", "vanished": "vanished-mcp"])
-        let toml = auditor.configuredCommands(client: .codex, configurationPaths: [home.root.appending(path: ".codex/config.toml").path(percentEncoded: false)])
+        let toml = auditor.configuredCommands(configurationPaths: [home.root.appending(path: ".codex/config.toml").path(percentEncoded: false)])
         #expect(toml == ["present": "present-mcp"])
         #expect(auditor.commandIsReachable("present-mcp"))
         #expect(auditor.commandIsReachable("~/.local/bin/present-mcp"))
