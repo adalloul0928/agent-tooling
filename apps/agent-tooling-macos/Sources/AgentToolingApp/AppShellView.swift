@@ -24,11 +24,13 @@ struct AppShellView: View {
     init(
         workspace: WorkspaceLaunch.Workspace,
         initialSection: AppSection = .overview,
-        navigation: AppNavigationState? = nil
+        navigation: AppNavigationState? = nil,
+        paletteVisible: Bool = false
     ) {
         self.workspace = workspace
         _selection = State(initialValue: initialSection)
         _navigation = State(initialValue: navigation ?? AppNavigationState())
+        _paletteVisible = State(initialValue: paletteVisible)
     }
 
     var body: some View {
@@ -37,6 +39,7 @@ struct AppShellView: View {
                 workspace: workspace, selection: $selection,
                 openPalette: { paletteVisible = true }
             )
+            .allowsHitTesting(!paletteVisible)
             .minuteTicker()
             .navigationSplitViewColumnWidth(min: 210, ideal: 230, max: 300)
         } detail: {
@@ -58,6 +61,7 @@ struct AppShellView: View {
                 // column is a page with space under it, not a card floating in
                 // the middle of the window.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .allowsHitTesting(!paletteVisible)
                 // No background of its own. The one glass backdrop behind the
                 // whole split view is the ground for the sidebar and the
                 // content alike — a tint here is exactly what made them differ.
@@ -73,8 +77,11 @@ struct AppShellView: View {
         // While the palette is up, the window under it is scenery. Hover
         // tracking on macOS does not respect what is drawn on top, so rows
         // beneath the palette would light up as the pointer crossed them;
-        // both the hit test and the hover highlights are switched off here.
-        .allowsHitTesting(!paletteVisible)
+        // the hover highlights are switched off here, and each column's
+        // content stops taking the pointer (above). The switch sits on the
+        // columns' contents, not on the split view: with hit testing off,
+        // the split view drops its toolbar inset and the page jumps up
+        // under the title bar.
         .environment(\.hoverSuppressed, paletteVisible)
         // Spotlight rules, not sheet rules: the palette floats over the window,
         // a click anywhere outside it puts it away, and Escape does the same
@@ -84,7 +91,6 @@ struct AppShellView: View {
             if paletteVisible {
                 ZStack {
                     AgentTheme.scrim
-                        .ignoresSafeArea()
                         .contentShape(Rectangle())
                         .onTapGesture { paletteVisible = false }
                         .accessibilityLabel("Dismiss command palette")

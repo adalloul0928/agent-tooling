@@ -160,12 +160,9 @@ struct AgentToolingApplication: App {
     private func bringMainWindowForward() {
         NSApp.unhide(nil)
         NSApp.activate(ignoringOtherApps: true)
-        // SwiftUI names a Window scene's NSWindow after the scene id, with
-        // a per-instance suffix: "main", "main-AppWindow-1", and so on.
-        guard let window = NSApp.windows.first(where: {
-            guard let id = $0.identifier?.rawValue else { return false }
-            return id == "main" || id.hasPrefix("main-")
-        })
+        // The identifier WindowConfigurationView (Theme.swift) gives the main
+        // window when it appears; the scene id alone is not what AppKit sees.
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "agent-tooling-main" })
         else { return }
         window.deminiaturize(nil)
         window.makeKeyAndOrderFront(nil)
