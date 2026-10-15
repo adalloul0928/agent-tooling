@@ -21,8 +21,9 @@ client, and subject so a dismissed finding stays dismissed), a `Kind`, a
 maps to an existing reviewed path: `adoptSkill`, `removeSkillCopy`,
 `removeBrokenLink`, `reinstallPlugin`, `pruneStalePluginCache`,
 `inspectMCPServer`, `disableMCPServer`, `locateTool`, `checkClient`,
-`manageMCPServer`. `changesFiles` is false only for an inspect, a locate, or a
-check.
+`manageMCPServer`, `applyAccountChoices`, `openAccountSite`, `openAccounts`.
+`changesFiles` is false only for an inspect, a locate, a check, or opening an
+account's page or the Accounts tab.
 
 `SetupReviewService.run` (`SetupReview.swift`) runs the assistant pass over an
 audit and returns a `SetupReview`: a `summary` and prioritized
@@ -46,7 +47,12 @@ The pipeline is audit then review then one reviewed action at a time:
    in a client, unmanaged skills, unreachable MCP commands, stale plugin caches,
    unavailable tools, never-checked clients, skills without a `SKILL.md`, and
    servers configured several times. It reads only; it runs the same way every
-   time.
+   time. `AccountAuditor` adds the account findings from a light read of each
+   client's sign-in: not signed in with the subscription, a shell variable that
+   replaces the sign-in, shared account choices not followed, account
+   connectors that need attention, and an account that differs from the one
+   another Mac publishes. See
+   [account surfaces](account-surfaces-v1.md#checkup-and-home).
 2. `SetupReviewService.run` renders a prompt (the findings with their ids and
    offered actions, held counts, and redacted digests), stages a request folder,
    runs one assistant command with the prompt on standard input, and parses one
@@ -74,7 +80,12 @@ command that does not validate raises `commandRefused` and does not run. On
 apply, `installPlugin` and `disableMCPServer` identifiers are validated by
 `OperationCommandPolicy.isSafePluginIdentifier` / `isSafeMCPIdentifier`;
 `setSetting` goes through the configuration adapter. Evidence and investigated
-sources are redacted through `SensitiveValueRedactor`.
+sources are redacted through `SensitiveValueRedactor`. The account read runs
+`claude --version`, `claude auth status --json`, and `codex app-server` limited
+to `initialize`, `account/read` and `config/read`, plus one login-shell probe
+that reports variable names only. `applyAccountChoices` is the reviewed edit of
+`~/.claude/settings.json` or `~/.codex/config.toml` described there; the other
+two account actions open a page.
 
 ## What the UI shows
 
@@ -88,9 +99,12 @@ with the one thing to do about it behind a disclosure.
   of an answer, including dropping unknown finding and action references.
 - `CheckupTriageTests.swift` — bucketing and the primary action per row.
 - `CheckupSectionRenderTests.swift` — the rendered screen.
+- `AccountSafetyAndAuditTests.swift` and `WorkspaceAccountsSessionTests.swift` —
+  the account findings, their rows, and Checkup reusing the account read.
 
 ## Not covered
 
 The review supports only Claude Code and Codex. The audit's folder reads are
-bounded and skip anything oversized or unreadable. No cross-Mac audit: Checkup
-inspects only the Mac it runs on.
+bounded and skip anything oversized or unreadable. Checkup inspects only the
+Mac it runs on; its one comparison with other Macs is the account fingerprint
+each publishes in its status file.

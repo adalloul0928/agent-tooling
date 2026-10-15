@@ -37,6 +37,7 @@ New contracts under authoring now, listed here from the feature:
 - updates-and-policy-v1.md — update availability, cadence, per-kind auto/ask policy
 - insights-v1.md — recurring-work detection from local chat history and deep dive
 - checkup-and-review-v1.md — audit to assistant to one-reviewed-action-at-a-time
+- account-surfaces-v1.md — claude.ai and ChatGPT account contents, shared switches, sign-in checks
 - skill-creator-v1.md — assistant-driven skill authoring under a bounded command policy
 - content-risk-and-secrets-v1.md — content-risk scan and the portable-document secrets boundary
 - mcp-server-surface-v1.md — the read-only and request-only MCP tool catalog

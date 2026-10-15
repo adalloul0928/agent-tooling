@@ -33,12 +33,12 @@ configuration, and account state.
 
 | Surface | Receives owned plugins | Receives project files | Uses hosted connectors | Authentication home |
 | --- | --- | --- | --- | --- |
-| Claude Code CLI | Claude marketplace install | Local checkout | Optional unless disabled | Local Claude config, OAuth, and environment |
-| Claude Desktop Code | Same local Claude Code installation state | Local checkout | Optional unless disabled | Same local Claude Code state |
+| Claude Code CLI | Claude marketplace install; claude.ai account plugins as `<name>@synced` | Local checkout | claude.ai connectors with a claude.ai sign-in, unless `disableClaudeAiConnectors` | Local Claude config, OAuth, and environment |
+| Claude Desktop Code | Same local Claude Code installation state | Local checkout | claude.ai connectors in-process; the CLI's connector settings do not apply | Same local Claude Code state |
 | Claude Code cloud | Only what the remote checkout and supported cloud settings expose | Committed revision | Claude.ai connectors may be available | Cloud/project environment plus Claude account |
 | Claude.ai chat | Personal marketplace/account skills where supported | No implicit local checkout | Yes | Claude account |
-| Codex CLI | Codex marketplace install | Local checkout | No implicit ChatGPT app sync | Local Codex config, OAuth, and environment |
-| Codex desktop | Same Codex host installation state | Local checkout | Account apps are a separate layer | Local Codex state for MCPs; account state for apps |
+| Codex CLI | Codex marketplace install | Local checkout | ChatGPT apps through `/apps`, with a ChatGPT sign-in | Local Codex config, OAuth, and environment |
+| Codex desktop (the ChatGPT desktop app's Codex mode) | Same Codex host installation state | Local checkout | ChatGPT apps, as in the CLI | Local Codex state for MCPs; account state for apps |
 | Codex cloud | Only committed and supported remote configuration | Committed revision | Supported account integrations are separate | Cloud environment plus account state |
 | ChatGPT | Account/workspace plugins and apps | No implicit local checkout | Yes | OpenAI account/workspace |
 
@@ -78,13 +78,23 @@ or Codex configuration. Use the same repository as a supported publishing
 source when possible, but verify refresh, installation, and authentication on
 each hosted surface separately.
 
-Enabled Claude.ai account skills may also be exposed to Claude Code cloud. Do
-not use that implicit path as the source of truth for coding workflows and do
-not assume a chat skill is isolated from cloud coding sessions. Keep required
-Code skills in Git-backed plugins or the project repository. Add a skill to the
-Claude.ai account only when its possible presence in Claude Code cloud is
-acceptable; otherwise keep the capability on a more isolated hosted connector
-or local Code path.
+Account skills and plugins also reach local Claude Code. From 2.1.273, a
+session signed in with the claude.ai account downloads the account's skills to
+`~/.claude/skills/synced/` and its plugins to `~/.claude/plugins/synced/`,
+listed as `<name>@synced`. They are not scoped to a project: they load in every
+project Claude Code opens with that sign-in, and account skills may also reach
+Claude Code cloud. Keep required Code skills in Git-backed plugins or
+the project repository, and add a skill or plugin to the account only when its
+presence in every Claude Code session is acceptable. In Claude Code, a local
+plugin with the same name takes precedence over the account's copy.
+
+Codex gets the ChatGPT account's apps when it is signed in with ChatGPT, in the
+CLI through `/apps` and in the ChatGPT desktop app's Codex mode.
+
+The macOS app reads all of this per Mac under **Apps › Accounts** and treats
+the synced folders as the account's, never as loose local tools. Which of this
+repository's plugins to add to claude.ai, and how, is in
+[account surfaces](account-surfaces-v1.md#publishing-this-repositorys-plugins-to-claudeai).
 
 ## Owned plugins in `agent-tooling`
 
@@ -355,7 +365,10 @@ try to mirror every local development tool into chat.
 `disableClaudeAiConnectors` is enabled at user scope after validating the local
 Linear, Supabase, mobile-development, and project paths. This enforces the
 intended separation: hosted connectors for chat and deliberate local
-plugins/MCPs for Claude Code.
+plugins/MCPs for Claude Code. The macOS app's "Account connectors in Claude
+Code" choice writes the same key, and the `base-workstation` profile's
+`claude.connector-separation` check expects it set. Change both together, or
+the doctor and the app will disagree.
 
 ## Authentication
 
@@ -371,6 +384,10 @@ use the capability:
   requirement.
 - For Claude.ai connectors and ChatGPT apps, authenticate in the corresponding
   hosted account or workspace.
+- For an account's contents to reach a local client at all, sign the client in
+  with the subscription: `claude auth login` for claude.ai and `codex login`
+  for ChatGPT. An API key, a token or a third-party provider replaces that
+  sign-in, including one exported from the login shell; Checkup reports both.
 - For cloud coding sessions, configure the supported project/cloud environment
   independently of local desktop credentials.
 

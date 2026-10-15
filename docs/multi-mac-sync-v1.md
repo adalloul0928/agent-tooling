@@ -29,8 +29,9 @@ destinations, project folders, receipts, keys, or credentials.
 ```
 
 **`workspace.json`** is merged by `WorkspaceMergeEngine` per record (artifacts,
-assignments, projects, presets, devices…). Its revision history is kept in every
-Mac's store; Git's history is a second copy, not the one the engine reads.
+assignments, projects, presets, devices, account choices…). Its revision history
+is kept in every Mac's store; Git's history is a second copy, not the one the
+engine reads.
 
 **`content/`** is content-addressed and immutable. A tree is written once under
 its digest and never modified; two Macs writing the same digest write identical
@@ -55,11 +56,14 @@ retries), and `missing` (trees the document names that neither side could
 supply).
 
 **`status/<deviceID>.json`** is written only by the Mac it names, after each
-scan or apply. It is a small summary — device name, last scan, what is
-installed per app, what is pending — for other Macs to *show*. It is never read
-back into the writer's own state and never merged; the newest commit wins
-trivially because only one writer exists per file. A missing or stale file is
-shown as "last seen …", never as an error.
+scan or apply. It is a small summary — device name, last scan, what is installed
+per app, what is pending, and per account the sign-in method, plan, an account
+fingerprint and item counts — for other Macs to *show*. The fingerprint is a
+salted digest compared only for equality; no address, account name or item list
+is published (see [account surfaces](account-surfaces-v1.md#other-macs)). It is
+never read back into the writer's own state and never merged; the newest commit
+wins trivially because only one writer exists per file. A missing or stale file
+is shown as "last seen …", never as an error.
 
 Anything else in the checkout stops a publish, as today.
 
@@ -152,8 +156,8 @@ through this Mac's own plan.
 The document carries the *names* of credentials a server needs, never values.
 MCP definitions already refuse credential-shaped content; the Git transport
 already refuses credentials in a remote URL; `status/` files carry no paths
-outside `~` abbreviation and no tokens. Each Mac supplies its own values
-through its own client. This line does not move.
+outside `~` abbreviation, no tokens, and no account address. Each Mac supplies
+its own values through its own client. This line does not move.
 
 ## Scheduling
 

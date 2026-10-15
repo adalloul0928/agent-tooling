@@ -388,6 +388,38 @@ changelog, Codex's GitHub releases, Kiro's changelog pages), hands the notes,
 your configuration, and the audit to the assistant with the web allowed, and
 shows what to adopt with each item's source.
 
+## Accounts: what claude.ai and ChatGPT give each app
+
+The **Accounts** tab under Apps shows what your claude.ai account gives Claude
+Code (connectors, skills and plugins) and what your ChatGPT account gives Codex
+(apps), read live on this Mac from the apps themselves: `claude auth status`,
+`claude plugin list`, `claude mcp list`, and `codex app-server`. Nothing about
+the accounts' contents is stored or synced; each Mac reads its own. Adding,
+connecting or removing anything happens on the vendor's site, so those rows
+open claude.ai or ChatGPT.
+
+What the app does keep is your choice about the local switches: account skills,
+plugins or connectors in Claude Code, one plugin or connector, ChatGPT apps in
+Codex, one app, and how app tools are approved. A choice is saved once for
+every Mac. Each Mac then shows a reviewed plan that edits only
+`~/.claude/settings.json` or `~/.codex/config.toml`, backs the file up first,
+and is refused if the file changed after you reviewed it. A choice an
+organization's policy or another settings file decides is shown as held, with
+the reason, rather than written.
+
+Checkup and Home report an app not signed in with its subscription, a login
+shell variable that replaces the sign-in (by name; values are never read),
+choices this Mac does not follow yet, connectors that need signing in on the
+vendor's site, and an account that differs from the one another Mac uses.
+Skills and plugins the account syncs to `~/.claude/skills/synced/` and
+`<name>@synced` are the account's: the Library shows them in its own strip and
+never adopts, assigns or removes them.
+
+Saving the first account choice raises the shared workspace to schema 6, which
+older builds cannot read, so update the app on every Mac first. The contract,
+including the exact keys and how to publish this repository's plugins to
+claude.ai, is [account surfaces](../../docs/account-surfaces-v1.md).
+
 ## Try a skill in its app
 
 Each row under **Apps** in a skill's details has a **Try…** button where the
