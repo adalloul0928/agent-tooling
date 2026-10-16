@@ -349,7 +349,7 @@ struct PlanReviewSheet: View {
         switch reason {
         case .missingContent: "No verified copy in your library"
         case .trackedOwnership: "Recorded only"
-        case .packageMember: "Comes with its package"
+        case .packageMember: "Comes with its plugin"
         case .missingNativeRoute: "No install route on this Mac"
         case .unsupportedByAdapter: "This app version cannot do it"
         case .unknownClientVersion: "App version unknown"

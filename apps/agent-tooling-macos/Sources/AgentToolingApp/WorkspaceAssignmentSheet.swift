@@ -203,7 +203,7 @@ struct WorkspaceAssignmentSheet: View {
                         } else {
                             Text("Every Mac").tag(InstallWhere.everyMac)
                             Text("This Mac only").tag(InstallWhere.thisMac)
-                            Text("Choose Macs…").tag(InstallWhere.chooseMacs)
+                            Text("Choose Macs").tag(InstallWhere.chooseMacs)
                         }
                         Text("One project").tag(InstallWhere.project)
                     }

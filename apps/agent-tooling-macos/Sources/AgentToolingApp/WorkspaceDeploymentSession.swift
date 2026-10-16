@@ -637,7 +637,7 @@ final class WorkspaceDeploymentSession {
         if let refusal = refusal as? WorkspaceNativePluginCommandPlanningError {
             switch refusal {
             case .blockedByManagedPolicy, .unresolvedManagedPolicy:
-                return "A managed policy on this Mac blocks this package in \(client.rawValue)."
+                return "A managed policy on this Mac blocks this plugin in \(client.rawValue)."
             case .unsupportedScope, .unsupportedSurface, .unsupportedEnablement:
                 return "\(client.rawValue) cannot be asked to do this here."
             default:

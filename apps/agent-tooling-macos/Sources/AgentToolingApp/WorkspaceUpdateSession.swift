@@ -267,7 +267,7 @@ final class WorkspaceUpdateSession {
         let plan = OperationPlan(
             kind: .updatePlugin,
             title: "Update \(entry.displayName) in \(route.client.rawValue)",
-            summary: "Asks the app to update its own package.",
+            summary: "Asks the app to update its own plugin.",
             targetSurfaces: surface.map { [$0] } ?? [],
             steps: [
                 .init(kind: .command, title: "Update \(route.externalPluginID)",
@@ -314,11 +314,11 @@ final class WorkspaceUpdateSession {
     private func pluginUpdateRefusal(for row: WorkspaceLibraryReadModelRow?) -> String? {
         guard let row else { return nil }
         guard let route = row.nativeRoutes.first else {
-            return "This package is not tied to an app on this Mac, so no app can be asked to update it."
+            return "This plugin is not tied to an app on this Mac, so no app can be asked to update it."
         }
         guard NativePluginInstallRegister.command(for: route.client, externalPluginID: route.externalPluginID)?.updateArguments != nil
         else {
-            return "\(route.client.rawValue) keeps its own packages up to date; update it there."
+            return "\(route.client.rawValue) keeps its own plugins up to date; update it there."
         }
         return nil
     }
