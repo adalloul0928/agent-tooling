@@ -216,6 +216,20 @@ struct WorkspaceDeploymentOperationsTests {
         #expect(unmeasured.items.isEmpty)
     }
 
+    /// A removal step says who installed the copy the way the plan sheets
+    /// do: Agent Tooling, not "this app".
+    @Test func aRemovalStepSaysAgentToolingInstalledTheCopy() throws {
+        let staged = StagedDeployment(
+            artifactID: ArtifactID(), deploymentName: "personal", stagingPath: "",
+            fingerprint: String(repeating: "a", count: 64), destinationPath: "/Users/me/.codex/skills/personal",
+            client: .codex, scope: .user, change: .remove)
+
+        let step = try #require(WorkspaceDeploymentOperations.operations(for: [staged]).first?.steps.first)
+
+        #expect(step.kind == .removeManagedDirectory)
+        #expect(step.detail == "Remove the copy Agent Tooling installed in Codex.")
+    }
+
     @Test func aRemovalRefusesAFolderThatNoLongerMatchesWhatWasApproved() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

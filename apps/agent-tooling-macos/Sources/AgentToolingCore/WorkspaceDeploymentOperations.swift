@@ -212,7 +212,7 @@ public enum WorkspaceDeploymentOperations {
                             id: identifiers(),
                             kind: .removeManagedDirectory,
                             title: "Remove \(deployment.deploymentName)",
-                            detail: "Remove the copy this app installed in \(key.client.rawValue).",
+                            detail: "Remove the copy Agent Tooling installed in \(key.client.rawValue).",
                             destinationPath: deployment.destinationPath,
                             // Bound to the installed tree; an edited folder is
                             // left alone rather than deleted.
