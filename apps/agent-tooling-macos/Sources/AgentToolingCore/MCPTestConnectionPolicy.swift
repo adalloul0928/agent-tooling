@@ -100,39 +100,36 @@ public enum MCPTestConnectionPolicy {
 
     /// The search path a test connection uses. It is fixed rather than
     /// inherited so the resolved program does not depend on how the app was
-    /// launched.
+    /// launched, and it is the same list every other child this app launches
+    /// gets, so a server installed through Volta or pnpm is found here too.
     public static func searchPath(homeURL: URL) -> [String] {
-        let home = homeURL.path(percentEncoded: false)
-        return [
-            "\(home)/.local/bin",
-            "\(home)/.cargo/bin",
-            "\(home)/.bun/bin",
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-            "/usr/bin",
-            "/bin",
-            "/usr/sbin",
-            "/sbin",
-        ]
+        ProcessCommandRunner.searchPath(home: plainHome(homeURL))
     }
 
-    /// The complete environment handed to a test child. Built from nothing, so
-    /// no exported key, token, or session variable in the app's own environment
-    /// can reach a server being tested.
+    /// The complete environment handed to a test child. It is the app's own
+    /// child environment built from an empty parent — so no exported key,
+    /// token, or session variable in the app's environment can reach a server
+    /// being tested — plus the marker that tells a server it is being probed.
+    /// Building on the shared builder also means a tested server gets the same
+    /// `PATH`, `TERM`, and `LC_CTYPE` a real client command gets.
     public static func childEnvironment(
         homeURL: URL,
         temporaryDirectory: URL = FileManager.default.temporaryDirectory
     ) -> [String: String] {
-        let user = NSUserName()
-        return [
-            "PATH": searchPath(homeURL: homeURL).joined(separator: ":"),
-            "HOME": homeURL.path(percentEncoded: false),
-            "TMPDIR": temporaryDirectory.path(percentEncoded: false),
-            "LANG": "en_US.UTF-8",
-            "USER": user,
-            "LOGNAME": user,
-            "MCP_TEST_CONNECTION": "agent-tooling",
-        ]
+        var environment = ProcessCommandRunner.childEnvironment(
+            inheriting: [:],
+            homeURL: homeURL,
+            temporaryDirectory: temporaryDirectory
+        )
+        environment["MCP_TEST_CONNECTION"] = "agent-tooling"
+        return environment
+    }
+
+    /// A plain home path with no trailing slash, so `PATH` entries never
+    /// contain `//` and `HOME` does not end in `/`.
+    private static func plainHome(_ homeURL: URL) -> String {
+        let raw = homeURL.standardizedFileURL.path(percentEncoded: false)
+        return raw.count > 1 && raw.hasSuffix("/") ? String(raw.dropLast()) : raw
     }
 
     // MARK: Resolution

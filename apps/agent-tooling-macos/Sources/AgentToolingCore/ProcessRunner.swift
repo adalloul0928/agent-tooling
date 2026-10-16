@@ -287,7 +287,29 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
     ) -> [String: String] {
         let rawHome = homeURL.standardizedFileURL.path(percentEncoded: false)
         let home = rawHome.count > 1 && rawHome.hasSuffix("/") ? String(rawHome.dropLast()) : rawHome
-        let paths = [
+        let user = parent["USER"].flatMap(safeEnvironmentAtom) ?? NSUserName()
+        let language = parent["LANG"].flatMap(safeLocale) ?? "en_US.UTF-8"
+        var environment = [
+            "HOME": home,
+            "USER": user,
+            "LOGNAME": parent["LOGNAME"].flatMap(safeEnvironmentAtom) ?? user,
+            "TMPDIR": temporaryDirectory.standardizedFileURL.path(percentEncoded: false),
+            "PATH": searchPath(home: home).joined(separator: ":"),
+            "LANG": language,
+            "LC_CTYPE": parent["LC_CTYPE"].flatMap(safeLocale) ?? language,
+            "TERM": "dumb",
+        ]
+        if parent["NO_COLOR"] != nil { environment["NO_COLOR"] = "1" }
+        return environment
+    }
+
+    /// The fixed search path handed to every child this app launches. It is the
+    /// one list, so a tool installed through Volta or pnpm is found the same
+    /// way whether the child is a real client command or a server under test.
+    /// `home` must already be a plain path with no trailing slash, so the
+    /// entries never contain `//`.
+    static func searchPath(home: String) -> [String] {
+        [
             "\(home)/.local/bin",
             "\(home)/.cargo/bin",
             "\(home)/.volta/bin",
@@ -300,20 +322,6 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
             "/usr/sbin",
             "/sbin",
         ]
-        let user = parent["USER"].flatMap(safeEnvironmentAtom) ?? NSUserName()
-        let language = parent["LANG"].flatMap(safeLocale) ?? "en_US.UTF-8"
-        var environment = [
-            "HOME": home,
-            "USER": user,
-            "LOGNAME": parent["LOGNAME"].flatMap(safeEnvironmentAtom) ?? user,
-            "TMPDIR": temporaryDirectory.standardizedFileURL.path(percentEncoded: false),
-            "PATH": paths.joined(separator: ":"),
-            "LANG": language,
-            "LC_CTYPE": parent["LC_CTYPE"].flatMap(safeLocale) ?? language,
-            "TERM": "dumb",
-        ]
-        if parent["NO_COLOR"] != nil { environment["NO_COLOR"] = "1" }
-        return environment
     }
 
     private static func safeEnvironmentAtom(_ value: String) -> String? {

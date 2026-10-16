@@ -161,13 +161,54 @@ struct MCPTestConnectionPolicyTests {
             temporaryDirectory: URL(fileURLWithPath: "/tmp/example")
         )
 
-        #expect(Set(environment.keys) == ["PATH", "HOME", "TMPDIR", "LANG", "USER", "LOGNAME", "MCP_TEST_CONNECTION"])
+        // Built on the shared child-environment builder, so it carries the same
+        // keys a real client command gets (TERM and LC_CTYPE included) plus the
+        // test marker.
+        #expect(
+            Set(environment.keys)
+                == ["PATH", "HOME", "TMPDIR", "LANG", "LC_CTYPE", "TERM", "USER", "LOGNAME", "MCP_TEST_CONNECTION"]
+        )
         #expect(environment["HOME"] == "/Users/example")
         #expect(environment["PATH"]?.contains("/Users/example/.local/bin") == true)
+        #expect(environment["MCP_TEST_CONNECTION"] == "agent-tooling")
         // Whatever the app itself was launched with must not be visible here.
         for key in ProcessInfo.processInfo.environment.keys where !environment.keys.contains(key) {
             #expect(environment[key] == nil)
         }
+    }
+
+    @Test func theTestChildPathMatchesTheRunnersAndFindsVoltaAndPnpmTools() {
+        let home = URL(fileURLWithPath: "/Users/example")
+        let environment = MCPTestConnectionPolicy.childEnvironment(homeURL: home)
+
+        // The one list: a server under test is found the same way a real
+        // client command is, including tools installed through Volta or pnpm.
+        #expect(environment["PATH"] == ProcessCommandRunner.searchPath(home: "/Users/example").joined(separator: ":"))
+        #expect(environment["PATH"]?.contains("/Users/example/.volta/bin") == true)
+        #expect(environment["PATH"]?.contains("/Users/example/Library/pnpm") == true)
+    }
+
+    @Test func aSecretInTheParentNeverReachesATestChild() {
+        // childEnvironment ignores the process environment entirely, so even a
+        // secret exported into this test process cannot ride along.
+        setenv("AGENT_TOOLING_TEST_SECRET", "do-not-leak", 1)
+        defer { unsetenv("AGENT_TOOLING_TEST_SECRET") }
+
+        let environment = MCPTestConnectionPolicy.childEnvironment(homeURL: URL(fileURLWithPath: "/Users/example"))
+
+        #expect(environment["AGENT_TOOLING_TEST_SECRET"] == nil)
+        #expect(!environment.values.contains("do-not-leak"))
+    }
+
+    @Test func aTrailingSlashHomeDoesNotLeaveDoubledSeparators() {
+        // A directory URL keeps its trailing slash; the policy must strip it so
+        // HOME does not end in "/" and PATH entries do not contain "//".
+        let environment = MCPTestConnectionPolicy.childEnvironment(
+            homeURL: URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        )
+
+        #expect(environment["HOME"] == "/Users/example")
+        #expect(environment["PATH"]?.contains("//") == false)
     }
 
     @Test func theConsentSummaryNamesWhatIsAboutToHappen() throws {
