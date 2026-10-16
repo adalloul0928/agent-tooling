@@ -194,7 +194,11 @@ private extension ConfigurationEditor {
     static func json(_ value: ConfigurationValue) throws -> Any {
         switch value {
         case .string(let text): text
-        case .number(let number): number
+        case .number(let number) where number.isFinite: number
+        // JSON has no NaN or infinity, and JSONSerialization raises an
+        // Objective-C exception for one instead of throwing, which would end
+        // the app rather than refuse the value.
+        case .number: throw ConfigurationEditError.valueRejected
         case .boolean(let flag): flag
         case .list(let values): try values.map { try json($0) }
         // An opaque value is something this build read but never understood;

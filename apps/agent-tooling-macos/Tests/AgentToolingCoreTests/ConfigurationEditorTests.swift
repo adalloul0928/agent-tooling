@@ -103,6 +103,32 @@ struct ConfigurationEditorTests {
         #expect(try fixture.contents() == before)
     }
 
+    /// JSON has no NaN or infinity. JSONSerialization raises an Objective-C
+    /// exception for one rather than throwing, which ended the app, so such a
+    /// number is refused, alone or in a list, before anything is written.
+    @Test func aNumberJSONCannotHoldIsRefusedBeforeAnythingIsWritten() throws {
+        let values: [(key: String, value: ConfigurationValue)] = [
+            ("cleanupPeriodDays", .number(.nan)), ("cleanupPeriodDays", .number(.infinity)),
+            ("cleanupPeriodDays", .number(-.infinity)), ("permissions.allow", .list([.string("Read"), .number(.nan)])),
+        ]
+        for (key, value) in values {
+            let fixture = try Fixture(#"{"cleanupPeriodDays":30}"#)
+            defer { fixture.remove() }
+            let editor = ConfigurationEditor()
+            let before = try fixture.contents()
+
+            #expect(throws: ConfigurationEditError.valueRejected, "\(value)") {
+                _ = try editor.apply(
+                    .init(
+                        key: key, layer: .user, sourcePath: fixture.path, newValue: value,
+                        expectedFingerprint: try editor.fingerprint(of: fixture.path)),
+                    adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0")
+            }
+            #expect(try fixture.contents() == before)
+            #expect(!FileManager.default.fileExists(atPath: fixture.path + ".agent-tooling-backup"))
+        }
+    }
+
     @Test func aListSettingIsWrittenIntoItsDocumentedNesting() throws {
         let fixture = try Fixture(#"{"permissions":{"deny":["Bash"]}}"#)
         defer { fixture.remove() }
