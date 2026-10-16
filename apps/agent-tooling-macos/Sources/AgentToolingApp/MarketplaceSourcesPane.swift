@@ -45,8 +45,9 @@ extension MarketplaceView {
     /// emptiness, so nothing reads as a failure that is really a filter.
     var emptyPackageMessage: String {
         guard hasActiveFilter else {
-            guard session.canReachCatalog else { return WorkspaceMarketplaceSession.noProviderNote }
-            return "Refresh the catalogs. Nothing this workspace records has published a package yet."
+            return WorkspaceMarketplaceSession.unfilteredEmptyMessage(
+                canReachCatalog: session.canReachCatalog,
+                hasCatalogFailures: !session.catalogFailures.isEmpty)
         }
         if let source = selectedSource, componentFilter != .all {
             return

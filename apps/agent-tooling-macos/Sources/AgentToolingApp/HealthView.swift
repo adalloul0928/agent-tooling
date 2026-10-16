@@ -295,11 +295,21 @@ private struct HealthRow: View {
                 .foregroundStyle(AgentTheme.ok)
                 .wrapsLines()
         case .failed(let message):
-            Text(message)
+            Text(failureText(message))
                 .font(AgentFont.caption)
                 .foregroundStyle(AgentTheme.failure)
                 .wrapsLines()
         }
+    }
+
+    /// What to show for a failure detail. The raw detail is often a CLI
+    /// fragment ("is Anthropic-hosted and doesn't support local OAuth") that
+    /// reads as a broken sentence. When the fix is the claude.ai connectors
+    /// page, the app has its own sentence for that; otherwise show the detail
+    /// with a capital first letter so at least it starts like a sentence.
+    private func failureText(_ detail: String) -> String {
+        let routesToConnectors: Bool = if case .openClaudeAIConnectors = action { true } else { false }
+        return HealthFailureText.text(detail: detail, routesToClaudeAIConnectors: routesToConnectors)
     }
 
     @ViewBuilder

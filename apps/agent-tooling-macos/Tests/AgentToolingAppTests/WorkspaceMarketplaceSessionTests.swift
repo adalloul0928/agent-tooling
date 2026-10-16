@@ -172,6 +172,24 @@ struct WorkspaceMarketplaceSessionTests {
         #expect(healthy.catalogFailures.isEmpty)
     }
 
+    /// When Discover is empty with no filter active, the reason it gives must
+    /// match why it is empty. The bug: it blamed the publisher ("Nothing …has
+    /// published a package yet") even when every catalog failed to read.
+    @Test func anEmptyDiscoverBlamesTheCatalogsOnlyWhenTheyFailed() {
+        // Every catalog that was asked failed, so the fault is the catalogs'.
+        #expect(
+            WorkspaceMarketplaceSession.unfilteredEmptyMessage(canReachCatalog: true, hasCatalogFailures: true)
+                == "No catalog could be read. Check the sources and refresh.")
+        // A catalog answered and still had nothing: it is fair to say so.
+        #expect(
+            WorkspaceMarketplaceSession.unfilteredEmptyMessage(canReachCatalog: true, hasCatalogFailures: false)
+                == "Refresh the catalogs. Nothing this workspace records has published a package yet.")
+        // No catalog could be asked at all is its own, separate note.
+        #expect(
+            WorkspaceMarketplaceSession.unfilteredEmptyMessage(canReachCatalog: false, hasCatalogFailures: false)
+                == WorkspaceMarketplaceSession.noProviderNote)
+    }
+
     @Test func aRefreshWhereEveryCatalogFailsKeepsWhatWasAlreadyOnScreen() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

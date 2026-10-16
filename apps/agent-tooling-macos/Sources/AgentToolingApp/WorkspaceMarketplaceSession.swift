@@ -124,6 +124,18 @@ final class WorkspaceMarketplaceSession {
     static let noProviderNote =
         "No catalog provider is available in this build, so Discover shows only what this Mac already kept."
 
+    /// The empty-Discover message when no filter is active, so the reason an
+    /// unfiltered Discover is empty is told straight. When no provider can be
+    /// reached, that is the whole story. When every catalog that was asked
+    /// failed to read, the emptiness is the catalogs' fault, not the
+    /// publisher's, so point at the sources rather than blaming them. Only when
+    /// a catalog answered and still had nothing is it fair to say so.
+    static func unfilteredEmptyMessage(canReachCatalog: Bool, hasCatalogFailures: Bool) -> String {
+        if !canReachCatalog { return noProviderNote }
+        if hasCatalogFailures { return "No catalog could be read. Check the sources and refresh." }
+        return "Refresh the catalogs. Nothing this workspace records has published a package yet."
+    }
+
     private static let pageLimit = 100
 
     private let providers: [any MarketplaceProvider]

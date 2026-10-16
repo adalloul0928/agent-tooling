@@ -270,14 +270,16 @@ struct PlanReviewSheet: View {
     }
 
     private var installLabel: String {
-        if plan.items.isEmpty {
-            // Nothing to run and nothing listed: the button says so rather than
-            // "Install 0 changes", which reads as an action that does something.
-            return "Nothing to install"
-        }
-        return runnableCount == 0
-            ? "Nothing can run yet"
-            : "Install \(runnableCount) change\(runnableCount == 1 ? "" : "s")"
+        PlanReviewLabels.actionLabel(
+            listedCount: plan.items.count,
+            runnableCount: runnableCount,
+            hasRemoval: planHasRemoval)
+    }
+
+    /// True when any step in the plan removes content. A plan made only of
+    /// removals should not call itself an install, so the verb switches.
+    private var planHasRemoval: Bool {
+        plan.items.contains { if case .removeContent = $0.action { true } else { false } }
     }
 
     private var review: DeploymentPlanReview? {
@@ -286,12 +288,11 @@ struct PlanReviewSheet: View {
     }
 
     private var title: String {
-        if plan.items.isEmpty {
-            return plan.exclusions.isEmpty
-                ? "Nothing to install"
-                : "Nothing can be installed right now"
-        }
-        return installLabel
+        PlanReviewLabels.title(
+            listedCount: plan.items.count,
+            runnableCount: runnableCount,
+            hasRemoval: planHasRemoval,
+            hasExclusions: !plan.exclusions.isEmpty)
     }
 
     private var summary: String {
