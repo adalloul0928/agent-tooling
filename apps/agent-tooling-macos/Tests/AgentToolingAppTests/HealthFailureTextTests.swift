@@ -1,3 +1,4 @@
+import AgentToolingCore
 import Testing
 
 @testable import AgentToolingApp
@@ -30,5 +31,33 @@ struct HealthFailureTextTests {
     func leavesCapitalizedDetail() {
         #expect(
             HealthFailureText.text(detail: "Timed out", routesToClaudeAIConnectors: false) == "Timed out")
+    }
+
+    /// The fragment the review saw is the check's own detail on the row, under
+    /// the connection's name. The first fix reached only the sign-in result
+    /// line, so the row still printed it verbatim.
+    @Test("A failed check's own detail on the row reads as a sentence")
+    func failedCheckDetailOnTheRow() {
+        let gmail = entry(
+            "Gmail", source: .claudeAI, status: .failed(detail: "is Anthropic-hosted and doesn't support local OAuth"))
+        #expect(
+            HealthFailureText.statusDetail(of: gmail, action: ConnectionHealthActionClassifier.action(for: gmail))
+                == HealthFailureText.claudeAISentence)
+
+        let local = entry("inspector", source: .plugin("devtools"), status: .failed(detail: "connection refused"))
+        #expect(
+            HealthFailureText.statusDetail(of: local, action: ConnectionHealthActionClassifier.action(for: local))
+                == "Connection refused")
+
+        let connected = entry("local", source: .user, status: .connected)
+        #expect(HealthFailureText.statusDetail(of: connected, action: .none) == nil)
+        let silent = entry("quiet", source: .user, status: .failed(detail: ""))
+        #expect(HealthFailureText.statusDetail(of: silent, action: .none) == nil)
+    }
+
+    private func entry(_ name: String, source: ConnectionHealthSource, status: ConnectionHealthStatus) -> ConnectionHealthEntry {
+        ConnectionHealthEntry(
+            client: .claude, name: name, displayName: name, source: source, status: status,
+            summary: "npx \(name)", rawLine: "\(name): npx \(name)")
     }
 }

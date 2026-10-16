@@ -242,7 +242,7 @@ private struct HealthRow: View {
                         .lineLimit(2)
                         .textSelection(.enabled)
                 }
-                if case .failed(let detail) = entry.status, !detail.isEmpty {
+                if let detail = HealthFailureText.statusDetail(of: entry, action: action) {
                     Text(detail)
                         .font(AgentFont.caption)
                         .foregroundStyle(AgentTheme.failure)
