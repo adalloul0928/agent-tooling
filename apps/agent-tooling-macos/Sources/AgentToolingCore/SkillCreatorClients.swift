@@ -195,8 +195,7 @@ enum SkillCreatorCommandShapes {
             path.count <= 1_024
         else { return false }
         let home = homeURL.standardizedFileURL.path(percentEncoded: false)
-        let homePrefix = home.hasSuffix("/") ? home : home + "/"
-        guard path.hasPrefix(homePrefix) else { return false }
+        guard PathContainment.relativePath(ofNormalizedChild: path, inNormalizedRoot: home) != nil else { return false }
         let lastComponent = URL(filePath: path).lastPathComponent
         guard lastComponent.hasPrefix("request-"), UUID(uuidString: String(lastComponent.dropFirst("request-".count))) != nil
         else { return false }

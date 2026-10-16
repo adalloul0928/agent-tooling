@@ -203,7 +203,9 @@ public struct OperationPlanSafetyReviewer {
                 }
             )
         else { return nil }
-        let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        // Standardized like each item below, so a root spelled with `..` or a
+        // leading `/private` still matches the items found under it.
+        let normalizedRoot = root.standardizedFileURL
         var entries = Set<String>()
         var isTruncated = false
         while let item = enumerator.nextObject() as? URL {
@@ -211,9 +213,7 @@ public struct OperationPlanSafetyReviewer {
                 isTruncated = true
                 break
             }
-            let itemPath = item.standardizedFileURL.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            guard itemPath.hasPrefix(rootPath + "/") else { continue }
-            let relative = String(itemPath.dropFirst(rootPath.count + 1))
+            guard let relative = PathContainment.relativePath(of: item, under: normalizedRoot) else { continue }
             guard let values = try? item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]) else {
                 isTruncated = true
                 continue

@@ -571,10 +571,11 @@ public actor SkillDraftService {
 
         let homePath = normalizedPath(fileManager.homeDirectoryForCurrentUser)
         let temporaryPath = normalizedPath(fileManager.temporaryDirectory)
+        // Strictly inside the home or temporary folder, compared exactly.
         let allowedBase: String?
-        if rootPath.hasPrefix(homePath + "/") {
+        if PathContainment.relativePath(ofNormalizedChild: rootPath, inNormalizedRoot: homePath) != nil {
             allowedBase = homePath
-        } else if rootPath.hasPrefix(temporaryPath + "/") {
+        } else if PathContainment.relativePath(ofNormalizedChild: rootPath, inNormalizedRoot: temporaryPath) != nil {
             allowedBase = temporaryPath
         } else {
             allowedBase = nil
@@ -806,7 +807,7 @@ public actor SkillDraftService {
                 }
                 entriesSeen += 1
 
-                guard let relativePath = relativeReviewPath(of: child, under: root) else {
+                guard let relativePath = PathContainment.relativePath(of: child, under: root) else {
                     throw SkillDraftError.unsafePackage("A package item is outside the draft root.")
                 }
                 let pathComponents = relativePath.split(separator: "/", omittingEmptySubsequences: false)
@@ -882,26 +883,29 @@ public actor SkillDraftService {
         }
     }
 
-    private func relativeReviewPath(of child: URL, under root: URL) -> String? {
-        let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let childPath = child.standardizedFileURL.path(percentEncoded: false)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard childPath.hasPrefix(rootPath + "/") else { return nil }
-        let relative = String(childPath.dropFirst(rootPath.count + 1))
-        let components = relative.split(separator: "/", omittingEmptySubsequences: false)
-        guard !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) else { return nil }
-        return relative
+    private func removeRequestDirectory(_ requestURL: URL) throws {
+        guard let request = Self.removableRequestDirectory(requestURL, stagingRoot: stagingRootURL) else {
+            throw SkillDraftError.unsafeStagingRoot(requestURL.standardizedFileURL.path(percentEncoded: false))
+        }
+        if fileManager.fileExists(atPath: request.path(percentEncoded: false)) {
+            try fileManager.removeItem(at: request)
+        }
     }
 
-    private func removeRequestDirectory(_ requestURL: URL) throws {
-        let root = stagingRootURL.standardizedFileURL.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let request = requestURL.standardizedFileURL.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard request.hasPrefix(root + "/request-") else {
-            throw SkillDraftError.unsafeStagingRoot(request)
-        }
-        if fileManager.fileExists(atPath: requestURL.path(percentEncoded: false)) {
-            try fileManager.removeItem(at: requestURL)
-        }
+    /// The guard in front of every removal this service makes: the folder
+    /// `requestURL` names, when that is one folder directly inside the staging
+    /// root with a request folder's name, and nil for anything else. Both
+    /// sides are standardized, and the URL returned is the one that was
+    /// checked, so it is the one removed.
+    static func removableRequestDirectory(_ requestURL: URL, stagingRoot: URL) -> URL? {
+        let request = requestURL.standardizedFileURL
+        guard
+            let name = PathContainment.relativePath(
+                ofNormalizedChild: request.path(percentEncoded: false),
+                inNormalizedRoot: stagingRoot.standardizedFileURL.path(percentEncoded: false)),
+            !name.contains("/"), name.hasPrefix("request-")
+        else { return nil }
+        return request
     }
 
     private func boundedDiagnostic(_ value: String) -> String {

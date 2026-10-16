@@ -341,8 +341,7 @@ struct GitCheckoutSourceReader: Sendable {
 
     private static func relativePath(_ path: String, inside root: String) -> String? {
         if path == root { return "." }
-        let prefix = root.hasSuffix("/") ? root : root + "/"
-        guard path.hasPrefix(prefix) else { return nil }
-        return String(path.dropFirst(prefix.count))
+        // Both are real paths already, so they are compared as given.
+        return PathContainment.relativePath(ofNormalizedChild: path, inNormalizedRoot: root)
     }
 }

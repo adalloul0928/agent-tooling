@@ -231,9 +231,8 @@ enum AgentPluginMCPRuntimeMapper {
         let candidate = (relative.isEmpty ? base : base.appending(path: relative))
             .resolvingSymlinksInPath().standardizedFileURL
         let anchor = base.resolvingSymlinksInPath().standardizedFileURL
-        let anchorPath = normalized(anchor)
-        let candidatePath = normalized(candidate)
-        guard candidatePath == anchorPath || candidatePath.hasPrefix(anchorPath + "/") else {
+        // Both sides are resolved above, so the comparison takes them as given.
+        guard PathContainment.containsAsGiven(candidate, in: anchor) else {
             return .failure(.escapesPackage)
         }
         return .success(candidate)
@@ -259,11 +258,5 @@ enum AgentPluginMCPRuntimeMapper {
         guard fileManager.fileExists(atPath: resolved.path, isDirectory: &isDirectory),
               isDirectory.boolValue else { return nil }
         return resolved
-    }
-
-    private static func normalized(_ url: URL) -> String {
-        var path = url.path(percentEncoded: false)
-        while path.count > 1, path.hasSuffix("/") { path.removeLast() }
-        return path
     }
 }

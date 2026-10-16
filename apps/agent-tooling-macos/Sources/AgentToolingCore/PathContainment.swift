@@ -18,8 +18,8 @@ enum PathContainment {
     /// components: `/a/bc` is not inside `/a/b`, because the match requires
     /// either equality or the root followed by a separator. The leading and
     /// trailing separators are trimmed, so `"/"` trims to the empty string and
-    /// contains only itself, as every check this replaced did. A caller that
-    /// passes the filesystem root by mistake is refused, not granted the disk.
+    /// contains only itself. A caller that passes the filesystem root by
+    /// mistake is refused, not granted the disk.
     static func isContained(normalizedChild child: String, inNormalizedRoot root: String) -> Bool {
         let child = trimmed(child)
         let root = trimmed(root)
@@ -27,10 +27,34 @@ enum PathContainment {
         return child == root || child.hasPrefix(root + "/")
     }
 
+    /// Where `child` sits below `root`: the components after the root, with
+    /// no separator leading or trailing. Nil when `child` is the root itself
+    /// or not inside it, compared the way `isContained` compares, so `/a/bc`
+    /// is not below `/a/b` and nothing is below the filesystem root. Also nil
+    /// when a remaining component is empty, `.` or `..`, so the answer joined
+    /// back onto the root names the place the comparison saw.
+    static func relativePath(ofNormalizedChild child: String, inNormalizedRoot root: String) -> String? {
+        let child = trimmed(child)
+        let root = trimmed(root)
+        guard !root.isEmpty, child.hasPrefix(root + "/") else { return nil }
+        let relative = String(child.dropFirst(root.count + 1))
+        let components = relative.split(separator: "/", omittingEmptySubsequences: false)
+        guard !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) else { return nil }
+        return relative
+    }
+
+    /// The relative path of an item found under a root the caller has already
+    /// normalized, such as an item a directory enumerator returned: the item
+    /// is standardized here, and the root is compared as given.
+    static func relativePath(of child: URL, under root: URL) -> String? {
+        relativePath(
+            ofNormalizedChild: child.standardizedFileURL.path(percentEncoded: false),
+            inNormalizedRoot: root.path(percentEncoded: false)
+        )
+    }
+
     /// Containment with no normalization: the caller has already resolved both
-    /// URLs and the bytes it passes are the bytes compared. Used where resolved
-    /// URLs flow in from the caller (`BoundedFileAccess`, the conversation
-    /// scanner and the read-only insights database).
+    /// URLs and the bytes it passes are the bytes compared.
     static func containsAsGiven(_ child: URL, in root: URL) -> Bool {
         isContained(
             normalizedChild: child.path(percentEncoded: false),

@@ -31,7 +31,7 @@ enum DirectoryFingerprint {
             ])
             guard values.isSymbolicLink != true,
                 values.isDirectory == true || values.isRegularFile == true,
-                let relativePath = relativePath(of: url, under: normalizedRoot)
+                let relativePath = PathContainment.relativePath(of: url, under: normalizedRoot)
             else {
                 throw DirectoryFingerprintError.unsafeItem(url.path(percentEncoded: false))
             }
@@ -91,16 +91,6 @@ enum DirectoryFingerprint {
             throw DirectoryFingerprintError.unsafeItem(url.path(percentEncoded: false))
         }
         return permissions & 0o111 != 0
-    }
-
-    private static func relativePath(of child: URL, under root: URL) -> String? {
-        let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let childPath = child.standardizedFileURL.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard childPath.hasPrefix(rootPath + "/") else { return nil }
-        let relative = String(childPath.dropFirst(rootPath.count + 1))
-        let components = relative.split(separator: "/", omittingEmptySubsequences: false)
-        guard !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) else { return nil }
-        return relative
     }
 
     private struct Entry {

@@ -44,6 +44,44 @@ struct PathContainmentTests {
         #expect(!PathContainment.containsResolved(URL(fileURLWithPath: "/Users"), in: URL(fileURLWithPath: "/")))
     }
 
+    // MARK: Relative path below a root
+
+    @Test func aChildsRelativePathIsWhatFollowsTheRoot() {
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/b/c/d", inNormalizedRoot: "/a/b") == "c/d")
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/b/c/", inNormalizedRoot: "/a/b/") == "c")
+    }
+
+    @Test func theRootItselfHasNoRelativePath() {
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/b", inNormalizedRoot: "/a/b") == nil)
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/b/", inNormalizedRoot: "/a/b") == nil)
+    }
+
+    @Test func aSharedPrefixSiblingHasNoRelativePath() {
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/bc/d", inNormalizedRoot: "/a/b") == nil)
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/c", inNormalizedRoot: "/a/b") == nil)
+    }
+
+    @Test func nothingHasARelativePathBelowTheFilesystemRoot() {
+        // The same answer the containment test gives: "/" contains only itself.
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a", inNormalizedRoot: "/") == nil)
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/", inNormalizedRoot: "/") == nil)
+    }
+
+    @Test func aRelativePathThatWouldNotLandWhereItWasCheckedIsRefused() {
+        // Joined back onto the root, each of these names some other place.
+        for child in ["/a/b/../c", "/a/b/./c", "/a/b//c", "/a/b/c/.."] {
+            #expect(PathContainment.relativePath(ofNormalizedChild: child, inNormalizedRoot: "/a/b") == nil, "\(child)")
+        }
+    }
+
+    @Test func anEnumeratedItemIsStandardizedAndItsRootTakenAsGiven() {
+        let root = URL(fileURLWithPath: "/a/b", isDirectory: true)
+        #expect(PathContainment.relativePath(of: URL(fileURLWithPath: "/a/b/./c/d"), under: root) == "c/d")
+        #expect(PathContainment.relativePath(of: URL(fileURLWithPath: "/a/x/../b/c"), under: root) == "c")
+        // The root is the caller's to normalize: it is not standardized here.
+        #expect(PathContainment.relativePath(of: URL(fileURLWithPath: "/a/b/c"), under: URL(fileURLWithPath: "/a/x/../b")) == nil)
+    }
+
     // MARK: as-given variant (no normalization)
 
     @Test func asGivenTakesTheBytesItIsGiven() {

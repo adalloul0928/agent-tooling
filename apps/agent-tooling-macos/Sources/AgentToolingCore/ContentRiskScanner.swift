@@ -716,9 +716,7 @@ public enum ContentRiskScanner {
     }
 
     private static func relativePath(of child: URL, under root: URL) -> String? {
-        let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let childPath = child.standardizedFileURL.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard childPath.hasPrefix(rootPath + "/") else { return nil }
-        return String(childPath.dropFirst(rootPath.count + 1))
+        // The root is standardized by `scan`; the enumerated item is standardized.
+        PathContainment.relativePath(of: child, under: root)
     }
 }

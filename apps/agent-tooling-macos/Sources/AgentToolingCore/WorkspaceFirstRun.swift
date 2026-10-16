@@ -174,10 +174,7 @@ enum WorkspaceFirstRun {
         let root = URL(fileURLWithPath: packageRoot).standardizedFileURL
         var child = URL(fileURLWithPath: path).standardizedFileURL
         if child.lastPathComponent == "SKILL.md" { child.deleteLastPathComponent() }
-        let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        guard child.path.hasPrefix(prefix) else { return nil }
-        let relative = String(child.path.dropFirst(prefix.count))
-        return relative.isEmpty ? nil : relative
+        return PathContainment.relativePath(ofNormalizedChild: child.path, inNormalizedRoot: root.path)
     }
 
     /// Every identifier some package claims, by its own record or by what a

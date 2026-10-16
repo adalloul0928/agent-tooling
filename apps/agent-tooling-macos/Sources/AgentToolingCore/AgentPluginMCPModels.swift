@@ -252,15 +252,8 @@ enum AgentPluginMCPConfigurationLoader {
         guard let relative else { return true }
         let root = packageRoot.resolvingSymlinksInPath().standardizedFileURL
         let candidate = root.appending(path: relative).resolvingSymlinksInPath().standardizedFileURL
-        let rootPath = normalizedPath(root)
-        let candidatePath = normalizedPath(candidate)
-        return candidatePath == rootPath || candidatePath.hasPrefix(rootPath + "/")
-    }
-
-    private static func normalizedPath(_ url: URL) -> String {
-        var path = url.path(percentEncoded: false)
-        while path.count > 1, path.hasSuffix("/") { path.removeLast() }
-        return path
+        // Both sides are resolved above, so the comparison takes them as given.
+        return PathContainment.containsAsGiven(candidate, in: root)
     }
 
     private static func isValidRemoteURL(_ value: String) -> Bool {
