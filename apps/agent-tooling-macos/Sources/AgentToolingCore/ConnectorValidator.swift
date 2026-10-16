@@ -12,13 +12,13 @@ public struct ValidatedConnectorDraft: Sendable, Equatable {
     }
 }
 
-public enum ConnectorValidator {
-    public static let maximumNameLength = 128
-    public static let maximumProviderLength = 128
-    public static let maximumSecretReferences = 64
-    public static let maximumSecretReferenceLength = 128
+enum ConnectorValidator {
+    static let maximumNameLength = 128
+    static let maximumProviderLength = 128
+    static let maximumSecretReferences = 64
+    static let maximumSecretReferenceLength = 128
 
-    public static func validate(
+    static func validate(
         name: String,
         provider: String,
         target: TargetSurface,

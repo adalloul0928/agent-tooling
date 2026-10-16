@@ -20,10 +20,10 @@ public struct ClientReleaseNote: Codable, Hashable, Sendable {
     public var rendered: String { "## \(client.rawValue) \(version)\nsource: \(source)\n\(body)" }
 }
 
-public enum ClientReleaseNotesError: LocalizedError, Sendable {
+enum ClientReleaseNotesError: LocalizedError, Sendable {
     case unsupportedClient(ClientKind)
     case unreachable(String)
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsupportedClient(let client): "\(client.rawValue) does not publish release notes this app knows how to read."
         case .unreachable(let detail): "The release notes could not be fetched. \(detail)"

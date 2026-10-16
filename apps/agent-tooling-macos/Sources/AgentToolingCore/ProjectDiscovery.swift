@@ -946,8 +946,8 @@ public struct ProjectComponentRow: Identifiable, Hashable, Sendable {
 /// Answers the one question the rest of the app cannot: for this project, is a
 /// component inherited from this Mac, replaced by a project copy, or only ever
 /// declared here?
-public enum ProjectOverlay {
-    public static func rows(
+enum ProjectOverlay {
+    static func rows(
         kind: ComponentKind,
         inherited: [ProjectInheritedComponent],
         local: [ProjectComponentRecord]
@@ -1004,15 +1004,15 @@ public enum ProjectOverlay {
 /// A reviewed, idempotent edit to a project's `.gitignore`. The plan carries
 /// the exact text that will be appended so it can be shown before it is
 /// written; applying it never rewrites or reorders anything already there.
-public struct ProjectIgnorePlan: Hashable, Sendable {
-    public var projectPath: String
-    public var gitignorePath: String
-    public var missingPatterns: [String]
-    public var appendedText: String
+struct ProjectIgnorePlan: Hashable, Sendable {
+    var projectPath: String
+    var gitignorePath: String
+    var missingPatterns: [String]
+    var appendedText: String
 
-    public var isSatisfied: Bool { missingPatterns.isEmpty }
+    var isSatisfied: Bool { missingPatterns.isEmpty }
 
-    public init(projectPath: String, gitignorePath: String, missingPatterns: [String], appendedText: String) {
+    init(projectPath: String, gitignorePath: String, missingPatterns: [String], appendedText: String) {
         self.projectPath = projectPath
         self.gitignorePath = gitignorePath
         self.missingPatterns = missingPatterns

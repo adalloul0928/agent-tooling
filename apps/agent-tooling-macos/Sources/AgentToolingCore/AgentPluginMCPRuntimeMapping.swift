@@ -59,11 +59,11 @@ public struct AgentPluginMCPRouteResult: Hashable, Sendable {
 ///
 /// This maps; it does not launch. Nothing here starts a process or opens a
 /// connection, and a resolved route is not evidence that the server works.
-public enum AgentPluginMCPRuntimeMapper {
+enum AgentPluginMCPRuntimeMapper {
     /// `dataRoot` is the package's persistent folder. It belongs to the client
     /// and survives updates, which is what makes it different from the package
     /// root: content is replaced on update, data is not.
-    public static func resolve(
+    static func resolve(
         servers: [String: AgentPluginMCPServerDeclaration],
         packageRoot: URL,
         dataRoot: URL,

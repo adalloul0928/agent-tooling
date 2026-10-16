@@ -62,13 +62,13 @@ public struct DeepDiveTheme: Codable, Hashable, Identifiable, Sendable {
 /// schema: Claude takes it on the command line, Codex reads it from a file the
 /// service writes beside the prompt inside the staged folder, so the argument
 /// list itself stays fixed.
-public enum InsightsDeepDiveCommandShapes {
+enum InsightsDeepDiveCommandShapes {
     /// The name of the schema file written into the request folder for Codex.
-    public static let codexSchemaFileName = "deep-dive-schema.json"
+    static let codexSchemaFileName = "deep-dive-schema.json"
 
     /// Claude Code in print mode with no tools at all: it may read the prompt
     /// and answer, and nothing else. No session is kept.
-    public static func claude() -> [String] {
+    static func claude() -> [String] {
         [
             "-p", "--output-format", "json",
             "--json-schema", responseSchemaJSON,
@@ -81,7 +81,7 @@ public enum InsightsDeepDiveCommandShapes {
 
     /// Codex in exec mode, read-only, ephemeral, inside the staged request
     /// folder that holds the schema file. Plugins, hooks, and apps are off.
-    public static func codex(requestDirectory: URL) -> [String] {
+    static func codex(requestDirectory: URL) -> [String] {
         [
             "exec", "--json", "--ephemeral",
             "--ignore-rules",
@@ -94,13 +94,13 @@ public enum InsightsDeepDiveCommandShapes {
         ]
     }
 
-    public static func isClaudeShape(_ arguments: [String]) -> Bool {
+    static func isClaudeShape(_ arguments: [String]) -> Bool {
         arguments == claude()
     }
 
     /// The Codex shape, for the policy: the folder must be a request folder
     /// under the home directory, and the schema file must be inside it.
-    public static func isCodexShape(_ arguments: [String], homeURL: URL) -> Bool {
+    static func isCodexShape(_ arguments: [String], homeURL: URL) -> Bool {
         guard let index = arguments.firstIndex(of: "--cd"), arguments.indices.contains(index + 1) else { return false }
         let path = arguments[index + 1]
         guard SkillCreatorCommandShapes.isRequestDirectoryPath(path, homeURL: homeURL) else { return false }
@@ -111,7 +111,7 @@ public enum InsightsDeepDiveCommandShapes {
     /// bounded, so the model cannot answer with a transcript. Built on each
     /// call: a `[String: Any]` cannot be a shared constant under strict
     /// concurrency, and the JSON string below is what callers actually use.
-    public static var responseSchema: [String: Any] { [
+    static var responseSchema: [String: Any] { [
         "type": "object",
         "additionalProperties": false,
         "required": ["summary", "themes", "recommendations"],
@@ -150,7 +150,7 @@ public enum InsightsDeepDiveCommandShapes {
         ],
     ] }
 
-    public static var responseSchemaJSON: String {
+    static var responseSchemaJSON: String {
         let data = try! JSONSerialization.data(withJSONObject: responseSchema, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
     }

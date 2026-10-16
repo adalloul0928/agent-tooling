@@ -1,6 +1,6 @@
 import Foundation
 
-public enum NativeSkillDestinationError: Error, Equatable, Sendable {
+enum NativeSkillDestinationError: Error, Equatable, Sendable {
     case unsupportedScope
     case invalidHomeURL
     case missingProjectRoot

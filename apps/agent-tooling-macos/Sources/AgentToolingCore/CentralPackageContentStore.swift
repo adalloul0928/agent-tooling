@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 
-public enum CentralPackageStoreError: Error, Equatable, Sendable {
+enum CentralPackageStoreError: Error, Equatable, Sendable {
     case invalidRoot, invalidDigest, missingContent, corruptContent, changedStore, ioFailure, busy
 }
 

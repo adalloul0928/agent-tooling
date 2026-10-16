@@ -8,11 +8,11 @@ import Foundation
 /// down by a test against a fixed string, with no process involved. A shape
 /// this parser has not seen becomes `.unknown(rawText:)` carrying the line, so
 /// an unfamiliar client update is shown verbatim rather than misread.
-public enum ConnectionHealthReport {
+enum ConnectionHealthReport {
     /// Parses one client's listing. Claude Code prints a status glyph per line;
     /// Codex and Kiro CLI list servers without a health check, so their entries
     /// come back `.unknown` unless a later `mcp get` says otherwise.
-    public static func parse(client: ClientKind, text: String) -> [ConnectionHealthEntry] {
+    static func parse(client: ClientKind, text: String) -> [ConnectionHealthEntry] {
         switch client {
         case .claude: parseClaude(text)
         case .codex: parseNameFirstTable(text, client: .codex, unknownText: codexUnknownText)
@@ -27,7 +27,7 @@ public enum ConnectionHealthReport {
     /// Parses Codex's `mcp list --json` when it answered JSON, falling back to
     /// the text table when it did not. Codex reports no health in either shape,
     /// so every server is `.unknown` here; a status only arrives from `mcp get`.
-    public static func parseCodex(jsonOrText text: String) -> [ConnectionHealthEntry] {
+    static func parseCodex(jsonOrText text: String) -> [ConnectionHealthEntry] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("{") || trimmed.hasPrefix("["),
             let data = trimmed.data(using: .utf8),
@@ -144,9 +144,9 @@ public enum ConnectionHealthReport {
     /// `claude.ai <display name>`, with ` (2)` appended on a name collision.
     /// The same string is what a `deniedMcpServers` `serverName` entry
     /// matches, so it is kept whole as the entry's name.
-    public static let claudeAIConnectorPrefix = "claude.ai "
+    static let claudeAIConnectorPrefix = "claude.ai "
 
-    public static func isClaudeAIConnectorName(_ name: String) -> Bool {
+    static func isClaudeAIConnectorName(_ name: String) -> Bool {
         name.hasPrefix(claudeAIConnectorPrefix) && name.count > claudeAIConnectorPrefix.count
     }
 

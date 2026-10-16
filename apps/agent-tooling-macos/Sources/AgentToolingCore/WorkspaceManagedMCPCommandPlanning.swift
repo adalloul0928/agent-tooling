@@ -1,6 +1,6 @@
 import Foundation
 
-public enum WorkspaceManagedMCPCommandPlanningError: Error, Equatable, Sendable {
+enum WorkspaceManagedMCPCommandPlanningError: Error, Equatable, Sendable {
     case invalidWorkspace
     case invalidRequirement
     case unsupportedEnablement

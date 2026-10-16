@@ -14,17 +14,17 @@ import Foundation
 /// claims no authority over its content. Nothing becomes `centralPersonal` from
 /// a scan — taking ownership of somebody's files is a decision they make, not
 /// one a first launch makes for them.
-public enum WorkspaceFirstRun {
-    public struct Result: Sendable {
-        public let document: PortableWorkspaceDocument
-        public let device: DeviceWorkspaceState
-        public let skillCount: Int
-        public let packageCount: Int
-        public let connectionCount: Int
+enum WorkspaceFirstRun {
+    struct Result: Sendable {
+        let document: PortableWorkspaceDocument
+        let device: DeviceWorkspaceState
+        let skillCount: Int
+        let packageCount: Int
+        let connectionCount: Int
     }
 
     /// Builds the first revision from a completed scan. Pure: it writes nothing.
-    public static func prepare(
+    static func prepare(
         observations: [TargetObservation],
         inventory: ScannedInventory,
         workspaceID: WorkspaceObjectID = WorkspaceObjectID(),
@@ -128,7 +128,7 @@ public enum WorkspaceFirstRun {
     /// first, and starting over on top of an existing one would discard whatever
     /// that workspace had decided.
     @discardableResult
-    public static func begin(
+    static func begin(
         containerRoot: URL,
         homeURL: URL,
         runner: any CommandRunning,

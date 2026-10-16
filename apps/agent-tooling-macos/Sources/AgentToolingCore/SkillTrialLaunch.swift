@@ -78,11 +78,11 @@ public enum SkillTrialCommandShapes {
 /// script starts the person's own login shell so the client sees the
 /// environment it has at their prompt, then replaces that shell with the
 /// client; when the client exits, Terminal reports the process as completed.
-public enum TerminalCommandScript {
+enum TerminalCommandScript {
     /// The script body. `interactiveShell` wraps the command in
     /// `$SHELL -l -i -c` so the person's profile applies; a test turns it off
     /// to run the rendered command directly.
-    public static func render(
+    static func render(
         title: String,
         workingDirectory: URL,
         executable: String,
@@ -108,14 +108,14 @@ public enum TerminalCommandScript {
 
     /// `value` as one shell word: single quotes, with a literal single quote
     /// spelled as `'\''`. Composable, so a quoted command can itself be quoted.
-    public static func shellQuoted(_ value: String) -> String {
+    static func shellQuoted(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     /// Writes `body` as `name.command` inside `directory`, both readable by the
     /// owner only, replacing an earlier file of the same name. A directory
     /// that is a link, or a destination that is, is refused.
-    public static func write(
+    static func write(
         _ body: String, named name: String, in directory: URL, fileManager: FileManager = .default
     ) throws -> URL {
         try fileManager.createDirectory(
@@ -136,10 +136,10 @@ public enum TerminalCommandScript {
     }
 }
 
-public enum TerminalCommandScriptError: LocalizedError, Equatable, Sendable {
+enum TerminalCommandScriptError: LocalizedError, Equatable, Sendable {
     case unsafeDirectory(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsafeDirectory(let path): "Agent Tooling refused to write a launch script at \(path)."
         }
@@ -163,13 +163,13 @@ public struct SkillTrialLaunch: Hashable, Sendable {
     }
 }
 
-public enum SkillTrialLaunchError: LocalizedError, Equatable, Sendable {
+enum SkillTrialLaunchError: LocalizedError, Equatable, Sendable {
     case unsupportedClient(ClientKind)
     case invalidSkillName(String)
     case toolNotFound(ClientKind)
     case commandRefused(ClientKind)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsupportedClient(let client): "Trying a skill in \(client.rawValue) from here is not supported yet."
         case .invalidSkillName(let name): "\"\(name)\" is not a name a client could call."

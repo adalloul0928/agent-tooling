@@ -79,7 +79,7 @@ public enum AccountShellOverride: String, Codable, CaseIterable, Hashable, Senda
 /// line for each variable that is set, and never prints a value. The shell is
 /// started as Terminal starts one (`-l -i`), because a key is as often in
 /// `.zshrc` as in `.zprofile`. Anything else the profile prints is ignored.
-public enum AccountShellEnvironmentProbe {
+enum AccountShellEnvironmentProbe {
     static let marker = "agent-tooling-shell-override:"
 
     static let script: String = {
@@ -88,9 +88,9 @@ public enum AccountShellEnvironmentProbe {
             + "[[ ${ENABLE_CLAUDEAI_MCP_SERVERS:-} == (false|0) ]] && print -r -- \"\(marker)ENABLE_CLAUDEAI_MCP_SERVERS\"; true"
     }()
 
-    public static let arguments: [String] = ["-l", "-i", "-c", script]
+    static let arguments: [String] = ["-l", "-i", "-c", script]
 
-    public static func read(runner: any CommandRunning) async -> [AccountShellOverride]? {
+    static func read(runner: any CommandRunning) async -> [AccountShellOverride]? {
         guard let output = try? await runner.run(executable: "/bin/zsh", arguments: arguments, currentDirectory: nil),
               output.status == 0
         else { return nil }

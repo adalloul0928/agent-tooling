@@ -6,10 +6,10 @@ import Foundation
 /// read-only listings, not the mutating add/remove/login shapes that file
 /// builds — but every argv here is still admitted by `OperationCommandPolicy`,
 /// so a listing the policy would refuse is a refused probe, not a wrong command.
-public enum ConnectionHealthListing {
+enum ConnectionHealthListing {
     /// The list arguments for a client, or nil when the client has no listing
     /// this app knows how to read (Gemini today).
-    public static func arguments(for client: ClientKind) -> [String]? {
+    static func arguments(for client: ClientKind) -> [String]? {
         switch client {
         case .claude: ["mcp", "list"]
         case .codex: ["mcp", "list", "--json"]

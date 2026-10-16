@@ -227,10 +227,10 @@ extension WorkspaceApplicationService {
     }
 }
 
-public enum WorkspaceObservationReconciliationError: LocalizedError, Equatable, Sendable {
+enum WorkspaceObservationReconciliationError: LocalizedError, Equatable, Sendable {
     case nothingToAdd
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .nothingToAdd: "The check found nothing this library does not already hold."
         }

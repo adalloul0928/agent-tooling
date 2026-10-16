@@ -14,7 +14,7 @@ public enum InteractiveLoginOutcome: Equatable, Sendable {
     case cancelled
 }
 
-public enum InteractiveLoginProcessError: Error, Equatable, Sendable {
+enum InteractiveLoginProcessError: Error, Equatable, Sendable {
     case cannotOpenTerminal
     case cannotSpawn(Int32)
 }
@@ -37,7 +37,7 @@ public enum InteractiveLoginProcessError: Error, Equatable, Sendable {
 /// to the tool's own localhost callback, and the tool stores the credential
 /// where it always does. Nothing typed into the terminal is ever sent; the
 /// pseudo-terminal exists so the tool will run at all.
-public struct InteractiveLoginProcess: Sendable {
+struct InteractiveLoginProcess: Sendable {
     /// Bounds on what is kept from the terminal, so a chatty tool cannot grow
     /// memory without limit while a person is away.
     private static let maximumTranscriptBytes = 262_144
@@ -45,7 +45,7 @@ public struct InteractiveLoginProcess: Sendable {
     private let homeURL: URL
     private let timeout: Duration
 
-    public init(homeURL: URL, timeout: Duration = .seconds(300)) {
+    init(homeURL: URL, timeout: Duration = .seconds(300)) {
         self.homeURL = homeURL
         self.timeout = timeout
     }
@@ -55,7 +55,7 @@ public struct InteractiveLoginProcess: Sendable {
     /// appears in its output. The URL is delivered once, unredacted, because
     /// it is the thing the person must open; the transcript returned at the
     /// end is redacted.
-    public func run(
+    func run(
         executable: String,
         arguments: [String],
         onAuthorizationURL: @escaping @Sendable (URL) -> Void

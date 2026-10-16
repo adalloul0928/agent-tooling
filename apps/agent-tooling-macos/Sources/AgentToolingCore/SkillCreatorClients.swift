@@ -102,13 +102,13 @@ public enum SkillCreatorAvailability: Hashable, Sendable {
 /// Prompts travel on standard input, never on the command line: they are
 /// long, they are the person's words, and argv is visible to every process
 /// on the Mac.
-public enum SkillCreatorCommandShapes {
+enum SkillCreatorCommandShapes {
     /// Claude Code, answering one prompt and exiting. Tools that would edit
     /// files are auto-accepted only inside the working directory, which is the
     /// staged request folder; MCP servers and project settings are left out
     /// so a turn is fast and touches nothing else; Bash and the web are
     /// disallowed so the creator writes files and nothing more.
-    public static func claude(sessionID: UUID, resuming: Bool) -> [String] {
+    static func claude(sessionID: UUID, resuming: Bool) -> [String] {
         [
             "-p", "--output-format", "json",
             resuming ? "--resume" : "--session-id", sessionID.uuidString.lowercased(),
@@ -128,7 +128,7 @@ public enum SkillCreatorCommandShapes {
     /// everything that would act on this Mac beyond the folder: project
     /// rules, plugins, hooks, and apps. The sandbox confines writes to the
     /// working directory, which is the request folder.
-    public static func codexStart(requestDirectory: URL) -> [String] {
+    static func codexStart(requestDirectory: URL) -> [String] {
         [
             "exec", "--json",
             "--ignore-rules",
@@ -144,7 +144,7 @@ public enum SkillCreatorCommandShapes {
     /// Codex, continuing a thread it reported. `resume` takes fewer flags than
     /// `exec`; the sandbox is restated through `-c` because the resumed thread
     /// must not gain what the first turn never had.
-    public static func codexResume(threadID: String) -> [String] {
+    static func codexResume(threadID: String) -> [String] {
         [
             "exec", "resume", threadID, "--json",
             "--ignore-rules",
@@ -159,17 +159,17 @@ public enum SkillCreatorCommandShapes {
     /// The Claude marketplace plugin that carries the skill creator, and the
     /// commands that add it. Installing needs the marketplace to be known to
     /// Claude Code first; both shapes are admitted by the policy.
-    public static let claudeSkillCreatorPluginID = "skill-creator@claude-plugins-official"
-    public static let claudeOfficialMarketplaceName = "claude-plugins-official"
-    public static let claudeOfficialMarketplaceAddArguments = ["plugin", "marketplace", "add", "anthropics/claude-plugins-official"]
-    public static var claudeSkillCreatorInstallArguments: [String] {
+    static let claudeSkillCreatorPluginID = "skill-creator@claude-plugins-official"
+    static let claudeOfficialMarketplaceName = "claude-plugins-official"
+    static let claudeOfficialMarketplaceAddArguments = ["plugin", "marketplace", "add", "anthropics/claude-plugins-official"]
+    static var claudeSkillCreatorInstallArguments: [String] {
         ["plugin", "install", claudeSkillCreatorPluginID, "--scope", "user"]
     }
 
     /// Whether `arguments` is exactly one of the Claude shapes above, for the
     /// policy. The session identifier is the only variable part and must be a
     /// UUID.
-    public static func isClaudeCreatorShape(_ arguments: [String]) -> Bool {
+    static func isClaudeCreatorShape(_ arguments: [String]) -> Bool {
         guard arguments.count > 4, let sessionID = UUID(uuidString: arguments[4]) else { return false }
         return arguments == claude(sessionID: sessionID, resuming: true)
             || arguments == claude(sessionID: sessionID, resuming: false)
@@ -179,7 +179,7 @@ public enum SkillCreatorCommandShapes {
     /// policy. A start's folder must be an absolute, normalized path under
     /// `homeURL` whose last component is a request folder; a resume's thread
     /// identifier must be a UUID.
-    public static func isCodexCreatorShape(_ arguments: [String], homeURL: URL) -> Bool {
+    static func isCodexCreatorShape(_ arguments: [String], homeURL: URL) -> Bool {
         if arguments.count > 2, arguments[1] == "resume" {
             guard UUID(uuidString: arguments[2]) != nil else { return false }
             return arguments == codexResume(threadID: arguments[2])
@@ -362,7 +362,7 @@ enum SkillCreatorClientAdapters {
 
 /// Where each client keeps the skill creator, so the app can say whether a
 /// conversation can start before it tries.
-public enum SkillCreatorLocator {
+enum SkillCreatorLocator {
     /// Claude Code records installed plugins and known marketplaces in its
     /// config directory. Reading those files is instant and needs no process;
     /// the CLI would say the same.
@@ -371,7 +371,7 @@ public enum SkillCreatorLocator {
     /// marketplace first only if Claude Code does not know it yet: adding one
     /// it already has would refresh it, which is a longer operation nobody
     /// asked for.
-    public static func claudeAvailability(
+    static func claudeAvailability(
         homeURL: URL, environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> SkillCreatorAvailability {
         let configDirectory = claudeConfigDirectory(homeURL: homeURL, environment: environment)
@@ -419,7 +419,7 @@ public enum SkillCreatorLocator {
 
     /// Codex ships its skill creator as a system skill; there is nothing to
     /// install, only a Codex too old to have it.
-    public static func codexAvailability(skillCreatorURL: URL) -> SkillCreatorAvailability {
+    static func codexAvailability(skillCreatorURL: URL) -> SkillCreatorAvailability {
         guard let values = try? skillCreatorURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
             values.isRegularFile == true, values.isSymbolicLink != true
         else {

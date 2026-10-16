@@ -86,8 +86,8 @@ public struct WorkspaceMergeResult: Sendable {
 /// the same fact in different directions. Every conflicting record is preserved
 /// in the result under the local value, so nothing is lost while the person
 /// decides; callers must not apply a result that still carries conflicts.
-public enum WorkspaceMergeEngine {
-    public static func merge(
+enum WorkspaceMergeEngine {
+    static func merge(
         base: PortableWorkspaceDocument?,
         local: PortableWorkspaceDocument,
         remote: PortableWorkspaceDocument,

@@ -11,7 +11,7 @@ public protocol ClientAdapter: Sendable {
 public typealias TargetAdapter = ClientAdapter
 
 struct ClaudeCodeAdapter: TargetAdapter {
-    public let client: ClientKind = .claude
+    let client: ClientKind = .claude
     let surface: TargetSurface = .claudeCode
     let capabilities = TargetCapabilities(
         supportsPluginInstall: true,
@@ -48,7 +48,7 @@ struct ClaudeCodeAdapter: TargetAdapter {
 }
 
 struct CodexAdapter: TargetAdapter {
-    public let client: ClientKind = .codex
+    let client: ClientKind = .codex
     let surface: TargetSurface = .codexCLI
     let capabilities = TargetCapabilities(
         supportsPluginInstall: true,
@@ -88,7 +88,7 @@ struct CodexAdapter: TargetAdapter {
 }
 
 struct GeminiCLIAdapter: TargetAdapter {
-    public let client: ClientKind = .gemini
+    let client: ClientKind = .gemini
     let surface: TargetSurface = .geminiCLI
     let capabilities = TargetCapabilities(
         supportsPluginInstall: true,
@@ -134,7 +134,7 @@ struct GeminiCLIAdapter: TargetAdapter {
 /// verified `kiro-cli mcp add/remove` commands (2.23.0). It has no plugin
 /// marketplace this app has verified, so plugin capabilities stay off.
 struct KiroCLIAdapter: TargetAdapter {
-    public let client: ClientKind = .kiro
+    let client: ClientKind = .kiro
     let surface: TargetSurface = .kiroCLI
     let capabilities = TargetCapabilities(
         supportsPluginInstall: false,

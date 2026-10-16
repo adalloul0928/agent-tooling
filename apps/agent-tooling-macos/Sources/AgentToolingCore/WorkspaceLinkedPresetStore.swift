@@ -1,6 +1,6 @@
 import Foundation
 
-public enum WorkspaceLinkedPresetStoreError: Error, Equatable, Sendable {
+enum WorkspaceLinkedPresetStoreError: Error, Equatable, Sendable {
     case invalidRoot
     case unsupportedFormat
     case unreadable

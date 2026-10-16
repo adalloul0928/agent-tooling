@@ -30,10 +30,10 @@ enum StackedPlanError: LocalizedError, Equatable, Sendable {
 /// a person reviews at once, never what may run: the composed plan goes through
 /// the same review sheet, and the engine still checks every command against its
 /// fixed allowlist.
-public enum StackedPlanBuilder {
-    public static let maximumSelection = 25
+enum StackedPlanBuilder {
+    static let maximumSelection = 25
 
-    public static func mcpConfigurationPlan(
+    static func mcpConfigurationPlan(
         servers: [MCPServer],
         targets: Set<ClientKind>,
         availableClients: Set<ClientKind>
@@ -94,7 +94,7 @@ public enum StackedPlanBuilder {
         )
     }
 
-    public static func pluginRemovalPlan(
+    static func pluginRemovalPlan(
         plugins: [Plugin],
         client: ClientKind,
         packages: [MarketplacePackage]

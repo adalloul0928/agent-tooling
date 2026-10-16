@@ -199,8 +199,8 @@ public enum AccountPreferencePlanner {
 /// tables, or with quoting the editor does not match. Writing a second
 /// definition beside any of those makes the file invalid, and Codex would
 /// refuse to start, so each is reported instead.
-public enum CodexConfigurationShape {
-    public static func obstacle(in text: String, keyPath: [String]) -> String? {
+enum CodexConfigurationShape {
+    static func obstacle(in text: String, keyPath: [String]) -> String? {
         guard let key = keyPath.last, keyPath.count >= 2 else { return nil }
         let table = Array(keyPath.dropLast())
         let target = keyPath

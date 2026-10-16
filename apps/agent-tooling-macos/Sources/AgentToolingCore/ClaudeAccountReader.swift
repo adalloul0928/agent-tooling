@@ -3,10 +3,10 @@ import Foundation
 /// The fixed, read-only commands the account reader runs against Claude Code.
 /// Each is admitted by `OperationCommandPolicy` too, so a listing the policy
 /// would refuse is a refused read rather than a different command.
-public enum ClaudeAccountCommands {
-    public static let authStatus = ["auth", "status", "--json"]
-    public static let pluginList = ["plugin", "list", "--json"]
-    public static let version = ["--version"]
+enum ClaudeAccountCommands {
+    static let authStatus = ["auth", "status", "--json"]
+    static let pluginList = ["plugin", "list", "--json"]
+    static let version = ["--version"]
 }
 
 /// What Claude Code's own settings say about the claude.ai account, read from
@@ -84,10 +84,10 @@ public struct ClaudeSyncedSkill: Hashable, Sendable {
 
 /// Pure readings of Claude Code's own output. Each is a function over text or
 /// one folder, so every shape the client prints is pinned by a fixed fixture.
-public enum ClaudeAccountParsing {
+enum ClaudeAccountParsing {
     /// `claude auth status --json`. Claude Code exits 1 when signed out but
     /// still prints the object, so the exit status is not consulted.
-    public static func signIn(fromAuthStatus text: String) -> AccountSignIn? {
+    static func signIn(fromAuthStatus text: String) -> AccountSignIn? {
         guard let object = jsonObject(text) else { return nil }
         let loggedIn = object["loggedIn"] as? Bool ?? false
         let method = (object["authMethod"] as? String)?.lowercased() ?? "none"
@@ -124,7 +124,7 @@ public enum ClaudeAccountParsing {
 
     /// The `<name>@synced` rows of `claude plugin list --json`. Every other
     /// row belongs to this Mac and is read by the device scan instead.
-    public static func syncedPlugins(fromPluginList text: String) -> [ClaudeSyncedPlugin] {
+    static func syncedPlugins(fromPluginList text: String) -> [ClaudeSyncedPlugin] {
         guard let data = text.data(using: .utf8),
               let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
         else { return [] }
@@ -163,7 +163,7 @@ public enum ClaudeAccountParsing {
     }
 
     /// The account switches one Claude settings file holds.
-    public static func settings(fromJSON text: String) -> ClaudeAccountSettings {
+    static func settings(fromJSON text: String) -> ClaudeAccountSettings {
         var result = ClaudeAccountSettings()
         guard let object = jsonObject(text) else { return result }
         result.skillSyncOff = (object["syncClaudeAiSkills"] as? Bool) == false
@@ -184,7 +184,7 @@ public enum ClaudeAccountParsing {
 
     /// Skills under `~/.claude/skills/synced`. A folder with a `SKILL.md`
     /// is one skill, named by its frontmatter when it has a readable one.
-    public static func syncedSkills(in directory: URL, fileManager: FileManager = .default) -> [ClaudeSyncedSkill] {
+    static func syncedSkills(in directory: URL, fileManager: FileManager = .default) -> [ClaudeSyncedSkill] {
         var skills: [String: ClaudeSyncedSkill] = [:]
         for url in BoundedFileAccess.descendantDirectories(under: directory, fileManager: fileManager, maximumDepth: 3) {
             let definition = url.appending(path: "SKILL.md")
@@ -205,7 +205,7 @@ public enum ClaudeAccountParsing {
 
     /// `claude --version` prints `2.1.300 (Claude Code)` or a vendor build
     /// line; the first token that starts with a digit is the version.
-    public static func version(fromVersionOutput text: String) -> String? {
+    static func version(fromVersionOutput text: String) -> String? {
         text.split(whereSeparator: { $0 == " " || $0.isNewline })
             .first { $0.first?.isNumber == true }
             .map(String.init)

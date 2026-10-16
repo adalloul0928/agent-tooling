@@ -16,17 +16,17 @@ import Foundation
 ///   per client with the package it came from;
 /// - `.aim-core-skills.json` in the skills folder, listing the core skills;
 /// - `.aim-managed` inside the skill's folder, naming the owner.
-public struct ExternalSkillManagerIndex: Sendable, Equatable {
+struct ExternalSkillManagerIndex: Sendable, Equatable {
     /// Placed folders, by standardized absolute path, with the package each came from.
     private var placements: [String: ObservedExternalManager]
 
-    public init(placements: [String: ObservedExternalManager] = [:]) {
+    init(placements: [String: ObservedExternalManager] = [:]) {
         self.placements = placements
     }
 
     /// Reads AIM's placement records under `homeURL`. A record that is
     /// missing, oversized, or unreadable contributes nothing.
-    public static func load(homeURL: URL, fileManager: FileManager = .default) -> Self {
+    static func load(homeURL: URL, fileManager: FileManager = .default) -> Self {
         let directory = homeURL.appending(path: ".aim/state/skills", directoryHint: .isDirectory)
         guard let entries = try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
             return Self()
@@ -58,7 +58,7 @@ public struct ExternalSkillManagerIndex: Sendable, Equatable {
     }
 
     /// Who placed the skill folder at `folder`, or nil when nothing says.
-    public func manager(forSkillAt folder: URL) -> ObservedExternalManager? {
+    func manager(forSkillAt folder: URL) -> ObservedExternalManager? {
         if let placed = placements[Self.standardized(folder)] { return placed }
         // The marker inside the folder names its owner on its first line.
         let marker = folder.appending(path: ".aim-managed")

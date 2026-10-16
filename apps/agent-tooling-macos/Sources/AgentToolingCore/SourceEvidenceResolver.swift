@@ -142,8 +142,8 @@ public struct SourceEvidenceResolution: Hashable, Sendable {
 }
 
 /// Reconciles caller-provided evidence without file, network, or native-client operations.
-public enum SourceEvidenceResolver {
-    public static func resolve(
+enum SourceEvidenceResolver {
+    static func resolve(
         artifacts: [ArtifactRecord], confirmed: [ConfirmedSourceBinding], observations: [SourceEvidenceObservation]
     ) -> SourceEvidenceResolution {
         let artifactsByID = Dictionary(grouping: artifacts, by: { $0.identity.id })

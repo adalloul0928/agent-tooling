@@ -146,13 +146,13 @@ public struct ClientConfigurationEdit: Codable, Hashable, Sendable {
     }
 }
 
-public enum ClientConfigurationEditError: LocalizedError, Equatable, Sendable {
+enum ClientConfigurationEditError: LocalizedError, Equatable, Sendable {
     case unsafeEdit
     case notAnObject(String)
     case notAList(String)
     case malformedFile(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsafeEdit: "That edit is not one this app makes."
         case .notAnObject(let key): "\(key) is not a section, so nothing can be set inside it."
@@ -164,8 +164,8 @@ public enum ClientConfigurationEditError: LocalizedError, Equatable, Sendable {
 
 /// Applies an edit to a file's text. JSON is parsed and written back; TOML is
 /// edited line by line so comments and everything else in the file stay.
-public enum ClientConfigurationEditor {
-    public static func apply(_ edit: ClientConfigurationEdit, to text: String) throws -> String {
+enum ClientConfigurationEditor {
+    static func apply(_ edit: ClientConfigurationEdit, to text: String) throws -> String {
         guard edit.isSafe else { throw ClientConfigurationEditError.unsafeEdit }
         return edit.file.isTOML ? try applyTOML(edit, to: text) : try applyJSON(edit, to: text)
     }

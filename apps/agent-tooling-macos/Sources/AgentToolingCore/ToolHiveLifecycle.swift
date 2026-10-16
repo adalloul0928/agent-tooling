@@ -71,11 +71,11 @@ public enum ToolHiveLifecycleOutcome: Hashable, Sendable {
 /// workload API exposes no conditional-mutation contract, so this app cannot
 /// promise that its view of a workload is still current when it writes; those
 /// actions stay in ToolHive's own tools until such a contract exists.
-public struct ToolHiveLifecycleService: Sendable {
+struct ToolHiveLifecycleService: Sendable {
     private let inspection: ToolHiveRuntimeInspection
     private let runner: any CommandRunning
 
-    public init(
+    init(
         runner: any CommandRunning = ProcessCommandRunner(timeout: .seconds(60)),
         inspection: ToolHiveRuntimeInspection? = nil
     ) {
@@ -85,13 +85,13 @@ public struct ToolHiveLifecycleService: Sendable {
 
     /// Reads the workload's current state and describes what this action would
     /// do. Nothing is changed here.
-    public enum PlanResult: Hashable, Sendable {
+    enum PlanResult: Hashable, Sendable {
         case prepared(ToolHiveLifecyclePlan)
         /// Why no plan could be prepared, in the same terms an outcome uses.
         case blocked(ToolHiveLifecycleOutcome)
     }
 
-    public func plan(
+    func plan(
         workloadName: String,
         action: ToolHiveLifecycleAction,
         otherWorkloadNames: [String] = []
@@ -109,7 +109,7 @@ public struct ToolHiveLifecycleService: Sendable {
         }
     }
 
-    public func apply(_ plan: ToolHiveLifecyclePlan) async throws -> ToolHiveLifecycleOutcome {
+    func apply(_ plan: ToolHiveLifecyclePlan) async throws -> ToolHiveLifecycleOutcome {
         try Task.checkCancellation()
         // The reviewed plan must still describe reality before anything runs.
         guard case .available(let current, _) = try await inspection.status(workloadName: plan.workloadName) else {

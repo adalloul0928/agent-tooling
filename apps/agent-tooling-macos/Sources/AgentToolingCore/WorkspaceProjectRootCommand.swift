@@ -54,7 +54,7 @@ public enum WorkspaceProjectRootError: Error, Equatable, Sendable, LocalizedErro
 /// leaf — using the same lexical and symlink rules the skill-target capture
 /// relies on, so a folder this command accepts is one a later install can write
 /// into rather than one recorded now and rejected then.
-public enum WorkspaceProjectRootCommand {
+enum WorkspaceProjectRootCommand {
     /// Records that a project's folder on this Mac is `rootPath`, replacing any
     /// folder it was bound to before. Validates the path against the filesystem
     /// and refuses a folder another project already uses.
@@ -62,7 +62,7 @@ public enum WorkspaceProjectRootCommand {
     /// The mutation reads the document handed to it only to name the other
     /// project in a conflict; the caller supplies the same document so the check
     /// runs against the revision being committed.
-    public static func bind(
+    static func bind(
         projectID: ArtifactID,
         rootPath: String,
         document: PortableWorkspaceDocument,
@@ -92,7 +92,7 @@ public enum WorkspaceProjectRootCommand {
     ///
     /// Idempotent: a project that has no binding is left unchanged rather than
     /// treated as an error.
-    public static func unbind(
+    static func unbind(
         projectID: ArtifactID,
         into device: inout DeviceWorkspaceState
     ) {

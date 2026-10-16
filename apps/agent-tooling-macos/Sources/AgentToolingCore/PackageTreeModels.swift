@@ -43,7 +43,7 @@ public struct PackageTreeEntry: Hashable, Sendable {
 }
 
 /// Sanitized failures: no raw source paths, content, link values, or OS error strings.
-public enum PackageTreeError: Error, Equatable, Sendable {
+enum PackageTreeError: Error, Equatable, Sendable {
     case invalidPath, caseCollision, invalidStructure, unsupportedItem, unsafeSymbolicLink
     case limitExceeded, changedDuringCapture, ioFailure, invalidDigest
 }

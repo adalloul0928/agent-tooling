@@ -13,7 +13,7 @@ public protocol CodexAppServerTransport: Sendable {
     func close() async
 }
 
-public enum CodexAppServerError: LocalizedError, Equatable, Sendable {
+enum CodexAppServerError: LocalizedError, Equatable, Sendable {
     case notAllowed(String)
     case launchFailed(String)
     case timedOut(String)
@@ -21,7 +21,7 @@ public enum CodexAppServerError: LocalizedError, Equatable, Sendable {
     case serverError(method: String, message: String)
     case malformedResponse(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .notAllowed(let method): "Agent Tooling does not send \(method) to Codex."
         case .launchFailed(let reason): "Codex could not be started: \(reason)"

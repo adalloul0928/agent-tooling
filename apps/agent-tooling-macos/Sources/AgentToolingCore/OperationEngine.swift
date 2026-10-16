@@ -1073,7 +1073,7 @@ public actor OperationExecutor {
     private static let maximumPersistedOutputCharacters = 60_000
 }
 
-public typealias OperationEngine = OperationExecutor
+typealias OperationEngine = OperationExecutor
 
 enum OperationEngineError: LocalizedError, Sendable {
     case malformedStep(String)

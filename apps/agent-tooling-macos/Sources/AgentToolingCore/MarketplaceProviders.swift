@@ -447,7 +447,7 @@ public struct OfficialMCPRegistryProvider: MarketplaceProvider {
     }
 }
 
-public enum MarketplaceProviderError: LocalizedError, Sendable {
+enum MarketplaceProviderError: LocalizedError, Sendable {
     case insecureBaseURL
     case invalidRequest
     case invalidResponse
@@ -455,7 +455,7 @@ public enum MarketplaceProviderError: LocalizedError, Sendable {
     case responseTooLarge
     case invalidPayload
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .insecureBaseURL: "Marketplace providers require an HTTPS base URL."
         case .invalidRequest: "The marketplace request could not be created."

@@ -115,14 +115,14 @@ public struct SetupReview: Codable, Hashable, Sendable {
 /// How each client is asked to review the audit. Two shapes each: one that
 /// may read the tooling folders and nothing else, and one that may also
 /// reach the web. Neither may run a command or write a file.
-public enum SetupReviewCommandShapes {
-    public static let codexSchemaFileName = "setup-review-schema.json"
+enum SetupReviewCommandShapes {
+    static let codexSchemaFileName = "setup-review-schema.json"
 
     /// The folders the model may read, relative to home. Claude's Read tool is
     /// scoped to these; anything else it asks for is refused by Claude itself.
-    public static let readableFolders = [".claude", ".codex", ".agents", ".kiro", ".gemini", ".aim"]
+    static let readableFolders = [".claude", ".codex", ".agents", ".kiro", ".gemini", ".aim"]
 
-    public static func claude(homeURL: URL, web: Bool) -> [String] {
+    static func claude(homeURL: URL, web: Bool) -> [String] {
         var arguments = [
             "-p", "--output-format", "json",
             "--json-schema", responseSchemaJSON,
@@ -142,7 +142,7 @@ public enum SetupReviewCommandShapes {
     /// Codex reads inside its sandbox; `--cd` is the home folder so the tooling
     /// folders are in reach, and read-only keeps it a reader. `--search` is the
     /// only difference for a client review.
-    public static func codex(homeURL: URL, requestDirectory: URL, web: Bool) -> [String] {
+    static func codex(homeURL: URL, requestDirectory: URL, web: Bool) -> [String] {
         var arguments = [
             "exec", "--json", "--ephemeral",
             "--ignore-rules",
@@ -157,11 +157,11 @@ public enum SetupReviewCommandShapes {
         return arguments
     }
 
-    public static func isClaudeShape(_ arguments: [String], homeURL: URL) -> Bool {
+    static func isClaudeShape(_ arguments: [String], homeURL: URL) -> Bool {
         arguments == claude(homeURL: homeURL, web: false) || arguments == claude(homeURL: homeURL, web: true)
     }
 
-    public static func isCodexShape(_ arguments: [String], homeURL: URL) -> Bool {
+    static func isCodexShape(_ arguments: [String], homeURL: URL) -> Bool {
         guard let index = arguments.firstIndex(of: "--output-schema"), arguments.indices.contains(index + 1) else { return false }
         let schemaPath = arguments[index + 1]
         guard schemaPath.hasSuffix("/" + codexSchemaFileName) else { return false }
@@ -177,7 +177,7 @@ public enum SetupReviewCommandShapes {
     ]
     static let clients = ["claude", "codex", "kiro", "gemini"]
 
-    public static var responseSchema: [String: Any] {
+    static var responseSchema: [String: Any] {
         [
             "type": "object", "additionalProperties": false,
             "required": ["summary", "recommendations"],
@@ -224,7 +224,7 @@ public enum SetupReviewCommandShapes {
         ]
     }
 
-    public static var responseSchemaJSON: String {
+    static var responseSchemaJSON: String {
         let data = try! JSONSerialization.data(withJSONObject: responseSchema, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
     }
@@ -320,13 +320,13 @@ public enum SetupReviewPrompt {
 
 // MARK: - The service
 
-public enum SetupReviewError: LocalizedError, Equatable, Sendable {
+enum SetupReviewError: LocalizedError, Equatable, Sendable {
     case unsupportedClient(ClientKind)
     case commandRefused(ClientKind)
     case clientFailed(ClientKind, Int32, String)
     case unreadableAnswer(ClientKind)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsupportedClient(let client): "\(client.rawValue) cannot run the review."
         case .commandRefused(let client):

@@ -72,8 +72,8 @@ public struct WorkspaceConflictResolutionResult: Sendable {
 /// usable when every one of them has an answer. Choosing a side is expressed by
 /// rewriting the *ancestor* for that fact, so the engine's own rules still
 /// decide the outcome rather than this type editing the document directly.
-public enum WorkspaceConflictResolver {
-    public static func resolve(
+enum WorkspaceConflictResolver {
+    static func resolve(
         base: PortableWorkspaceDocument?,
         local: PortableWorkspaceDocument,
         remote: PortableWorkspaceDocument,

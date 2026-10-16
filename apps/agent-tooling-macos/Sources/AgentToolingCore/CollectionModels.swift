@@ -102,13 +102,13 @@ public struct TagAssignment: Identifiable, Codable, Hashable, Sendable {
 
 /// Normalization shared by the model layer, the validator and the editors, so
 /// a tag typed three different ways is still one tag.
-public enum ToolingTag {
-    public static let maximumLength = 48
-    public static let maximumTagsPerItem = 32
+enum ToolingTag {
+    static let maximumLength = 48
+    static let maximumTagsPerItem = 32
 
     /// Trims, collapses internal whitespace and rejects anything empty, too
     /// long, or carrying control characters. Display casing is preserved.
-    public static func normalized(_ value: String) -> String? {
+    static func normalized(_ value: String) -> String? {
         let collapsed = value.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         guard !collapsed.isEmpty,
             collapsed.count <= maximumLength,

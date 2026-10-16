@@ -1,11 +1,11 @@
 import Foundation
 
 /// Pure readings of Codex app-server answers, each pinned by a fixture.
-public enum CodexAccountParsing {
+enum CodexAccountParsing {
     /// `initialize` returns a user agent such as
     /// `agent-tooling/0.162.1 (Mac OS 26.7.1; arm64) …`; the version is the
     /// token after the first slash.
-    public static func version(fromInitialize result: JSONValue) -> String? {
+    static func version(fromInitialize result: JSONValue) -> String? {
         guard let agent = result["userAgent"]?.stringValue, let slash = agent.firstIndex(of: "/") else { return nil }
         let token = agent[agent.index(after: slash)...].prefix { !$0.isWhitespace }
         return token.first?.isNumber == true ? String(token.prefix(64)) : nil
@@ -13,7 +13,7 @@ public enum CodexAccountParsing {
 
     /// `account/read`: `{ account: null | {type, email?, planType?,
     /// credentialSource?}, requiresOpenaiAuth }`.
-    public static func signIn(fromAccountRead result: JSONValue) -> AccountSignIn? {
+    static func signIn(fromAccountRead result: JSONValue) -> AccountSignIn? {
         guard result.objectValue != nil else { return nil }
         let requiresOpenAIAuth = result["requiresOpenaiAuth"]?.boolValue ?? true
         guard let account = result["account"], !account.isNull else {
@@ -37,28 +37,28 @@ public enum CodexAccountParsing {
     }
 
     /// One page of `app/list`.
-    public struct AppListPage: Hashable, Sendable {
-        public var apps: [CodexApp]
-        public var nextCursor: String?
+    struct AppListPage: Hashable, Sendable {
+        var apps: [CodexApp]
+        var nextCursor: String?
     }
 
-    public struct CodexApp: Hashable, Sendable {
-        public var id: String
-        public var name: String
-        public var summary: String?
-        public var installURL: URL?
+    struct CodexApp: Hashable, Sendable {
+        var id: String
+        var name: String
+        var summary: String?
+        var installURL: URL?
         /// Connected to the ChatGPT account.
-        public var isAccessible: Bool
+        var isAccessible: Bool
         /// What `config.toml` says, as app-server reports it.
-        public var isEnabled: Bool
+        var isEnabled: Bool
     }
 
     /// The requested page size for `app/list`, and the matching cap on how
     /// many rows are parsed from one page so the parser never keeps more than
     /// was asked for.
-    public static let appListPageLimit = 100
+    static let appListPageLimit = 100
 
-    public static func appList(_ result: JSONValue, limit: Int = appListPageLimit) -> AppListPage? {
+    static func appList(_ result: JSONValue, limit: Int = appListPageLimit) -> AppListPage? {
         guard let rows = result["data"]?.arrayValue else { return nil }
         let apps = rows.prefix(limit).compactMap { row -> CodexApp? in
             guard let id = row["id"]?.stringValue, !id.isEmpty, id.count <= 256 else { return nil }
@@ -74,14 +74,14 @@ public enum CodexAccountParsing {
         return AppListPage(apps: apps, nextCursor: result["nextCursor"]?.stringValue)
     }
 
-    public struct InstalledApp: Hashable, Sendable {
-        public var id: String
-        public var enabled: Bool
-        public var callable: Bool
+    struct InstalledApp: Hashable, Sendable {
+        var id: String
+        var enabled: Bool
+        var callable: Bool
     }
 
     /// `app/installed`: the effective runtime state of each app.
-    public static func installedApps(_ result: JSONValue) -> [String: InstalledApp] {
+    static func installedApps(_ result: JSONValue) -> [String: InstalledApp] {
         var apps: [String: InstalledApp] = [:]
         for row in (result["apps"]?.arrayValue ?? []).prefix(1_000) {
             guard let id = row["id"]?.stringValue, !id.isEmpty else { continue }
@@ -92,7 +92,7 @@ public enum CodexAccountParsing {
 
     /// The account switches one Codex configuration object holds: the
     /// `[features] apps` flag and the `[apps]` tables.
-    public static func switches(fromConfig config: JSONValue?) -> [AccountPreferenceKey: AccountPreferenceValue] {
+    static func switches(fromConfig config: JSONValue?) -> [AccountPreferenceKey: AccountPreferenceValue] {
         var switches: [AccountPreferenceKey: AccountPreferenceValue] = [:]
         guard let config else { return switches }
         if let flag = config["features"]?["apps"]?.boolValue {
@@ -125,13 +125,13 @@ public enum CodexAccountParsing {
 
     /// `config/read` with `includeLayers`: the effective configuration and
     /// the user layer, with the file the user layer came from.
-    public struct ConfigReading: Sendable {
-        public var effective: JSONValue?
-        public var user: JSONValue?
-        public var userFile: String?
+    struct ConfigReading: Sendable {
+        var effective: JSONValue?
+        var user: JSONValue?
+        var userFile: String?
     }
 
-    public static func configReading(_ result: JSONValue) -> ConfigReading {
+    static func configReading(_ result: JSONValue) -> ConfigReading {
         let user = result["layers"]?.arrayValue?.first { $0["name"]?["type"]?.stringValue == "user" }
         return ConfigReading(
             effective: result["config"], user: user?["config"], userFile: user?["name"]?["file"]?.stringValue)

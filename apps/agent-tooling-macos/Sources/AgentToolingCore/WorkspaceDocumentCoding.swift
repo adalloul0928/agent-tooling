@@ -1,10 +1,10 @@
 import CryptoKit
 import Foundation
 
-public enum WorkspaceDocumentCoding {
-    public static let maximumDocumentBytes = 32 * 1_024 * 1_024
+enum WorkspaceDocumentCoding {
+    static let maximumDocumentBytes = 32 * 1_024 * 1_024
 
-    public static func seal(_ document: PortableWorkspaceDocument) throws -> PortableWorkspaceDocument {
+    static func seal(_ document: PortableWorkspaceDocument) throws -> PortableWorkspaceDocument {
         var sealed = document.canonicalized()
         sealed.revision.documentDigest = .unsealed
         try sealed.validateStructure()
@@ -12,7 +12,7 @@ public enum WorkspaceDocumentCoding {
         return sealed
     }
 
-    public static func encode(_ document: PortableWorkspaceDocument) throws -> Data {
+    static func encode(_ document: PortableWorkspaceDocument) throws -> Data {
         let canonical = document.canonicalized()
         try canonical.validateStructure()
         guard canonical.revision.documentDigest == (try digest(for: canonical)) else {
@@ -25,7 +25,7 @@ public enum WorkspaceDocumentCoding {
         return data
     }
 
-    public static func decode(_ data: Data) throws -> PortableWorkspaceDocument {
+    static func decode(_ data: Data) throws -> PortableWorkspaceDocument {
         guard data.count <= maximumDocumentBytes else {
             throw WorkspaceDomainValidationError.invalidField("workspace document size")
         }
@@ -40,7 +40,7 @@ public enum WorkspaceDocumentCoding {
         return decoded
     }
 
-    public static func encodeDeviceState(_ state: DeviceWorkspaceState) throws -> Data {
+    static func encodeDeviceState(_ state: DeviceWorkspaceState) throws -> Data {
         let canonical = state.canonicalized()
         try canonical.validateStructure()
         let data = try encoder().encode(canonical)
@@ -50,7 +50,7 @@ public enum WorkspaceDocumentCoding {
         return data
     }
 
-    public static func decodeDeviceState(
+    static func decodeDeviceState(
         _ data: Data, against portable: PortableWorkspaceDocument? = nil
     ) throws -> DeviceWorkspaceState {
         guard data.count <= maximumDocumentBytes else {
@@ -64,7 +64,7 @@ public enum WorkspaceDocumentCoding {
         return decoded
     }
 
-    public static func digest(for document: PortableWorkspaceDocument) throws -> DocumentDigest {
+    static func digest(for document: PortableWorkspaceDocument) throws -> DocumentDigest {
         let canonical = document.canonicalized()
         let payload = DigestDocument(document: canonical)
         let bytes = try encoder().encode(payload)

@@ -1,6 +1,6 @@
 import Foundation
 
-public enum WorkspaceLocatorError: Error, Equatable, Sendable {
+enum WorkspaceLocatorError: Error, Equatable, Sendable {
     case invalidRoot
     case unreadable
     case unsupportedFormat

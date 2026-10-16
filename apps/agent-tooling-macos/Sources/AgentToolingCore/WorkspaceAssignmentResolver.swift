@@ -193,8 +193,8 @@ public struct WorkspaceAssignmentResolution: Hashable, Sendable {
 /// structurally validated portable graph; this narrow array API cannot validate
 /// source, project, or preset references. A returned requirement still needs
 /// S3/Y2 staging, destination-baseline validation and reviewed apply.
-public enum WorkspaceAssignmentResolver {
-    public static func resolve(
+enum WorkspaceAssignmentResolver {
+    static func resolve(
         artifacts: [ArtifactRecord],
         contributions: [AssignmentContribution],
         currentDeviceID: WorkspaceObjectID,

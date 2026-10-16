@@ -33,7 +33,7 @@ public enum GitCheckoutSourceDiagnostic: String, Hashable, Sendable {
     case missingUpstream, ambiguousUpstream, unsupportedUpstream, detachedHEAD, unbornHEAD
 }
 
-public enum GitCheckoutSourceReadError: Error, Equatable, Sendable {
+enum GitCheckoutSourceReadError: Error, Equatable, Sendable {
     case invalidDirectory, notWorkingTree, commandFailed, invalidOutput, outputLimitExceeded
     case changedDuringCapture
 }
@@ -51,7 +51,7 @@ public struct GitCheckoutSourceRecognition: Hashable, Sendable {
 /// Reads an explicitly supplied existing checkout using local Git plumbing only.
 /// No fetch, status scan, credential helper, hook, checkout, index refresh, or config write.
 /// Invoke from the background inventory pipeline, never a view render path.
-public struct GitCheckoutSourceReader: Sendable {
+struct GitCheckoutSourceReader: Sendable {
     private let runner: any CommandRunning
     private static let outputLimit = 65_536
     private static let configPattern = "^(remote\\..*\\.url|branch\\..*\\.(remote|merge)|include\\.path|includeif\\..*\\.path)$"
@@ -60,11 +60,11 @@ public struct GitCheckoutSourceReader: Sendable {
         "-c", "core.hooksPath=/dev/null",
     ]
 
-    public init(runner: any CommandRunning = ProcessCommandRunner(timeout: .seconds(5))) {
+    init(runner: any CommandRunning = ProcessCommandRunner(timeout: .seconds(5))) {
         self.runner = runner
     }
 
-    public func capture(directory: URL) async throws -> GitCheckoutObservation {
+    func capture(directory: URL) async throws -> GitCheckoutObservation {
         let directoryPath = try Self.existingDirectory(directory)
         return try await capture(canonicalDirectory: directoryPath)
     }
@@ -72,7 +72,7 @@ public struct GitCheckoutSourceReader: Sendable {
     /// The caller supplies an inventory artifact's observed folder, not a name match.
     /// Git finds its nearest checkout; realpath containment establishes the package path.
     /// A configured upstream is a review candidate, never an approved revision or fork.
-    public func recognize(artifactID: ArtifactID, directory: URL) async throws -> GitCheckoutSourceRecognition {
+    func recognize(artifactID: ArtifactID, directory: URL) async throws -> GitCheckoutSourceRecognition {
         let originalPath = try Self.existingDirectory(directory)
         let checkout = try await capture(canonicalDirectory: originalPath)
         guard try Self.existingDirectory(directory) == originalPath else {
