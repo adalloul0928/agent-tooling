@@ -518,14 +518,7 @@ struct WorkspaceAssignmentSheet: View {
     }
 
     private func actionText(_ item: WorkspaceDeploymentItem) -> String {
-        let app = item.surface.displayName
-        switch item.action {
-        case .installContent: return "Install in \(app)"
-        case .updateContent: return "Replace what \(app) has"
-        case .removeContent: return "Remove from \(app)"
-        case .installNativePackage: return "Ask \(app) to install it"
-        case .configureManagedConnection: return "Add the connection to \(app)"
-        }
+        item.installActionText(app: item.surface.displayName)
     }
 
     // MARK: Outcome

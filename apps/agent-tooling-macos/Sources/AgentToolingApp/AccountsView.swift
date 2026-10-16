@@ -219,7 +219,7 @@ private struct AccountCard: View {
                         + (plan.held.isEmpty ? "" : " \(plan.held.count) more cannot be applied here; see each row.")
             ) {
                 if !plan.changes.isEmpty {
-                    Button(session.applyingProvider == provider ? "Applying…" : "Review changes…") { onReview(plan) }
+                    Button(session.applyingProvider == provider ? "Applying…" : ActionTitles.reviewChanges(count: plan.changes.count)) { onReview(plan) }
                         .primaryActionStyle()
                         .controlSize(.small)
                         .disabled(session.applyingProvider != nil || !session.canWrite)

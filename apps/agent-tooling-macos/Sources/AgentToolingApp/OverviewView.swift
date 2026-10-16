@@ -71,7 +71,9 @@ struct OverviewView: View {
                     reviewChanges()
                 } label: {
                     Label(
-                        workspace.deployment.isBusy ? "Preparing…" : "Review changes",
+                        workspace.deployment.isBusy
+                            ? "Preparing…"
+                            : ActionTitles.reviewChanges(count: workspace.deployment.plan?.items.count),
                         systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.glass)

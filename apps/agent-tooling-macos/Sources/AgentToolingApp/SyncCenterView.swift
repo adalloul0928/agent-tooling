@@ -202,8 +202,7 @@ struct SyncCenterView: View {
     }
 
     private var reviewTitle: String {
-        let count = workspace.deployment.plan?.items.count ?? 0
-        return count == 0 ? "Review changes" : "Review \(count) change\(count == 1 ? "" : "s")"
+        ActionTitles.reviewChanges(count: workspace.deployment.plan?.items.count)
     }
 
     // MARK: - Tiles

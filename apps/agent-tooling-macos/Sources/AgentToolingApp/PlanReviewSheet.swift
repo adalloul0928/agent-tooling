@@ -438,16 +438,7 @@ private struct PlanStepRow: View {
 
     private var clause: String {
         let place = item.scope == .project ? "in this project" : "for your account"
-        switch item.action {
-        case .installContent: return "Add \(place)"
-        case .updateContent(let from, _):
-            return from == nil
-                ? "Replace what is there now, \(place)" : "Update to your approved version, \(place)"
-        case .installNativePackage: return "Ask its app to install it, \(place)"
-        case .configureManagedConnection: return "Set up this connection \(place)"
-        case .removeContent:
-            return "Remove the copy this app installed, \(place). Anything you changed is left alone."
-        }
+        return item.planActionClause(place: place)
     }
 }
 
