@@ -3,32 +3,32 @@ import Foundation
 
 /// Checkout paths and branch observations are device facts, not portable source ownership.
 /// Deliberately not Codable: only reconciled source candidates can enter a portable review.
-public struct GitCheckoutObservation: Hashable, Sendable {
-    public let checkoutPath: String
-    public let gitDirectory: String
-    public let commonGitDirectory: String
-    public let branch: String?
-    public let headCommit: SourceRevision?
-    public let remotes: [GitRemoteSourceObservation]
-    public let upstream: GitCheckoutUpstream?
-    public let diagnostics: [GitCheckoutSourceDiagnostic]
+struct GitCheckoutObservation: Hashable, Sendable {
+    let checkoutPath: String
+    let gitDirectory: String
+    let commonGitDirectory: String
+    let branch: String?
+    let headCommit: SourceRevision?
+    let remotes: [GitRemoteSourceObservation]
+    let upstream: GitCheckoutUpstream?
+    let diagnostics: [GitCheckoutSourceDiagnostic]
     // No clean/dirty or publication assertion is made by these metadata-only reads.
 }
 
-public struct GitRemoteSourceObservation: Hashable, Sendable {
-    public let name: String
+struct GitRemoteSourceObservation: Hashable, Sendable {
+    let name: String
     /// Nil means unsupported or unsafe. The original remote URL is never retained.
-    public let repositoryURL: String?
+    let repositoryURL: String?
 }
 
-public struct GitCheckoutUpstream: Hashable, Sendable {
-    public let remoteName: String
-    public let repositoryURL: String
+struct GitCheckoutUpstream: Hashable, Sendable {
+    let remoteName: String
+    let repositoryURL: String
     /// The configured remote branch, which may differ from the local branch name.
-    public let requestedRef: String
+    let requestedRef: String
 }
 
-public enum GitCheckoutSourceDiagnostic: String, Hashable, Sendable {
+enum GitCheckoutSourceDiagnostic: String, Hashable, Sendable {
     case includedConfigurationOmitted, unsupportedRemote, malformedConfiguration
     case missingUpstream, ambiguousUpstream, unsupportedUpstream, detachedHEAD, unbornHEAD
 }
@@ -38,14 +38,14 @@ enum GitCheckoutSourceReadError: Error, Equatable, Sendable {
     case changedDuringCapture
 }
 
-public enum GitCheckoutSourceMatchIssue: String, Hashable, Sendable {
+enum GitCheckoutSourceMatchIssue: String, Hashable, Sendable {
     case noUpstream, noCommit, incompleteConfiguration, excludedPackagePath
 }
 
-public struct GitCheckoutSourceRecognition: Hashable, Sendable {
-    public let checkout: GitCheckoutObservation
-    public let observations: [SourceEvidenceObservation]
-    public let issues: [GitCheckoutSourceMatchIssue]
+struct GitCheckoutSourceRecognition: Hashable, Sendable {
+    let checkout: GitCheckoutObservation
+    let observations: [SourceEvidenceObservation]
+    let issues: [GitCheckoutSourceMatchIssue]
 }
 
 /// Reads an explicitly supplied existing checkout using local Git plumbing only.

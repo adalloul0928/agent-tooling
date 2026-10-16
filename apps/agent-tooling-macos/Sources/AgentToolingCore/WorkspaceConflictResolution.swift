@@ -57,11 +57,11 @@ public struct WorkspaceConflictResolution: Hashable, Sendable {
     }
 }
 
-public struct WorkspaceConflictResolutionResult: Sendable {
-    public let document: PortableWorkspaceDocument?
+struct WorkspaceConflictResolutionResult: Sendable {
+    let document: PortableWorkspaceDocument?
     /// Conflicts still waiting for a decision.
-    public let remaining: [WorkspaceMergeConflict]
-    public var isResolved: Bool { document != nil && remaining.isEmpty }
+    let remaining: [WorkspaceMergeConflict]
+    var isResolved: Bool { document != nil && remaining.isEmpty }
 }
 
 /// Applies a person's conflict decisions by re-running the merge with the

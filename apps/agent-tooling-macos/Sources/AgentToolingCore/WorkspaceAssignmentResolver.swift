@@ -53,11 +53,11 @@ public struct ResolvedAssignmentTarget: Hashable, Sendable {
     }
 }
 
-public struct MCPAssignmentDefinitionEvidence: Hashable, Sendable {
-    public var artifactID: ArtifactID
-    public var transport: String
+struct MCPAssignmentDefinitionEvidence: Hashable, Sendable {
+    var artifactID: ArtifactID
+    var transport: String
 
-    public init(artifactID: ArtifactID, transport: String) {
+    init(artifactID: ArtifactID, transport: String) {
         self.artifactID = artifactID
         self.transport = transport
     }
@@ -115,7 +115,7 @@ public struct EffectiveAssignmentRequirement: Hashable, Sendable {
     }
 }
 
-public enum WorkspaceAssignmentIssueKind: String, Hashable, Sendable, CaseIterable {
+enum WorkspaceAssignmentIssueKind: String, Hashable, Sendable, CaseIterable {
     case duplicateContributionID
     case invalidDesiredPresence
     case unknownArtifact
@@ -153,13 +153,13 @@ public enum WorkspaceAssignmentIssueKind: String, Hashable, Sendable, CaseIterab
     case incompatiblePhysicalStrategies
 }
 
-public struct WorkspaceAssignmentIssue: Hashable, Sendable {
-    public var kind: WorkspaceAssignmentIssueKind
-    public var contributionIDs: [WorkspaceObjectID]
-    public var artifactID: ArtifactID?
-    public var physicalDestinationID: WorkspaceObjectID?
+struct WorkspaceAssignmentIssue: Hashable, Sendable {
+    var kind: WorkspaceAssignmentIssueKind
+    var contributionIDs: [WorkspaceObjectID]
+    var artifactID: ArtifactID?
+    var physicalDestinationID: WorkspaceObjectID?
 
-    public init(
+    init(
         kind: WorkspaceAssignmentIssueKind,
         contributionIDs: [WorkspaceObjectID] = [],
         artifactID: ArtifactID? = nil,
@@ -172,13 +172,13 @@ public struct WorkspaceAssignmentIssue: Hashable, Sendable {
     }
 }
 
-public struct WorkspaceAssignmentResolution: Hashable, Sendable {
-    public var requirements: [EffectiveAssignmentRequirement]
-    public var issues: [WorkspaceAssignmentIssue]
+struct WorkspaceAssignmentResolution: Hashable, Sendable {
+    var requirements: [EffectiveAssignmentRequirement]
+    var issues: [WorkspaceAssignmentIssue]
     /// Contributions deliberately selecting no device, or another device, are preserved in wire intent but ignored here.
-    public var ignoredContributionIDs: [WorkspaceObjectID]
+    var ignoredContributionIDs: [WorkspaceObjectID]
 
-    public init(
+    init(
         requirements: [EffectiveAssignmentRequirement],
         issues: [WorkspaceAssignmentIssue],
         ignoredContributionIDs: [WorkspaceObjectID]

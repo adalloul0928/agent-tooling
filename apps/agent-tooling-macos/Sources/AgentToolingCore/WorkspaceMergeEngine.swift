@@ -62,14 +62,14 @@ public struct WorkspaceMergeConflict: Hashable, Sendable {
     }
 }
 
-public struct WorkspaceMergeResult: Sendable {
+struct WorkspaceMergeResult: Sendable {
     /// Unsealed. The caller seals it against its own writer and revision.
-    public let document: PortableWorkspaceDocument?
-    public let conflicts: [WorkspaceMergeConflict]
+    let document: PortableWorkspaceDocument?
+    let conflicts: [WorkspaceMergeConflict]
     /// True when a document was produced and nothing needs a person's decision.
-    public var isResolved: Bool { document != nil && conflicts.isEmpty }
+    var isResolved: Bool { document != nil && conflicts.isEmpty }
 
-    public init(document: PortableWorkspaceDocument?, conflicts: [WorkspaceMergeConflict]) {
+    init(document: PortableWorkspaceDocument?, conflicts: [WorkspaceMergeConflict]) {
         self.document = document
         self.conflicts = conflicts
     }

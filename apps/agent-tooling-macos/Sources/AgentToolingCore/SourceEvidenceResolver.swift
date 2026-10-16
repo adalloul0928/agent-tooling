@@ -1,12 +1,12 @@
 import Foundation
 
-public struct ConfirmedSourceBinding: Hashable, Sendable {
-    public var artifactID: ArtifactID
-    public var repositoryURL: String
-    public var requestedRef: String
-    public var packagePath: String
+struct ConfirmedSourceBinding: Hashable, Sendable {
+    var artifactID: ArtifactID
+    var repositoryURL: String
+    var requestedRef: String
+    var packagePath: String
 
-    public init(artifactID: ArtifactID, repositoryURL: String, requestedRef: String, packagePath: String) {
+    init(artifactID: ArtifactID, repositoryURL: String, requestedRef: String, packagePath: String) {
         self.artifactID = artifactID
         self.repositoryURL = repositoryURL
         self.requestedRef = requestedRef
@@ -14,17 +14,17 @@ public struct ConfirmedSourceBinding: Hashable, Sendable {
     }
 }
 
-public enum SourceEvidenceMatchContext: String, Hashable, Sendable {
+enum SourceEvidenceMatchContext: String, Hashable, Sendable {
     case exactRelativePath, checkoutRepository, nativeChild, nameOnly, ambiguousPath
 }
 
-public struct SourceEvidenceObservation: Hashable, Sendable {
-    public var artifactID: ArtifactID
-    public var context: SourceEvidenceMatchContext
-    public var evidence: SourceLockEvidence
-    public var observedCommit: SourceRevision?
+struct SourceEvidenceObservation: Hashable, Sendable {
+    var artifactID: ArtifactID
+    var context: SourceEvidenceMatchContext
+    var evidence: SourceLockEvidence
+    var observedCommit: SourceRevision?
 
-    public init(
+    init(
         artifactID: ArtifactID, context: SourceEvidenceMatchContext,
         evidence: SourceLockEvidence, observedCommit: SourceRevision? = nil
     ) {
@@ -35,15 +35,15 @@ public struct SourceEvidenceObservation: Hashable, Sendable {
     }
 }
 
-public struct SourceEvidenceCandidate: Hashable, Sendable {
-    public var artifactID: ArtifactID
-    public var repositoryURL: String
-    public var requestedRef: String
-    public var packagePath: String
-    public var observedCommit: SourceRevision?
-    public var integrity: [SourceLockIntegrityEvidence]
+struct SourceEvidenceCandidate: Hashable, Sendable {
+    var artifactID: ArtifactID
+    var repositoryURL: String
+    var requestedRef: String
+    var packagePath: String
+    var observedCommit: SourceRevision?
+    var integrity: [SourceLockIntegrityEvidence]
 
-    public init(
+    init(
         artifactID: ArtifactID, repositoryURL: String, requestedRef: String,
         packagePath: String, observedCommit: SourceRevision? = nil,
         integrity: [SourceLockIntegrityEvidence] = []
@@ -57,77 +57,77 @@ public struct SourceEvidenceCandidate: Hashable, Sendable {
     }
 }
 
-public enum SourceEvidenceConflictKind: String, Hashable, Sendable {
+enum SourceEvidenceConflictKind: String, Hashable, Sendable {
     case confirmedBindingDisagreement, competingObservations, competingEvidenceFacts
     case duplicateArtifactIdentity, duplicateConfirmedBinding
 }
 
-public struct SourceEvidenceConflict: Hashable, Sendable {
-    public var artifactID: ArtifactID
-    public var kind: SourceEvidenceConflictKind
+struct SourceEvidenceConflict: Hashable, Sendable {
+    var artifactID: ArtifactID
+    var kind: SourceEvidenceConflictKind
     /// Alternatives stay review-only and never enter an eligible fetch group.
-    public var alternatives: [SourceEvidenceCandidate]
+    var alternatives: [SourceEvidenceCandidate]
 
-    public init(artifactID: ArtifactID, kind: SourceEvidenceConflictKind, alternatives: [SourceEvidenceCandidate] = []) {
+    init(artifactID: ArtifactID, kind: SourceEvidenceConflictKind, alternatives: [SourceEvidenceCandidate] = []) {
         self.artifactID = artifactID
         self.kind = kind
         self.alternatives = alternatives
     }
 }
 
-public enum SourceEvidenceUnresolvedReason: String, Hashable, Sendable {
+enum SourceEvidenceUnresolvedReason: String, Hashable, Sendable {
     case unknownArtifact, duplicateArtifactIdentity, invalidConfirmedBinding, duplicateConfirmedBinding
     case ineligibleArtifactAuthority, childArtifact, insufficientMatchContext, evidenceGap
     case invalidLocator, invalidPackagePath, invalidRequestedRef, invalidObservedCommit, invalidIntegrity
     case unsupportedArtifactKind, missingConfirmedUpstreamBinding, competingObservations, competingEvidenceFacts
 }
 
-public struct SourceEvidenceUnresolved: Hashable, Sendable {
-    public var artifactID: ArtifactID
-    public var reason: SourceEvidenceUnresolvedReason
+struct SourceEvidenceUnresolved: Hashable, Sendable {
+    var artifactID: ArtifactID
+    var reason: SourceEvidenceUnresolvedReason
 
-    public init(artifactID: ArtifactID, reason: SourceEvidenceUnresolvedReason) {
+    init(artifactID: ArtifactID, reason: SourceEvidenceUnresolvedReason) {
         self.artifactID = artifactID
         self.reason = reason
     }
 }
 
-public enum SourceEvidenceResolverDiagnostic: String, Hashable, Sendable {
+enum SourceEvidenceResolverDiagnostic: String, Hashable, Sendable {
     case unknownArtifactObservation, duplicateArtifactIdentity
     case invalidConfirmedBinding, duplicateConfirmedBinding, invalidObservation
 }
 
-public struct SourceEvidenceFetchArtifact: Hashable, Sendable {
-    public var artifactID: ArtifactID
-    public var packagePath: String
+struct SourceEvidenceFetchArtifact: Hashable, Sendable {
+    var artifactID: ArtifactID
+    var packagePath: String
 
-    public init(artifactID: ArtifactID, packagePath: String) {
+    init(artifactID: ArtifactID, packagePath: String) {
         self.artifactID = artifactID
         self.packagePath = packagePath
     }
 }
 
-public struct SourceEvidenceFetchGroup: Hashable, Sendable {
-    public var repositoryURL: String
-    public var requestedRef: String
-    public var artifactPaths: [SourceEvidenceFetchArtifact]
+struct SourceEvidenceFetchGroup: Hashable, Sendable {
+    var repositoryURL: String
+    var requestedRef: String
+    var artifactPaths: [SourceEvidenceFetchArtifact]
 
-    public init(repositoryURL: String, requestedRef: String, artifactPaths: [SourceEvidenceFetchArtifact]) {
+    init(repositoryURL: String, requestedRef: String, artifactPaths: [SourceEvidenceFetchArtifact]) {
         self.repositoryURL = repositoryURL
         self.requestedRef = requestedRef
         self.artifactPaths = artifactPaths
     }
 }
 
-public struct SourceEvidenceResolution: Hashable, Sendable {
-    public var confirmedBindings: [ConfirmedSourceBinding]
-    public var candidates: [SourceEvidenceCandidate]
-    public var conflicts: [SourceEvidenceConflict]
-    public var unresolved: [SourceEvidenceUnresolved]
-    public var proposedFetchGroups: [SourceEvidenceFetchGroup]
-    public var diagnostics: [SourceEvidenceResolverDiagnostic]
+struct SourceEvidenceResolution: Hashable, Sendable {
+    var confirmedBindings: [ConfirmedSourceBinding]
+    var candidates: [SourceEvidenceCandidate]
+    var conflicts: [SourceEvidenceConflict]
+    var unresolved: [SourceEvidenceUnresolved]
+    var proposedFetchGroups: [SourceEvidenceFetchGroup]
+    var diagnostics: [SourceEvidenceResolverDiagnostic]
 
-    public init(
+    init(
         confirmedBindings: [ConfirmedSourceBinding], candidates: [SourceEvidenceCandidate],
         conflicts: [SourceEvidenceConflict], unresolved: [SourceEvidenceUnresolved],
         proposedFetchGroups: [SourceEvidenceFetchGroup], diagnostics: [SourceEvidenceResolverDiagnostic]

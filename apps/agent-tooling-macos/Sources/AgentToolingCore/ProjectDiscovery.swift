@@ -872,12 +872,12 @@ public enum ProjectDiscovery {
 
 // MARK: - Inherited versus overridden
 
-public enum ProjectComponentOrigin: String, Codable, CaseIterable, Sendable {
+enum ProjectComponentOrigin: String, Codable, CaseIterable, Sendable {
     case inherited
     case overridden
     case projectOnly
 
-    public var displayName: String {
+    var displayName: String {
         switch self {
         case .inherited: "Inherited"
         case .overridden: "Overridden here"
@@ -885,7 +885,7 @@ public enum ProjectComponentOrigin: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    public var explanation: String {
+    var explanation: String {
         switch self {
         case .inherited: "Comes from this Mac. The project does not change it."
         case .overridden: "This Mac has one too; the copy inside the project takes precedence."
@@ -895,13 +895,13 @@ public enum ProjectComponentOrigin: String, Codable, CaseIterable, Sendable {
 }
 
 /// One inherited component as it is known outside the project.
-public struct ProjectInheritedComponent: Identifiable, Hashable, Sendable {
-    public var id: String
-    public var name: String
-    public var detail: String
-    public var clients: [ClientKind]
+struct ProjectInheritedComponent: Identifiable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var detail: String
+    var clients: [ClientKind]
 
-    public init(id: String, name: String, detail: String, clients: [ClientKind] = []) {
+    init(id: String, name: String, detail: String, clients: [ClientKind] = []) {
         self.id = id
         self.name = name
         self.detail = detail
@@ -909,18 +909,18 @@ public struct ProjectInheritedComponent: Identifiable, Hashable, Sendable {
     }
 }
 
-public struct ProjectComponentRow: Identifiable, Hashable, Sendable {
-    public var id: String
-    public var name: String
-    public var kind: ComponentKind
-    public var origin: ProjectComponentOrigin
-    public var detail: String
-    public var clients: [ClientKind]
-    public var sharing: ProjectFileSharing?
-    public var sourcePath: String?
-    public var sourceRelativePath: String?
+struct ProjectComponentRow: Identifiable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var kind: ComponentKind
+    var origin: ProjectComponentOrigin
+    var detail: String
+    var clients: [ClientKind]
+    var sharing: ProjectFileSharing?
+    var sourcePath: String?
+    var sourceRelativePath: String?
 
-    public init(
+    init(
         id: String,
         name: String,
         kind: ComponentKind,

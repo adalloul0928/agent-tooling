@@ -1,6 +1,6 @@
 import Foundation
 
-public enum ToolHiveLifecycleAction: String, Hashable, Sendable, CaseIterable {
+enum ToolHiveLifecycleAction: String, Hashable, Sendable, CaseIterable {
     case start, stop, restart
 
     var command: String { rawValue }
@@ -20,15 +20,15 @@ public enum ToolHiveLifecycleAction: String, Hashable, Sendable, CaseIterable {
 
 /// A reviewed action against one exact workload, bound to the state that was
 /// observed when it was prepared.
-public struct ToolHiveLifecyclePlan: Hashable, Sendable {
-    public let workloadName: String
-    public let action: ToolHiveLifecycleAction
-    public let observed: ToolHiveWorkloadStatus
+struct ToolHiveLifecyclePlan: Hashable, Sendable {
+    let workloadName: String
+    let action: ToolHiveLifecycleAction
+    let observed: ToolHiveWorkloadStatus
     /// Other workloads this device knows about, checked before and after so an
     /// action that reaches beyond its target is visible rather than assumed away.
-    public let otherWorkloadNames: [String]
+    let otherWorkloadNames: [String]
 
-    public init(
+    init(
         workloadName: String,
         action: ToolHiveLifecycleAction,
         observed: ToolHiveWorkloadStatus,
@@ -41,7 +41,7 @@ public struct ToolHiveLifecyclePlan: Hashable, Sendable {
     }
 }
 
-public enum ToolHiveLifecycleOutcome: Hashable, Sendable {
+enum ToolHiveLifecycleOutcome: Hashable, Sendable {
     /// The workload already reports a state this action would produce.
     case alreadySatisfied(ToolHiveWorkloadStatus)
     /// The postcondition was verified after the command ran.

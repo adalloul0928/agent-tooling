@@ -1,7 +1,7 @@
 import Foundation
 
 /// Why a declared connection cannot be delivered to a particular app.
-public enum AgentPluginMCPRouteRefusal: String, Error, Hashable, Sendable, CaseIterable {
+enum AgentPluginMCPRouteRefusal: String, Error, Hashable, Sendable, CaseIterable {
     /// This app has no recorded evidence that it accepts MCP connections.
     case noRecordedSupport
     /// This app does not accept this transport.
@@ -19,32 +19,32 @@ public enum AgentPluginMCPRouteRefusal: String, Error, Hashable, Sendable, CaseI
 }
 
 /// One connection, resolved for one app on this Mac.
-public struct ResolvedPluginMCPServer: Hashable, Sendable {
-    public let name: String
-    public let surface: TargetSurface
-    public let transport: String
+struct ResolvedPluginMCPServer: Hashable, Sendable {
+    let name: String
+    let surface: TargetSurface
+    let transport: String
     /// Absolute for a command inside the package; a bare name otherwise, which
     /// the client resolves by its own PATH rules.
-    public let executable: String?
-    public let arguments: [String]
+    let executable: String?
+    let arguments: [String]
     /// The package's declared variables plus the two the client owns. The
     /// client-owned pair always wins.
-    public let environment: [String: String]
-    public let workingDirectory: String?
-    public let endpoint: String?
-    public let headers: [String: String]
+    let environment: [String: String]
+    let workingDirectory: String?
+    let endpoint: String?
+    let headers: [String: String]
 }
 
-public struct AgentPluginMCPRouteResult: Hashable, Sendable {
-    public let resolved: [ResolvedPluginMCPServer]
-    public let refused: [Refusal]
+struct AgentPluginMCPRouteResult: Hashable, Sendable {
+    let resolved: [ResolvedPluginMCPServer]
+    let refused: [Refusal]
 
-    public struct Refusal: Hashable, Sendable {
-        public let name: String
-        public let surface: TargetSurface
-        public let reason: AgentPluginMCPRouteRefusal
+    struct Refusal: Hashable, Sendable {
+        let name: String
+        let surface: TargetSurface
+        let reason: AgentPluginMCPRouteRefusal
         /// Static description. Never contains a path, endpoint or credential.
-        public let detail: String
+        let detail: String
     }
 }
 

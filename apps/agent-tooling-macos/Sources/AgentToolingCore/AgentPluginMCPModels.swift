@@ -1,12 +1,12 @@
 import Foundation
 
-public struct AgentPluginStdioServer: Codable, Hashable, Sendable {
-    public var command: String
-    public var arguments: [String]
-    public var environment: [String: String]
-    public var currentDirectory: String?
+struct AgentPluginStdioServer: Codable, Hashable, Sendable {
+    var command: String
+    var arguments: [String]
+    var environment: [String: String]
+    var currentDirectory: String?
 
-    public init(
+    init(
         command: String,
         arguments: [String] = [],
         environment: [String: String] = [:],
@@ -26,24 +26,24 @@ public struct AgentPluginStdioServer: Codable, Hashable, Sendable {
     }
 }
 
-public struct AgentPluginHTTPServer: Codable, Hashable, Sendable {
-    public var url: String
-    public var headers: [String: String]
+struct AgentPluginHTTPServer: Codable, Hashable, Sendable {
+    var url: String
+    var headers: [String: String]
 
-    public init(url: String, headers: [String: String] = [:]) {
+    init(url: String, headers: [String: String] = [:]) {
         self.url = url
         self.headers = headers
     }
 }
 
-public typealias AgentPluginMCPServerDeclaration = AgentPluginMCPServer
+typealias AgentPluginMCPServerDeclaration = AgentPluginMCPServer
 
-public enum AgentPluginMCPServer: Hashable, Sendable {
+enum AgentPluginMCPServer: Hashable, Sendable {
     case stdio(AgentPluginStdioServer)
     case streamableHTTP(AgentPluginHTTPServer)
     case sse(AgentPluginHTTPServer)
 
-    public var transport: String {
+    var transport: String {
         switch self {
         case .stdio: "stdio"
         case .streamableHTTP: "streamable-http"

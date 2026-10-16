@@ -11,28 +11,28 @@ enum ClaudeAccountCommands {
 
 /// What Claude Code's own settings say about the claude.ai account, read from
 /// one settings file.
-public struct ClaudeAccountSettings: Hashable, Sendable {
+struct ClaudeAccountSettings: Hashable, Sendable {
     /// `syncClaudeAiSkills`: only `false` means anything.
-    public var skillSyncOff = false
+    var skillSyncOff = false
     /// `syncClaudeAiPlugins`: only `false` means anything.
-    public var pluginSyncOff = false
+    var pluginSyncOff = false
     /// `disableClaudeAiConnectors`: only `true` means anything.
-    public var connectorsOff = false
+    var connectorsOff = false
     /// `deniedMcpServers` `serverName` entries for claude.ai connectors, by
     /// the connector's display name (the prefix removed).
-    public var deniedConnectors: Set<String> = []
+    var deniedConnectors: Set<String> = []
     /// `enabledPlugins` entries for `<name>@synced`, by plugin name.
-    public var syncedPluginFlags: [String: Bool] = [:]
+    var syncedPluginFlags: [String: Bool] = [:]
 
-    public init() {}
+    init() {}
 
-    public var isEmpty: Bool {
+    var isEmpty: Bool {
         !skillSyncOff && !pluginSyncOff && !connectorsOff && deniedConnectors.isEmpty && syncedPluginFlags.isEmpty
     }
 
     /// The account switches this one file sets, keyed the way the shared
     /// choices are. A key it does not set is absent.
-    public var switches: [AccountPreferenceKey: AccountPreferenceValue] {
+    var switches: [AccountPreferenceKey: AccountPreferenceValue] {
         var switches: [AccountPreferenceKey: AccountPreferenceValue] = [:]
         if skillSyncOff { switches[.init(.skillSync)] = .off }
         if pluginSyncOff { switches[.init(.pluginSync)] = .off }
@@ -44,18 +44,18 @@ public struct ClaudeAccountSettings: Hashable, Sendable {
 }
 
 /// One plugin Claude Code loads from the claude.ai account.
-public struct ClaudeSyncedPlugin: Hashable, Sendable {
-    public var name: String
-    public var version: String?
-    public var enabled: Bool
+struct ClaudeSyncedPlugin: Hashable, Sendable {
+    var name: String
+    var version: String?
+    var enabled: Bool
     /// False for a row Claude Code lists without a folder: a synced plugin a
     /// local copy of the same name shadows, or one that failed to download.
-    public var isInstalled: Bool
-    public var mcpServers: [String]
-    public var errors: [String]
-    public var notes: [String]
+    var isInstalled: Bool
+    var mcpServers: [String]
+    var errors: [String]
+    var notes: [String]
 
-    public init(
+    init(
         name: String, version: String? = nil, enabled: Bool, isInstalled: Bool, mcpServers: [String] = [],
         errors: [String] = [], notes: [String] = []
     ) {
@@ -70,12 +70,12 @@ public struct ClaudeSyncedPlugin: Hashable, Sendable {
 }
 
 /// One skill Claude Code downloaded from the claude.ai account.
-public struct ClaudeSyncedSkill: Hashable, Sendable {
-    public var folder: String
-    public var name: String
-    public var summary: String?
+struct ClaudeSyncedSkill: Hashable, Sendable {
+    var folder: String
+    var name: String
+    var summary: String?
 
-    public init(folder: String, name: String, summary: String? = nil) {
+    init(folder: String, name: String, summary: String? = nil) {
         self.folder = folder
         self.name = name
         self.summary = summary
