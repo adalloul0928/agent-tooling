@@ -203,7 +203,7 @@ struct CheckupView: View {
         }
     }
 
-    static func sentences(_ text: String) -> [String] {
+    nonisolated static func sentences(_ text: String) -> [String] {
         var out: [String] = []
         var current = ""
         for character in text {
