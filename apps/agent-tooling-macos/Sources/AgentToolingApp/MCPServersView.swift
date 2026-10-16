@@ -254,7 +254,7 @@ struct MCPServersView: View {
                 }
                 Spacer(minLength: 0)
                 if !columns.expanded {
-                    StatusGlyph(state: entry.verdict.state, size: Size.glyph, tint: selected ? Color.white : nil)
+                    StatusGlyph(state: entry.verdict.state, size: Size.glyph, tint: selected ? AgentTheme.onSelection : nil)
                         .accessibilityHidden(false)
                         .accessibilityLabel(entry.verdict.text)
                 }
@@ -301,7 +301,7 @@ struct MCPServersView: View {
                     .font(AgentFont.caption.monospacedDigit())
                     .collectionRowForeground(selected: selected, secondary: true)
                     .frame(width: columns.tools, alignment: .leading)
-                StatusGlyph(state: entry.verdict.state, size: Size.glyph, tint: selected ? Color.white : nil)
+                StatusGlyph(state: entry.verdict.state, size: Size.glyph, tint: selected ? AgentTheme.onSelection : nil)
                     .accessibilityHidden(false)
                     .accessibilityLabel(entry.verdict.text)
                     .frame(width: columns.status, alignment: .center)

@@ -18,12 +18,12 @@ struct FilterPill: View {
                 Text(title).lineLimit(1)
                 if let count {
                     Text(count, format: .number)
-                        .foregroundStyle(isOn ? Color.white.opacity(0.75) : Color.secondary)
+                        .foregroundStyle(isOn ? AgentTheme.onSelection.opacity(0.75) : Color.secondary)
                         .monospacedDigit()
                 }
             }
             .font(isOn ? AgentFont.captionSemibold : AgentFont.caption)
-            .foregroundStyle(isOn ? Color.white : Color.primary)
+            .foregroundStyle(isOn ? AgentTheme.onSelection : Color.primary)
             .padding(.horizontal, Space.lg)
             .frame(height: Size.pillHeight)
             .background(
@@ -78,7 +78,7 @@ struct SelectionCheckbox: View {
     }
 
     private var tint: Color {
-        if selected { return .white }
+        if selected { return AgentTheme.onSelection }
         return enabled ? Color.secondary : Color.secondary.opacity(0.3)
     }
 }

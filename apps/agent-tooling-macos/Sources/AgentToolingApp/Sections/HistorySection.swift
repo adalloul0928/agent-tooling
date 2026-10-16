@@ -66,15 +66,15 @@ struct HistorySection: View {
                         .font(.system(size: Size.glyphLarge))
                         .foregroundStyle(
                             selected
-                                ? AnyShapeStyle(Color.white)
+                                ? AnyShapeStyle(AgentTheme.onSelection)
                                 : point.isCurrent ? AnyShapeStyle(AgentTheme.selection) : AnyShapeStyle(.secondary))
                     VStack(alignment: .leading, spacing: Space.xxs) {
                         Text(point.isCurrent ? "Now" : point.createdAt.formatted(.relative(presentation: .named)))
                             .font(AgentFont.bodyMedium)
-                            .foregroundStyle(selected ? Color.white : Color.primary)
+                            .foregroundStyle(selected ? AgentTheme.onSelection : Color.primary)
                         Text(summary(point))
                             .font(AgentFont.caption)
-                            .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                            .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
                     }
                 }
                 .padding(.vertical, Space.sm)

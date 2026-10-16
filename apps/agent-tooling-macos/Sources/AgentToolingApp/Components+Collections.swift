@@ -45,7 +45,7 @@ extension View {
     func collectionRowForeground(selected: Bool, secondary: Bool = false) -> some View {
         foregroundStyle(
             selected
-                ? (secondary ? Color.white.opacity(0.78) : Color.white)
+                ? (secondary ? AgentTheme.onSelection.opacity(0.78) : AgentTheme.onSelection)
                 : (secondary ? Color.secondary : Color.primary))
     }
 }

@@ -333,7 +333,7 @@ private struct ProjectCollectionRow: View {
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(project.name)
                     .font(AgentFont.bodyMedium)
-                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .foregroundStyle(selected ? AgentTheme.onSelection : Color.primary)
                     .lineLimit(1)
                 HStack(spacing: Space.sm) {
                     Text(assignedCount == 1 ? "1 tool assigned" : "\(assignedCount) tools assigned")
@@ -342,10 +342,10 @@ private struct ProjectCollectionRow: View {
                     }
                 }
                 .font(AgentFont.caption)
-                .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
             }
             Spacer(minLength: Space.lg)
-            StatusGlyph(state: hasFolder ? .healthy : .pending, size: Size.glyph, tint: selected ? Color.white : nil)
+            StatusGlyph(state: hasFolder ? .healthy : .pending, size: Size.glyph, tint: selected ? AgentTheme.onSelection : nil)
         }
         .padding(.vertical, Space.sm)
         .help(hasFolder ? "This project has a folder on this Mac." : "This project has no folder on this Mac yet.")

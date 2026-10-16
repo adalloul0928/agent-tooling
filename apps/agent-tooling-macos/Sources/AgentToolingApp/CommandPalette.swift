@@ -450,23 +450,23 @@ private struct CommandPaletteRow: View {
             } else {
                 Image(systemName: item.symbol)
                     .font(AgentFont.bodyMedium)
-                    .foregroundStyle(selected ? Color.white : Color.secondary)
+                    .foregroundStyle(selected ? AgentTheme.onSelection : Color.secondary)
                     .frame(width: Size.tile, height: Size.tile)
             }
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(item.title)
                     .font(AgentFont.bodyMedium)
-                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .foregroundStyle(selected ? AgentTheme.onSelection : Color.primary)
                     .lineLimit(1)
                 Text(item.subtitle)
                     .font(AgentFont.caption)
-                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                    .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: Space.lg)
             Text(item.contextLabel)
                 .font(AgentFont.caption)
-                .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary.opacity(0.75))
+                .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary.opacity(0.75))
                 .lineLimit(1)
         }
         .padding(.horizontal, Space.lg)

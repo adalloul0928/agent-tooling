@@ -226,21 +226,21 @@ private struct ActivityCollectionRow: View {
 
     var body: some View {
         HStack(spacing: Space.lg) {
-            StatusGlyph(state: receipt.state, size: Size.glyphLarge, tint: selected ? Color.white : nil)
+            StatusGlyph(state: receipt.state, size: Size.glyphLarge, tint: selected ? AgentTheme.onSelection : nil)
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(receipt.displayTitle)
                     .font(AgentFont.bodyMedium)
-                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .foregroundStyle(selected ? AgentTheme.onSelection : Color.primary)
                     .lineLimit(1)
                 Text(receipt.detail)
                     .font(AgentFont.caption)
-                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                    .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: Space.lg)
             Text(SnapshotTime.standalone(receipt.date))
                 .font(AgentFont.caption)
-                .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
         }
         .padding(.vertical, Space.sm)
     }

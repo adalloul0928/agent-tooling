@@ -16,6 +16,12 @@ enum AgentTheme {
     /// The one accent: selection fills, prominent buttons, links, progress.
     static let selection = dynamic(light: 0x0065D1, dark: 0x0A64CD)
 
+    /// The foreground on a selected row, where the accent fill is the ground.
+    /// The system's text colour for an alternate selection adapts with the
+    /// accent and the appearance, so it stays legible where a flat white would
+    /// not.
+    static let onSelection = Color(nsColor: .alternateSelectedControlTextColor)
+
     static let panelCornerRadius = Radius.lg
 
     /// Neutral content surfaces leave the desktop's color to the native glass.
