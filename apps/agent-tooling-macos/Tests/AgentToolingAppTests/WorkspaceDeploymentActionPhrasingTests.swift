@@ -50,23 +50,23 @@ struct WorkspaceDeploymentActionPhrasingTests {
 
     @Test("The plan sheet uses the same verbs with the place, not the app")
     func planSheetPhrases() {
-        let account = "for your account"
+        let account = "on this Mac"
         let project = "in this project"
-        #expect(item(.installContent(digest: digest)).planActionClause(place: account) == "Install for your account")
+        #expect(item(.installContent(digest: digest)).planActionClause(place: account) == "Install on this Mac")
         #expect(
             item(.updateContent(from: nil, to: digest)).planActionClause(place: account)
-                == "Replace what is there now, for your account")
+                == "Replace what is there now, on this Mac")
         #expect(
             item(.updateContent(from: digest, to: digest)).planActionClause(place: project)
                 == "Update to your approved version, in this project")
         #expect(
             item(.installNativePackage(route: .init(client: .claude, externalPluginID: "x")))
-                .planActionClause(place: account) == "Ask its app to install it, for your account")
+                .planActionClause(place: account) == "Ask its app to install it, on this Mac")
         #expect(
             item(.configureManagedConnection(transport: .http)).planActionClause(place: account)
-                == "Add the connection for your account")
+                == "Add the connection on this Mac")
         #expect(
             item(.removeContent(installed: digest)).planActionClause(place: account)
-                == "Remove the copy this app installed, for your account. Anything you changed is left alone.")
+                == "Remove the copy this app installed, on this Mac. Anything you changed is left alone.")
     }
 }

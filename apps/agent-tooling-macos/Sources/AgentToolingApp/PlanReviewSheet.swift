@@ -437,7 +437,7 @@ private struct PlanStepRow: View {
     }
 
     private var clause: String {
-        let place = item.scope == .project ? "in this project" : "for your account"
+        let place = item.scope == .project ? "in this project" : "on this Mac"
         return item.planActionClause(place: place)
     }
 }

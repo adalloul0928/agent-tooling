@@ -282,7 +282,7 @@ struct EffectiveSettingsView: View {
     private func describe(_ scope: AgentInstructionInventory.Scope) -> String {
         switch scope {
         case .managedPolicy: "your organization"
-        case .user: "your account on this Mac"
+        case .user: "every project on this Mac"
         case .project: "this project"
         case .localProject: "this project, just for you"
         }
@@ -299,7 +299,7 @@ struct EffectiveSettingsView: View {
         case .session: "the running session"
         case .localProject: "this project, just for you"
         case .project: "this project"
-        case .user: "your account on this Mac"
+        case .user: "every project on this Mac"
         case .builtInDefault: "the app's default"
         }
     }

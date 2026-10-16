@@ -3,7 +3,7 @@ import AgentToolingCore
 /// One wording for each deployment action, shared by the two sheets that show a
 /// plan. The install sheet names the app inside the phrase ("Install in Claude
 /// Code"); the plan sheet already prints the app after a separator, so it uses
-/// the same verb with the place instead ("Install for your account"). Keeping
+/// the same verb with the place instead ("Install on this Mac"). Keeping
 /// both renderings here stops the two sheets describing the same action in two
 /// different ways.
 extension WorkspaceDeploymentItem {
@@ -23,7 +23,7 @@ extension WorkspaceDeploymentItem {
     }
 
     /// The phrase for the plan review sheet, where `place` is where the write
-    /// lands ("in this project" / "for your account"). The app itself is shown
+    /// lands ("in this project" / "on this Mac"). The app itself is shown
     /// separately by that sheet, so it is not repeated here.
     func planActionClause(place: String) -> String {
         switch action {
