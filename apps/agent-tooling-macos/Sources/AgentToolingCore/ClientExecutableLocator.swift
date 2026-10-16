@@ -89,7 +89,20 @@ public enum ClientExecutableLocator {
         homeURL: URL,
         fileManager: FileManager = .default
     ) -> URL? {
-        for candidate in candidates(for: client, homeURL: homeURL) {
+        locate(client, homeURL: homeURL, fileManager: fileManager, searching: { _ in true })
+    }
+
+    /// `locate`, looking only in the folders `searching` keeps, in the same
+    /// order. For tests: the fixed roots start with folders every process on
+    /// the Mac shares, such as `/opt/homebrew/bin`, and a test must not find a
+    /// tool that the Mac running it happens to have installed there.
+    static func locate(
+        _ client: ClientKind,
+        homeURL: URL,
+        fileManager: FileManager = .default,
+        searching: (URL) -> Bool
+    ) -> URL? {
+        for candidate in candidates(for: client, homeURL: homeURL) where searching(candidate.deletingLastPathComponent()) {
             let resolved = candidate.resolvingSymlinksInPath().standardizedFileURL
             var isDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: resolved.path, isDirectory: &isDirectory),
