@@ -522,7 +522,7 @@ struct MCPServersView: View {
     }
 
     private var emptyStateActionTitle: String {
-        entries.isEmpty ? "Add connection…" : "Clear Filters"
+        entries.isEmpty ? "Add connection…" : "Clear filters"
     }
 
     private func performEmptyStateAction() {

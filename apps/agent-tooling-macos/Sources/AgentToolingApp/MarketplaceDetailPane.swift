@@ -87,7 +87,7 @@ extension MarketplaceView {
                                             .font(AgentFont.mono)
                                             .foregroundStyle(.secondary)
                                             .textSelection(.enabled)
-                                        Button("Copy Command", systemImage: "doc.on.doc") {
+                                        Button("Copy command", systemImage: "doc.on.doc") {
                                             NSPasteboard.general.clearContents()
                                             NSPasteboard.general.setString(command, forType: .string)
                                         }
@@ -157,7 +157,7 @@ extension MarketplaceView {
                                         LocationText(path: package.location)
                                     }
                                     if canOpen(package.location) {
-                                        Button("Open Source", systemImage: "arrow.up.right.square") {
+                                        Button("Open location", systemImage: "arrow.up.right.square") {
                                             open(package.location)
                                         }
                                         .secondaryActionStyle()

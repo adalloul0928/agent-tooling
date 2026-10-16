@@ -26,7 +26,7 @@ struct MCPStackPane: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Review one assignment", action: onAssign)
+                    Button("Review one assignment…", action: onAssign)
                         .primaryActionStyle()
                         .disabled(assignable.isEmpty || isBusy)
                 }
@@ -201,14 +201,15 @@ struct MCPDetailView: View {
             }
             if !entry.requestedAssignments.isEmpty {
                 Menu("Stop asking…") {
+                    // Each choice opens the reviewed withdrawal, so each says so.
                     ForEach(entry.requestedAssignments) { requested in
-                        Button(requested.destination.surface.displayName, role: .destructive) {
+                        Button("\(requested.destination.surface.displayName)…", role: .destructive) {
                             onRemove([requested.id])
                         }
                     }
                     if entry.requestedAssignments.count > 1 {
                         Divider()
-                        Button("Everywhere", role: .destructive) {
+                        Button("Everywhere…", role: .destructive) {
                             onRemove(entry.requestedAssignments.map(\.id))
                         }
                     }

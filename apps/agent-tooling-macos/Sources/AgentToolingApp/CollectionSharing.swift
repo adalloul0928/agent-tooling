@@ -46,7 +46,7 @@ enum PackageFileExport {
     @MainActor
     static func chooseDestinationFolder() -> URL? {
         let panel = NSOpenPanel()
-        panel.title = "Export Package"
+        panel.title = "Export package"
         panel.prompt = "Export"
         panel.message = "Choose a folder on this Mac to write the package into."
         panel.canChooseDirectories = true

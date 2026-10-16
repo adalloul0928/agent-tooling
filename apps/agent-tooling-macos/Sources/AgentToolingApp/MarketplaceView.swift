@@ -258,7 +258,7 @@ struct MarketplaceView: View {
                             message: session.catalogFailures.map { "\($0.name): \($0.reason)" }
                                 .joined(separator: "\n")
                         ) {
-                            Button("Sources", systemImage: "shippingbox") { showingSources = true }
+                            Button("Sources…", systemImage: "shippingbox") { showingSources = true }
                                 .buttonStyle(.glass)
                                 .help("Open the Sources list to see each catalog's status")
                         }
@@ -270,7 +270,7 @@ struct MarketplaceView: View {
                             showingSources = true
                         } label: {
                             let count = session.catalogFailures.count
-                            Text("\(count) catalog\(count == 1 ? "" : "s") could not be read — Sources")
+                            Text("\(count) catalog\(count == 1 ? "" : "s") could not be read — Sources…")
                                 .font(AgentFont.caption)
                                 .foregroundStyle(.secondary)
                         }

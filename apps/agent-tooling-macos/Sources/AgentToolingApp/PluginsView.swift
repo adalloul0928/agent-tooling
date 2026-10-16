@@ -333,7 +333,7 @@ private struct PluginStackPane: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Review removal plan", action: review)
+                    Button("Review removal plan…", action: review)
                         .primaryActionStyle()
                         .disabled(library.isBusy || contributionIDs.isEmpty)
                 }

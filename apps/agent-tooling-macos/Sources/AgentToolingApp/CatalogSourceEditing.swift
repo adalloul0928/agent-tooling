@@ -277,7 +277,7 @@ struct AddCatalogSourceSheet: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Use Folder"
+        panel.prompt = "Use folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         session.clearError()
         folder = url.standardizedFileURL.path

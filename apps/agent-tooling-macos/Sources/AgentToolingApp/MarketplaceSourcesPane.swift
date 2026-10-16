@@ -316,18 +316,20 @@ struct MarketplaceGalleryCard: View {
                     .accessibilityLabel("Adding to your library")
             } else {
                 switch install {
+                // Both open the install picker, so both say so, as the
+                // details pane's Install does.
                 case .install(let client):
-                    Button("Install") { onInstall(client) }
+                    Button("Install…") { onInstall(client) }
                         .secondaryActionStyle()
                         .controlSize(.small)
                         .help(client.map { "Install for \($0.rawValue)" } ?? "Choose the apps and install")
                 case .choose(let clients):
-                    Menu("Install") {
+                    Menu("Install…") {
                         ForEach(clients) { client in
                             Button {
                                 onInstall(client)
                             } label: {
-                                Label("For \(client.rawValue)", systemImage: "arrow.down.circle")
+                                Label("For \(client.rawValue)…", systemImage: "arrow.down.circle")
                             }
                         }
                     }
