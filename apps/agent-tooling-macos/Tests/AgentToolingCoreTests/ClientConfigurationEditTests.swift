@@ -185,4 +185,35 @@ struct ClientConfigurationEditTests {
         #expect(try String(contentsOf: elsewhere, encoding: .utf8) == #"{"mcpServers":{"memory":{"command":"gone.sh"}}}"#)
         #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: file.path(percentEncoded: false))) != nil)
     }
+
+    @Test func anOversizedConfigurationIsRefusedBeforeItIsLoaded() async throws {
+        // The existing file is read bounded, so a file past the configuration
+        // size limit is refused rather than read whole and measured after.
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "ClientConfigurationEditTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let home = root.appending(path: "home", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: home.appending(path: ".kiro/settings"), withIntermediateDirectories: true)
+        let file = home.appending(path: ".kiro/settings/mcp.json")
+        // One byte past the limit is enough to trip the bounded read.
+        let oversized = Data(repeating: UInt8(ascii: " "), count: BoundedFileAccess.maximumConfigurationBytes + 1)
+        try oversized.write(to: file, options: .atomic)
+
+        let document = try WorkspaceDocumentCoding.seal(.init(workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+        let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
+        let store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "workspace"), workspaceID: document.workspaceID, deviceID: device.deviceID)
+        try store.initialize(document: document, device: device)
+        let engine = OperationEngine(store: store, homeURL: home)
+        let edit = ClientConfigurationEdit(file: .kiroMCP, keyPath: ["mcpServers", "memory", "disabled"], value: .bool(true))
+        let plan = OperationPlan(kind: .configureMCP, title: "t", summary: "s", steps: [
+            .init(kind: .editClientConfiguration, title: "e", detail: edit.summary,
+                  destinationPath: file.path(percentEncoded: false), contents: try edit.encoded()),
+        ])
+
+        let receipt = await engine.execute(plan)
+
+        #expect(receipt.results.first?.status == .failed)
+        // The file is left exactly as it was: nothing was rewritten.
+        #expect(try Data(contentsOf: file).count == BoundedFileAccess.maximumConfigurationBytes + 1)
+    }
 }

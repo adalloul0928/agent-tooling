@@ -378,8 +378,22 @@ public actor OperationExecutor {
             let edit = try ClientConfigurationEdit.decode(contents)
             guard edit.file == file, edit.isSafe else { throw OperationEngineError.unsafeDestination(destinationPath) }
             let destination = file.url(homeURL: homeURL)
-            let existing = (try? String(contentsOf: destination, encoding: .utf8)) ?? ""
-            guard existing.utf8.count <= BoundedFileAccess.maximumConfigurationBytes else { throw OperationEngineError.sourceTooLarge }
+            // Read bounded so an oversized configuration is refused before it
+            // is loaded, rather than read whole and measured afterwards. A
+            // missing or otherwise unreadable file still reads as empty, the
+            // new-file case; only exceeding the size limit is an error, kept as
+            // the same sourceTooLarge it was before.
+            let existing: String
+            do {
+                existing = try BoundedFileAccess.readUTF8(
+                    at: destination,
+                    maximumBytes: BoundedFileAccess.maximumConfigurationBytes
+                )
+            } catch BoundedFileAccessError.fileTooLarge {
+                throw OperationEngineError.sourceTooLarge
+            } catch {
+                existing = ""
+            }
             let updated = try ClientConfigurationEditor.apply(edit, to: existing)
             if updated == existing { return (.skipped, "\(destination.lastPathComponent) already says that.") }
             // The file as it was, kept whole under a dated name, so any edit
