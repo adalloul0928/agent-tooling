@@ -149,9 +149,8 @@ enum BoundedFileAccess {
     }
 
     private static func contains(_ child: URL, within root: URL) -> Bool {
-        let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let childPath = child.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
+        // Callers pass already-resolved URLs, so the bytes given are compared.
+        PathContainment.containsAsGiven(child, in: root)
     }
 
     private static func relativePath(of child: URL, under root: URL) -> String? {

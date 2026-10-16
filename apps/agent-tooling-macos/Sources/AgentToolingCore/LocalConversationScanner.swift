@@ -1008,9 +1008,9 @@ private func recentJSONLFiles(under root: URL, containedBy homeURL: URL, limit: 
 /// inside the home root. Not `private`: `ReadOnlyInsightsDatabase` lives in its
 /// own file and calls this.
 func isContained(_ child: URL, by root: URL) -> Bool {
-    let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-    let childPath = child.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-    return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
+    // Both callers resolve the URLs before passing them, so the bytes given
+    // are the bytes compared.
+    PathContainment.containsAsGiven(child, in: root)
 }
 
 private func skippedItemDetail(_ count: Int, suffix: String) -> String {

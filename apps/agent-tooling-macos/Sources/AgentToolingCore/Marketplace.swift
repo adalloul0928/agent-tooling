@@ -940,9 +940,7 @@ public final class MarketplaceService {
     }
 
     private func contains(_ candidate: URL, in root: URL) -> Bool {
-        let rootPath = canonicalPath(root)
-        let candidatePath = canonicalPath(candidate)
-        return candidatePath == rootPath || candidatePath.hasPrefix(rootPath + "/")
+        PathContainment.containsResolved(candidate, in: root)
     }
 
     private func canonicalPath(_ url: URL) -> String {

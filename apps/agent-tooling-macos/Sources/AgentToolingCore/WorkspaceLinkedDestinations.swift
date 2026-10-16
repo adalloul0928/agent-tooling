@@ -106,6 +106,6 @@ public enum WorkspaceLinkedDestinations {
     /// Either path containing the other is the same conflict: a destination
     /// inside a source root still writes into that root.
     private static func isWithin(_ left: String, or right: String) -> Bool {
-        left == right || left.hasPrefix(right + "/") || right.hasPrefix(left + "/")
+        PathContainment.overlapsAsGiven(left, right)
     }
 }

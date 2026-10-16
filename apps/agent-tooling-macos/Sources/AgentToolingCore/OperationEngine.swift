@@ -1027,11 +1027,7 @@ public actor OperationExecutor {
     }
 
     private func isContained(_ child: URL, in root: URL) -> Bool {
-        let childPath = child.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
+        PathContainment.containsResolved(child, in: root)
     }
 
     private static let maximumTreeItems = 10_000
@@ -1053,15 +1049,11 @@ public actor OperationExecutor {
     }
 
     private static func isLexicallyContained(_ child: URL, in root: URL) -> Bool {
-        let childPath = normalizedPath(child)
-        let rootPath = normalizedPath(root)
-        return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
+        PathContainment.containsLexically(child, in: root)
     }
 
     private static func normalizedPath(_ url: URL) -> String {
-        let path = url.standardizedFileURL.path(percentEncoded: false)
-        guard path.count > 1 else { return path }
-        return path.hasSuffix("/") ? String(path.dropLast()) : path
+        PathContainment.lexicalPath(url)
     }
 
     private static func persistableOutput(_ text: String) -> String {

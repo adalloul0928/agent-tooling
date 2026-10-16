@@ -369,10 +369,6 @@ struct OperationCommandPolicy: Sendable {
     }
 
     private static func contains(_ child: URL, in root: URL) -> Bool {
-        let childPath = child.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
+        PathContainment.containsResolved(child, in: root)
     }
 }
