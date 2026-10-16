@@ -98,11 +98,15 @@ enum CommandPaletteCatalog {
             + receipts(workspace)
     }
 
+    /// The palette is part of the window, so its entries are sentence case;
+    /// the same commands keep title case in the menus. An entry that opens a
+    /// sheet ends in an ellipsis, as its button on the screen does. A name an
+    /// entry used to have stays among its keywords, so typing it still lands.
     private static func actions() -> [CommandPaletteItem] {
         [
             CommandPaletteItem(
                 id: "action.checkSetup",
-                title: "Check Setup",
+                title: "Check setup",
                 subtitle: "Read this Mac again for what each app actually has",
                 contextLabel: "Action",
                 kind: nil,
@@ -112,12 +116,12 @@ enum CommandPaletteCatalog {
                 outcome: .checkSetup),
             CommandPaletteItem(
                 id: "action.reviewSync",
-                title: "Review Sync",
+                title: ActionTitles.reviewChangesCommand(.palette),
                 subtitle: "Prepare one plan for everything that is out of step",
                 contextLabel: "Action",
                 kind: nil,
                 symbol: "arrow.triangle.2.circlepath",
-                keywords: ["sync", "install", "plan", "reconcile", "apps"],
+                keywords: ["sync", "install", "plan", "reconcile", "apps", "review sync"],
                 priority: 100,
                 outcome: .reviewSync),
             CommandPaletteItem(
@@ -132,17 +136,17 @@ enum CommandPaletteCatalog {
                 outcome: .checkConnectionHealth),
             CommandPaletteItem(
                 id: "action.addServer",
-                title: "Add MCP server",
+                title: "Add connection…",
                 subtitle: "Paste a definition to see what it describes",
                 contextLabel: "Action",
                 kind: .mcpServer,
                 symbol: "plus",
-                keywords: ["mcp", "new", "server", "add", "connection"],
+                keywords: ["mcp", "new", "server", "add", "connection", "add mcp server"],
                 priority: 100,
                 outcome: .screenRequest(.addMCPServer)),
             CommandPaletteItem(
                 id: "action.paste",
-                title: "Paste to import",
+                title: "Paste to import…",
                 subtitle: "Read an mcp add command, a JSON block, a server URL, or a SKILL.md",
                 contextLabel: "Action",
                 kind: nil,
@@ -363,7 +367,7 @@ struct CommandPaletteView: View {
             VStack(spacing: Space.sm) {
                 Text("Nothing matches \(query)")
                     .font(AgentFont.bodyMedium)
-                Text("Search by name, or type an action such as Check Setup.")
+                Text("Search by name, or type an action such as Check setup.")
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }

@@ -104,6 +104,31 @@ struct CommandPaletteCatalogTests {
         #expect(CommandPaletteMatcher.rank(items, query: "zzzznothing").isEmpty)
     }
 
+    /// The palette is part of the window, so its commands read in sentence
+    /// case, and the two that open a sheet end in an ellipsis. The review is
+    /// named the way the menus name it, so the three ways into one review
+    /// cannot drift apart again; the names the entries used to have still find
+    /// them.
+    @Test("Palette actions read in sentence case and name the review as the menus do")
+    func actionTitlesFollowTheWindowsWording() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let items = CommandPaletteCatalog.items(for: fixture.workspace)
+        func title(_ outcome: CommandPaletteOutcome) -> String? {
+            items.first { $0.outcome == outcome }?.title
+        }
+
+        #expect(title(.checkSetup) == "Check setup")
+        #expect(title(.checkConnectionHealth) == "Check connection health")
+        #expect(title(.reviewSync) == ActionTitles.reviewChangesCommand(.palette))
+        #expect(title(.reviewSync) == "Review changes…")
+        #expect(title(.screenRequest(.addMCPServer)) == "Add connection…")
+        #expect(title(.screenRequest(.pasteImport)) == "Paste to import…")
+
+        #expect(CommandPaletteMatcher.rank(items, query: "review sync").first?.outcome == .reviewSync)
+        #expect(CommandPaletteMatcher.rank(items, query: "add mcp server").first?.outcome == .screenRequest(.addMCPServer))
+    }
+
     @Test("A screen request names the screen that answers it")
     func screenRequestsCarryTheirScreen() {
         #expect(ScreenRequest.addMCPServer.section == .mcpServers)

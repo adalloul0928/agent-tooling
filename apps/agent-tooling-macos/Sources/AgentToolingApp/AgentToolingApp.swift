@@ -50,7 +50,9 @@ struct AgentToolingApplication: App {
         .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandGroup(after: .newItem) {
-                Button("Sync Agent Tooling") {
+                // The same review the menu-bar item and the palette open, under
+                // the same name; a menu title-cases it.
+                Button(ActionTitles.reviewChangesCommand(.menu)) {
                     guard workspace != nil else { return }
                     // Preparing is not applying. This opens Apps with a plan on
                     // it; writing anything is still a decision made there.
@@ -80,7 +82,7 @@ struct AgentToolingApplication: App {
                 MenuBarContent(workspace: workspace, navigation: navigation)
             } else {
                 Text("Agent Tooling could not open your workspace")
-                Button("Try again") { Task { await load() } }
+                Button("Try Again") { Task { await load() } }
                 Divider()
                 Button("Quit Agent Tooling") { NSApp.terminate(nil) }
             }
@@ -178,7 +180,8 @@ struct AgentToolingApplication: App {
 }
 
 /// The menu-bar item: open the window, read this Mac again, or go and look at
-/// what is out of step. Nothing here writes to a client.
+/// what is out of step. Nothing here writes to a client. Its items are menu
+/// items, so they title-case the way the system's own do, busy or not.
 private struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
     let workspace: WorkspaceLaunch.Workspace
@@ -187,11 +190,11 @@ private struct MenuBarContent: View {
     var body: some View {
         Button("Open Agent Tooling") { open() }
         Divider()
-        Button(workspace.device.isChecking ? "Checking setup…" : "Check Setup") {
+        Button(workspace.device.isChecking ? "Checking Setup…" : "Check Setup") {
             Task { await workspace.device.refresh() }
         }
         .disabled(workspace.device.isChecking)
-        Button(workspace.deployment.isBusy ? "Preparing changes…" : "Review sync") {
+        Button(workspace.deployment.isBusy ? "Preparing Changes…" : ActionTitles.reviewChangesCommand(.menu)) {
             open()
             navigation.showAllClients()
             navigation.openScreenRequest(.reviewChanges)

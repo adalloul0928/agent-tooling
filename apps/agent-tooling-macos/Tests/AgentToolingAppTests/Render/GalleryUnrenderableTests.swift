@@ -63,7 +63,8 @@ struct GalleryUnrenderableTests {
         // listed with their exact text rather than screenshot.
         index.addUnrenderable(
             control: "Menu bar item",
-            text: "Open Agent Tooling · Check Setup (Checking setup… while busy) · Review sync (Preparing changes… while busy) · Quit Agent Tooling",
-            source: "Sources/AgentToolingApp/AgentToolingApp.swift:182")
+            text: "Open Agent Tooling · Check Setup (Checking Setup… while busy) · "
+                + "Review Changes… (Preparing Changes… while busy) · Quit Agent Tooling",
+            source: "Sources/AgentToolingApp/AgentToolingApp.swift:185")
     }
 }
