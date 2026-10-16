@@ -126,6 +126,15 @@ final class WorkspaceDeviceSession {
     /// Scripted by tests; live launches ask the login shell for real.
     private let toolProbeRunner: (any CommandRunning)?
 
+    /// The device write in flight, so the next one waits for it before it reads
+    /// the head. Two quick toggle flips each start their own task; without this
+    /// both read the same head, the first commits, and the second commits
+    /// against a head that has moved, is rejected as stale, and reverts — so
+    /// the stored choice lands on the first flip rather than the last one made.
+    /// Serializing lets the second flip read the head the first one left, so
+    /// the last flip wins.
+    private var pendingDeviceWrite: Task<Void, Never>?
+
     /// Reads back which apps this Mac manages, and nothing else.
     ///
     /// One bounded local read: the choice lives in this device's own record, so
@@ -180,24 +189,26 @@ final class WorkspaceDeviceSession {
         hasExplicitClientChoice = true
         errorMessage = nil
         do {
-            guard let head = try await service.snapshot()?.document.revision.id else {
-                throw WorkspaceRevisionStoreError.notInitialized
-            }
-            // Written as a difference against what is recorded — or, for the
-            // first explicit choice, against what was effectively shown — so a
-            // choice made somewhere else between reading and writing is not
-            // quietly overwritten by this one.
-            _ = try await service.commitDeviceChange(expectedRevisionID: head) { device in
-                guard var application = device.applicationState else {
+            try await serializeDeviceWrite {
+                guard let head = try await self.service.snapshot()?.document.revision.id else {
                     throw WorkspaceRevisionStoreError.notInitialized
                 }
-                var clients = Set(application.preferences.chosenClients ?? Array(previous))
-                if enabled { clients.insert(client) } else { clients.remove(client) }
-                let sorted = clients.sorted { $0.rawValue < $1.rawValue }
-                application.preferences.chosenClients = sorted
-                // Mirrored so an older build of this app reads the same choice.
-                application.preferences.enabledClients = sorted
-                device.applicationState = application
+                // Written as a difference against what is recorded — or, for the
+                // first explicit choice, against what was effectively shown — so a
+                // choice made somewhere else between reading and writing is not
+                // quietly overwritten by this one.
+                _ = try await self.service.commitDeviceChange(expectedRevisionID: head) { device in
+                    guard var application = device.applicationState else {
+                        throw WorkspaceRevisionStoreError.notInitialized
+                    }
+                    var clients = Set(application.preferences.chosenClients ?? Array(previous))
+                    if enabled { clients.insert(client) } else { clients.remove(client) }
+                    let sorted = clients.sorted { $0.rawValue < $1.rawValue }
+                    application.preferences.chosenClients = sorted
+                    // Mirrored so an older build of this app reads the same choice.
+                    application.preferences.enabledClients = sorted
+                    device.applicationState = application
+                }
             }
         } catch {
             // Showing a checkbox that did not save would be a lie about what
@@ -285,15 +296,17 @@ final class WorkspaceDeviceSession {
         automaticallyCheckHealth = enabled
         errorMessage = nil
         do {
-            guard let head = try await service.snapshot()?.document.revision.id else {
-                throw WorkspaceRevisionStoreError.notInitialized
-            }
-            _ = try await service.commitDeviceChange(expectedRevisionID: head) { device in
-                guard var application = device.applicationState else {
+            try await serializeDeviceWrite {
+                guard let head = try await self.service.snapshot()?.document.revision.id else {
                     throw WorkspaceRevisionStoreError.notInitialized
                 }
-                application.preferences.automaticallyCheckHealth = enabled
-                device.applicationState = application
+                _ = try await self.service.commitDeviceChange(expectedRevisionID: head) { device in
+                    guard var application = device.applicationState else {
+                        throw WorkspaceRevisionStoreError.notInitialized
+                    }
+                    application.preferences.automaticallyCheckHealth = enabled
+                    device.applicationState = application
+                }
             }
         } catch {
             // Showing a toggle that did not save would be a lie about what
@@ -343,16 +356,38 @@ final class WorkspaceDeviceSession {
     }
 
     private func commitPreferences(_ change: @escaping @Sendable (inout DeviceWorkspacePreferences) throws -> Void) async throws {
-        guard let head = try await service.snapshot()?.document.revision.id else {
-            throw WorkspaceRevisionStoreError.notInitialized
-        }
-        _ = try await service.commitDeviceChange(expectedRevisionID: head) { device in
-            guard var application = device.applicationState else {
+        try await serializeDeviceWrite {
+            guard let head = try await self.service.snapshot()?.document.revision.id else {
                 throw WorkspaceRevisionStoreError.notInitialized
             }
-            try change(&application.preferences)
-            device.applicationState = application
+            _ = try await self.service.commitDeviceChange(expectedRevisionID: head) { device in
+                guard var application = device.applicationState else {
+                    throw WorkspaceRevisionStoreError.notInitialized
+                }
+                try change(&application.preferences)
+                device.applicationState = application
+            }
         }
+    }
+
+    /// Runs one device write only after the one before it has finished, so each
+    /// write reads the head the previous write left and the last flip wins.
+    ///
+    /// The body's own error still reaches its caller, which reverts and reports
+    /// as before; a predecessor that failed does not stop the next write from
+    /// reading a fresh head and committing.
+    private func serializeDeviceWrite(_ body: @escaping @Sendable () async throws -> Void) async throws {
+        let previous = pendingDeviceWrite
+        // A Result-returning task runs the body exactly once, after the prior
+        // write, and carries the body's outcome back to this caller.
+        let write = Task { @MainActor () -> Result<Void, Error> in
+            await previous?.value
+            do { try await body(); return .success(()) } catch { return .failure(error) }
+        }
+        // Keep the chain as a Never-failing handle so later writes only wait for
+        // ordering, not for this one's success.
+        pendingDeviceWrite = Task { @MainActor in _ = await write.value }
+        try await write.value.get()
     }
 
     /// Checks this Mac's apps. Reads only.

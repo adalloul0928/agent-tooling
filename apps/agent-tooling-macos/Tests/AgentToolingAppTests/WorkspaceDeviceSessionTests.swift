@@ -397,6 +397,50 @@ struct WorkspaceDeviceSessionTests {
         #expect(snapshot.device.applicationState?.preferences.automaticallyCheckHealth == true)
     }
 
+    /// Two quick flips of a client toggle, fired without awaiting between them,
+    /// must leave the stored choice at the last flip's position. The toggle's
+    /// setter starts an unstructured task per flip; without serialization both
+    /// tasks read the same head, the first commits, and the second commits
+    /// against a stale head, throws, and reverts in memory — so the stored
+    /// value lands on the first flip, not the last one the person made.
+    @Test func twoQuickClientFlipsLeaveTheStoredChoiceAtTheLastFlip() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        #expect(session.isEnabled(.gemini))
+
+        // Off then on, the way two taps in a row reach the setter: each flip
+        // is its own task, and neither waits for the other.
+        async let first: Void = session.setEnabled(.gemini, false)
+        async let second: Void = session.setEnabled(.gemini, true)
+        _ = await (first, second)
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        #expect(session.isEnabled(.gemini))
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(
+            snapshot.device.applicationState?.preferences.enabledClients
+                == ClientKind.allCases.sorted { $0.rawValue < $1.rawValue })
+    }
+
+    /// The same guarantee for the automatic-health toggle, which writes the
+    /// same device record through the same head check.
+    @Test func twoQuickHealthFlipsLeaveTheStoredChoiceAtTheLastFlip() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        #expect(session.automaticallyCheckHealth)
+
+        async let first: Void = session.setAutomaticallyCheckHealth(false)
+        async let second: Void = session.setAutomaticallyCheckHealth(true)
+        _ = await (first, second)
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        #expect(session.automaticallyCheckHealth)
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.automaticallyCheckHealth == true)
+    }
+
     @Test func anOverlappingCheckJoinsTheOneAlreadyRunning() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
