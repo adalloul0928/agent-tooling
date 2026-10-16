@@ -31,7 +31,7 @@ struct SkillEditorSheet: View {
 
             HStack(spacing: 0) {
                 stepList
-                    .frame(width: 205)
+                    .frame(width: Size.stepListWidth)
                 Hairline(.vertical)
                 stepContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -77,7 +77,7 @@ struct SkillEditorSheet: View {
                         Text("\(index + 1)")
                             .font(AgentFont.caption.monospacedDigit())
                             .foregroundStyle(index == step ? Color.primary : Color.secondary)
-                            .frame(width: 20, alignment: .trailing)
+                            .frame(width: Size.glyphSlot, alignment: .trailing)
                         Text(title).font(index == step ? AgentFont.bodySemibold : AgentFont.body)
                         Spacer()
                     }
@@ -130,8 +130,8 @@ struct SkillEditorSheet: View {
                         .font(AgentFont.body)
                         .scrollContentBackground(.hidden)
                         .padding(Space.md)
-                        .frame(height: 120)
-                        .background(.quaternary.opacity(0.28), in: RoundedRectangle.control)
+                        .frame(height: Size.editorFieldHeight)
+                        .background(.quaternary.opacity(Opacity.editorWell), in: RoundedRectangle.control)
                         .accessibilityLabel("Purpose")
                     if draft.purpose.count > WorkspaceLibrary.maximumPurposeLength * 3 / 4 {
                         CharacterCount(current: draft.purpose.count, maximum: WorkspaceLibrary.maximumPurposeLength)

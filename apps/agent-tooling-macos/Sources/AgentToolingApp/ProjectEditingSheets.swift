@@ -19,7 +19,7 @@ struct WorkspaceProjectAddSheet: View {
                 Text("Add tools to \(project.name)").font(AgentFont.title)
                 Spacer()
                 InventorySearchField(placeholder: "Search library", text: $query)
-                    .frame(minWidth: 180, idealWidth: 240)
+                    .frame(minWidth: Size.searchFieldMin, idealWidth: Size.searchFieldSheetIdeal)
             }.padding(Space.xxl)
             Hairline()
             if let library = session.state?.library {

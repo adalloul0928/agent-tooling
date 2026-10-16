@@ -196,7 +196,7 @@ struct SkillCreatorSheet: View {
                     .font(AgentFont.caption)
                     .foregroundStyle(.red)
                     .lineLimit(2)
-                    .frame(maxWidth: 520, alignment: .leading)
+                    .frame(maxWidth: Size.proseMaxWidth, alignment: .leading)
             } else if session.isThinking {
                 ProgressView()
                     .controlSize(.small)

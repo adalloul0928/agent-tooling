@@ -34,7 +34,7 @@ struct SkillCreatorConversationPane: View {
             Hairline()
             composer
         }
-        .background(AgentTheme.controlBackground.opacity(0.34))
+        .background(AgentTheme.controlBackground.opacity(Opacity.paneShade))
     }
 
     private var openingGuidance: some View {
@@ -127,7 +127,7 @@ struct SkillCreatorConversationPane: View {
                 .font(AgentFont.body)
                 .scrollContentBackground(.hidden)
                 .padding(Space.md)
-                .frame(minHeight: 72, maxHeight: 140)
+                .frame(minHeight: Size.composerMinHeight, maxHeight: Size.composerMaxHeight)
                 .background(AgentTheme.contentBackground, in: RoundedRectangle.control)
                 .overlay {
                     RoundedRectangle.control
@@ -181,7 +181,7 @@ struct SkillCreatorMessageRow: View {
                     .textSelection(.enabled)
                     .padding(.horizontal, Space.lg)
                     .padding(.vertical, Space.md)
-                    .background(AgentTheme.selection.opacity(0.18), in: RoundedRectangle.card)
+                    .background(AgentTheme.selection.opacity(Opacity.messageWash), in: RoundedRectangle.card)
             }
             .accessibilityLabel("You said: \(message.text)")
         case .assistant:
@@ -228,7 +228,7 @@ struct SkillCreatorInstallOffer: View {
                     .font(AgentFont.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 520)
+                    .frame(maxWidth: Size.proseMaxWidth)
             }
             if install.isEmpty {
                 Text("Agent Tooling does not know a command that installs it here.")
@@ -248,7 +248,7 @@ struct SkillCreatorInstallOffer: View {
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 520)
+                    .frame(maxWidth: Size.proseMaxWidth)
                 Button {
                     turnTask = Task { @MainActor in
                         await session.installSkillCreator(for: client)

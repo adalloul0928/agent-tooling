@@ -98,7 +98,7 @@ struct SkillCreatorOptionsSummary: View {
         }
         .padding(Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AgentTheme.contentBackground.opacity(0.6), in: RoundedRectangle.control)
+        .background(AgentTheme.contentBackground.opacity(Opacity.insetGround), in: RoundedRectangle.control)
     }
 }
 
@@ -163,7 +163,7 @@ struct SkillCreatorOptionsForm: View {
             }
         }
         .padding(Space.lg)
-        .background(AgentTheme.contentBackground.opacity(0.6), in: RoundedRectangle.control)
+        .background(AgentTheme.contentBackground.opacity(Opacity.insetGround), in: RoundedRectangle.control)
     }
 
     private func targetBinding(_ target: ClientKind) -> Binding<Bool> {

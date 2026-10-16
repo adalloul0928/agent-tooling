@@ -115,7 +115,8 @@ struct InsightsView: View {
             Text("Scan recent work")
                 .font(AgentFont.heading)
                 .padding(.horizontal, Space.xl)
-                .frame(minHeight: 43, alignment: .leading)
+                // The strip and the hairline under it make one header height.
+                .frame(minHeight: Size.headerHeight - Hairline.width, alignment: .leading)
             Hairline()
 
             VStack(alignment: .leading, spacing: 0) {
@@ -173,7 +174,7 @@ struct InsightsView: View {
                             Text("90 days").tag(90)
                         }
                         .labelsHidden()
-                        .frame(maxWidth: 330)
+                        .frame(maxWidth: Size.segmentedPickerMax)
                         .accessibilityLabel("Review period")
                     }
 
@@ -186,7 +187,7 @@ struct InsightsView: View {
                             Text("50 chats").tag(50)
                         }
                         .labelsHidden()
-                        .frame(maxWidth: 330)
+                        .frame(maxWidth: Size.segmentedPickerMax)
                         .accessibilityLabel("Maximum conversations per source")
                     }
 
@@ -458,7 +459,7 @@ struct InsightsView: View {
                     title: "Nothing worth adding right now",
                     message: "The scan did not find a repeated workflow or catalog match strong enough to recommend."
                 )
-                .frame(maxWidth: .infinity, minHeight: 180)
+                .frame(maxWidth: .infinity, minHeight: Size.emptyStatePanelHeight)
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(recommendations.enumerated()), id: \.element.id) { index, recommendation in
@@ -505,7 +506,7 @@ struct InsightsView: View {
                         title: "No quality issues found",
                         message: "The managed skills inspected by this scan passed the available static checks."
                     )
-                    .frame(maxWidth: .infinity, minHeight: 180)
+                    .frame(maxWidth: .infinity, minHeight: Size.emptyStatePanelHeight)
                 } else {
                     let findings = sortedFindings(report.qualityFindings)
                     LazyVStack(spacing: 0) {
@@ -566,7 +567,7 @@ struct InsightsView: View {
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(width: 180, alignment: .leading)
+        .frame(width: Size.optionLabelColumn, alignment: .leading)
     }
 
     private func configurationRow(

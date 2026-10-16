@@ -315,7 +315,7 @@ struct PresetsView: View {
                         }
                     }
                     .labelsHidden()
-                    .frame(maxWidth: 320)
+                    .frame(maxWidth: Size.fieldStandard)
                     .onAppear { if shareSelection == nil { shareSelection = candidates.first?.id } }
                     .onChange(of: preset.id) { _, _ in shareSelection = candidates.first?.id }
 
@@ -354,7 +354,9 @@ struct PresetsView: View {
                 }
                 .secondaryActionStyle()
                 .disabled(export.isBusy)
-                .overlay(alignment: .bottom) { ShareAnchorView(anchor: shareAnchor).frame(width: 1, height: 1) }
+                .overlay(alignment: .bottom) {
+                    ShareAnchorView(anchor: shareAnchor).frame(width: Size.anchorPoint, height: Size.anchorPoint)
+                }
 
                 Spacer()
             }
@@ -457,13 +459,13 @@ private struct PresetListRow: View {
                     .lineLimit(1)
                 Text(subtitle)
                     .font(AgentFont.caption)
-                    .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
+                    .foregroundStyle(selected ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection) : Color.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: Space.lg)
             Text(itemSummary)
                 .font(AgentFont.caption)
-                .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
+                .foregroundStyle(selected ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection) : Color.secondary)
         }
         .padding(.horizontal, Space.xl)
         .frame(minHeight: Size.rowHeight)
@@ -532,7 +534,7 @@ struct PresetFollowSheet: View {
                             ForEach(library.state?.library.projects ?? []) { project in
                                 Text(project.name).tag(ArtifactID?.some(project.id))
                             }
-                        }.frame(maxWidth: 320)
+                        }.frame(maxWidth: Size.fieldStandard)
                     }
                 }
                 Spacer(minLength: 0)
@@ -611,7 +613,7 @@ struct PresetEditorSheet: View {
                 }
                 LabeledContent("Name") {
                     TextField("Starter set", text: $name)
-                        .textFieldStyle(.roundedBorder).frame(maxWidth: 320)
+                        .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldStandard)
                         .accessibilityLabel("Preset name")
                 }
                 if !isRenaming { memberPicker }

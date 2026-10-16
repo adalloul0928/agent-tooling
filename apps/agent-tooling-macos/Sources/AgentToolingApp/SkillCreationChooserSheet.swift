@@ -95,7 +95,7 @@ struct SkillCreationChooserSheet: View {
         }
         .buttonStyle(.plain)
         .disabled(unavailableReason != nil)
-        .opacity(unavailableReason == nil ? 1 : 0.55)
+        .opacity(unavailableReason == nil ? 1 : Opacity.unavailable)
         .accessibilityLabel(method.title)
         .accessibilityHint(unavailableReason ?? method.detail)
     }

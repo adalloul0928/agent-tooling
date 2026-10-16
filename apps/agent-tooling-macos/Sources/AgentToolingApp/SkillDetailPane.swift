@@ -127,11 +127,12 @@ struct SkillDetailView: View {
             Spacer()
             ClientMarks(present: inventory.observedClients[copy.id] ?? [], size: Size.brandMark)
             if isThis {
-                Text("Shown").font(AgentFont.caption).foregroundStyle(.secondary).frame(minWidth: 52, alignment: .trailing)
+                Text("Shown").font(AgentFont.caption).foregroundStyle(.secondary)
+                    .frame(minWidth: Size.rowActionMinWidth, alignment: .trailing)
             } else {
                 Button("Show") { onSelectCopy(copy.id) }
                     .secondaryActionStyle().controlSize(.small)
-                    .frame(minWidth: 52, alignment: .trailing)
+                    .frame(minWidth: Size.rowActionMinWidth, alignment: .trailing)
                     .accessibilityLabel("Show the copy from \(origin.pluginName ?? copy.parentPluginLabel ?? "a standalone folder")")
             }
         }
@@ -402,7 +403,7 @@ struct SkillInfoButton: View {
         .accessibilityLabel(label)
         .help(text)
         .popover(isPresented: $presented) {
-            Text(text).font(AgentFont.body).padding(Space.xl).frame(width: 290, alignment: .leading)
+            Text(text).font(AgentFont.body).padding(Space.xl).frame(width: Size.infoPopover, alignment: .leading)
                 .wrapsLines()
         }
     }

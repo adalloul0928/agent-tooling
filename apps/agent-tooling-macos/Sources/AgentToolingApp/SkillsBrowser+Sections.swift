@@ -60,13 +60,13 @@ extension SkillsBrowser {
                                     }
                                 }
                             }
-                            .padding(.bottom, isSelecting && !selection.isEmpty ? 72 : 0)
+                            .padding(.bottom, isSelecting && !selection.isEmpty ? Size.selectionBarClearance : 0)
                         }
                     }
                 }
             }
         }
-        .animation(.snappy(duration: 0.18), value: selection.isEmpty)
+        .animation(AgentMotion.actionBar, value: selection.isEmpty)
         .collectionSurface()
         // Above the card's clip, so its shadow and rounded corners survive.
         .overlay(alignment: .bottom) {
@@ -78,7 +78,7 @@ extension SkillsBrowser {
                     action: assignSelection,
                     clear: { selection = [] }
                 )
-                .padding(.bottom, WorkspaceLayout.pageInset + 10)
+                .padding(.bottom, WorkspaceLayout.floatingBarInset)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }

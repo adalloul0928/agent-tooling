@@ -103,7 +103,7 @@ struct ProjectsView: View {
                 projectFilter
                 Spacer(minLength: Space.xl)
                 InventorySearchField(placeholder: "Search projects", text: $query)
-                    .frame(width: 320)
+                    .frame(width: Size.fieldStandard)
             }
             VStack(alignment: .leading, spacing: Space.md) {
                 InventorySearchField(placeholder: "Search projects", text: $query)
@@ -329,7 +329,7 @@ private struct ProjectCollectionRow: View {
     var body: some View {
         HStack(spacing: Space.lg) {
             SymbolTile(symbol: assignedCount > 0 ? "folder.badge.gearshape" : "folder", size: Size.discLarge)
-                .opacity(assignedCount > 0 ? 1 : 0.5)
+                .opacity(assignedCount > 0 ? 1 : Opacity.inactive)
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(project.name)
                     .font(AgentFont.bodyMedium)
@@ -342,7 +342,7 @@ private struct ProjectCollectionRow: View {
                     }
                 }
                 .font(AgentFont.caption)
-                .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
+                .foregroundStyle(selected ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection) : Color.secondary)
             }
             Spacer(minLength: Space.lg)
             StatusGlyph(state: hasFolder ? .healthy : .pending, size: Size.glyph, tint: selected ? AgentTheme.onSelection : nil)
@@ -368,7 +368,7 @@ private struct DiscoveredFolderRow: View {
     var body: some View {
         HStack(spacing: Space.lg) {
             SymbolTile(symbol: "folder.badge.questionmark", size: Size.discLarge)
-                .opacity(0.7)
+                .opacity(Opacity.quiet)
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(match.project.name).font(AgentFont.bodyMedium).lineLimit(1)
                 HStack(spacing: Space.sm) {

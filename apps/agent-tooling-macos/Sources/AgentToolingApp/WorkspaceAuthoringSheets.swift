@@ -35,7 +35,7 @@ struct WorkspaceAttachFolderSheet: View {
                         LabeledContent("Files") { Text("\(candidate.fileCount)") }
                         LabeledContent("Show it as") {
                             TextField(candidate.displayName, text: $displayName)
-                                .textFieldStyle(.roundedBorder).frame(maxWidth: 280)
+                                .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldShort)
                         }
                     }
                     .padding(Space.xl).standardPanel()

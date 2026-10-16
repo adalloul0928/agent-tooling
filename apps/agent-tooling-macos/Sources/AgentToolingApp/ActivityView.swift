@@ -234,13 +234,13 @@ private struct ActivityCollectionRow: View {
                     .lineLimit(1)
                 Text(receipt.detail)
                     .font(AgentFont.caption)
-                    .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
+                    .foregroundStyle(selected ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection) : Color.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: Space.lg)
             Text(SnapshotTime.standalone(receipt.date))
                 .font(AgentFont.caption)
-                .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
+                .foregroundStyle(selected ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection) : Color.secondary)
         }
         .padding(.vertical, Space.sm)
     }
@@ -395,7 +395,7 @@ private struct ItemOutcomeRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: Space.lg) {
             StatusGlyph(state: state, size: Size.glyph)
-                .padding(.top, 1)
+                .padding(.top, Space.nudge)
             VStack(alignment: .leading, spacing: Space.xxs) {
                 HStack(spacing: Space.sm) {
                     Text(outcome.title).font(AgentFont.bodyMedium)

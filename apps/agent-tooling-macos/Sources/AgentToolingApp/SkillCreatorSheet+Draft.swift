@@ -168,8 +168,11 @@ struct SkillCreatorDraftPane: View {
                     }
                 }
             }
-            .frame(minWidth: 200, idealWidth: 230, maxWidth: 300, maxHeight: .infinity)
-            .background(AgentTheme.controlBackground.opacity(0.34))
+            .frame(
+                minWidth: Size.creatorFileListMin, idealWidth: Size.creatorFileListIdeal,
+                maxWidth: Size.creatorFileListMax, maxHeight: .infinity
+            )
+            .background(AgentTheme.controlBackground.opacity(Opacity.paneShade))
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
@@ -227,7 +230,7 @@ struct SkillCreatorDraftPane: View {
                     )
                 }
             }
-            .frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: Size.creatorPreviewMin, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

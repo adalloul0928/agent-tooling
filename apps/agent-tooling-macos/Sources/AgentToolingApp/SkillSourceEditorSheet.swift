@@ -47,9 +47,9 @@ struct SkillSourceEditorSheet: View {
             } else {
                 HSplitView {
                     sourcePane(title: "Stored", text: original, editable: false)
-                        .frame(minWidth: 360)
+                        .frame(minWidth: Size.storedSourcePaneMin)
                     sourcePane(title: "Edited", text: edited, editable: true)
-                        .frame(minWidth: 420)
+                        .frame(minWidth: Size.editedSourcePaneMin)
                 }
             }
 

@@ -113,14 +113,16 @@ struct SkillsBrowser: View {
                     HSplitView {
                         collectionPane(skills: listed)
                             .frame(
-                                minWidth: Size.listPaneMin, idealWidth: proxy.size.width / 2, maxWidth: .infinity,
+                                minWidth: Size.listPaneMin, idealWidth: proxy.size.width * Proportion.evenShare,
+                                maxWidth: .infinity,
                                 maxHeight: .infinity, alignment: .topLeading)
                         VStack(spacing: 0) {
                             InspectorHeader(title: "Skill details") { selectedID = nil }
                             detailPane
                         }
                         .frame(
-                            minWidth: Size.detailPaneMin, idealWidth: proxy.size.width / 2, maxWidth: .infinity,
+                            minWidth: Size.detailPaneMin, idealWidth: proxy.size.width * Proportion.evenShare,
+                            maxWidth: .infinity,
                             maxHeight: .infinity, alignment: .topLeading)
                     }
                 } else {
@@ -245,7 +247,7 @@ struct SkillsBrowser: View {
                 HStack(spacing: Space.xxl) {
                     ownershipPicker
                     Spacer(minLength: Space.xl)
-                    searchField.frame(width: 220)
+                    searchField.frame(width: Size.searchFieldCompact)
                 }
                 VStack(alignment: .leading, spacing: Space.lg) {
                     ownershipPicker
@@ -265,7 +267,7 @@ struct SkillsBrowser: View {
                     Label(marketplaceFilterTitle, systemImage: "storefront")
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .frame(maxWidth: 220, alignment: .leading)
+                        .frame(maxWidth: Size.filterMenuLabelMax, alignment: .leading)
                 }
                 .fixedSize()
                 .help("Marketplace: \(marketplaceFilterTitle)")

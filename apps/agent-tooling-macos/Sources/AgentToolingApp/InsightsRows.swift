@@ -15,7 +15,8 @@ struct InsightPanel<Content: View>: View {
             Text(title)
                 .font(AgentFont.heading)
                 .padding(.horizontal, Space.xl)
-                .frame(maxWidth: .infinity, minHeight: 43, alignment: .leading)
+                // The strip and the hairline under it make one header height.
+                .frame(maxWidth: .infinity, minHeight: Size.headerHeight - Hairline.width, alignment: .leading)
             Hairline()
             content
         }
