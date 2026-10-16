@@ -67,7 +67,7 @@ New contracts under authoring now, listed here from the feature:
 - competitor-review-2026-09.md — dated competitor review
 - tooling-discovery-2026-07.md — early tooling discovery notes
 - workspace-merge-engine-v1.md — merge rules; superseded by multi-mac-sync for sync
-- sync-export-runtime-v1.md — export and ToolHive; sync half superseded by multi-mac-sync
+- sync-export-runtime-v1.md — export; sync half superseded by multi-mac-sync; ToolHive actions removed in 8abce2b
 - workspace-migration-design-v1.md — legacy-to-versioned migration design
 - workspace-migration-intake-v1.md — migration intake stage
 - workspace-migration-assembly-v1.md — migration candidate assembly
