@@ -1,6 +1,10 @@
 # Source recognition contracts v1
 
-Status: proposed S1 evidence-reader contract, September 8, 2026. This describes read-only interpretation of foreign source locks. It does not establish content authority, update a lock, fetch a repository, or change an installed skill.
+Status: S1 evidence readers built and tested, but nothing in the app calls them
+yet: no inventory scan reads foreign source locks or captures checkout evidence,
+and the source-review UI that would act on it does not exist. This describes
+read-only interpretation of foreign source locks. It does not establish content
+authority, update a lock, fetch a repository, or change an installed skill.
 
 ## Pinned Vercel formats
 

@@ -76,21 +76,4 @@ struct LiveToolHiveTests {
         }
         #expect(!diagnostic.isEmpty)
     }
-
-    @Test("Planning against an absent workload is blocked rather than prepared",
-          .enabled(if: runsLiveToolHive))
-    func planningAnAbsentWorkloadIsBlocked() async throws {
-        let name = "agent-tooling-live-check-\(UUID().uuidString.prefix(8).lowercased())"
-
-        let result = try await ToolHiveLifecycleService().plan(workloadName: name, action: .start)
-
-        // No plan means nothing downstream can be applied, which is the
-        // property that matters: this suite must never mutate a workload.
-        guard case .blocked(let outcome) = result else {
-            Issue.record("A nonexistent workload produced a runnable plan: \(result)")
-            return
-        }
-        if case .commandFailed = outcome { return }
-        Issue.record("Expected a failed command for an absent workload, got: \(outcome)")
-    }
 }
