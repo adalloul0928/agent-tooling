@@ -263,8 +263,8 @@ final class WorkspaceSettingsSession {
 
     private nonisolated static func describe(_ error: Error) -> String {
         switch error {
-        case ConfigurationLayerReadError.fileTooLarge:
-            "One of this app's settings files is too large to read safely."
+        case let tooLarge as ConfigurationFileTooLargeError:
+            tooLarge.localizedDescription
         case ConfigurationLayerReadError.unreadable:
             "One of this app's settings files could not be read. It was left exactly as it is."
         default:

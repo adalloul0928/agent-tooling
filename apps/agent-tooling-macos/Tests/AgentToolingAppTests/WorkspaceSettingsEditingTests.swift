@@ -95,6 +95,25 @@ struct WorkspaceSettingsEditingTests {
         #expect(session.lastReceipt == nil)
     }
 
+    /// A settings file over the limit every configuration read shares cannot
+    /// be shown, and the screen says which file and what limit, in the words
+    /// the editor and every other reader of it use.
+    @Test func aSettingsFileOverTheLimitIsNamedWithTheLimitOnTheScreen() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let limit = BoundedFileAccess.maximumConfigurationBytes
+        try fixture.writeUserSettings(#"{"model":"opus"}"# + String(repeating: " ", count: limit))
+        let session = fixture.session()
+
+        await session.refresh()
+
+        let surface = try #require(session.surfaces.first { $0.id == .claudeCode })
+        #expect(surface.configuration == nil)
+        #expect(
+            surface.errorMessage
+                == ConfigurationFileTooLargeError(path: fixture.userSettingsPath, maximumBytes: limit).errorDescription)
+    }
+
     @Test func aSettingSomethingWithMoreSayDecidesIsNotEditableHere() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

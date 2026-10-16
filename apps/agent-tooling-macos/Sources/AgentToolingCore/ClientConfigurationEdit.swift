@@ -76,7 +76,8 @@ extension ClientConfigurationFile {
     }
 
     /// A configuration file's bytes exactly as they are, under the same limit
-    /// and the same refusal, for a writer that fingerprints or backs them up.
+    /// and the same refusal, for a writer that fingerprints or backs them up
+    /// and for the settings reader that parses them.
     static func readData(at url: URL, named name: String) throws -> Data {
         do {
             return try BoundedFileAccess.readData(at: url, maximumBytes: BoundedFileAccess.maximumConfigurationBytes)
@@ -87,11 +88,11 @@ extension ClientConfigurationFile {
 }
 
 /// A client configuration file larger than Agent Tooling reads. Every path
-/// that reads one to change it, or to plan a change, refuses it with this
-/// error before loading it: a reviewed edit, the Settings editor, Checkup
-/// turning a server off, and the account planner. So each says the same
-/// thing, names the file and the limit, and none goes on as though the file
-/// were empty.
+/// that reads one to change it, to plan a change or to show it refuses it
+/// with this error before loading it: a reviewed edit, the Settings editor
+/// and the settings it shows, Checkup turning a server off, and the account
+/// planner. So each says the same thing, names the file and the limit, and
+/// none goes on as though the file were empty.
 public struct ConfigurationFileTooLargeError: LocalizedError, Hashable, Sendable {
     /// The file, as a person would find it.
     let path: String

@@ -96,15 +96,32 @@ struct ConfigurationLayerReaderTests {
         #expect(older.first?.values["mcp_servers.files"] == .opaque("Configured"))
     }
 
-    @Test func anOversizedFileIsRefusedRatherThanRead() throws {
+    /// Over the limit every client configuration read shares, a file is
+    /// refused before it is loaded, with the error that names it and the
+    /// limit, so the screen can say which file and why.
+    @Test func aFileOverTheSharedConfigurationLimitIsRefusedByNameAndLimit() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let padding = String(repeating: "x", count: ConfigurationLayerReader.maximumFileBytes)
-        try fixture.write(".claude/settings.json", in: fixture.home, #"{"model":"\#(padding)"}"#)
+        let limit = BoundedFileAccess.maximumConfigurationBytes
+        try fixture.write(".claude/settings.json", in: fixture.home, #"{"model":"\#(String(repeating: "x", count: limit))"}"#)
+        let path = fixture.home.appending(path: ".claude/settings.json").path(percentEncoded: false)
 
-        #expect(throws: ConfigurationLayerReadError.fileTooLarge) {
+        #expect(throws: ConfigurationFileTooLargeError(path: path, maximumBytes: limit)) {
             _ = try ConfigurationLayerReader().claudeCodeLayers(homeRoot: fixture.home)
         }
+    }
+
+    /// The reader once kept a 1 MB cap of its own. A file past it and under
+    /// the shared limit is one the editor reads, so it is read here too.
+    @Test func aFileUnderTheSharedConfigurationLimitIsRead() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let padding = String(repeating: "x", count: 1 << 20)
+        try fixture.write(".claude/settings.json", in: fixture.home, #"{"model":"\#(padding)"}"#)
+
+        let layers = try ConfigurationLayerReader().claudeCodeLayers(homeRoot: fixture.home)
+
+        #expect(layers.first?.values["model"] == .string(padding))
     }
 
     private struct Fixture {

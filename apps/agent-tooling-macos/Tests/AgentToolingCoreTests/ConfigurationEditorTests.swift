@@ -185,7 +185,7 @@ struct ConfigurationEditorTests {
         defer { fixture.remove() }
         let editor = ConfigurationEditor()
         let before = try fixture.contents()
-        let long = String(repeating: "x", count: ConfigurationLayerReader.maximumFileBytes)
+        let long = String(repeating: "x", count: BoundedFileAccess.maximumConfigurationBytes)
 
         #expect(throws: ConfigurationEditError.notEffectiveAfterWrite) {
             _ = try editor.apply(

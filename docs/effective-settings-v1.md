@@ -50,8 +50,10 @@ session overrides unknown."
 `ConfigurationLayerReader` turns files on disk into layers. It only reads:
 nothing is rewritten, reformatted or normalized. A file that is absent produces
 no layer, while a file that exists but cannot be parsed is an error — treating a
-broken file as empty would present a partial picture as complete. Files above
-1 MB are refused rather than read.
+broken file as empty would present a partial picture as complete. Each file is
+read under the 4 MB limit every reader of a client configuration file shares,
+the editor included: a file above it is refused before it is loaded, and the
+screen names the file and the limit.
 
 Claude Code's user, project, local-project and managed-policy files are read as
 JSON. Managed policy is never writable. `permissions.allow` and `permissions.deny`
