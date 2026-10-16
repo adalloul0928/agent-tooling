@@ -6,6 +6,11 @@ import AgentToolingCore
 /// the same verb with the place instead ("Install on this Mac"). Keeping
 /// both renderings here stops the two sheets describing the same action in two
 /// different ways.
+///
+/// The place always follows the phrase directly, with no comma, so no action
+/// reads as an afterthought beside another. A removal is "the copy Agent
+/// Tooling installed" in both sheets: the planner only ever offers to remove a
+/// copy it can prove it put there.
 extension WorkspaceDeploymentItem {
     /// The phrase for the assignment (install) sheet, where `app` is the
     /// destination app's display name.
@@ -18,7 +23,7 @@ extension WorkspaceDeploymentItem {
                 : "Update to your approved version in \(app)"
         case .installNativePackage: "Ask \(app) to install it"
         case .configureManagedConnection: "Add the connection to \(app)"
-        case .removeContent: "Remove from \(app)"
+        case .removeContent: "Remove the copy Agent Tooling installed in \(app)"
         }
     }
 
@@ -30,14 +35,14 @@ extension WorkspaceDeploymentItem {
         case .installContent: "Install \(place)"
         case .updateContent(let from, _):
             from == nil
-                ? "Replace what is there now, \(place)"
-                : "Update to your approved version, \(place)"
-        case .installNativePackage: "Ask its app to install it, \(place)"
+                ? "Replace what is there now \(place)"
+                : "Update to your approved version \(place)"
+        case .installNativePackage: "Ask its app to install it \(place)"
         case .configureManagedConnection: "Add the connection \(place)"
         case .removeContent:
             // The plan sheet keeps the reassurance that a hand-edited copy is
             // left untouched; the install sheet has no room for it.
-            "Remove the copy this app installed, \(place). Anything you changed is left alone."
+            "Remove the copy Agent Tooling installed \(place). Anything you changed is left alone."
         }
     }
 }

@@ -45,7 +45,9 @@ struct WorkspaceDeploymentActionPhrasingTests {
         #expect(
             item(.configureManagedConnection(transport: .http)).installActionText(app: "Claude Code")
                 == "Add the connection to Claude Code")
-        #expect(item(.removeContent(installed: digest)).installActionText(app: "Claude Code") == "Remove from Claude Code")
+        #expect(
+            item(.removeContent(installed: digest)).installActionText(app: "Claude Code")
+                == "Remove the copy Agent Tooling installed in Claude Code")
     }
 
     @Test("The plan sheet uses the same verbs with the place, not the app")
@@ -55,18 +57,49 @@ struct WorkspaceDeploymentActionPhrasingTests {
         #expect(item(.installContent(digest: digest)).planActionClause(place: account) == "Install on this Mac")
         #expect(
             item(.updateContent(from: nil, to: digest)).planActionClause(place: account)
-                == "Replace what is there now, on this Mac")
+                == "Replace what is there now on this Mac")
         #expect(
             item(.updateContent(from: digest, to: digest)).planActionClause(place: project)
-                == "Update to your approved version, in this project")
+                == "Update to your approved version in this project")
         #expect(
             item(.installNativePackage(route: .init(client: .claude, externalPluginID: "x")))
-                .planActionClause(place: account) == "Ask its app to install it, on this Mac")
+                .planActionClause(place: account) == "Ask its app to install it on this Mac")
         #expect(
             item(.configureManagedConnection(transport: .http)).planActionClause(place: account)
                 == "Add the connection on this Mac")
         #expect(
             item(.removeContent(installed: digest)).planActionClause(place: account)
-                == "Remove the copy this app installed, on this Mac. Anything you changed is left alone.")
+                == "Remove the copy Agent Tooling installed on this Mac. Anything you changed is left alone.")
+    }
+
+    /// Every action the planner can produce, once.
+    private var everyAction: [WorkspaceDeploymentAction] {
+        [
+            .installContent(digest: digest),
+            .updateContent(from: nil, to: digest),
+            .updateContent(from: digest, to: digest),
+            .installNativePackage(route: .init(client: .claude, externalPluginID: "x")),
+            .configureManagedConnection(transport: .http),
+            .removeContent(installed: digest),
+        ]
+    }
+
+    @Test("The place follows every plan clause the same way, with no comma before it")
+    func placeFollowsWithoutAComma() {
+        for place in ["on this Mac", "in this project"] {
+            for action in everyAction {
+                let clause = item(action).planActionClause(place: place)
+                #expect(clause.contains(" \(place)"), "\(clause) does not name \(place)")
+                #expect(!clause.contains(", \(place)"), "\(clause) sets \(place) off with a comma")
+            }
+        }
+    }
+
+    @Test("Both sheets call a removal by the same words")
+    func oneRemovalWording() {
+        let removal = item(.removeContent(installed: digest))
+        let phrase = "Remove the copy Agent Tooling installed"
+        #expect(removal.installActionText(app: "Codex").hasPrefix(phrase))
+        #expect(removal.planActionClause(place: "on this Mac").hasPrefix(phrase))
     }
 }
