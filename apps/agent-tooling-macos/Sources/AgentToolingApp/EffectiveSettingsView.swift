@@ -359,12 +359,24 @@ struct EffectiveSettingEditSheet: View {
     /// The values the setting's app defines for it, when it defines a fixed
     /// set; the new value is then chosen from them. Empty means it is typed,
     /// or switched for a setting that is on or off.
-    var choices: [ConfigurationValue] = []
+    let choices: [ConfigurationValue]
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @State private var flag = false
     @State private var choice: ConfigurationValue?
     @State private var loaded = false
+
+    init(
+        session: WorkspaceSettingsSession, edit: WorkspaceSettingsSession.PendingEdit, choices: [ConfigurationValue] = []
+    ) {
+        self.session = session
+        self.edit = edit
+        self.choices = choices
+        // A choice starts on the current value, listed or not, from the first
+        // frame: the sheet opens with nothing changed, and the picker never
+        // holds a selection it has no row for.
+        _choice = State(initialValue: edit.row.value)
+    }
 
     private var input: EffectiveSettingInput { EffectiveSettingInput(current: edit.row.value, choices: choices) }
 
@@ -443,9 +455,6 @@ struct EffectiveSettingEditSheet: View {
             case .boolean(let value): flag = value
             default: text = edit.row.value.displayText
             }
-            // A choice starts on the current value, listed or not, so the
-            // sheet opens with nothing changed.
-            choice = edit.row.value
         }
     }
 }
