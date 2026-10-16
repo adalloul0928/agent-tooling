@@ -41,7 +41,7 @@ struct AppShellView: View {
             )
             .allowsHitTesting(!paletteVisible)
             .minuteTicker()
-            .navigationSplitViewColumnWidth(min: 210, ideal: 230, max: 300)
+            .navigationSplitViewColumnWidth(min: Size.sidebarMin, ideal: Size.sidebarIdeal, max: Size.sidebarMax)
         } detail: {
             SectionContent(section: selection, workspace: workspace)
                 .environment(\.workspaceSelection, selection)
@@ -101,12 +101,14 @@ struct AppShellView: View {
                             paletteVisible = false
                             Task { @MainActor in activate(outcome) }
                         },
-                        onClose: { paletteVisible = false })
-                        .clipShape(RoundedRectangle.panel)
-                        .overlay(
-                            RoundedRectangle.panel
-                                .strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width))
-                        .shadow(color: AgentTheme.shadowStrong, radius: 28, y: 12)
+                        onClose: { paletteVisible = false }
+                    )
+                    .clipShape(RoundedRectangle.panel)
+                    .overlay(
+                        RoundedRectangle.panel
+                            .strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width)
+                    )
+                    .elevation(.palette)
                 }
                 .transition(.opacity)
             }

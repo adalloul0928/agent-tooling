@@ -404,7 +404,7 @@ struct CommandPaletteView: View {
                         return
                     }
                     guard results.indices.contains(index) else { return }
-                    withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(results[index].id, anchor: .center) }
+                    withAnimation(AgentMotion.quick) { proxy.scrollTo(results[index].id, anchor: .center) }
                 }
             }
         }
@@ -460,13 +460,17 @@ private struct CommandPaletteRow: View {
                     .lineLimit(1)
                 Text(item.subtitle)
                     .font(AgentFont.caption)
-                    .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
+                    .foregroundStyle(selected ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection) : Color.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: Space.lg)
             Text(item.contextLabel)
                 .font(AgentFont.caption)
-                .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary.opacity(0.75))
+                .foregroundStyle(
+                    selected
+                        ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection)
+                        : Color.secondary.opacity(Opacity.supporting)
+                )
                 .lineLimit(1)
         }
         .padding(.horizontal, Space.lg)

@@ -122,7 +122,7 @@ struct SetupWizardSheet: View {
                             Spacer()
                         }
                         .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
-                        .background(AgentTheme.controlBackground.opacity(0.6), in: RoundedRectangle.card)
+                        .background(AgentTheme.controlBackground.opacity(Opacity.insetGround), in: RoundedRectangle.card)
                     }
                     switch step {
                     case .apps: appsStep
@@ -138,7 +138,7 @@ struct SetupWizardSheet: View {
             Hairline()
             footer
         }
-        .frame(minWidth: 780, idealWidth: 860, minHeight: 560, idealHeight: 640)
+        .sheetSize(minimum: SheetSize.setupWizardMinimum, ideal: SheetSize.setupWizardIdeal)
         .task(id: step) {
             switch step {
             case .audit where !startedAudit:
@@ -171,7 +171,9 @@ struct SetupWizardSheet: View {
             Text("Step \(index + 1) of \(steps.count)").font(AgentFont.captionMedium).foregroundStyle(.secondary)
             HStack(spacing: Space.xs) {
                 ForEach(Array(steps.enumerated()), id: \.element) { position, _ in
-                    Capsule().fill(position <= index ? AgentTheme.selection : Color.secondary.opacity(0.18)).frame(width: Size.glyphSlot, height: Space.xs)
+                    Capsule()
+                        .fill(position <= index ? AgentTheme.selection : Color.secondary.opacity(Opacity.track))
+                        .frame(width: Size.glyphSlot, height: Space.xs)
                 }
             }
             .accessibilityHidden(true)

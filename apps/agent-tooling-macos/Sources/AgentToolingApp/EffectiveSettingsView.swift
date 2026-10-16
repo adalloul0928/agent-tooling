@@ -57,7 +57,7 @@ struct EffectiveSettingsView: View {
                             title: "No app settings to show",
                             message: "No settings can be read yet for the apps this Mac manages."
                         )
-                        .frame(maxWidth: .infinity, minHeight: 160)
+                        .frame(maxWidth: .infinity, minHeight: Size.emptyStateStackMinHeight)
                     }
                     ForEach(session.surfaces) { surface in
                         surfaceCard(surface)

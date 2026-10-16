@@ -295,7 +295,7 @@ struct CheckupView: View {
             Spacer()
         }
         .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
-        .background(AgentTheme.controlBackground.opacity(0.6), in: RoundedRectangle.card)
+        .background(AgentTheme.controlBackground.opacity(Opacity.insetGround), in: RoundedRectangle.card)
     }
 
     private func noticeRow(_ text: String, state: HealthState) -> some View {
@@ -305,7 +305,7 @@ struct CheckupView: View {
             Spacer(minLength: Space.lg)
         }
         .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
-        .background(AgentTheme.controlBackground.opacity(0.6), in: RoundedRectangle.card)
+        .background(AgentTheme.controlBackground.opacity(Opacity.insetGround), in: RoundedRectangle.card)
     }
 }
 
@@ -334,7 +334,7 @@ struct CheckupRow: View {
                     HStack(spacing: Space.lg) {
                         Image(systemName: "chevron.right")
                             .font(AgentFont.microBold).foregroundStyle(.tertiary)
-                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .rotationEffect(isExpanded ? .disclosureOpen : .zero)
                             .frame(width: Size.glyphSmall)
                         if let client = item.client { ClientBrandIcon(client: client, size: Size.brandMark).frame(width: Size.glyphSlot) }
                         else { Image(systemName: "desktopcomputer").font(AgentFont.caption).foregroundStyle(.secondary).frame(width: Size.glyphSlot) }
@@ -465,7 +465,7 @@ struct SeverityBadge: View {
         Text(severity.rawValue.capitalized)
             .font(AgentFont.microSemibold)
             .padding(.horizontal, Space.sm).padding(.vertical, Space.xxs)
-            .background(color.opacity(0.16), in: Capsule())
+            .background(color.opacity(Opacity.badgeWash), in: Capsule())
             .foregroundStyle(color)
     }
     private var color: Color {
@@ -473,7 +473,7 @@ struct SeverityBadge: View {
         case .high: AgentTheme.failure
         case .medium: AgentTheme.warning
         case .low: Color.secondary
-        case .info: Color.secondary.opacity(0.7)
+        case .info: Color.secondary.opacity(Opacity.quiet)
         }
     }
 }

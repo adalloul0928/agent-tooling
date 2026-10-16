@@ -67,7 +67,13 @@ struct OnboardingChoiceRow: View {
             }
         }
         .padding(Space.xxl)
-        .frame(width: 320, height: min(320, CGFloat(row.includedChildren.count * 26 + 90)))
+        .frame(width: Size.fieldStandard, height: includedContentsHeight)
+    }
+
+    /// The popover's chrome and one row per included tool, up to the height
+    /// where the list starts to scroll.
+    private var includedContentsHeight: CGFloat {
+        min(Size.popoverListMaxHeight, CGFloat(row.includedChildren.count) * Size.popoverListRow + Size.popoverListChrome)
     }
 
 }

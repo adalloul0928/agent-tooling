@@ -341,7 +341,7 @@ private struct HealthRow: View {
                             .wrapsLines()
                     }
                     .padding(Space.xl)
-                    .frame(width: 320)
+                    .frame(width: Size.fieldStandard)
                 }
         case .none:
             EmptyView()
@@ -359,7 +359,7 @@ private struct HealthBadge: View {
             .lineLimit(1)
             .padding(.horizontal, Space.md)
             .frame(height: Size.chipHeight)
-            .background(tint.opacity(0.14), in: Capsule())
+            .background(tint.opacity(Opacity.badgeWash), in: Capsule())
             .foregroundStyle(tint)
     }
 }
@@ -405,6 +405,6 @@ struct BulkReauthenticateConfirmation: View {
             }
         }
         .padding(Space.xxl)
-        .frame(width: 420)
+        .frame(width: Size.fieldWide)
     }
 }

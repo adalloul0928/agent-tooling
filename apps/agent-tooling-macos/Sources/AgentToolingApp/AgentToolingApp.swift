@@ -35,7 +35,7 @@ struct AgentToolingApplication: App {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minWidth: 1_180, minHeight: 760)
+            .frame(minWidth: WindowSize.minimum.width, minHeight: WindowSize.minimum.height)
             .containerBackground(.clear, for: .window)
             .background(WindowConfigurator())
             .preferredColorScheme(colorScheme)
@@ -45,7 +45,7 @@ struct AgentToolingApplication: App {
                 bringMainWindowForward()
             }
         }
-        .defaultSize(width: 1_440, height: 900)
+        .defaultSize(WindowSize.standard)
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
         .commands {
@@ -98,7 +98,7 @@ struct AgentToolingApplication: App {
                 }
             }
             .formStyle(.grouped)
-            .frame(width: 360)
+            .frame(width: WindowSize.settingsWidth)
         }
     }
 

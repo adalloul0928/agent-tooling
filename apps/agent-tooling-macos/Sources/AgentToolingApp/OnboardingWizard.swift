@@ -97,7 +97,7 @@ struct OnboardingWizard: View {
             footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .frame(minWidth: 720, minHeight: 480)
+        .frame(minWidth: SheetSize.onboardingMinimum.width, minHeight: SheetSize.onboardingMinimum.height)
         .sheet(isPresented: $isAssigning) {
             OnboardingAssignmentPickerSheet(session: workspace.library)
         }
@@ -113,7 +113,7 @@ struct OnboardingWizard: View {
                 .font(AgentFont.captionMedium).foregroundStyle(.secondary)
             HStack(spacing: Space.xs) {
                 ForEach(OnboardingStep.allCases) { candidate in
-                    Capsule().fill(candidate.rawValue <= step.rawValue ? AgentTheme.selection : Color.secondary.opacity(0.18))
+                    Capsule().fill(candidate.rawValue <= step.rawValue ? AgentTheme.selection : Color.secondary.opacity(Opacity.track))
                         .frame(width: Size.glyphSlot, height: Space.xs)
                 }
             }.accessibilityHidden(true)
@@ -152,7 +152,7 @@ struct OnboardingWizard: View {
             }
         } else {
             ProgressView("Reading your library…")
-                .frame(maxWidth: .infinity, minHeight: 200)
+                .frame(maxWidth: .infinity, minHeight: Size.emptyStateMinHeight)
         }
     }
 
@@ -227,7 +227,7 @@ struct OnboardingWizard: View {
     private var assignStep: some View {
         if workspace.library.state == nil {
             ProgressView("Reading your library…")
-                .frame(maxWidth: .infinity, minHeight: 200)
+                .frame(maxWidth: .infinity, minHeight: Size.emptyStateMinHeight)
         } else if isDone {
             doneCard
         } else {
