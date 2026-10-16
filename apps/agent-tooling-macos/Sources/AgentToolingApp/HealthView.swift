@@ -79,9 +79,15 @@ struct HealthView: View {
 
     private func bulkHelp(_ eligible: [ConnectionHealthEntry]) -> String {
         guard !eligible.isEmpty else { return "No connections can be signed in to from here." }
-        let commands = eligible.compactMap { session.loginCommandText(for: $0) }
-        return "Signs in to \(CountNoun.connection.phrase(eligible.count)), one at a time:\n"
-            + commands.joined(separator: "\n")
+        return Self.bulkHelpText(
+            count: eligible.count, commands: eligible.compactMap { session.loginCommandText(for: $0) })
+    }
+
+    /// The bulk button's tooltip: how many it signs in to and the command for
+    /// each. Only several are signed in to one at a time.
+    static func bulkHelpText(count: Int, commands: [String]) -> String {
+        let pacing = count == 1 ? "" : ", one at a time"
+        return "Signs in to \(CountNoun.connection.phrase(count))\(pacing):\n" + commands.joined(separator: "\n")
     }
 
     private var statusLine: String {
@@ -377,11 +383,9 @@ struct BulkReauthenticateConfirmation: View {
         VStack(alignment: .leading, spacing: Space.lg) {
             Text("Sign in to \(CountNoun.connection.phrase(entries.count))")
                 .font(AgentFont.heading)
-            Text(
-                "Each sign-in prints a page to visit; Agent Tooling opens it in your browser, one connection after another, and waits for the tool to confirm."
-            )
-            .font(AgentFont.body)
-            .foregroundStyle(.secondary)
+            Text(Self.explanation(count: entries.count))
+                .font(AgentFont.body)
+                .foregroundStyle(.secondary)
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.md) {
                     ForEach(entries) { entry in
@@ -409,5 +413,15 @@ struct BulkReauthenticateConfirmation: View {
         }
         .padding(Space.xxl)
         .frame(width: Size.fieldWide)
+    }
+
+    /// What signing in does, agreeing with the heading's count: several
+    /// connections are opened one after another, and one is simply opened.
+    static func explanation(count: Int) -> String {
+        guard count != 1 else {
+            return "The sign-in prints a page to visit; Agent Tooling opens it in your browser and waits for the tool to confirm."
+        }
+        return "Each sign-in prints a page to visit; Agent Tooling opens it in your browser, one connection after another, "
+            + "and waits for the tool to confirm."
     }
 }
