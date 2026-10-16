@@ -30,21 +30,26 @@ enum SkillClientFilter: String, CaseIterable, Identifiable {
     }
 }
 
+/// The Skills table's columns: the geometry every collection table shares
+/// (`CollectionColumns`), and the columns only this one has.
 struct SkillTableColumns {
-    let width: CGFloat
-    let selecting: Bool
     /// Whether anything on this list has a description to put in one.
     let describing: Bool
-    var expanded: Bool { width >= 940 }
-    var verdict: CGFloat { expanded ? 104 : 96 }
-    var name: CGFloat {
-        guard expanded else { return max(140, width - 144 - verdict - (selecting ? 32 : 0)) }
-        // With no description column the name takes the space back rather than
-        // leaving a gap where one used to be.
-        return describing ? min(300, width * 0.24) : min(520, width * 0.42)
+    private let table: CollectionColumns
+
+    init(width: CGFloat, selecting: Bool, describing: Bool) {
+        self.describing = describing
+        table = CollectionColumns(width: width, layout: .skills(selecting: selecting, describing: describing))
     }
-    var plugin: CGFloat { min(200, width * 0.17) }
-    var marketplace: CGFloat { min(180, width * 0.15) }
+
+    var expanded: Bool { table.expanded }
+    var name: CGFloat { table.name }
+    /// The Managed column.
+    var verdict: CGFloat { expanded ? CollectionColumn.Skills.verdict : CollectionColumn.Skills.verdictCompact }
+    var plugin: CGFloat { table.share(CollectionColumn.Skills.pluginShare, upTo: CollectionColumn.Skills.pluginMax) }
+    var marketplace: CGFloat {
+        table.share(CollectionColumn.Skills.marketplaceShare, upTo: CollectionColumn.Skills.marketplaceMax)
+    }
 }
 
 /// How many copies of one skill the library holds, for the badge beside its

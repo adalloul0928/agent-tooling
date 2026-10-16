@@ -115,37 +115,26 @@ struct PluginsView: View {
         .paneMaterial()
     }
 
-    /// The columns the list lays out by hand. `Table` draws its own row
-    /// separators in a colour the card cannot control, so the rows live in a
-    /// `List` (native multiple selection and keyboard travel kept) and the
-    /// columns are plain frames, the way the Skills screen already does it.
-    private struct Columns {
-        let width: CGFloat
-        var expanded: Bool { width >= 820 }
-        var name: CGFloat { expanded ? min(300, width * 0.28) : max(160, width - managed - Space.lg) }
-        let source: CGFloat = 150
-        let skills: CGFloat = 50
-        let managed: CGFloat = Size.brandMark * 4 + Space.sm * 3 + Space.sm
-        let updates: CGFloat = 130
-    }
-
+    /// The rows live in a `List`, keeping native multiple selection and
+    /// keyboard travel, and the columns are plain frames laid out by hand, the
+    /// way every collection table does it (`CollectionColumns`).
     private func pluginList(rows: [WorkspaceLibraryReadModelRow], updates: PluginUpdateEvaluation) -> some View {
         GeometryReader { geometry in
             // The card's inner width, less the row's own insets.
-            let columns = Columns(width: geometry.size.width - Space.xl * 2)
+            let columns = CollectionColumns(width: geometry.size.width - Space.xl * 2, layout: .plugins)
             VStack(spacing: 0) {
                 CollectionColumnHeader {
                     Text(columns.expanded ? "Name" : "Plugin").frame(width: columns.name, alignment: .leading)
                     if columns.expanded {
                         Text("Description").frame(maxWidth: .infinity, alignment: .leading)
-                        Text("Source").frame(width: columns.source, alignment: .leading)
-                        Text("Skills").frame(width: columns.skills, alignment: .trailing)
+                        Text("Source").frame(width: CollectionColumn.source, alignment: .leading)
+                        Text("Skills").frame(width: CollectionColumn.narrow, alignment: .trailing)
                     } else {
                         Spacer(minLength: 0)
                     }
-                    Text("Managed by").frame(width: columns.managed, alignment: .trailing)
+                    Text("Managed by").frame(width: CollectionColumn.clientMarks, alignment: .trailing)
                     if columns.expanded {
-                        Text("Updates").frame(width: columns.updates, alignment: .leading)
+                        Text("Updates").frame(width: CollectionColumn.Plugins.updates, alignment: .leading)
                     }
                 }
                 List(rows, selection: $selection) { row in
@@ -160,7 +149,7 @@ struct PluginsView: View {
         .collectionSurface()
     }
 
-    private func pluginRow(_ row: WorkspaceLibraryReadModelRow, updates: PluginUpdateEvaluation, columns: Columns) -> some View {
+    private func pluginRow(_ row: WorkspaceLibraryReadModelRow, updates: PluginUpdateEvaluation, columns: CollectionColumns) -> some View {
         let selected = selection.contains(row.artifactID)
         return HStack(spacing: Space.lg) {
             HStack(spacing: Space.lg) {
@@ -184,15 +173,15 @@ struct PluginsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(row.sourceLabel ?? "Not recorded").font(AgentFont.caption).lineLimit(1)
                     .collectionRowForeground(selected: selected, secondary: true)
-                    .frame(width: columns.source, alignment: .leading)
+                    .frame(width: CollectionColumn.source, alignment: .leading)
                 Text("\(row.childCount)").font(AgentFont.caption.monospacedDigit())
                     .collectionRowForeground(selected: selected, secondary: true)
-                    .frame(width: columns.skills, alignment: .trailing)
+                    .frame(width: CollectionColumn.narrow, alignment: .trailing)
             } else {
                 Spacer(minLength: 0)
             }
             TableClientMarks(clients: availableClients, present: Set(row.nativeRoutes.map(\.client)))
-                .frame(width: columns.managed, alignment: .trailing)
+                .frame(width: CollectionColumn.clientMarks, alignment: .trailing)
             if columns.expanded {
                 let update = updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet.")
                 Group {
@@ -203,7 +192,7 @@ struct PluginsView: View {
                             .collectionRowForeground(selected: selected, secondary: true)
                     }
                 }
-                .frame(width: columns.updates, alignment: .leading)
+                .frame(width: CollectionColumn.Plugins.updates, alignment: .leading)
             }
         }
         .padding(.vertical, Space.md)

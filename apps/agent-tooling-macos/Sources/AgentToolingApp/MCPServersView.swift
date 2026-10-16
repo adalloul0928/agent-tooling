@@ -189,42 +189,28 @@ struct MCPServersView: View {
         .paneMaterial()
     }
 
-    /// The columns the list lays out by hand; see `PluginsView.Columns` for why
-    /// this is a `List` and not a `Table`.
-    private struct Columns {
-        let width: CGFloat
-        var expanded: Bool { width >= 1_050 }
-        var name: CGFloat { expanded ? min(240, width * 0.22) : max(150, width - app - Space.lg) }
-        let ownership: CGFloat = 165
-        let plugin: CGFloat = 170
-        let source: CGFloat = 150
-        /// Four brand marks and the gaps between them.
-        let app: CGFloat = Size.brandMark * 4 + Space.sm * 3 + Space.sm
-        let requested: CGFloat = 75
-        let tools: CGFloat = 100
-        let status: CGFloat = 50
-    }
-
+    /// The list lays its columns out by hand, the way every collection table
+    /// does (`CollectionColumns`).
     private var serverTable: some View {
         GeometryReader { geometry in
             // The card's inner width, less the row's own insets.
-            let columns = Columns(width: geometry.size.width - Space.xl * 2)
+            let columns = CollectionColumns(width: geometry.size.width - Space.xl * 2, layout: .connections)
             VStack(spacing: 0) {
                 CollectionColumnHeader {
                     Text(columns.expanded ? "Name" : "Connection").frame(width: columns.name, alignment: .leading)
                     if columns.expanded {
-                        Text("Managed by").frame(width: columns.ownership, alignment: .leading)
-                        Text("Plugin").frame(width: columns.plugin, alignment: .leading)
-                        Text("Source").frame(width: columns.source, alignment: .leading)
+                        Text("Managed by").frame(width: CollectionColumn.Connections.ownership, alignment: .leading)
+                        Text("Plugin").frame(width: CollectionColumn.Connections.plugin, alignment: .leading)
+                        Text("Source").frame(width: CollectionColumn.source, alignment: .leading)
                         Spacer(minLength: 0)
                     } else {
                         Spacer(minLength: 0)
                     }
-                    Text("App").frame(width: columns.app, alignment: .leading)
+                    Text("App").frame(width: CollectionColumn.clientMarks, alignment: .leading)
                     if columns.expanded {
-                        Text("Asked for").frame(width: columns.requested, alignment: .leading)
-                        Text("Tools").frame(width: columns.tools, alignment: .leading)
-                        Text("Status").frame(width: columns.status, alignment: .center)
+                        Text("Asked for").frame(width: CollectionColumn.Connections.requested, alignment: .leading)
+                        Text("Tools").frame(width: CollectionColumn.Connections.tools, alignment: .leading)
+                        Text("Status").frame(width: CollectionColumn.narrow, alignment: .center)
                     }
                 }
                 List(filteredEntries, selection: $selection) { entry in
@@ -239,7 +225,7 @@ struct MCPServersView: View {
         .collectionSurface()
     }
 
-    private func serverRow(_ entry: MCPConnectionEntry, columns: Columns) -> some View {
+    private func serverRow(_ entry: MCPConnectionEntry, columns: CollectionColumns) -> some View {
         let selected = selection.contains(entry.id)
         return HStack(spacing: Space.lg) {
             HStack(spacing: Space.lg) {
@@ -264,7 +250,7 @@ struct MCPServersView: View {
                 FilterPill(title: entry.ownershipLabel, isOn: ownershipFilter == entry.ownershipLabel) {
                     ownershipFilter = ownershipFilter == entry.ownershipLabel ? "" : entry.ownershipLabel
                 }
-                .frame(width: columns.ownership, alignment: .leading)
+                .frame(width: CollectionColumn.Connections.ownership, alignment: .leading)
                 Group {
                     if let plugin = entry.parentPluginLabel {
                         FilterPill(title: plugin, isOn: pluginFilter == plugin) {
@@ -274,7 +260,7 @@ struct MCPServersView: View {
                         Text("—").foregroundStyle(.tertiary)
                     }
                 }
-                .frame(width: columns.plugin, alignment: .leading)
+                .frame(width: CollectionColumn.Connections.plugin, alignment: .leading)
                 Group {
                     if let source = entry.sourceLabel {
                         FilterPill(title: source, isOn: sourceFilter == source) {
@@ -284,27 +270,27 @@ struct MCPServersView: View {
                         Text("—").foregroundStyle(.tertiary)
                     }
                 }
-                .frame(width: columns.source, alignment: .leading)
+                .frame(width: CollectionColumn.source, alignment: .leading)
                 Spacer(minLength: 0)
             } else {
                 Spacer(minLength: 0)
             }
             TableClientMarks(clients: availableClients, present: entry.routedClients)
-                .frame(width: columns.app, alignment: .leading)
+                .frame(width: CollectionColumn.clientMarks, alignment: .leading)
             if columns.expanded {
                 Text(entry.requestedAssignments.isEmpty ? "—" : "\(entry.requestedAssignments.count)")
                     .font(AgentFont.caption.monospacedDigit())
                     .collectionRowForeground(selected: selected, secondary: true)
                     .help("Saved choices about where this server should be used. Installation is checked separately.")
-                    .frame(width: columns.requested, alignment: .leading)
+                    .frame(width: CollectionColumn.Connections.requested, alignment: .leading)
                 Text(capabilities.summary(for: entry.id) ?? "—")
                     .font(AgentFont.caption.monospacedDigit())
                     .collectionRowForeground(selected: selected, secondary: true)
-                    .frame(width: columns.tools, alignment: .leading)
+                    .frame(width: CollectionColumn.Connections.tools, alignment: .leading)
                 StatusGlyph(state: entry.verdict.state, size: Size.glyph, tint: selected ? AgentTheme.onSelection : nil)
                     .accessibilityHidden(false)
                     .accessibilityLabel(entry.verdict.text)
-                    .frame(width: columns.status, alignment: .center)
+                    .frame(width: CollectionColumn.narrow, alignment: .center)
             }
         }
         .padding(.vertical, Space.md)

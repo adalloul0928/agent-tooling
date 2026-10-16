@@ -90,3 +90,88 @@ struct CollectionColumnHeader<Columns: View>: View {
         .hairlineBottom()
     }
 }
+
+// MARK: - Collection tables
+
+/// How a collection laid out as a table by hand divides its width: the
+/// Skills, Plugins and Connections tables. `Table` draws its own row
+/// separators in a colour the card cannot control, so these tables are rows of
+/// plain frames, and the header and every row read their widths from one value
+/// of this.
+///
+/// One rule serves all three. A table shows its wide layout from its own
+/// `expandedFrom` width up, and its narrow layout below it. In the wide layout
+/// the name column takes its share of the width, up to a ceiling; in the
+/// narrow one it takes what the columns beside it leave, down to a floor. The
+/// other columns are fixed widths from `CollectionColumn`, or take a share of
+/// their own through `share(_:upTo:)`.
+struct CollectionColumns {
+    /// One table's numbers, all from `CollectionColumn`.
+    struct Layout {
+        /// The width the wide layout starts at.
+        let expandedFrom: CGFloat
+        /// The wide layout's name column: this share of the width, up to
+        /// `nameMax`.
+        let nameShare: CGFloat
+        let nameMax: CGFloat
+        /// The narrow layout's name column: the width less `narrowReserve`,
+        /// the columns and gaps beside it, down to `nameMin`.
+        let nameMin: CGFloat
+        let narrowReserve: CGFloat
+    }
+
+    /// The table's inner width: the card's, less the rows' own insets.
+    let width: CGFloat
+    /// Whether the table shows its wide layout.
+    let expanded: Bool
+    /// The name column's width.
+    let name: CGFloat
+
+    init(width: CGFloat, layout: Layout) {
+        self.width = width
+        expanded = width >= layout.expandedFrom
+        name =
+            expanded
+            ? min(layout.nameMax, width * layout.nameShare)
+            : max(layout.nameMin, width - layout.narrowReserve)
+    }
+
+    /// A column that takes `fraction` of the table's width, up to `ceiling`.
+    func share(_ fraction: CGFloat, upTo ceiling: CGFloat) -> CGFloat {
+        min(ceiling, width * fraction)
+    }
+}
+
+extension CollectionColumns.Layout {
+    /// The Connections table. Its narrow layout keeps the App column, and the
+    /// gap before it, beside the name.
+    static let connections = Self(
+        expandedFrom: CollectionColumn.Connections.expandedFrom,
+        nameShare: CollectionColumn.Connections.nameShare,
+        nameMax: CollectionColumn.Connections.nameMax,
+        nameMin: CollectionColumn.Connections.nameMin,
+        narrowReserve: CollectionColumn.clientMarks + Space.lg)
+
+    /// The Plugins table. Its narrow layout keeps the Managed by column, and
+    /// the gap before it, beside the name.
+    static let plugins = Self(
+        expandedFrom: CollectionColumn.Plugins.expandedFrom,
+        nameShare: CollectionColumn.Plugins.nameShare,
+        nameMax: CollectionColumn.nameMax,
+        nameMin: CollectionColumn.Plugins.nameMin,
+        narrowReserve: CollectionColumn.clientMarks + Space.lg)
+
+    /// The Skills table. Its narrow layout keeps the Found in marks, the
+    /// compact Managed column and, while several are being chosen, the
+    /// checkbox slot and its gap. With no description on the list the wide
+    /// name takes that column's room back.
+    static func skills(selecting: Bool, describing: Bool) -> Self {
+        Self(
+            expandedFrom: CollectionColumn.Skills.expandedFrom,
+            nameShare: describing ? CollectionColumn.Skills.nameShare : CollectionColumn.Skills.nameShareUndescribed,
+            nameMax: describing ? CollectionColumn.nameMax : CollectionColumn.Skills.nameMaxUndescribed,
+            nameMin: CollectionColumn.Skills.nameMin,
+            narrowReserve: CollectionColumn.Skills.compactReserve + CollectionColumn.Skills.verdictCompact
+                + (selecting ? Size.glyphSlot + Space.lg : 0))
+    }
+}
