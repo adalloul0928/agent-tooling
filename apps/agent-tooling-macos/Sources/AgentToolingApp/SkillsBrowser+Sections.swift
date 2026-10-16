@@ -344,7 +344,7 @@ extension SkillsBrowser {
     }
 
     var toolbarContext: String {
-        "\(inventory.distinctCount) skills · \(inventory.mineCount) mine · \(inventory.unknownCount) unclassified"
+        "\(CountNoun.skill.phrase(inventory.distinctCount)) · \(inventory.mineCount) mine · \(inventory.unknownCount) unclassified"
     }
 
     func clearHiddenSelection() {

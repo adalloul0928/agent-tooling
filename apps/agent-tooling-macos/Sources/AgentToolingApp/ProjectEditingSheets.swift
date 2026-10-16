@@ -199,8 +199,7 @@ struct WorkspaceProjectDeclarationSheet: View {
             }
             LabeledContent("Pinned") {
                 Text(
-                    preview.lock.map { $0.entries.count == 1 ? "1 version" : "\($0.entries.count) versions" }
-                        ?? "None")
+                    preview.lock.map { CountNoun("version").phrase($0.entries.count) } ?? "None")
             }
             if !preview.unlocked.isEmpty {
                 VStack(alignment: .leading, spacing: Space.xs) {

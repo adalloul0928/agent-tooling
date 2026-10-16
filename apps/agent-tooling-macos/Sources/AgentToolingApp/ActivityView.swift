@@ -136,10 +136,7 @@ struct ActivityView: View {
     /// collection every count, filter, and selection on this screen reads from.
     private var mergedActivities: [ActivityReceipt] { session.mergedActivities }
 
-    private var activityContext: String {
-        let count = mergedActivities.count
-        return count == 1 ? "1 receipt" : "\(count) receipts"
-    }
+    private var activityContext: String { CountNoun("receipt").phrase(mergedActivities.count) }
 
     private var filteredActivities: [ActivityReceipt] {
         mergedActivities.filter { receipt in

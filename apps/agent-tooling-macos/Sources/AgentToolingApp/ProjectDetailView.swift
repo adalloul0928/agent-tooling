@@ -418,7 +418,7 @@ private struct ComponentRows: View {
 
     private func detail(for row: WorkspaceLibraryReadModelRow) -> String {
         row.childCount > 0
-            ? "\(row.ownershipLabel) · Includes \(row.childCount) \(row.childCount == 1 ? "tool" : "tools")"
+            ? "\(row.ownershipLabel) · Includes \(CountNoun("tool").phrase(row.childCount))"
             : row.ownershipLabel
     }
 

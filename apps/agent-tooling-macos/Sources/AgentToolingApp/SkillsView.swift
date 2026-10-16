@@ -322,7 +322,7 @@ struct SkillsBrowser: View {
                         .buttonStyle(.plain).foregroundStyle(.secondary)
                 }
                 // Copies of one skill are one row, so they are one in the count.
-                Text("\(Set(skills.map(SkillInventoryIndex.copyKey(for:))).count) skills")
+                Text(CountNoun.skill.phrase(Set(skills.map(SkillInventoryIndex.copyKey(for:))).count))
                     .font(AgentFont.caption).foregroundStyle(.secondary).fixedSize()
             }
             .inventoryMenuStyle()

@@ -303,7 +303,7 @@ struct InsightsView: View {
                 skillHealthSection(report)
             }
 
-            DisclosureGroup("Scan coverage · \(report.conversationsScanned) conversations") {
+            DisclosureGroup("Scan coverage · \(InsightCount.conversation.phrase(report.conversationsScanned))") {
                 coverageSection(report.coverage).padding(.top, Space.lg)
                 if let discovery = report.marketplaceDiscovery,
                     discovery.queriesAttempted > 0 || discovery.queriesFailed > 0 || discovery.wasCancelled
@@ -411,7 +411,8 @@ struct InsightsView: View {
                     VStack(alignment: .leading, spacing: Space.sm) {
                         Text(dive.summary).font(AgentFont.body).wrapsLines()
                         Text(
-                            "\(dive.conversationsConsidered) conversations read · \(dive.generatedAt.formatted(.relative(presentation: .named)))"
+                            "\(InsightCount.conversation.phrase(dive.conversationsConsidered)) read · "
+                                + dive.generatedAt.formatted(.relative(presentation: .named))
                         )
                         .font(AgentFont.micro).foregroundStyle(.secondary)
                     }
@@ -446,7 +447,7 @@ struct InsightsView: View {
     }
 
     private func themeMetadata(_ theme: DeepDiveTheme) -> String {
-        var parts = ["Seen in \(theme.conversationCount) \(theme.conversationCount == 1 ? "conversation" : "conversations")"]
+        var parts = ["Seen in \(InsightCount.conversation.phrase(theme.conversationCount))"]
         if !theme.clients.isEmpty { parts.append(theme.clients.map(\.rawValue).joined(separator: ", ")) }
         return parts.joined(separator: " · ")
     }
@@ -741,9 +742,8 @@ struct InsightsView: View {
 
     private func catalogDiscoveryDetail(_ discovery: MarketplaceDiscoverySummary) -> String {
         let successful =
-            "\(discovery.queriesSucceeded) privacy-filtered \(discovery.queriesSucceeded == 1 ? "query" : "queries") completed"
-        let packages =
-            "\(discovery.packagesReturned) \(discovery.packagesReturned == 1 ? "catalog result" : "catalog results") reviewed locally"
+            "\(discovery.queriesSucceeded) privacy-filtered \(InsightCount.query.word(for: discovery.queriesSucceeded)) completed"
+        let packages = "\(InsightCount.catalogResult.phrase(discovery.packagesReturned)) reviewed locally"
         if discovery.queriesFailed > 0 {
             return "\(successful); \(discovery.queriesFailed) failed. \(packages). No chat text or local names were sent."
         }

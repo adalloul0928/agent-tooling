@@ -98,7 +98,7 @@ struct SkillSourceEditorSheet: View {
             HStack {
                 Text(title).font(AgentFont.heading)
                 Spacer()
-                Text("\(text.split(separator: "\n", omittingEmptySubsequences: false).count) lines")
+                Text(Self.lines.phrase(text.split(separator: "\n", omittingEmptySubsequences: false).count))
                     .font(AgentFont.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
@@ -124,12 +124,23 @@ struct SkillSourceEditorSheet: View {
         .padding(Space.xl)
     }
 
-    private var changeSummary: String {
+    private var changeSummary: String { Self.changeSummary(from: original, to: edited) }
+
+    nonisolated private static let lines = CountNoun("line")
+
+    /// "2 changed · +1 line": how many of the lines both copies have now
+    /// differ, and how far the line count moved, one line in the singular.
+    nonisolated static func changeSummary(from original: String, to edited: String) -> String {
         let oldLines = original.split(separator: "\n", omittingEmptySubsequences: false)
         let newLines = edited.split(separator: "\n", omittingEmptySubsequences: false)
-        let shared = zip(oldLines, newLines).count { $0 != $1 }
+        let changed = zip(oldLines, newLines).count { $0 != $1 }
         let delta = newLines.count - oldLines.count
-        let lineDelta = delta == 0 ? "same line count" : delta > 0 ? "+\(delta) lines" : "\(delta) lines"
-        return "\(shared) changed · \(lineDelta)"
+        let lineDelta =
+            switch delta {
+            case 0: "same line count"
+            case 1...: "+\(lines.phrase(delta))"
+            default: "-\(lines.phrase(-delta))"
+            }
+        return "\(changed) changed · \(lineDelta)"
     }
 }

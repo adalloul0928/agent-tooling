@@ -336,7 +336,7 @@ private struct ProjectCollectionRow: View {
                     .foregroundStyle(selected ? AgentTheme.onSelection : Color.primary)
                     .lineLimit(1)
                 HStack(spacing: Space.sm) {
-                    Text(assignedCount == 1 ? "1 tool assigned" : "\(assignedCount) tools assigned")
+                    Text(assignedText)
                     if let hint = project.repositoryHints.first {
                         Text(hint).lineLimit(1).truncationMode(.middle)
                     }
@@ -349,10 +349,10 @@ private struct ProjectCollectionRow: View {
         }
         .padding(.vertical, Space.sm)
         .help(hasFolder ? "This project has a folder on this Mac." : "This project has no folder on this Mac yet.")
-        .accessibilityValue(
-            "\(assignedCount == 1 ? "1 tool assigned" : "\(assignedCount) tools assigned"), \(hasFolder ? "on this Mac" : "not on this Mac")"
-        )
+        .accessibilityValue("\(assignedText), \(hasFolder ? "on this Mac" : "not on this Mac")")
     }
+
+    private var assignedText: String { "\(CountNoun("tool").phrase(assignedCount)) assigned" }
 }
 
 /// A folder the scan found that the workspace does not track here. Says what

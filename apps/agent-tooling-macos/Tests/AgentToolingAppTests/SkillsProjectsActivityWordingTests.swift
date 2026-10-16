@@ -54,4 +54,20 @@ struct SkillsProjectsActivityWordingTests {
         #expect(InstallDriftNotice.title(count: 2) == "2 installed copies differ from what you reviewed")
         #expect(!InstallDriftNotice.title(count: 2).contains("package"))
     }
+
+    @Test("The source editor says how far the line count moved, one line in the singular")
+    func sourceEditorLineDelta() {
+        let summary = SkillSourceEditorSheet.changeSummary(from:to:)
+        #expect(summary("a\nb", "a\nb") == "0 changed · same line count")
+        #expect(summary("a\nb", "a\nc\nd") == "1 changed · +1 line")
+        #expect(summary("a", "a\nb\nc") == "0 changed · +2 lines")
+        #expect(summary("a\nb\nc", "a\nb") == "0 changed · -1 line")
+        #expect(summary("a\nb\nc", "x") == "1 changed · -2 lines")
+    }
+
+    @Test("A scan source counts its chats and items, one in the singular")
+    func coverageCounts() {
+        #expect(CoverageRow.countsText(chats: 1, items: 1) == "1 chat · 1 item")
+        #expect(CoverageRow.countsText(chats: 12, items: 0) == "12 chats · 0 items")
+    }
 }

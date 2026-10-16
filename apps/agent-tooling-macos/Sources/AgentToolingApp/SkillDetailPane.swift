@@ -108,7 +108,8 @@ struct SkillDetailView: View {
                 .padding(Space.sm)
             } label: {
                 HStack(spacing: Space.sm) {
-                    Text(versions.count > 1 ? "\(copies.count) copies · \(versions.count) versions" : "\(copies.count) copies")
+                    let copyCount = CountNoun("copy", plural: "copies").phrase(copies.count)
+                    Text(versions.count > 1 ? "\(copyCount) · \(CountNoun("version").phrase(versions.count))" : copyCount)
                     SkillInfoButton(text: copiesNote(versions: versions.count), label: "About copies")
                 }
             }

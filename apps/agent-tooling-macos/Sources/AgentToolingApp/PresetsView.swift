@@ -231,15 +231,10 @@ struct PresetsView: View {
                     Text("Up to date with this preset.").font(AgentFont.body).foregroundStyle(.secondary)
                 } else {
                     if !added.isEmpty {
-                        Label(
-                            added.count == 1 ? "1 tool would be added" : "\(added.count) tools would be added",
-                            systemImage: "plus.circle")
+                        Label("\(PresetCount.tool.phrase(added.count)) would be added", systemImage: "plus.circle")
                     }
                     if !removed.isEmpty {
-                        Label(
-                            removed.count == 1
-                                ? "1 tool would be taken back out" : "\(removed.count) tools would be taken back out",
-                            systemImage: "minus.circle")
+                        Label("\(PresetCount.tool.phrase(removed.count)) would be taken back out", systemImage: "minus.circle")
                     }
                     if !kept.isEmpty {
                         Label(
@@ -389,7 +384,7 @@ struct PresetsView: View {
         let unsupported = preview.compatibility.filter { !$0.isFullySupported }
         return VStack(alignment: .leading, spacing: Space.xs) {
             Text(
-                "\(preview.fileCount) file\(preview.fileCount == 1 ? "" : "s") · "
+                "\(PresetCount.file.phrase(preview.fileCount)) · "
                     + ByteCountFormatter.string(fromByteCount: Int64(preview.totalFileBytes), countStyle: .file)
             )
             .font(AgentFont.body).foregroundStyle(.secondary)
@@ -434,7 +429,7 @@ struct PresetsView: View {
     }
 
     private func itemSummary(_ preset: WorkspaceLibraryPresetReadModel) -> String {
-        preset.memberArtifactIDs.count == 1 ? "1 item" : "\(preset.memberArtifactIDs.count) items"
+        PresetCount.item.phrase(preset.memberArtifactIDs.count)
     }
 
     private var context: String {
@@ -442,8 +437,16 @@ struct PresetsView: View {
         let pending = session.rows.filter(\.hasPendingChanges).count
         if pending > 0 { return pending == 1 ? "1 preset has changes to review" : "\(pending) presets have changes to review" }
         return following == 0
-            ? "Not following any preset on this Mac" : "Following \(following == 1 ? "1 preset" : "\(following) presets") on this Mac"
+            ? "Not following any preset on this Mac" : "Following \(PresetCount.preset.phrase(following)) on this Mac"
     }
+}
+
+/// What the Presets screen counts, each with its plural.
+private enum PresetCount {
+    static let tool = CountNoun("tool")
+    static let file = CountNoun("file")
+    static let item = CountNoun("item")
+    static let preset = CountNoun("preset")
 }
 
 private struct PresetListRow: View {
@@ -480,9 +483,7 @@ private struct PresetListRow: View {
         return row.needsCatchUp ? "Following · changes to review" : "Following · up to date"
     }
 
-    private var itemSummary: String {
-        preset.memberArtifactIDs.count == 1 ? "1 item" : "\(preset.memberArtifactIDs.count) items"
-    }
+    private var itemSummary: String { PresetCount.item.phrase(preset.memberArtifactIDs.count) }
 }
 
 /// Choosing where a preset's tools should go before following it. The same

@@ -58,7 +58,7 @@ struct SkillCreatorReviewSelection: Equatable {
         let remaining = result.files.filter { !reviewedPaths.contains($0.relativePath) }.count
         return remaining == 0
             ? "Every generated file has been opened for review."
-            : "Open \(remaining) more generated \(remaining == 1 ? "file" : "files") before saving."
+            : "Open \(remaining) more generated \(CountNoun("file").word(for: remaining)) before saving."
     }
 }
 
