@@ -22,10 +22,18 @@ import Testing
 let shellWindowSize = CGSize(width: 1_100, height: 760)
 
 /// The shell, opened on one section, at the size a window would give it.
+///
+/// The size defaults to `shellWindowSize`, so every section test that just
+/// wants a real window's worth of space is unchanged. The gallery passes the
+/// window size it is capturing at, so the shell fills that window rather than
+/// standing a fixed 1100×760 shell inside a larger frame with margins around
+/// it.
 @MainActor
-func renderShell(_ section: AppSection, fixture: ShellRenderFixture) -> some View {
+func renderShell(
+    _ section: AppSection, fixture: ShellRenderFixture, size: CGSize = shellWindowSize
+) -> some View {
     AppShellView(workspace: fixture.workspace, initialSection: section)
-        .frame(width: shellWindowSize.width, height: shellWindowSize.height)
+        .frame(width: size.width, height: size.height)
 }
 
 /// Lays the screen out at a real window size and rasterizes it.
