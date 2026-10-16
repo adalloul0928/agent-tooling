@@ -23,7 +23,11 @@ import Foundation
 ///   and treats the filesystem root as containing everything. Either can refuse
 ///   a path the disk keeps apart, such as a folder that differs from a
 ///   protected one only by case on a case-sensitive volume, but no spelling of
-///   a protected path gets through.
+///   a protected path that differs only in case or in how its characters are
+///   composed gets through. The check still compares text, not the folders the
+///   text reaches: a path that reaches a protected folder through a symbolic
+///   link, or by any other route to the same folder, is not seen as inside it.
+///   A site that must catch that resolves the path, or refuses links, first.
 ///
 /// Deny checks fold case everywhere rather than asking a volume, because a path
 /// has no single answer: each component is looked up on the volume holding its
