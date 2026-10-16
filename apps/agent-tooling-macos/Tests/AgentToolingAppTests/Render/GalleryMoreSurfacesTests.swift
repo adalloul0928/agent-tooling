@@ -55,7 +55,7 @@ struct GalleryMoreSurfacesTests {
 
     /// Changing one effective setting: a boolean, and a choice. The sheet reads
     /// the row it is handed, so a built `PendingEdit` for each kind draws the
-    /// toggle form and the text form.
+    /// toggle form and the picker, here over the approval modes Core defines.
     @Test func effectiveSettingEditSheet() async throws {
         for appearance in Self.both {
             let fixture = try await ShellRenderFixture()
@@ -70,7 +70,8 @@ struct GalleryMoreSurfacesTests {
             try gallerySnapshot(
                 EffectiveSettingEditSheet(
                     session: fixture.workspace.settings,
-                    edit: Self.pendingEdit(value: .string("auto"), name: "Approval mode")),
+                    edit: Self.pendingEdit(value: .string("auto"), name: "Approval mode"),
+                    choices: AccountSetting.approvalMode.acceptedValues.map { .string($0.rawValue) }),
                 area: "Apps · App settings", screen: "Effective setting edit sheet", state: "choice",
                 size: SheetGallerySize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/EffectiveSettingsView.swift:72")

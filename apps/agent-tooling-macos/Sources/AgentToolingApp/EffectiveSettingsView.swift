@@ -303,15 +303,74 @@ struct EffectiveSettingsView: View {
     }
 }
 
+/// The control the edit sheet offers for a setting's new value, decided by what
+/// the setting can hold rather than only by how its current value reads.
+///
+/// A setting its app defines a fixed set of values for is chosen from that set,
+/// so a typo cannot write a value the app would not read. A current value
+/// outside the set is offered as well, first, so opening the sheet neither drops
+/// it nor quietly replaces it: until another value is chosen, nothing changes.
+/// A number is typed, and only a finite number is accepted.
+enum EffectiveSettingInput: Equatable {
+    case toggle
+    /// The values to choose from, and the current value when it is not one of
+    /// them.
+    case choice(options: [ConfigurationValue], unlisted: ConfigurationValue?)
+    case number
+    case text
+
+    init(current: ConfigurationValue, choices: [ConfigurationValue]) {
+        if case .boolean = current {
+            self = .toggle
+        } else if !choices.isEmpty {
+            self = .choice(options: choices, unlisted: choices.contains(current) ? nil : current)
+        } else if case .number = current {
+            self = .number
+        } else {
+            self = .text
+        }
+    }
+
+    /// What was typed, switched or chosen, or nil while it is not a value this
+    /// setting can take: empty text, text that is not a finite number, no
+    /// choice.
+    func value(text: String, flag: Bool, choice: ConfigurationValue?) -> ConfigurationValue? {
+        switch self {
+        case .toggle: .boolean(flag)
+        case .choice: choice
+        case .number:
+            Double(text.trimmingCharacters(in: .whitespaces)).flatMap { $0.isFinite ? .number($0) : nil }
+        case .text: text.isEmpty ? nil : .string(text)
+        }
+    }
+
+    /// The value to write: the input's value when it is one and differs from
+    /// `current`, and nil when there is nothing to change.
+    func change(from current: ConfigurationValue, text: String, flag: Bool, choice: ConfigurationValue?) -> ConfigurationValue? {
+        value(text: text, flag: flag, choice: choice).flatMap { $0 == current ? nil : $0 }
+    }
+}
+
 /// One reviewed change to one setting in one file, restyled from the old
 /// Settings sheet: the file, its current value, and the new one, side by side.
 struct EffectiveSettingEditSheet: View {
     let session: WorkspaceSettingsSession
     let edit: WorkspaceSettingsSession.PendingEdit
+    /// The values the setting's app defines for it, when it defines a fixed
+    /// set; the new value is then chosen from them. Empty means it is typed,
+    /// or switched for a setting that is on or off.
+    var choices: [ConfigurationValue] = []
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @State private var flag = false
+    @State private var choice: ConfigurationValue?
     @State private var loaded = false
+
+    private var input: EffectiveSettingInput { EffectiveSettingInput(current: edit.row.value, choices: choices) }
+
+    private var change: ConfigurationValue? {
+        input.change(from: edit.row.value, text: text, flag: flag, choice: choice)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -330,12 +389,26 @@ struct EffectiveSettingEditSheet: View {
                 LabeledContent("Now") { Text(edit.row.value.displayText) }
                 VStack(alignment: .leading, spacing: Space.md) {
                     Text("New value").font(AgentFont.heading)
-                    switch edit.row.value {
-                    case .boolean:
+                    switch input {
+                    case .toggle:
                         Toggle(edit.row.displayName, isOn: $flag).toggleStyle(.switch)
-                    default:
+                    case .choice(let options, let unlisted):
+                        Picker(edit.row.displayName, selection: $choice) {
+                            if let unlisted {
+                                Text("\(unlisted.displayText) (current)").tag(Optional(unlisted))
+                                Divider()
+                            }
+                            ForEach(options, id: \.self) { option in
+                                Text(option.displayText).tag(Optional(option))
+                            }
+                        }
+                        .frame(maxWidth: Size.fieldMedium, alignment: .leading)
+                    case .number, .text:
                         TextField(edit.row.displayName, text: $text)
                             .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldMedium)
+                        if input == .number, !text.isEmpty, input.value(text: text, flag: flag, choice: choice) == nil {
+                            Text("Enter a number.").font(AgentFont.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
                 if edit.row.requiresNewSession {
@@ -351,13 +424,14 @@ struct EffectiveSettingEditSheet: View {
                 }
                 Spacer()
                 Button("Change it") {
+                    guard let change else { return }
                     Task {
-                        await session.applyEdit(value)
+                        await session.applyEdit(change)
                         if session.editMessage == nil { dismiss() }
                     }
                 }
                 .primaryActionStyle()
-                .disabled(session.isBusy || !hasChange)
+                .disabled(session.isBusy || change == nil)
             }.padding(Space.xxl)
         }
         .sheetSize(SheetSize.medium)
@@ -369,21 +443,9 @@ struct EffectiveSettingEditSheet: View {
             case .boolean(let value): flag = value
             default: text = edit.row.value.displayText
             }
-        }
-    }
-
-    private var value: ConfigurationValue {
-        switch edit.row.value {
-        case .boolean: .boolean(flag)
-        case .number: Double(text).map { ConfigurationValue.number($0) } ?? .string(text)
-        default: .string(text)
-        }
-    }
-
-    private var hasChange: Bool {
-        switch edit.row.value {
-        case .boolean(let current): flag != current
-        default: !text.isEmpty && value != edit.row.value
+            // A choice starts on the current value, listed or not, so the
+            // sheet opens with nothing changed.
+            choice = edit.row.value
         }
     }
 }
