@@ -337,7 +337,7 @@ private struct EffectiveSettingEditSheet: View {
                         Toggle(edit.row.displayName, isOn: $flag).toggleStyle(.switch)
                     default:
                         TextField(edit.row.displayName, text: $text)
-                            .textFieldStyle(.roundedBorder).frame(maxWidth: 360)
+                            .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldMedium)
                     }
                 }
                 if edit.row.requiresNewSession {

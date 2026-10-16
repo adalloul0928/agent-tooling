@@ -354,7 +354,7 @@ struct SetupWizardSheet: View {
                 }
                 if let progress = session.applyProgress {
                     HStack(spacing: Space.lg) {
-                        ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).frame(width: 160)
+                        ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).frame(width: Size.fieldNarrow)
                         Text("\(progress.done) of \(progress.total) done").font(AgentFont.caption).foregroundStyle(.secondary)
                         Spacer()
                     }

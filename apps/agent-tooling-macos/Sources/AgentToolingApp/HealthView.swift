@@ -150,7 +150,7 @@ struct HealthView: View {
             symbol: "checkmark.circle",
             title: "Everything is connected",
             message: "No connection needs attention. Switch to All to see every listed connection.")
-        .frame(height: 220)
+        .frame(height: Size.emptyStatePaneHeight)
     }
 
     // MARK: - One client's connections
@@ -384,7 +384,7 @@ private struct BulkReauthenticateConfirmation: View {
                     }
                 }
             }
-            .frame(maxHeight: 200)
+            .frame(maxHeight: Size.sheetScrollCap)
             HStack {
                 Spacer()
                 Button("Cancel", action: onCancel)
