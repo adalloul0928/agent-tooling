@@ -214,12 +214,14 @@ struct AppearanceSettingsView: View {
     @Binding var appearance: String
 
     var body: some View {
-        // One row in the card it sits in. A grouped Form here drew its own
-        // inset card and gray ground inside the section's card — three nested
-        // surfaces for one picker.
-        HStack {
-            Text("Appearance")
-            Spacer()
+        // One row in the card it sits in, in the grammar of the other Settings
+        // rows. The card is titled "Appearance", so the row names the choice
+        // rather than printing the word a second time. A grouped Form here
+        // drew its own inset card and gray ground inside the section's card —
+        // three nested surfaces for one picker.
+        InfoRow("Light or dark", detail: "System follows macOS.") {
+            Image(systemName: "circle.lefthalf.filled").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
+        } trailing: {
             Picker("Appearance", selection: $appearance) {
                 Text("System").tag("System")
                 Text("Light").tag("Light")
@@ -228,7 +230,6 @@ struct AppearanceSettingsView: View {
             .labelsHidden()
             .fixedSize()
         }
-        .padding(Space.xl)
     }
 }
 
