@@ -43,11 +43,11 @@ struct GalleryUnrenderableTests {
             source: "Sources/AgentToolingApp/PasteImportSheet.swift:639")
         index.addUnrenderable(
             control: "Open panel",
-            text: "prompt \"Use Folder\" · folders (link a workspace folder)",
+            text: "prompt \"Use folder\" · folders (link a workspace folder)",
             source: "Sources/AgentToolingApp/SyncSettingsView.swift:374")
         index.addUnrenderable(
             control: "Open panel",
-            text: "prompt \"Use Folder\" · folders (link a sync folder)",
+            text: "prompt \"Use folder\" · folders (link a sync folder)",
             source: "Sources/AgentToolingApp/SyncSettingsView.swift:385")
         index.addUnrenderable(
             control: "Open panel",
