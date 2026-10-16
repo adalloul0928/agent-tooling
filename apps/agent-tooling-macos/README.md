@@ -45,7 +45,7 @@ skill.
   MCP Registry server to the library goes through the same reviewed intake as
   pasting one by hand: Discover builds the connection from the listing's
   reviewed transport, records one connection, and starts or contacts nothing.
-  Every card and the detail pane carry **Install**: it puts the listing in the
+  Every card and the detail pane carry **Install…**: it puts the listing in the
   library (a plugin through the client it is for, chosen first when more than
   one could take it), then opens the same picker the Library uses. A skills.sh
   skill is fetched from its GitHub repository at the default branch, from the
@@ -127,7 +127,7 @@ changes nothing:
 
 - skills that follow a repository, with what the repository publishes now;
 - native plugins, with the catalog Discover kept;
-- MCP servers, with the catalog entry of the same name, when there is one.
+- connections, with the catalog entry of the same name, when there is one.
 
 A found update appears on Home with an **Update** button (and on its row in the
 Library), unless its kind is set to install automatically, in which case the
@@ -137,8 +137,7 @@ app proved it installed is replaced. A copy somebody edited since it was
 installed is left alone and waits on the Apps screen's review, where a person
 can decide. A native plugin is updated by its own app's command (`claude plugin
 update`, the only one recorded); an app with no recorded update command keeps
-its packages up to date itself, and the row says so instead of offering a
-button.
+its own plugins up to date, and the row says so instead of offering **Update**.
 
 Skill metadata supports standard YAML, including multiline descriptions and
 quoted names. Managed copies use the name declared in `SKILL.md`, even when the
@@ -378,10 +377,11 @@ Nothing runs in bulk.
 
 The **Checkup** tab under Apps shows the latest audit and review and runs both
 on its own when the app opens and the last checkup is more than a week old.
-**Set up…** (on Apps, on Checkup, and at the end of first-run onboarding) opens
-a wizard: choose the apps this Mac manages, audit, hand off to the assistant,
-then one stop per category — cleanup, duplicates, unmanaged skills,
-connections, settings — with the findings and recommendations for it. Home
+**Set up…** on Apps, and **Walk through…** on Checkup, open the same wizard:
+choose the apps this Mac manages, audit, hand off to the assistant, then one
+stop per category — cleanup, duplicates, unmanaged skills, connections,
+settings — with the findings and recommendations for it. At the end of
+first-run onboarding, **Check this Mac** goes to the Checkup tab. Home
 shows the last checkup in a sentence. Each app's page has **Review**, which
 fetches what the app has published since your installed version (Claude Code's
 changelog, Codex's GitHub releases, Kiro's changelog pages), hands the notes,
@@ -486,7 +486,7 @@ registers under its computer name, and shows up under Settings › Sync › Macs
 on every Mac.
 
 **Where an install goes.** The install picker asks *Every Mac* (the default),
-*This Mac only*, *Choose Macs…*, or *One project*. A Mac can be set to take
+*This Mac only*, *Choose Macs*, or *One project*. A Mac can be set to take
 only what names it (Settings › Sync › Macs, the toggle); that is how one Mac
 keeps a deliberately smaller set. An item's detail shows which Macs it is for
 and lets you leave one out (*Except*).
