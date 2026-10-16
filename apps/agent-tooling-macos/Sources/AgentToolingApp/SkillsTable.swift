@@ -112,6 +112,18 @@ struct SkillCollectionRow: View {
         (columns.describing ? 1 : 0) + (origin == nil ? 0 : 1)
     }
 
+    /// The narrow layout's height: the name alone, with one caption line
+    /// under it, or with two.
+    private var stackedHeight: CGFloat {
+        [Size.stackedRowHeight, Size.stackedRowHeightOneCaption, Size.stackedRowHeightTwoCaptions][min(captionLines, 2)]
+    }
+
+    /// The Managed column's word, which on a selected row ranks between the
+    /// name and its secondary text.
+    private var managedLabelColor: Color {
+        selected ? AgentTheme.onSelection.opacity(Opacity.labelOnSelection) : Color.secondary
+    }
+
     var body: some View {
         HStack(spacing: Space.lg) {
             Button(action: activate) {
@@ -121,7 +133,7 @@ struct SkillCollectionRow: View {
                     }
                     HStack(spacing: Space.md) {
                         KindTile(kind: .skill, size: Size.tileSmall, ghost: !skill.isMaintainedHere)
-                            .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.7) : Color.secondary)
+                            .foregroundStyle(selected ? AgentTheme.onSelection.opacity(Opacity.quiet) : Color.secondary)
                         VStack(alignment: .leading, spacing: Space.xxs) {
                             HStack(spacing: Space.md) {
                                 Text(skill.displayName).font(AgentFont.bodyMedium).lineLimit(1)
@@ -131,7 +143,9 @@ struct SkillCollectionRow: View {
                                         .padding(.horizontal, Space.sm).padding(.vertical, Space.xxs)
                                         .background(.quaternary, in: Capsule())
                                         .foregroundStyle(
-                                            selected ? AgentTheme.onSelection.opacity(0.85) : copies.versions > 1 ? AgentTheme.warning : Color.secondary)
+                                            selected
+                                                ? AgentTheme.onSelection.opacity(Opacity.labelOnSelection)
+                                                : copies.versions > 1 ? AgentTheme.warning : Color.secondary)
                                         .help(copies.explanation)
                                         .accessibilityLabel(copies.label)
                                 }
@@ -180,12 +194,12 @@ struct SkillCollectionRow: View {
                     // put it. One disc alone would only say "Claude".
                     HStack(spacing: Space.sm) {
                         Text(management.label)
-                            .font(AgentFont.caption).foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.85) : Color.secondary)
+                            .font(AgentFont.caption).foregroundStyle(managedLabelColor)
                         PlacementStack(placed: clients, size: Size.tileSmall)
                     }
                 } else {
                     Text(management.label)
-                        .font(AgentFont.caption).foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.85) : Color.secondary)
+                        .font(AgentFont.caption).foregroundStyle(managedLabelColor)
                         .lineLimit(1)
                 }
             }
@@ -194,7 +208,7 @@ struct SkillCollectionRow: View {
         }
         .foregroundStyle(selected ? AgentTheme.onSelection : Color.primary)
         .padding(.horizontal, Space.xl)
-        .frame(height: columns.expanded ? 44 : [40, 48, 64][min(captionLines, 2)])
+        .frame(height: columns.expanded ? Size.rowHeight : stackedHeight)
         .rowSelection(selected)
         .hairlineBottom()
     }

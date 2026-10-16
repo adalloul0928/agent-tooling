@@ -10,7 +10,7 @@ extension MarketplaceView {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.xl) {
                     HStack(alignment: .top, spacing: Space.lg) {
-                        ToolIdentityIcon(packageID: package.id, fallback: marketplaceKind(for: package), size: 44)
+                        ToolIdentityIcon(packageID: package.id, fallback: marketplaceKind(for: package), size: Size.identityIconLarge)
                         VStack(alignment: .leading, spacing: Space.xs) {
                             Text(package.presentationName).font(AgentFont.pageTitle)
                             Text("\(package.originLabel): \(package.originName)").font(AgentFont.caption).foregroundStyle(.secondary)

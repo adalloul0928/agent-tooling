@@ -45,12 +45,12 @@ struct PluginsView: View {
                     if showingDetails, !selection.isEmpty {
                         HSplitView {
                             collectionPane(rows: listed, updates: updates)
-                                .frame(minWidth: Size.listPaneMin, idealWidth: proxy.size.width * 0.55)
+                                .frame(minWidth: Size.listPaneMin, idealWidth: proxy.size.width * Proportion.listShare)
                             VStack(spacing: 0) {
                                 InspectorHeader(title: "Plugin details") { showingDetails = false }
                                 detailPane(inventory: inventory, updates: updates)
                             }
-                            .frame(minWidth: Size.detailPaneMin, idealWidth: proxy.size.width * 0.45)
+                            .frame(minWidth: Size.detailPaneMin, idealWidth: proxy.size.width * Proportion.detailShare)
                         }
                     } else {
                         collectionPane(rows: listed, updates: updates)
@@ -363,7 +363,7 @@ private struct PluginStackPane: View {
                     VStack(spacing: 0) {
                         ForEach(rows) { row in
                             InfoRow(row.displayName, detail: row.ownershipLabel) {
-                                pluginIcon(for: row, size: 26)
+                                pluginIcon(for: row, size: Size.tile)
                             } trailing: {
                                 ClientMarks(present: Set(row.nativeRoutes.map(\.client)), size: Size.brandMark)
                             }
@@ -441,7 +441,7 @@ private struct PluginDetailView: View {
 
     private var header: some View {
         HStack(spacing: Space.xl) {
-            pluginIcon(for: row, size: 44)
+            pluginIcon(for: row, size: Size.identityIconLarge)
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text(row.displayName).font(AgentFont.pageTitle)
                 Text(row.sourceLabel ?? row.ownershipLabel).font(AgentFont.body).foregroundStyle(.secondary)

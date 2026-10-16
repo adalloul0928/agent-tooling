@@ -65,12 +65,12 @@ struct MarketplaceView: View {
                     if showingDetails, selectedPackage != nil {
                         HSplitView {
                             packagePane(packages: packages)
-                                .frame(minWidth: Size.listPaneMin, idealWidth: proxy.size.width * 0.55)
+                                .frame(minWidth: Size.listPaneMin, idealWidth: proxy.size.width * Proportion.listShare)
                             VStack(spacing: 0) {
                                 InspectorHeader(title: "Package details") { showingDetails = false }
                                 detailPane
                             }
-                            .frame(minWidth: Size.detailPaneMin, idealWidth: proxy.size.width * 0.45)
+                            .frame(minWidth: Size.detailPaneMin, idealWidth: proxy.size.width * Proportion.detailShare)
                         }
                     } else {
                         packagePane(packages: packages)
@@ -241,7 +241,7 @@ struct MarketplaceView: View {
                                 .foregroundStyle(AgentTheme.selection)
                                 .accessibilityLabel("Clear all marketplace filters")
                         }
-                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
+                        .transition(.opacity.combined(with: .scale(scale: AgentMotion.appearScale, anchor: .topLeading)))
                     }
                 }
                 .animation(reduceMotion ? nil : AgentMotion.quick, value: hasActiveTokenFilter)
@@ -294,7 +294,9 @@ struct MarketplaceView: View {
             } else {
                 ScrollView {
                     LazyVGrid(
-                        columns: showingDetails ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 360, maximum: 560))],
+                        columns: showingDetails
+                            ? [GridItem(.flexible())]
+                            : [GridItem(.adaptive(minimum: Size.packageCardMinWidth, maximum: Size.packageCardMaxWidth))],
                         alignment: .leading, spacing: Space.xl
                     ) {
                         ForEach(packages) { package in
@@ -312,7 +314,7 @@ struct MarketplaceView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, showingDetails ? 12 : WorkspaceLayout.pageInset)
+                    .padding(.horizontal, showingDetails ? Space.lg : WorkspaceLayout.pageInset)
                     .padding(.top, WorkspaceLayout.contentTopInset)
                     .padding(.bottom, WorkspaceLayout.pageInset)
                     .frame(maxWidth: .infinity)

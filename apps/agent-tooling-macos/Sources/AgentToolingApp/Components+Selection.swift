@@ -18,7 +18,7 @@ struct FilterPill: View {
                 Text(title).lineLimit(1)
                 if let count {
                     Text(count, format: .number)
-                        .foregroundStyle(isOn ? AgentTheme.onSelection.opacity(0.75) : Color.secondary)
+                        .foregroundStyle(isOn ? AgentTheme.onSelection.opacity(Opacity.supporting) : Color.secondary)
                         .monospacedDigit()
                 }
             }
@@ -79,7 +79,7 @@ struct SelectionCheckbox: View {
 
     private var tint: Color {
         if selected { return AgentTheme.onSelection }
-        return enabled ? Color.secondary : Color.secondary.opacity(0.3)
+        return enabled ? Color.secondary : Color.secondary.opacity(Opacity.disabled)
     }
 }
 
@@ -111,7 +111,7 @@ struct SelectionActionBar: View {
         .padding(.horizontal, Space.xl)
         .frame(height: Size.headerHeight)
         .standardPanel()
-        .shadow(color: AgentTheme.shadow, radius: 8, y: 3)
+        .elevation(.floatingBar)
         .padding(Space.lg)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(count) selected")

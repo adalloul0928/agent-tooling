@@ -133,7 +133,7 @@ struct InspectorHeader: View {
             .keyboardShortcut(.escape, modifiers: [])
         }
         .padding(.horizontal, WorkspaceLayout.paneInset).frame(height: Size.headerHeight)
-        .background(AgentTheme.controlBackground.opacity(0.35))
+        .background(AgentTheme.controlBackground.opacity(Opacity.paneShade))
         .hairlineBottom()
     }
 }

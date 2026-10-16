@@ -4,7 +4,8 @@ import SwiftUI
 
 struct ClientBrandIcon: View {
     let client: ClientKind
-    var size: CGFloat = 22
+    /// Always one of the `Size` tokens, chosen by the caller for its row.
+    let size: CGFloat
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {

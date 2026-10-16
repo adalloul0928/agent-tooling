@@ -65,7 +65,7 @@ struct GradeChip: View {
                     .font(AgentFont.mono.weight(.bold))
                     .foregroundStyle(tint(grade))
                     .frame(width: Size.pillHeight, height: Size.chipHeight)
-                    .background(tint(grade).opacity(0.14), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    .background(tint(grade).opacity(Opacity.badgeWash), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
             } else {
                 Text(PackageGradeVerdict.notGradedLetter)
                     .font(AgentFont.captionMedium)
@@ -101,7 +101,7 @@ struct PackageGradeRows: View {
                             .font(AgentFont.micro)
                             .foregroundStyle(.tertiary)
                     }
-                    .frame(width: 132, alignment: .leading)
+                    .frame(width: Size.labelColumn, alignment: .leading)
                     Text(verdict.detail)
                         .font(AgentFont.body)
                         .foregroundStyle(.secondary)
@@ -310,7 +310,7 @@ private struct ToolAnnotationChips: View {
         .foregroundStyle(tint)
         .padding(.horizontal, Space.sm)
         .frame(height: Size.chipHeight)
-        .background(tint.opacity(0.12), in: Capsule())
+        .background(tint.opacity(Opacity.tagWash), in: Capsule())
     }
 }
 

@@ -70,7 +70,7 @@ struct PathInfoButton: View {
                 }
             }
             .padding(Space.lg)
-            .frame(minWidth: 220, maxWidth: 440, alignment: .leading)
+            .frame(minWidth: Size.pathPopoverMin, maxWidth: Size.pathPopoverMax, alignment: .leading)
         }
     }
 

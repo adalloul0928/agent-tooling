@@ -108,12 +108,12 @@ struct MCPServersView: View {
             Group {
                 if showingDetails, !selection.isEmpty {
                     HSplitView {
-                        collectionPane.frame(minWidth: Size.listPaneMin, idealWidth: proxy.size.width * 0.55)
+                        collectionPane.frame(minWidth: Size.listPaneMin, idealWidth: proxy.size.width * Proportion.listShare)
                         VStack(spacing: 0) {
                             InspectorHeader(title: "Connection details") { showingDetails = false }
                             detailPane
                         }
-                        .frame(minWidth: Size.detailPaneMin, idealWidth: proxy.size.width * 0.45)
+                        .frame(minWidth: Size.detailPaneMin, idealWidth: proxy.size.width * Proportion.detailShare)
                     }
                 } else {
                     collectionPane
@@ -135,7 +135,7 @@ struct MCPServersView: View {
                 .inventoryMenuStyle().fixedSize()
                 Spacer()
                 InventorySearchField(placeholder: "Search connections", text: $query)
-                    .frame(maxWidth: 420)
+                    .frame(maxWidth: Size.fieldWide)
                     .accessibilityLabel("Search connections")
             }
             .padding(.horizontal, WorkspaceLayout.pageInset)
@@ -615,7 +615,7 @@ struct AssignmentRemovalSheet: View {
                         }
                     } else if session.isBusy {
                         ProgressView("Working out what this would change…")
-                            .frame(maxWidth: .infinity, minHeight: 120)
+                            .frame(maxWidth: .infinity, minHeight: Size.progressPlaceholderMinHeight)
                     }
 
                     if let message = session.errorMessage {

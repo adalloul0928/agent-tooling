@@ -237,7 +237,7 @@ struct MarketplaceSourceRow: View {
         .padding(Space.lg)
         .background(
             RoundedRectangle.control
-                .fill(selected ? AgentTheme.selection.opacity(0.14) : .clear)
+                .fill(selected ? AgentTheme.selection.opacity(Opacity.selectedWash) : .clear)
         )
         .animation(reduceMotion ? nil : AgentMotion.quick, value: selected)
     }
@@ -289,7 +289,7 @@ struct MarketplaceGalleryCard: View {
             .accessibilityHint("Open package details")
             trailing
         }
-        .padding(compact ? Space.lg : Space.xxl).frame(maxWidth: .infinity, minHeight: compact ? 116 : 138, alignment: .topLeading)
+        .padding(compact ? Space.lg : Space.xxl).frame(maxWidth: .infinity, minHeight: cardMinHeight, alignment: .topLeading)
         // A standing card, not floating text: material at rest, a lift on
         // hover, and the accent stroke only when this listing is open.
         .background(hovering && !hoverSuppressed ? AgentTheme.fillHover : Color.clear, in: RoundedRectangle.card)
@@ -298,8 +298,8 @@ struct MarketplaceGalleryCard: View {
         .overlay(
             RoundedRectangle.card
                 .strokeBorder(
-                    selected ? AgentTheme.selection.opacity(0.65) : AgentTheme.hairlineStroke,
-                    lineWidth: selected ? 1.5 : 0.5)
+                    selected ? AgentTheme.selection.opacity(Opacity.selectedStroke) : AgentTheme.hairlineStroke,
+                    lineWidth: selected ? Hairline.ring : Hairline.fine)
         )
         .onHover { hovering = $0 }
     }
@@ -358,7 +358,7 @@ struct MarketplaceGalleryCard: View {
 
     private var cardContent: some View {
             HStack(alignment: .top, spacing: compact ? Space.lg : Space.xl) {
-                ToolIdentityIcon(packageID: package.id, fallback: marketplaceKind(for: package), size: compact ? 36 : 44)
+                ToolIdentityIcon(packageID: package.id, fallback: marketplaceKind(for: package), size: iconSize)
                 VStack(alignment: .leading, spacing: Space.sm) {
                     HStack(alignment: .firstTextBaseline, spacing: Space.md) {
                         Text(package.presentationName).font(compact ? AgentFont.title : AgentFont.titleLarge).lineLimit(1)
@@ -373,7 +373,7 @@ struct MarketplaceGalleryCard: View {
                         }
                     }
                     Text(package.summary).font(compact ? AgentFont.body : AgentFont.titleRegular).foregroundStyle(.secondary)
-                        .lineLimit(2).frame(maxWidth: .infinity, minHeight: 38, alignment: .topLeading)
+                        .lineLimit(2).frame(maxWidth: .infinity, minHeight: Size.cardSummaryMinHeight, alignment: .topLeading)
                     HStack(spacing: Space.md) {
                         ForEach(cardComponents, id: \.self) { component in
                             Text(component.displayName)
@@ -386,7 +386,7 @@ struct MarketplaceGalleryCard: View {
                             Text(category.capitalized)
                                 .font(AgentFont.microMedium)
                                 .padding(.horizontal, Space.sm).padding(.vertical, Space.xxs)
-                                .background(AgentTheme.selection.opacity(0.10), in: Capsule())
+                                .background(AgentTheme.selection.opacity(Opacity.tagWash), in: Capsule())
                                 .foregroundStyle(.secondary)
                                 .help("Filed under \(category) by \(package.sourceName)")
                         }
@@ -400,6 +400,16 @@ struct MarketplaceGalleryCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    /// The least height a card keeps, so a row of cards lines up; the compact
+    /// card beside an open details pane keeps less.
+    private var cardMinHeight: CGFloat {
+        compact ? Size.packageCardMinHeightCompact : Size.packageCardMinHeight
+    }
+
+    private var iconSize: CGFloat {
+        compact ? Size.identityIconCompact : Size.identityIconLarge
     }
 
     /// The component chips a card has room for: every kind when there are a

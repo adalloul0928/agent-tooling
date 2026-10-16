@@ -47,11 +47,11 @@ struct ToolHiveWorkloadInspector: View {
                     logSection
                 }
                 .padding(Space.xxl)
-                .frame(maxWidth: 620, alignment: .leading)
+                .frame(maxWidth: Size.inspectorContentMax, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
         }
-        .frame(minWidth: 640, idealWidth: 720, minHeight: 480, idealHeight: 560)
+        .sheetSize(minimum: SheetSize.inspectorMinimum, ideal: SheetSize.inspectorIdeal)
         .background(AgentTheme.contentBackground)
         .task(id: inspectionRequestID) {
             await refreshInspection()
@@ -186,7 +186,7 @@ struct ToolHiveWorkloadInspector: View {
                         .textSelection(.enabled)
                         .padding(Space.lg)
                 }
-                .frame(minHeight: 110, maxHeight: 240)
+                .frame(minHeight: Size.logMinHeight, maxHeight: Size.logMaxHeight)
                 .background(AgentTheme.fillSubtle, in: RoundedRectangle.control)
             }
         }
@@ -281,7 +281,7 @@ struct MCPRuntimesSheet: View {
                                 "Agent Tooling starts no runtime on its own. Check reads which runtimes this Mac has "
                                 + "and, where one manages workloads, what it is holding. Nothing is started or stopped."
                         )
-                        .frame(minHeight: 220)
+                        .frame(minHeight: Size.emptyStatePaneHeight)
                     } else {
                         TitledCard("Runtimes", count: "\(session.statuses.count)") {
                             ForEach(Array(session.statuses.enumerated()), id: \.element.id) { index, status in

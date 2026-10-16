@@ -199,7 +199,7 @@ struct ActiveFilterToken: View {
                 Text(title)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .frame(maxWidth: 190, alignment: .leading)
+                    .frame(maxWidth: Size.filterTokenLabelMax, alignment: .leading)
                 Image(systemName: "xmark")
                     .font(AgentFont.microBold)
                     .accessibilityHidden(true)
@@ -208,7 +208,7 @@ struct ActiveFilterToken: View {
             .foregroundStyle(AgentTheme.selection)
             .padding(.horizontal, Space.md)
             .frame(height: Size.pillHeight)
-            .background(AgentTheme.selection.opacity(0.12), in: Capsule())
+            .background(AgentTheme.selection.opacity(Opacity.tagWash), in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)

@@ -152,7 +152,7 @@ struct MCPToolRunPanel: View {
                 ForEach(options, id: \.self) { Text($0).tag($0) }
             }
             .labelsHidden()
-            .frame(maxWidth: 240, alignment: .leading)
+            .frame(maxWidth: Size.fieldChoice, alignment: .leading)
             .accessibilityLabel(field.displayName)
         case .text(let multiline) where multiline:
             TextEditor(text: binding)
@@ -223,7 +223,6 @@ private struct MCPToolOutcomeView: View {
 private struct MCPResultText: View {
     private static let inlineLineLimit = 12
     private static let inlineCharacterLimit = 900
-    private static let scrollHeight: CGFloat = 200
 
     let text: String
     let font: Font
@@ -235,7 +234,7 @@ private struct MCPResultText: View {
                 content
             } else {
                 ScrollView(.vertical) { content }
-                    .frame(height: Self.scrollHeight)
+                    .frame(height: Size.sheetScrollCap)
             }
         }
         .padding(Space.xl)

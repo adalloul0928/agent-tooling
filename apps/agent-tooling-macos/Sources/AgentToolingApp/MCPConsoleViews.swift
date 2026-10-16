@@ -14,7 +14,7 @@ struct MCPLiveIndicator: View {
                 Circle()
                     .fill(AgentTheme.ok)
                     .frame(width: Size.dot, height: Size.dot)
-                    .opacity(Int(context.date.timeIntervalSince(connectedAt)) % 2 == 0 ? 1 : 0.35)
+                    .opacity(Int(context.date.timeIntervalSince(connectedAt)) % 2 == 0 ? 1 : Opacity.pulseLow)
                 Text(label(at: context.date))
                     .font(AgentFont.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -156,7 +156,7 @@ struct MCPToolInventoryList: View {
                 .font(AgentFont.bodyMedium)
                 .foregroundStyle(tool.safety == .readOnly ? Color.secondary : AgentTheme.warning)
                 .frame(width: Size.glyphSlot)
-                .padding(.top, 1)
+                .padding(.top, Space.nudge)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Space.xxs) {
                 HStack(spacing: Space.sm) {
@@ -200,9 +200,9 @@ struct MCPSafetyTag: View {
             .font(AgentFont.microMedium)
             .foregroundStyle(isWarning ? AgentTheme.warning : Color.secondary)
             .padding(.horizontal, Space.sm)
-            .padding(.vertical, 1)
+            .padding(.vertical, Space.nudge)
             .background(
-                Capsule().fill((isWarning ? AgentTheme.warning : AgentTheme.graphite).opacity(0.14))
+                Capsule().fill((isWarning ? AgentTheme.warning : AgentTheme.graphite).opacity(Opacity.badgeWash))
             )
     }
 }

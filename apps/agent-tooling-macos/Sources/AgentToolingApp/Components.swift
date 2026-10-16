@@ -65,15 +65,15 @@ struct KindTile: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: max(Radius.sm, size * 0.28), style: .continuous)
+            RoundedRectangle(cornerRadius: max(Radius.sm, size * Proportion.tileCorner), style: .continuous)
                 .fill(kind.color.gradient)
             Image(systemName: kind.symbol)
-                .font(.system(size: size * 0.5, weight: .medium))
+                .font(.system(size: size * Proportion.tileSymbol, weight: .medium))
                 .foregroundStyle(.white)
         }
         .frame(width: size, height: size)
-        .opacity(ghost ? 0.45 : 1)
-        .saturation(ghost ? 0.35 : 1)
+        .opacity(ghost ? Opacity.ghost : 1)
+        .saturation(ghost ? Saturation.ghost : 1)
         .accessibilityHidden(true)
     }
 }
@@ -85,10 +85,10 @@ struct SymbolTile: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: max(Radius.sm, size * 0.28), style: .continuous)
+            RoundedRectangle(cornerRadius: max(Radius.sm, size * Proportion.tileCorner), style: .continuous)
                 .fill(AgentTheme.graphite.gradient)
             Image(systemName: symbol)
-                .font(.system(size: size * 0.46, weight: .medium))
+                .font(.system(size: size * Proportion.symbolTileSymbol, weight: .medium))
                 .foregroundStyle(.white)
         }
         .frame(width: size, height: size)
@@ -138,7 +138,7 @@ struct PlacementStack: View {
     private var ordered: [ClientKind] { order.filter(placed.contains) }
 
     var body: some View {
-        HStack(spacing: -(size * 0.32)) {
+        HStack(spacing: -(size * Proportion.discOverlap)) {
             ForEach(ordered) { client in
                 ClientDisc(client: client, size: size)
             }
@@ -162,7 +162,7 @@ struct ClientDisc: View {
                 Circle().fill(AgentTheme.controlBackground)
                 Circle().strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width)
             }
-            ClientBrandIcon(client: client, size: size * 0.53)
+            ClientBrandIcon(client: client, size: size * Proportion.discMark)
         }
         .frame(width: size, height: size)
     }
@@ -196,7 +196,9 @@ struct StatusGlyph: View {
         Image(systemName: symbol)
             .font(.system(size: size, weight: .medium))
             .foregroundStyle(tint ?? color)
-            .frame(width: size + 2, height: size + 2)
+            // A hairline indented past a glyph (Home's rows) adds the same
+            // `Space.xxs` to the glyph's size, so the two stay in step.
+            .frame(width: size + Space.xxs, height: size + Space.xxs)
             .accessibilityHidden(true)
     }
 
@@ -259,13 +261,13 @@ struct AttentionBanner<Action: View>: View {
         }
         .padding(.horizontal, Space.xl)
         .padding(.vertical, Space.lg)
-        .background(AgentTheme.warning.opacity(0.10), in: RoundedRectangle.card)
+        .background(AgentTheme.warning.opacity(Opacity.bannerWash), in: RoundedRectangle.card)
         // Banners come and go with state; arriving with a transition keeps the
         // content below from teleporting by a banner's height.
         .transition(.move(edge: .top).combined(with: .opacity))
         .overlay {
             RoundedRectangle.card
-                .strokeBorder(AgentTheme.warning.opacity(0.32), lineWidth: Hairline.width)
+                .strokeBorder(AgentTheme.warning.opacity(Opacity.bannerStroke), lineWidth: Hairline.width)
         }
     }
 }
