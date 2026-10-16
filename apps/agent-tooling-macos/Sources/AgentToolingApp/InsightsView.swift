@@ -33,7 +33,7 @@ struct InsightsView: View {
     var body: some View {
         VStack(spacing: 0) {
             PageToolbar(title: "Insights", context: toolbarContext) {
-                Button("Scan options", systemImage: "slider.horizontal.3") { showingScanOptions.toggle() }
+                Button("Scan options…", systemImage: "slider.horizontal.3") { showingScanOptions.toggle() }
                     .buttonStyle(.glass)
                     .popover(isPresented: $showingScanOptions) {
                         ScrollView { scanConfiguration.padding(Space.xxl) }.sheetSize(SheetSize.medium)
@@ -101,7 +101,7 @@ struct InsightsView: View {
             isPresented: $isPresentingClearConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Clear Saved Insights", role: .destructive) { session.clear() }
+            Button("Clear saved insights", role: .destructive) { session.clear() }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes the saved aggregate report. Client chat history will not be changed.")
@@ -331,7 +331,7 @@ struct InsightsView: View {
                 Text("Last scan \(report.generatedAt, format: .relative(presentation: .named))")
                     .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                Button("Clear results") {
+                Button("Clear results…") {
                     isPresentingClearConfirmation = true
                 }
                 .inlineActionStyle()

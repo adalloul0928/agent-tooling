@@ -53,7 +53,7 @@ struct ProjectsView: View {
                 .menuStyle(.button)
                 .buttonStyle(.glass)
                 .help("Besides the folders Claude Code has run in, look through these folders' children for projects.")
-                Button("New Project…", systemImage: "plus") { isCreatingProject = true }
+                Button("New project…", systemImage: "plus") { isCreatingProject = true }
                     .buttonStyle(.glass)
                     .disabled(workspace.library.access != .writable)
                     .help("Name a project, or start one from a folder on this Mac.")
@@ -291,7 +291,7 @@ struct ProjectsView: View {
     private var emptyStateActionTitle: String? {
         if !query.isEmpty { return "Clear Search" }
         if filter == .assigned { return "Show All" }
-        return workspace.library.access == .writable ? "New Project…" : nil
+        return workspace.library.access == .writable ? "New project…" : nil
     }
 
     private var emptyStateAction: (() -> Void)? {

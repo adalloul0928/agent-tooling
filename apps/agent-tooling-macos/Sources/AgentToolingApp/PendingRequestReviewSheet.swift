@@ -122,11 +122,11 @@ struct PendingRequestReviewSheet: View {
             .padding(Space.xxxl)
         } footer: {
             HStack(spacing: Space.lg) {
-                Button("Not Now", action: onDefer)
+                Button("Not now", action: onDefer)
                     .secondaryActionStyle()
                     .keyboardShortcut(.cancelAction)
                     .help("Keep the request in the queue and close this review")
-                Button("Reject Request", role: .destructive, action: onReject)
+                Button("Reject request", role: .destructive, action: onReject)
                     .secondaryActionStyle()
                     .disabled(isBusy)
                     .help("Remove this request without changing any client")
@@ -142,7 +142,7 @@ struct PendingRequestReviewSheet: View {
                         .disabled(isBusy)
                         .help("Opens the Codex creator on this request; nothing is created until you accept the draft")
                 } else {
-                    Button("Continue to App Review", action: onContinue)
+                    Button("Continue to review…", action: onContinue)
                         .primaryActionStyle()
                         .keyboardShortcut(.defaultAction)
                         .disabled(isBusy)

@@ -318,8 +318,8 @@ private struct HealthRow: View {
                 .controlSize(.small)
                 .help("Opens https://claude.ai/customize/connectors, where a hosted connector is managed.")
         case .reconnectOnly(let guidance):
-            Button("How to fix") { showingHelp = true }
-                .inlineActionStyle()
+            Button("How to fix…") { showingHelp = true }
+                .secondaryActionStyle()
                 .controlSize(.small)
                 .help(guidance)
                 .popover(isPresented: $showingHelp, arrowEdge: .bottom) {

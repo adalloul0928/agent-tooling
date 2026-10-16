@@ -291,7 +291,7 @@ struct NewProjectSheet: View {
             Hairline()
             HStack {
                 Spacer()
-                Button("Create Project") { create() }
+                Button("Create project") { create() }
                     .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canCreate)

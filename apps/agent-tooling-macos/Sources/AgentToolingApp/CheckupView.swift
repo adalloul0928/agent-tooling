@@ -54,7 +54,7 @@ struct CheckupView: View {
                     Button {
                         confirmingFixAll = true
                     } label: {
-                        Label("Fix all \(fixAll.total)", systemImage: "checkmark.circle")
+                        Label("Fix all \(fixAll.total)…", systemImage: "checkmark.circle")
                     }
                     .primaryActionStyle()
                     .disabled(session.isBusy)

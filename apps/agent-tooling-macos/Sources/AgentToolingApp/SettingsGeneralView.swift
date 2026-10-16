@@ -82,7 +82,7 @@ struct SettingsGeneralView: View {
                     HStack {
                         Text("Connection mode check").font(AgentFont.bodyMedium)
                         Spacer()
-                        Button("Check Modes") { Task { await runtimes?.refresh() } }
+                        Button("Check modes") { Task { await runtimes?.refresh() } }
                             .secondaryActionStyle()
                             .controlSize(.small)
                             .disabled(runtimes?.isRefreshingMCPRuntimes == true)

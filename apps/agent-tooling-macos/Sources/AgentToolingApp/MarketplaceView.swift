@@ -42,7 +42,7 @@ struct MarketplaceView: View {
 
         VStack(spacing: 0) {
             PageToolbar(title: AppSection.marketplace.navigationTitle, context: toolbarContext) {
-                Button("Sources", systemImage: "shippingbox") { showingSources.toggle() }
+                Button("Sources…", systemImage: "shippingbox") { showingSources.toggle() }
                     .buttonStyle(.glass)
                     .help("Look at the catalogs, registries, and folders shown in Discover")
                     .popover(isPresented: $showingSources) { sourcePane.sheetSize(SheetSize.popover) }
@@ -289,7 +289,7 @@ struct MarketplaceView: View {
                     symbol: hasActiveFilter ? "line.3.horizontal.decrease.circle" : "shippingbox",
                     title: hasActiveFilter ? "No matching packages" : "No packages found",
                     message: emptyPackageMessage,
-                    actionTitle: hasActiveFilter ? "Clear Filters" : nil,
+                    actionTitle: hasActiveFilter ? "Clear filters" : nil,
                     isActionEnabled: hasActiveFilter
                 ) {
                     clearFilters()

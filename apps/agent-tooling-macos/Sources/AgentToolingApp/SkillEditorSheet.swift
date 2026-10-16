@@ -302,7 +302,7 @@ struct SkillEditorSheet: View {
                     .primaryActionStyle()
                     .disabled(!canContinue)
             } else {
-                Button("Create Skill") { onCreate(draft, draft.syncClients) }
+                Button("Create skill") { onCreate(draft, draft.syncClients) }
                     .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
                     .disabled(!isDraftValid || isBusy || !canWrite)
