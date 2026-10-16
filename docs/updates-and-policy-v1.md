@@ -60,10 +60,10 @@ Installing a skill update runs the library update (`updateStandaloneSkill`) then
 replaces the copies this app proved it installed, through
 `WorkspaceDeploymentSession.replaceProvenCopies`. Copies this app cannot prove
 it installed, or that were edited after install, are left alone; `notice`
-reports that they wait on the Apps screen's Review changes. Installing a plugin
+reports that they wait on the Apps screen's review. Installing a plugin
 update runs the app's own `plugin update` command through the operation
 executor's allowlist. An MCP server update is refused from here with a
-`cannotUpdate` note pointing at the MCP Servers screen.
+`cannotUpdate` note pointing at the Connections screen.
 
 Multi-Mac arrivals reuse this policy. `WorkspaceIncomingSession.review` runs
 after a sync pass and inspects plan items for assignments that did not originate

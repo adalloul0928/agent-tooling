@@ -136,7 +136,7 @@ for that one item. Both directions are first-class; neither requires editing
 other assignments when a Mac joins or leaves.
 
 The install picker's default for user-scope installs is **Every Mac** (`nil`).
-"This Mac only", "Choose Macs…", and "One project" are the other choices.
+"This Mac only", "Choose Macs", and "One project" are the other choices.
 
 ## Incoming changes
 
