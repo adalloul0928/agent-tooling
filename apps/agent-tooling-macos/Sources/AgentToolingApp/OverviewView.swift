@@ -460,7 +460,7 @@ struct OverviewView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Hairline()
-                Label(incomingFooter, systemImage: "checkmark.shield")
+                Label(Self.incomingFooter(automatic: automaticKinds), systemImage: "checkmark.shield")
                     .font(AgentFont.caption).foregroundStyle(.tertiary)
                     .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -468,13 +468,34 @@ struct OverviewView: View {
         }
     }
 
-    private var incomingFooter: String {
+    /// What the From your other Macs card can promise, given the kinds that
+    /// install on their own.
+    static func incomingFooter(automatic: [ToolingItemKind]) -> String {
+        guard !automatic.isEmpty else { return "Nothing from another Mac installs here until you press Install." }
+        return "Arriving \(automaticNames(automatic)) install on their own (\(updatesSettingsPath)). The rest wait here."
+    }
+
+    /// The kinds the update policy installs without a press, in Library order.
+    private var automaticKinds: [ToolingItemKind] {
         let policy = workspace.device.updatePolicy
-        if !policy.installsAnythingAutomatically {
-            return "Nothing from another Mac installs here until you press Install."
+        return ToolingItemKind.allCases.filter { policy.policy(for: $0) == .automatic }
+    }
+
+    /// Where the rows that set those kinds are. Both footers point at the same
+    /// card, so they name it the same way.
+    private static let updatesSettingsPath = "Settings › General › Updates"
+
+    /// The kinds in the plural, by the names of the Settings rows that set
+    /// them: "skills and connections".
+    private static func automaticNames(_ kinds: [ToolingItemKind]) -> String {
+        kinds.map { kind in
+            switch kind {
+            case .skill: CountNoun.skill.plural
+            case .plugin: CountNoun.plugin.plural
+            case .mcpServer: CountNoun.connection.plural
+            }
         }
-        let automatic = ToolingItemKind.allCases.filter { policy.policy(for: $0) == .automatic }
-        return "Arriving \(automatic.map { $0.displayName.lowercased() }.formatted(.list(type: .and))) install on their own (Settings › Updates). The rest wait here."
+        .formatted(.list(type: .and))
     }
 
     // MARK: - Waiting for your review
@@ -563,7 +584,7 @@ struct OverviewView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Hairline()
-                Label(updatesFooter, systemImage: "checkmark.shield")
+                Label(Self.updatesFooter(automatic: automaticKinds), systemImage: "checkmark.shield")
                     .font(AgentFont.caption)
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, Space.xl)
@@ -573,15 +594,11 @@ struct OverviewView: View {
         }
     }
 
-    /// What this card can promise about installing, given the policy.
-    private var updatesFooter: String {
-        let policy = workspace.device.updatePolicy
-        if !policy.installsAnythingAutomatically {
-            return "Nothing installs until you approve it here."
-        }
-        let automatic = ToolingItemKind.allCases.filter { policy.policy(for: $0) == .automatic }
-        let names = automatic.map { $0.displayName.lowercased() }.formatted(.list(type: .and))
-        return "Updates to \(names) install on their own (Settings). Everything else waits here."
+    /// What the Waiting for your review card can promise about installing,
+    /// given the kinds that install on their own.
+    static func updatesFooter(automatic: [ToolingItemKind]) -> String {
+        guard !automatic.isEmpty else { return "Nothing installs until you approve it here." }
+        return "Updates to \(automaticNames(automatic)) install on their own (\(updatesSettingsPath)). Everything else waits here."
     }
 
     /// One update Home can show: the row, the verdict, and whether the button
