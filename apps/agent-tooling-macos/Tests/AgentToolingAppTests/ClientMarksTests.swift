@@ -19,17 +19,39 @@ struct ClientMarksTests {
 
     @Test("An app without the item leaves a mark that stands off the card in both appearances")
     func absentMarksCanBeSeen() throws {
+        try expectAbsentMarksStandOff(AgentTheme.controlBackground, "the card", selected: false)
+    }
+
+    /// A selected row draws the accent fill behind its marks, where the grey
+    /// that stands off a card reaches under 2:1.
+    @Test("On a selected row the empty rings stand off the selection fill in both appearances")
+    func absentMarksCanBeSeenOnASelectedRow() throws {
+        try expectAbsentMarksStandOff(AgentTheme.selection, "the selection fill", selected: true)
+    }
+
+    private func expectAbsentMarksStandOff(
+        _ ground: Color, _ groundName: String, selected: Bool, sourceLocation: SourceLocation = #_sourceLocation
+    ) throws {
         let rows: [(String, AnyView)] = [
-            ("TableClientMarks", AnyView(TableClientMarks(clients: ClientKind.allCases, present: []))),
-            ("ClientMarks", AnyView(ClientMarks(present: []).environment(\.availableClients, ClientKind.allCases))),
+            (
+                "TableClientMarks",
+                AnyView(TableClientMarks(clients: ClientKind.allCases, present: [], selected: selected))
+            ),
+            (
+                "ClientMarks",
+                AnyView(
+                    ClientMarks(present: [], selected: selected).environment(\.availableClients, ClientKind.allCases))
+            ),
         ]
         for appearance in [RenderAppearance.light, .dark] {
             for (name, marks) in rows {
                 let bitmap = try rasterize(
-                    marks.frame(maxWidth: .infinity, maxHeight: .infinity).background(AgentTheme.controlBackground),
+                    marks.frame(maxWidth: .infinity, maxHeight: .infinity).background(ground),
                     size: Self.card, appearance: appearance)
                 let ratio = try strongestContrast(in: bitmap)
-                #expect(ratio >= 3, "\(name), \(appearance): the absent marks reach only \(ratio):1 against the card")
+                #expect(
+                    ratio >= 3, "\(name), \(appearance): the absent marks reach only \(ratio):1 against \(groundName)",
+                    sourceLocation: sourceLocation)
             }
         }
     }

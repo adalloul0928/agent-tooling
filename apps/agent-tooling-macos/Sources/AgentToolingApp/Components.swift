@@ -103,6 +103,9 @@ struct SymbolTile: View {
 struct ClientMarks: View {
     let present: Set<ClientKind>
     var size: CGFloat = Size.brandMark
+    /// Whether the row is selected, so the empty rings stand off the accent
+    /// fill rather than the card.
+    var selected = false
     /// The shell publishes the clients this Mac actually offers, so a row never
     /// has to know how that set was decided. With nothing published the marks
     /// fall back to every known client, which is what a single row rendered on
@@ -115,7 +118,7 @@ struct ClientMarks: View {
                 if present.contains(client) {
                     ClientBrandIcon(client: client, size: size).help(client.rawValue)
                 } else {
-                    AbsentMark(size: size).help("Not in \(client.rawValue)")
+                    AbsentMark(size: size, selected: selected).help("Not in \(client.rawValue)")
                 }
             }
         }

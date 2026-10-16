@@ -180,7 +180,7 @@ struct PluginsView: View {
             } else {
                 Spacer(minLength: 0)
             }
-            TableClientMarks(clients: availableClients, present: Set(row.nativeRoutes.map(\.client)))
+            TableClientMarks(clients: availableClients, present: Set(row.nativeRoutes.map(\.client)), selected: selected)
                 .frame(width: CollectionColumn.clientMarks, alignment: .trailing)
             if columns.expanded {
                 let update = updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet.")

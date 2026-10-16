@@ -275,7 +275,7 @@ struct MCPServersView: View {
             } else {
                 Spacer(minLength: 0)
             }
-            TableClientMarks(clients: availableClients, present: entry.routedClients)
+            TableClientMarks(clients: availableClients, present: entry.routedClients, selected: selected)
                 .frame(width: CollectionColumn.clientMarks, alignment: .leading)
             if columns.expanded {
                 Text(entry.requestedAssignments.isEmpty ? "—" : "\(entry.requestedAssignments.count)")

@@ -555,7 +555,8 @@ enum Opacity {
     /// 0.75 — a supporting label beside the text it belongs to: the count in
     /// a selected pill, a palette row's context label.
     static let supporting: Double = 0.75
-    /// 0.78 — secondary text on the accent fill of a selected row, applied to
+    /// 0.78 — secondary text on the accent fill of a selected row, and the
+    /// empty ring of an app that does not have the item there, applied to
     /// `AgentTheme.onSelection`.
     static let secondaryOnSelection: Double = 0.78
     /// 0.85 — a label on a selected row that ranks between its title and its
@@ -745,17 +746,25 @@ extension View {
 /// small empty ring in the slot the app's brand mark would fill. A filled mark
 /// beside an empty ring is a difference of shape, so it reads without colour,
 /// and the ring is drawn in `AgentTheme.absentMark`, which keeps at least 3:1
-/// against a card in both appearances. The ring sits inside the slot rather
-/// than filling it, so it reads as an empty place and not as the unchecked
-/// selection checkbox. Use it in place of the brand mark rather than dimming
-/// the mark, and keep the row's accessibility label naming the apps that have
-/// the item.
+/// against a card in both appearances. On a selected row the ground is the
+/// accent fill, where that grey all but vanishes, so the ring takes the row's
+/// secondary foreground instead (`AgentTheme.onSelection` at
+/// `Opacity.secondaryOnSelection`), which keeps 3:1 on the fill. The ring sits
+/// inside the slot rather than filling it, so it reads as an empty place and
+/// not as the unchecked selection checkbox. Use it in place of the brand mark
+/// rather than dimming the mark, and keep the row's accessibility label naming
+/// the apps that have the item.
 struct AbsentMark: View {
     var size: CGFloat = Size.brandMark
+    /// Whether the row it sits on is selected, and so drawn on the accent fill.
+    var selected = false
 
     var body: some View {
         Circle()
-            .strokeBorder(AgentTheme.absentMark, lineWidth: Hairline.width)
+            .strokeBorder(
+                selected ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection) : AgentTheme.absentMark,
+                lineWidth: Hairline.width
+            )
             .padding(Space.xxs)
             .frame(width: size, height: size)
             .accessibilityHidden(true)

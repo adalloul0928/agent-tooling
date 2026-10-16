@@ -186,7 +186,7 @@ struct SkillCollectionRow: View {
                 .frame(maxHeight: .infinity).contentShape(Rectangle())
             }
             .buttonStyle(.plain).accessibilityLabel(skill.displayName)
-            ClientMarks(present: observed, size: Size.brandMark)
+            ClientMarks(present: observed, size: Size.brandMark, selected: selected)
                 .frame(width: Size.foundInColumn, alignment: .trailing)
             Group {
                 if case .placed(let clients) = management {

@@ -569,7 +569,11 @@ a view is treated the way a raw hex colour would be.
 - `AbsentMark` — what a row of client marks shows for an app that does not
   have the item: a small empty ring in `AgentTheme.absentMark`, which keeps at
   least 3:1 against a card in both appearances. Filled mark against empty ring
-  is a difference of shape, so absence never rests on a faded colour alone.
+  is a difference of shape, so absence never rests on a faded colour alone. On
+  a selected row the ring takes the row's secondary foreground
+  (`AgentTheme.onSelection` at `Opacity.secondaryOnSelection`), which keeps
+  3:1 on the accent fill; `ClientMarks` and `TableClientMarks` take the row's
+  `selected` for it.
 - `wrapsLines()` — for text that may wrap onto more lines. Never use
   `fixedSize(horizontal: false, vertical: true)`: when such a view appears
   after the window has laid out, AppKit measures the content's minimum size at

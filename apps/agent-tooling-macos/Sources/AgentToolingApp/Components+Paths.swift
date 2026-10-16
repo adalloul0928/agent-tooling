@@ -123,6 +123,9 @@ struct CompactPathText: View {
 struct TableClientMarks: View {
     let clients: [ClientKind]
     let present: Set<ClientKind>
+    /// Whether the row is selected, so the empty rings stand off the accent
+    /// fill rather than the card.
+    var selected = false
 
     var body: some View {
         HStack(spacing: Space.sm) {
@@ -130,7 +133,7 @@ struct TableClientMarks: View {
                 if present.contains(client) {
                     ClientBrandIcon(client: client, size: Size.brandMark).help(client.rawValue)
                 } else {
-                    AbsentMark(size: Size.brandMark).help("Not in \(client.rawValue)")
+                    AbsentMark(size: Size.brandMark, selected: selected).help("Not in \(client.rawValue)")
                 }
             }
         }
