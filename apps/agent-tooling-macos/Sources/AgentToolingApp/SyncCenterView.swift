@@ -297,13 +297,14 @@ struct SyncCenterView: View {
             Hairline()
 
             // What the app holds, as the check saw it. Counts, not claims: an
-            // app that has not been checked has no numbers, and says so.
+            // app that has not been checked has no numbers, and says so. The
+            // columns go in the Library's order, as every holdings line does.
             HStack(spacing: 0) {
                 heldColumn(.skill, count: held?.skills)
                 Hairline(.vertical).frame(height: Size.controlHeight)
-                heldColumn(.connection, count: held?.connections)
-                Hairline(.vertical).frame(height: Size.controlHeight)
                 heldColumn(.plugin, count: held?.plugins)
+                Hairline(.vertical).frame(height: Size.controlHeight)
+                heldColumn(.connection, count: held?.connections)
             }
             .padding(.horizontal, Space.md).padding(.vertical, Space.lg)
 
@@ -583,8 +584,8 @@ struct SyncCenterView: View {
         guard !mine.isEmpty else { return nil }
         return AppTile.Held(
             skills: Set(mine.flatMap(\.discoveredSkills)).count,
-            connections: Set(mine.flatMap(\.discoveredMCPServers)).count,
-            plugins: Set(mine.flatMap(\.discoveredPlugins)).count)
+            plugins: Set(mine.flatMap(\.discoveredPlugins)).count,
+            connections: Set(mine.flatMap(\.discoveredMCPServers)).count)
     }
 
     private func version(for app: ClientKind) -> String? {
@@ -686,22 +687,9 @@ private struct ClientGroup: Identifiable {
 /// One app, once: its mark, its name, one clause, its verdict, and what is
 /// waiting for it. The whole tile is the way to narrow the screen to it.
 struct AppTile: View {
-    struct Held: Equatable {
-        let skills: Int
-        let connections: Int
-        let plugins: Int
-
-        /// What the app holds, in one line counted in the library's own nouns:
-        /// "2 skills · 1 connection · 0 plugins".
-        var summary: String {
-            [
-                CountNoun.skill.phrase(skills),
-                CountNoun.connection.phrase(connections),
-                CountNoun.plugin.phrase(plugins),
-            ]
-            .joined(separator: " · ")
-        }
-    }
+    /// What the last check found in the app, counted the way every screen
+    /// counts an app's holdings: "2 skills · 0 plugins · 1 connection".
+    typealias Held = LibraryCounts
 
     let client: ClientKind
     let verdict: ClientVerdict

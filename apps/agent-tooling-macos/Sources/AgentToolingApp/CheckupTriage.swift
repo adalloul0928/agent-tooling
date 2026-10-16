@@ -234,11 +234,7 @@ enum CheckupTriage {
     /// library's own nouns and in the singular where a count is one:
     /// "17 skills · 1 plugin · 8 connections".
     static func inventoryLine(_ counts: SetupAuditReport.HeldCounts) -> String {
-        [
-            CountNoun.skill.phrase(counts.skills),
-            CountNoun.plugin.phrase(counts.plugins),
-            CountNoun.connection.phrase(counts.mcpServers),
-        ].joined(separator: " · ")
+        LibraryCounts(skills: counts.skills, plugins: counts.plugins, connections: counts.mcpServers).summary
     }
 
     /// The note under the buckets about rows a person dismissed, agreeing

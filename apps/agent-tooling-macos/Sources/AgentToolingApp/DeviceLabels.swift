@@ -39,11 +39,9 @@ enum DeviceLabels {
             let absent = "not found on that Mac"
             return AppLine(text: absent.capitalizedFirst, accessibilityLabel: "\(name), \(absent)")
         }
-        let held = [
-            CountNoun.skill.phrase(app.skillCount),
-            CountNoun.plugin.phrase(app.pluginCount),
-            CountNoun.connection.phrase(app.mcpServerCount),
-        ]
+        let held = LibraryCounts(
+            skills: app.skillCount, plugins: app.pluginCount, connections: app.mcpServerCount
+        ).phrases
         return AppLine(
             text: ([app.version ?? "Installed"] + held).joined(separator: " · "),
             accessibilityLabel: ([name, "installed", app.version ?? "version unknown"] + held)
