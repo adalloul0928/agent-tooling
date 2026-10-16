@@ -410,10 +410,11 @@ struct WorkspaceDeviceSessionTests {
         #expect(session.isEnabled(.gemini))
 
         // Off then on, the way two taps in a row reach the setter: each flip
-        // is its own task, and neither waits for the other.
-        async let first: Void = session.setEnabled(.gemini, false)
-        async let second: Void = session.setEnabled(.gemini, true)
-        _ = await (first, second)
+        // is its own main-actor task, started in order, and neither waits for
+        // the other.
+        let first = Task { await session.setEnabled(.gemini, false) }
+        let second = Task { await session.setEnabled(.gemini, true) }
+        _ = await (first.value, second.value)
 
         #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
         #expect(session.isEnabled(.gemini))
@@ -431,9 +432,9 @@ struct WorkspaceDeviceSessionTests {
         let session = await fixture.session()
         #expect(session.automaticallyCheckHealth)
 
-        async let first: Void = session.setAutomaticallyCheckHealth(false)
-        async let second: Void = session.setAutomaticallyCheckHealth(true)
-        _ = await (first, second)
+        let first = Task { await session.setAutomaticallyCheckHealth(false) }
+        let second = Task { await session.setAutomaticallyCheckHealth(true) }
+        _ = await (first.value, second.value)
 
         #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
         #expect(session.automaticallyCheckHealth)
