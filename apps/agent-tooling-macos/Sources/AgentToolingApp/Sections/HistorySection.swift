@@ -34,8 +34,8 @@ struct HistorySection: View {
                     message: "Versions appear here as you change your library.")
             } else {
                 HSplitView {
-                    versionList.frame(minWidth: 260, idealWidth: 300)
-                    detail.frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    versionList.frame(minWidth: Size.versionListMin, idealWidth: Size.versionListIdeal)
+                    detail.frame(minWidth: Size.versionDetailMin, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
         }

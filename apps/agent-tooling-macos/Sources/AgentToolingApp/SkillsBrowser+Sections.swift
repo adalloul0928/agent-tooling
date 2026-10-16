@@ -100,7 +100,7 @@ extension SkillsBrowser {
             } else {
                 Spacer(minLength: 0)
             }
-            Text("Found in").frame(width: 72, alignment: .trailing)
+            Text("Found in").frame(width: Size.foundInColumn, alignment: .trailing)
             Text("Managed").frame(width: columns.verdict, alignment: .trailing)
                 .help("Who manages each skill: you (with the apps this app placed it in), its plugin, or nobody here.")
         }

@@ -205,7 +205,7 @@ struct AddCatalogSourceSheet: View {
                 VStack(alignment: .leading, spacing: Space.lg) {
                     LabeledContent("Name") {
                         TextField("Team catalog", text: $name)
-                            .textFieldStyle(.roundedBorder).frame(maxWidth: 300)
+                            .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldCapped)
                     }
                     LabeledContent("Folder on this Mac") {
                         HStack(spacing: Space.lg) {
@@ -219,7 +219,7 @@ struct AddCatalogSourceSheet: View {
                         LabeledContent("Repository") {
                             VStack(alignment: .leading, spacing: Space.xs) {
                                 TextField("https://example.com/team/catalog", text: $repository)
-                                    .textFieldStyle(.roundedBorder).frame(maxWidth: 300)
+                                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldCapped)
                                 Text("Optional, and shared with your other Macs. Leave out any user name or token.")
                                     .font(AgentFont.caption).foregroundStyle(.secondary)
                             }
@@ -365,7 +365,7 @@ struct RemoveCatalogSourceConfirmation: View {
             }
         }
         .padding(Space.xl)
-        .frame(width: 300)
+        .frame(width: Size.fieldCapped)
     }
 
     static let consequence =

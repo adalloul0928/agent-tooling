@@ -63,11 +63,11 @@ struct ProjectsView: View {
                 collectionPane(projects: listed)
             } else {
                 HSplitView {
-                    collectionPane(projects: listed).frame(minWidth: 320, idealWidth: 600)
+                    collectionPane(projects: listed).frame(minWidth: Size.listPaneMin, idealWidth: Size.paneIdealWide)
                     VStack(spacing: 0) {
                         InspectorHeader(title: "Project details") { selectedProjectID = nil }
                         detailPane(allProjects: allProjects)
-                    }.frame(minWidth: 400, idealWidth: 600)
+                    }.frame(minWidth: Size.detailPaneMin, idealWidth: Size.paneIdealWide)
                 }
             }
         }

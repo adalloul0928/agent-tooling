@@ -162,6 +162,19 @@ enum Size {
     static let fieldMedium: CGFloat = 360
     /// A wide text field, a search box, or a compact confirmation popover.
     static let fieldWide: CGFloat = 420
+    /// A text field that caps itself mid-width: a URL or path in an editing
+    /// sheet, wider than a search box but kept off the sheet's edges.
+    static let fieldCapped: CGFloat = 300
+    /// A field holding a short upstream reference (a ref or tag).
+    static let fieldRef: CGFloat = 220
+    /// A field holding an upstream URL beside that ref.
+    static let fieldLink: CGFloat = 340
+    /// The least width a header search field keeps before it stops shrinking.
+    static let searchFieldMin: CGFloat = 180
+    /// The width that search field prefers.
+    static let searchFieldIdeal: CGFloat = 300
+    /// The managed-clients popover shown from the Apps toolbar.
+    static let managedClientsPopover: CGFloat = 380
     /// The least height an empty state keeps so its symbol and text sit clear of the edges.
     static let emptyStateMinHeight: CGFloat = 200
     /// The fixed height a full-page empty-state card fills, so its symbol and
@@ -172,6 +185,32 @@ enum Size {
     static let sheetScrollCap: CGFloat = 200
     /// The form on the first-launch screen.
     static let firstLaunchFormWidth: CGFloat = 520
+
+    /// The least width the list column of a screen's main list/detail split
+    /// keeps. Every equivalent split (Presets, Projects, Activity, MCP servers,
+    /// Marketplace, Plugins, Skills) uses this one value so the columns line up
+    /// screen to screen.
+    static let listPaneMin: CGFloat = 320
+    /// The least width the detail column of that same split keeps.
+    static let detailPaneMin: CGFloat = 400
+    /// The width a split prefers when the window has room: a near-even split.
+    static let paneIdealWide: CGFloat = 600
+    /// The least width the History tab's version list keeps. A narrower rail
+    /// than the shared list column because it holds only stamps, not rows of
+    /// detail.
+    static let versionListMin: CGFloat = 260
+    /// The width that version list prefers when the window has room.
+    static let versionListIdeal: CGFloat = 300
+    /// The least width the History tab's detail column keeps, narrower than the
+    /// shared detail minimum because its content is a single version's note.
+    static let versionDetailMin: CGFloat = 380
+    /// The skill creator's chat column: its own split, not the shared list/detail
+    /// one, so it keeps its own widths.
+    static let creatorChatMin: CGFloat = 380
+    static let creatorChatIdeal: CGFloat = 430
+    static let creatorChatMax: CGFloat = 520
+    /// The skill creator's draft-review column.
+    static let creatorDraftMin: CGFloat = 440
 
     /// A client brand mark on a row.
     static let brandMark: CGFloat = 15
@@ -184,6 +223,9 @@ enum Size {
     static let iconButton: CGFloat = 28
     /// The label column of a key/value row.
     static let labelColumn: CGFloat = 132
+    /// The trailing "Found in" column on a skill table row and its header, wide
+    /// enough for the client marks it holds.
+    static let foundInColumn: CGFloat = 72
     /// A narrower, trailing-aligned label column for a sheet's detail rows,
     /// where the value column wants more room than `labelColumn` leaves.
     static let compactLabelColumn: CGFloat = 118
@@ -213,6 +255,9 @@ enum SheetSize {
     static let xlarge = CGSize(width: 860, height: 680)
     /// A full editor.
     static let editor = CGSize(width: 980, height: 720)
+    /// The skill creator: a chat column beside a draft-review pane, wider than
+    /// the shared editor so both panes keep room.
+    static let creator = CGSize(width: 1_000, height: 720)
 }
 
 extension View {

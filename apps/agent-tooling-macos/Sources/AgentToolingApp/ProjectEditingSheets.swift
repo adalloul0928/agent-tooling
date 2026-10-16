@@ -256,7 +256,7 @@ struct NewProjectSheet: View {
                 VStack(alignment: .leading, spacing: Space.lg) {
                     LabeledContent("Name") {
                         TextField("My service", text: $name)
-                            .textFieldStyle(.roundedBorder).frame(maxWidth: 300)
+                            .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldCapped)
                             .focused($nameFocused)
                             .onSubmit { if canCreate { create() } }
                     }

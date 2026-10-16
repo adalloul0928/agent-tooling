@@ -45,12 +45,12 @@ struct PluginsView: View {
                     if showingDetails, !selection.isEmpty {
                         HSplitView {
                             collectionPane(rows: listed, updates: updates)
-                                .frame(minWidth: 340, idealWidth: proxy.size.width * 0.55)
+                                .frame(minWidth: Size.listPaneMin, idealWidth: proxy.size.width * 0.55)
                             VStack(spacing: 0) {
                                 InspectorHeader(title: "Plugin details") { showingDetails = false }
                                 detailPane(inventory: inventory, updates: updates)
                             }
-                            .frame(minWidth: 400, idealWidth: proxy.size.width * 0.45)
+                            .frame(minWidth: Size.detailPaneMin, idealWidth: proxy.size.width * 0.45)
                         }
                     } else {
                         collectionPane(rows: listed, updates: updates)

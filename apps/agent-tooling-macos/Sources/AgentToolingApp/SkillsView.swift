@@ -113,14 +113,14 @@ struct SkillsBrowser: View {
                     HSplitView {
                         collectionPane(skills: listed)
                             .frame(
-                                minWidth: 320, idealWidth: proxy.size.width / 2, maxWidth: .infinity,
+                                minWidth: Size.listPaneMin, idealWidth: proxy.size.width / 2, maxWidth: .infinity,
                                 maxHeight: .infinity, alignment: .topLeading)
                         VStack(spacing: 0) {
                             InspectorHeader(title: "Skill details") { selectedID = nil }
                             detailPane
                         }
                         .frame(
-                            minWidth: 400, idealWidth: proxy.size.width / 2, maxWidth: .infinity,
+                            minWidth: Size.detailPaneMin, idealWidth: proxy.size.width / 2, maxWidth: .infinity,
                             maxHeight: .infinity, alignment: .topLeading)
                     }
                 } else {
@@ -236,7 +236,7 @@ struct SkillsBrowser: View {
 
     var searchField: some View {
         InventorySearchField(placeholder: "Search skills", text: $query)
-            .frame(minWidth: 180, idealWidth: 300, maxWidth: 420)
+            .frame(minWidth: Size.searchFieldMin, idealWidth: Size.searchFieldIdeal, maxWidth: Size.fieldWide)
     }
 
     func filtersToolbar(skills: [SkillEntry]) -> some View {

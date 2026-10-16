@@ -41,11 +41,11 @@ struct ActivityView: View {
                 activityList
             } else {
                 HSplitView {
-                    activityList.frame(minWidth: 320, idealWidth: 500)
+                    activityList.frame(minWidth: Size.listPaneMin, idealWidth: Size.paneIdealWide)
                     VStack(spacing: 0) {
                         InspectorHeader(title: "Activity details") { selectedID = nil }
                         activityDetail
-                    }.frame(minWidth: 400, idealWidth: 620)
+                    }.frame(minWidth: Size.detailPaneMin, idealWidth: Size.paneIdealWide)
                 }
             }
         }

@@ -90,11 +90,11 @@ struct SkillCreatorSheet: View {
                         composerText: $composerText, showsOptions: $showsOptions, optionsState: $options,
                         composerFocused: $composerFocused, sendComposer: sendComposer, startOver: startOver,
                         chooseProjectFolder: chooseProjectFolder)
-                    .frame(minWidth: 380, idealWidth: 430, maxWidth: 520, maxHeight: .infinity)
+                    .frame(minWidth: Size.creatorChatMin, idealWidth: Size.creatorChatIdeal, maxWidth: Size.creatorChatMax, maxHeight: .infinity)
                     SkillCreatorDraftPane(
                         result: session.result, draftIssue: session.draftIssue,
                         hasConversation: session.hasConversation, client: client, selection: $reviewSelection)
-                    .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(minWidth: Size.creatorDraftMin, maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
 
@@ -112,7 +112,7 @@ struct SkillCreatorSheet: View {
             reviewSelection.reset()
             reviewSelection.selectInitial(from: session.result?.files ?? [])
         }
-        .frame(width: 1_000, height: 720)
+        .frame(width: SheetSize.creator.width, height: SheetSize.creator.height)
         .background(AgentTheme.contentBackground)
         .task(id: client) {
             await session.checkAvailability(for: client)

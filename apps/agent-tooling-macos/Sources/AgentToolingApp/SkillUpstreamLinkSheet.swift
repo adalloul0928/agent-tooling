@@ -292,17 +292,17 @@ struct SkillUpstreamLinkSheet: View {
         VStack(alignment: .leading, spacing: Space.lg) {
             LabeledContent("Repository") {
                 TextField("https://github.com/owner/repository", text: $session.repositoryURL)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 340)
+                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldLink)
                     .accessibilityLabel("Repository address")
             }
             LabeledContent("Branch or tag") {
                 TextField("main", text: $session.ref)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 220)
+                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldRef)
                     .accessibilityLabel("Branch or tag")
             }
             LabeledContent("Folder in the repository") {
                 TextField("Repository root", text: $session.subdirectory)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 340)
+                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldLink)
                     .accessibilityLabel("Folder in the repository")
             }
             HStack(spacing: Space.lg) {

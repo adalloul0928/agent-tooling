@@ -89,12 +89,12 @@ struct PresetsView: View {
             }
         } else if let selection, let preset = presets.first(where: { $0.id == selection }) {
             HSplitView {
-                list.frame(minWidth: 280, idealWidth: 320)
+                list.frame(minWidth: Size.listPaneMin, idealWidth: Size.paneIdealWide)
                 VStack(spacing: 0) {
                     InspectorHeader(title: "Preset details") { self.selection = nil }
                     detail(preset)
                 }
-                .frame(minWidth: 420, idealWidth: 600)
+                .frame(minWidth: Size.detailPaneMin, idealWidth: Size.paneIdealWide)
             }
             .onExitCommand { self.selection = nil }
         } else {

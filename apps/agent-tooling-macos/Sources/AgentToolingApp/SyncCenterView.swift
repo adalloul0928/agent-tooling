@@ -59,7 +59,7 @@ struct SyncCenterView: View {
                     Button("Choose apps…") { showingClientSelection = true }
                         .buttonStyle(.glass)
                         .popover(isPresented: $showingClientSelection) {
-                            ManagedClientsPopover(device: workspace.device).frame(width: 380)
+                            ManagedClientsPopover(device: workspace.device).frame(width: Size.managedClientsPopover)
                         }
                     Button("Set up…", systemImage: "wand.and.stars") { showingSetup = true }
                         .buttonStyle(.glass)

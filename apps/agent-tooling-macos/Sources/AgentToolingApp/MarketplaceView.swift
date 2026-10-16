@@ -65,12 +65,12 @@ struct MarketplaceView: View {
                     if showingDetails, selectedPackage != nil {
                         HSplitView {
                             packagePane(packages: packages)
-                                .frame(minWidth: 340, idealWidth: proxy.size.width * 0.55)
+                                .frame(minWidth: Size.listPaneMin, idealWidth: proxy.size.width * 0.55)
                             VStack(spacing: 0) {
                                 InspectorHeader(title: "Package details") { showingDetails = false }
                                 detailPane
                             }
-                            .frame(minWidth: 410, idealWidth: proxy.size.width * 0.45)
+                            .frame(minWidth: Size.detailPaneMin, idealWidth: proxy.size.width * 0.45)
                         }
                     } else {
                         packagePane(packages: packages)

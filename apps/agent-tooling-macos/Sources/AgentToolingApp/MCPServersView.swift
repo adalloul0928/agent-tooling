@@ -108,12 +108,12 @@ struct MCPServersView: View {
             Group {
                 if showingDetails, !selection.isEmpty {
                     HSplitView {
-                        collectionPane.frame(minWidth: 340, idealWidth: proxy.size.width * 0.55)
+                        collectionPane.frame(minWidth: Size.listPaneMin, idealWidth: proxy.size.width * 0.55)
                         VStack(spacing: 0) {
                             InspectorHeader(title: "Connection details") { showingDetails = false }
                             detailPane
                         }
-                        .frame(minWidth: 400, idealWidth: proxy.size.width * 0.45)
+                        .frame(minWidth: Size.detailPaneMin, idealWidth: proxy.size.width * 0.45)
                     }
                 } else {
                     collectionPane
