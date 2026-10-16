@@ -365,7 +365,9 @@ struct PresetsView: View {
                 guard let id = shareSelection else { return }
                 Task { await export.prepare(id) }
             } label: {
-                Label("Prepare export…", systemImage: "doc.text.magnifyingglass")
+                // Reads the item and shows what an export would hold right
+                // here; nothing opens until Export… or Share….
+                Label("Prepare export", systemImage: "doc.text.magnifyingglass")
             }
             .secondaryActionStyle()
             .disabled(export.isBusy || shareSelection == nil)

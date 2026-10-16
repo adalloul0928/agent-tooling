@@ -199,7 +199,7 @@ struct ProjectsView: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Look Here"
+        panel.prompt = "Look here"
         panel.message = "Agent Tooling will look through this folder's children for projects."
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await workspace.projectDiscovery.addScanRoot(url) }
@@ -289,8 +289,8 @@ struct ProjectsView: View {
     }
 
     private var emptyStateActionTitle: String? {
-        if !query.isEmpty { return "Clear Search" }
-        if filter == .assigned { return "Show All" }
+        if !query.isEmpty { return "Clear search" }
+        if filter == .assigned { return "Show all" }
         return workspace.library.access == .writable ? "New project…" : nil
     }
 

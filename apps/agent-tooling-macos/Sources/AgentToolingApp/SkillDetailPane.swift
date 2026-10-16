@@ -158,7 +158,7 @@ struct SkillDetailView: View {
     @ViewBuilder private var actions: some View {
         HStack(spacing: Space.md) {
             if skill.ownership == .centralPersonal, skill.hasCentralContent {
-                Button("Edit Source…", systemImage: "doc.text", action: onEditSource)
+                Button("Edit source…", systemImage: "doc.text", action: onEditSource)
                     .secondaryActionStyle()
                     .disabled(content.isBusy || !content.canWrite)
                     .accessibilityHint("Edits the complete SKILL.md while preserving scripts, references, and assets")
@@ -230,7 +230,7 @@ struct SkillDetailView: View {
                         Text("Asked for, but not installed yet.")
                             .font(AgentFont.caption).foregroundStyle(.secondary)
                         Spacer()
-                        Button("Install now", systemImage: "arrow.down.circle", action: onAssign)
+                        Button("Install now…", systemImage: "arrow.down.circle", action: onAssign)
                             .primaryActionStyle()
                             .accessibilityLabel("Install this skill in the apps that asked for it")
                     }

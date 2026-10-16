@@ -234,7 +234,8 @@ struct SkillCreatorSheet: View {
             .disabled(session.isSaving || session.isInstalling)
 
             if let result = session.result {
-                Button("Save skill and choose where it is used") {
+                // Saving closes this sheet and opens the assignment sheet.
+                Button("Save skill and choose where it is used…") {
                     save(result)
                 }
                 .primaryActionStyle()

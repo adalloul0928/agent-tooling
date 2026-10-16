@@ -68,13 +68,14 @@ struct SkillsBrowser: View {
         VStack(spacing: 0) {
             PageToolbar(title: "Skills", context: toolbarContext) {
                 if isSelecting {
-                    Button("Select All") { selection = assignableIDs.intersection(listed.map(\.id)) }
+                    Button("Select all") { selection = assignableIDs.intersection(listed.map(\.id)) }
                         .buttonStyle(.glass)
                         .accessibilityHint("Selects every skill on this list that can be assigned")
                     Button("Done", systemImage: "checkmark.circle") { setSelecting(false) }.buttonStyle(.glass)
                 } else {
                     Menu {
-                        Button("Choose several…", systemImage: "checkmark.circle") { setSelecting(true) }
+                        // Only switches the list into choosing; nothing opens.
+                        Button("Choose several", systemImage: "checkmark.circle") { setSelecting(true) }
                             .disabled(workspace.library.isBusy || assignableIDs.isEmpty)
                         Button("Attach a folder you author…", systemImage: "folder.badge.plus") { attaching = true }
                             .disabled(workspace.library.isBusy || !canWrite)

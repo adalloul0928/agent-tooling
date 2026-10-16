@@ -26,7 +26,7 @@ extension SkillsBrowser {
                     symbol: query.isEmpty ? "doc.text" : "doc.text.magnifyingglass",
                     title: emptyStateTitle,
                     message: emptyStateMessage,
-                    actionTitle: inventory.skills.isEmpty ? "New Skill…" : "Clear filters"
+                    actionTitle: inventory.skills.isEmpty ? "New skill…" : "Clear filters"
                 ) {
                     performEmptyStateAction()
                 }

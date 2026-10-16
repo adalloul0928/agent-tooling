@@ -51,7 +51,8 @@ struct WorkspaceProjectAddSheet: View {
                 Spacer()
                 Text(selection.isEmpty ? "Select the tools this project needs." : "\(selection.count) selected")
                     .foregroundStyle(.secondary)
-                Button("Continue") {
+                // Opens the assignment sheet over this one.
+                Button("Continue…") {
                     session.discardReview()
                     isReviewing = true
                 }
@@ -314,7 +315,7 @@ struct NewProjectSheet: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Use Folder"
+        panel.prompt = "Use folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard ProjectDiscovery.isEligibleProjectRoot(url, homeURL: workspace.homeRoot) else {
             errorMessage = "Your home folder is where this Mac's own skills and servers live. Choose a project folder inside it."

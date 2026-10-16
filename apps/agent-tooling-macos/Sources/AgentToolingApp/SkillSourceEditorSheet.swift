@@ -63,7 +63,7 @@ struct SkillSourceEditorSheet: View {
                 Button("Cancel") { dismiss() }
                     .secondaryActionStyle()
                     .keyboardShortcut(.cancelAction)
-                Button("Save Source") {
+                Button("Save source") {
                     Task {
                         if await session.saveSource(edited, for: skill) { dismiss() }
                     }

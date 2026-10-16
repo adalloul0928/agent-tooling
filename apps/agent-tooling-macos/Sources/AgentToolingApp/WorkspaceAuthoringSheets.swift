@@ -62,12 +62,12 @@ struct WorkspaceAttachFolderSheet: View {
                 }
                 Spacer()
                 if session.candidate == nil {
-                    Button("Choose Folder…") { choose() }
+                    Button("Choose folder…") { choose() }
                         .primaryActionStyle()
                         .keyboardShortcut(.defaultAction)
                         .disabled(session.isBusy)
                 } else {
-                    Button("Attach This Folder") {
+                    Button("Attach this folder") {
                         Task {
                             await session.attach(displayName: displayName)
                             if session.errorMessage == nil { dismiss() }
@@ -91,7 +91,7 @@ struct WorkspaceAttachFolderSheet: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Use Folder"
+        panel.prompt = "Use folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         displayName = ""
         Task { await session.inspect(url.standardizedFileURL) }
@@ -214,7 +214,7 @@ struct WorkspacePackageExportSheet: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "Export Here"
+        panel.prompt = "Export here"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await session.write(to: url.standardizedFileURL) }
     }

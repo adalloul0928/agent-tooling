@@ -17,7 +17,8 @@ struct GalleryUnrenderableTests {
 
         index.addUnrenderable(
             control: "Confirmation dialog",
-            text: "Clear saved insights? · This removes the saved aggregate report. Client chat history will not be changed. · [Clear Saved Insights] [Cancel]",
+            text: "Clear saved insights? · This removes the saved aggregate report. Client chat history will not be changed. · "
+                + "[Clear saved insights] [Cancel]",
             source: "Sources/AgentToolingApp/InsightsView.swift:99")
         index.addUnrenderable(
             control: "Confirmation dialog",
@@ -50,8 +51,8 @@ struct GalleryUnrenderableTests {
             source: "Sources/AgentToolingApp/SyncSettingsView.swift:385")
         index.addUnrenderable(
             control: "Open panel",
-            text: "prompt \"Use Folder\" · folders (link a project folder)",
-            source: "Sources/AgentToolingApp/ProjectEditingSheets.swift:313")
+            text: "prompt \"Use folder\" · folders (link a project folder)",
+            source: "Sources/AgentToolingApp/ProjectEditingSheets.swift:314")
 
         index.addUnrenderable(
             control: "Menu",

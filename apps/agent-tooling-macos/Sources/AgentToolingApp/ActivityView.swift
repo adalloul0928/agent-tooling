@@ -83,7 +83,7 @@ struct ActivityView: View {
                     message: mergedActivities.isEmpty
                         ? "Checks, reviewed changes, and account attestations will appear here."
                         : "Try another kind or clear the search.",
-                    actionTitle: mergedActivities.isEmpty ? nil : "Clear Filters"
+                    actionTitle: mergedActivities.isEmpty ? nil : "Clear filters"
                 ) {
                     query = ""
                     filter = .all
