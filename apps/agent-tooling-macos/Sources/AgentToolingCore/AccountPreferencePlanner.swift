@@ -79,6 +79,18 @@ public enum AccountPreferencePlanner {
     public static func plan(
         preferences: AccountPreferences, observation: AccountObservation, configurationText: String?
     ) -> AccountPreferencePlan {
+        plan(preferences: preferences, observation: observation, configuration: .success(configurationText))
+    }
+
+    /// The same decision, from the file as it was read: its text, nil when
+    /// there is no file, or the error that kept a file that is there from
+    /// being read, such as one over the size limit. A file that could not be
+    /// read is never planned against as though it were empty, because the
+    /// engine would refuse the edit too: every choice that needs one is held,
+    /// with the error's own words as the reason.
+    public static func plan(
+        preferences: AccountPreferences, observation: AccountObservation, configuration: Result<String?, any Error>
+    ) -> AccountPreferencePlan {
         let provider = observation.provider
         var plan = AccountPreferencePlan(provider: provider)
         let entries = preferences.entries.filter { $0.provider == provider }.sorted { $0.key < $1.key }
@@ -89,7 +101,12 @@ public enum AccountPreferencePlanner {
             return plan
         }
 
-        var text = configurationText ?? ""
+        var text = ""
+        var unreadable: String?
+        switch configuration {
+        case .success(let read): text = read ?? ""
+        case .failure(let error): unreadable = (error as? any LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
         for entry in entries {
             let key = entry.key
             let current = observation.effectiveValue(of: key)
@@ -106,6 +123,10 @@ public enum AccountPreferencePlanner {
             case .success(let made): edits = made
             case .failure(let reason):
                 plan.held.append(.init(key: key, desired: entry.value, reason: reason.message))
+                continue
+            }
+            if let unreadable {
+                plan.held.append(.init(key: key, desired: entry.value, reason: unreadable))
                 continue
             }
             if provider == .chatGPT, let obstacle = edits.lazy.compactMap({ CodexConfigurationShape.obstacle(in: text, keyPath: $0.keyPath) }).first {

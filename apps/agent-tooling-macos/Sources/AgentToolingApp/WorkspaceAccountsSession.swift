@@ -211,10 +211,13 @@ final class WorkspaceAccountsSession {
         let computed = await Task.detached(priority: .userInitiated) { () -> [AccountProvider: AccountPreferencePlan] in
             var plans: [AccountProvider: AccountPreferencePlan] = [:]
             for (provider, observation) in observations {
-                let file = ClientConfigurationFile.settings(for: provider.client).url(homeURL: home)
-                let text = Self.boundedText(at: file)
+                // Read the way the engine reads it to apply, so a file over the
+                // limit, or one that is there but cannot be read, is held in
+                // the plan with the reason rather than rehearsed as empty.
+                let file = ClientConfigurationFile.settings(for: provider.client)
                 plans[provider] = AccountPreferencePlanner.plan(
-                    preferences: preferences, observation: observation, configurationText: text)
+                    preferences: preferences, observation: observation,
+                    configuration: Result { try file.readText(homeURL: home) })
             }
             return plans
         }.value
@@ -369,15 +372,12 @@ final class WorkspaceAccountsSession {
         return status
     }
 
-    /// The text of a settings file, read with a byte cap so a pathological
-    /// file cannot be loaded whole into memory on a hot path. Nil when the
-    /// file is missing, unreadable, or over the cap — the readers in
-    /// AgentToolingCore use the same 4 MB configuration bound.
+    /// The text of a file Claude Code keeps beside its settings, read with the
+    /// configuration read's bound, for what the publishing card shows. It
+    /// decides nothing, so nil covers a missing file, an unreadable one, and
+    /// one over the limit alike.
     nonisolated static func boundedText(at url: URL) -> String? {
-        let maximumBytes = 4 * 1_024 * 1_024
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
-        defer { try? handle.close() }
-        return try? BoundedInputReader.readUTF8(from: handle, maximumBytes: maximumBytes)
+        try? ClientConfigurationFile.readText(at: url, named: url.lastPathComponent)
     }
 
     /// The source Claude Code recorded for a marketplace, from its own

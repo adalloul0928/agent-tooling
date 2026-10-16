@@ -31,8 +31,10 @@ struct WorkspaceAccountsSessionBoundedReadTests {
 
     /// A config.toml that defines `apps.github.enabled` as a dotted key the
     /// line editor cannot rewrite, padded past the configuration byte cap.
-    /// Read whole, the planner sees the obstacle and holds the choice; read
-    /// bounded, the oversize file is ignored and the choice becomes a change.
+    /// Read whole, the planner would hold the choice on that obstacle. Read
+    /// bounded, the file is refused for its size before it is loaded, and the
+    /// choice is held with that reason: not planned against an empty file,
+    /// which the engine would only refuse when the plan was applied.
     @Test func anOversizeConfigFileIsNotReadWholeWhenPlanning() async throws {
         let fixture = try await ShellRenderFixture(
             deviceObserver: StubDeviceObserver(observations: [
@@ -56,9 +58,14 @@ struct WorkspaceAccountsSessionBoundedReadTests {
         await session.read()
         #expect(await session.setChoice(.init(.app, subject: "github"), to: .off))
         let plan = try #require(session.plan(.chatGPT))
+        #expect(plan.changes.isEmpty, "nothing is planned against a file that could not be read")
+        #expect(plan.held.map(\.key) == [.init(.app, subject: "github")])
         #expect(
-            plan.changes.map(\.key) == [.init(.app, subject: "github")],
-            "an oversize file is ignored, so the choice is a change rather than held on an obstacle only a whole read would see")
-        #expect(plan.held.isEmpty)
+            plan.held.first?.reason
+                == ConfigurationFileTooLargeError(
+                    path: ".codex/config.toml", maximumBytes: BoundedFileAccess.maximumConfigurationBytes
+                ).errorDescription,
+            "held for the file's size, not for an obstacle only a whole read would see")
+        #expect(session.operationPlan(.chatGPT) == nil)
     }
 }

@@ -156,6 +156,20 @@ struct AccountPreferencePlannerTests {
         #expect(plan.held.first?.reason.contains("could not be read") == true)
     }
 
+    /// A file that is there but could not be read, here one over the size
+    /// limit, is not an empty one. Each choice that needs an edit is held with
+    /// the read's own reason; one this Mac already follows still is followed.
+    @Test func aFileThatCouldNotBeReadHoldsTheChoicesThatNeedAnEdit() {
+        let tooLarge = ConfigurationFileTooLargeError(path: ".claude/settings.json", maximumBytes: 4 * 1_048_576)
+        let plan = AccountPreferencePlanner.plan(
+            preferences: Self.preferences((.init(.skillSync), .off), (.init(.pluginSync), .on)),
+            observation: Self.claude(), configuration: .failure(tooLarge))
+        #expect(plan.changes.isEmpty)
+        #expect(plan.held.map(\.key) == [.init(.skillSync)])
+        #expect(plan.held.first?.reason == tooLarge.errorDescription)
+        #expect(plan.following == [.init(.pluginSync)])
+    }
+
     @Test func theOtherAccountsChoicesAreNotThisPlans() {
         let plan = AccountPreferencePlanner.plan(
             preferences: Self.preferences((.init(.apps), .off)), observation: Self.claude(), configurationText: nil)
