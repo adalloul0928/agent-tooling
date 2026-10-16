@@ -64,9 +64,11 @@ public struct ConfigurationEditReceipt: Hashable, Sendable {
 /// Only JSON layers are supported. Codex's TOML keeps comments and formatting
 /// this build cannot reproduce faithfully, so editing it here would risk
 /// rewriting someone's file to satisfy a parser.
+///
+/// The file is read the way every client configuration file is: bounded by
+/// the limit they all share, and refused before it is loaded when it is over
+/// it, with the error that names the file and the limit.
 public struct ConfigurationEditor: Sendable {
-    public static let maximumFileBytes = 1 << 20
-
     public init() {}
 
     /// Checks a proposed change against what the inspector currently reports.
@@ -87,9 +89,7 @@ public struct ConfigurationEditor: Sendable {
     /// The file's current content fingerprint, for review and for the write's
     /// own precondition.
     public func fingerprint(of path: String) throws -> String? {
-        guard FileManager.default.fileExists(atPath: path) else { return nil }
-        let bytes = try read(path)
-        return SHA256.hash(data: bytes).lowercaseHex
+        try contents(of: path)?.fingerprint
     }
 
     public func apply(
@@ -97,12 +97,13 @@ public struct ConfigurationEditor: Sendable {
         adapter: some ConfigurationAdapter,
         installedClientVersion: String?
     ) throws -> ConfigurationEditReceipt {
-        let current = try fingerprint(of: edit.sourcePath)
-        guard current == edit.expectedFingerprint else {
-            throw ConfigurationEditError.fileChangedSinceReview(currentFingerprint: current)
+        // One read: the bytes edited are the bytes whose fingerprint matched
+        // what was reviewed, not a second read that could have moved on.
+        let current = try contents(of: edit.sourcePath)
+        guard current?.fingerprint == edit.expectedFingerprint else {
+            throw ConfigurationEditError.fileChangedSinceReview(currentFingerprint: current?.fingerprint)
         }
-        let original = FileManager.default.fileExists(atPath: edit.sourcePath)
-            ? try read(edit.sourcePath) : Data("{}".utf8)
+        let original = current?.bytes ?? Data("{}".utf8)
         guard var object = try? JSONSerialization.jsonObject(with: original) as? [String: Any] else {
             throw ConfigurationEditError.unsupportedFormat
         }
@@ -123,10 +124,15 @@ public struct ConfigurationEditor: Sendable {
         catch { throw ConfigurationEditError.writeFailed }
 
         // Re-read and resolve again: the write is only a success if the client
-        // would now actually use this value.
-        let reader = ConfigurationLayerReader()
-        let layer = try reader.layer(at: URL(fileURLWithPath: edit.sourcePath),
-                                     kind: edit.layer, isWritable: true)
+        // would now actually use this value. A file that cannot be read back
+        // shows no value at all, and it has been written, so it is reported as
+        // that rather than as an edit that never happened.
+        let layer: ConfigurationLayer?
+        do {
+            layer = try ConfigurationLayerReader().layer(at: URL(fileURLWithPath: edit.sourcePath), kind: edit.layer, isWritable: true)
+        } catch {
+            throw ConfigurationEditError.notEffectiveAfterWrite
+        }
         let resolved = EffectiveConfigurationResolver.resolve(
             adapter: adapter, installedClientVersion: installedClientVersion,
             layers: layer.map { [$0] } ?? [])
@@ -152,12 +158,21 @@ extension ConfigurationLayerReader {
 }
 
 private extension ConfigurationEditor {
-    func read(_ path: String) throws -> Data {
+    /// The file's bytes as they are and their fingerprint, or nil when there is
+    /// no file. Read bounded by the limit every client configuration read
+    /// shares: a file over it is refused with the error that names it and the
+    /// limit, before it is loaded.
+    func contents(of path: String) throws -> (bytes: Data, fingerprint: String)? {
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
         let bytes: Data
-        do { bytes = try Data(contentsOf: URL(fileURLWithPath: path), options: [.mappedIfSafe]) }
-        catch { throw ConfigurationEditError.writeFailed }
-        guard bytes.count <= Self.maximumFileBytes else { throw ConfigurationEditError.unsupportedFormat }
-        return bytes
+        do {
+            bytes = try ClientConfigurationFile.readData(at: URL(fileURLWithPath: path), named: path)
+        } catch let tooLarge as ConfigurationFileTooLargeError {
+            throw tooLarge
+        } catch {
+            throw ConfigurationEditError.writeFailed
+        }
+        return (bytes, SHA256.hash(data: bytes).lowercaseHex)
     }
 
     /// Sets one key, including the documented `permissions.*` nesting, leaving

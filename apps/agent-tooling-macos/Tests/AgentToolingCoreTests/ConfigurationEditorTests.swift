@@ -120,6 +120,58 @@ struct ConfigurationEditorTests {
         #expect(permissions["deny"] as? [String] == ["Bash"])
     }
 
+    /// The editor reads under the limit every client configuration read
+    /// shares, not a smaller one of its own: a file past its old 1 MB cap
+    /// still has a fingerprint to review against.
+    @Test func aFileUnderTheSharedConfigurationLimitIsRead() throws {
+        let fixture = try Fixture(#"{"model":"old-model"}"# + String(repeating: " ", count: 1 << 20))
+        defer { fixture.remove() }
+
+        #expect(try ConfigurationEditor().fingerprint(of: fixture.path) != nil)
+    }
+
+    /// Over the shared limit the file is refused before it is loaded, with the
+    /// error that names it and the limit, and nothing is written: neither the
+    /// file nor a backup beside it.
+    @Test func aFileOverTheSharedConfigurationLimitIsRefusedByNameAndLimit() throws {
+        let limit = BoundedFileAccess.maximumConfigurationBytes
+        let fixture = try Fixture(#"{"model":"old-model"}"# + String(repeating: " ", count: limit))
+        defer { fixture.remove() }
+        let before = try fixture.contents()
+        let refusal = ConfigurationFileTooLargeError(path: fixture.path, maximumBytes: limit)
+        let edit = ConfigurationEdit(
+            key: "model", layer: .user, sourcePath: fixture.path, newValue: .string("new-model"), expectedFingerprint: nil)
+
+        #expect(throws: refusal) { _ = try ConfigurationEditor().fingerprint(of: fixture.path) }
+        #expect(throws: refusal) {
+            _ = try ConfigurationEditor().apply(edit, adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0")
+        }
+        #expect(try fixture.contents() == before)
+        #expect(!FileManager.default.fileExists(atPath: fixture.path + ".agent-tooling-backup"))
+    }
+
+    /// A rewrite the editor cannot read back to check has still been written.
+    /// It is reported as written and not shown to take effect, with the
+    /// original beside it, rather than as a change that never happened. A
+    /// value longer than a settings layer is read up to makes such a rewrite.
+    @Test func aRewriteThatCannotBeReadBackIsReportedAsWrittenButNotEffective() throws {
+        let fixture = try Fixture(#"{"model":"old-model"}"#)
+        defer { fixture.remove() }
+        let editor = ConfigurationEditor()
+        let before = try fixture.contents()
+        let long = String(repeating: "x", count: ConfigurationLayerReader.maximumFileBytes)
+
+        #expect(throws: ConfigurationEditError.notEffectiveAfterWrite) {
+            _ = try editor.apply(
+                .init(
+                    key: "model", layer: .user, sourcePath: fixture.path, newValue: .string(long),
+                    expectedFingerprint: try editor.fingerprint(of: fixture.path)),
+                adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0")
+        }
+        #expect(try fixture.object()["model"] as? String == long, "the file was written")
+        #expect(try Data(contentsOf: URL(fileURLWithPath: fixture.path + ".agent-tooling-backup")) == before)
+    }
+
     private struct Fixture {
         let root: URL
         let path: String

@@ -254,6 +254,8 @@ final class WorkspaceSettingsSession {
             "A backup of your file could not be written first, so nothing was changed."
         case ConfigurationEditError.valueRejected:
             "That value is not one this setting accepts."
+        case let tooLarge as ConfigurationFileTooLargeError:
+            tooLarge.localizedDescription
         default:
             "That setting could not be changed. Nothing was written."
         }
