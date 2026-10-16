@@ -179,7 +179,7 @@ struct OtherMacSheet: View {
 }
 
 /// Pick a library item, then the picker opens for exactly one Mac.
-private struct AssignToDeviceSheet: View {
+struct AssignToDeviceSheet: View {
     let workspace: WorkspaceLaunch.Workspace
     let device: DeviceRecord
     @Environment(\.dismiss) private var dismiss

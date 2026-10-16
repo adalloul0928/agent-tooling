@@ -356,7 +356,7 @@ private struct HealthBadge: View {
 
 /// The confirmation a person reads before signing in to several connections at
 /// once: exactly which servers, and the exact command each will run.
-private struct BulkReauthenticateConfirmation: View {
+struct BulkReauthenticateConfirmation: View {
     let entries: [ConnectionHealthEntry]
     let commandText: (ConnectionHealthEntry) -> String?
     let onConfirm: () -> Void

@@ -395,7 +395,7 @@ struct OnboardingWizard: View {
 /// unselected, and nothing here is enabled, removed, or installed for an item
 /// nobody chose — the same browser, the same review and the same save as
 /// everywhere else in the app.
-private struct OnboardingAssignmentPickerSheet: View {
+struct OnboardingAssignmentPickerSheet: View {
     let session: WorkspaceLibrarySession
     @Environment(\.dismiss) private var dismiss
     @State private var selection: Set<ArtifactID> = []

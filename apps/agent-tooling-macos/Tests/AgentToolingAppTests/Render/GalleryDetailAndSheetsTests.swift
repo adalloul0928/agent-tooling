@@ -195,6 +195,9 @@ struct GalleryDetailAndSheetsTests {
 enum SheetGallerySize {
     static let medium = CGSize(width: 680, height: 620)
     static let large = CGSize(width: 820, height: 720)
+    /// A popover's content view, drawn at the compact footprint the system
+    /// gives a popover rather than at a sheet's width.
+    static let popover = CGSize(width: 360, height: 320)
     /// A three-pane sheet — the skill creator's conversation, file list and
     /// preview — needs more width than a form sheet or it clips.
     static let wide = CGSize(width: 1_120, height: 760)

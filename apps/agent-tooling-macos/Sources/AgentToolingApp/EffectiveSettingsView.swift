@@ -307,7 +307,7 @@ struct EffectiveSettingsView: View {
 
 /// One reviewed change to one setting in one file, restyled from the old
 /// Settings sheet: the file, its current value, and the new one, side by side.
-private struct EffectiveSettingEditSheet: View {
+struct EffectiveSettingEditSheet: View {
     let session: WorkspaceSettingsSession
     let edit: WorkspaceSettingsSession.PendingEdit
     @Environment(\.dismiss) private var dismiss

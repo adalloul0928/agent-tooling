@@ -16,9 +16,9 @@ import Testing
 /// audit and Accounts with read contents — are built with the gallery helpers
 /// below (`galleryCheckupServices`, `galleryAccountReader`) and refreshed with
 /// `readAccountsForGallery`. Health reads its listing through a real command
-/// runner the launch wiring does not let a test replace, so the shell Health
-/// screen can only show its "nothing checked yet" state; its scripted listing
-/// is left to a follow-up suite that draws `HealthView` directly.
+/// runner the launch wiring does not let a test replace, so its scripted
+/// listing is drawn by `GalleryMoreSurfacesTests` from a `HealthView` built
+/// with a scripted session rather than through the shell.
 extension ShellRenderFixture {
     /// Puts the library past onboarding and leaves a request in it, so Skills,
     /// Plugins and Connections all have real rows.
@@ -101,5 +101,43 @@ extension ShellRenderFixture {
     /// `ShellRenderFixture(setupServices:)`.
     static func galleryCheckupServices() -> StubSetupServices {
         StubSetupServices(restored: setupCheckup(home: URL(filePath: "/Users/example")))
+    }
+
+    /// A Health session that has already checked, over a scripted listing with
+    /// a needs-auth remote, a connected local, a failed plugin server and a
+    /// claude.ai connector, so the Health screen draws every row shape rather
+    /// than "Nothing has been checked yet".
+    ///
+    /// Health reads its listing through a command runner the launch wiring
+    /// builds for real and does not let a test replace, so the gallery draws
+    /// this scripted session through `HealthView` directly rather than through
+    /// the shell. The listing mirrors the one `HealthSectionRenderTests` guards.
+    func galleryHealthSession() async -> WorkspaceHealthSession {
+        for client in ClientKind.allCases {
+            await workspace.device.setEnabled(client, client == .claude)
+        }
+        let listing =
+            "linear: https://mcp.linear.app/sse - ! Needs authentication\n"
+            + "local: npx -y @scope/local - ✔ Connected\n"
+            + "plugin:devtools:inspector: npx inspector - ✘ Failed to connect — connection refused\n"
+            + "Gmail: claude.ai connector - ✘ Failed to connect — is Anthropic-hosted and doesn't support local OAuth"
+        let session = WorkspaceHealthSession(
+            device: workspace.device, homeRoot: home,
+            runner: GalleryCommandRunner(output: listing),
+            locate: { client, _ in
+                URL(fileURLWithPath: "/opt/homebrew/bin/\(ClientExecutableLocator.executableName(for: client))")
+            },
+            openURL: { _ in })
+        await session.check()
+        return session
+    }
+}
+
+/// A command runner that answers one scripted listing, so the gallery's Health
+/// session reports a fixture rather than running a real client.
+struct GalleryCommandRunner: CommandRunning {
+    let output: String
+    func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput {
+        CommandOutput(status: 0, standardOutput: output, standardError: "")
     }
 }

@@ -102,8 +102,10 @@ struct GallerySectionsTests {
     /// The state label a section's shell image carries. Health reads its
     /// listing through a command runner the launch wiring builds for real and
     /// does not let a test replace, so the shell Health screen can only show
-    /// its "nothing checked yet" state; it is labelled honestly here. Every
-    /// other section draws its populated screen.
+    /// its "nothing checked yet" state; it is labelled honestly here, and the
+    /// scripted listing is drawn from `HealthView` directly in
+    /// `GalleryMoreSurfacesTests`. Every other section draws its populated
+    /// screen.
     static func state(for section: AppSection) -> String {
         section == .health ? "unchecked" : "populated"
     }

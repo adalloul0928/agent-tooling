@@ -484,7 +484,7 @@ private struct PresetListRow: View {
 /// Choosing where a preset's tools should go before following it. The same
 /// interaction `WorkspacePresetsView` offers, ported into this screen's own
 /// file so its detail pane can present it directly.
-private struct PresetFollowSheet: View {
+struct PresetFollowSheet: View {
     let session: WorkspacePresetsSession
     let library: WorkspaceLibrarySession
     let presetID: ArtifactID
@@ -580,7 +580,7 @@ private struct PresetFollowSheet: View {
 /// name only — a preset's membership is changed by editing the tools in the
 /// Library, not here. Nothing is put in place by either: creating records the
 /// shelf, and following it later is what moves anything.
-private struct PresetEditorSheet: View {
+struct PresetEditorSheet: View {
     enum Mode {
         case create
         case rename(presetID: ArtifactID, currentName: String)

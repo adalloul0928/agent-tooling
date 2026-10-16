@@ -34,6 +34,28 @@ struct PasteImportSheet: View {
     @State private var isSaving = false
     @State private var savedSkillName: String?
     @State private var savedServerName: String?
+    /// A preview seed: text to interpret on appear, so a gallery or preview can
+    /// show the parsed and parse-error layouts the sheet otherwise reaches only
+    /// from text a person types. Nil on every normal path.
+    private let previewText: String?
+
+    /// The sheet as the app presents it: nothing seeded, text comes from the
+    /// person.
+    init(workspace: WorkspaceLaunch.Workspace, mode: Mode = .paste) {
+        self.workspace = workspace
+        self.mode = mode
+        self.previewText = nil
+    }
+
+    /// A preview-only initializer that seeds the paste field and interprets it
+    /// on appear, so the parsed-definition and parse-error layouts can be shown
+    /// without a person typing. Internal, used by the screen gallery.
+    init(workspace: WorkspaceLaunch.Workspace, mode: Mode = .paste, previewText: String) {
+        self.workspace = workspace
+        self.mode = mode
+        self.previewText = previewText
+        _text = State(initialValue: previewText)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,7 +67,7 @@ struct PasteImportSheet: View {
         }
         .onAppear {
             skillDraft.selectedTargets.formIntersection(Set(availableClients))
-            startNewConnectionIfNeeded()
+            if let previewText { read(previewText) } else { startNewConnectionIfNeeded() }
         }
         .sheetSize(SheetSize.large)
         .background(AgentTheme.contentBackground)

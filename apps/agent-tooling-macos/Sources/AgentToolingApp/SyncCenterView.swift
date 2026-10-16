@@ -737,7 +737,7 @@ private struct AppTile: View {
 ///
 /// Unchecking one records a choice and nothing else: its software and its
 /// configuration stay exactly where they are, and nothing is removed from it.
-private struct ManagedClientsPopover: View {
+struct ManagedClientsPopover: View {
     let device: WorkspaceDeviceSession
 
     var body: some View {
@@ -776,7 +776,7 @@ private struct ManagedClientsPopover: View {
 }
 
 /// Choosing which destination goes somewhere other than its app's own folder.
-private struct WorkspaceLinkDestinationSheet: View {
+struct WorkspaceLinkDestinationSheet: View {
     let session: WorkspaceDeploymentSession
     /// Only the apps this Mac manages are offered: pointing a folder at an app
     /// this Mac was told not to touch would record a destination for something

@@ -57,5 +57,12 @@ struct GalleryUnrenderableTests {
             control: "Menu",
             text: "The sidebar's device switcher and each row's context and assignment menus are AppKit menus drawn by the system; their items are the same actions the panels and sheets above present.",
             source: "Sources/AgentToolingApp/AssignmentDeviceScopeMenu.swift")
+
+        // The menu bar extra is a system menu-style scene, so its items are
+        // listed with their exact text rather than screenshot.
+        index.addUnrenderable(
+            control: "Menu bar item",
+            text: "Open Agent Tooling · Check Setup (Checking setup… while busy) · Review sync (Preparing changes… while busy) · Quit Agent Tooling",
+            source: "Sources/AgentToolingApp/AgentToolingApp.swift:182")
     }
 }

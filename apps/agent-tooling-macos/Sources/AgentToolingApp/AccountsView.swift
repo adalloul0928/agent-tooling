@@ -525,7 +525,7 @@ private struct PublishingCard: View {
 
 // MARK: - Sharing this Mac's settings
 
-private struct ShareSettingsConfirmation: View {
+struct ShareSettingsConfirmation: View {
     let provider: AccountProvider
     let settings: [AccountPreference]
     let onConfirm: () -> Void
