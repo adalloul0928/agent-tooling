@@ -37,16 +37,16 @@ enum PathContainment {
     ///
     /// Both arguments must already be normalized the same way by the caller
     /// (the variants below do this). The comparison is on whole path
-    /// components: `/a/bc` is not inside `/a/b`, because the match requires
-    /// either equality or the root followed by a separator. The leading and
+    /// components: `/a/bc` is not inside `/a/b`, because each of the root's
+    /// components must equal the child's in the same place. The leading and
     /// trailing separators are trimmed, so `"/"` trims to the empty string and
     /// contains only itself. A caller that passes the filesystem root by
     /// mistake is refused, not granted the disk.
     static func isContained(normalizedChild child: String, inNormalizedRoot root: String) -> Bool {
-        let child = trimmed(child)
-        let root = trimmed(root)
-        if root.isEmpty { return child.isEmpty }
-        return child == root || child.hasPrefix(root + "/")
+        let rootParts = components(root)
+        let childParts = components(child)
+        guard !rootParts.isEmpty else { return childParts.isEmpty }
+        return childParts.count >= rootParts.count && zip(rootParts, childParts).allSatisfy { $0 == $1 }
     }
 
     /// Where `child` sits below `root`: the components after the root, with
@@ -56,13 +56,14 @@ enum PathContainment {
     /// when a remaining component is empty, `.` or `..`, so the answer joined
     /// back onto the root names the place the comparison saw.
     static func relativePath(ofNormalizedChild child: String, inNormalizedRoot root: String) -> String? {
-        let child = trimmed(child)
-        let root = trimmed(root)
-        guard !root.isEmpty, child.hasPrefix(root + "/") else { return nil }
-        let relative = String(child.dropFirst(root.count + 1))
-        let components = relative.split(separator: "/", omittingEmptySubsequences: false)
-        guard !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) else { return nil }
-        return relative
+        let rootParts = components(root)
+        let childParts = components(child)
+        guard !rootParts.isEmpty, childParts.count > rootParts.count,
+            zip(rootParts, childParts).allSatisfy({ $0 == $1 })
+        else { return nil }
+        let below = childParts.dropFirst(rootParts.count)
+        guard !below.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) else { return nil }
+        return below.joined(separator: "/")
     }
 
     /// The relative path of an item found under a root the caller has already
@@ -184,6 +185,19 @@ enum PathContainment {
 
     private static func trimmed(_ path: String) -> String {
         path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    /// The trimmed path's components, split at every separator scalar, as the
+    /// deny checks compare. Split as characters, a separator and the mark
+    /// after it are one character, so a name that begins with a combining
+    /// mark would not start a component, and a name that ends in a prepended
+    /// mark would swallow the separator after it. Each component stays a
+    /// string, so precomposed and decomposed spellings of a name still match.
+    /// Empty for the filesystem root.
+    private static func components(_ path: String) -> [String] {
+        let path = trimmed(path)
+        guard !path.isEmpty else { return [] }
+        return path.unicodeScalars.split(separator: "/", omittingEmptySubsequences: false).map { String($0) }
     }
 
     /// The trimmed path in Unicode's canonical caseless form: decomposed, case

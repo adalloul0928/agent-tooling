@@ -59,6 +59,22 @@ struct ToolCopyIdentityTests {
         #expect(ToolCopyIdentity.definitionDigest(ofSkillAt: root.appending(path: "missing")) == nil)
     }
 
+    /// A file whose name begins with a combining mark is part of the skill
+    /// like any other, so a copy that adds one does not share the digest of
+    /// a copy without it and is not called identical apart from its stamp.
+    @Test func aFileNamedWithALeadingCombiningMarkCounts() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let plain = try writeSkill(at: root.appending(path: "plain/pdf"), stamp: "1", body: "Read PDFs.")
+        let added = try writeSkill(at: root.appending(path: "added/pdf"), stamp: "1", body: "Read PDFs.")
+        let script = added.appending(path: "\u{301}run.sh")
+        try "#!/bin/sh\necho added\n".write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path(percentEncoded: false))
+
+        let digest = try #require(ToolCopyIdentity.definitionDigest(ofSkillAt: plain))
+        #expect(ToolCopyIdentity.definitionDigest(ofSkillAt: added) != digest)
+    }
+
     /// Skills that bundle fonts or images run to megabytes; they are still compared.
     @Test func aSkillWithLargeAssetsIsStillCompared() throws {
         let root = try temporaryDirectory()

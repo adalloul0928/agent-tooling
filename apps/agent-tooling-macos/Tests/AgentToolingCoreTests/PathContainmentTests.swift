@@ -74,6 +74,37 @@ struct PathContainmentTests {
         }
     }
 
+    // MARK: Components split as scalars
+
+    /// As characters, a separator and the combining mark, joiner or variation
+    /// selector after it are one character, so a character-wise test put a
+    /// name that starts with one outside the folder it is in.
+    @Test func aNameThatStartsWithACombiningMarkIsBelowItsRoot() {
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/b/\u{301}x", inNormalizedRoot: "/a/b") == "\u{301}x")
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/b/\u{200D}x", inNormalizedRoot: "/a/b") == "\u{200D}x")
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/b/\u{FE0F}x/y", inNormalizedRoot: "/a/b") == "\u{FE0F}x/y")
+        #expect(PathContainment.isContained(normalizedChild: "/a/b/\u{301}x", inNormalizedRoot: "/a/b"))
+    }
+
+    /// A prepended mark joins the character after it, here the separator, so
+    /// a character-wise test dropped one character too many below such a
+    /// root, and saw a `..` after such a name as part of the name.
+    @Test func aRootThatEndsInAPrependedMarkHasItsChildrenBelowIt() {
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/b\u{600}/x", inNormalizedRoot: "/a/b\u{600}") == "x")
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/b\u{600}/xy", inNormalizedRoot: "/a/b\u{600}") == "xy")
+        #expect(PathContainment.isContained(normalizedChild: "/a/b\u{600}/x", inNormalizedRoot: "/a/b\u{600}"))
+        #expect(!PathContainment.isContained(normalizedChild: "/a/b\u{600}x", inNormalizedRoot: "/a/b\u{600}"))
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/a/b/p\u{600}/../q", inNormalizedRoot: "/a/b") == nil)
+    }
+
+    /// Each component still compares as a string, so the precomposed and
+    /// decomposed spellings of a name, which the disk treats as one, match.
+    @Test func precomposedAndDecomposedSpellingsOfANameStillMatch() {
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/x/caf\u{e9}/y", inNormalizedRoot: "/x/cafe\u{301}") == "y")
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/x/cafe\u{301}/y", inNormalizedRoot: "/x/caf\u{e9}") == "y")
+        #expect(PathContainment.isContained(normalizedChild: "/x/caf\u{e9}", inNormalizedRoot: "/x/cafe\u{301}"))
+    }
+
     @Test func anEnumeratedItemIsStandardizedAndItsRootTakenAsGiven() {
         let root = URL(fileURLWithPath: "/a/b", isDirectory: true)
         #expect(PathContainment.relativePath(of: URL(fileURLWithPath: "/a/b/./c/d"), under: root) == "c/d")

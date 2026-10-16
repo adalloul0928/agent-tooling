@@ -197,6 +197,24 @@ struct PathContainmentAllowSiteTests {
             #expect(!count.isTruncated)
         }
     }
+
+    /// A name that begins with a combining mark is a file like any other. The
+    /// count must include it, not drop it as though it were outside the
+    /// folder, so the receipt says what the replacement took away.
+    @Test func theRemovalCountIncludesANameThatStartsWithACombiningMark() throws {
+        let fixture = try TemporaryFolder("path-containment-removal-marks").url
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let destination = fixture.appending(path: "destination", directoryHint: .isDirectory)
+        let source = fixture.appending(path: "source", directoryHint: .isDirectory)
+        try write(destination.appending(path: "SKILL.md"), "kept")
+        try write(destination.appending(path: "\u{301}notes.md"), "added by hand")
+        try write(source.appending(path: "SKILL.md"), "kept")
+
+        let count = OperationPlanSafetyReviewer().replacementRemovalCount(replacing: destination, with: source)
+
+        #expect(count.count == 1)
+        #expect(!count.isTruncated)
+    }
 }
 
 /// The deny and exclusion checks that compare paths through `PathContainment`.
