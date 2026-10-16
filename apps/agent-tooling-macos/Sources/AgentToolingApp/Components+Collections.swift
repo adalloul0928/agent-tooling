@@ -138,7 +138,10 @@ struct CollectionColumns {
         let narrowReserve: CGFloat
     }
 
-    /// The table's inner width: the card's, less the rows' own insets.
+    /// The table's inner width, which its header and each row lay their
+    /// columns out across: the card's width less the rows' own insets,
+    /// `Space.xl` on each side. All three tables pass exactly this, so one
+    /// table's `expandedFrom` and reserve compare directly with another's.
     let width: CGFloat
     /// Whether the table shows its wide layout.
     let expanded: Bool

@@ -546,7 +546,8 @@ a view is treated the way a raw hex colour would be.
   Connections tables: shared widths (`clientMarks`, `source`, `narrow`,
   `nameMax`) at the top, and per table the width it switches layout at
   (`expandedFrom`), its name column's floor, share and ceiling, and its other
-  columns. `ListCellMargin` is what a native `List` adds around a row's
+  columns, all measured on a table's inner width (its card less `Space.xl` on
+  each side). `ListCellMargin` is what a native `List` adds around a row's
   content on its own (8 leading, 9 trailing), which a table row gives back so
   its columns stand under the header's titles.
 - `Proportion` — the ratios a tile, disc or identity icon scales by, and the

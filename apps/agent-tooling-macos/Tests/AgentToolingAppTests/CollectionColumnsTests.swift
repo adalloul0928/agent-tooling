@@ -5,7 +5,10 @@ import Testing
 
 /// The Skills, Plugins and Connections tables lay their columns out from one
 /// shared rule. The widths below are the ones each table drew with while it
-/// still kept its own copy of the rule, so sharing it moved no column.
+/// still kept its own copy of the rule, so sharing it moved no column. Skills
+/// once measured from 16 points less of its card than the other two; it now
+/// measures from the same inner width, so its widths read 16 more for the
+/// same card and the same narrow layout.
 @Suite("Collection table columns")
 struct CollectionColumnsTests {
     @Test("Each table switches to its wide layout at its own width")
@@ -13,7 +16,7 @@ struct CollectionColumnsTests {
         let thresholds: [(String, CollectionColumns.Layout, CGFloat)] = [
             ("Connections", .connections, 1_050),
             ("Plugins", .plugins, 820),
-            ("Skills", .skills(selecting: false, describing: true), 940),
+            ("Skills", .skills(selecting: false, describing: true), 956),
         ]
         for (name, layout, from) in thresholds {
             #expect(!CollectionColumns(width: from - 1, layout: layout).expanded, "\(name) widened too early")
@@ -57,11 +60,11 @@ struct CollectionColumnsTests {
 
     @Test("Skills: the narrow name gives way to the marks, the Managed column and any checkbox")
     func skillsNarrowColumns() {
-        let browsing = SkillTableColumns(width: 800, selecting: false, describing: true)
+        let browsing = SkillTableColumns(width: 816, selecting: false, describing: true)
         #expect(!browsing.expanded)
         expectWidth(browsing.verdict, 96)
         expectWidth(browsing.name, 560)
-        expectWidth(SkillTableColumns(width: 800, selecting: true, describing: true).name, 528)
+        expectWidth(SkillTableColumns(width: 816, selecting: true, describing: true).name, 528)
         expectWidth(SkillTableColumns(width: 300, selecting: true, describing: true).name, 140)
     }
 

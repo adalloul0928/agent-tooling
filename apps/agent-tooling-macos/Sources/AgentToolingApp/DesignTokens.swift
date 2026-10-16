@@ -605,7 +605,9 @@ enum Proportion {
 /// `expandedFrom` width up, and its narrow layout below it. A name column takes
 /// its share of the table's width up to a ceiling in the wide layout, and what
 /// the other columns leave, down to a floor, in the narrow one; the other
-/// columns are fixed. Widths the tables share live at the top.
+/// columns are fixed. Widths the tables share live at the top. Every width a
+/// table is measured at is its inner width (`CollectionColumns.width`): the
+/// card's, less the rows' own insets.
 enum CollectionColumn {
     /// Four client brand marks and the gaps between them: the App and Managed
     /// by columns.
@@ -649,12 +651,16 @@ enum CollectionColumn {
     /// The Skills table. Its wide layout adds the description, Plugin and
     /// Marketplace columns.
     enum Skills {
-        static let expandedFrom: CGFloat = 940
+        static let expandedFrom: CGFloat = 956
         /// The narrow layout's name column takes what is left after
-        /// `compactReserve` (the Found in marks, the row's insets and its
-        /// gaps), the Managed column and any checkbox, down to `nameMin`.
+        /// `compactReserve`, the Managed column and any checkbox, down to
+        /// `nameMin`. The reserve is the Found in marks, the row's three gaps
+        /// beside the name, and `nameClearance`.
         static let nameMin: CGFloat = 140
-        static let compactReserve: CGFloat = 144
+        static let compactReserve: CGFloat = Size.foundInColumn + Space.lg * 3 + nameClearance
+        /// The room a narrow row leaves between the end of its name column
+        /// and the Found in marks, past the gaps.
+        static let nameClearance: CGFloat = 52
         static let nameShare: CGFloat = 0.24
         /// The name column when no skill on the list has a description, so the
         /// name takes that column's room back.

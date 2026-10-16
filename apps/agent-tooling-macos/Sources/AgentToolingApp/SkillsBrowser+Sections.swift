@@ -32,8 +32,10 @@ extension SkillsBrowser {
                 }
             } else {
                 GeometryReader { geometry in
+                    // The card's inner width, less the row's own insets, the
+                    // width every collection table measures from.
                     let columns = SkillTableColumns(
-                        width: geometry.size.width - WorkspaceLayout.pageInset * 2, selecting: isSelecting,
+                        width: geometry.size.width - Space.xl * 2, selecting: isSelecting,
                         // A workspace built by scanning records no descriptions,
                         // so the column would be a screenful of dashes. It earns
                         // its width only once something in view has one.
