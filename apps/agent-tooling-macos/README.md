@@ -519,23 +519,53 @@ it will not execute policy-provided scripts or fetch a policy in the background.
 ## Design tokens
 
 Every view draws from the scales in `Sources/AgentToolingApp/DesignTokens.swift`
-and nowhere else. A raw number in a view is treated the way a raw hex colour
-would be.
+(and the colours and motion in `Theme.swift`) and nowhere else. A raw number in
+a view is treated the way a raw hex colour would be.
 
 - `AgentFont` — the type scale: `pageTitle` 20, `titleLarge` 17, `title` 15,
   `body` 13, `caption` 11, `micro` 10, plus `heading` for card titles, `mono`
-  for paths and commands, and `stat` for a headline number.
+  for paths and commands, `stat` for a headline number, and `capsKerning` for
+  an all-caps label.
 - `Space` — a 4-point grid (`xxs` 2 … `xxxl` 24, `huge` 32) for padding,
-  stack spacing, and insets.
+  stack spacing, and insets, with `nudge` 1 for lining a glyph up with the
+  first line of text beside it.
 - `Radius` — `sm` 6 chips, `md` 8 controls and selection, `lg` 12 cards,
   `xl` 16 the palette. `RoundedRectangle.card/.control/.panel` are the shapes.
-- `Size` — row and header heights, glyph, tile, disc and mark sizes, control
-  heights, the sheet bar.
-- `SheetSize` — the five sheet sizes; a sheet picks the smallest it fits in.
+- `Size` — row and header heights, glyph, tile, disc, mark and identity-icon
+  sizes, control heights, the sheet bar; field, search, picker and popover
+  widths (`fieldNarrow` 160 … `fieldWide` 420, with `fieldStandard` 320 for
+  most form fields); pane widths for each split (the shared list/detail split,
+  the sidebar, the History, skill creator and source editor columns);
+  empty-state and placeholder heights; Discover card sizes.
+- `SheetSize` — the fixed sheet sizes, from `popover` to `creator`; a sheet
+  picks the smallest it fits in. The few that resize (the setup wizard, the
+  ToolHive inspector) take a minimum and an ideal through
+  `sheetSize(minimum:ideal:)`. `WindowSize` holds the main window's minimum
+  and opening size and the Settings window's width.
+- `CollectionColumn` — the hand-laid columns of the Skills, Plugins and
+  Connections tables: shared widths (`clientMarks`, `source`, `narrow`,
+  `nameMax`) at the top, and per table the width it switches layout at
+  (`expandedFrom`), its name column's floor, share and ceiling, and its other
+  columns.
+- `Proportion` — the ratios a tile, disc or identity icon scales by, and the
+  shares of a split's ideal width (`listShare` 0.55, `detailShare` 0.45,
+  `evenShare` 0.5).
+- `Opacity` — how strongly something is drawn, named by job in four
+  families: washes under content in its own tint (`noticeWash`, `bannerWash`,
+  `tagWash`, `badgeWash`, `selectedWash`, `messageWash`), the strokes that
+  edge them (`noticeStroke`, `bannerStroke`, `selectedStroke`), neutral
+  grounds at part strength (`editorWell`, `paneShade`, `insetGround`), and
+  fades (`track`, `disabled`, `pulseLow`, `ghost`, `inactive`, `unavailable`,
+  `quiet`, `supporting`, `secondaryOnSelection`, `labelOnSelection`).
+  `Saturation.ghost` goes with `Opacity.ghost`.
+- `Elevation` — the two shadows, `floatingBar` and `palette`, cast with
+  `elevation(_:)`.
 - `Hairline` — the one separator, drawn in `AgentTheme.hairline` (primary at
   10%) so it lifts in dark mode and shades in light on any material; a
   `Divider` darkens on a vibrant card. `Hairline(.vertical)` between cells.
   A bare `Divider()` belongs only inside a menu, where the system draws it.
+  `Hairline.width` 1 is a drawn border, `ring` 1.5 a selection ring, `fine`
+  0.5 a Discover card at rest.
 - `wrapsLines()` — for text that may wrap onto more lines. Never use
   `fixedSize(horizontal: false, vertical: true)`: when such a view appears
   after the window has laid out, AppKit measures the content's minimum size at
@@ -543,8 +573,29 @@ would be.
   past the window (`LateContentLayoutTests` guards this).
 - `AgentTheme.fillSubtle/fillHover/fillStrong`, `shadow`, `scrim`,
   `hairlineStroke` — the quiet fills and strokes.
+- `AgentMotion` — `selection`, `quick` and `actionBar`, and `appearScale` for
+  a row of controls fading in; `Angle.disclosureOpen` turns a disclosure
+  chevron.
 - `primaryActionStyle()`, `secondaryActionStyle()`, `inlineActionStyle()` —
   the three button treatments.
+
+What stays a literal, because it is not a design value: indices and offsets
+into a collection; counts and limits (how many rows to show, `lineLimit`, a
+character cap, a threshold in logic, the 2 in "both sides"); time that paces
+behaviour rather than motion (a debounce, a clipboard timeout, a clock's
+tick); data such as picker tags and a setting's default; and 0 or 1 where they
+mean none or all (opacity 0 and 1, spacing, padding and insets of 0, a scale
+of 1, grayscale 0 and 1, an angle of zero). Everything else a view is drawn
+with — frames, padding, opacity, shadows, offsets, kerning, ratios, column
+widths, split proportions, animation durations — comes from a token. A value
+two screens use for the same job is one token; a value that only happens to be
+equal to another gets its own name.
+
+The words on buttons that more than one screen shows come from
+`ActionTitles`: `reviewChanges(count:)` for the button, and
+`reviewChangesCommand(_:)` for the command, in title case in a menu and
+sentence case in the command palette. Counted nouns come from `CountNoun`:
+`CountNoun.connection.phrase(2)` is "2 connections".
 
 Collections (Skills, Plugins, Connections, Presets, Projects, Activity,
 History) sit on `collectionSurface()`. Native `List`s take

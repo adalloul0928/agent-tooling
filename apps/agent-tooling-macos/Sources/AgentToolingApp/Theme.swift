@@ -8,6 +8,9 @@ enum WorkspaceLayout {
     static let sectionSpacing = Space.xxxl
     /// The inset of a sheet's body and an inspector's detail pane.
     static let paneInset = Space.xxl
+    /// How far a bar floating over a collection (the selection bar) sits above
+    /// the window's bottom edge: the page inset and ten points more.
+    static let floatingBarInset = pageInset + 10
 }
 
 /// Content uses neutral surfaces. NavigationSplitView owns the window's native
@@ -73,6 +76,11 @@ enum AgentTheme {
 enum AgentMotion {
     static let selection = Animation.snappy(duration: 0.22, extraBounce: 0)
     static let quick = Animation.easeOut(duration: 0.12)
+    /// The selection bar arriving over a list, and the list making room for it.
+    static let actionBar = Animation.snappy(duration: 0.18)
+    /// The scale a row of controls grows from as it fades in, so it settles
+    /// into place rather than popping.
+    static let appearScale: CGFloat = 0.98
 }
 
 extension NSColor {
