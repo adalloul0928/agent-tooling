@@ -579,11 +579,11 @@ struct PresetFollowSheet: View {
 /// Creating a preset, or renaming one.
 ///
 /// A preset is a name and a set of library items. Create mode asks for both: a
-/// name, and a checklist of the skills, servers and plugins the library already
-/// holds, searchable because a full library is long. Rename mode asks for the
-/// name only — a preset's membership is changed by editing the tools in the
-/// Library, not here. Nothing is put in place by either: creating records the
-/// shelf, and following it later is what moves anything.
+/// name, and a checklist of the skills, connections and plugins the library
+/// already holds, searchable because a full library is long. Rename mode asks
+/// for the name only — a preset's membership is changed by editing the tools in
+/// the Library, not here. Nothing is put in place by either: creating records
+/// the shelf, and following it later is what moves anything.
 struct PresetEditorSheet: View {
     enum Mode {
         case create
@@ -658,7 +658,7 @@ struct PresetEditorSheet: View {
             }
             InventorySearchField(placeholder: "Search your library", text: $search)
             if candidates.isEmpty {
-                Text("Your library has no skills, servers, or plugins to put in a preset yet.")
+                Text("Your library has no skills, connections, or plugins to put in a preset yet.")
                     .font(AgentFont.body).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
@@ -689,9 +689,9 @@ struct PresetEditorSheet: View {
         return false
     }
 
-    /// The library items that can go in a preset: skills, servers and plugins.
-    /// Presets and logical projects are not members of a preset, so they are
-    /// left out rather than offered as choices that would be refused.
+    /// The library items that can go in a preset: skills, connections and
+    /// plugins. Presets and logical projects are not members of a preset, so
+    /// they are left out rather than offered as choices that would be refused.
     private var candidates: [WorkspaceLibraryReadModelRow] {
         (library.state?.library.rows ?? []).filter {
             switch $0.kind {
@@ -758,7 +758,7 @@ private struct PresetMemberToggle: View {
     private func kindLabel(_ kind: ArtifactKind) -> String {
         switch kind {
         case .skill: "Skill"
-        case .mcpServer: "MCP server"
+        case .mcpServer: "Connection"
         case .nativePlugin, .package: "Plugin"
         case .preset: "Preset"
         case .logicalProject: "Project"

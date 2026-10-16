@@ -15,7 +15,9 @@ struct SkillCreatorOptionsTests {
         let options = SkillCreatorOptions(proposedName: "", scope: .user, projectRoot: "", targets: [])
         let text = options.summaryText(client: .claude)
         #expect(text.contains("Claude Code chooses the name"))
-        #expect(text.contains("for you"))
+        // The home scope has one name across the app.
+        #expect(text.contains("on this Mac"))
+        #expect(!text.contains("for you"))
         #expect(text.contains("offered to no app yet"))
     }
 

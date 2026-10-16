@@ -95,7 +95,7 @@ struct SkillsBrowser: View {
                     Label("Find opportunities", systemImage: "magnifyingglass")
                 }
                 .buttonStyle(.glass)
-                .accessibilityHint("Scans recent work for useful skills, plugins, and MCP servers")
+                .accessibilityHint("Opens Insights to scan recent work for useful skills, plugins, and connections")
                 Button {
                     choosingCreation = true
                 } label: {

@@ -196,7 +196,7 @@ struct InsightsView: View {
                     configurationRow("Catalog suggestions", detail: "Optional network access") {
                         VStack(alignment: .leading, spacing: Space.xs) {
                             Toggle(
-                                "Include established plugins, skills, and MCP servers from connected catalogs",
+                                "Include established plugins, skills, and connections from connected catalogs",
                                 isOn: $includeCatalogSuggestions
                             )
                             .toggleStyle(.checkbox)
@@ -240,7 +240,7 @@ struct InsightsView: View {
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text("Reviewing recent work")
                     .font(AgentFont.bodyMedium)
-                Text("The scan is read-only. No skill, plugin, or MCP server will be installed.")
+                Text("The scan is read-only. No skill, plugin, or connection will be installed.")
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }

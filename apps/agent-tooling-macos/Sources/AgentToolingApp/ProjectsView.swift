@@ -372,7 +372,7 @@ private struct DiscoveredFolderRow: View {
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(match.project.name).font(AgentFont.bodyMedium).lineLimit(1)
                 HStack(spacing: Space.sm) {
-                    Text(summary).lineLimit(1)
+                    Text(match.project.foundFolderSummary).lineLimit(1)
                     if let hint = match.project.repositoryHint {
                         Text("·").foregroundStyle(.tertiary)
                         Text(hint.replacingOccurrences(of: "https://", with: "")).lineLimit(1).truncationMode(.middle)
@@ -394,15 +394,22 @@ private struct DiscoveredFolderRow: View {
         .help(match.project.path)
         .accessibilityLabel("\(match.project.name), found on this Mac")
     }
+}
 
-    private var summary: String {
-        let project = match.project
+extension DiscoveredProject {
+    /// What a folder found on this Mac holds, in the library's words and
+    /// counted the way every screen counts: "2 skills · 1 connection · on
+    /// main". A folder with none of those names its agent files instead, so
+    /// the row never reads as empty.
+    var foundFolderSummary: String {
         var parts: [String] = []
-        if !project.skills.isEmpty { parts.append(project.skills.count == 1 ? "1 skill" : "\(project.skills.count) skills") }
-        if !project.mcpServers.isEmpty { parts.append(project.mcpServers.count == 1 ? "1 server" : "\(project.mcpServers.count) servers") }
-        if !project.plugins.isEmpty { parts.append(project.plugins.count == 1 ? "1 plugin" : "\(project.plugins.count) plugins") }
-        if parts.isEmpty { parts.append(project.instructionFileTitles.isEmpty ? "No agent files" : project.instructionFileTitles.joined(separator: ", ")) }
-        if let branch = project.gitBranch { parts.append(project.isDetachedHead ? "at \(branch)" : "on \(branch)") }
+        if !skills.isEmpty { parts.append(CountNoun.skill.phrase(skills.count)) }
+        if !mcpServers.isEmpty { parts.append(CountNoun.connection.phrase(mcpServers.count)) }
+        if !plugins.isEmpty { parts.append(CountNoun.plugin.phrase(plugins.count)) }
+        if parts.isEmpty {
+            parts.append(instructionFileTitles.isEmpty ? "No agent files" : instructionFileTitles.joined(separator: ", "))
+        }
+        if let gitBranch { parts.append(isDetachedHead ? "at \(gitBranch)" : "on \(gitBranch)") }
         return parts.joined(separator: " · ")
     }
 }

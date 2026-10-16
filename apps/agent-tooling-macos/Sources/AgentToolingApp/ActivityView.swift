@@ -248,7 +248,7 @@ private struct ActivityCollectionRow: View {
 
 /// Drift is information, not an accusation. Editing an installed skill in place
 /// is a normal thing to do, so this states what changed and stops there.
-private struct InstallDriftNotice: View {
+struct InstallDriftNotice: View {
     let reports: [InstalledPackageDrift]
 
     var body: some View {
@@ -285,9 +285,13 @@ private struct InstallDriftNotice: View {
         .standardPanel()
     }
 
-    private var title: String {
-        let count = reports.count
-        return "\(count) installed package\(count == 1 ? "" : "s") differ\(count == 1 ? "s" : "") from what you reviewed"
+    private var title: String { Self.title(count: reports.count) }
+
+    /// An installed skill or plugin is a copy of the library's, the word the
+    /// plan and the setup check use for it too, never a "package".
+    nonisolated static func title(count: Int) -> String {
+        let copies = CountNoun("installed copy", plural: "installed copies")
+        return "\(copies.phrase(count)) \(count == 1 ? "differs" : "differ") from what you reviewed"
     }
 }
 

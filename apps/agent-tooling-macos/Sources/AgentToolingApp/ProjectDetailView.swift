@@ -30,7 +30,7 @@ private enum ProjectDetailTab: String, CaseIterable, Identifiable {
         case .skills:
             "A project skill lives in a selected client's skill folder inside the repository and hides a skill of the same name installed on this Mac. Create and edit skills in the Skills tab."
         case .mcpServers:
-            "Project MCP servers come from files inside the repository. Adding or reviewing one still goes through a reviewed assignment, scoped to this project."
+            "Project connections come from files inside the repository. Adding or reviewing one still goes through a reviewed assignment, scoped to this project."
         case .plugins:
             "A project enables plugins in its own settings file. Installing a plugin remains a client-level action reviewed on the Install screen."
         }

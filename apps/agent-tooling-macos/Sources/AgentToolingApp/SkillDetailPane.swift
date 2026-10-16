@@ -149,7 +149,7 @@ struct SkillDetailView: View {
 
     private func copiesNote(versions: Int) -> String {
         let base =
-            "Each plugin that ships this skill, and each app folder it was copied into, is a copy. An app uses the copy it has; the marks say where each one was found. Content is compared with each package's build stamp ignored."
+            "Each plugin that ships this skill, and each app folder it was copied into, is a copy. An app uses the copy it has; the marks say where each one was found. Content is compared with each copy's build stamp ignored."
         return versions > 1
             ? base + " These copies are not all the same, so the skill can behave differently depending on which copy an app loads."
             : base

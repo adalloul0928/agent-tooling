@@ -205,7 +205,7 @@ final class SkillUpstreamLinkSession: Identifiable {
         case WorkspaceSkillPreparationError.invalidSkillDefinition:
             "The repository's definition does not say what the skill is called and what it does."
         case WorkspaceSkillPreparationError.pluginPackageRoot:
-            "That folder is a whole plugin rather than one skill, so it follows its package instead."
+            "That folder is a whole plugin rather than one skill. Choose the skill's own folder inside it."
         case WorkspaceSkillPreparationError.invalidUpstream:
             "This build follows public GitHub repositories only."
         case WorkspaceSkillCommandError.contentStoreUnavailable:

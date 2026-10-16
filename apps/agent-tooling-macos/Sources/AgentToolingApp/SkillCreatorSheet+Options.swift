@@ -34,8 +34,9 @@ struct SkillCreatorOptions: Equatable {
         let offered = targets.isEmpty
             ? "offered to no app yet"
             : "offered to \(targets.sorted { $0.rawValue < $1.rawValue }.map(\.rawValue).joined(separator: ", "))"
-        let where_ = scope == .project ? "for a project" : "for you"
-        return "\(name), \(where_), \(offered) after review. Change these under Options before the first message."
+        // The home scope is "on this Mac" here, as on every other screen.
+        let placement = scope == .project ? "for a project" : "on this Mac"
+        return "\(name), \(placement), \(offered) after review. Change these under Options before the first message."
     }
 
     /// Why the first message cannot be sent yet, or nil when it can. After a
