@@ -94,8 +94,8 @@ extension ClientConfigurationFile {
 /// were empty.
 public struct ConfigurationFileTooLargeError: LocalizedError, Hashable, Sendable {
     /// The file, as a person would find it.
-    public let path: String
-    public let maximumBytes: Int
+    let path: String
+    let maximumBytes: Int
 
     public var errorDescription: String? {
         "\(path) is larger than Agent Tooling's \(Self.size(maximumBytes)) limit for a configuration file, so it was left alone."

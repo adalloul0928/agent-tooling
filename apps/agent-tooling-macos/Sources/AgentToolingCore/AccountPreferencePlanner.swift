@@ -69,25 +69,25 @@ public struct AccountPreferencePlan: Hashable, Sendable {
 }
 
 public enum AccountPreferencePlanner {
-    /// Decides what to change on this Mac for one provider. Pure: it reads
-    /// nothing and writes nothing.
-    ///
-    /// - Parameter configurationText: the current text of the file this app
-    ///   edits, or nil when it does not exist. Edits are rehearsed against it,
-    ///   so a file the editor would refuse is reported here rather than as a
-    ///   failed step.
-    public static func plan(
+    /// The same decision as `plan(preferences:observation:configuration:)`,
+    /// from the file's text, or nil when it does not exist.
+    static func plan(
         preferences: AccountPreferences, observation: AccountObservation, configurationText: String?
     ) -> AccountPreferencePlan {
         plan(preferences: preferences, observation: observation, configuration: .success(configurationText))
     }
 
-    /// The same decision, from the file as it was read: its text, nil when
-    /// there is no file, or the error that kept a file that is there from
-    /// being read, such as one over the size limit. A file that could not be
-    /// read is never planned against as though it were empty, because the
-    /// engine would refuse the edit too: every choice that needs one is held,
-    /// with the error's own words as the reason.
+    /// Decides what to change on this Mac for one provider. Pure: it reads
+    /// nothing and writes nothing.
+    ///
+    /// - Parameter configuration: the file this app edits, as it was read: its
+    ///   text, nil when there is no file, or the error that kept a file that is
+    ///   there from being read, such as one over the size limit. Edits are
+    ///   rehearsed against the text, so a file the editor would refuse is
+    ///   reported here rather than as a failed step. A file that could not be
+    ///   read is never planned against as though it were empty, because the
+    ///   engine would refuse the edit too: every choice that needs one is held,
+    ///   with the error's own words as the reason.
     public static func plan(
         preferences: AccountPreferences, observation: AccountObservation, configuration: Result<String?, any Error>
     ) -> AccountPreferencePlan {
