@@ -178,6 +178,50 @@ struct WorkspaceAccountsSessionTests {
         #expect(!FileManager.default.fileExists(atPath: fixture.settingsURL.path(percentEncoded: false)))
     }
 
+    /// A file that can no longer be read once the change was reviewed, here
+    /// one grown past the size limit, holds the change when the plan is made
+    /// again to apply it. That is a refusal with the read's own reason, not
+    /// "already follows", and nothing is written.
+    @Test func aReviewedChangeWhoseFileCanNoLongerBeReadIsRefused() async throws {
+        let fixture = try await Fixture()
+        defer { fixture.remove() }
+        try Self.write(fixture.settingsURL, #"{"theme":"dark"}"#)
+        await fixture.session.read()
+        await fixture.session.setChoice(.init(.skillSync), to: .off)
+        let reviewed = try #require(fixture.session.plan(.claude))
+        #expect(reviewed.changes.count == 1)
+        try Self.growPastTheConfigurationLimit(fixture.settingsURL)
+        let before = try Data(contentsOf: fixture.settingsURL)
+
+        #expect(await fixture.session.apply(.claude, reviewed: reviewed) == nil)
+        #expect(fixture.session.lastApplyMessage == nil)
+        #expect(fixture.session.errorMessage?.contains("4 MB limit") == true, "\(fixture.session.errorMessage ?? "no error")")
+        #expect(try Data(contentsOf: fixture.settingsURL) == before)
+    }
+
+    /// Checkup applies the plan it showed without passing it back. The same
+    /// refusal reaches it, so its step fails with the reason instead of
+    /// reporting a choice followed.
+    @Test func applyingFromCheckupAfterTheFileBecameUnreadableIsRefused() async throws {
+        let fixture = try await Fixture()
+        defer { fixture.remove() }
+        try Self.write(fixture.settingsURL, #"{"theme":"dark"}"#)
+        await fixture.session.read()
+        await fixture.session.setChoice(.init(.skillSync), to: .off)
+        try Self.growPastTheConfigurationLimit(fixture.settingsURL)
+
+        #expect(await fixture.session.apply(.claude) == nil)
+        #expect(fixture.session.errorMessage?.contains("4 MB limit") == true, "\(fixture.session.errorMessage ?? "no error")")
+    }
+
+    /// Rewrites the settings file with a value long enough to put it past the
+    /// limit every client configuration read shares, so the next read of it
+    /// refuses it.
+    private static func growPastTheConfigurationLimit(_ url: URL) throws {
+        let padding = String(repeating: "x", count: BoundedFileAccess.maximumConfigurationBytes)
+        try Self.write(url, #"{"theme":"dark","padding":"\#(padding)"}"#)
+    }
+
     @Test func applyingWithNothingToDoSaysSo() async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }

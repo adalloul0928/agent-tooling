@@ -304,6 +304,13 @@ final class WorkspaceAccountsSession {
         defer { applyingProvider = nil }
         let shown = reviewed ?? plans[provider]
         await replan()
+        // A reviewed change the plan now holds cannot be made here any more,
+        // for example because the file can no longer be read. That is a
+        // refusal with the plan's own reason, not "nothing to do".
+        if let shown, let held = plans[provider]?.held.first(where: { held in shown.changes.contains { $0.key == held.key } }) {
+            errorMessage = "Nothing was changed. \(held.key.label.capitalizedFirst): \(held.reason)"
+            return nil
+        }
         guard let plan = plans[provider], !plan.isEmpty else {
             lastApplyMessage = "\(provider.client.rawValue) already follows every shared \(provider.accountName) choice it can."
             return lastApplyMessage
