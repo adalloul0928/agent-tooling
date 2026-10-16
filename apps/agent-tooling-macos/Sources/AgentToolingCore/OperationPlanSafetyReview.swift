@@ -1,45 +1,16 @@
 import Foundation
 
-/// What replacing an existing folder would add and take away. Computed while a
-/// plan is still being reviewed, because a person cannot consent to a deletion
-/// they were only told about afterwards.
-public struct DirectoryReplacementDiff: Codable, Hashable, Sendable {
+/// What replacing an existing folder takes away: the entries at the destination
+/// that the incoming package does not contain. The executor works it out just
+/// before it replaces the folder, and only for the count in the receipt; no
+/// plan review lists these entries before approval.
+struct DirectoryReplacementDiff: Codable, Hashable, Sendable {
     /// Paths present at the destination that the incoming package does not
     /// contain. Directories carry a trailing slash.
-    public var removedPaths: [String]
-    public var addedPaths: [String]
-    public var keptCount: Int
-    /// True when either tree was too large to compare completely, so the lists
-    /// are a partial answer rather than a complete one.
-    public var isTruncated: Bool
-
-    public init(removedPaths: [String] = [], addedPaths: [String] = [], keptCount: Int = 0, isTruncated: Bool = false) {
-        self.removedPaths = removedPaths
-        self.addedPaths = addedPaths
-        self.keptCount = keptCount
-        self.isTruncated = isTruncated
-    }
-
-    public var removesContent: Bool { !removedPaths.isEmpty }
-
-    public var removedFileCount: Int { removedPaths.count { !$0.hasSuffix("/") } }
-
-    public var removedDirectoryCount: Int { removedPaths.count { $0.hasSuffix("/") } }
-
-    /// The sentence the plan states before approval, for example
-    /// "This update removes 3 files."
-    public var removalHeadline: String? {
-        guard removesContent else { return nil }
-        let files = removedFileCount
-        let directories = removedDirectoryCount
-        var phrase = ""
-        if files > 0 { phrase = "\(files) file\(files == 1 ? "" : "s")" }
-        if directories > 0 {
-            let folders = "\(directories) folder\(directories == 1 ? "" : "s")"
-            phrase = phrase.isEmpty ? folders : "\(phrase) and \(folders)"
-        }
-        return "This update removes \(phrase)."
-    }
+    var removedPaths: [String] = []
+    /// True when either tree was too large to compare completely, so the list
+    /// is a partial answer rather than a complete one.
+    var isTruncated = false
 }
 
 /// Whether Agent Tooling can prove it is entitled to replace a destination.
@@ -47,7 +18,7 @@ public struct DirectoryReplacementDiff: Codable, Hashable, Sendable {
 /// The engine already confines writes to known folders. That stops a plan from
 /// writing somewhere unexpected; it does not stop a plan from overwriting
 /// somebody else's files inside an expected folder. This is that second half.
-public enum DestinationOwnership: Codable, Hashable, Sendable {
+enum DestinationOwnership: Codable, Hashable, Sendable {
     /// Agent Tooling's own managed library or local backup library.
     case managedRoot
     /// Nothing exists at the destination yet.
@@ -63,14 +34,14 @@ public enum DestinationOwnership: Codable, Hashable, Sendable {
     /// Ownership could not be established. The reason is shown to the operator.
     case unprovable(String)
 
-    public var isProven: Bool {
+    var isProven: Bool {
         switch self {
         case .managedRoot, .absent, .empty, .ledgerInstall, .receiptInstall, .linkedInstallation: true
         case .unprovable: false
         }
     }
 
-    public var summary: String {
+    var summary: String {
         switch self {
         case .managedRoot: "Agent Tooling's own managed library."
         case .absent: "Nothing exists here yet."
@@ -140,13 +111,14 @@ enum DestinationOwnershipInspector {
     }
 }
 
-/// Produces the plan-time review. Reading is all it does: nothing here writes,
-/// moves, or deletes anything.
-public struct OperationPlanSafetyReviewer {
+/// Counts what a replacement takes away, for the receipt the executor writes
+/// afterwards. Reading is all it does: nothing here writes, moves, or deletes
+/// anything.
+struct OperationPlanSafetyReviewer {
     private let fileManager: FileManager
     private let maximumComparedItems: Int
 
-    public init(
+    init(
         fileManager: FileManager = .default,
         maximumComparedItems: Int = 10_000
     ) {
@@ -156,13 +128,13 @@ public struct OperationPlanSafetyReviewer {
 
     /// How many existing entries a replacement would take away, and whether the
     /// comparison was cut short at `maximumComparedItems`. Used for the short
-    /// after-the-fact note in a receipt; the plan review lists them by name
-    /// before anything is approved.
+    /// after-the-fact note in a receipt; nothing lists the entries by name
+    /// before approval.
     ///
     /// The second half matters: a truncated comparison under-counts, so a
     /// receipt that printed the bare number would understate what it removed
     /// exactly when the folder was too big to check.
-    public func replacementRemovalCount(replacing destination: URL, with source: URL) -> (count: Int, isTruncated: Bool) {
+    func replacementRemovalCount(replacing destination: URL, with source: URL) -> (count: Int, isTruncated: Bool) {
         guard let diff = replacementDiff(replacing: destination, with: source) else { return (0, false) }
         return (diff.removedPaths.count, diff.isTruncated)
     }
@@ -176,12 +148,8 @@ public struct OperationPlanSafetyReviewer {
         guard let existing, let incoming else {
             return DirectoryReplacementDiff(isTruncated: true)
         }
-        let removed = existing.entries.subtracting(incoming.entries).sorted()
-        let added = incoming.entries.subtracting(existing.entries).sorted()
         return DirectoryReplacementDiff(
-            removedPaths: removed,
-            addedPaths: added,
-            keptCount: existing.entries.intersection(incoming.entries).count,
+            removedPaths: existing.entries.subtracting(incoming.entries).sorted(),
             isTruncated: existing.isTruncated || incoming.isTruncated
         )
     }

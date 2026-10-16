@@ -516,7 +516,7 @@ public actor OperationExecutor {
 
     /// Counts destination entries the incoming package does not contain, and
     /// says whether the comparison was complete. Used only to describe the
-    /// completed replacement in the receipt; the plan review lists them by name
+    /// completed replacement in the receipt; nothing lists the entries by name
     /// before approval.
     private func removedEntryCount(replacing destination: URL, with source: URL) -> (count: Int, isTruncated: Bool) {
         let reviewer = OperationPlanSafetyReviewer(
