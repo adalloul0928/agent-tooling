@@ -22,11 +22,11 @@ struct OnboardingChoiceRow: View {
             KindTile(kind: ToolingKind(row.kind), size: Size.tile)
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(row.displayName).font(AgentFont.bodyMedium).lineLimit(1)
-                if row.childCount > 0 {
+                if let included = row.includedSummary {
                     Button {
                         showingIncluded = true
                     } label: {
-                        Text(contentsSummary).font(AgentFont.caption).foregroundStyle(.secondary)
+                        Text(included).font(AgentFont.caption).foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Show tools included with \(row.displayName)")
@@ -42,15 +42,6 @@ struct OnboardingChoiceRow: View {
         .padding(.horizontal, Space.xxs)
         .help(row.assignmentExplanation ?? row.displayName)
         .popover(isPresented: $showingIncluded) { includedContents }
-    }
-
-    private var contentsSummary: String {
-        let skills = row.includedChildren.count { $0.kind == .skill }
-        let servers = row.includedChildren.count { $0.kind == .mcpServer }
-        var parts: [String] = []
-        if skills > 0 { parts.append(CountNoun.skill.phrase(skills)) }
-        if servers > 0 { parts.append(CountNoun.connection.phrase(servers)) }
-        return parts.isEmpty ? "Bundle" : "Includes " + parts.joined(separator: " · ")
     }
 
     private var includedContents: some View {

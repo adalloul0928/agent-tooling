@@ -387,7 +387,7 @@ private struct ComponentRows: View {
     var body: some View {
         LazyVStack(spacing: 0) {
             ForEach(rows) { row in
-                InfoRow(row.displayName, detail: detail(for: row)) {
+                InfoRow(row.displayName, detail: ProjectDetailView.componentDetail(for: row)) {
                     KindTile(kind: ToolingKind(row.kind), size: Size.tile)
                 } trailing: {
                     HStack(spacing: Space.lg) {
@@ -416,12 +416,14 @@ private struct ComponentRows: View {
         }
     }
 
-    private func detail(for row: WorkspaceLibraryReadModelRow) -> String {
-        row.childCount > 0
-            ? "\(row.ownershipLabel) · Includes \(CountNoun("tool").phrase(row.childCount))"
-            : row.ownershipLabel
-    }
+}
 
+extension ProjectDetailView {
+    /// The line under a component row: whose it is, and what a plugin
+    /// bundles, counted the way every screen counts a plugin's tools.
+    static func componentDetail(for row: WorkspaceLibraryReadModelRow) -> String {
+        [row.ownershipLabel, row.includedSummary].compactMap { $0 }.joined(separator: " · ")
+    }
 }
 
 private struct EmptyCardRow: View {

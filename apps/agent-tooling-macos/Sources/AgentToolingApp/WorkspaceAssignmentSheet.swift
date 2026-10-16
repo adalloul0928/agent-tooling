@@ -733,8 +733,7 @@ struct WorkspaceAssignmentSheet: View {
         let children = Dictionary(uniqueKeysWithValues: library.rows.flatMap(\.includedChildren).map { ($0.artifactID, $0) })
         return ids.compactMap { id in
             if let row = roots[id] {
-                let bundled = row.childCount == 0 ? "" : " · Includes \(CountNoun("bundled item").phrase(row.childCount))"
-                return .init(id: id, name: row.displayName, kind: row.kind, detail: "\(ownershipLabel(row.ownership))\(bundled)")
+                return .init(id: id, name: row.displayName, kind: row.kind, detail: Self.itemDetail(for: row))
             }
             if let child = children[id] {
                 return .init(id: id, name: child.displayName, kind: child.kind, detail: "Included with \(child.parentPluginLabel ?? "plugin")")
@@ -744,7 +743,13 @@ struct WorkspaceAssignmentSheet: View {
     }
 
 
-    private func ownershipLabel(_ ownership: WorkspaceLibraryOwnership) -> String {
+    /// The line under a library row this sheet installs: whose it is, and what
+    /// it bundles, counted the way every screen counts a plugin's tools.
+    static func itemDetail(for row: WorkspaceLibraryReadModelRow) -> String {
+        [ownershipLabel(row.ownership), row.includedSummary].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private static func ownershipLabel(_ ownership: WorkspaceLibraryOwnership) -> String {
         switch ownership {
         case .centralPersonal: "Personal library"
         case .centralUpstream: "Upstream linked"
