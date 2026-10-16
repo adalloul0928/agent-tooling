@@ -442,6 +442,33 @@ struct WorkspaceDeviceSessionTests {
         #expect(snapshot.device.applicationState?.preferences.automaticallyCheckHealth == true)
     }
 
+    // MARK: - Writes that fail, and writes that overlap
+
+    /// A flip made while a check is under way: the check records what it found
+    /// and the flip records the choice, and neither is refused as stale because
+    /// the other moved the workspace between its read and its write.
+    @Test func aFlipMadeWhileACheckRecordsIsNeitherRacedNorRefused() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let observed = [
+            Fixture.claudeCode(
+                commandAvailable: true, version: "2.1.263", scannedAt: Date(timeIntervalSince1970: 1_700_000_000))
+        ]
+        let observer = ObserverThatFlipsMidCheck(observed: observed)
+        let session = await fixture.session(observer: observer)
+        await observer.duringTheCheck { await session.setEnabled(.gemini, false) }
+
+        await session.refresh()
+        let flip = try #require(await observer.flip)
+        await flip.value
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        #expect(session.enabledClients == [.claude, .codex, .kiro])
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.observations == observed)
+        #expect(snapshot.device.applicationState?.preferences.chosenClients == [.claude, .codex, .kiro])
+    }
+
     @Test func anOverlappingCheckJoinsTheOneAlreadyRunning() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -627,6 +654,28 @@ struct WorkspaceDeviceSessionTests {
             isHeld = false
             for waiter in held { waiter.resume() }
             held = []
+        }
+    }
+
+    /// A check during which somebody flips a toggle. The flip starts from
+    /// inside the scan, so it reaches the session after the check began and
+    /// before the check records what it found — the moment a flip used to
+    /// read the same head as that record and lose to it, or beat it.
+    private actor ObserverThatFlipsMidCheck: DeviceObserving {
+        private let observed: [TargetObservation]
+        private var action: (@MainActor @Sendable () async -> Void)?
+        /// The flip, once the scan started it.
+        private(set) var flip: Task<Void, Never>?
+
+        init(observed: [TargetObservation]) { self.observed = observed }
+
+        func duringTheCheck(_ action: @escaping @MainActor @Sendable () async -> Void) {
+            self.action = action
+        }
+
+        func observe(homeRoot: URL) async throws -> [TargetObservation] {
+            if let action { flip = Task { @MainActor in await action() } }
+            return observed
         }
     }
 
