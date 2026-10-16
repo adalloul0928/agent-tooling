@@ -32,11 +32,16 @@ struct PathContainmentTests {
         #expect(PathContainment.isContained(normalizedChild: "/a/b/c/", inNormalizedRoot: "/a/b/"))
     }
 
-    @Test func theFilesystemRootContainsEverything() {
-        // "/" trims to the empty string, which contains every path, matching
-        // the behavior the string checks had before.
-        #expect(PathContainment.isContained(normalizedChild: "/a", inNormalizedRoot: "/"))
+    @Test func theFilesystemRootContainsOnlyItself() {
+        // The checks this replaced trimmed "/" to the empty string and then
+        // required the child to equal it or start with "/", so the root
+        // contained only itself. A caller that passes "/" by mistake is
+        // therefore refused rather than granted the whole disk.
         #expect(PathContainment.isContained(normalizedChild: "/", inNormalizedRoot: "/"))
+        #expect(!PathContainment.isContained(normalizedChild: "/a", inNormalizedRoot: "/"))
+        #expect(!PathContainment.containsAsGiven(URL(fileURLWithPath: "/Users"), in: URL(fileURLWithPath: "/")))
+        #expect(!PathContainment.containsLexically(URL(fileURLWithPath: "/Users"), in: URL(fileURLWithPath: "/")))
+        #expect(!PathContainment.containsResolved(URL(fileURLWithPath: "/Users"), in: URL(fileURLWithPath: "/")))
     }
 
     // MARK: as-given variant (no normalization)

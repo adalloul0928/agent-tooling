@@ -216,4 +216,36 @@ struct ClientConfigurationEditTests {
         // The file is left exactly as it was: nothing was rewritten.
         #expect(try Data(contentsOf: file).count == BoundedFileAccess.maximumConfigurationBytes + 1)
     }
+
+    @Test func anExistingConfigurationThatIsNotUTF8IsLeftAlone() async throws {
+        // Only a missing file is the new-file case. A file that exists but is
+        // not valid text reads as empty, so without the commit-time check
+        // (which re-reads the destination and requires it to match what was
+        // read) the edit would write a file holding only this one key over
+        // everything the user had. This pins that the check holds.
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "ClientConfigurationEditTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let home = root.appending(path: "home", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: home.appending(path: ".kiro/settings"), withIntermediateDirectories: true)
+        let file = home.appending(path: ".kiro/settings/mcp.json")
+        let original = Data([0x7B, 0x22, 0xFF, 0xFE, 0x22, 0x7D])
+        try original.write(to: file, options: .atomic)
+
+        let document = try WorkspaceDocumentCoding.seal(.init(workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+        let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
+        let store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "workspace"), workspaceID: document.workspaceID, deviceID: device.deviceID)
+        try store.initialize(document: document, device: device)
+        let engine = OperationEngine(store: store, homeURL: home)
+        let edit = ClientConfigurationEdit(file: .kiroMCP, keyPath: ["mcpServers", "memory", "disabled"], value: .bool(true))
+        let plan = OperationPlan(kind: .configureMCP, title: "t", summary: "s", steps: [
+            .init(kind: .editClientConfiguration, title: "e", detail: edit.summary,
+                  destinationPath: file.path(percentEncoded: false), contents: try edit.encoded()),
+        ])
+
+        let receipt = await engine.execute(plan)
+
+        #expect(receipt.results.first?.status == .failed)
+        #expect(try Data(contentsOf: file) == original)
+    }
 }

@@ -17,13 +17,13 @@ enum PathContainment {
     /// (the variants below do this). The comparison is on whole path
     /// components: `/a/bc` is not inside `/a/b`, because the match requires
     /// either equality or the root followed by a separator. The leading and
-    /// trailing separators are trimmed so `"/"` (the filesystem root, which
-    /// trims to the empty string) contains everything, matching the behavior
-    /// the string checks had before.
+    /// trailing separators are trimmed, so `"/"` trims to the empty string and
+    /// contains only itself, as every check this replaced did. A caller that
+    /// passes the filesystem root by mistake is refused, not granted the disk.
     static func isContained(normalizedChild child: String, inNormalizedRoot root: String) -> Bool {
         let child = trimmed(child)
         let root = trimmed(root)
-        if root.isEmpty { return true }
+        if root.isEmpty { return child.isEmpty }
         return child == root || child.hasPrefix(root + "/")
     }
 
