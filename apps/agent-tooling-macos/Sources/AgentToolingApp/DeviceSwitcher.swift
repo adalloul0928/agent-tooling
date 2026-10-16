@@ -66,6 +66,17 @@ struct OtherMacSheet: View {
         }
     }
 
+    /// The kind said in words for an accessibility label, grouped the same way
+    /// the row's tile groups it: a connection, a skill, or everything else as a
+    /// package.
+    private func assignedKindLabel(for kind: ArtifactKind) -> String {
+        switch kind {
+        case .mcpServer: "connection"
+        case .skill: "skill"
+        default: "package"
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: Space.lg) {
@@ -102,6 +113,13 @@ struct OtherMacSheet: View {
                                     StatusGlyph(state: app.installed ? .healthy : .pending, size: Size.glyph)
                                 }
                                 .padding(.horizontal, Space.xl).frame(minHeight: Size.rowHeight)
+                                // The glyph is the only thing that says installed
+                                // from not found, so the row is one element whose
+                                // label carries that state in words.
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(app.installed
+                                    ? "\(app.surface.displayName), installed, \(app.version ?? "version unknown"), \(app.skillCount) skills, \(app.pluginCount) plugins, \(app.mcpServerCount) servers"
+                                    : "\(app.surface.displayName), not found on that Mac")
                                 if index < status.apps.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
                             }
                         }
@@ -114,6 +132,10 @@ struct OtherMacSheet: View {
                                         Spacer()
                                     }
                                     .padding(.horizontal, Space.xl).frame(minHeight: Size.compactRowHeight)
+                                    // The pending glyph is the row's only state,
+                                    // so the label says it in words.
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel("\(name), waiting to install on that Mac")
                                     if index < status.pending.count - 1 { Hairline() }
                                 }
                                 Hairline()
@@ -141,6 +163,10 @@ struct OtherMacSheet: View {
                                     Spacer()
                                 }
                                 .padding(.horizontal, Space.xl).frame(minHeight: Size.compactRowHeight)
+                                // The kind tile is the row's only sign of what
+                                // kind this is, so the label names it.
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("\(row.displayName), \(assignedKindLabel(for: row.kind))")
                                 if index < assigned.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tileSmall)) }
                             }
                         }
