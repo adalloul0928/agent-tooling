@@ -71,9 +71,7 @@ struct OverviewView: View {
                     reviewChanges()
                 } label: {
                     Label(
-                        workspace.deployment.isBusy
-                            ? "Preparing…"
-                            : ActionTitles.reviewChanges(count: workspace.deployment.plan?.items.count),
+                        workspace.deployment.isBusy ? "Preparing…" : reviewTitle,
                         systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.glass)
@@ -327,7 +325,7 @@ struct OverviewView: View {
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: Space.xs)
-                    Button(workspace.deployment.isBusy ? "Preparing…" : "Review…") { reviewChanges() }
+                    Button(workspace.deployment.isBusy ? "Preparing…" : reviewTitle) { reviewChanges() }
                         .buttonStyle(.glass)
                         .controlSize(.small)
                         .disabled(workspace.deployment.isBusy || !hasChangesWaiting)
@@ -447,7 +445,7 @@ struct OverviewView: View {
                             Text("Needs a look before installing here.").font(AgentFont.body).foregroundStyle(.secondary).lineLimit(1)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        Button("Review") { reviewChanges() }.buttonStyle(.glass).controlSize(.small)
+                        Button(reviewTitle) { reviewChanges() }.buttonStyle(.glass).controlSize(.small)
                     }
                     .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
                     if arrival.id != incoming.heldForReview.last?.id {
@@ -814,6 +812,13 @@ struct OverviewView: View {
     }
 
     // MARK: - Acting
+
+    /// The title of every button on Home that opens the plan review: the
+    /// toolbar's, the card's, and a held arrival's. One title, counted from the
+    /// prepared plan, so the same action never reads two ways on one screen.
+    private var reviewTitle: String {
+        ActionTitles.reviewChanges(count: workspace.deployment.plan?.items.count)
+    }
 
     /// Works out what would change, on the screen that can approve it. Preparing
     /// reads only; nothing is written until somebody says so there.

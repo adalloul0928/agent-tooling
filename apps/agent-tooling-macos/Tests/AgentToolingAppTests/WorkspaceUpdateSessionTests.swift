@@ -167,6 +167,9 @@ struct WorkspaceUpdateSessionTests {
         #expect(row?.contentDigest == (try Self.tree(body: "Version two")).digest)
         #expect(try installedBody(fixture) == "# Mine now\n")
         #expect(updates.notice?.contains("Claude Code kept a copy") == true)
+        // It names the button it sends the person to by the title that button
+        // carries, ellipsis and all.
+        #expect(updates.notice?.contains("\(ActionTitles.reviewChanges(count: nil)) on the Apps screen") == true)
         // The Apps screen still offers the replacement for a person to decide.
         #expect(fixture.workspace.deployment.plan?.items.contains {
             $0.artifactID == skill && { if case .updateContent = $0.action { return true }; return false }($0)

@@ -240,9 +240,12 @@ final class WorkspaceUpdateSession {
         }
         if !leftAlone.isEmpty {
             let apps = leftAlone.map(\.surface.displayName).formatted(.list(type: .and))
+            let them = leftAlone.count == 1 ? "it" : "them"
+            // Names the button by the title it carries, so the sentence and the
+            // button it sends a person to cannot drift apart.
             notice = "\(apps) kept \(leftAlone.count == 1 ? "a copy" : "copies") of \(entry.displayName) that "
-                + "\(leftAlone.count == 1 ? "was" : "were") edited after Agent Tooling installed "
-                + "\(leftAlone.count == 1 ? "it" : "them"). Review changes on the Apps screen replaces \(leftAlone.count == 1 ? "it" : "them")."
+                + "\(leftAlone.count == 1 ? "was" : "were") edited after Agent Tooling installed \(them). "
+                + "\(ActionTitles.reviewChanges(count: nil)) on the Apps screen replaces \(them)."
         }
         return true
     }

@@ -204,7 +204,15 @@ struct SyncCenterView: View {
     }
 
     private var reviewTitle: String {
-        ActionTitles.reviewChanges(count: workspace.deployment.plan?.items.count)
+        Self.reviewTitle(for: workspace.deployment.plan, scopedTo: client)
+    }
+
+    /// The title of both buttons that open the plan review: the toolbar's and
+    /// the changes card's. A page narrowed to one app counts that app's
+    /// changes, the way its status line and card do, so the page never shows
+    /// two counts for the same thing.
+    static func reviewTitle(for plan: WorkspaceDeploymentPlan?, scopedTo client: ClientKind?) -> String {
+        ActionTitles.reviewChanges(count: plan.map { scoped($0.items, to: client).count })
     }
 
     // MARK: - Tiles
@@ -432,7 +440,7 @@ struct SyncCenterView: View {
     /// review is where each step is approved.
     private func changesCard(_ items: [WorkspaceDeploymentItem]) -> some View {
         TitledCard(PlanReviewLabels.readyTitle(hasRemoval: items.contains(where: \.isRemoval)), count: "\(items.count)") {
-            Button("Review…", action: onReviewChanges)
+            Button(reviewTitle, action: onReviewChanges)
                 .inlineActionStyle()
                 .disabled(workspace.deployment.isBusy)
         } content: {
@@ -588,6 +596,12 @@ struct SyncCenterView: View {
     }
 
     private func scoped(_ items: [WorkspaceDeploymentItem]) -> [WorkspaceDeploymentItem] {
+        Self.scoped(items, to: client)
+    }
+
+    /// A plan's steps as a page shows them: every app's, or only the steps for
+    /// the one app the page is narrowed to.
+    static func scoped(_ items: [WorkspaceDeploymentItem], to client: ClientKind?) -> [WorkspaceDeploymentItem] {
         items.filter { client == nil || $0.surface.client == client }
     }
 
