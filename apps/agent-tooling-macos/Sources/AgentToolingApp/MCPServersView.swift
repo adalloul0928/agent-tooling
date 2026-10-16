@@ -281,7 +281,7 @@ struct MCPServersView: View {
                 Text(entry.requestedAssignments.isEmpty ? "—" : "\(entry.requestedAssignments.count)")
                     .font(AgentFont.caption.monospacedDigit())
                     .collectionRowForeground(selected: selected, secondary: true)
-                    .help("Saved choices about where this server should be used. Installation is checked separately.")
+                    .help("Saved choices about where this connection should be used. Installation is checked separately.")
                     .frame(width: CollectionColumn.Connections.requested, alignment: .leading)
                 Text(capabilities.summary(for: entry.id) ?? "—")
                     .font(AgentFont.caption.monospacedDigit())
@@ -323,7 +323,7 @@ struct MCPServersView: View {
     // MARK: - Filter controls
 
     private var statusSelector: some View {
-        WorkspaceSegmentedPicker("MCP server status", selection: $filter) {
+        WorkspaceSegmentedPicker("Connection status", selection: $filter) {
             ForEach(MCPFilter.allCases) { item in Text(item.rawValue).tag(item) }
         }
         .fixedSize()
@@ -422,7 +422,7 @@ struct MCPServersView: View {
                             // change this workspace cannot make.
                             isAssignable: false,
                             assignmentExplanation:
-                                "\(row.displayName) brings this server with it. Assign the plugin to choose where it is used.",
+                                "\(row.displayName) brings this connection with it. Assign the plugin to choose where it is used.",
                             server: server,
                             definedBy: MCPDefinitionSources.found(named: child.declaredName, in: workspace.device.observations)))
                 }

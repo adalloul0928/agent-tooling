@@ -271,14 +271,14 @@ struct PasteImportSheet: View {
             }
 
             if servers.count > 1 {
-                Section("Servers read") {
+                Section("Connections read") {
                     Picker("Show", selection: $selectedServer) {
                         ForEach(Array(servers.enumerated()), id: \.offset) { index, server in
                             Text(server.draft.name).tag(index)
                         }
                     }
-                    .accessibilityLabel("Server to show")
-                    Text("\(servers.count) servers were read.")
+                    .accessibilityLabel("Connection to show")
+                    Text("\(CountNoun.connection.phrase(servers.count)) were read.")
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -296,7 +296,7 @@ struct PasteImportSheet: View {
 
             Section("Connection") {
                 TextField("Name", text: $serverDraft.name)
-                    .accessibilityLabel("Server name")
+                    .accessibilityLabel("Connection name")
                 Picker("Transport", selection: $serverDraft.transport) {
                     ForEach(MCPTransport.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
@@ -383,7 +383,7 @@ struct PasteImportSheet: View {
     private var serverError: String? {
         let rawName = serverDraft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !rawName.isEmpty else {
-            return mode == .newConnection ? "Name this connection." : "The paste named no server."
+            return mode == .newConnection ? "Name this connection." : "The paste named no connection."
         }
         guard (try? WorkspaceLibrary.normalizedIdentifier(rawName)) != nil else {
             return ManagedMCPServerIntakeError.invalidConnectionName(rawName).errorDescription
@@ -396,7 +396,7 @@ struct PasteImportSheet: View {
         if serverDraft.scope != .user {
             do {
                 _ = try ConfigurationValidator.normalizedScopedRoot(
-                    scope: serverDraft.scope, value: serverDraft.projectRoot, noun: "MCP server")
+                    scope: serverDraft.scope, value: serverDraft.projectRoot, noun: "connection")
             } catch {
                 return error.localizedDescription
             }
@@ -659,7 +659,7 @@ struct PasteImportSheet: View {
 
     private func chooseProjectFolder() {
         let panel = NSOpenPanel()
-        panel.title = "Choose the MCP project folder"
+        panel.title = "Choose this connection's project folder"
         panel.prompt = "Choose"
         panel.canChooseDirectories = true
         panel.canChooseFiles = false

@@ -70,7 +70,7 @@ struct MCPObservationSummary: View {
             Hairline()
             LabeledValueRow("Recorded") {
                 Text(
-                    "Nothing. This is what one connection saw at \(observation.observedAt.formatted(date: .omitted, time: .standard)), not this server's saved status."
+                    "Nothing. This is what one live test saw at \(observation.observedAt.formatted(date: .omitted, time: .standard)), not this connection's saved status."
                 )
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
@@ -314,7 +314,7 @@ struct MCPTestConsentSheet: View {
         items.append(
             (
                 "doc.badge.gearshape",
-                "No client configuration changes, and the result is not saved as this server's status. It is one observation, shown once."
+                "No client configuration changes, and the result is not saved as this connection's status. It is one observation, shown once."
             )
         )
         items.append(

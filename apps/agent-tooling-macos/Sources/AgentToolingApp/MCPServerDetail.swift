@@ -20,7 +20,7 @@ struct MCPStackPane: View {
                 HStack(spacing: Space.xl) {
                     KindTile(kind: .mcpServer, size: Size.tileLarge)
                     VStack(alignment: .leading, spacing: Space.xs) {
-                        Text("\(entries.count) servers selected").font(AgentFont.title)
+                        Text("\(CountNoun.connection.phrase(entries.count)) selected").font(AgentFont.title)
                         Text("Review them as one assignment instead of one each.")
                             .font(AgentFont.body)
                             .foregroundStyle(.secondary)
@@ -56,7 +56,7 @@ struct MCPStackPane: View {
                 }
 
                 Text(
-                    "Saves where these servers should be used. Installing them in an app is a separate reviewed step "
+                    "Saves where these connections should be used. Installing them in an app is a separate reviewed step "
                         + "on the Apps screen; nothing here writes to a client."
                 )
                 .font(AgentFont.caption)
@@ -94,7 +94,7 @@ struct MCPDetailView: View {
                 TitledCard("Where it was asked for", count: "\(entry.requestedAssignments.count)") {
                     if entry.requestedAssignments.isEmpty {
                         LabeledValueRow("Assignments") {
-                            Text("Nobody has asked for this server anywhere yet.")
+                            Text("Nobody has asked for this connection anywhere yet.")
                                 .font(AgentFont.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -134,7 +134,7 @@ struct MCPDetailView: View {
                     Text(
                         "How to reach \(entry.displayName) — its command or address, its transport and its "
                             + "credentials — lives in each app's own configuration file, not in this workspace. "
-                            + "Agent Tooling records that the server exists and where it was asked for."
+                            + "Agent Tooling records that the connection exists and where it was asked for."
                     )
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
@@ -171,7 +171,7 @@ struct MCPDetailView: View {
                     Image(systemName: "square.on.square").foregroundStyle(AgentTheme.warning)
                     Text(
                         "\(repeated.map(\.client.rawValue).joined(separator: " and ")) "
-                            + "\(repeated.count == 1 ? "gets" : "get") this server from more than one place. "
+                            + "\(repeated.count == 1 ? "gets" : "get") this connection from more than one place. "
                             + "Unless two definitions are identical, each one starts its own process and lists its own tools. "
                             + "A copy in the app's own configuration is yours to remove; a plugin's comes and goes with the plugin."
                     )
