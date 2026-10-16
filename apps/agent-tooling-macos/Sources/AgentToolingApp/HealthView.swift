@@ -58,7 +58,8 @@ struct HealthView: View {
             if let progress = session.bulkProgress {
                 Label("Signing in \(progress.completed) of \(progress.total)…", systemImage: "person.badge.key")
             } else {
-                Label("Re-authenticate all (\(eligible.count))", systemImage: "person.badge.key")
+                // It opens the confirmation below rather than signing in.
+                Label("Re-authenticate all (\(eligible.count))…", systemImage: "person.badge.key")
             }
         }
         .buttonStyle(.glass)

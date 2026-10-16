@@ -320,7 +320,8 @@ struct OnboardingWizard: View {
             if step == .assign {
                 // The thorough route: audit this Mac and have the assistant
                 // read the results, category by category, on the Checkup tab.
-                Button("Check this Mac…", action: finishToSetup)
+                // It only goes there, so it takes no ellipsis.
+                Button("Check this Mac", action: finishToSetup)
                     .buttonStyle(.glass)
                     .help("Find what is broken, duplicated, or unmanaged, and walk through what to change.")
             }
@@ -374,8 +375,8 @@ struct OnboardingWizard: View {
         workspaceNavigate(.overview)
     }
 
-    /// Ends onboarding on the Apps screen with the full setup wizard open,
-    /// for a person who wants the audit and the assistant's read right away.
+    /// Ends onboarding on Apps · Checkup, where the audit and the assistant's
+    /// read of it are, for a person who wants them right away.
     private func finishToSetup() {
         onFinish()
         workspaceNavigate(.checkup)
@@ -446,7 +447,8 @@ struct OnboardingAssignmentPickerSheet: View {
                 Spacer()
                 Text(selection.isEmpty ? "Nothing selected yet." : "\(selection.count) selected")
                     .foregroundStyle(.secondary)
-                Button("Continue") { isReviewing = true }
+                // It opens the assignment review sheet, so it says so.
+                Button("Continue…") { isReviewing = true }
                     .primaryActionStyle()
                     .disabled(selection.isEmpty || session.isBusy)
             }.padding(Space.xxl)
