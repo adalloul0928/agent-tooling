@@ -37,7 +37,7 @@ enum SetupWizardStep: Hashable, Identifiable {
         case .category(.cleanup): "Broken links, empty folders, and old plugin versions. Removals go to Agent Tooling's trash first."
         case .category(.duplicates): "Skills one app can reach two ways. Keep one; the other is a copy."
         case .category(.unmanaged): "Skills found in an app that this library does not hold. Adopting one copies it in as yours; the app's folder is not changed."
-        case .category(.connections): "MCP servers that cannot start or are configured separately in several apps."
+        case .category(.connections): "MCP servers that cannot start, and connections configured separately in several apps."
         case .category(.settings): "Settings your assistant recommends. These are changed on the Settings tab, where the file is shown."
         case .category(.additions): "Plugins and skills worth adding."
         case .category(.updates): "What changed in your apps since you last looked."

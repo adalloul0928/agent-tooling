@@ -44,13 +44,11 @@ struct SettingsGeneralView: View {
     private var runtimesCard: some View {
         TitledCard("MCP connection modes") {
             VStack(alignment: .leading, spacing: 0) {
-                Text(
-                    "Servers stay configured directly in each client by default. ToolHive is an optional, separate host for isolated workloads; Agent Tooling never moves servers into it automatically."
-                )
-                .font(AgentFont.body)
-                .foregroundStyle(.secondary)
-                .padding(Space.xl)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(Self.connectionModesExplanation)
+                    .font(AgentFont.body)
+                    .foregroundStyle(.secondary)
+                    .padding(Space.xl)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 if let runtimes, !runtimes.statuses.isEmpty {
                     ForEach(runtimes.statuses, id: \.id) { status in
@@ -92,6 +90,13 @@ struct SettingsGeneralView: View {
             }
         }
     }
+
+    /// What the connection modes are. A configured entry is a connection, as
+    /// the Updates card below calls it; an MCP server is only what ToolHive
+    /// runs.
+    static let connectionModesExplanation =
+        "Connections stay configured directly in each client by default. ToolHive is an optional, separate host "
+        + "that runs MCP servers as isolated workloads; Agent Tooling never moves a connection into it automatically."
 
     private func statusRow(_ status: MCPRuntimeStatus) -> some View {
         InfoRow(status.displayName, detail: rowDetail(status)) {
