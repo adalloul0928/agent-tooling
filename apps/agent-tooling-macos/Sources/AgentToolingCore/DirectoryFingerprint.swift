@@ -2,11 +2,15 @@ import CryptoKit
 import Foundation
 
 enum DirectoryFingerprint {
+    /// - Parameter afterReading: runs with a file's relative path once its
+    ///   bytes are hashed and before it is checked again, so a test can change
+    ///   the file in between. Nothing else passes it.
     static func sha256(
         of root: URL,
         fileManager: FileManager = .default,
         maximumItems: Int = 10_000,
-        maximumBytes: Int = 384 * 1_024 * 1_024
+        maximumBytes: Int = 384 * 1_024 * 1_024,
+        afterReading: (String) throws -> Void = { _ in }
     ) throws -> String {
         let normalizedRoot = root.standardizedFileURL
         let rootValues = try normalizedRoot.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
@@ -74,7 +78,13 @@ enum DirectoryFingerprint {
             while let chunk = try handle.read(upToCount: 64 * 1_024), !chunk.isEmpty {
                 hasher.update(data: chunk)
             }
-            let finalValues = try entry.url.resourceValues(forKeys: [
+            try afterReading(entry.relativePath)
+            // The walk fetched these values with the URL and the URL keeps
+            // them, so asking it again would repeat them and the check could
+            // never fail. Clear them, so the file is looked at as it is now.
+            var current = entry.url
+            current.removeAllCachedResourceValues()
+            let finalValues = try current.resourceValues(forKeys: [
                 .contentModificationDateKey, .fileResourceIdentifierKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey,
             ])
             guard finalValues.isRegularFile == true,

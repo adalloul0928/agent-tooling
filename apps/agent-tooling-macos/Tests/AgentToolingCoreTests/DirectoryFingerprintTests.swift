@@ -37,6 +37,43 @@ struct DirectoryFingerprintTests {
         }
     }
 
+    /// A file rewritten in place while it is hashed, at the same size, must
+    /// not pass as unchanged: the check after the read has to look at the
+    /// disk again, not at the values the walk fetched.
+    @Test func aSameSizeRewriteWhileHashingIsRefused() throws {
+        let fixture = try TemporaryFolder("directory-fingerprint-rewrite").url
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let file = fixture.appending(path: "SKILL.md")
+        try write(file, "reviewed")
+
+        let refusal = #expect(throws: DirectoryFingerprintError.self) {
+            _ = try DirectoryFingerprint.sha256(
+                of: fixture,
+                afterReading: { _ in
+                    let handle = try FileHandle(forWritingTo: file)
+                    try handle.write(contentsOf: Data("rewrote!".utf8))
+                    try handle.close()
+                })
+        }
+        #expect(Self.isChangedWhileReading(refusal), "\(String(describing: refusal))")
+    }
+
+    /// A save that swaps in a new file of the same size leaves a different
+    /// file at the path, which the check must see.
+    @Test func aSameSizeReplacementWhileHashingIsRefused() throws {
+        let fixture = try TemporaryFolder("directory-fingerprint-replace").url
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let file = fixture.appending(path: "SKILL.md")
+        try write(file, "reviewed")
+
+        let refusal = #expect(throws: DirectoryFingerprintError.self) {
+            _ = try DirectoryFingerprint.sha256(
+                of: fixture,
+                afterReading: { _ in try "replaced".write(to: file, atomically: true, encoding: .utf8) })
+        }
+        #expect(Self.isChangedWhileReading(refusal), "\(String(describing: refusal))")
+    }
+
     @Test func executableModeChangesTheFingerprintWithoutChangingFileBytes() throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -108,6 +145,11 @@ struct DirectoryFingerprintTests {
         #expect(receipt.results.first?.status == .failed)
         #expect(receipt.results.first?.output.contains("changed after it was reviewed") == true)
         #expect(!FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)))
+    }
+
+    private static func isChangedWhileReading(_ error: DirectoryFingerprintError?) -> Bool {
+        if case .changedWhileReading = error { return true }
+        return false
     }
 
     private func temporaryDirectory() throws -> URL {
