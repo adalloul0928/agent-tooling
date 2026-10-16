@@ -472,7 +472,7 @@ struct MCPServersView: View {
     private var toolbarContext: String {
         let total = entries.count
         let routed = entries.filter { !$0.routedClients.isEmpty }.count
-        let base = "\(total) \(total == 1 ? "connection" : "connections") · \(routed) in an app"
+        let base = "\(CountNoun.connection.phrase(total)) · \(routed) in an app"
         return stackedEntries.count > 1 ? "\(base) · \(stackedEntries.count) selected" : base
     }
 
@@ -661,7 +661,6 @@ struct AssignmentRemovalSheet: View {
     }
 
     private var subtitle: String {
-        presentation.contributionIDs.count == 1
-            ? "One saved request" : "\(presentation.contributionIDs.count) saved requests"
+        CountNoun("saved request").phrase(presentation.contributionIDs.count)
     }
 }

@@ -116,9 +116,7 @@ struct MarketplaceView: View {
         "This workspace records no catalogs of its own. Add a folder of packages, or a Git checkout of one, for Discover to read."
 
     var toolbarContext: String {
-        let packageCount = session.packages.count
-        let sourceCount = session.sources.count
-        return "\(packageCount) package\(packageCount == 1 ? "" : "s") from \(sourceCount) source\(sourceCount == 1 ? "" : "s")"
+        "\(CountNoun("package").phrase(session.packages.count)) from \(CountNoun("source").phrase(session.sources.count))"
     }
 
     func applyExternalNavigation() {
@@ -266,18 +264,17 @@ struct MarketplaceView: View {
                         // Some catalogs answered and some did not. The grid
                         // below is real, so the shortfall is a quiet one-line
                         // note that points at the Sources list for the detail.
+                        let unread = CountNoun("catalog").phrase(session.catalogFailures.count)
                         Button {
                             showingSources = true
                         } label: {
-                            let count = session.catalogFailures.count
-                            Text("\(count) catalog\(count == 1 ? "" : "s") could not be read — Sources…")
+                            Text("\(unread) could not be read — Sources…")
                                 .font(AgentFont.caption)
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
                         .help("Open the Sources list to see which catalogs could not be read and why")
-                        .accessibilityLabel(
-                            "\(session.catalogFailures.count) catalogs could not be read. Open Sources for detail.")
+                        .accessibilityLabel("\(unread) could not be read. Open Sources for detail.")
                     }
                 }
             }

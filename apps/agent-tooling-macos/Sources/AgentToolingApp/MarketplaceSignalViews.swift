@@ -209,10 +209,10 @@ private struct DeclaredToolRow: View {
     private var schemaSummary: String {
         var parts: [String] = []
         if tool.declaresInputSchema {
-            parts.append("\(tool.inputFields.count) input field\(tool.inputFields.count == 1 ? "" : "s")")
+            parts.append(CountNoun("input field").phrase(tool.inputFields.count))
         }
         if tool.declaresOutputSchema {
-            parts.append("\(tool.outputFields.count) output field\(tool.outputFields.count == 1 ? "" : "s")")
+            parts.append(CountNoun("output field").phrase(tool.outputFields.count))
         }
         return parts.joined(separator: " · ")
     }

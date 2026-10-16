@@ -424,9 +424,9 @@ extension MarketplaceView {
         }
         if sortOrder == .installs {
             guard let installs = package.installCount else { return "No install count" }
-            return "\(installs.formatted()) installs (\(package.sourceName))"
+            return "\(CompactCountFormatter.installs(installs)) (\(package.sourceName))"
         }
-        return "\(package.components.count) component\(package.components.count == 1 ? "" : "s")"
+        return CountNoun("component").phrase(package.components.count)
     }
 
     /// The Skills CLI command for a skills.sh listing, rebuilt from the listing

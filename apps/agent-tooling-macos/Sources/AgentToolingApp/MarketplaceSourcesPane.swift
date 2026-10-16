@@ -51,7 +51,7 @@ extension MarketplaceView {
         }
         if let source = selectedSource, componentFilter != .all {
             return
-                "\(source.name) publishes no \(componentFilter.rawValue.lowercased()) packages. Native client catalogs list plugins; skills come from skills.sh searches and from Agent Plugins folders and Git checkouts you add."
+                "\(source.name) publishes no \(componentFilter.listingNoun). Native client catalogs list plugins; skills come from skills.sh searches and from Agent Plugins folders and Git checkouts you add."
         }
         if let source = selectedSource, let classification = classificationFilter.classification {
             return "Nothing from \(source.name) is classified \(classification.displayName). \(classification.definition)"
@@ -108,12 +108,12 @@ extension MarketplaceView {
     func contentsSummary(for source: ToolingSource) -> String? {
         let packages = session.packages.filter { matches(source, $0) }
         guard !packages.isEmpty else { return nil }
-        let counts: [(String, Int)] = [
-            ("skill", packages.filter { $0.components.contains(.skill) }.count),
-            ("plugin", packages.filter { $0.components.contains(.plugin) }.count),
-            ("MCP server", packages.filter { $0.components.contains(.mcpServer) }.count),
+        let counts: [(CountNoun, Int)] = [
+            (.skill, packages.filter { $0.components.contains(.skill) }.count),
+            (.plugin, packages.filter { $0.components.contains(.plugin) }.count),
+            (CountNoun("MCP server"), packages.filter { $0.components.contains(.mcpServer) }.count),
         ]
-        let parts = counts.filter { $0.1 > 0 }.map { "\($0.1) \($0.0)\($0.1 == 1 ? "" : "s")" }
+        let parts = counts.filter { $0.1 > 0 }.map { $0.0.phrase($0.1) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -369,7 +369,7 @@ struct MarketplaceGalleryCard: View {
                                 .font(AgentFont.captionMedium.monospacedDigit())
                                 .foregroundStyle(.secondary)
                                 .labelStyle(.titleAndIcon)
-                                .help("\(installs.formatted()) installs — reported by \(package.sourceName)")
+                                .help("\(CompactCountFormatter.installs(installs)) — reported by \(package.sourceName)")
                         }
                     }
                     Text(package.summary).font(compact ? AgentFont.body : AgentFont.titleRegular).foregroundStyle(.secondary)
@@ -414,7 +414,7 @@ struct MarketplaceGalleryCard: View {
     private var accessibilitySummary: String {
         var parts = ["\(package.presentationName), from \(package.originName)"]
         if let installs = package.installCount {
-            parts.append("\(installs.formatted()) installs reported by \(package.sourceName)")
+            parts.append("\(CompactCountFormatter.installs(installs)) reported by \(package.sourceName)")
         }
         return parts.joined(separator: ". ")
     }
@@ -423,6 +423,12 @@ struct MarketplaceGalleryCard: View {
 /// `217637` shown as `217.6K` where a full number would not fit. Rounding is
 /// display-only; the exact count stays in the help text beside it.
 enum CompactCountFormatter {
+    /// That exact count, in full and with the noun that agrees with it:
+    /// "1 install", "217,637 installs".
+    static func installs(_ count: Int) -> String {
+        "\(count.formatted()) \(CountNoun("install").word(for: count))"
+    }
+
     static func string(for count: Int) -> String {
         let magnitude = abs(count)
         switch magnitude {

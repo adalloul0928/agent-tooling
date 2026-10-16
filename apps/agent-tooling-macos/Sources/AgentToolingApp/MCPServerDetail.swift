@@ -34,9 +34,7 @@ struct MCPStackPane: View {
                 if assignable.count < entries.count {
                     AttentionBanner(
                         title: "Some of these cannot be assigned here",
-                        message:
-                            "\(entries.count - assignable.count) of \(entries.count) are owned by an app or a plugin, "
-                            + "so this workspace has no say in where they are used. They stay out of the review."
+                        message: Self.unassignableNote(entries.count - assignable.count, of: entries.count)
                     ) {
                         Button("Keep one", action: onClear)
                             .secondaryActionStyle()
@@ -68,6 +66,16 @@ struct MCPStackPane: View {
     }
 
     private var assignable: [MCPConnectionEntry] { entries.filter(\.isAssignable) }
+
+    /// Why some of the stack stays out of the review, agreeing with how many
+    /// that is: "1 of 3 is owned…", "2 of 3 are owned…".
+    static func unassignableNote(_ unassignable: Int, of total: Int) -> String {
+        unassignable == 1
+            ? "1 of \(total) is owned by an app or a plugin, so this workspace has no say in where it is used. "
+                + "It stays out of the review."
+            : "\(unassignable) of \(total) are owned by an app or a plugin, so this workspace has no say in where "
+                + "they are used. They stay out of the review."
+    }
 }
 
 // MARK: - Detail

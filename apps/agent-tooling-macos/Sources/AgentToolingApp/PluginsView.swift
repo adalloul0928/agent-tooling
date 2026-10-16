@@ -257,7 +257,7 @@ struct PluginsView: View {
     private var hasFilters: Bool { !query.isEmpty || clientFilter != nil }
 
     private func toolbarContext(_ inventory: PluginInventoryIndex) -> String {
-        "\(inventory.rows.count) plugin\(inventory.rows.count == 1 ? "" : "s")"
+        CountNoun.plugin.phrase(inventory.rows.count)
     }
 
     /// Several picks, one plan. Removing plugins one at a time means one review
@@ -327,7 +327,7 @@ private struct PluginStackPane: View {
                 HStack(spacing: Space.xl) {
                     KindTile(kind: .plugin, size: Size.tileLarge)
                     VStack(alignment: .leading, spacing: Space.xs) {
-                        Text("\(rows.count) plugins selected").font(AgentFont.title)
+                        Text("\(CountNoun.plugin.phrase(rows.count)) selected").font(AgentFont.title)
                         Text("Remove their assignment to one app through one reviewed plan.")
                             .font(AgentFont.body)
                             .foregroundStyle(.secondary)
@@ -393,7 +393,7 @@ private struct PluginStackPane: View {
         guard !ids.isEmpty else { return }
         removal = .init(
             kind: .plugin,
-            name: rows.count == 1 ? (rows.first?.displayName ?? "plugin") : "\(rows.count) plugins",
+            name: rows.count == 1 ? (rows.first?.displayName ?? "plugin") : CountNoun.plugin.phrase(rows.count),
             contributionIDs: ids)
     }
 

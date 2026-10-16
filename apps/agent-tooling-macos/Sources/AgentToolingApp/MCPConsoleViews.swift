@@ -131,7 +131,7 @@ struct MCPToolInventoryList: View {
                 }
                 if tools.count > Self.visibleLimit {
                     Hairline()
-                    Text("\(tools.count - Self.visibleLimit) more tools are not listed here.")
+                    Text(Self.unlistedNote(tools.count - Self.visibleLimit))
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .padding(Space.xl)
@@ -143,6 +143,12 @@ struct MCPToolInventoryList: View {
     }
 
     private var visibleTools: [MCPLiveTool] { Array(tools.prefix(Self.visibleLimit)) }
+
+    /// The line under a list cut short at `visibleLimit`, agreeing with how
+    /// many it left out: "1 more tool is not listed here."
+    static func unlistedNote(_ count: Int) -> String {
+        "\(count) more \(CountNoun("tool").word(for: count)) \(count == 1 ? "is" : "are") not listed here."
+    }
 
     private func row(_ tool: MCPLiveTool) -> some View {
         HStack(alignment: .top, spacing: Space.lg) {

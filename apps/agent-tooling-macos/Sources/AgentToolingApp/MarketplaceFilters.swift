@@ -105,7 +105,7 @@ extension MarketplaceView {
         }
         .inventoryMenuStyle()
         .fixedSize()
-        .help(activeCount == 0 ? "Filter packages by app, provenance, or category" : "\(activeCount) filters active")
+        .help(activeCount == 0 ? "Filter packages by app, provenance, or category" : "\(CountNoun("filter").phrase(activeCount)) active")
         .accessibilityLabel("Package filters")
         .accessibilityValue(activeCount == 0 ? "No app, provenance, or category filter" : "\(activeCount) active")
     }
@@ -149,7 +149,7 @@ extension MarketplaceView {
     }
 
     func resultCountDescription(_ count: Int) -> String {
-        "\(count) \(count == 1 ? "result" : "results")"
+        CountNoun("result").phrase(count)
     }
 
     var hasActiveTokenFilter: Bool {
@@ -280,6 +280,18 @@ enum MarketplaceComponentFilter: String, CaseIterable, Identifiable {
     case mcpServers = "MCP"
 
     var id: String { rawValue }
+
+    /// What the filter keeps, as it reads in a sentence: "publishes no MCP
+    /// servers". The segment's own title is too short for one, and lowercasing
+    /// it would turn MCP into "mcp".
+    var listingNoun: String {
+        switch self {
+        case .all: "packages"
+        case .skills: "skills"
+        case .plugins: "plugins"
+        case .mcpServers: "MCP servers"
+        }
+    }
 
     func matches(_ package: MarketplacePackage) -> Bool {
         switch self {

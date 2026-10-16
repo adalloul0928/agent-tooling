@@ -160,9 +160,8 @@ actor MCPRegistryCatalog: CatalogSourceReporting {
 
     func search(_ query: MarketplaceQuery) async throws -> MarketplacePage {
         let page = try await asking.search(query)
-        let count = page.packages.count
         report.summaries[.mcpRegistry] =
-            "\(count) server\(count == 1 ? "" : "s") loaded from \(asking.displayName); "
+            "\(CountNoun("server").phrase(page.packages.count)) loaded from \(asking.displayName); "
             + "package execution still requires review"
         report.refreshedKinds = [.mcpRegistry]
         return page
@@ -210,9 +209,8 @@ actor SkillsShCatalog: CatalogSourceReporting {
         // A real search term asks the registry once, exactly as before.
         if let term = SkillsShRegistryProvider.searchTerm(from: query) {
             let page = try await asking.search(query)
-            let count = page.packages.count
             report.summaries[.skillsShRegistry] =
-                "\(count) skill\(count == 1 ? "" : "s") matched “\(term)”; read the source repository before installing"
+                "\(CountNoun.skill.phrase(page.packages.count)) matched “\(term)”; read the source repository before installing"
             report.refreshedKinds = [.skillsShRegistry]
             return page
         }
@@ -415,9 +413,8 @@ actor ClaudeMarketplaceCatalog: CatalogSourceReporting {
             // so and names why the CLI could not be asked.
             let reason = Self.shortReason(cliNote)
             if httpsAnswered {
-                let count = httpsPackages.count
                 built.summaries[.claudeMarketplace] =
-                    "\(count) plugin\(count == 1 ? "" : "s") read from the official catalog on GitHub. "
+                    "\(CountNoun.plugin.phrase(httpsPackages.count)) read from the official catalog on GitHub. "
                     + "Claude Code itself could not be asked: \(reason)"
                 built.refreshedKinds.insert(.claudeMarketplace)
             } else if let httpsFailure {
@@ -443,7 +440,6 @@ actor ClaudeMarketplaceCatalog: CatalogSourceReporting {
     static func completeSummary(
         cliCount: Int, httpsCount: Int, httpsAnswered: Bool, httpsFailure: String?, cliNote: String?
     ) -> String {
-        func plugins(_ count: Int) -> String { "\(count) plugin\(count == 1 ? "" : "s")" }
         var sentences: [String] = []
         if cliCount == 0 {
             // Installing a file-sourced listing needs the marketplace to be
@@ -454,10 +450,10 @@ actor ClaudeMarketplaceCatalog: CatalogSourceReporting {
                 + "Before a plugin from the official catalog can be installed, run: "
                 + "claude plugin marketplace add anthropics/claude-plugins-official")
         } else {
-            sentences.append("\(plugins(cliCount)) listed by Claude Code from its added marketplaces.")
+            sentences.append("\(CountNoun.plugin.phrase(cliCount)) listed by Claude Code from its added marketplaces.")
         }
         if httpsAnswered {
-            sentences.append("\(plugins(httpsCount)) read from the official catalog on GitHub.")
+            sentences.append("\(CountNoun.plugin.phrase(httpsCount)) read from the official catalog on GitHub.")
         } else if let httpsFailure {
             sentences.append("The official catalog on GitHub could not be read: \(httpsFailure)")
         }
@@ -508,7 +504,7 @@ actor RecordedFolderCatalog: CatalogSourceReporting {
                 built.folderSummaries[source.id] =
                     inspected.isEmpty
                     ? "No portable packages found"
-                    : "\(inspected.count) package\(inspected.count == 1 ? "" : "s") discovered; review before installing"
+                    : "\(CountNoun("package").phrase(inspected.count)) discovered; review before installing"
                 built.refreshedFolders.insert(source.id)
             } catch {
                 // The folder's own refusal, with anything that looks like a

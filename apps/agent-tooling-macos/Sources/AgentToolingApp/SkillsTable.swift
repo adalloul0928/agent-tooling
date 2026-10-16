@@ -65,7 +65,9 @@ struct SkillCopySummary: Equatable {
         self.versions = versions
     }
 
-    var label: String { versions > 1 ? "\(versions) versions" : "\(copies) copies" }
+    var label: String {
+        versions > 1 ? CountNoun("version").phrase(versions) : CountNoun("copy", plural: "copies").phrase(copies)
+    }
 
     var explanation: String {
         versions > 1
