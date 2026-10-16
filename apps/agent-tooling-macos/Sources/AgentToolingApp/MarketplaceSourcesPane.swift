@@ -140,7 +140,7 @@ extension MarketplaceView {
         guard let match = session.libraryMatch(for: package) else {
             return "Not in your library"
         }
-        return "In your library as \(match.displayName); where it is installed is decided on Apps"
+        return "In your library as \(match.displayName); where it is installed is decided on the Apps screen"
     }
 
     func symbol(for kind: SourceKind) -> String {

@@ -106,7 +106,7 @@ struct CheckupTriageTests {
         let setting = items.first { $0.id == "r3" }
         #expect(setting?.bucket == .fix)
         #expect(setting?.settings.map(\.key) == ["toolSearch"])
-        #expect(setting?.primaryTitle == "Set toolSearch")
+        #expect(setting?.primaryTitle == "Change setting")
 
         let plan = CheckupTriage.fixAll(items)
         #expect(plan.total == 4, "three removals and one setting; the \"leave these\" row is not in it")

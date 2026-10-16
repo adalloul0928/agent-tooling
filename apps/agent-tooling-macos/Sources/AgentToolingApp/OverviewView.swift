@@ -274,7 +274,7 @@ struct OverviewView: View {
             HStack(alignment: .top, spacing: Space.md) {
                 libraryKindCell("Skills", count: distinctSkillCount, kind: .skill, section: .skills)
                 libraryKindCell("Plugins", count: inventory?.plugins.count ?? 0, kind: .plugin, section: .plugins)
-                libraryKindCell("Servers", count: inventory?.mcpServers.count ?? 0, kind: .mcpServer, section: .mcpServers)
+                libraryKindCell("Connections", count: inventory?.mcpServers.count ?? 0, kind: .mcpServer, section: .mcpServers)
             }
             .padding(.horizontal, Space.lg)
             .padding(.vertical, Space.xl)

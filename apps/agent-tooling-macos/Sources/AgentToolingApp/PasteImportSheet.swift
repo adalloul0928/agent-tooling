@@ -166,7 +166,7 @@ struct PasteImportSheet: View {
 
     private var primaryTitle: String {
         if shape == .skillMarkdown { return "Create skill" }
-        if !servers.isEmpty { return "Add server" }
+        if !servers.isEmpty { return "Add connection" }
         return "Read paste"
     }
 

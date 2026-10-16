@@ -289,7 +289,7 @@ private struct MCPTestConsoleSection: View {
         HStack(alignment: .top, spacing: Space.lg) {
             Image(systemName: "bolt.slash").foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: Space.xs) {
-                Text("A live test is not possible for this server")
+                Text("A live test is not possible for this connection")
                     .font(AgentFont.bodyMedium)
                 Text(error.localizedDescription)
                     .font(AgentFont.caption)

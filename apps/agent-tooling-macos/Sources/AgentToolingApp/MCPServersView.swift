@@ -110,7 +110,7 @@ struct MCPServersView: View {
                     HSplitView {
                         collectionPane.frame(minWidth: 340, idealWidth: proxy.size.width * 0.55)
                         VStack(spacing: 0) {
-                            InspectorHeader(title: "Server details") { showingDetails = false }
+                            InspectorHeader(title: "Connection details") { showingDetails = false }
                             detailPane
                         }
                         .frame(minWidth: 400, idealWidth: proxy.size.width * 0.45)
@@ -134,9 +134,9 @@ struct MCPServersView: View {
                 }
                 .inventoryMenuStyle().fixedSize()
                 Spacer()
-                InventorySearchField(placeholder: "Search servers", text: $query)
+                InventorySearchField(placeholder: "Search connections", text: $query)
                     .frame(maxWidth: 420)
-                    .accessibilityLabel("Search MCP servers")
+                    .accessibilityLabel("Search connections")
             }
             .padding(.horizontal, WorkspaceLayout.pageInset)
             .padding(.top, WorkspaceLayout.contentTopInset)
@@ -211,7 +211,7 @@ struct MCPServersView: View {
             let columns = Columns(width: geometry.size.width - Space.xl * 2)
             VStack(spacing: 0) {
                 CollectionColumnHeader {
-                    Text(columns.expanded ? "Name" : "Server").frame(width: columns.name, alignment: .leading)
+                    Text(columns.expanded ? "Name" : "Connection").frame(width: columns.name, alignment: .leading)
                     if columns.expanded {
                         Text("Managed by").frame(width: columns.ownership, alignment: .leading)
                         Text("Plugin").frame(width: columns.plugin, alignment: .leading)
@@ -329,7 +329,7 @@ struct MCPServersView: View {
                 })
         } else {
             EmptyStateView(
-                symbol: "network", title: "Select a server",
+                symbol: "network", title: "Select a connection",
                 message: "Inspect where it came from, where it was asked for, and what one live test says it offers.")
         }
     }
@@ -486,7 +486,7 @@ struct MCPServersView: View {
     private var toolbarContext: String {
         let total = entries.count
         let routed = entries.filter { !$0.routedClients.isEmpty }.count
-        let base = "\(total) \(total == 1 ? "server" : "servers") · \(routed) in an app"
+        let base = "\(total) \(total == 1 ? "connection" : "connections") · \(routed) in an app"
         return stackedEntries.count > 1 ? "\(base) · \(stackedEntries.count) selected" : base
     }
 
@@ -524,7 +524,7 @@ struct MCPServersView: View {
     }
 
     private var emptyStateTitle: String {
-        entries.isEmpty ? "No connections yet" : "No matching servers"
+        entries.isEmpty ? "No connections yet" : "No matching connections"
     }
 
     private var emptyStateMessage: String {
@@ -637,7 +637,7 @@ struct AssignmentRemovalSheet: View {
                     }
 
                     Text(
-                        "Removes the record that somebody wanted this \(presentation.kind == .mcpServer ? "server" : "item") there. "
+                        "Removes the record that somebody wanted this \(presentation.kind == .mcpServer ? "connection" : "item") there. "
                             + "Nothing is uninstalled: what an app already has stays until the Apps screen is asked to change it."
                     )
                     .font(AgentFont.body)

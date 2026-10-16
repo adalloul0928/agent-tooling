@@ -134,7 +134,7 @@ enum CheckupTriage {
             return CheckupItem(
                 id: recommendation.id, bucket: .fix, client: client, title: recommendation.title, detail: recommendation.summary,
                 findings: findings, recommendation: recommendation, actions: [], settings: [(client, key, value)],
-                primaryTitle: "Set \(key)", provenance: recommendation.provenance, opens: nil)
+                primaryTitle: "Change setting", provenance: recommendation.provenance, opens: nil)
         case .readOnly:
             // "Leave these alone" or plain information: fine, dismiss together.
             return CheckupItem(

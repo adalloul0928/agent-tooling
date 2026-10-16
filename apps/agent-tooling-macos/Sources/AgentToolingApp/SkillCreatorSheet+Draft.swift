@@ -94,7 +94,7 @@ struct SkillCreatorDraftPane: View {
                     EmptyStateView(
                         symbol: "doc.text",
                         title: "Nothing written yet",
-                        message: "\(client.rawValue) has not written the package yet. Answer its questions and the files will appear here.")
+                        message: "\(client.rawValue) has not written the skill yet. Answer its questions and the files will appear here.")
                 } else {
                     EmptyStateView(
                         symbol: "doc.text",
