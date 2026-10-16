@@ -292,13 +292,14 @@ struct AppSectionTests {
     }
 
     /// A tab sits under its family's heading, so it must not repeat it. Only
-    /// three tabs disagree with their durable identifier, and each disagrees
+    /// four tabs disagree with their durable identifier, and each disagrees
     /// because the identifier would read wrongly under that heading.
     @Test("Tab labels read correctly under their own heading")
     func tabTitlesAreScopedToTheirFamily() {
         #expect(AppSection.syncCenter.tabTitle == "Clients")
         #expect(AppSection.appSettings.tabTitle == "Settings")
         #expect(AppSection.settings.tabTitle == "General")
+        #expect(AppSection.activity.tabTitle == "Receipts")
         #expect(AppSection.skills.tabTitle == "Skills")
         #expect(AppSection.presets.tabTitle == "Presets")
         #expect(AppSection.history.tabTitle == "History")
@@ -306,9 +307,26 @@ struct AppSectionTests {
 
         #expect(AppSection.skills.workspaceTitle == "Library")
         #expect(AppSection.appSettings.workspaceTitle == "Apps")
+        #expect(AppSection.checkup.workspaceTitle == "Apps")
         #expect(AppSection.history.workspaceTitle == "Activity")
         #expect(AppSection.sync.workspaceTitle == "Settings")
         #expect(AppSection.overview.workspaceTitle == nil)
+    }
+
+    /// The family's name is the heading, so a tab with the same name reads as
+    /// a duplicate rather than a child, the way the Activity heading sat over
+    /// an Activity tab. The tab row stays the same from tab to tab, and so does
+    /// the heading above it: Checkup once fell back to its own name there.
+    @Test("No tab repeats its family's heading, and a family keeps one heading")
+    func tabsNeverRepeatTheirHeading() {
+        for section in AppSection.allCases where !section.workspaceTabs.isEmpty {
+            let heading = section.workspaceTitle
+            #expect(heading != nil, "\(section.rawValue) has tabs but no heading")
+            for tab in section.workspaceTabs {
+                #expect(tab.tabTitle != heading, "\(tab.rawValue) repeats its heading")
+                #expect(tab.workspaceTitle == heading, "\(tab.rawValue) is headed unlike \(section.rawValue)")
+            }
+        }
     }
 
     @Test("Every tab keeps its family's sidebar row selected")

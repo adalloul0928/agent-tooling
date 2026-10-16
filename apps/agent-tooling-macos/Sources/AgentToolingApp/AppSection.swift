@@ -43,10 +43,13 @@ enum AppSection: String, CaseIterable, Identifiable {
     /// What a tab calls itself inside its own family, where the family name is
     /// already on the heading above it. "Clients" and "Settings" only read
     /// correctly under "Apps"; "General" only reads correctly under "Settings".
+    /// A tab never repeats its heading: under "Activity" the first tab is the
+    /// list of receipts, so it is called that.
     var tabTitle: String {
         switch self {
         case .appSettings: "Settings"
         case .settings: "General"
+        case .activity: "Receipts"
         default: rawValue
         }
     }
@@ -73,12 +76,13 @@ enum AppSection: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The heading above a family's tabs. A section that stands alone has none,
-    /// and its screen keeps whatever title it gave its own toolbar.
+    /// The heading above a family's tabs, the same on every tab of it. A
+    /// section that stands alone has none, and its screen keeps whatever title
+    /// it gave its own toolbar.
     var workspaceTitle: String? {
         switch self {
         case .skills, .plugins, .mcpServers, .presets: "Library"
-        case .syncCenter, .accounts, .appSettings, .health: "Apps"
+        case .syncCenter, .accounts, .checkup, .appSettings, .health: "Apps"
         case .activity, .history: "Activity"
         case .settings, .sync: "Settings"
         default: nil
