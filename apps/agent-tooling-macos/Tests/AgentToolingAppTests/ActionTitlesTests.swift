@@ -29,6 +29,15 @@ struct ActionTitlesTests {
         #expect(ActionTitles.reviewChanges(count: -1) == "Review changes…")
     }
 
+    @Test("A whole plan reviewed from one app's page says all of it")
+    func allChanges() {
+        #expect(ActionTitles.reviewAllChanges(count: 3) == "Review all 3 changes…")
+        #expect(ActionTitles.reviewAllChanges(count: 2) == "Review all 2 changes…")
+        // "All 1 change" says nothing "1 change" does not.
+        #expect(ActionTitles.reviewAllChanges(count: 1) == ActionTitles.reviewChanges(count: 1))
+        #expect(ActionTitles.reviewAllChanges(count: 0) == ActionTitles.reviewChanges(count: nil))
+    }
+
     @Test("Menus title-case the command; the palette uses the window's sentence case")
     func commandTitles() {
         #expect(ActionTitles.reviewChangesCommand(.menu) == "Review Changes…")
@@ -47,6 +56,7 @@ struct ActionTitlesTests {
     func titlesEndInEllipsis() {
         let titles =
             [nil, 0, 1, 3].map { ActionTitles.reviewChanges(count: $0) }
+            + [1, 3].map { ActionTitles.reviewAllChanges(count: $0) }
             + [ActionTitles.reviewChangesCommand(.menu), ActionTitles.reviewChangesCommand(.palette)]
             + [ActionTitles.createSkill(with: .claude)]
         for title in titles {

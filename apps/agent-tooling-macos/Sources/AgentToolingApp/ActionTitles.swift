@@ -26,6 +26,16 @@ enum ActionTitles {
         return "Review \(CountNoun.change.phrase(count))…"
     }
 
+    /// The same button on a page narrowed to one app, when the plan also
+    /// holds other apps' changes. The sheet it opens applies the whole plan,
+    /// so the button counts the whole plan and says so: "Review all 3
+    /// changes…". One change has no "all" to it, so it reads as the plain
+    /// count.
+    static func reviewAllChanges(count: Int) -> String {
+        guard count > 1 else { return reviewChanges(count: count) }
+        return "Review all \(CountNoun.change.phrase(count))…"
+    }
+
     /// The command that opens the same review from the main menu, the menu-bar
     /// item, or the command palette. It names no count: a command is there
     /// before any plan is.

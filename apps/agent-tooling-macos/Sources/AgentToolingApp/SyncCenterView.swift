@@ -210,11 +210,18 @@ struct SyncCenterView: View {
     }
 
     /// The title of both buttons that open the plan review: the toolbar's and
-    /// the changes card's. A page narrowed to one app counts that app's
-    /// changes, the way its status line and card do, so the page never shows
-    /// two counts for the same thing.
+    /// the changes card's. Both open one sheet, and it applies the whole plan,
+    /// so the title counts the whole plan. On a page narrowed to one app whose
+    /// plan also holds other apps' changes it says "all", so that count is not
+    /// read as this app's; the line under the title and the changes card
+    /// still count this app's alone.
     static func reviewTitle(for plan: WorkspaceDeploymentPlan?, scopedTo client: ClientKind?) -> String {
-        ActionTitles.reviewChanges(count: plan.map { scoped($0.items, to: client).count })
+        guard let plan else { return ActionTitles.reviewChanges(count: nil) }
+        let whole = plan.items.count
+        guard client != nil, scoped(plan.items, to: client).count < whole else {
+            return ActionTitles.reviewChanges(count: whole)
+        }
+        return ActionTitles.reviewAllChanges(count: whole)
     }
 
     // MARK: - Tiles
