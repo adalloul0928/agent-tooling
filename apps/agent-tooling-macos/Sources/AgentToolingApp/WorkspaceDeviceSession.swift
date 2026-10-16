@@ -120,6 +120,9 @@ final class WorkspaceDeviceSession {
     }
 
     private let service: WorkspaceApplicationService
+    /// Where every change to this Mac's own record goes: the service, unless a
+    /// test hands in one that fails a chosen write.
+    private let recorder: any DeviceStateRecording
     private let library: WorkspaceLibrarySession
     private let homeRoot: URL
     private let observer: any DeviceObserving
@@ -132,6 +135,34 @@ final class WorkspaceDeviceSession {
     /// flip is the one that stays. A check recording what it found joins the
     /// same queue, so it cannot get between a flip and its write either.
     @ObservationIgnored private var pendingDeviceWrite: Task<Result<DeviceWorkspaceState, any Error>, Never>?
+    /// How many queued writes still have each setting to change. A setting is
+    /// shown as recorded once the last of them has finished, so a write that
+    /// fails puts back its own flip and never one made after it.
+    @ObservationIgnored private var writesInFlight: [DeviceSetting: Int] = [:]
+    /// This Mac's choices as the store holds them: read at launch, then taken
+    /// from each write that lands.
+    @ObservationIgnored private var recordedPreferences: DeviceWorkspacePreferences
+    /// What was shown before the first explicit choice of apps, while that
+    /// choice is on its way to the store. Every flip made meanwhile is written
+    /// against it, so a flip that failed is not carried in by the next one.
+    @ObservationIgnored private var shownBeforeChoice: Set<ClientKind>?
+    /// The message a failed choice left on screen, so a later choice that
+    /// saves can take that message down without taking down a check's.
+    @ObservationIgnored private var writeFailureMessage: String?
+
+    /// One setting a device write changes.
+    private enum DeviceSetting: Hashable {
+        case client(ClientKind)
+        case automaticHealth
+        case updatePolicy
+        case scanRoots
+
+        var isClient: Bool {
+            if case .client = self { true } else { false }
+        }
+    }
+
+    private static let choiceNotRecorded = "This Mac could not record that choice. Nothing was changed."
 
     /// Reads back which apps this Mac manages, and nothing else.
     ///
@@ -146,9 +177,11 @@ final class WorkspaceDeviceSession {
         store: WorkspaceRevisionStore,
         homeRoot: URL,
         observer: any DeviceObserving = LiveDeviceObserver(),
-        toolProbeRunner: (any CommandRunning)? = nil
+        toolProbeRunner: (any CommandRunning)? = nil,
+        recorder: (any DeviceStateRecording)? = nil
     ) {
         self.service = service
+        self.recorder = recorder ?? service
         self.library = library
         self.homeRoot = homeRoot
         self.observer = observer
@@ -166,6 +199,7 @@ final class WorkspaceDeviceSession {
         updatePolicy = preferences?.effectiveUpdatePolicy ?? UpdatePolicy()
         lastUpdateCheck = preferences?.lastUpdateCheck
         projectScanRoots = preferences?.projectScanRoots ?? []
+        recordedPreferences = preferences ?? DeviceWorkspacePreferences()
         ClientExecutableLocator.registerAdditionalRoots(preferences?.customToolDirectories ?? [])
     }
 
@@ -181,35 +215,39 @@ final class WorkspaceDeviceSession {
     /// for. Opting out is never an uninstall.
     func setEnabled(_ client: ClientKind, _ enabled: Bool) async {
         guard enabledClients.contains(client) != enabled else { return }
-        let previous = enabledClients
-        let previousChoice = hasExplicitClientChoice
+        // The first explicit choice is written against what was shown before
+        // it, and so is every flip made while that choice is on its way: what
+        // is on screen by then holds the earlier flips too, and one of those
+        // that fails must not be written by this one.
+        if !hasExplicitClientChoice { shownBeforeChoice = enabledClients }
+        let shown = shownBeforeChoice ?? enabledClients
         if enabled { enabledClients.insert(client) } else { enabledClients.remove(client) }
         hasExplicitClientChoice = true
         errorMessage = nil
         do {
             // Written as a difference against what is recorded — or, for the
-            // first explicit choice, against what was effectively shown — so a
-            // choice made somewhere else between reading and writing is not
-            // quietly overwritten by this one.
-            try await writePreferences { preferences in
-                var clients = Set(preferences.chosenClients ?? Array(previous))
+            // first explicit choice, against what was shown — so a choice made
+            // somewhere else between reading and writing is not quietly
+            // overwritten by this one. A write that fails puts this app back as
+            // recorded and says so: a checkbox that did not save would be a lie
+            // about what this Mac will do next.
+            try await writePreferences(
+                .client(client), failure: "This Mac could not record which apps it manages. Nothing was changed."
+            ) { preferences in
+                var clients = Set(preferences.chosenClients ?? Array(shown))
                 if enabled { clients.insert(client) } else { clients.remove(client) }
                 let sorted = clients.sorted { $0.rawValue < $1.rawValue }
                 preferences.chosenClients = sorted
                 // Mirrored so an older build of this app reads the same choice.
                 preferences.enabledClients = sorted
             }
+            // The choice is device state, but recording it advances the
+            // workspace, so the library is read again rather than left holding
+            // an older head.
+            await library.refresh()
         } catch {
-            // Showing a checkbox that did not save would be a lie about what
-            // this Mac will do next.
-            enabledClients = previous
-            hasExplicitClientChoice = previousChoice
-            errorMessage = "This Mac could not record which apps it manages. Nothing was changed."
-            return
+            // Already settled: the app is shown as recorded, with the reason.
         }
-        // The choice is device state, but recording it advances the workspace,
-        // so the library is read again rather than left holding an older head.
-        await library.refresh()
     }
 
     /// Looks for the tools of managed apps the last check could not find, by
@@ -276,49 +314,41 @@ final class WorkspaceDeviceSession {
     /// changes — one flag rather than a set — not the care taken over it.
     func setAutomaticallyCheckHealth(_ enabled: Bool) async {
         guard automaticallyCheckHealth != enabled else { return }
-        let previous = automaticallyCheckHealth
         automaticallyCheckHealth = enabled
         errorMessage = nil
         do {
-            try await writePreferences { $0.automaticallyCheckHealth = enabled }
+            // A write that fails puts the toggle back as recorded and says so:
+            // a toggle that did not save would be a lie about what this Mac
+            // will do next.
+            try await writePreferences(.automaticHealth, failure: Self.choiceNotRecorded) {
+                $0.automaticallyCheckHealth = enabled
+            }
+            await library.refresh()
         } catch {
-            // Showing a toggle that did not save would be a lie about what
-            // this Mac will do next.
-            automaticallyCheckHealth = previous
-            errorMessage = "This Mac could not record that choice. Nothing was changed."
-            return
+            // Already settled: the toggle is shown as recorded, with the reason.
         }
-        await library.refresh()
     }
 
     /// Records how this Mac handles updates. Saved before it is shown as the
     /// rule, for the same reason the health toggle is.
     func setUpdatePolicy(_ policy: UpdatePolicy) async {
         guard updatePolicy != policy else { return }
-        let previous = updatePolicy
         updatePolicy = policy
         errorMessage = nil
         do {
-            try await writePreferences { $0.updatePolicy = policy }
+            try await writePreferences(.updatePolicy, failure: Self.choiceNotRecorded) { $0.updatePolicy = policy }
+            await library.refresh()
         } catch {
-            updatePolicy = previous
-            errorMessage = "This Mac could not record that choice. Nothing was changed."
-            return
+            // Already settled: the policy is shown as recorded, with the reason.
         }
-        await library.refresh()
     }
 
     /// Records the folders this Mac looks in for projects. Saved before it is
-    /// shown, like every device choice here.
+    /// shown, like every device choice here; a write that fails shows them as
+    /// recorded again before the error reaches the caller.
     func setProjectScanRoots(_ roots: [String]) async throws {
-        let previous = projectScanRoots
         projectScanRoots = roots
-        do {
-            try await writePreferences { $0.projectScanRoots = roots }
-        } catch {
-            projectScanRoots = previous
-            throw error
-        }
+        try await writePreferences(.scanRoots) { $0.projectScanRoots = roots }
     }
 
     /// Stamps the time of a finished update check. A check that could not
@@ -332,9 +362,10 @@ final class WorkspaceDeviceSession {
     /// device write.
     @discardableResult
     private func writePreferences(
+        _ setting: DeviceSetting? = nil, failure message: String? = nil,
         _ change: @escaping @Sendable (inout DeviceWorkspacePreferences) throws -> Void
     ) async throws -> DeviceWorkspaceState {
-        try await serializeDeviceWrite { device in
+        try await serializeDeviceWrite(setting, failure: message) { device in
             guard var application = device.applicationState else {
                 throw WorkspaceRevisionStoreError.notInitialized
             }
@@ -348,25 +379,85 @@ final class WorkspaceDeviceSession {
     /// and the last flip is the one that stays.
     ///
     /// The head is read in the same call that commits, so another device write
-    /// landing in between cannot make this one stale. A write that failed does
-    /// not stop the next one, and its error still reaches its caller.
+    /// landing in between cannot make this one stale. Each write is settled in
+    /// that same order before the next one starts: `setting` names what it
+    /// changes, and `message` is what a person is told if a choice of theirs
+    /// did not save. A write that failed does not stop the next one, and its
+    /// error still reaches its caller.
     @discardableResult
     private func serializeDeviceWrite(
+        _ setting: DeviceSetting? = nil, failure message: String? = nil,
         _ change: @escaping @Sendable (inout DeviceWorkspaceState) throws -> Void
     ) async throws -> DeviceWorkspaceState {
+        if let setting { writesInFlight[setting, default: 0] += 1 }
         let previous = pendingDeviceWrite
         // An unstructured task runs the change exactly once, after the one
         // before it, whatever happens to the caller waiting on it.
         let write = Task { @MainActor () -> Result<DeviceWorkspaceState, any Error> in
             _ = await previous?.value
+            let result: Result<DeviceWorkspaceState, any Error>
             do {
-                return .success(try await service.recordDeviceChange(change))
+                result = .success(try await recorder.recordDeviceChange(change))
             } catch {
-                return .failure(error)
+                result = .failure(error)
             }
+            settle(setting, failure: message, result)
+            return result
         }
         pendingDeviceWrite = write
         return try await write.value.get()
+    }
+
+    /// Takes in what one write left behind: the record as written, or the
+    /// reason it was not, and then — once no later write is left to change the
+    /// same setting — that setting as the store holds it.
+    private func settle(
+        _ setting: DeviceSetting?, failure message: String?, _ result: Result<DeviceWorkspaceState, any Error>
+    ) {
+        switch result {
+        case .success(let device):
+            if let preferences = device.applicationState?.preferences { recordedPreferences = preferences }
+            // A later choice that saved makes "Nothing was changed" untrue, so
+            // the message an earlier one left comes down with it.
+            if message != nil, let failure = writeFailureMessage {
+                if errorMessage == failure { errorMessage = nil }
+                writeFailureMessage = nil
+            }
+        case .failure:
+            if let message {
+                errorMessage = message
+                writeFailureMessage = message
+            }
+        }
+        guard let setting else { return }
+        let remaining = (writesInFlight[setting] ?? 1) - 1
+        writesInFlight[setting] = remaining > 0 ? remaining : nil
+        // A later write to the same setting settles it when it lands.
+        if remaining == 0 { showRecorded(setting) }
+    }
+
+    /// Shows one setting as the store holds it. For a flip that saved, that is
+    /// what is already on screen. For one that failed it is the value before
+    /// it — taken from the store, which already holds every flip that saved,
+    /// so a flip made after the failed one is never undone with it.
+    private func showRecorded(_ setting: DeviceSetting) {
+        let recorded = recordedPreferences
+        switch setting {
+        case .client(let client):
+            let clients = recorded.chosenClients.map { Set($0) } ?? shownBeforeChoice ?? enabledClients
+            if clients.contains(client) { enabledClients.insert(client) } else { enabledClients.remove(client) }
+            // Whether a choice was made at all is settled once no flip of any
+            // app is left: with none recorded, the next check decides again.
+            guard !writesInFlight.keys.contains(where: \.isClient) else { return }
+            hasExplicitClientChoice = recorded.chosenClients != nil
+            shownBeforeChoice = nil
+        case .automaticHealth:
+            automaticallyCheckHealth = recorded.automaticallyCheckHealth
+        case .updatePolicy:
+            updatePolicy = recorded.effectiveUpdatePolicy
+        case .scanRoots:
+            projectScanRoots = recorded.projectScanRoots ?? []
+        }
     }
 
     /// Checks this Mac's apps. Reads only.

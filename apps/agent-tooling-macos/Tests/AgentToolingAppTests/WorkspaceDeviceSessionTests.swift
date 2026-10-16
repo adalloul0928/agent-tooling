@@ -444,6 +444,111 @@ struct WorkspaceDeviceSessionTests {
 
     // MARK: - Writes that fail, and writes that overlap
 
+    /// A flip whose write fails goes back to what is recorded and says so,
+    /// rather than showing a toggle this Mac will not act on.
+    @Test func aFlipThatDoesNotSaveGoesBackAndSaysNothingWasChanged() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let recorder = ScriptedRecorder(service: fixture.service, failing: [1])
+        let session = await fixture.session(recorder: recorder)
+
+        await session.setAutomaticallyCheckHealth(false)
+
+        #expect(session.automaticallyCheckHealth)
+        #expect(session.errorMessage == "This Mac could not record that choice. Nothing was changed.")
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.automaticallyCheckHealth == true)
+    }
+
+    /// On, off, on, off, with the first write failing while the other two wait
+    /// behind it. Putting back the whole value saved before the first flip
+    /// would show "on" over a store that holds "off", under a message that
+    /// says nothing was changed after two writes that changed something.
+    @Test func anEarlierFlipThatFailsWhileLaterOnesWaitDoesNotUndoThem() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let recorder = ScriptedRecorder(service: fixture.service, failing: [1])
+        let session = await fixture.session(recorder: recorder)
+        #expect(session.automaticallyCheckHealth)
+
+        let first = Task { await session.setAutomaticallyCheckHealth(false) }
+        let second = Task { await session.setAutomaticallyCheckHealth(true) }
+        let third = Task { await session.setAutomaticallyCheckHealth(false) }
+        _ = await (first.value, second.value, third.value)
+
+        #expect(await recorder.calls == 3)
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.automaticallyCheckHealth == false)
+        #expect(session.automaticallyCheckHealth == false)
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+    }
+
+    /// Two different apps turned off at once are both turned off: each write
+    /// is a difference against what the one before it recorded.
+    @Test func twoAppsFlippedAtOnceAreBothRecorded() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+
+        let first = Task { await session.setEnabled(.gemini, false) }
+        let second = Task { await session.setEnabled(.kiro, false) }
+        _ = await (first.value, second.value)
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        #expect(session.enabledClients == [.claude, .codex])
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.chosenClients == [.claude, .codex])
+    }
+
+    /// When the first of two apps flipped at once does not save, only that app
+    /// goes back. The other one saved, so the screen keeps it and no longer
+    /// says nothing was changed.
+    @Test func whenOneOfTwoAppsFlippedAtOnceFailsOnlyThatOneGoesBack() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        // An explicit choice is already recorded, so every write here is a
+        // difference against it.
+        try await fixture.recordChosenClients(ClientKind.allCases)
+        let recorder = ScriptedRecorder(service: fixture.service, failing: [1])
+        let session = await fixture.session(recorder: recorder)
+
+        let first = Task { await session.setEnabled(.gemini, false) }
+        let second = Task { await session.setEnabled(.kiro, false) }
+        _ = await (first.value, second.value)
+
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.chosenClients == [.claude, .codex, .gemini])
+        #expect(session.enabledClients == [.claude, .codex, .gemini])
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+    }
+
+    /// The first explicit choice is written against what was shown before it.
+    /// When that first flip fails, the flip after it must not write it anyway
+    /// by starting from a screen that already had it — and with a choice now
+    /// recorded, the next check no longer decides what is shown.
+    @Test func aFirstChoiceThatFailsIsNotWrittenByTheFlipAfterIt() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let recorder = ScriptedRecorder(service: fixture.service, failing: [1])
+        let session = await fixture.session(
+            observer: ScriptedObserver(results: [.success([Fixture.claudeCode(commandAvailable: true, version: "2.1.263")])]),
+            recorder: recorder)
+        #expect(session.enabledClients == Set(ClientKind.allCases))
+
+        let first = Task { await session.setEnabled(.gemini, false) }
+        let second = Task { await session.setEnabled(.kiro, false) }
+        _ = await (first.value, second.value)
+
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.chosenClients == [.claude, .codex, .gemini])
+        #expect(session.enabledClients == [.claude, .codex, .gemini])
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+
+        // A check that finds only Claude Code leaves the recorded choice alone.
+        await session.refresh()
+        #expect(session.enabledClients == [.claude, .codex, .gemini])
+    }
+
     /// A flip made while a check is under way: the check records what it found
     /// and the flip records the choice, and neither is refused as stale because
     /// the other moved the workspace between its read and its write.
@@ -657,6 +762,30 @@ struct WorkspaceDeviceSessionTests {
         }
     }
 
+    private struct WriteFailure: Error {}
+
+    /// The real service, with the writes a test names made to fail. Writes are
+    /// counted from 1 in the order the session sends them, which is the order
+    /// they were asked for.
+    private actor ScriptedRecorder: DeviceStateRecording {
+        private let service: WorkspaceApplicationService
+        private let failing: Set<Int>
+        private(set) var calls = 0
+
+        init(service: WorkspaceApplicationService, failing: Set<Int>) {
+            self.service = service
+            self.failing = failing
+        }
+
+        func recordDeviceChange(
+            _ change: @escaping @Sendable (inout DeviceWorkspaceState) throws -> Void
+        ) async throws -> DeviceWorkspaceState {
+            calls += 1
+            guard !failing.contains(calls) else { throw WriteFailure() }
+            return try await service.recordDeviceChange(change)
+        }
+    }
+
     /// A check during which somebody flips a toggle. The flip starts from
     /// inside the scan, so it reaches the session after the check began and
     /// before the check records what it found — the moment a flip used to
@@ -721,12 +850,27 @@ struct WorkspaceDeviceSessionTests {
 
         func session(
             observer: any DeviceObserving = ScriptedObserver(results: [.success([])]),
-            toolProbeRunner: (any CommandRunning)? = nil
+            toolProbeRunner: (any CommandRunning)? = nil,
+            recorder: (any DeviceStateRecording)? = nil
         ) async -> WorkspaceDeviceSession {
             await library.refresh()
             return WorkspaceDeviceSession(
                 service: service, library: library, store: store, homeRoot: home, observer: observer,
-                toolProbeRunner: toolProbeRunner)
+                toolProbeRunner: toolProbeRunner, recorder: recorder)
+        }
+
+        /// Records an explicit choice of apps, the way an earlier launch would
+        /// have left it.
+        func recordChosenClients(_ clients: [ClientKind]) async throws {
+            let sorted = clients.sorted { $0.rawValue < $1.rawValue }
+            _ = try await service.recordDeviceChange { device in
+                guard var application = device.applicationState else {
+                    throw WorkspaceRevisionStoreError.notInitialized
+                }
+                application.preferences.chosenClients = sorted
+                application.preferences.enabledClients = sorted
+                device.applicationState = application
+            }
         }
 
         static func observation(

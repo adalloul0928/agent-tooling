@@ -2,6 +2,19 @@ import AgentToolingCore
 import Foundation
 import os
 
+/// Recording one change to this Mac's own record.
+///
+/// A protocol rather than the service itself so a test can make a chosen write
+/// fail and look at what the session shows afterwards, the same way
+/// `DeviceObserving` lets a test hand in a scan.
+protocol DeviceStateRecording: Sendable {
+    /// Applies `change` to this Mac's record as the store holds it now, and
+    /// returns the record as it was written.
+    func recordDeviceChange(
+        _ change: @escaping @Sendable (inout DeviceWorkspaceState) throws -> Void
+    ) async throws -> DeviceWorkspaceState
+}
+
 /// Device writes that read the head in the same call that commits.
 ///
 /// Reading the head in one call and committing in another leaves a gap that
@@ -11,9 +24,7 @@ import os
 /// that instant; each change here is applied to the store's own copy inside the
 /// transaction, never to one read earlier, so committing it on the newer head
 /// is the same change, and it is tried again a few times rather than reported.
-extension WorkspaceApplicationService {
-    /// Applies `change` to this Mac's record as the store holds it now, and
-    /// returns the record as it was written.
+extension WorkspaceApplicationService: DeviceStateRecording {
     func recordDeviceChange(
         _ change: @escaping @Sendable (inout DeviceWorkspaceState) throws -> Void
     ) throws -> DeviceWorkspaceState {
