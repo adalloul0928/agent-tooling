@@ -101,6 +101,9 @@ struct CoverageRow: View {
 
 struct RecommendationRow: View {
     let recommendation: ToolRecommendation
+    /// The assistant a recommendation to create a skill is drafted with, so
+    /// the button names the one that will write it.
+    let assistant: ClientKind
     let action: () -> Void
 
     var body: some View {
@@ -141,10 +144,14 @@ struct RecommendationRow: View {
         }
     }
 
-    private var actionTitle: String {
+    private var actionTitle: String { Self.actionTitle(for: recommendation, assistant: assistant) }
+
+    /// Opening a skill or Discover only navigates. Creating one opens the
+    /// skill creator, a sheet, so it takes the ellipsis.
+    nonisolated static func actionTitle(for recommendation: ToolRecommendation, assistant: ClientKind) -> String {
         switch recommendation.kind {
         case .useExistingSkill: "Open skill"
-        case .createCustomSkill: "Create with Codex"
+        case .createCustomSkill: "Create with \(assistant.rawValue)…"
         case .marketplaceSkill, .mcpServer, .plugin:
             recommendation.marketplacePackageID == nil ? "Browse Discover" : "Review in Discover"
         }
@@ -153,7 +160,8 @@ struct RecommendationRow: View {
     private var actionHint: String {
         switch recommendation.kind {
         case .useExistingSkill: "Opens the installed skill details"
-        case .createCustomSkill: "Opens a Codex draft you review file by file. Nothing is created and nothing is installed"
+        case .createCustomSkill:
+            "Opens a \(assistant.rawValue) draft you review file by file. Nothing is created and nothing is installed"
         case .marketplaceSkill, .mcpServer, .plugin: "Opens Discover without installing anything"
         }
     }

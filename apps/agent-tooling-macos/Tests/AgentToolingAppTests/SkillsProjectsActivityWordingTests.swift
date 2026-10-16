@@ -70,4 +70,26 @@ struct SkillsProjectsActivityWordingTests {
         #expect(CoverageRow.countsText(chats: 1, items: 1) == "1 chat · 1 item")
         #expect(CoverageRow.countsText(chats: 12, items: 0) == "12 chats · 0 items")
     }
+
+    private func recommendation(_ kind: ToolRecommendationKind, packageID: String? = nil) -> ToolRecommendation {
+        ToolRecommendation(
+            id: "r", kind: kind, title: "t", summary: "s", rationale: "r", confidence: .high,
+            supportingConversationCount: 1, marketplacePackageID: packageID)
+    }
+
+    @Test("Creating a skill names the assistant that will draft it, and opens a sheet")
+    func createNamesTheDraftingAssistant() {
+        let create = recommendation(.createCustomSkill)
+        #expect(RecommendationRow.actionTitle(for: create, assistant: .claude) == "Create with Claude Code…")
+        #expect(RecommendationRow.actionTitle(for: create, assistant: .codex) == "Create with Codex…")
+    }
+
+    @Test("Opening a skill or Discover only navigates, so takes no ellipsis")
+    func navigatingActionsTakeNoEllipsis() {
+        #expect(RecommendationRow.actionTitle(for: recommendation(.useExistingSkill), assistant: .claude) == "Open skill")
+        #expect(RecommendationRow.actionTitle(for: recommendation(.plugin), assistant: .claude) == "Browse Discover")
+        #expect(
+            RecommendationRow.actionTitle(for: recommendation(.mcpServer, packageID: "p"), assistant: .claude)
+                == "Review in Discover")
+    }
 }

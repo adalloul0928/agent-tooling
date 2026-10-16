@@ -437,7 +437,7 @@ struct InsightsView: View {
                     if !dive.recommendations.isEmpty {
                         Hairline()
                         ForEach(Array(dive.recommendations.enumerated()), id: \.element.id) { index, recommendation in
-                            RecommendationRow(recommendation: recommendation) { open(recommendation) }
+                            RecommendationRow(recommendation: recommendation, assistant: draftingClient) { open(recommendation) }
                             if index < dive.recommendations.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
                         }
                     }
@@ -464,7 +464,7 @@ struct InsightsView: View {
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(recommendations.enumerated()), id: \.element.id) { index, recommendation in
-                        RecommendationRow(recommendation: recommendation) {
+                        RecommendationRow(recommendation: recommendation, assistant: draftingClient) {
                             open(recommendation)
                         }
                         if index < recommendations.count - 1 {
@@ -644,6 +644,13 @@ struct InsightsView: View {
         Task { await session.scan(options: options, deepDiveWith: reader) }
     }
 
+    /// The assistant a recommendation to create a skill is drafted with: Claude
+    /// Code when this Mac manages it, else Codex. The request names it, and the
+    /// creator opens on it, so the row's button names it too.
+    private var draftingClient: ClientKind {
+        [ClientKind.claude, .codex].first(where: enabledClients.contains) ?? .codex
+    }
+
     /// A recommendation opens a screen. Nothing here installs, nothing here
     /// writes to a client, and asking for a skill only hands the creator an
     /// instruction to draft — the draft is reviewed before it is saved.
@@ -673,7 +680,7 @@ struct InsightsView: View {
         let instruction = recommendation.draftInstruction ?? recommendation.summary
         guard !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         routeError = nil
-        let client = [ClientKind.claude, .codex].first(where: enabledClients.contains) ?? .codex
+        let client = draftingClient
         let request = SkillDraftRequest(
             client: client,
             instruction: instruction,
