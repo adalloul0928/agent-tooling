@@ -1,4 +1,5 @@
 import AgentToolingCore
+import AgentToolingTestSupport
 import AppKit
 import Foundation
 import SwiftUI
@@ -96,9 +97,12 @@ struct ComponentsRenderTests {
     /// shell has wrapped yet, and inside the shell once one does.
     @Test("The page toolbar degrades to a plain heading with no shell around it")
     func toolbarWithoutEnvironmentShowsNoTabs() throws {
-        let bare = try measure(toolbar(title: "Library"))
-        let inShell = try measure(toolbar(title: "Library").environment(\.workspaceSelection, .skills))
-        let noTabs = try measure(toolbar(title: "Home").environment(\.workspaceSelection, .overview))
+        // Each is measured at its own intrinsic size rather than in a window,
+        // so a tab row is told apart from a few hundred points, not lost in a
+        // wash of page background.
+        let bare = try #require(fittingSize(of: toolbar(title: "Library")))
+        let inShell = try #require(fittingSize(of: toolbar(title: "Library").environment(\.workspaceSelection, .skills)))
+        let noTabs = try #require(fittingSize(of: toolbar(title: "Home").environment(\.workspaceSelection, .overview)))
 
         #expect(bare.height > 0)
         #expect(inShell.height > bare.height, "the Library tab row did not appear")
@@ -121,8 +125,8 @@ struct ComponentsRenderTests {
     /// tool is unavailable everywhere.
     @Test("Client marks fall back to every known client")
     func clientMarksFallBackToAllClients() throws {
-        let all = try measure(ClientMarks(present: [.codex]))
-        let one = try measure(ClientMarks(present: [.codex]).environment(\.availableClients, [.codex]))
+        let all = try #require(fittingSize(of: ClientMarks(present: [.codex])))
+        let one = try #require(fittingSize(of: ClientMarks(present: [.codex]).environment(\.availableClients, [.codex])))
 
         #expect(all.width > one.width)
     }
@@ -160,17 +164,6 @@ struct ComponentsRenderTests {
     private func expectDrawn(_ view: some View, _ name: String, _ location: SourceLocation = #_sourceLocation) throws {
         let bitmap = try rasterize(view, name, location)
         #expect(distinctColours(in: bitmap) >= 2, "\(name) drew a blank frame", sourceLocation: location)
-    }
-
-    /// Lays a primitive out at its own intrinsic size rather than in a window,
-    /// so a badge is measured against its own few hundred pixels instead of
-    /// being lost in a wash of page background.
-    private func measure(_ view: some View, _ location: SourceLocation = #_sourceLocation) throws -> CGSize {
-        let host = NSHostingView(rootView: AnyView(view.fixedSize()))
-        host.layoutSubtreeIfNeeded()
-        let size = host.fittingSize
-        #expect(size.width > 0 && size.height > 0, "laid out to nothing", sourceLocation: location)
-        return size
     }
 
     private func rasterize(

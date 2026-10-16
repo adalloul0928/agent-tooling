@@ -636,11 +636,14 @@ swift test --disable-sandbox
 The three test targets share one plain `AgentToolingTestSupport` target
 (`Tests/AgentToolingTestSupport`), not a product. It holds test scaffolding the
 suites would otherwise copy: a self-cleaning `TemporaryFolder`, a `write(_:_:)`
-file helper, real-git fixtures (`GitTestFixture`), and `ScriptedCommandRunner` /
-`RefusingCommandRunner`. It imports only Foundation and the public
+file helper, real-git fixtures (`GitTestFixture`), `ScriptedCommandRunner` /
+`RefusingCommandRunner`, `ContrastRatio` (the WCAG contrast between two
+colours), and `fittingSize(of:)` (the size a view lays itself out at on its
+own). It imports only Foundation, AppKit, SwiftUI and the public
 `AgentToolingCore` API — no `import Testing`, no `@testable import` — so it
 builds clean under CI's release gate
-(`swift build --configuration release -Xswiftc -warnings-as-errors`).
+(`swift build --configuration release -Xswiftc -warnings-as-errors`). A helper
+that has to fail a test returns an optional for the suite to `#require`.
 
 [Periphery](https://github.com/peripheryapp/periphery) finds unused code, the
 way knip does for JavaScript. With `brew install periphery`, run
