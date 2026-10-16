@@ -129,6 +129,25 @@ struct CommandPaletteCatalogTests {
         #expect(CommandPaletteMatcher.rank(items, query: "add mcp server").first?.outcome == .screenRequest(.addMCPServer))
     }
 
+    /// Pointing at a result says what it will do in a sentence that fits it,
+    /// not one shape for all ("Open Home in Go to", "Open Check setup in
+    /// Action").
+    @Test("A result's tooltip fits what the result does")
+    func tooltipsFitWhatTheResultDoes() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let items = CommandPaletteCatalog.items(for: fixture.workspace)
+        func help(_ outcome: CommandPaletteOutcome) -> String? {
+            items.first { $0.outcome == outcome }?.help
+        }
+
+        #expect(help(.navigate(.overview)) == "Go to Home")
+        #expect(help(.checkSetup) == "Read this Mac again for what each app actually has")
+        #expect(help(.screenRequest(.addMCPServer)) == "Paste a definition to see what it describes")
+        #expect(help(.openClient(.claude)) == "Open Claude Code in Apps")
+        #expect(help(.openSkill(Self.identifier(ShellRenderFixture.skill))) == "Open Standalone Skill in Library")
+    }
+
     @Test("A screen request names the screen that answers it")
     func screenRequestsCarryTheirScreen() {
         #expect(ScreenRequest.addMCPServer.section == .mcpServers)

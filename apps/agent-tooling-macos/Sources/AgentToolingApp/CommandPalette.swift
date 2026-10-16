@@ -82,6 +82,18 @@ struct CommandPaletteItem: Identifiable, PaletteSearchable {
         guard case .openClient(let client) = outcome else { return nil }
         return client
     }
+
+    /// What pointing at the result says it will do. A screen is gone to, an
+    /// action says what it does, and anything else opens on its screen; one
+    /// sentence shape for all of them read "Open Home in Go to".
+    var help: String {
+        switch outcome {
+        case .navigate: "Go to \(title)"
+        case .checkSetup, .checkConnectionHealth, .reviewSync: subtitle
+        case .screenRequest(let request) where request.itemID == nil: subtitle
+        case .openClient, .openSkill, .screenRequest: "Open \(title) in \(contextLabel)"
+        }
+    }
 }
 
 /// Every named object the app already holds, in one list. Built once when the
@@ -393,7 +405,7 @@ struct CommandPaletteView: View {
                                 highlighted = index
                             }
                             .id(item.id)
-                            .help("Open \(item.title) in \(item.contextLabel)")
+                            .help(item.help)
                             .accessibilityLabel("\(item.title), \(item.subtitle)")
                             .accessibilityValue(index == highlighted ? "Selected" : "")
                         }
