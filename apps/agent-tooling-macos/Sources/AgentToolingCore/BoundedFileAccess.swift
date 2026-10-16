@@ -11,6 +11,22 @@ enum BoundedFileAccess {
         maximumBytes: Int = maximumTextBytes,
         allowSymbolicLink: Bool = true
     ) throws -> String {
+        let data = try readData(at: url, maximumBytes: maximumBytes, allowSymbolicLink: allowSymbolicLink)
+        guard let contents = String(data: data, encoding: .utf8) else {
+            throw BoundedFileAccessError.invalidUTF8(url.lastPathComponent)
+        }
+        return contents
+    }
+
+    /// The file's bytes exactly as they are on disk, for a caller that must
+    /// keep them that way: a fingerprint or a backup of the file. The size is
+    /// checked before anything is read, at most one byte past the limit is
+    /// read, and the file is checked afterwards to be the one that was sized.
+    static func readData(
+        at url: URL,
+        maximumBytes: Int = maximumTextBytes,
+        allowSymbolicLink: Bool = true
+    ) throws -> Data {
         let originalValues = try url.resourceValues(forKeys: [.isSymbolicLinkKey])
         guard allowSymbolicLink || originalValues.isSymbolicLink != true else {
             throw BoundedFileAccessError.symbolicLink(url.path(percentEncoded: false))
@@ -39,9 +55,6 @@ enum BoundedFileAccess {
             }
             throw BoundedFileAccessError.changedWhileReading(url.lastPathComponent)
         }
-        guard let contents = String(data: data, encoding: .utf8) else {
-            throw BoundedFileAccessError.invalidUTF8(url.lastPathComponent)
-        }
 
         let resourceIdentifier = values.fileResourceIdentifier.map { String(describing: $0) }
         let finalValues = try resolvedURL.resourceValues(forKeys: [
@@ -58,7 +71,7 @@ enum BoundedFileAccess {
         else {
             throw BoundedFileAccessError.changedWhileReading(url.lastPathComponent)
         }
-        return contents
+        return data
     }
 
     static func descendantDirectories(

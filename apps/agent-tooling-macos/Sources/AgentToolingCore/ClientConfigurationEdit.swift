@@ -52,6 +52,61 @@ public enum ClientConfigurationFile: String, Codable, CaseIterable, Sendable {
     }
 }
 
+// MARK: - Reading
+
+extension ClientConfigurationFile {
+    /// This file's text, read the way every client configuration file is
+    /// read (see `readText(at:named:)`). Nil when there is no file.
+    public func readText(homeURL: URL) throws -> String? {
+        try Self.readText(at: url(homeURL: homeURL), named: relativePath)
+    }
+
+    /// A configuration file's text, read bounded by the one limit every
+    /// reader of one shares, so a file over it is refused before it is loaded
+    /// rather than read whole and measured afterwards. Nil when nothing is
+    /// there. Over the limit throws `ConfigurationFileTooLargeError`, naming
+    /// the file as `name`; a file that is there but cannot be read as text
+    /// throws the read's own error, so a caller never takes it for a missing
+    /// one.
+    public static func readText(at url: URL, named name: String) throws -> String? {
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return nil }
+        let data = try readData(at: url, named: name)
+        guard let text = String(data: data, encoding: .utf8) else { throw BoundedFileAccessError.invalidUTF8(name) }
+        return text
+    }
+
+    /// A configuration file's bytes exactly as they are, under the same limit
+    /// and the same refusal, for a writer that fingerprints or backs them up.
+    static func readData(at url: URL, named name: String) throws -> Data {
+        do {
+            return try BoundedFileAccess.readData(at: url, maximumBytes: BoundedFileAccess.maximumConfigurationBytes)
+        } catch BoundedFileAccessError.fileTooLarge(_, let maximumBytes) {
+            throw ConfigurationFileTooLargeError(path: name, maximumBytes: maximumBytes)
+        }
+    }
+}
+
+/// A client configuration file larger than Agent Tooling reads. Every path
+/// that reads one to change it, or to plan a change, refuses it with this
+/// error before loading it: a reviewed edit, the Settings editor, Checkup
+/// turning a server off, and the account planner. So each says the same
+/// thing, names the file and the limit, and none goes on as though the file
+/// were empty.
+public struct ConfigurationFileTooLargeError: LocalizedError, Hashable, Sendable {
+    /// The file, as a person would find it.
+    public let path: String
+    public let maximumBytes: Int
+
+    public var errorDescription: String? {
+        "\(path) is larger than Agent Tooling's \(Self.size(maximumBytes)) limit for a configuration file, so it was left alone."
+    }
+
+    /// A limit in the unit it is set in: whole megabytes, else kilobytes.
+    static func size(_ bytes: Int) -> String {
+        bytes % 1_048_576 == 0 ? "\(bytes / 1_048_576) MB" : "\(bytes / 1_024) KB"
+    }
+}
+
 /// One change to one key in one of those files. Reviewed as a step, applied
 /// by the engine, backed up first.
 public struct ClientConfigurationEdit: Codable, Hashable, Sendable {

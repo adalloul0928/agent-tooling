@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -213,8 +214,44 @@ struct ClientConfigurationEditTests {
         let receipt = await engine.execute(plan)
 
         #expect(receipt.results.first?.status == .failed)
+        // The refusal names the file and the limit, rather than the copy limit
+        // a source folder with too many files gets.
+        let output = try #require(receipt.results.first?.output)
+        #expect(output.contains(".kiro/settings/mcp.json"), "\(output)")
+        #expect(output.contains("\(BoundedFileAccess.maximumConfigurationBytes / 1_048_576) MB"), "\(output)")
+        #expect(
+            output
+                == ConfigurationFileTooLargeError(
+                    path: ".kiro/settings/mcp.json", maximumBytes: BoundedFileAccess.maximumConfigurationBytes
+                ).errorDescription)
         // The file is left exactly as it was: nothing was rewritten.
         #expect(try Data(contentsOf: file).count == BoundedFileAccess.maximumConfigurationBytes + 1)
+    }
+
+    /// The one read every path that changes a client's configuration shares:
+    /// the file's text, nothing when there is no file, or a refusal. A file
+    /// over the limit or one that is not text is never read as missing.
+    @Test func aConfigurationFileReadsAsItsTextAsNothingOrAsARefusal() throws {
+        let home = try TemporaryFolder("ClientConfigurationRead").url
+        defer { try? FileManager.default.removeItem(at: home) }
+        let file = ClientConfigurationFile.codexConfig
+        let limit = BoundedFileAccess.maximumConfigurationBytes
+
+        #expect(try file.readText(homeURL: home) == nil, "no file is the new-file case")
+        try write(file.url(homeURL: home), "model = \"gpt-5\"\n")
+        #expect(try file.readText(homeURL: home) == "model = \"gpt-5\"\n")
+
+        try Data(repeating: UInt8(ascii: "#"), count: limit + 1).write(to: file.url(homeURL: home))
+        #expect(throws: ConfigurationFileTooLargeError(path: ".codex/config.toml", maximumBytes: limit)) {
+            try file.readText(homeURL: home)
+        }
+        #expect(
+            ConfigurationFileTooLargeError(path: ".codex/config.toml", maximumBytes: limit).errorDescription
+                == ".codex/config.toml is larger than Agent Tooling's 4 MB limit for a configuration file, so it was left alone.")
+        #expect(ConfigurationFileTooLargeError.size(512 * 1_024) == "512 KB")
+
+        try Data([0x7B, 0xFF, 0xFE, 0x7D]).write(to: file.url(homeURL: home))
+        #expect(throws: BoundedFileAccessError.self) { try file.readText(homeURL: home) }
     }
 
     @Test func anExistingConfigurationThatIsNotUTF8IsLeftAlone() async throws {

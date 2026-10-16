@@ -379,18 +379,16 @@ public actor OperationExecutor {
             guard edit.file == file, edit.isSafe else { throw OperationEngineError.unsafeDestination(destinationPath) }
             let destination = file.url(homeURL: homeURL)
             // Read bounded so an oversized configuration is refused before it
-            // is loaded, rather than read whole and measured afterwards. A
-            // missing or otherwise unreadable file still reads as empty, the
-            // new-file case; only exceeding the size limit is an error, kept as
-            // the same sourceTooLarge it was before.
+            // is loaded, rather than read whole and measured afterwards, with
+            // the refusal that names the file and the limit. A missing or
+            // otherwise unreadable file still reads as empty, the new-file
+            // case: the commit-time check in writeConfiguration refuses to
+            // replace a file that is there but did not read as this text.
             let existing: String
             do {
-                existing = try BoundedFileAccess.readUTF8(
-                    at: destination,
-                    maximumBytes: BoundedFileAccess.maximumConfigurationBytes
-                )
-            } catch BoundedFileAccessError.fileTooLarge {
-                throw OperationEngineError.sourceTooLarge
+                existing = try file.readText(homeURL: homeURL) ?? ""
+            } catch let tooLarge as ConfigurationFileTooLargeError {
+                throw tooLarge
             } catch {
                 existing = ""
             }
@@ -822,7 +820,9 @@ public actor OperationExecutor {
     /// is: staged beside it, then swapped in only after the destination is
     /// checked again to be the plain file whose text the edit was computed
     /// from. A link or a changed file appearing between read and write is
-    /// refused rather than followed or overwritten.
+    /// refused rather than followed or overwritten. The check reads under the
+    /// same limit as the first read, so a file that grew past it in between is
+    /// refused too rather than loaded whole to be compared.
     private func writeConfiguration(_ updated: String, existing: String, to destination: URL, planStepID: UUID) throws {
         let parent = destination.deletingLastPathComponent()
         try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
@@ -835,7 +835,7 @@ public actor OperationExecutor {
             guard self.fileManager.fileExists(atPath: path) else { return }   // new file: nothing to check
             let values = try destination.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
             guard values.isSymbolicLink != true, values.isRegularFile == true,
-                  (try? String(contentsOf: destination, encoding: .utf8)) == existing
+                (try? BoundedFileAccess.readUTF8(at: destination, maximumBytes: BoundedFileAccess.maximumConfigurationBytes)) == existing
             else { throw OperationEngineError.unsafeDestination(path) }
         }
     }
