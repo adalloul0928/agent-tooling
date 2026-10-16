@@ -686,12 +686,21 @@ final class WorkspaceDeploymentSession {
     /// the button said.
     func plan(
         for artifactIDs: Set<ArtifactID>, includingRemovals: Bool = false,
-        excluding heldBack: Set<WorkspaceDeploymentInstallKey> = []
+        excluding heldBack: Set<WorkspaceDeploymentInstallKey> = [],
+        onlyRemovalKeys: Set<WorkspaceDeploymentInstallKey>? = nil
     ) -> WorkspaceDeploymentPlan? {
         guard let plan else { return nil }
         return WorkspaceDeploymentPlan(
             items: plan.items.filter { item in
-                if case .removeContent = item.action, !includingRemovals { return false }
+                if case .removeContent = item.action {
+                    if !includingRemovals { return false }
+                    // Scoping by artifact alone sweeps up every removal the
+                    // planner offers for that artifact, including one pending at
+                    // a destination this caller never touched. When a caller
+                    // knows the exact places it wrote, it narrows removals to
+                    // those keys so an unrelated pending removal is left alone.
+                    if let onlyRemovalKeys, !onlyRemovalKeys.contains(Self.installKey(item)) { return false }
+                }
                 if heldBack.contains(Self.installKey(item)) { return false }
                 return artifactIDs.contains(item.artifactID)
             },
@@ -713,9 +722,11 @@ final class WorkspaceDeploymentSession {
     /// `risk(for:)`, that nobody needs to look first.
     func apply(
         only artifactIDs: Set<ArtifactID>, includingRemovals: Bool = false,
-        excluding heldBack: Set<WorkspaceDeploymentInstallKey> = []
+        excluding heldBack: Set<WorkspaceDeploymentInstallKey> = [],
+        onlyRemovalKeys: Set<WorkspaceDeploymentInstallKey>? = nil
     ) async {
-        guard let scoped = plan(for: artifactIDs, includingRemovals: includingRemovals, excluding: heldBack),
+        guard let scoped = plan(for: artifactIDs, includingRemovals: includingRemovals,
+                                excluding: heldBack, onlyRemovalKeys: onlyRemovalKeys),
               !scoped.items.isEmpty else { return }
         await apply(plan: scoped)
     }

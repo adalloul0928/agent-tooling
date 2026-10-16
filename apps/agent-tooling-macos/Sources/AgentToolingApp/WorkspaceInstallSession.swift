@@ -74,6 +74,11 @@ final class WorkspaceInstallSession {
     private let service: WorkspaceApplicationService
     /// The contributions this install added, for Undo. Empty until saved.
     private var addedContributionIDs: [WorkspaceObjectID] = []
+    /// The exact place-and-thing this install actually wrote, for Undo. Only a
+    /// removal whose key is in here is applied when undoing, so a removal
+    /// pending at another destination of the same artifact — left over from an
+    /// unrelated withdrawal — is not swept up by scoping removals by artifact.
+    private var installedKeys: Set<WorkspaceDeploymentInstallKey> = []
     private var targetArtifactIDs: Set<ArtifactID> = []
 
     init(
@@ -199,6 +204,14 @@ final class WorkspaceInstallSession {
                 installed.insert(client)
             }
         }
+        // Remember the exact place-and-thing that actually landed, so Undo
+        // removes only those: a step that was attempted but whose surface
+        // reported a failure did not write, and is left out.
+        let failedSurfaces = Set(
+            deployment.results.filter { $0.failed > 0 }.flatMap(\.surfaces))
+        installedKeys = Set(
+            running.filter { !failedSurfaces.contains($0.surface) }
+                .map(WorkspaceDeploymentSession.installKey))
         let skipped = plan.exclusions.map(\.detail) + heldBack.map {
             "\($0.surface.displayName) already has \($0.displayName) from somewhere else; it was left alone."
         }
@@ -223,14 +236,17 @@ final class WorkspaceInstallSession {
             return
         }
         // With the assignments gone, the planner offers the copies it proved
-        // this app placed for removal; applying that is the undo.
+        // this app placed for removal; applying that is the undo. Only the keys
+        // this install actually wrote are removed, so a removal pending at
+        // another destination of the same artifact is left where it is.
         await deployment.prepare()
-        await deployment.apply(only: targetArtifactIDs, includingRemovals: true)
+        await deployment.apply(only: targetArtifactIDs, includingRemovals: true, onlyRemovalKeys: installedKeys)
         if let message = deployment.errorMessage {
             fail(message)
             return
         }
         addedContributionIDs = []
+        installedKeys = []
         phase = .finished(.init(installed: [], failed: [:], skipped: [], canUndo: false))
     }
 
@@ -240,6 +256,7 @@ final class WorkspaceInstallSession {
         reviewPlan = nil
         heldBack = []
         addedContributionIDs = []
+        installedKeys = []
         targetArtifactIDs = []
         if library.review != nil, !library.isBusy { library.discardReview() }
     }
