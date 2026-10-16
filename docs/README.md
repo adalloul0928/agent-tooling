@@ -19,7 +19,7 @@ files are frozen and should not be read as current behavior.
 - standing-instructions-v1.md — read-only inventory of instructions and agents
 - central-skill-intake-v1.md — personal and upstream skill intake plus content updates
 - versioned-commands-v1.md — the four versioned workspace commands
-- effective-settings-v1.md — resolver and read-only inspector for native settings
+- effective-settings-v1.md — resolver, inspector and narrow editor for native settings
 - workspace-deployment-v1.md — intent to reviewable plan, staging, execution
 - workspace-store-v1.md — versioned revision store and application service writer
 - workspace-assignment-commands-v1.md — shared assign/apply batch and one-step install

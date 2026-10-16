@@ -1,9 +1,10 @@
 # Effective native settings v1
 
-Status: the resolver, two versioned vendor adapters, the file reader and the
-inspector UI are implemented and fixture-tested. No adapter has been checked
-against a live installed client, and the inspector is read-only, so this does
-not establish effective-settings coverage for every real setup.
+Status: the resolver, two versioned vendor adapters, the file reader, the
+inspector UI and its editor for the settings recorded as writable are
+implemented and fixture-tested. No adapter has been checked against a live
+installed client, so this does not establish effective-settings coverage for
+every real setup.
 
 ## Contract
 
@@ -91,9 +92,16 @@ interpret are listed separately and never presented as effective.
 
 ## Still open
 
-The inspector is read-only: an editing UI, and hooks/agents/instructions views,
-remain open. Project trust gating, Claude Desktop MCP discovery, and the dated
-compatibility register with upstream schema-change detection also remain open.
-Gemini has no adapter; its current TOML discovery must not be presented as
-effective-settings support. No adapter has been checked against a live installed
-client.
+App settings edits a setting only when the compatibility register records it as
+writable, the resolver says this app can write the layer that decides it, that
+layer is a JSON file, and the value is not a list combined across files; today
+that is a few Claude Code settings, and Codex stays read-only. Standing
+instructions, rules and agent definitions are listed beside the settings,
+read-only, as standing-instructions-v1.md describes. Hooks appear only as a
+count per contributing file, so a view of individual hooks remains open, as do
+project trust gating and Claude Desktop MCP discovery.
+`ConfigurationCompatibilityRegister` records each understood setting with a
+version range, the vendor page it came from and whether it can be written;
+dated entries and upstream schema-change detection remain open. Gemini has no
+adapter; its current TOML discovery must not be presented as effective-settings
+support. No adapter has been checked against a live installed client.
