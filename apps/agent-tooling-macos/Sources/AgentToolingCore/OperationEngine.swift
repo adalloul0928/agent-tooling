@@ -657,7 +657,8 @@ public actor OperationExecutor {
             // app may move: the next sync would only download it again.
             !ClaudeAccountSync.isInsideSyncedSkills(destination, homeURL: homeURL),
             !Self.samePath(destination, store.libraryURL),
-            !destination.standardizedFileURL.path(percentEncoded: false).hasPrefix(store.rootURL.standardizedFileURL.path(percentEncoded: false))
+            // A deny check: nothing this app keeps is moved, however spelled.
+            !PathContainment.mightContainLexically(destination, in: store.rootURL)
         else { throw OperationEngineError.unsafeDestination(rawPath) }
         return destination
     }
@@ -678,7 +679,7 @@ public actor OperationExecutor {
         let cache = marketplace.deletingLastPathComponent()
         guard caches.contains(where: { Self.samePath(cache, $0) }),
             [destination, plugin, marketplace].allSatisfy({ OperationCommandPolicy.isSafePluginIdentifier($0.lastPathComponent) || OperationCommandPolicy.isSafeMCPIdentifier($0.lastPathComponent) }),
-            !destination.standardizedFileURL.path(percentEncoded: false).hasPrefix(store.rootURL.standardizedFileURL.path(percentEncoded: false))
+            !PathContainment.mightContainLexically(destination, in: store.rootURL)
         else { throw OperationEngineError.unsafeDestination(rawPath) }
         return destination
     }

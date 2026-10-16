@@ -234,6 +234,80 @@ struct PathContainmentTests {
         #expect(!PathContainment.overlapsAsGiven("/a/b", "/a/bc"))
         #expect(!PathContainment.overlapsAsGiven("/a/bc", "/a/b"))
     }
+
+    @Test func theFilesystemRootOverlapsEverything() {
+        // A deny check: a linked destination of "/" would write into every
+        // source checkout, and a checkout at "/" holds every destination.
+        #expect(PathContainment.overlapsAsGiven("/", "/Users/me/repo"))
+        #expect(PathContainment.overlapsAsGiven("/Users/me/repo", "/"))
+        #expect(PathContainment.overlapsAsGiven("/", "/"))
+    }
+
+    // MARK: Case: allow checks compare exactly, deny checks fold
+
+    @Test func allowChecksRefuseADifferentlyCasedSpelling() {
+        #expect(!PathContainment.isContained(normalizedChild: "/A/B/c", inNormalizedRoot: "/a/b"))
+        #expect(!PathContainment.containsAsGiven(URL(fileURLWithPath: "/A/B/c"), in: URL(fileURLWithPath: "/a/b")))
+        #expect(!PathContainment.containsLexically(URL(fileURLWithPath: "/A/B/c"), in: URL(fileURLWithPath: "/a/b")))
+        #expect(PathContainment.relativePath(ofNormalizedChild: "/A/B/c", inNormalizedRoot: "/a/b") == nil)
+    }
+
+    @Test func denyChecksAcceptADifferentlyCasedSpelling() {
+        #expect(PathContainment.mightBeContained(normalizedChild: "/A/B/c", inNormalizedRoot: "/a/b"))
+        #expect(PathContainment.mightBeContained(normalizedChild: "/a/b", inNormalizedRoot: "/A/B/"))
+        #expect(PathContainment.mightContainLexically(URL(fileURLWithPath: "/A/./B/c"), in: URL(fileURLWithPath: "/a/b")))
+        #expect(PathContainment.overlapsAsGiven("/Users/Me/Repo", "/users/me/repo/skills"))
+        #expect(PathContainment.mightBeSamePath("/Users/Me", "/users/me/"))
+    }
+
+    @Test func denyChecksStillRejectASharedPrefixSibling() {
+        #expect(!PathContainment.mightBeContained(normalizedChild: "/A/BC", inNormalizedRoot: "/a/b"))
+        #expect(!PathContainment.mightBeContained(normalizedChild: "/a/c", inNormalizedRoot: "/a/b"))
+        #expect(!PathContainment.overlapsAsGiven("/a/b", "/A/BC"))
+        #expect(!PathContainment.mightBeSamePath("/a/b", "/a/bc"))
+    }
+
+    @Test func denyChecksTreatTheFilesystemRootAsHoldingEverything() {
+        #expect(PathContainment.mightBeContained(normalizedChild: "/a", inNormalizedRoot: "/"))
+        #expect(PathContainment.mightBeContained(normalizedChild: "/", inNormalizedRoot: "/"))
+        #expect(!PathContainment.mightBeContained(normalizedChild: "/", inNormalizedRoot: "/a"))
+    }
+
+    @Test func denyChecksFoldCaseAsUnicodeDefinesIt() {
+        // Full case folding, which lowercasing alone does not do.
+        #expect(PathContainment.mightBeContained(normalizedChild: "/x/STRASSE/y", inNormalizedRoot: "/x/straße"))
+        #expect(PathContainment.mightBeContained(normalizedChild: "/x/ΣΑ/y", inNormalizedRoot: "/x/ςα"))
+        // Canonically equivalent spellings, precomposed and decomposed.
+        #expect(PathContainment.mightBeContained(normalizedChild: "/x/cafe\u{301}/y", inNormalizedRoot: "/x/caf\u{e9}"))
+        #expect(!PathContainment.mightBeContained(normalizedChild: "/x/cafe\u{301}/y", inNormalizedRoot: "/x/cafe"))
+    }
+
+    @Test func denyChecksSeeANameThatStartsWithACombiningMark() {
+        // As characters, "/" and the mark after it are one character, so a
+        // character-wise prefix test would put this name outside the root.
+        #expect(PathContainment.mightBeContained(normalizedChild: "/a/b/\u{301}x", inNormalizedRoot: "/a/b"))
+    }
+
+    /// The fold must be at least as broad as the volume's own: any two names
+    /// the temporary volume treats as one folder must also be one to a deny
+    /// check. On a case-sensitive volume every pair is distinct and this holds
+    /// trivially.
+    @Test func denyChecksFoldAtLeastAsMuchAsTheVolumeDoes() throws {
+        let fixture = try PathContainmentFixture()
+        defer { fixture.cleanUp() }
+        let pairs = [
+            ("Agent Tooling", "agent tooling"), ("straße", "STRASSE"), ("σα", "ςα"), ("ﬀ", "ff"),
+            ("\u{212A}elvin", "kelvin"), ("ſynced", "SYNCED"), ("caf\u{e9}", "cafe\u{301}"),
+        ]
+        for (index, pair) in pairs.enumerated() {
+            try fixture.makeDirectory("\(index)/\(pair.0)")
+            let made = fixture.path("\(index)/\(pair.0)")
+            let probe = fixture.path("\(index)/\(pair.1)")
+            guard FileManager.default.fileExists(atPath: probe) else { continue }
+            #expect(PathContainment.mightBeSamePath(made, probe), "\(pair)")
+            #expect(PathContainment.mightBeContained(normalizedChild: probe + "/x", inNormalizedRoot: made), "\(pair)")
+        }
+    }
 }
 
 /// A self-cleaning fixture of real directories and symlinks under a resolved

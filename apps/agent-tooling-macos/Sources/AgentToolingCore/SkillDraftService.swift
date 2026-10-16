@@ -586,7 +586,10 @@ public actor SkillDraftService {
         protectedPaths.insert(homePath + "/Library")
         protectedPaths.insert(homePath + "/Library/Application Support")
         protectedPaths.insert(homePath + "/Library/Caches")
-        guard !protectedPaths.contains(rootPath) else { throw SkillDraftError.unsafeStagingRoot(rootPath) }
+        // A deny check, so `~/library` is refused as `~/Library` would be.
+        guard !protectedPaths.contains(where: { PathContainment.mightBeSamePath($0, rootPath) }) else {
+            throw SkillDraftError.unsafeStagingRoot(rootPath)
+        }
 
         // Check every caller-controlled existing component below the trusted
         // home/temp boundary before createDirectory can follow it.

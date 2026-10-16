@@ -10,7 +10,29 @@ import Foundation
 /// primitive is the comparison, and each named variant applies exactly the
 /// normalization its site always applied. The variants are not interchangeable;
 /// pick the one that normalizes the way the site's own paths already are.
+///
+/// A check must also err in the direction its answer is used, so there are two
+/// families, and a site picks by what a wrong answer would cost:
+///
+/// - An allow check asks whether a path may be read, written or removed. It
+///   compares exactly, so on a case-insensitive volume a differently cased
+///   spelling of an allowed root is refused, and the filesystem root contains
+///   only itself. Either mistake costs a refusal, never access.
+/// - A deny or exclusion check asks whether a path must be left alone. It folds
+///   case the way a case-insensitive volume compares names, on every volume,
+///   and treats the filesystem root as containing everything. Either can refuse
+///   a path the disk keeps apart, such as a folder that differs from a
+///   protected one only by case on a case-sensitive volume, but no spelling of
+///   a protected path gets through.
+///
+/// Deny checks fold case everywhere rather than asking a volume, because a path
+/// has no single answer: each component is looked up on the volume holding its
+/// parent. `/volumes/work/repo` reaches a case-sensitive volume mounted at
+/// `/Volumes/work` through the case-insensitive startup volume, and a path that
+/// does not exist yet has no volume to ask.
 enum PathContainment {
+    // MARK: - Allow checks: exact
+
     /// The component-wise containment test over two normalized paths.
     ///
     /// Both arguments must already be normalized the same way by the caller
@@ -86,14 +108,44 @@ enum PathContainment {
         )
     }
 
-    /// Containment where either path containing the other counts as the same
-    /// conflict, comparing the strings exactly as given. Matches
-    /// `WorkspaceLinkedDestinations`, where a destination inside a source root
-    /// and a source root inside a destination are both refused.
-    static func overlapsAsGiven(_ left: String, _ right: String) -> Bool {
-        isContained(normalizedChild: left, inNormalizedRoot: right)
-            || isContained(normalizedChild: right, inNormalizedRoot: left)
+    // MARK: - Deny and exclusion checks: case folded, "/" holds everything
+
+    /// The deny counterpart of `isContained`: whether `child` may be `root` or
+    /// inside it under any spelling a case-insensitive volume accepts, and
+    /// always when `root` is the filesystem root.
+    ///
+    /// Both paths are compared in Unicode's canonical caseless form, which is
+    /// how such a volume compares names (`straße` is `STRASSE`, `σ` is `ς`),
+    /// and as scalars rather than characters, so a component that begins with
+    /// a combining mark still starts after the separator before it.
+    static func mightBeContained(normalizedChild child: String, inNormalizedRoot root: String) -> Bool {
+        let root = caselessScalars(root)
+        guard !root.isEmpty else { return true }
+        let child = caselessScalars(child)
+        return child == root || child.starts(with: root + ["/"])
     }
+
+    /// The deny counterpart of comparing two normalized paths for equality:
+    /// whether they may name the same place.
+    static func mightBeSamePath(_ left: String, _ right: String) -> Bool {
+        caselessScalars(left) == caselessScalars(right)
+    }
+
+    /// The deny counterpart of `containsLexically`.
+    static func mightContainLexically(_ child: URL, in root: URL) -> Bool {
+        mightBeContained(normalizedChild: lexicalPath(child), inNormalizedRoot: lexicalPath(root))
+    }
+
+    /// Either path containing the other counts as the same conflict, comparing
+    /// the strings as given. A deny check: `WorkspaceLinkedDestinations` refuses
+    /// a destination inside a source root and a source root inside a
+    /// destination, so either side being `/` overlaps everything.
+    static func overlapsAsGiven(_ left: String, _ right: String) -> Bool {
+        mightBeContained(normalizedChild: left, inNormalizedRoot: right)
+            || mightBeContained(normalizedChild: right, inNormalizedRoot: left)
+    }
+
+    // MARK: - Normalization
 
     /// Standardize and drop one trailing separator, without resolving the
     /// path's symlinks. This is the normalization `OperationEngine.normalizedPath`
@@ -119,5 +171,13 @@ enum PathContainment {
 
     private static func trimmed(_ path: String) -> String {
         path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    /// The trimmed path in Unicode's canonical caseless form: decomposed, case
+    /// folded, decomposed again.
+    private static func caselessScalars(_ path: String) -> [Unicode.Scalar] {
+        let folded = trimmed(path).decomposedStringWithCanonicalMapping
+            .folding(options: [.caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        return Array(folded.decomposedStringWithCanonicalMapping.unicodeScalars)
     }
 }

@@ -50,26 +50,21 @@ public enum ClaudeAccountSync {
     }
 
     /// Whether a path is the synced skills folder or anything inside it.
-    /// Compared case-insensitively on the reserved component, the way Claude
-    /// Code itself treats the name.
+    /// Compared case-insensitively, on the reserved component the way Claude
+    /// Code itself treats the name, and on the folders above it the way a
+    /// case-insensitive volume does: this is a check that keeps the app's
+    /// hands off, so any spelling of the folder is still the account's.
     public static func isInsideSyncedSkills(_ url: URL, homeURL: URL) -> Bool {
         // The inventory reports skills at their resolved paths, so a `~/.claude`
         // that is itself a link is compared both as named and as resolved.
         let skillsRoot = homeURL.appending(path: ".claude/skills", directoryHint: .isDirectory)
-        let roots = Set([skillsRoot.standardizedFileURL, skillsRoot.resolvingSymlinksInPath().standardizedFileURL]
-            .map { $0.path(percentEncoded: false) })
-        let candidates = Set([url.standardizedFileURL, url.resolvingSymlinksInPath().standardizedFileURL]
-            .map { $0.path(percentEncoded: false) })
-        for root in roots {
-            let prefix = root.hasSuffix("/") ? root : root + "/"
-            for candidate in candidates where candidate.hasPrefix(prefix) {
-                let relative = candidate.dropFirst(prefix.count)
-                if let first = relative.split(separator: "/").first, String(first).lowercased() == syncedSkillsFolderName {
-                    return true
-                }
-            }
+        let skillsRoots = [skillsRoot.standardizedFileURL, skillsRoot.resolvingSymlinksInPath().standardizedFileURL]
+        let syncedFolders = Set(skillsRoots.map { $0.appending(path: syncedSkillsFolderName).path(percentEncoded: false) })
+        let spellings = [url.standardizedFileURL, url.resolvingSymlinksInPath().standardizedFileURL]
+        let candidates = Set(spellings.map { $0.path(percentEncoded: false) })
+        return syncedFolders.contains { folder in
+            candidates.contains { PathContainment.mightBeContained(normalizedChild: $0, inNormalizedRoot: folder) }
         }
-        return false
     }
 
     /// The origin after the last `@`, or nil when the identifier has none.

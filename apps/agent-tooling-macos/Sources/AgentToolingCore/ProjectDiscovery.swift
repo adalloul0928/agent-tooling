@@ -492,7 +492,10 @@ public enum ProjectDiscovery {
     public static func isEligibleProjectRoot(_ url: URL, homeURL: URL) -> Bool {
         let candidate = ProjectPath.canonical(url)
         guard candidate != "/", !candidate.isEmpty else { return false }
-        return !(ProjectPath.canonical(homeURL) + "/").hasPrefix(candidate + "/")
+        // An exclusion, so it folds case: a differently cased spelling of the
+        // home folder, or of a folder above it, is excluded all the same.
+        return !PathContainment.mightBeContained(
+            normalizedChild: ProjectPath.canonical(homeURL), inNormalizedRoot: candidate)
     }
 
     /// A folder counts as a project when it is a Git working tree or already

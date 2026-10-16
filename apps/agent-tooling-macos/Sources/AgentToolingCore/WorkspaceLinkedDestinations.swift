@@ -46,8 +46,11 @@ public enum WorkspaceLinkedDestinations {
               url.standardizedFileURL.path == path else {
             throw WorkspaceLinkedDestinationError.invalidPath
         }
+        // The path refusals below are deny checks, so a differently cased
+        // spelling of the same folder is refused too, as a case-insensitive
+        // volume would treat it.
         let library = managedLibraryRoot.standardizedFileURL.path
-        guard path != library, !path.hasPrefix(library + "/") else {
+        guard !PathContainment.mightBeContained(normalizedChild: path, inNormalizedRoot: library) else {
             throw WorkspaceLinkedDestinationError.pathInsideManagedLibrary
         }
         guard !device.sourceLocations.contains(where: { isWithin(path, or: $0.checkoutPath) }) else {
@@ -56,7 +59,7 @@ public enum WorkspaceLinkedDestinations {
         guard binding(for: selector, in: device) == nil else {
             throw WorkspaceLinkedDestinationError.duplicateSelector
         }
-        guard !device.destinations.contains(where: { $0.resolvedPath == path }) else {
+        guard !device.destinations.contains(where: { PathContainment.mightBeSamePath($0.resolvedPath, path) }) else {
             throw WorkspaceLinkedDestinationError.duplicatePath
         }
         device.destinations.append(.init(id: identifier, selector: selector,
@@ -104,7 +107,8 @@ public enum WorkspaceLinkedDestinations {
     }
 
     /// Either path containing the other is the same conflict: a destination
-    /// inside a source root still writes into that root.
+    /// inside a source root still writes into that root, and `/` overlaps
+    /// every folder.
     private static func isWithin(_ left: String, or right: String) -> Bool {
         PathContainment.overlapsAsGiven(left, right)
     }

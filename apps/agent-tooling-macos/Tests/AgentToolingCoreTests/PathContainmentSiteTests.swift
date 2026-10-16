@@ -78,9 +78,9 @@ struct PathContainmentAllowSiteTests {
         defer { try? FileManager.default.removeItem(at: fixture) }
         let home = FolderOverridingFileManager.home(under: fixture)
 
-        let besideRefused = try await Self.stagingRootRefusal(
+        let besideRefused = try await stagingRootRefusal(
             at: fixture.appending(path: "home-old/staging", directoryHint: .isDirectory), fixture: fixture)
-        let insideRefused = try await Self.stagingRootRefusal(
+        let insideRefused = try await stagingRootRefusal(
             at: home.appending(path: "staging", directoryHint: .isDirectory), fixture: fixture)
 
         #expect(besideRefused)
@@ -189,27 +189,214 @@ struct PathContainmentAllowSiteTests {
             #expect(!count.isTruncated)
         }
     }
+}
 
-    // MARK: Helpers
+/// The deny and exclusion checks that compare paths through `PathContainment`.
+/// Each must still refuse a differently cased spelling of what it protects, as
+/// a case-insensitive volume would treat it, without refusing a sibling whose
+/// name only extends the protected one's.
+@Suite("Path containment at deny sites")
+struct PathContainmentDenySiteTests {
+    // MARK: Engine removals stay out of the store
 
-    /// Whether a service staging at `stagingRoot` refuses it, as opposed to
-    /// accepting it and then finding no conversation to continue. The home and
-    /// temporary folders the service checks against are fixture folders.
-    private static func stagingRootRefusal(at stagingRoot: URL, fixture: URL) async throws -> Bool {
-        let service = SkillDraftService(
-            stagingRootURL: stagingRoot, runner: UnreachedRunner(),
-            skillCreatorURL: fixture.appending(path: "creator/SKILL.md"),
-            homeURL: FolderOverridingFileManager.home(under: fixture),
-            fileManager: try FolderOverridingFileManager(under: fixture))
-        do {
-            _ = try await service.continueConversation(requestID: UUID(), reply: "Carry on.")
-            Issue.record("A conversation that was never started cannot be continued.")
-            return false
-        } catch SkillDraftError.unsafeStagingRoot {
-            return true
-        } catch SkillDraftError.noConversation {
-            return false
+    @Test func aSkillCopyInsideTheStoreIsNotMovedWhateverItsSpelling() async throws {
+        let fixture = try EngineFixture()
+        defer { fixture.remove() }
+        // A home folder inside the store, named with the store's path in
+        // another case: on a case-insensitive volume the same folder.
+        let home = fixture.store.rootURL.appending(path: "home", directoryHint: .isDirectory)
+        let copy = home.appending(path: ".claude/skills/loose", directoryHint: .isDirectory)
+        try write(copy.appending(path: "SKILL.md"), "---\nname: loose\ndescription: A skill.\n---\n")
+        let spelledHome = URL(fileURLWithPath: home.path(percentEncoded: false).uppercased(), isDirectory: true)
+
+        let status = await fixture.run(
+            .removeUnmanagedSkillCopy, removing: spelledHome.appending(path: ".claude/skills/loose"), home: spelledHome)
+
+        #expect(status == .failed)
+        #expect(FileManager.default.fileExists(atPath: copy.appending(path: "SKILL.md").path(percentEncoded: false)))
+    }
+
+    @Test func aSkillCopyBesideTheStoreIsStillMoved() async throws {
+        let fixture = try EngineFixture()
+        defer { fixture.remove() }
+        // The store folder's name followed by more characters is a sibling.
+        var storePath = fixture.store.rootURL.path(percentEncoded: false)
+        if storePath.hasSuffix("/") { storePath.removeLast() }
+        let home = URL(fileURLWithPath: storePath + "-home", isDirectory: true)
+        let copy = home.appending(path: ".claude/skills/loose", directoryHint: .isDirectory)
+        try write(copy.appending(path: "SKILL.md"), "---\nname: loose\ndescription: A skill.\n---\n")
+
+        let status = await fixture.run(.removeUnmanagedSkillCopy, removing: copy, home: home)
+
+        #expect(status == .succeeded)
+        #expect(!FileManager.default.fileExists(atPath: copy.path(percentEncoded: false)))
+    }
+
+    @Test func aPluginCacheVersionInsideTheStoreIsNotMovedWhateverItsSpelling() async throws {
+        let fixture = try EngineFixture()
+        defer { fixture.remove() }
+        let home = fixture.store.rootURL.appending(path: "home", directoryHint: .isDirectory)
+        let version = home.appending(path: ".claude/plugins/cache/market/tool/1.0.0", directoryHint: .isDirectory)
+        try write(version.appending(path: "plugin.json"), "{}")
+        let spelledHome = URL(fileURLWithPath: home.path(percentEncoded: false).uppercased(), isDirectory: true)
+
+        let status = await fixture.run(
+            .removeUnmanagedPluginCache, removing: spelledHome.appending(path: ".claude/plugins/cache/market/tool/1.0.0"),
+            home: spelledHome)
+
+        #expect(status == .failed)
+        #expect(FileManager.default.fileExists(atPath: version.appending(path: "plugin.json").path(percentEncoded: false)))
+    }
+
+    // MARK: Linked destinations
+
+    @Test func aLinkedDestinationInsideTheLibraryIsRefusedWhateverItsSpelling() throws {
+        var device = DeviceWorkspaceState(workspaceID: WorkspaceObjectID())
+        let library = URL(fileURLWithPath: "/Users/me/Library/Application Support/Agent Tooling/library")
+
+        #expect(throws: WorkspaceLinkedDestinationError.pathInsideManagedLibrary) {
+            try WorkspaceLinkedDestinations.register(
+                selector: Self.codexUser, path: "/users/me/library/application support/agent tooling/Library/packages",
+                in: &device, managedLibraryRoot: library)
         }
+        // A sibling whose name only extends the library's is somewhere else.
+        try WorkspaceLinkedDestinations.register(
+            selector: Self.codexUser, path: library.path + "-old", in: &device, managedLibraryRoot: library)
+        #expect(device.destinations.count == 1)
+    }
+
+    @Test func aLinkedDestinationOverlappingASourceIsRefusedWhateverItsSpelling() throws {
+        var device = DeviceWorkspaceState(workspaceID: WorkspaceObjectID())
+        device.sourceLocations = [.init(sourceRootID: WorkspaceObjectID(), checkoutPath: "/Users/me/my-repo")]
+
+        for path in ["/users/me/MY-REPO/skills", "/USERS/ME", "/"] {
+            #expect(throws: WorkspaceLinkedDestinationError.pathInUseAsSource, "\(path)") {
+                try WorkspaceLinkedDestinations.register(
+                    selector: Self.codexUser, path: path, in: &device, managedLibraryRoot: Self.library)
+            }
+        }
+        try WorkspaceLinkedDestinations.register(
+            selector: Self.codexUser, path: "/Users/me/my-repo-skills", in: &device, managedLibraryRoot: Self.library)
+        #expect(device.destinations.count == 1)
+    }
+
+    @Test func aSourceCheckoutAtTheFilesystemRootOverlapsEveryDestination() {
+        var device = DeviceWorkspaceState(workspaceID: WorkspaceObjectID())
+        device.sourceLocations = [.init(sourceRootID: WorkspaceObjectID(), checkoutPath: "/")]
+
+        #expect(throws: WorkspaceLinkedDestinationError.pathInUseAsSource) {
+            try WorkspaceLinkedDestinations.register(
+                selector: Self.codexUser, path: "/Volumes/Work/agents", in: &device, managedLibraryRoot: Self.library)
+        }
+    }
+
+    @Test func aSecondDestinationForTheSameFolderIsRefusedWhateverItsSpelling() throws {
+        var device = DeviceWorkspaceState(workspaceID: WorkspaceObjectID())
+        try WorkspaceLinkedDestinations.register(
+            selector: Self.codexUser, path: "/Volumes/Work/agents", in: &device, managedLibraryRoot: Self.library)
+
+        #expect(throws: WorkspaceLinkedDestinationError.duplicatePath) {
+            try WorkspaceLinkedDestinations.register(
+                selector: .init(surface: .claudeCode, scope: .user), path: "/volumes/work/Agents",
+                in: &device, managedLibraryRoot: Self.library)
+        }
+        try WorkspaceLinkedDestinations.register(
+            selector: .init(surface: .claudeCode, scope: .user), path: "/Volumes/Work/agents-two",
+            in: &device, managedLibraryRoot: Self.library)
+        #expect(device.destinations.count == 2)
+    }
+
+    // MARK: The account's synced skills
+
+    @Test func theSyncedFolderIsTheAccountsUnderAnySpelling() {
+        let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        func isSynced(_ path: String) -> Bool {
+            ClaudeAccountSync.isInsideSyncedSkills(URL(fileURLWithPath: path), homeURL: home)
+        }
+
+        #expect(isSynced("/Users/Example/.Claude/Skills/synced/pdf"))
+        #expect(isSynced("/users/example/.claude/skills/SYNCED"))
+        // A sibling of the skills folder is not where Claude Code syncs.
+        #expect(!isSynced("/Users/example/.claude/skills-old/synced/pdf"))
+        #expect(!isSynced("/Users/example/.claude/skills/synced-notes"))
+    }
+
+    // MARK: Project discovery
+
+    @Test func theHomeFolderIsNotAProjectUnderAnySpelling() {
+        let home = URL(fileURLWithPath: "/Users/Example", isDirectory: true)
+
+        #expect(!ProjectDiscovery.isEligibleProjectRoot(URL(fileURLWithPath: "/users/example"), homeURL: home))
+        #expect(!ProjectDiscovery.isEligibleProjectRoot(URL(fileURLWithPath: "/USERS"), homeURL: home))
+        // Siblings whose names only extend part of the home folder's path.
+        #expect(ProjectDiscovery.isEligibleProjectRoot(URL(fileURLWithPath: "/Users/Exam"), homeURL: home))
+        #expect(ProjectDiscovery.isEligibleProjectRoot(URL(fileURLWithPath: "/Users/Example-work"), homeURL: home))
+    }
+
+    // MARK: Skill draft staging root
+
+    @Test func aProtectedFolderIsNotAStagingRootUnderAnySpelling() async throws {
+        let fixture = try TemporaryFolder("path-containment-protected-staging").url
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let home = FolderOverridingFileManager.home(under: fixture)
+
+        let libraryRefused = try await stagingRootRefusal(at: home.appending(path: "library"), fixture: fixture)
+        let besideRefused = try await stagingRootRefusal(at: home.appending(path: "Library-drafts"), fixture: fixture)
+
+        #expect(libraryRefused)
+        #expect(!besideRefused)
+    }
+
+    private static let codexUser = PortableDestination(surface: .codexCLI, scope: .user)
+    private static let library = URL(fileURLWithPath: "/Users/me/Library/Application Support/Agent Tooling/library")
+}
+
+/// A store with its managed folders, and an executor run of one removal step.
+private struct EngineFixture {
+    let root: URL
+    let store: WorkspaceRevisionStore
+
+    init() throws {
+        root = try TemporaryFolder("path-containment-engine").url
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+        let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
+        store = try WorkspaceRevisionStore(
+            containerRoot: root.appending(path: "workspace", directoryHint: .isDirectory),
+            workspaceID: document.workspaceID, deviceID: device.deviceID)
+        try store.initialize(document: document, device: device)
+        try store.prepareManagedDirectories()
+    }
+
+    func remove() { try? FileManager.default.removeItem(at: root) }
+
+    func run(_ kind: OperationStepKind, removing destination: URL, home: URL) async -> OperationStepStatus? {
+        let plan = OperationPlan(
+            kind: .installSkill, title: "Remove", summary: "",
+            steps: [
+                .init(kind: kind, title: "Remove", detail: "", destinationPath: destination.path(percentEncoded: false))
+            ])
+        return await OperationExecutor(store: store, homeURL: home).execute(plan).results.first?.status
+    }
+}
+
+/// Whether a skill draft service staging at `stagingRoot` refuses it, as
+/// opposed to accepting it and then finding no conversation to continue. The
+/// home and temporary folders it checks against are fixture folders.
+private func stagingRootRefusal(at stagingRoot: URL, fixture: URL) async throws -> Bool {
+    let service = SkillDraftService(
+        stagingRootURL: stagingRoot, runner: UnreachedRunner(),
+        skillCreatorURL: fixture.appending(path: "creator/SKILL.md"),
+        homeURL: FolderOverridingFileManager.home(under: fixture),
+        fileManager: try FolderOverridingFileManager(under: fixture))
+    do {
+        _ = try await service.continueConversation(requestID: UUID(), reply: "Carry on.")
+        Issue.record("A conversation that was never started cannot be continued.")
+        return false
+    } catch SkillDraftError.unsafeStagingRoot {
+        return true
+    } catch SkillDraftError.noConversation {
+        return false
     }
 }
 
