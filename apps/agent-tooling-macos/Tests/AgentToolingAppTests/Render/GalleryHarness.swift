@@ -176,7 +176,18 @@ func gallerySnapshot(
     source: String
 ) throws {
     guard let folder = GalleryOutput.folder else { return }
-    let bitmap = try rasterize(view, size: size, appearance: appearance)
+    // A sheet or popover carries no window of its own, so off-screen it draws
+    // on the transparent ground the host clears to. In dark mode its white text
+    // then lands on the image viewer's own white and the picture reads blank.
+    // Standing it on an opaque window-background colour reproduces the sheet
+    // window a person actually sees. The colour is dynamic, so it resolves to
+    // the light or dark face from the appearance the capture renders under.
+    let grounded = ZStack {
+        Color(nsColor: .windowBackgroundColor)
+        view
+    }
+    .ignoresSafeArea()
+    let bitmap = try rasterize(grounded, size: size, appearance: appearance)
     try writeGalleryPNG(
         bitmap, folder: folder, area: area, screen: screen, state: state,
         size: size, appearance: appearance, source: source, note: nil)
