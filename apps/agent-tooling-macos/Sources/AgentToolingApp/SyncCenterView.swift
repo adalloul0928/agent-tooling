@@ -297,11 +297,11 @@ struct SyncCenterView: View {
             // What the app holds, as the check saw it. Counts, not claims: an
             // app that has not been checked has no numbers, and says so.
             HStack(spacing: 0) {
-                heldColumn("Skills", count: held?.skills)
+                heldColumn(.skill, count: held?.skills)
                 Hairline(.vertical).frame(height: Size.controlHeight)
-                heldColumn("MCP servers", count: held?.servers)
+                heldColumn(.connection, count: held?.connections)
                 Hairline(.vertical).frame(height: Size.controlHeight)
-                heldColumn("Plugins", count: held?.plugins)
+                heldColumn(.plugin, count: held?.plugins)
             }
             .padding(.horizontal, Space.md).padding(.vertical, Space.lg)
 
@@ -403,7 +403,7 @@ struct SyncCenterView: View {
                 } else if let message = setup.clientReviewMessage {
                     Text(message).font(AgentFont.body).foregroundStyle(.secondary).padding(Space.xl)
                 } else {
-                    Text("Fetches what \(app.rawValue) has published since the version on this Mac and has your assistant read it against your configuration: settings the docs now recommend, hooks, skills, plugins, and servers worth adding, and what is deprecated. Every claim names its source.")
+                    Text("Fetches what \(app.rawValue) has published since the version on this Mac and has your assistant read it against your configuration: settings the docs now recommend, hooks, skills, plugins, and connections worth adding, and what is deprecated. Every claim names its source.")
                         .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines().padding(Space.xl)
                 }
             }
@@ -424,14 +424,17 @@ struct SyncCenterView: View {
         return "Fetches \(app.rawValue)'s release notes and has your signed-in \(assistant.rawValue) read them, your configuration, and \(app.rawValue)'s documentation on the web. It can read; it cannot change anything."
     }
 
-    private func heldColumn(_ title: String, count: Int?) -> some View {
-        VStack(spacing: Space.xxs) {
+    /// One count under an app's header, titled with the library's own noun and
+    /// read out in the singular for one.
+    private func heldColumn(_ noun: CountNoun, count: Int?) -> some View {
+        let title = noun.plural.capitalizedFirst
+        return VStack(spacing: Space.xxs) {
             Text(count.map(String.init) ?? "—").font(AgentFont.titleLarge).monospacedDigit()
             Text(title).font(AgentFont.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(count.map { "\($0) \(title.lowercased())" } ?? "\(title): not checked yet")
+        .accessibilityLabel(count.map(noun.phrase) ?? "\(title): not checked yet")
     }
 
     // MARK: - Cards
@@ -482,7 +485,8 @@ struct SyncCenterView: View {
                 ) {
                     SymbolTile(symbol: "tray.and.arrow.down", size: Size.discLarge)
                 } trailing: {
-                    Button("Review") { onReviewRequest(request) }
+                    // Opens the request's review sheet, so it carries the ellipsis.
+                    Button("Review…") { onReviewRequest(request) }
                         .secondaryActionStyle()
                         .controlSize(.small)
                         .accessibilityLabel("Review \(request.title)")
@@ -576,7 +580,7 @@ struct SyncCenterView: View {
         guard !mine.isEmpty else { return nil }
         return AppTile.Held(
             skills: Set(mine.flatMap(\.discoveredSkills)).count,
-            servers: Set(mine.flatMap(\.discoveredMCPServers)).count,
+            connections: Set(mine.flatMap(\.discoveredMCPServers)).count,
             plugins: Set(mine.flatMap(\.discoveredPlugins)).count)
     }
 
@@ -672,11 +676,22 @@ private struct ClientGroup: Identifiable {
 
 /// One app, once: its mark, its name, one clause, its verdict, and what is
 /// waiting for it. The whole tile is the way to narrow the screen to it.
-private struct AppTile: View {
+struct AppTile: View {
     struct Held: Equatable {
         let skills: Int
-        let servers: Int
+        let connections: Int
         let plugins: Int
+
+        /// What the app holds, in one line counted in the library's own nouns:
+        /// "2 skills · 1 connection · 0 plugins".
+        var summary: String {
+            [
+                CountNoun.skill.phrase(skills),
+                CountNoun.connection.phrase(connections),
+                CountNoun.plugin.phrase(plugins),
+            ]
+            .joined(separator: " · ")
+        }
     }
 
     let client: ClientKind
@@ -745,8 +760,7 @@ private struct AppTile: View {
     }
 
     private var heldText: String {
-        guard let held else { return "Not checked yet" }
-        return "\(held.skills) skills · \(held.servers) servers · \(held.plugins) plugins"
+        held?.summary ?? "Not checked yet"
     }
 }
 
@@ -862,7 +876,7 @@ struct WorkspaceLinkDestinationSheet: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "Use Folder"
+        panel.prompt = "Use folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         folder = url.standardizedFileURL
     }

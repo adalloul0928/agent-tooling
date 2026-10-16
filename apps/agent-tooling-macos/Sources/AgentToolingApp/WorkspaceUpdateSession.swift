@@ -160,7 +160,7 @@ final class WorkspaceUpdateSession {
             }
             next[row.artifactID] = .init(
                 id: row.artifactID, displayName: row.displayName, kind: .mcpServer, availability: availability,
-                cannotUpdate: "Connections are set up once; a changed listing is applied by removing and adding it again from the MCP Servers screen.")
+                cannotUpdate: "Connections are set up once; a changed listing is applied by removing and adding it again from the Connections screen.")
         }
 
         entries = next

@@ -290,7 +290,7 @@ struct SyncSettingsView: View {
             parts.append("Published \(SnapshotTime.compact(status.publishedAt))")
             let installed = status.apps.filter(\.installed)
             if !installed.isEmpty {
-                parts.append(installed.map { "\($0.surface.displayName) \($0.skillCount) skills" }.joined(separator: ", "))
+                parts.append(installed.map { "\($0.surface.displayName) \(CountNoun.skill.phrase($0.skillCount))" }.joined(separator: ", "))
             }
             if !status.pending.isEmpty { parts.append("\(status.pending.count) pending") }
         } else {
@@ -376,7 +376,7 @@ struct SyncSettingsView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "Use Folder"
+        panel.prompt = "Use folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         folder = url.standardizedFileURL
     }
@@ -387,7 +387,7 @@ struct SyncSettingsView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "Use Folder"
+        panel.prompt = "Use folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         checkout = url.standardizedFileURL
     }
@@ -441,7 +441,7 @@ struct SyncSettingsView: View {
 /// session has nothing further to report until the folder is connected.
 private struct SyncScopePanel: View {
     private static let travels = [
-        "Your library's records: skills, plugins, servers, presets, projects",
+        "Your library's records: skills, plugins, connections, presets, projects",
         "Where each tool is assigned, to which apps and which Macs",
         "The names of the Macs sharing the library",
     ]

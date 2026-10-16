@@ -179,7 +179,7 @@ struct OverviewView: View {
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text("Bring your existing setup into Agent Tooling")
                     .font(AgentFont.titleLarge)
-                Text("Choose the skills, plugins, and MCP servers you want to manage or track.")
+                Text("Choose the skills, plugins, and connections you want to manage or track.")
                     .font(AgentFont.body).foregroundStyle(.secondary)
             }
             Spacer(minLength: Space.xl)
@@ -296,7 +296,7 @@ struct OverviewView: View {
             .contentShape(RoundedRectangle.card)
         }
         .buttonStyle(LibraryDestinationStyle())
-        .accessibilityLabel("Open \(title), \(count) items")
+        .accessibilityLabel("Open \(title), \(CountNoun("item").phrase(count))")
     }
 
     // MARK: - Mini cards
@@ -830,7 +830,7 @@ struct OverviewView: View {
         navigation.openScreenRequest(.reviewChanges)
     }
 
-    /// The row's own screen: Plugins, MCP Servers, or Skills by kind.
+    /// The row's own screen: Plugins, Connections, or Skills by kind.
     private func open(_ row: WorkspaceLibraryReadModelRow) {
         let section: AppSection = switch row.kind {
         case .nativePlugin, .package: .plugins

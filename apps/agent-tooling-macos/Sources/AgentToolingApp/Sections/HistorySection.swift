@@ -163,7 +163,7 @@ struct HistorySection: View {
                     }
                 }
                 HStack(spacing: Space.lg) {
-                    Button("Go back to this version") { isConfirming = true }
+                    Button("Go back to this version…") { isConfirming = true }
                         .primaryActionStyle()
                         .disabled(!session.canRestore || preview.isEmpty)
                     Text(restoreExplanation(preview))
