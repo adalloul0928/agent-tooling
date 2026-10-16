@@ -784,6 +784,9 @@ public actor SkillDraftService {
 
     private func reviewFiles(in packageURL: URL) throws -> [SkillDraftFile] {
         let root = packageURL.standardizedFileURL
+        // Each listing names its children under the folder's real path, so
+        // the root is also matched that way, resolved once for the whole walk.
+        let resolvedRoot = root.resolvingSymlinksInPath().standardizedFileURL
         var queue = [root]
         var entriesSeen = 0
         var totalBytes = 0
@@ -810,7 +813,10 @@ public actor SkillDraftService {
                 }
                 entriesSeen += 1
 
-                guard let relativePath = PathContainment.relativePath(of: child, under: root) else {
+                guard
+                    let relativePath = PathContainment.relativePath(
+                        ofEnumerated: child, under: root, resolvedRoot: resolvedRoot)
+                else {
                     throw SkillDraftError.unsafePackage("A package item is outside the draft root.")
                 }
                 let pathComponents = relativePath.split(separator: "/", omittingEmptySubsequences: false)

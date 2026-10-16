@@ -75,6 +75,19 @@ enum PathContainment {
         )
     }
 
+    /// The relative path of an item a directory walk of `root` returned, and
+    /// only for such an item. A walk names what it finds under the folder's
+    /// real path: links above the folder resolved, letter case as the disk
+    /// stores it, `/private` put back. So the item is matched against `root`
+    /// as given and then against `resolvedRoot`, the same folder with its
+    /// links resolved, which the caller works out once per walk. A walk never
+    /// returns anything outside the folder it opened, so the second spelling
+    /// changes how an item is named, never which items are let in: each must
+    /// still be inside one spelling of the root.
+    static func relativePath(ofEnumerated child: URL, under root: URL, resolvedRoot: URL) -> String? {
+        relativePath(of: child, under: root) ?? relativePath(of: child, under: resolvedRoot)
+    }
+
     /// Containment with no normalization: the caller has already resolved both
     /// URLs and the bytes it passes are the bytes compared.
     static func containsAsGiven(_ child: URL, in root: URL) -> Bool {

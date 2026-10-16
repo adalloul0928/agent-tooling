@@ -153,6 +153,33 @@ struct ContentRiskScannerTests {
         #expect(scanned.riskyCount == 2)
     }
 
+    /// The walk names every file under the folder's real path. A package
+    /// reached through a link above it, or spelled in another case, is the
+    /// same package, so every file is inspected and the scan is complete,
+    /// not a partial answer that inspected nothing.
+    @Test func aPackageReachedThroughALinkOrSpelledInAnotherCaseIsScannedWhole() throws {
+        let root = try Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let package = root.appending(path: "volume/clean", directoryHint: .isDirectory)
+        try Self.write(Self.cleanSkill, to: package.appending(path: "SKILL.md"))
+        try Self.write("Team handbook notes.\n", to: package.appending(path: "references/handbook.md"))
+        try FileManager.default.createDirectory(at: root.appending(path: "home"), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(
+            at: root.appending(path: "home/workplace"), withDestinationURL: root.appending(path: "volume"))
+
+        var spellings = [root.appending(path: "home/workplace/clean", directoryHint: .isDirectory)]
+        let otherCase = package.path(percentEncoded: false).uppercased()
+        // Only on a volume that compares names without case is this the same folder.
+        if FileManager.default.fileExists(atPath: otherCase) { spellings.append(URL(fileURLWithPath: otherCase)) }
+        for spelling in spellings {
+            let report = ContentRiskScanner.scan(directory: spelling)
+
+            #expect(report.filesScanned == 2, "\(spelling.path(percentEncoded: false))")
+            #expect(report.isComplete, "\(report.coverageNotes)")
+            #expect(report.isClean)
+        }
+    }
+
     @Test func aPackageWithHiddenInstructionsSurfacesThemForTheOperator() throws {
         let root = try Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

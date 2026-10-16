@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -5,6 +6,37 @@ import Testing
 
 @Suite("Directory fingerprints")
 struct DirectoryFingerprintTests {
+    /// The walk names every item under the folder's real path. A folder
+    /// reached through a link above it, or spelled in another case, is the
+    /// same folder and has the same fingerprint; a root that is itself a link
+    /// is still refused, because the folder named is not the one walked.
+    @Test func aFolderReachedThroughALinkOrSpelledInAnotherCaseHasItsRealFingerprint() throws {
+        let fixture = try TemporaryFolder("directory-fingerprint-spellings").url
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let real = fixture.appending(path: "volume/skill", directoryHint: .isDirectory)
+        try write(real.appending(path: "SKILL.md"), "reviewed")
+        try write(real.appending(path: "folder/notes.md"), "notes")
+        try FileManager.default.createDirectory(at: fixture.appending(path: "home"), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(
+            at: fixture.appending(path: "home/workplace"), withDestinationURL: fixture.appending(path: "volume"))
+        let expected = try DirectoryFingerprint.sha256(of: real)
+
+        #expect(try DirectoryFingerprint.sha256(of: fixture.appending(path: "home/workplace/skill")) == expected)
+        let otherCase = real.path(percentEncoded: false).uppercased()
+        if FileManager.default.fileExists(atPath: otherCase) {
+            #expect(try DirectoryFingerprint.sha256(of: URL(fileURLWithPath: otherCase, isDirectory: true)) == expected)
+        }
+
+        try FileManager.default.createSymbolicLink(at: fixture.appending(path: "linked-skill"), withDestinationURL: real)
+        let refusal = #expect(throws: DirectoryFingerprintError.self) {
+            _ = try DirectoryFingerprint.sha256(of: fixture.appending(path: "linked-skill"))
+        }
+        guard case .unsafeItem = refusal else {
+            Issue.record("A root that is itself a link is an unsafe item, not \(String(describing: refusal)).")
+            return
+        }
+    }
+
     @Test func executableModeChangesTheFingerprintWithoutChangingFileBytes() throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

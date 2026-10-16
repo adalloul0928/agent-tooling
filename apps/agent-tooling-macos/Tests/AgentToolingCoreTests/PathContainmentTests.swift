@@ -82,6 +82,51 @@ struct PathContainmentTests {
         #expect(PathContainment.relativePath(of: URL(fileURLWithPath: "/a/b/c"), under: URL(fileURLWithPath: "/a/x/../b")) == nil)
     }
 
+    // MARK: Items a directory walk returned
+
+    /// A walk names what it finds under the folder's real path. A root reached
+    /// through a link above it, or spelled in another case, is the same folder,
+    /// so each item is placed by the same relative path its real spelling gives.
+    @Test func aWalkedItemIsPlacedUnderARootReachedThroughALinkOrSpelledInAnotherCase() throws {
+        let fixture = try PathContainmentFixture()
+        defer { fixture.cleanUp() }
+        try fixture.makeDirectory("volume/repo/folder")
+        try Data("gone".utf8).write(to: fixture.url("volume/repo/gone.md"))
+        try Data("gone".utf8).write(to: fixture.url("volume/repo/folder/also-gone.md"))
+        try fixture.makeDirectory("home")
+        // The shape of ~/workplace -> /Volumes/workplace.
+        try fixture.makeSymlink(at: "home/workplace", to: fixture.path("volume"))
+        let real = fixture.url("volume/repo")
+
+        let expected = try Self.placedByWalking(real)
+        #expect(expected == ["folder", "folder/also-gone.md", "gone.md"])
+        var spellings = [fixture.url("home/workplace/repo")]
+        let otherCase = fixture.path("volume/repo").uppercased()
+        // Only on a volume that compares names without case is this one folder.
+        if FileManager.default.fileExists(atPath: otherCase) { spellings.append(URL(fileURLWithPath: otherCase)) }
+        for spelling in spellings {
+            #expect(try Self.placedByWalking(spelling) == expected, "\(spelling.path(percentEncoded: false))")
+        }
+    }
+
+    /// The second spelling names an item differently; it never lets in one
+    /// that is not inside either spelling of the root, which is still compared
+    /// exactly, component by component.
+    @Test func aWalkedItemOutsideBothSpellingsOfItsRootIsNotPlaced() {
+        let given = URL(fileURLWithPath: "/a/link/repo", isDirectory: true)
+        let resolved = URL(fileURLWithPath: "/a/volume/repo", isDirectory: true)
+        func placed(_ path: String) -> String? {
+            PathContainment.relativePath(ofEnumerated: URL(fileURLWithPath: path), under: given, resolvedRoot: resolved)
+        }
+
+        #expect(placed("/a/link/repo/x") == "x")
+        #expect(placed("/a/volume/repo/x/y") == "x/y")
+        #expect(placed("/a/volume/repo-old/x") == nil)
+        #expect(placed("/a/elsewhere/x") == nil)
+        #expect(placed("/a/volume/repo") == nil)
+        #expect(placed("/A/VOLUME/REPO/x") == nil, "each spelling is still compared exactly")
+    }
+
     // MARK: as-given variant (no normalization)
 
     @Test func asGivenTakesTheBytesItIsGiven() {
@@ -307,6 +352,18 @@ struct PathContainmentTests {
             #expect(PathContainment.mightBeSamePath(made, probe), "\(pair)")
             #expect(PathContainment.mightBeContained(normalizedChild: probe + "/x", inNormalizedRoot: made), "\(pair)")
         }
+    }
+
+    /// Walks `root` the way the folder-walking sites do: the root resolved
+    /// once, each item placed through the walk helper. Throws when an item
+    /// the walk returned cannot be placed, so a miss is not a shorter list.
+    private static func placedByWalking(_ root: URL) throws -> [String] {
+        let given = root.standardizedFileURL
+        let resolved = given.resolvingSymlinksInPath().standardizedFileURL
+        let items = FileManager.default.enumerator(at: given, includingPropertiesForKeys: nil)?.allObjects as? [URL] ?? []
+        return try items.map { item in
+            try #require(PathContainment.relativePath(ofEnumerated: item, under: given, resolvedRoot: resolved))
+        }.sorted()
     }
 }
 

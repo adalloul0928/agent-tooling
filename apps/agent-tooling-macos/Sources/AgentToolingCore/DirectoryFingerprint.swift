@@ -19,6 +19,11 @@ enum DirectoryFingerprint {
                 ]
             )
         else { throw DirectoryFingerprintError.unsafeItem(normalizedRoot.path(percentEncoded: false)) }
+        // The walk names each item under the folder's real path, so a root
+        // reached through a link above it, or spelled in another case, is
+        // also matched as that real path. The root itself is still never a
+        // link: that is refused above.
+        let resolvedRoot = normalizedRoot.resolvingSymlinksInPath().standardizedFileURL
 
         let rootIsExecutable = try isExecutable(at: normalizedRoot, fileManager: fileManager)
         var entries: [Entry] = []
@@ -31,7 +36,7 @@ enum DirectoryFingerprint {
             ])
             guard values.isSymbolicLink != true,
                 values.isDirectory == true || values.isRegularFile == true,
-                let relativePath = PathContainment.relativePath(of: url, under: normalizedRoot)
+                let relativePath = PathContainment.relativePath(ofEnumerated: url, under: normalizedRoot, resolvedRoot: resolvedRoot)
             else {
                 throw DirectoryFingerprintError.unsafeItem(url.path(percentEncoded: false))
             }

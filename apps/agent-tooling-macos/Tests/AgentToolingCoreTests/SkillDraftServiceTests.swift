@@ -603,6 +603,38 @@ struct SkillDraftServiceTests {
         #expect(result.files.first(where: { $0.relativePath.hasSuffix("icon.dat") })?.textContent == nil)
     }
 
+    /// The service refuses links below the home or temporary folder its
+    /// staging root is in, not one above it. Listing the draft names each file
+    /// under the real path, so a staging root with a link above it must still
+    /// place every file rather than refuse the draft as outside its own root.
+    @Test func aDraftStagedBelowALinkedTemporaryFolderIsStillReviewed() async throws {
+        let base = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "SkillDraftServiceTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let real = base.appending(path: "real", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        let temporary = base.appending(path: "temporary", directoryHint: .isDirectory)
+        try FileManager.default.createSymbolicLink(at: temporary, withDestinationURL: real)
+        let skillCreator = temporary.appending(path: "codex/skills/.system/skill-creator/SKILL.md")
+        try FileManager.default.createDirectory(at: skillCreator.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "---\nname: skill-creator\ndescription: Create a skill.\n---\n".write(
+            to: skillCreator, atomically: true, encoding: .utf8)
+        let service = SkillDraftService(
+            stagingRootURL: temporary.appending(path: "staging", directoryHint: .isDirectory),
+            runner: SkillDraftRunnerStub(.valid(name: "linked-review")),
+            skillCreatorURL: skillCreator,
+            homeURL: temporary,
+            fileManager: LinkedTemporaryFolderFileManager(temporaryDirectory: temporary)
+        )
+
+        let result = try await service.createDraft(
+            SkillDraftRequest(instruction: "Create a draft staged below a link.", proposedName: "linked-review")
+        )
+
+        #expect(result.files.map(\.relativePath) == ["plugin.json", "skills/linked-review/SKILL.md"])
+        #expect(result.fingerprint.count == 64)
+    }
+
     @Test func rejectsHiddenNestedFilesInsteadOfSilentlyExcludingThemFromReview() async throws {
         let fixture = try makeFixture()
         let runner = SkillDraftRunnerStub(.hiddenNestedFile(name: "hidden-review"))
@@ -1068,4 +1100,17 @@ struct SkillDraftServiceTests {
 
 private extension Array {
     var only: Element? { count == 1 ? self[0] : nil }
+}
+
+/// A file manager whose temporary folder is a fixture folder, so a staging
+/// root inside it can have a link above it that the service does not check.
+private final class LinkedTemporaryFolderFileManager: FileManager, @unchecked Sendable {
+    private let folder: URL
+
+    init(temporaryDirectory: URL) {
+        folder = temporaryDirectory
+        super.init()
+    }
+
+    override var temporaryDirectory: URL { folder }
 }

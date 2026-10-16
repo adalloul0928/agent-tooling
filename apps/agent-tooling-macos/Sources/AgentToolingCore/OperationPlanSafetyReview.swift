@@ -172,8 +172,11 @@ struct OperationPlanSafetyReviewer {
             )
         else { return nil }
         // Standardized like each item below, so a root spelled with `..` or a
-        // leading `/private` still matches the items found under it.
+        // leading `/private` still matches the items found under it, and
+        // resolved once, because the walk names its items under the folder's
+        // real path: links above it resolved, case as the disk stores it.
         let normalizedRoot = root.standardizedFileURL
+        let resolvedRoot = normalizedRoot.resolvingSymlinksInPath().standardizedFileURL
         var entries = Set<String>()
         var isTruncated = false
         while let item = enumerator.nextObject() as? URL {
@@ -181,7 +184,15 @@ struct OperationPlanSafetyReviewer {
                 isTruncated = true
                 break
             }
-            guard let relative = PathContainment.relativePath(of: item, under: normalizedRoot) else { continue }
+            guard
+                let relative = PathContainment.relativePath(
+                    ofEnumerated: item, under: normalizedRoot, resolvedRoot: resolvedRoot)
+            else {
+                // An entry that cannot be placed is not counted, so the count
+                // is partial; skipping it quietly would read as nothing removed.
+                isTruncated = true
+                continue
+            }
             guard let values = try? item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]) else {
                 isTruncated = true
                 continue

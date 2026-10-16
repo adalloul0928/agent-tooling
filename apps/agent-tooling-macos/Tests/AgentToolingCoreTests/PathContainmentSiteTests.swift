@@ -164,8 +164,9 @@ struct PathContainmentAllowSiteTests {
     // MARK: Replacement receipt count
 
     /// The count compares each enumerated item against its root, so a root
-    /// spelled with `..`, or with the `/private` prefix a real path carries,
-    /// must be normalized like the items or nothing matches and the receipt
+    /// spelled with `..`, with the `/private` prefix a real path carries,
+    /// through a link above it or in another case must still place the items
+    /// the walk names under the real path, or nothing matches and the receipt
     /// reports no removals.
     @Test func theRemovalCountMatchesItemsUnderAnyNormalSpellingOfTheRoot() throws {
         let fixture = try TemporaryFolder("path-containment-removals").url
@@ -177,11 +178,18 @@ struct PathContainmentAllowSiteTests {
         try write(destination.appending(path: "folder/also-gone.md"), "gone")
         try write(source.appending(path: "kept.md"), "kept")
         try FileManager.default.createDirectory(at: fixture.appending(path: "step"), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: fixture.appending(path: "link"), withDestinationURL: fixture)
         let reviewer = OperationPlanSafetyReviewer()
 
-        var spellings = [destination, URL(fileURLWithPath: fixture.path(percentEncoded: false) + "/step/../destination")]
+        var spellings = [
+            destination, URL(fileURLWithPath: fixture.path(percentEncoded: false) + "/step/../destination"),
+            fixture.appending(path: "link/destination", directoryHint: .isDirectory),
+        ]
         let realSpelling = "/private" + destination.path(percentEncoded: false)
         if FileManager.default.fileExists(atPath: realSpelling) { spellings.append(URL(fileURLWithPath: realSpelling)) }
+        // Only on a volume that compares names without case is this the same folder.
+        let otherCase = destination.path(percentEncoded: false).uppercased()
+        if FileManager.default.fileExists(atPath: otherCase) { spellings.append(URL(fileURLWithPath: otherCase)) }
         for spelling in spellings {
             let count = reviewer.replacementRemovalCount(replacing: spelling, with: source)
             // gone.md, folder/ and folder/also-gone.md are not in the package.
