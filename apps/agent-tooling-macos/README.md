@@ -442,9 +442,9 @@ any client changes.
 The companion extension lives at
 [`integrations/raycast/agent-tooling`](../../integrations/raycast/agent-tooling).
 It can search the local inventory, queue a skill request, check setup,
-open Sync, and focus the app. It finds the signed CLI helper inside
-`Agent Tooling.app/Contents/Helpers/agent-tooling`; no separate shell setup is
-needed for a packaged build.
+open the Apps screen or Insights, and focus the app. It finds the signed CLI
+helper inside `Agent Tooling.app/Contents/Helpers/agent-tooling`; no separate
+shell setup is needed for a packaged build.
 
 Until the extension is published in the Raycast Store, import it locally:
 
@@ -457,7 +457,7 @@ npm run dev
 ```
 
 Set `author` in the extension's `package.json` to the handle returned by
-`ray profile`, then assign the five command hotkeys in Raycast Settings. Skill
+`ray profile`, then assign the six command hotkeys in Raycast Settings. Skill
 instructions travel over stdin and the extension can only open review screens;
 all installation and sync mutations remain in the desktop app.
 
