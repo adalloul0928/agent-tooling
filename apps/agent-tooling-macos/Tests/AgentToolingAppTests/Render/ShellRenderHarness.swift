@@ -36,20 +36,38 @@ func renderShell(_ section: AppSection, fixture: ShellRenderFixture) -> some Vie
 @MainActor
 func expectDrawn(
     _ view: some View,
+    size: CGSize = shellWindowSize,
+    appearance: RenderAppearance = .light,
     _ location: SourceLocation = #_sourceLocation
 ) throws {
-    let bitmap = try rasterize(view, location)
+    let bitmap = try rasterize(view, size: size, appearance: appearance, location)
     #expect(
         distinctColours(in: bitmap) > 4, "the screen drew a blank frame",
         sourceLocation: location)
+}
+/// The light or dark face a screen is drawn under. Defaulting to light keeps
+/// every existing `rasterize` call rendering exactly as it did.
+enum RenderAppearance {
+    case light
+    case dark
+
+    /// The system appearance to put on the window and host. Nil leaves the
+    /// process default (light under the test runner) in place.
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
 }
 
 @MainActor
 func rasterize(
     _ view: some View,
+    size: CGSize = shellWindowSize,
+    appearance: RenderAppearance = .light,
     _ location: SourceLocation = #_sourceLocation
 ) throws -> NSBitmapImageRep {
-    let size = shellWindowSize
     let host = NSHostingView(rootView: AnyView(view.frame(width: size.width, height: size.height)))
     host.frame = CGRect(origin: .zero, size: size)
     // A bare hosting view never finishes compositing an enabled glass control
@@ -58,6 +76,13 @@ func rasterize(
     let window = NSWindow(
         contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    // Dark mode has to reach both the window the glass settles against and the
+    // host the SwiftUI tree reads its colour scheme from, or half the frame
+    // comes back in the wrong face.
+    if let nsAppearance = appearance.nsAppearance {
+        window.appearance = nsAppearance
+        host.appearance = nsAppearance
+    }
     window.contentView = host
     window.orderFrontRegardless()
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
