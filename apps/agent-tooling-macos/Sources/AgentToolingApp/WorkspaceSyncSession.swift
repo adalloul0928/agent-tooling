@@ -29,6 +29,9 @@ final class WorkspaceSyncSession {
     private let writerID: WorkspaceObjectID
     private let workspaceID: WorkspaceObjectID
     private let contentStore: CentralPackageContentStore?
+    /// The one service this session's registry changes go through, so two
+    /// quick changes queue on one actor rather than race on two.
+    private let service: WorkspaceApplicationService
     private var transport: (any WorkspaceRevisionTransport)?
     /// Builds this Mac's published summary at publish time. Set by the shell,
     /// which knows the scan and the plan; nil publishes no status.
@@ -62,6 +65,7 @@ final class WorkspaceSyncSession {
         self.writerID = writerID
         self.keyStore = keyStore
         self.contentStore = contentStore
+        service = WorkspaceApplicationService(store: store, writerID: writerID, contentStore: contentStore)
         refreshDevices()
     }
 
@@ -333,20 +337,22 @@ final class WorkspaceSyncSession {
     /// Macs see a named device. Idempotent; a registered Mac is left alone.
     private func registerThisDeviceIfNeeded() async {
         refreshDevices()
-        guard thisDevice == nil, let head = try? store.snapshot()?.document.revision.id else { return }
+        guard thisDevice == nil else { return }
         let name = Host.current().localizedName ?? "This Mac"
-        let service = WorkspaceApplicationService(store: store, writerID: writerID, contentStore: contentStore)
-        _ = try? await service.registerDevice(.init(expectedRevisionID: head, deviceID: store.deviceID, name: name))
+        _ = try? await service.registerDeviceAtCurrentHead(store.deviceID, name: name)
         refreshDevices()
     }
 
     /// One registry change, then a pass so every Mac learns of it.
+    ///
+    /// The head is read in the same call that commits, so neither a second
+    /// quick flip nor a check this Mac records meanwhile turns the change into
+    /// a stale write that is refused.
     func updateDevice(_ id: WorkspaceObjectID, _ change: DeviceRegistryChange) async {
-        guard !isBusy, let head = try? store.snapshot()?.document.revision.id else { return }
+        guard !isBusy else { return }
         errorMessage = nil
-        let service = WorkspaceApplicationService(store: store, writerID: writerID, contentStore: contentStore)
         do {
-            _ = try await service.updateDevice(.init(expectedRevisionID: head, deviceID: id, change: change))
+            _ = try await service.updateDeviceAtCurrentHead(id, change)
             refreshDevices()
         } catch let error as DeviceRegistryError {
             errorMessage = error.localizedDescription

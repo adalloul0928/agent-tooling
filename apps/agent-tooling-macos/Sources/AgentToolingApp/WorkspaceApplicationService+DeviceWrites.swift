@@ -29,6 +29,22 @@ extension WorkspaceApplicationService {
         return device
     }
 
+    /// One change to a row of the device registry.
+    func updateDeviceAtCurrentHead(
+        _ id: WorkspaceObjectID, _ change: DeviceRegistryChange
+    ) throws -> WorkspaceCommandReceipt {
+        try atCurrentHead { head in
+            try updateDevice(.init(expectedRevisionID: head, deviceID: id, change: change))
+        }
+    }
+
+    /// Adds a device to the registry, or refreshes its row.
+    func registerDeviceAtCurrentHead(_ id: WorkspaceObjectID, name: String) throws -> WorkspaceCommandReceipt {
+        try atCurrentHead { head in
+            try registerDevice(.init(expectedRevisionID: head, deviceID: id, name: name))
+        }
+    }
+
     /// Runs `commit` against the head as it is now, and again against a newer
     /// one if another writer moved it in between, up to three tries in all.
     private func atCurrentHead<T>(_ commit: (WorkspaceObjectID) throws -> T) throws -> T {
