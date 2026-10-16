@@ -12,7 +12,7 @@ enum CommandPaletteOutcome: Equatable {
     case screenRequest(ScreenRequest)
     case openSkill(String)
     /// Read this Mac's apps again. Reads only.
-    case checkSetup
+    case checkApps
     /// Read each managed app's connections again and show the Health screen.
     /// Reads only.
     case checkConnectionHealth
@@ -89,7 +89,7 @@ struct CommandPaletteItem: Identifiable, PaletteSearchable {
     var help: String {
         switch outcome {
         case .navigate: "Go to \(title)"
-        case .checkSetup, .checkConnectionHealth, .reviewSync: subtitle
+        case .checkApps, .checkConnectionHealth, .reviewSync: subtitle
         case .screenRequest(let request) where request.itemID == nil: subtitle
         case .openClient, .openSkill, .screenRequest: "Open \(title) in \(contextLabel)"
         }
@@ -116,16 +116,18 @@ enum CommandPaletteCatalog {
     /// entry used to have stays among its keywords, so typing it still lands.
     private static func actions() -> [CommandPaletteItem] {
         [
+            // The Apps toolbar's refresh, by its name and its symbol there.
+            // "Setup" and the stethoscope are Checkup's, which this is not.
             CommandPaletteItem(
-                id: "action.checkSetup",
-                title: "Check setup",
+                id: "action.checkApps",
+                title: ActionTitles.checkAppsCommand(.palette),
                 subtitle: "Read this Mac again for what each app actually has",
                 contextLabel: "Action",
                 kind: nil,
-                symbol: "stethoscope",
-                keywords: ["doctor", "scan", "health", "check", "clients"],
+                symbol: "arrow.clockwise",
+                keywords: ["check setup", "setup", "doctor", "scan", "health", "refresh", "clients"],
                 priority: 100,
-                outcome: .checkSetup),
+                outcome: .checkApps),
             CommandPaletteItem(
                 id: "action.reviewSync",
                 title: ActionTitles.reviewChangesCommand(.palette),
@@ -378,7 +380,7 @@ struct CommandPaletteView: View {
             VStack(spacing: Space.sm) {
                 Text("Nothing matches \(query)")
                     .font(AgentFont.bodyMedium)
-                Text("Search by name, or type an action such as Check setup.")
+                Text("Search by name, or type an action such as \(ActionTitles.checkAppsCommand(.palette)).")
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }

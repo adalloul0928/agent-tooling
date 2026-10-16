@@ -46,6 +46,21 @@ struct ActionTitlesTests {
         #expect(ActionTitles.reviewChangesCommand(.palette) == ActionTitles.reviewChanges(count: nil))
     }
 
+    /// The one read of this Mac's apps was "Check Setup" in the menus and the
+    /// palette and "Check apps" on Apps. Setup is what Checkup audits.
+    @Test("Reading the apps again has one name, title-cased only in menus")
+    func checkAppsHasOneName() {
+        #expect(ActionTitles.checkApps == "Check apps")
+        #expect(ActionTitles.checkAppsCommand(.palette) == ActionTitles.checkApps)
+        #expect(ActionTitles.checkAppsCommand(.menu) == "Check Apps")
+        #expect(ActionTitles.checkingAppsMenu == "Checking Apps…")
+        // It reads and changes nothing, so it opens nothing and takes no ellipsis.
+        for title in [ActionTitles.checkApps, ActionTitles.checkAppsCommand(.menu)] {
+            #expect(!title.hasSuffix("\u{2026}"), "\(title) ends in an ellipsis")
+            #expect(!title.localizedCaseInsensitiveContains("setup"), "\(title) names setup")
+        }
+    }
+
     @Test("Creating a skill names the assistant that writes the draft")
     func createSkillNamesTheAssistant() {
         #expect(ActionTitles.createSkill(with: .claude) == "Create with Claude Code…")

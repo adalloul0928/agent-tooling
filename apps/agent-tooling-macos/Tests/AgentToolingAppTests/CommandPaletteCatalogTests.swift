@@ -42,7 +42,7 @@ struct CommandPaletteCatalogTests {
         for client in ClientKind.allCases {
             #expect(items.contains { $0.outcome == .openClient(client) })
         }
-        #expect(items.contains { $0.outcome == .checkSetup })
+        #expect(items.contains { $0.outcome == .checkApps })
         #expect(items.contains { $0.outcome == .checkConnectionHealth })
         #expect(items.contains { $0.outcome == .reviewSync })
         #expect(items.contains { $0.outcome == .screenRequest(.addMCPServer) })
@@ -98,8 +98,10 @@ struct CommandPaletteCatalogTests {
         let byName = CommandPaletteMatcher.rank(items, query: "Standalone Skill")
         #expect(byName.first?.outcome == .openSkill(Self.identifier(ShellRenderFixture.skill)))
 
-        let byAction = CommandPaletteMatcher.rank(items, query: "check setup")
-        #expect(byAction.first?.outcome == .checkSetup)
+        let byAction = CommandPaletteMatcher.rank(items, query: "check apps")
+        #expect(byAction.first?.outcome == .checkApps)
+        // The name it had in the menus and here still finds it.
+        #expect(CommandPaletteMatcher.rank(items, query: "check setup").first?.outcome == .checkApps)
 
         #expect(CommandPaletteMatcher.rank(items, query: "zzzznothing").isEmpty)
     }
@@ -118,7 +120,8 @@ struct CommandPaletteCatalogTests {
             items.first { $0.outcome == outcome }?.title
         }
 
-        #expect(title(.checkSetup) == "Check setup")
+        #expect(title(.checkApps) == "Check apps")
+        #expect(title(.checkApps) == ActionTitles.checkAppsCommand(.palette))
         #expect(title(.checkConnectionHealth) == "Check connection health")
         #expect(title(.reviewSync) == ActionTitles.reviewChangesCommand(.palette))
         #expect(title(.reviewSync) == "Review changes…")
@@ -142,7 +145,7 @@ struct CommandPaletteCatalogTests {
         }
 
         #expect(help(.navigate(.overview)) == "Go to Home")
-        #expect(help(.checkSetup) == "Read this Mac again for what each app actually has")
+        #expect(help(.checkApps) == "Read this Mac again for what each app actually has")
         #expect(help(.screenRequest(.addMCPServer)) == "Paste a definition to see what it describes")
         #expect(help(.openClient(.claude)) == "Open Claude Code in Apps")
         #expect(help(.openSkill(Self.identifier(ShellRenderFixture.skill))) == "Open Standalone Skill in Library")

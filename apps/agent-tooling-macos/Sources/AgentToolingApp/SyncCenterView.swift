@@ -69,13 +69,13 @@ struct SyncCenterView: View {
                     Task { await workspace.device.refresh() }
                 } label: {
                     Label(
-                        workspace.device.isChecking ? "Checking…" : "Check apps",
+                        workspace.device.isChecking ? "Checking…" : ActionTitles.checkApps,
                         systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.glass)
                 .disabled(workspace.device.isChecking)
                 .help("Read what each app holds on this Mac. Nothing is changed.")
-                .accessibilityLabel("Check apps")
+                .accessibilityLabel(ActionTitles.checkApps)
 
                 if hasMissingManagedTool {
                     Button {

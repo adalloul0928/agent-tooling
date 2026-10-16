@@ -62,7 +62,7 @@ struct AgentToolingApplication: App {
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(workspace?.deployment.isBusy != false)
 
-                Button("Check Setup") {
+                Button(ActionTitles.checkAppsCommand(.menu)) {
                     guard let workspace else { return }
                     Task { await workspace.device.refresh() }
                 }
@@ -190,7 +190,7 @@ private struct MenuBarContent: View {
     var body: some View {
         Button("Open Agent Tooling") { open() }
         Divider()
-        Button(workspace.device.isChecking ? "Checking Setup…" : "Check Setup") {
+        Button(workspace.device.isChecking ? ActionTitles.checkingAppsMenu : ActionTitles.checkAppsCommand(.menu)) {
             Task { await workspace.device.refresh() }
         }
         .disabled(workspace.device.isChecking)

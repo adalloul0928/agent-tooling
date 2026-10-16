@@ -46,6 +46,24 @@ enum ActionTitles {
         }
     }
 
+    /// Reading again what each app on this Mac holds, as the Apps toolbar
+    /// names it. It reads and changes nothing, so it takes no ellipsis.
+    static let checkApps = "Check apps"
+
+    /// The same read as a command, from the main menu, the menu-bar item, or
+    /// the command palette. It was "Check Setup" there, but setup is what
+    /// Checkup audits; this only reads the apps again, so every place calls it
+    /// what the Apps toolbar does.
+    static func checkAppsCommand(_ placement: CommandPlacement) -> String {
+        switch placement {
+        case .menu: "Check Apps"
+        case .palette: checkApps
+        }
+    }
+
+    /// The menu-bar item while that read runs.
+    static let checkingAppsMenu = "Checking Apps…"
+
     /// The button that opens the skill creator on a draft. It names the
     /// assistant that writes the draft, because the creator runs that one and
     /// no other, and it ends in an ellipsis because the creator is a sheet.

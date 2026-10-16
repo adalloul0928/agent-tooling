@@ -233,7 +233,7 @@ struct AppShellView: View {
             } else {
                 navigation.openScreenRequest(request)
             }
-        case .checkSetup:
+        case .checkApps:
             Task { await workspace.device.refresh() }
         case .checkConnectionHealth:
             navigate(.health)
