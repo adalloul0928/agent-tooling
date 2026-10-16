@@ -107,6 +107,15 @@ final class WorkspaceRequestSession {
         return request
     }
 
+    /// The assistant a request to write a skill is drafted with: the one its
+    /// own stored draft names, which is the one the creator opens on and runs.
+    /// Nil for every other kind of request, and for a draft that cannot be
+    /// read, so a review never names an assistant it only guessed.
+    func draftingClient(for request: PendingAgentRequest) async -> ClientKind? {
+        guard request.kind == .createSkill else { return nil }
+        return await access.draftingClient(request.id)
+    }
+
     /// Removes one row without changing any client.
     @discardableResult
     func reject(_ request: PendingAgentRequest) async -> Bool {
@@ -345,6 +354,14 @@ final class WorkspaceRequestSession {
         func discardDraft(_ id: UUID) async {
             let store = store
             await Task.detached { try? store.deleteRequestDraft(id) }.value
+        }
+
+        /// Which assistant a skill request's stored draft names.
+        func draftingClient(_ id: UUID) async -> ClientKind? {
+            let store = store
+            return await Task.detached {
+                (try? store.requestDraft(id, as: SkillDraftRequest.self))?.client
+            }.value
         }
     }
 

@@ -110,6 +110,16 @@ struct ClientsSectionRenderTests {
                 onDefer: {}, onReject: {}, onContinue: {}))
     }
 
+    /// A request to write a skill draws its creator button, named for the
+    /// assistant the request's draft names.
+    @Test func theSkillRequestReviewSheetDraws() throws {
+        let request = ShellRenderFixture.pendingRequest(kind: .createSkill, componentID: "release-readiness")
+
+        try expectDrawn(
+            PendingRequestReviewSheet(
+                request: request, draftingClient: .claude, onDefer: {}, onReject: {}, onContinue: {}))
+    }
+
     @Test func thePlanReviewSheetDraws() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }

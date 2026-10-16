@@ -15,6 +15,10 @@ struct PendingRequestReviewSheet: View {
     /// it is about.
     var refusal: String?
     var isBusy = false
+    /// For a request to write a skill, the assistant its stored draft names.
+    /// The creator opens on that one, so this sheet names it too. Nil when
+    /// the draft could not be read, and the sheet then names none.
+    var draftingClient: ClientKind?
     let onDefer: () -> Void
     let onReject: () -> Void
     let onContinue: () -> Void
@@ -55,8 +59,7 @@ struct PendingRequestReviewSheet: View {
                 if isSkillDraft {
                     AttentionBanner(
                         title: "This asks for a skill that does not exist yet",
-                        message:
-                            "Opening the creator runs Codex in an isolated draft folder. Your library is unchanged until you have read the generated files and saved them, and this request stays in the queue until you do."
+                        message: Self.creatorBanner(for: draftingClient)
                     )
                 }
 
@@ -136,11 +139,11 @@ struct PendingRequestReviewSheet: View {
                     // this request has no approval to give. It opens the
                     // creator instead, and stays in the queue until a draft
                     // made from it is accepted.
-                    Button("Create with Codex…", action: openCreator)
+                    Button(Self.creatorTitle(for: draftingClient), action: openCreator)
                         .primaryActionStyle()
                         .keyboardShortcut(.defaultAction)
                         .disabled(isBusy)
-                        .help("Opens the Codex creator on this request; nothing is created until you accept the draft")
+                        .help(Self.creatorHelp(for: draftingClient))
                 } else {
                     Button("Continue to review…", action: onContinue)
                         .primaryActionStyle()
@@ -160,6 +163,25 @@ struct PendingRequestReviewSheet: View {
     /// have nothing to assign, so it is routed to the creator rather than to
     /// the assignment path every other request kind takes.
     private var isSkillDraft: Bool { request.kind == .createSkill }
+
+    /// The button that opens the creator. It names the assistant the creator
+    /// will run, which is the one the request's draft names rather than one
+    /// this sheet assumes; with no draft to read, it names none.
+    static func creatorTitle(for assistant: ClientKind?) -> String {
+        assistant.map(ActionTitles.createSkill(with:)) ?? "Open the creator…"
+    }
+
+    /// What opening the creator does, naming the same assistant the button does.
+    static func creatorBanner(for assistant: ClientKind?) -> String {
+        "Opening the creator runs \(assistant?.rawValue ?? "the assistant this request names") in an isolated draft folder. "
+            + "Your library is unchanged until you have read the generated files and saved them, "
+            + "and this request stays in the queue until you do."
+    }
+
+    static func creatorHelp(for assistant: ClientKind?) -> String {
+        let creator = assistant.map { "the \($0.rawValue) creator" } ?? "the creator"
+        return "Opens \(creator) on this request; nothing is created until you accept the draft"
+    }
 
     /// Closes this review first, then asks the window for the creator on the
     /// next turn, so the queued route is handed back exactly once before the

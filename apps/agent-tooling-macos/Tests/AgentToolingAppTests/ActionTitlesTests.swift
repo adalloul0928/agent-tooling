@@ -37,11 +37,18 @@ struct ActionTitlesTests {
         #expect(ActionTitles.reviewChangesCommand(.palette) == ActionTitles.reviewChanges(count: nil))
     }
 
+    @Test("Creating a skill names the assistant that writes the draft")
+    func createSkillNamesTheAssistant() {
+        #expect(ActionTitles.createSkill(with: .claude) == "Create with Claude Code…")
+        #expect(ActionTitles.createSkill(with: .codex) == "Create with Codex…")
+    }
+
     @Test("Every title ends in the one-character ellipsis, because each opens a sheet")
     func titlesEndInEllipsis() {
         let titles =
             [nil, 0, 1, 3].map { ActionTitles.reviewChanges(count: $0) }
             + [ActionTitles.reviewChangesCommand(.menu), ActionTitles.reviewChangesCommand(.palette)]
+            + [ActionTitles.createSkill(with: .claude)]
         for title in titles {
             #expect(title.hasSuffix("\u{2026}"), "\(title) does not end in an ellipsis")
             #expect(!title.hasSuffix("..."), "\(title) ends in three full stops")

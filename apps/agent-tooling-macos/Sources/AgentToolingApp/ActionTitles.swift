@@ -1,3 +1,4 @@
+import AgentToolingCore
 import Foundation
 
 /// One source for the button and accessibility strings that would otherwise
@@ -33,5 +34,12 @@ enum ActionTitles {
         case .menu: "Review Changes…"
         case .palette: reviewChanges(count: nil)
         }
+    }
+
+    /// The button that opens the skill creator on a draft. It names the
+    /// assistant that writes the draft, because the creator runs that one and
+    /// no other, and it ends in an ellipsis because the creator is a sheet.
+    static func createSkill(with assistant: ClientKind) -> String {
+        "Create with \(assistant.rawValue)…"
     }
 }
