@@ -566,6 +566,10 @@ a view is treated the way a raw hex colour would be.
   A bare `Divider()` belongs only inside a menu, where the system draws it.
   `Hairline.width` 1 is a drawn border, `ring` 1.5 a selection ring, `fine`
   0.5 a Discover card at rest.
+- `AbsentMark` — what a row of client marks shows for an app that does not
+  have the item: a small empty ring in `AgentTheme.absentMark`, which keeps at
+  least 3:1 against a card in both appearances. Filled mark against empty ring
+  is a difference of shape, so absence never rests on a faded colour alone.
 - `wrapsLines()` — for text that may wrap onto more lines. Never use
   `fixedSize(horizontal: false, vertical: true)`: when such a view appears
   after the window has laid out, AppKit measures the content's minimum size at

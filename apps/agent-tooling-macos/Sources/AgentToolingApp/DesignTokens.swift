@@ -739,6 +739,29 @@ extension View {
     }
 }
 
+// MARK: - Absent marks
+
+/// What a row of client marks shows for an app that does not have the item: a
+/// small empty ring in the slot the app's brand mark would fill. A filled mark
+/// beside an empty ring is a difference of shape, so it reads without colour,
+/// and the ring is drawn in `AgentTheme.absentMark`, which keeps at least 3:1
+/// against a card in both appearances. The ring sits inside the slot rather
+/// than filling it, so it reads as an empty place and not as the unchecked
+/// selection checkbox. Use it in place of the brand mark rather than dimming
+/// the mark, and keep the row's accessibility label naming the apps that have
+/// the item.
+struct AbsentMark: View {
+    var size: CGFloat = Size.brandMark
+
+    var body: some View {
+        Circle()
+            .strokeBorder(AgentTheme.absentMark, lineWidth: Hairline.width)
+            .padding(Space.xxs)
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Wrapping text
 
 extension View {

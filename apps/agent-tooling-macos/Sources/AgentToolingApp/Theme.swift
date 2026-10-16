@@ -25,6 +25,12 @@ enum AgentTheme {
     /// not.
     static let onSelection = Color(nsColor: .alternateSelectedControlTextColor)
 
+    /// The ring an app leaves in a row of client marks when it does not have
+    /// the item (`AbsentMark`). A mid grey that keeps at least 3:1 against a
+    /// card, the contrast a graphic needs to be read (WCAG 1.4.11), in both
+    /// appearances, while staying quieter than the brand marks beside it.
+    static let absentMark = dynamic(light: 0x7C7C80, dark: 0x8E8E93)
+
     static let panelCornerRadius = Radius.lg
 
     /// Neutral content surfaces leave the desktop's color to the native glass.
