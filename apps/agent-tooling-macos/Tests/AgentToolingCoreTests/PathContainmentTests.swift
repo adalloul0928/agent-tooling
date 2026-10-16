@@ -101,6 +101,32 @@ struct PathContainmentTests {
         )
     }
 
+    /// Standardizing is not purely textual: when the whole path exists,
+    /// Foundation resolves its `..` on disk, so `link/..` is the parent of the
+    /// link's target, the folder the kernel would reach. When the path does
+    /// not exist, `..` is removed as text, even right after a link.
+    @Test func lexicalResolvesDotDotAfterALinkOnlyWhenThePathExists() throws {
+        let fixture = try PathContainmentFixture()
+        defer { fixture.cleanUp() }
+        try fixture.makeDirectory("rootA/real")
+        try fixture.makeDirectory("rootA/present")
+        try fixture.makeDirectory("rootB")
+        try fixture.makeSymlink(at: "rootB/link", to: fixture.path("rootA/real"))
+
+        // The whole path exists, so the link is followed before the `..`.
+        let linkDotDot = fixture.url("rootB/link/..")
+        #expect(PathContainment.lexicalPath(linkDotDot) == fixture.path("rootA"))
+        #expect(PathContainment.containsLexically(linkDotDot, in: fixture.url("rootA")))
+        #expect(!PathContainment.containsLexically(linkDotDot, in: fixture.url("rootB")))
+        #expect(PathContainment.lexicalPath(fixture.url("rootB/link/../present")) == fixture.path("rootA/present"))
+        // Nothing is there, so the same `..` is removed as text.
+        #expect(PathContainment.lexicalPath(fixture.url("rootB/link/../missing")) == fixture.path("rootB/missing"))
+        // Without the `..`, the link is a plain component and is not followed.
+        #expect(PathContainment.containsLexically(fixture.url("rootB/link/x"), in: fixture.url("rootB")))
+        // A `..` after a name that is not a link is removed as text too.
+        #expect(PathContainment.lexicalPath(fixture.url("rootB/missing/..")) == fixture.path("rootB"))
+    }
+
     // MARK: resolved variant (standardize then resolve symlinks)
 
     @Test func resolvedEqualAndChildAndSibling() {
@@ -138,10 +164,10 @@ struct PathContainmentTests {
 
     /// A real symlink `link -> target`, checked as `link/..`. The kernel
     /// follows `link` first and then applies `..`, so `link/..` is the parent
-    /// of `target`, not the parent of the link. This pins which normalization
-    /// order the resolved variant uses, the point the task flags between
-    /// Marketplace (resolve then standardize) and OperationEngine (standardize
-    /// then resolve).
+    /// of `target`, not the parent of the link. This pins that the resolved
+    /// variant's order, standardize then resolve, reaches the same folder as
+    /// Marketplace's former resolve then standardize: standardizing already
+    /// resolves a `..` that follows an existing link.
     @Test func resolvedHandlesLinkDotDotTheWayTheFilesystemDoes() throws {
         let fixture = try PathContainmentFixture()
         defer { fixture.cleanUp() }

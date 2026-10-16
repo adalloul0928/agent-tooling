@@ -9,7 +9,7 @@ import Foundation
 /// must follow symlinks must not be turned into a lexical one. So the shared
 /// primitive is the comparison, and each named variant applies exactly the
 /// normalization its site always applied. The variants are not interchangeable;
-/// pick the one whose column in the task table matches the site.
+/// pick the one that normalizes the way the site's own paths already are.
 enum PathContainment {
     /// The component-wise containment test over two normalized paths.
     ///
@@ -38,10 +38,12 @@ enum PathContainment {
         )
     }
 
-    /// Lexical containment: standardize both paths and drop one trailing
-    /// separator, but do not follow symlinks. Matches the "same as the
-    /// filesystem would read the characters" check `OperationEngine` applies
-    /// before its stricter symlink-walking validation.
+    /// Containment over `lexicalPath`: both paths standardized, with one
+    /// trailing separator dropped. Symlinks are not followed, except that a
+    /// `..` after a link is resolved when the whole path exists, as
+    /// `lexicalPath` describes. This is the check `OperationEngine` applies
+    /// before its stricter validation, which refuses any symlink component
+    /// and then repeats the check on resolved paths.
     static func containsLexically(_ child: URL, in root: URL) -> Bool {
         isContained(
             normalizedChild: lexicalPath(child),
@@ -69,9 +71,18 @@ enum PathContainment {
             || isContained(normalizedChild: right, inNormalizedRoot: left)
     }
 
-    /// Standardize, drop one trailing separator, do not resolve. This is the
-    /// normalization `OperationEngine.normalizedPath` performed, kept here so
-    /// the lexical variant and the engine's own policy share one spelling.
+    /// Standardize and drop one trailing separator, without resolving the
+    /// path's symlinks. This is the normalization `OperationEngine.normalizedPath`
+    /// performed, kept here so the lexical variant and the engine's own policy
+    /// share one spelling.
+    ///
+    /// Standardizing is not purely textual. When the whole path exists,
+    /// Foundation resolves its `..` on disk, so a `..` after a symbolic link
+    /// names the parent of the link's target, the folder the kernel would
+    /// reach. When the path does not exist, `..` is removed as text, even
+    /// right after a link. A link with no `..` after it stays a plain
+    /// component either way, and a leading `/private` is dropped when the
+    /// path without it exists.
     static func lexicalPath(_ url: URL) -> String {
         let path = url.standardizedFileURL.path(percentEncoded: false)
         guard path.count > 1 else { return path }
