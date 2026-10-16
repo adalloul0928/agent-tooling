@@ -285,8 +285,7 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         homeURL: URL,
         temporaryDirectory: URL = FileManager.default.temporaryDirectory
     ) -> [String: String] {
-        let rawHome = homeURL.standardizedFileURL.path(percentEncoded: false)
-        let home = rawHome.count > 1 && rawHome.hasSuffix("/") ? String(rawHome.dropLast()) : rawHome
+        let home = plainPath(of: homeURL)
         let user = parent["USER"].flatMap(safeEnvironmentAtom) ?? NSUserName()
         let language = parent["LANG"].flatMap(safeLocale) ?? "en_US.UTF-8"
         var environment = [
@@ -303,9 +302,19 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         return environment
     }
 
-    /// The fixed search path handed to every child this app launches. It is the
-    /// one list, so a tool installed through Volta or pnpm is found the same
-    /// way whether the child is a real client command or a server under test.
+    /// The fixed search path handed to every child this app launches, and the
+    /// one list of folders this app looks in for a command by name. The audit
+    /// counts a server's command reachable when it is in one of them and the
+    /// client-tool locator checks every one, so a command either of them finds
+    /// is a command a child can start: a server under test, a real client
+    /// command, or a tool installed through Volta or pnpm, all alike.
+    ///
+    /// When two folders hold the same name the earlier one wins, so a folder
+    /// is only ever added at the end: putting it ahead of another would change
+    /// which file a name that already resolves runs. After the system folders
+    /// come Amazon Toolbox's shims, a common npm global prefix, AIM's MCP
+    /// servers, the mise and asdf shims, and the person's own `~/bin`.
+    ///
     /// `home` must already be a plain path with no trailing slash, so the
     /// entries never contain `//`.
     static func searchPath(home: String) -> [String] {
@@ -321,7 +330,26 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
             "/bin",
             "/usr/sbin",
             "/sbin",
+            "\(home)/.toolbox/bin",
+            "\(home)/.npm-global/bin",
+            "\(home)/.aim/mcp-servers",
+            "\(home)/.local/share/mise/shims",
+            "\(home)/.asdf/shims",
+            "\(home)/bin",
         ]
+    }
+
+    /// The same folders, in the same order, as directory URLs: for a caller
+    /// that looks a command up itself rather than handing its name to a child.
+    static func searchDirectories(homeURL: URL) -> [URL] {
+        searchPath(home: plainPath(of: homeURL)).map { URL(filePath: $0, directoryHint: .isDirectory) }
+    }
+
+    /// A home folder as a plain path with no trailing slash, so `HOME` does not
+    /// end in `/` and no search-path entry contains `//`.
+    static func plainPath(of homeURL: URL) -> String {
+        let raw = homeURL.standardizedFileURL.path(percentEncoded: false)
+        return raw.count > 1 && raw.hasSuffix("/") ? String(raw.dropLast()) : raw
     }
 
     private static func safeEnvironmentAtom(_ value: String) -> String? {

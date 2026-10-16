@@ -211,14 +211,11 @@ public struct SetupAuditor: Sendable {
     }
 
     /// Where a bare command is looked for when the login shell has not been
-    /// asked: the usual places, plus the version managers' active shims.
+    /// asked: the folders every child this app starts searches, version
+    /// managers' shims included, so a server counted reachable here is one a
+    /// live test of it can start.
     static func defaultSearchPath(homeURL: URL) -> [URL] {
-        let fixed = ["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"].map { URL(filePath: $0, directoryHint: .isDirectory) }
-        let home = [
-            ".toolbox/bin", ".local/bin", ".aim/mcp-servers", ".cargo/bin", ".npm-global/bin", "bin",
-            ".local/share/mise/shims", ".asdf/shims", ".volta/bin", ".bun/bin",
-        ].map { homeURL.appending(path: $0, directoryHint: .isDirectory) }
-        return home + fixed
+        ProcessCommandRunner.searchDirectories(homeURL: homeURL)
     }
 
     /// The search path a real audit should use: the login shell's, with the

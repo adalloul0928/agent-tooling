@@ -101,6 +101,31 @@ struct ClientExecutableLocatorTests {
         #expect(ClientExecutableLocator.locate(.claude, homeURL: fixture.home)?.path == shim.path)
     }
 
+    /// Every folder a child process searches is checked, so a tool a child
+    /// could start by name, here one installed through Volta, is offered by
+    /// its own path rather than missed.
+    @Test func aToolInAnyFolderAChildSearchesIsFound() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let volta = fixture.home.appending(path: ".volta/bin/codex")
+        try fixture.installRunnableFile(at: volta)
+
+        #expect(ClientExecutableLocator.locate(.codex, homeURL: fixture.home)?.path == volta.path)
+    }
+
+    /// The folders the locator always checked still come first, so the tool
+    /// it found before is the one it finds now, even where a child's own
+    /// search order would reach another copy first.
+    @Test func aFolderTheLocatorAlwaysCheckedStillWins() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let npm = fixture.home.appending(path: ".npm-global/bin/codex")
+        try fixture.installRunnableFile(at: npm)
+        try fixture.installRunnableFile(at: fixture.home.appending(path: ".cargo/bin/codex"))
+
+        #expect(ClientExecutableLocator.locate(.codex, homeURL: fixture.home)?.path == npm.path)
+    }
+
     @Test func aLinkToSomethingThatCannotRunIsNotOffered() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

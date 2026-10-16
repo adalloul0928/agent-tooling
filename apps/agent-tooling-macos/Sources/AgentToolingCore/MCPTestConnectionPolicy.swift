@@ -49,7 +49,8 @@ public enum MCPTestTarget: Equatable, Sendable {
 ///    in a client's configuration records where it was seen, not how to start
 ///    it, so it is refused rather than guessed at.
 /// 3. **A named program, never a wrapper.** The executable must resolve to a
-///    real, non-setuid file on this Mac using this policy's own `PATH`. Shells,
+///    real, non-setuid file on this Mac using the fixed `PATH` every child
+///    this app starts gets, never the app's inherited one. Shells,
 ///    privilege elevators, and run-another-program wrappers are refused,
 ///    because the console's safety story is that the displayed line is the
 ///    program that runs. There is no `/usr/bin/env` fallback.
@@ -98,14 +99,6 @@ public enum MCPTestConnectionPolicy {
         "sshpass", "stdbuf", "su", "sudo", "tcsh", "time", "timeout", "xargs", "zsh",
     ]
 
-    /// The search path a test connection uses. It is fixed rather than
-    /// inherited so the resolved program does not depend on how the app was
-    /// launched, and it is the same list every other child this app launches
-    /// gets, so a server installed through Volta or pnpm is found here too.
-    public static func searchPath(homeURL: URL) -> [String] {
-        ProcessCommandRunner.searchPath(home: plainHome(homeURL))
-    }
-
     /// The complete environment handed to a test child. It is the app's own
     /// child environment built from an empty parent — so no exported key,
     /// token, or session variable in the app's environment can reach a server
@@ -123,13 +116,6 @@ public enum MCPTestConnectionPolicy {
         )
         environment["MCP_TEST_CONNECTION"] = "agent-tooling"
         return environment
-    }
-
-    /// A plain home path with no trailing slash, so `PATH` entries never
-    /// contain `//` and `HOME` does not end in `/`.
-    private static func plainHome(_ homeURL: URL) -> String {
-        let raw = homeURL.standardizedFileURL.path(percentEncoded: false)
-        return raw.count > 1 && raw.hasSuffix("/") ? String(raw.dropLast()) : raw
     }
 
     // MARK: Resolution
@@ -205,8 +191,12 @@ public enum MCPTestConnectionPolicy {
             throw MCPLiveTestError.executableNotPermitted(requestedName)
         }
         let environment = childEnvironment(homeURL: homeURL)
+        // The program starts from the path it was found at, not the file a link
+        // there leads to, the way every other child this app starts does: a
+        // shim dispatches on the name it was started by, and every tool in
+        // Amazon Toolbox's `~/.toolbox/bin` is a link to one shared dispatcher.
         guard
-            let resolved = ProcessCommandRunner.canonicalExecutableURL(
+            let installed = ProcessCommandRunner.launchExecutableURL(
                 for: executable,
                 environment: environment,
                 currentDirectory: nil,
@@ -215,8 +205,10 @@ public enum MCPTestConnectionPolicy {
         else {
             throw MCPLiveTestError.executableNotFound(executable)
         }
-        // The resolved file can differ from the written name through a symlink,
-        // so the refusal list is applied again to what actually launches.
+        // The file the link leads to is the code that runs and can differ from
+        // the written name, so the refusal list is applied again to it, and it
+        // is the file checked for setuid.
+        let resolved = installed.resolvingSymlinksInPath().standardizedFileURL
         guard !refusedExecutableNames.contains(resolved.lastPathComponent.lowercased()) else {
             throw MCPLiveTestError.executableNotPermitted(resolved.lastPathComponent)
         }
@@ -225,7 +217,7 @@ public enum MCPTestConnectionPolicy {
                 "\(resolved.lastPathComponent) runs as another user (setuid or setgid)"
             )
         }
-        return .stdio(executableURL: resolved, arguments: arguments)
+        return .stdio(executableURL: installed, arguments: arguments)
     }
 
     private static func isSetIdentifier(_ url: URL, fileManager: FileManager) -> Bool {

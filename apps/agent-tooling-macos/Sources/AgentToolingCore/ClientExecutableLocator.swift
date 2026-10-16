@@ -31,25 +31,38 @@ public enum ClientExecutableLocator {
 
     /// Where each client's tool is installed, in the order they are checked:
     /// the folders somebody recorded for this Mac first, then the fixed roots.
-    /// `~/.toolbox/bin` is Amazon Toolbox's shim directory: internal builds of
-    /// these clients install there as symlinks to a dispatcher, which the
-    /// runnability check follows like any other link. It is checked before the
-    /// per-user install folders because a Mac that has it usually also has an
-    /// older native install beside it, and the managed shim is the one the
-    /// person's shell runs and the one that carries their sign-in.
     public static func candidates(for client: ClientKind, homeURL: URL) -> [URL] {
         let name = executableName(for: client)
-        let fixed = [
-            URL(fileURLWithPath: "/opt/homebrew/bin"),
-            URL(fileURLWithPath: "/usr/local/bin"),
-            homeURL.appending(path: ".toolbox/bin"),
-            homeURL.appending(path: ".local/bin"),
-            homeURL.appending(path: ".bun/bin"),
-            homeURL.appending(path: ".npm-global/bin"),
-        ]
         var roots = recordedRoots.withLock { $0 }
-        roots.append(contentsOf: fixed.filter { root in !roots.contains(root) })
+        roots.append(contentsOf: fixedRoots(homeURL: homeURL).filter { root in !roots.contains(root) })
         return roots.map { $0.appending(path: name).standardizedFileURL }
+    }
+
+    /// The fixed roots, in the order they are checked. They are the folders on
+    /// the search path every child process gets, so a tool a child could start
+    /// by name is a tool found here; only the order is the locator's own.
+    ///
+    /// Six come first, in the order they always have, so a tool found before is
+    /// the tool found now; every other folder follows in the search path's own
+    /// order. `~/.toolbox/bin` is Amazon Toolbox's shim directory: internal
+    /// builds of these clients install there as symlinks to a dispatcher, which
+    /// the runnability check follows like any other link. It is checked before
+    /// the per-user install folders because a Mac that has it usually also has
+    /// an older native install beside it, and the managed shim is the one the
+    /// person's shell runs and the one that carries their sign-in.
+    static func fixedRoots(homeURL: URL) -> [URL] {
+        let home = ProcessCommandRunner.plainPath(of: homeURL)
+        let shared = ProcessCommandRunner.searchPath(home: home)
+        let first = [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "\(home)/.toolbox/bin",
+            "\(home)/.local/bin",
+            "\(home)/.bun/bin",
+            "\(home)/.npm-global/bin",
+        ]
+        .filter(shared.contains)
+        return (first + shared.filter { !first.contains($0) }).map { URL(filePath: $0, directoryHint: .isDirectory) }
     }
 
     public static func executableName(for client: ClientKind) -> String {

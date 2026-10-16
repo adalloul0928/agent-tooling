@@ -188,6 +188,32 @@ struct MCPTestConnectionPolicyTests {
         #expect(environment["PATH"]?.contains("/Users/example/Library/pnpm") == true)
     }
 
+    /// Amazon Toolbox installs every tool as a link in `~/.toolbox/bin` to one
+    /// shared dispatcher, which works out what to run from the name it was
+    /// started by. Checkup counts such a server reachable, so a live test has
+    /// to find it on the same path and start it by that name, not as the
+    /// dispatcher the link leads to.
+    @Test func aToolboxServerCheckupFindsResolvesAndStartsByItsOwnName() throws {
+        let tree = try TemporaryTree()
+        defer { tree.remove() }
+        let dispatcher = try tree.makeExecutable(named: "toolbox-exec")
+        let bin = tree.root.appending(path: ".toolbox/bin", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let shim = bin.appending(path: "fixture-toolbox-mcp", directoryHint: .notDirectory)
+        try FileManager.default.createSymbolicLink(at: shim, withDestinationURL: dispatcher)
+
+        #expect(SetupAuditor(homeURL: tree.root).commandIsReachable("fixture-toolbox-mcp"))
+        let target = try MCPTestConnectionPolicy.resolveStdio(["fixture-toolbox-mcp", "--stdio"], homeURL: tree.root)
+
+        guard case .stdio(let executableURL, let arguments) = target else {
+            Issue.record("Expected a stdio target")
+            return
+        }
+        #expect(executableURL.path(percentEncoded: false) == shim.path(percentEncoded: false))
+        #expect(arguments == ["--stdio"])
+        #expect(target.displayCommand.hasSuffix(".toolbox/bin/fixture-toolbox-mcp --stdio"))
+    }
+
     @Test func aSecretInTheParentNeverReachesATestChild() {
         // childEnvironment ignores the process environment entirely, so even a
         // secret exported into this test process cannot ride along.
