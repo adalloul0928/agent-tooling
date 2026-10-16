@@ -143,23 +143,14 @@ enum DestinationOwnershipInspector {
 /// Produces the plan-time review. Reading is all it does: nothing here writes,
 /// moves, or deletes anything.
 public struct OperationPlanSafetyReviewer {
-    private let authority: ManagedInstallAuthority
-    private let managedRoots: [URL]
     private let fileManager: FileManager
-    private let contentLimits: ContentRiskScanner.Limits
     private let maximumComparedItems: Int
 
     public init(
-        authority: ManagedInstallAuthority,
-        managedRoots: [URL] = [],
         fileManager: FileManager = .default,
-        contentLimits: ContentRiskScanner.Limits = ContentRiskScanner.Limits(),
         maximumComparedItems: Int = 10_000
     ) {
-        self.authority = authority
-        self.managedRoots = managedRoots
         self.fileManager = fileManager
-        self.contentLimits = contentLimits
         self.maximumComparedItems = maximumComparedItems
     }
 

@@ -522,8 +522,6 @@ public actor OperationExecutor {
     /// before approval.
     private func removedEntryCount(replacing destination: URL, with source: URL) -> (count: Int, isTruncated: Bool) {
         let reviewer = OperationPlanSafetyReviewer(
-            authority: installAuthority,
-            managedRoots: managedRoots,
             fileManager: fileManager
         )
         return reviewer.replacementRemovalCount(replacing: destination, with: source)
