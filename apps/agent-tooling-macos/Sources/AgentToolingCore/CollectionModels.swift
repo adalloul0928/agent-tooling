@@ -69,10 +69,6 @@ public struct ToolingCollection: Identifiable, Codable, Hashable, Sendable {
         self.createdAt = createdAt
     }
 
-    public func contains(_ item: ToolingItemReference) -> Bool {
-        items.contains(item)
-    }
-
     public var itemCount: Int { items.count }
 
     private enum CodingKeys: String, CodingKey {
@@ -121,20 +117,4 @@ public enum ToolingTag {
         return collapsed
     }
 
-    /// Case-insensitive de-duplication that keeps the first spelling seen,
-    /// then orders the result the way a person reads a list.
-    public static func normalizedList(_ values: [String]) -> [String] {
-        var seen = Set<String>()
-        var result: [String] = []
-        for value in values {
-            guard let tag = normalized(value) else { continue }
-            guard seen.insert(tag.lowercased()).inserted else { continue }
-            result.append(tag)
-        }
-        return result.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-    }
-
-    public static func matches(_ tag: String, _ other: String) -> Bool {
-        tag.compare(other, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
-    }
 }

@@ -173,10 +173,6 @@ final class StubInsightsServices: InsightsServicing, @unchecked Sendable {
         lock.withLock { kept }
     }
 
-    func answer(with report: InsightsReport) {
-        lock.withLock { answer = report }
-    }
-
     func libraryContent(for requests: [SkillContentRequest]) async -> [String: SkillContentFacts] {
         lock.withLock { contentRequests = requests }
         return contentFacts

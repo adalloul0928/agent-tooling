@@ -185,7 +185,6 @@ public struct SetupAuditReport: Codable, Hashable, Sendable {
         self.counts = counts
     }
 
-    public func findings(for client: ClientKind) -> [SetupFinding] { findings.filter { $0.client == client } }
     public var highestSeverity: SetupFinding.Severity? { findings.map(\.severity).max() }
 }
 

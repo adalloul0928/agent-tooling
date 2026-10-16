@@ -252,11 +252,6 @@ public struct OnboardingTargetBinding: Identifiable, Codable, Hashable, Sendable
     public let client: ClientKind
     public let enabled: Bool?
 
-    public init(item: ToolingItemReference, client: ClientKind, enabled: Bool? = nil) {
-        self.item = item
-        self.client = client
-        self.enabled = enabled
-    }
 }
 
 public struct ToolingProfile: Identifiable, Codable, Hashable, Sendable {
@@ -384,29 +379,6 @@ public struct ActivityReceipt: Identifiable, Codable, Hashable, Sendable {
     /// immutable history in the workspace database.
     public var displayTitle: String {
         title == "Reality scan completed" ? "Setup check completed" : title
-    }
-}
-
-public enum SyncStageState: String, Codable, CaseIterable, Sendable {
-    case waiting
-    case running
-    case complete
-    case attention
-}
-
-public struct SyncStage: Identifiable, Codable, Hashable, Sendable {
-    public let id: String
-    public var title: String
-    public var detail: String
-    public var symbol: String
-    public var state: SyncStageState
-
-    public init(id: String, title: String, detail: String, symbol: String, state: SyncStageState) {
-        self.id = id
-        self.title = title
-        self.detail = detail
-        self.symbol = symbol
-        self.state = state
     }
 }
 

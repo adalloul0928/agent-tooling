@@ -246,7 +246,7 @@ public enum SetupReviewPrompt {
 
     public static func render(
         purpose: Purpose, audit: SetupAuditReport, digests: [ConversationDigest], focus client: ClientKind?,
-        clientVersions: [ClientKind: String], releaseNotes: [String] = [], homeURL: URL
+        clientVersions: [ClientKind: String], releaseNotes: [String] = []
     ) -> String {
         var text = """
             You are reviewing how one person's AI coding assistants are set up on their Mac, and proposing what to change. \
@@ -369,7 +369,7 @@ public struct SetupReviewService: Sendable {
         let web = purpose == .clientReview
         let prompt = SetupReviewPrompt.render(
             purpose: purpose, audit: audit, digests: digests, focus: focus, clientVersions: clientVersions,
-            releaseNotes: releaseNotes, homeURL: homeURL)
+            releaseNotes: releaseNotes)
 
         let requestURL = stagingRootURL.appending(path: "request-\(UUID().uuidString.lowercased())", directoryHint: .isDirectory)
         let fileManager = FileManager.default

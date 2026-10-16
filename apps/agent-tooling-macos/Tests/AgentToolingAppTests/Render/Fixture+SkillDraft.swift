@@ -164,11 +164,6 @@ final class StubSkillDrafting: SkillDrafting, @unchecked Sendable {
     var discardedDraftIDs: [UUID] { lock.withLock { discardedDrafts } }
     var discardedRequestIDs: [UUID] { lock.withLock { discardedRequests } }
 
-    /// Queues one more scripted turn.
-    func enqueue(_ step: Step) {
-        lock.withLock { script.append(step) }
-    }
-
     /// Changes what the stub says about a client, as installing would.
     func setAvailability(_ value: SkillCreatorAvailability, for client: ClientKind) {
         lock.withLock { availability[client] = value }

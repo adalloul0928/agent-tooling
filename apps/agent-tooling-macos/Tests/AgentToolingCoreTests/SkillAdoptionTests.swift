@@ -15,7 +15,6 @@ struct SkillAdoptionTests {
         let contentStore: CentralPackageContentStore
         let service: WorkspaceApplicationService
         let trackedID = ArtifactID()
-        let pluginChildID = ArtifactID()
         let personalID = ArtifactID()
 
         init() throws {

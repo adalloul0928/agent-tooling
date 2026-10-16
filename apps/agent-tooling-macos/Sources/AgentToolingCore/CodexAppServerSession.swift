@@ -120,10 +120,6 @@ public actor CodexAppServerSession {
         await transport.close()
     }
 
-    public func diagnostics() async -> String {
-        await transport.diagnostics()
-    }
-
     // MARK: Framing
 
     static func encode(_ value: JSONValue) throws -> Data {

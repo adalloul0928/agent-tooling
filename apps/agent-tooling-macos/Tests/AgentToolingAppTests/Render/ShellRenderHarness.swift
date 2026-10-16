@@ -117,31 +117,16 @@ struct StubDeviceObserver: DeviceObserving {
 /// A workspace with the shapes each screen reaches for: a plugin that carries a
 /// skill, a standalone skill, a server, a preset and a project.
 ///
-/// The store is real and lives in a temporary folder, and the sessions come from
-/// the app's own launch wiring, so a screen that outgrows what launch hands it
-/// fails here rather than only on a real Mac.
-///
-/// Every service that reaches outside the app is scripted here rather than in a
-/// test's own environment, because launch is where the app itself settles them:
-/// the catalog answers from memory, the scan is a canned report and the review
-/// queue is a list. A test that wants different answers hands them to this
-/// initializer, and no screen can reach past what it was given.
 /// Answers an account read from a script, so no test runs Claude Code or
 /// Codex, or starts a login shell, on the Mac that runs it.
-final class StubAccountReader: AccountSurfaceReading, @unchecked Sendable {
-    private let lock = NSLock()
+struct StubAccountReader: AccountSurfaceReading {
     private let answers: [AccountProvider: AccountObservation]
-    private var reads: [(providers: [AccountProvider], depth: AccountSurfaceProbe.Depth)] = []
 
     init(answers: [AccountProvider: AccountObservation] = [:]) {
         self.answers = answers
     }
 
-    var readCount: Int { lock.withLock { reads.count } }
-    var lastDepth: AccountSurfaceProbe.Depth? { lock.withLock { reads.last?.depth } }
-
     func read(_ providers: [AccountProvider], depth: AccountSurfaceProbe.Depth, now: Date) async -> [AccountObservation] {
-        lock.withLock { reads.append((providers, depth)) }
         return providers.map { provider in
             var observation = answers[provider] ?? AccountObservation(
                 provider: provider, observedAt: now,
@@ -153,6 +138,15 @@ final class StubAccountReader: AccountSurfaceReading, @unchecked Sendable {
     }
 }
 
+/// The store is real and lives in a temporary folder, and the sessions come from
+/// the app's own launch wiring, so a screen that outgrows what launch hands it
+/// fails here rather than only on a real Mac.
+///
+/// Every service that reaches outside the app is scripted here rather than in a
+/// test's own environment, because launch is where the app itself settles them:
+/// the catalog answers from memory, the scan is a canned report and the review
+/// queue is a list. A test that wants different answers hands them to this
+/// initializer, and no screen can reach past what it was given.
 @MainActor struct ShellRenderFixture {
     static let plugin = ArtifactID()
     static let child = ArtifactID()

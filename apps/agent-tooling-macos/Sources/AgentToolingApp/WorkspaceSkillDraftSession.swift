@@ -218,10 +218,6 @@ final class WorkspaceSkillDraftSession {
 
     var canWrite: Bool { library.access == .writable }
 
-    func dismissError() {
-        errorMessage = nil
-    }
-
     // MARK: - The skill creator
 
     /// Asks whether `client` can run its skill creator. A file read on the

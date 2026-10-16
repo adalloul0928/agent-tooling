@@ -81,8 +81,6 @@ final class WorkspaceUpdateSession {
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
 
-    func available(_ kind: ToolingItemKind) -> [Entry] { available.filter { $0.kind == kind } }
-
     func availability(for artifactID: ArtifactID) -> UpdateAvailability? { entries[artifactID]?.availability }
 
     var isBusy: Bool { isChecking || !updating.isEmpty }

@@ -364,14 +364,6 @@ final class WorkspaceSyncSession {
         await updateDevice(id, .receivesSharedAssignments(value))
     }
 
-    /// Takes the registered device that a join or a first run made, so the
-    /// settings screen shows this Mac at once.
-    func adopt(enrollment: WorkspaceSyncEnrollment) {
-        self.enrollment = enrollment
-        refreshDevices()
-        transport = nil
-    }
-
     /// Rebuilds the transport this connection describes.
     private func makeTransport(for enrollment: WorkspaceSyncEnrollment) throws -> any WorkspaceRevisionTransport {
         switch enrollment.kind {

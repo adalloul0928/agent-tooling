@@ -98,19 +98,19 @@ struct SetupReviewTests {
 
     @Test func thePromptCarriesTheFindingsWithTheirIdsAndActionsAndSaysWhatTheRunIsFor() {
         let setup = SetupReviewPrompt.render(
-            purpose: .setup, audit: audit, digests: [], focus: nil, clientVersions: [.claude: "2.1.285"], homeURL: home)
+            purpose: .setup, audit: audit, digests: [], focus: nil, clientVersions: [.claude: "2.1.285"])
         #expect(setup.contains("first-time setup"))
         #expect(setup.contains(audit.findings[0].id))
         #expect(setup.contains("action[0]: Remove the broken link"), "the offered actions are listed by index")
         #expect(setup.contains("- Claude Code: 2.1.285"))
         #expect(setup.contains("Never recommend deleting the only copy"))
 
-        let checkup = SetupReviewPrompt.render(purpose: .checkup, audit: audit, digests: [], focus: nil, clientVersions: [:], homeURL: home)
+        let checkup = SetupReviewPrompt.render(purpose: .checkup, audit: audit, digests: [], focus: nil, clientVersions: [:])
         #expect(checkup.contains("routine check"))
 
         let review = SetupReviewPrompt.render(
             purpose: .clientReview, audit: audit, digests: [], focus: .claude, clientVersions: [.claude: "2.1.285"],
-            releaseNotes: ["## Claude Code 2.1.290\n- Added X"], homeURL: home)
+            releaseNotes: ["## Claude Code 2.1.290\n- Added X"])
         #expect(review.contains("review of Claude Code alone"))
         #expect(review.contains("Its installed version is 2.1.285"))
         #expect(review.contains("- Added X"))

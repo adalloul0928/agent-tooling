@@ -5,7 +5,7 @@ import Foundation
 /// Reproduces the fixture-root idiom repeated across the suites:
 /// `FileManager.default.temporaryDirectory.resolvingSymlinksInPath()`
 /// `.appending(path: "<prefix>-\(UUID())")`, created with the restrictive
-/// `0o700` permissions the fixtures use, and removed on `remove()`. The symlink
+/// `0o700` permissions the fixtures use. The caller removes it. The symlink
 /// resolution matters because some tests compare against a resolved path, so the
 /// shape must stay identical; the `0o700` creation matches the dominant form so
 /// migrated sites keep writing the same bytes with the same mode.
@@ -21,11 +21,5 @@ public struct TemporaryFolder {
             .appending(path: "\(prefix)-\(UUID())")
         try FileManager.default.createDirectory(
             at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-    }
-
-    /// Removes the directory and everything under it, ignoring failures the way
-    /// a test teardown does.
-    public func remove() {
-        try? FileManager.default.removeItem(at: url)
     }
 }

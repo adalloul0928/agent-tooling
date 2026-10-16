@@ -28,11 +28,6 @@ public enum OperationPlanRiskClassifier {
         /// Show it. Each reason is one sentence a person needs to read first.
         case needsReview([Reason])
 
-        public var requiresReview: Bool {
-            if case .needsReview = self { return true }
-            return false
-        }
-
         public var reasons: [Reason] {
             if case .needsReview(let reasons) = self { return reasons }
             return []
