@@ -519,8 +519,8 @@ it will not execute policy-provided scripts or fetch a policy in the background.
 ## Design tokens
 
 Every view draws from the scales in `Sources/AgentToolingApp/DesignTokens.swift`
-(and the colours and motion in `Theme.swift`) and nowhere else. A raw number in
-a view is treated the way a raw hex colour would be.
+(and the colours, motion and page layout insets in `Theme.swift`) and nowhere
+else. A raw number in a view is treated the way a raw hex colour would be.
 
 - `AgentFont` — the type scale: `pageTitle` 20, `titleLarge` 17, `title` 15,
   `body` 13, `caption` 11, `micro` 10, plus `heading` for card titles, `mono`
@@ -529,14 +529,21 @@ a view is treated the way a raw hex colour would be.
 - `Space` — a 4-point grid (`xxs` 2 … `xxxl` 24, `huge` 32) for padding,
   stack spacing, and insets, with `nudge` 1 for lining a glyph up with the
   first line of text beside it.
+- `WorkspaceLayout` (in `Theme.swift`) — the page's own insets, which every
+  screen's heading, filters and content share: `pageInset` 24,
+  `contentTopInset` 12, `sectionSpacing` 24, `paneInset` 20 for a sheet's body
+  or an inspector's detail, and `floatingBarInset` 34 for a bar floating over
+  a collection.
 - `Radius` — `sm` 6 chips, `md` 8 controls and selection, `lg` 12 cards,
   `xl` 16 the palette. `RoundedRectangle.card/.control/.panel` are the shapes.
 - `Size` — row and header heights, glyph, tile, disc, mark and identity-icon
   sizes, control heights, the sheet bar; field, search, picker and popover
-  widths (`fieldNarrow` 160 … `fieldWide` 420, with `fieldStandard` 320 for
-  most form fields); pane widths for each split (the shared list/detail split,
-  the sidebar, the History, skill creator and source editor columns);
-  empty-state and placeholder heights; Discover card sizes.
+  widths (`fieldNarrow` 160 … `fieldWide` 420, each named for the field it
+  sizes, such as `fieldStandard` 320 for a field or picker in a form or detail
+  pane like a preset's, or `fieldCapped` 300 for a URL or path in an editing
+  sheet); pane widths for each split (the shared list/detail split, the
+  sidebar, the History, skill creator and source editor columns); empty-state
+  and placeholder heights; Discover card sizes.
 - `SheetSize` — the fixed sheet sizes, from `popover` to `creator`; a sheet
   picks the smallest it fits in. The few that resize (the setup wizard, the
   ToolHive inspector) take a minimum and an ideal through
