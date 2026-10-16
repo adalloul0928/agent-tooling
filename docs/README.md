@@ -1,9 +1,10 @@
 # Agent Tooling docs index
 
 This index groups the `docs/*.md` files so a reader can tell a live behavioral
-contract from a frozen plan. Current contracts track the shipped code. Design
-notes record background and lower-churn rationale. Historical files are frozen
-and should not be read as current behavior.
+contract from a frozen plan. Current contracts track the shipped code. Staged
+contracts describe code that is built and tested but that nothing in the app
+calls yet. Design notes record background and lower-churn rationale. Historical
+files are frozen and should not be read as current behavior.
 
 ## Current contracts (behavioral, maintained)
 
@@ -11,12 +12,10 @@ and should not be read as current behavior.
 - encrypted-folder-sync-v1.md — sealed second transport over a synced folder
 - project-declaration-v1.md — project.json and lock contract with a Projects surface
 - linked-destinations-v1.md — installing into a folder outside a client's own
-- portable-mcp-delivery-v1.md — per-app MCP route resolution and mapping
 - package-tree-content-store-v1.md — content-addressed package store with digests
 - workspace-contracts-v1.md — portable and device document types and invariants
 - workspace-authority-v1.md — selects which store is authoritative
 - workspace-mcp-definitions-v3.md — managed MCP definition schema, version 3
-- source-recognition-contracts-v1.md — read-only interpretation of foreign source locks
 - standing-instructions-v1.md — read-only inventory of instructions and agents
 - central-skill-intake-v1.md — personal and upstream skill intake plus content updates
 - versioned-commands-v1.md — the four versioned workspace commands
@@ -24,16 +23,8 @@ and should not be read as current behavior.
 - workspace-deployment-v1.md — intent to reviewable plan, staging, execution
 - workspace-store-v1.md — versioned revision store and application service writer
 - workspace-assignment-commands-v1.md — shared assign/apply batch and one-step install
+- workspace-native-plugin-command-v1.md — admission rules for one native plugin install command
 - toolhive-runtime-inspection-v1.md — read-only, bounded adapter for the thv CLI
-- compatibility.md — minimum client builds exercised by the current release
-- profiles-and-doctor.md — desired-state profiles and the read-only doctor
-- tooling-inventory.md — canonical map for where a capability belongs
-- new-machine-setup.md — ordered runbook to set up a fresh Mac
-- macos-app-release.md — signed, notarized DMG release workflow
-- release-runbook.md — rolling-channel release procedure
-
-New contracts under authoring now, listed here from the feature:
-
 - updates-and-policy-v1.md — update availability, cadence, per-kind auto/ask policy
 - insights-v1.md — recurring-work detection from local chat history and deep dive
 - checkup-and-review-v1.md — audit to assistant to one-reviewed-action-at-a-time
@@ -41,11 +32,24 @@ New contracts under authoring now, listed here from the feature:
 - skill-creator-v1.md — assistant-driven skill authoring under a bounded command policy
 - content-risk-and-secrets-v1.md — content-risk scan and the portable-document secrets boundary
 - mcp-server-surface-v1.md — the read-only and request-only MCP tool catalog
+- compatibility.md — minimum client builds exercised by the current release
+- profiles-and-doctor.md — desired-state profiles and the read-only doctor
+- tooling-inventory.md — canonical map for where a capability belongs
+- new-machine-setup.md — ordered runbook to set up a fresh Mac
+- macos-app-release.md — signed, notarized DMG release workflow
+- release-runbook.md — rolling-channel release procedure
+
+Staged contracts, built and tested but not yet called by the app; each Status
+line names the missing step:
+
+- portable-mcp-delivery-v1.md — per-app MCP route resolution and mapping
+- source-recognition-contracts-v1.md — read-only interpretation of foreign source locks
 
 ## Design notes (background, lower churn)
 
 - tooling-strategy.md — Claude and Codex tooling strategy
 - tooling-rollout-plan.md — phased tooling rollout plan
+- build-prompts.md — copy-paste prompt and checkbox for each approved rollout item
 - onboarding-feature-roadmap.md — onboarding and configuration roadmap
 - apm-spike.md — Microsoft APM compiler spike result
 - public-release-boundary.md — public application extraction boundary
