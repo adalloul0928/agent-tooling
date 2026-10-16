@@ -671,6 +671,18 @@ enum CollectionColumn {
     }
 }
 
+/// What a native `List` puts between its edge and each row's content on its
+/// own, past the insets the row asks for: it lays its one column out 17 points
+/// narrower than the list, 8 in from the leading edge and 9 from the trailing.
+/// The system picks these, not this app. A row that has to line up with
+/// something outside its list, such as the column titles over a table, gives
+/// them back (`collectionTableRowChrome(selected:)`); `CollectionTableRowTests`
+/// fails if a macOS release moves them.
+enum ListCellMargin {
+    static let leading: CGFloat = 8
+    static let trailing: CGFloat = 9
+}
+
 // MARK: - Hairline
 
 /// The one divider. Rows inside a card are separated by this and nothing

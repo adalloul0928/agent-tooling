@@ -27,10 +27,26 @@ extension View {
     /// hairline underneath, hidden while the row is selected so the accent
     /// fill has a clean edge.
     func collectionRowChrome(selected: Bool) -> some View {
+        collectionRowChrome(selected: selected, leading: Space.xl, trailing: Space.xl)
+    }
+
+    /// A row of a collection laid out as a table under a
+    /// `CollectionColumnHeader` (Plugins, Connections): the same chrome, with
+    /// the row's content at exactly the standard inset. The header stands
+    /// outside the list, and the list pads each row's content by
+    /// `ListCellMargin` on its own, so a table row gives that margin back and
+    /// its columns stand under the header's titles.
+    func collectionTableRowChrome(selected: Bool) -> some View {
+        collectionRowChrome(
+            selected: selected, leading: Space.xl - ListCellMargin.leading,
+            trailing: Space.xl - ListCellMargin.trailing)
+    }
+
+    private func collectionRowChrome(selected: Bool, leading: CGFloat, trailing: CGFloat) -> some View {
         // The system separator is a row trait, so it is switched off here, on
         // the row, where it has effect; on the list it is ignored.
         listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 0, leading: Space.xl, bottom: 0, trailing: Space.xl))
+            .listRowInsets(EdgeInsets(top: 0, leading: leading, bottom: 0, trailing: trailing))
             .frame(minHeight: Size.rowHeight)
             .listRowBackground(
                 ZStack(alignment: .bottom) {
@@ -115,7 +131,9 @@ struct CollectionColumns {
         let nameShare: CGFloat
         let nameMax: CGFloat
         /// The narrow layout's name column: the width less `narrowReserve`,
-        /// the columns and gaps beside it, down to `nameMin`.
+        /// everything else a narrow row holds (its other columns and every
+        /// gap between its items, so a row adds no gap the reserve leaves
+        /// out), down to `nameMin`.
         let nameMin: CGFloat
         let narrowReserve: CGFloat
     }
@@ -144,7 +162,8 @@ struct CollectionColumns {
 
 extension CollectionColumns.Layout {
     /// The Connections table. Its narrow layout keeps the App column, and the
-    /// gap before it, beside the name.
+    /// one gap before it, beside the name; the row and its header put nothing
+    /// else between them.
     static let connections = Self(
         expandedFrom: CollectionColumn.Connections.expandedFrom,
         nameShare: CollectionColumn.Connections.nameShare,
@@ -153,7 +172,8 @@ extension CollectionColumns.Layout {
         narrowReserve: CollectionColumn.clientMarks + Space.lg)
 
     /// The Plugins table. Its narrow layout keeps the Managed by column, and
-    /// the gap before it, beside the name.
+    /// the one gap before it, beside the name; the row and its header put
+    /// nothing else between them.
     static let plugins = Self(
         expandedFrom: CollectionColumn.Plugins.expandedFrom,
         nameShare: CollectionColumn.Plugins.nameShare,

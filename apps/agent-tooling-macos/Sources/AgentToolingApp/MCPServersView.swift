@@ -195,29 +195,24 @@ struct MCPServersView: View {
         GeometryReader { geometry in
             // The card's inner width, less the row's own insets.
             let columns = CollectionColumns(width: geometry.size.width - Space.xl * 2, layout: .connections)
-            VStack(spacing: 0) {
-                CollectionColumnHeader {
-                    Text(columns.expanded ? "Name" : "Connection").frame(width: columns.name, alignment: .leading)
-                    if columns.expanded {
-                        Text("Managed by").frame(width: CollectionColumn.Connections.ownership, alignment: .leading)
-                        Text("Plugin").frame(width: CollectionColumn.Connections.plugin, alignment: .leading)
-                        Text("Source").frame(width: CollectionColumn.source, alignment: .leading)
-                        Spacer(minLength: 0)
-                    } else {
-                        Spacer(minLength: 0)
-                    }
-                    Text("App").frame(width: CollectionColumn.clientMarks, alignment: .leading)
-                    if columns.expanded {
-                        Text("Asked for").frame(width: CollectionColumn.Connections.requested, alignment: .leading)
-                        Text("Tools").frame(width: CollectionColumn.Connections.tools, alignment: .leading)
-                        Text("Status").frame(width: CollectionColumn.narrow, alignment: .center)
-                    }
-                }
+            // Leading, so the list keeps the header's leading edge even when
+            // a row's columns cannot fit and both run past the card.
+            VStack(alignment: .leading, spacing: 0) {
+                Self.columnHeader(columns)
                 List(filteredEntries, selection: $selection) { entry in
-                    serverRow(entry, columns: columns)
-                        .tag(entry.id)
-                        .collectionRowChrome(selected: selection.contains(entry.id))
-                        .accessibilityLabel(entry.displayName)
+                    ConnectionCollectionRow(
+                        entry: entry,
+                        columns: columns,
+                        clients: availableClients,
+                        tools: capabilities.summary(for: entry.id),
+                        selected: selection.contains(entry.id),
+                        ownershipFilter: $ownershipFilter,
+                        pluginFilter: $pluginFilter,
+                        sourceFilter: $sourceFilter
+                    )
+                    .tag(entry.id)
+                    .collectionTableRowChrome(selected: selection.contains(entry.id))
+                    .accessibilityLabel(entry.displayName)
                 }
                 .collectionListChrome()
             }
@@ -225,75 +220,25 @@ struct MCPServersView: View {
         .collectionSurface()
     }
 
-    private func serverRow(_ entry: MCPConnectionEntry, columns: CollectionColumns) -> some View {
-        let selected = selection.contains(entry.id)
-        return HStack(spacing: Space.lg) {
-            HStack(spacing: Space.lg) {
-                KindTile(kind: .mcpServer, size: Size.tile, ghost: !entry.isManaged)
-                VStack(alignment: .leading, spacing: Space.xxs) {
-                    Text(entry.displayName).font(AgentFont.bodyMedium).lineLimit(1)
-                        .collectionRowForeground(selected: selected)
-                    if !columns.expanded {
-                        Text(entry.clause).font(AgentFont.caption).lineLimit(1)
-                            .collectionRowForeground(selected: selected, secondary: true)
-                    }
-                }
-                Spacer(minLength: 0)
-                if !columns.expanded {
-                    StatusGlyph(state: entry.verdict.state, size: Size.glyph, tint: selected ? AgentTheme.onSelection : nil)
-                        .accessibilityHidden(false)
-                        .accessibilityLabel(entry.verdict.text)
-                }
-            }
-            .frame(width: columns.name, alignment: .leading)
+    /// The column titles, from the same widths as the rows under them. The
+    /// narrow layout is the name and App after one gap, the reserve
+    /// `CollectionColumns.Layout.connections` keeps.
+    static func columnHeader(_ columns: CollectionColumns) -> some View {
+        CollectionColumnHeader {
+            Text(columns.expanded ? "Name" : "Connection").frame(width: columns.name, alignment: .leading)
             if columns.expanded {
-                FilterPill(title: entry.ownershipLabel, isOn: ownershipFilter == entry.ownershipLabel) {
-                    ownershipFilter = ownershipFilter == entry.ownershipLabel ? "" : entry.ownershipLabel
-                }
-                .frame(width: CollectionColumn.Connections.ownership, alignment: .leading)
-                Group {
-                    if let plugin = entry.parentPluginLabel {
-                        FilterPill(title: plugin, isOn: pluginFilter == plugin) {
-                            pluginFilter = pluginFilter == plugin ? "" : plugin
-                        }
-                    } else {
-                        Text("—").foregroundStyle(.tertiary)
-                    }
-                }
-                .frame(width: CollectionColumn.Connections.plugin, alignment: .leading)
-                Group {
-                    if let source = entry.sourceLabel {
-                        FilterPill(title: source, isOn: sourceFilter == source) {
-                            sourceFilter = sourceFilter == source ? "" : source
-                        }
-                    } else {
-                        Text("—").foregroundStyle(.tertiary)
-                    }
-                }
-                .frame(width: CollectionColumn.source, alignment: .leading)
-                Spacer(minLength: 0)
-            } else {
+                Text("Managed by").frame(width: CollectionColumn.Connections.ownership, alignment: .leading)
+                Text("Plugin").frame(width: CollectionColumn.Connections.plugin, alignment: .leading)
+                Text("Source").frame(width: CollectionColumn.source, alignment: .leading)
                 Spacer(minLength: 0)
             }
-            TableClientMarks(clients: availableClients, present: entry.routedClients, selected: selected)
-                .frame(width: CollectionColumn.clientMarks, alignment: .leading)
+            Text("App").frame(width: CollectionColumn.clientMarks, alignment: .leading)
             if columns.expanded {
-                Text(entry.requestedAssignments.isEmpty ? "—" : "\(entry.requestedAssignments.count)")
-                    .font(AgentFont.caption.monospacedDigit())
-                    .collectionRowForeground(selected: selected, secondary: true)
-                    .help("Saved choices about where this connection should be used. Installation is checked separately.")
-                    .frame(width: CollectionColumn.Connections.requested, alignment: .leading)
-                Text(capabilities.summary(for: entry.id) ?? "—")
-                    .font(AgentFont.caption.monospacedDigit())
-                    .collectionRowForeground(selected: selected, secondary: true)
-                    .frame(width: CollectionColumn.Connections.tools, alignment: .leading)
-                StatusGlyph(state: entry.verdict.state, size: Size.glyph, tint: selected ? AgentTheme.onSelection : nil)
-                    .accessibilityHidden(false)
-                    .accessibilityLabel(entry.verdict.text)
-                    .frame(width: CollectionColumn.narrow, alignment: .center)
+                Text("Asked for").frame(width: CollectionColumn.Connections.requested, alignment: .leading)
+                Text("Tools").frame(width: CollectionColumn.Connections.tools, alignment: .leading)
+                Text("Status").frame(width: CollectionColumn.narrow, alignment: .center)
             }
         }
-        .padding(.vertical, Space.md)
     }
 
     @ViewBuilder
@@ -540,6 +485,94 @@ struct MCPServersView: View {
         ownershipFilter = ""
         pluginFilter = ""
         sourceFilter = ""
+    }
+}
+
+// MARK: - Rows
+
+/// One connection on the Connections table, laid out from the table's
+/// columns. Its narrow layout is the name and the App marks after one gap,
+/// exactly what `CollectionColumns.Layout.connections` reserves beside the
+/// name, so the row fills the table's width and never pushes the marks past
+/// the card. In the wide layout its pills filter the table by what they name.
+struct ConnectionCollectionRow: View {
+    let entry: MCPConnectionEntry
+    let columns: CollectionColumns
+    /// This Mac's managed apps, in the order every row draws their marks.
+    let clients: [ClientKind]
+    /// What the last live test said the connection offers, when it was run.
+    let tools: String?
+    let selected: Bool
+    @Binding var ownershipFilter: String
+    @Binding var pluginFilter: String
+    @Binding var sourceFilter: String
+
+    var body: some View {
+        HStack(spacing: Space.lg) {
+            HStack(spacing: Space.lg) {
+                KindTile(kind: .mcpServer, size: Size.tile, ghost: !entry.isManaged)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(entry.displayName).font(AgentFont.bodyMedium).lineLimit(1)
+                        .collectionRowForeground(selected: selected)
+                    if !columns.expanded {
+                        Text(entry.clause).font(AgentFont.caption).lineLimit(1)
+                            .collectionRowForeground(selected: selected, secondary: true)
+                    }
+                }
+                Spacer(minLength: 0)
+                if !columns.expanded {
+                    StatusGlyph(state: entry.verdict.state, size: Size.glyph, tint: selected ? AgentTheme.onSelection : nil)
+                        .accessibilityHidden(false)
+                        .accessibilityLabel(entry.verdict.text)
+                }
+            }
+            .frame(width: columns.name, alignment: .leading)
+            if columns.expanded {
+                FilterPill(title: entry.ownershipLabel, isOn: ownershipFilter == entry.ownershipLabel) {
+                    ownershipFilter = ownershipFilter == entry.ownershipLabel ? "" : entry.ownershipLabel
+                }
+                .frame(width: CollectionColumn.Connections.ownership, alignment: .leading)
+                Group {
+                    if let plugin = entry.parentPluginLabel {
+                        FilterPill(title: plugin, isOn: pluginFilter == plugin) {
+                            pluginFilter = pluginFilter == plugin ? "" : plugin
+                        }
+                    } else {
+                        Text("—").foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(width: CollectionColumn.Connections.plugin, alignment: .leading)
+                Group {
+                    if let source = entry.sourceLabel {
+                        FilterPill(title: source, isOn: sourceFilter == source) {
+                            sourceFilter = sourceFilter == source ? "" : source
+                        }
+                    } else {
+                        Text("—").foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(width: CollectionColumn.source, alignment: .leading)
+                Spacer(minLength: 0)
+            }
+            TableClientMarks(clients: clients, present: entry.routedClients, selected: selected)
+                .frame(width: CollectionColumn.clientMarks, alignment: .leading)
+            if columns.expanded {
+                Text(entry.requestedAssignments.isEmpty ? "—" : "\(entry.requestedAssignments.count)")
+                    .font(AgentFont.caption.monospacedDigit())
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .help("Saved choices about where this connection should be used. Installation is checked separately.")
+                    .frame(width: CollectionColumn.Connections.requested, alignment: .leading)
+                Text(tools ?? "—")
+                    .font(AgentFont.caption.monospacedDigit())
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .frame(width: CollectionColumn.Connections.tools, alignment: .leading)
+                StatusGlyph(state: entry.verdict.state, size: Size.glyph, tint: selected ? AgentTheme.onSelection : nil)
+                    .accessibilityHidden(false)
+                    .accessibilityLabel(entry.verdict.text)
+                    .frame(width: CollectionColumn.narrow, alignment: .center)
+            }
+        }
+        .padding(.vertical, Space.md)
     }
 }
 

@@ -122,26 +122,21 @@ struct PluginsView: View {
         GeometryReader { geometry in
             // The card's inner width, less the row's own insets.
             let columns = CollectionColumns(width: geometry.size.width - Space.xl * 2, layout: .plugins)
-            VStack(spacing: 0) {
-                CollectionColumnHeader {
-                    Text(columns.expanded ? "Name" : "Plugin").frame(width: columns.name, alignment: .leading)
-                    if columns.expanded {
-                        Text("Description").frame(maxWidth: .infinity, alignment: .leading)
-                        Text("Source").frame(width: CollectionColumn.source, alignment: .leading)
-                        Text("Skills").frame(width: CollectionColumn.narrow, alignment: .trailing)
-                    } else {
-                        Spacer(minLength: 0)
-                    }
-                    Text("Managed by").frame(width: CollectionColumn.clientMarks, alignment: .trailing)
-                    if columns.expanded {
-                        Text("Updates").frame(width: CollectionColumn.Plugins.updates, alignment: .leading)
-                    }
-                }
+            // Leading, so the list keeps the header's leading edge even when
+            // a row's columns cannot fit and both run past the card.
+            VStack(alignment: .leading, spacing: 0) {
+                Self.columnHeader(columns)
                 List(rows, selection: $selection) { row in
-                    pluginRow(row, updates: updates, columns: columns)
-                        .tag(row.artifactID)
-                        .collectionRowChrome(selected: selection.contains(row.artifactID))
-                        .accessibilityLabel(row.displayName)
+                    PluginCollectionRow(
+                        row: row,
+                        update: updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet."),
+                        clients: availableClients,
+                        columns: columns,
+                        selected: selection.contains(row.artifactID)
+                    )
+                    .tag(row.artifactID)
+                    .collectionTableRowChrome(selected: selection.contains(row.artifactID))
+                    .accessibilityLabel(row.displayName)
                 }
                 .collectionListChrome()
             }
@@ -149,53 +144,22 @@ struct PluginsView: View {
         .collectionSurface()
     }
 
-    private func pluginRow(_ row: WorkspaceLibraryReadModelRow, updates: PluginUpdateEvaluation, columns: CollectionColumns) -> some View {
-        let selected = selection.contains(row.artifactID)
-        return HStack(spacing: Space.lg) {
-            HStack(spacing: Space.lg) {
-                pluginIcon(for: row, size: Size.tile)
-                VStack(alignment: .leading, spacing: Space.xxs) {
-                    Text(row.displayName).font(AgentFont.bodyMedium).lineLimit(1)
-                        .collectionRowForeground(selected: selected)
-                    if !columns.expanded {
-                        Text(row.sourceLabel.map { "From \($0)" } ?? row.ownershipLabel)
-                            .font(AgentFont.caption).lineLimit(1)
-                            .collectionRowForeground(selected: selected, secondary: true)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(width: columns.name, alignment: .leading)
+    /// The column titles, from the same widths as the rows under them. The
+    /// narrow layout is the name and Managed by after one gap, the reserve
+    /// `CollectionColumns.Layout.plugins` keeps.
+    static func columnHeader(_ columns: CollectionColumns) -> some View {
+        CollectionColumnHeader {
+            Text(columns.expanded ? "Name" : "Plugin").frame(width: columns.name, alignment: .leading)
             if columns.expanded {
-                let text = description(for: row)
-                Text(text).font(AgentFont.body).lineLimit(1).help(text)
-                    .collectionRowForeground(selected: selected, secondary: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(row.sourceLabel ?? "Not recorded").font(AgentFont.caption).lineLimit(1)
-                    .collectionRowForeground(selected: selected, secondary: true)
-                    .frame(width: CollectionColumn.source, alignment: .leading)
-                Text("\(row.childCount)").font(AgentFont.caption.monospacedDigit())
-                    .collectionRowForeground(selected: selected, secondary: true)
-                    .frame(width: CollectionColumn.narrow, alignment: .trailing)
-            } else {
-                Spacer(minLength: 0)
+                Text("Description").frame(maxWidth: .infinity, alignment: .leading)
+                Text("Source").frame(width: CollectionColumn.source, alignment: .leading)
+                Text("Skills").frame(width: CollectionColumn.narrow, alignment: .trailing)
             }
-            TableClientMarks(clients: availableClients, present: Set(row.nativeRoutes.map(\.client)), selected: selected)
-                .frame(width: CollectionColumn.clientMarks, alignment: .trailing)
+            Text("Managed by").frame(width: CollectionColumn.clientMarks, alignment: .trailing)
             if columns.expanded {
-                let update = updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet.")
-                Group {
-                    if update.hasUpdate {
-                        UpdateStateBadge(availability: update)
-                    } else {
-                        Text(update.title).font(AgentFont.caption).lineLimit(1)
-                            .collectionRowForeground(selected: selected, secondary: true)
-                    }
-                }
-                .frame(width: CollectionColumn.Plugins.updates, alignment: .leading)
+                Text("Updates").frame(width: CollectionColumn.Plugins.updates, alignment: .leading)
             }
         }
-        .padding(.vertical, Space.md)
     }
 
     @ViewBuilder
@@ -242,11 +206,6 @@ struct PluginsView: View {
                     && (query.isEmpty || searchText(row).localizedCaseInsensitiveContains(query))
             }
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
-    }
-
-    private func description(for row: WorkspaceLibraryReadModelRow) -> String {
-        guard let observed = row.observedDescription, !observed.isEmpty else { return row.ownershipLabel }
-        return observed
     }
 
     private func searchText(_ row: WorkspaceLibraryReadModelRow) -> String {
@@ -307,6 +266,68 @@ private func pluginIcon(for row: WorkspaceLibraryReadModelRow, size: CGFloat) ->
         ToolIdentityIcon(packageID: route.externalPluginID, size: size)
     } else {
         KindTile(kind: .plugin, size: size)
+    }
+}
+
+/// One plugin on the Plugins table, laid out from the table's columns. Its
+/// narrow layout is the name and the Managed by marks after one gap, exactly
+/// what `CollectionColumns.Layout.plugins` reserves beside the name, so the
+/// row fills the table's width and never pushes the marks past the card.
+struct PluginCollectionRow: View {
+    let row: WorkspaceLibraryReadModelRow
+    let update: UpdateAvailability
+    /// This Mac's managed apps, in the order every row draws their marks.
+    let clients: [ClientKind]
+    let columns: CollectionColumns
+    let selected: Bool
+
+    var body: some View {
+        HStack(spacing: Space.lg) {
+            HStack(spacing: Space.lg) {
+                pluginIcon(for: row, size: Size.tile)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(row.displayName).font(AgentFont.bodyMedium).lineLimit(1)
+                        .collectionRowForeground(selected: selected)
+                    if !columns.expanded {
+                        Text(row.sourceLabel.map { "From \($0)" } ?? row.ownershipLabel)
+                            .font(AgentFont.caption).lineLimit(1)
+                            .collectionRowForeground(selected: selected, secondary: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(width: columns.name, alignment: .leading)
+            if columns.expanded {
+                Text(description).font(AgentFont.body).lineLimit(1).help(description)
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(row.sourceLabel ?? "Not recorded").font(AgentFont.caption).lineLimit(1)
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .frame(width: CollectionColumn.source, alignment: .leading)
+                Text("\(row.childCount)").font(AgentFont.caption.monospacedDigit())
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .frame(width: CollectionColumn.narrow, alignment: .trailing)
+            }
+            TableClientMarks(clients: clients, present: Set(row.nativeRoutes.map(\.client)), selected: selected)
+                .frame(width: CollectionColumn.clientMarks, alignment: .trailing)
+            if columns.expanded {
+                Group {
+                    if update.hasUpdate {
+                        UpdateStateBadge(availability: update)
+                    } else {
+                        Text(update.title).font(AgentFont.caption).lineLimit(1)
+                            .collectionRowForeground(selected: selected, secondary: true)
+                    }
+                }
+                .frame(width: CollectionColumn.Plugins.updates, alignment: .leading)
+            }
+        }
+        .padding(.vertical, Space.md)
+    }
+
+    private var description: String {
+        guard let observed = row.observedDescription, !observed.isEmpty else { return row.ownershipLabel }
+        return observed
     }
 }
 

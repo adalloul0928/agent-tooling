@@ -546,7 +546,9 @@ a view is treated the way a raw hex colour would be.
   Connections tables: shared widths (`clientMarks`, `source`, `narrow`,
   `nameMax`) at the top, and per table the width it switches layout at
   (`expandedFrom`), its name column's floor, share and ceiling, and its other
-  columns.
+  columns. `ListCellMargin` is what a native `List` adds around a row's
+  content on its own (8 leading, 9 trailing), which a table row gives back so
+  its columns stand under the header's titles.
 - `Proportion` — the ratios a tile, disc or identity icon scales by, and the
   shares of a split's ideal width (`listShare` 0.55, `detailShare` 0.45,
   `evenShare` 0.5).
@@ -610,7 +612,9 @@ History) sit on `collectionSurface()`. Native `List`s take
 `collectionListChrome()` and each row `collectionRowChrome(selected:)`, which
 switch the system's own separators off and draw the shared hairline; `Table`
 cannot be quieted that way, so its former users lay their columns out by hand
-inside a `List` (see `Components+Collections.swift`).
+inside a `List` (see `Components+Collections.swift`), and their rows take
+`collectionTableRowChrome(selected:)`, which lines a row's content up with the
+column titles above the list.
 
 ## Build and open the app
 
