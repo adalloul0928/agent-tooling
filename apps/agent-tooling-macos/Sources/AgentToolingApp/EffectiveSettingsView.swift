@@ -32,6 +32,7 @@ struct EffectiveSettingsView: View {
                 }
                 Button("Refresh", systemImage: "arrow.clockwise") { refreshID = UUID() }
                     .labelStyle(.iconOnly).buttonStyle(.glass).disabled(session.isBusy)
+                    .help("Refresh")
             }
             Hairline()
             ScrollView {

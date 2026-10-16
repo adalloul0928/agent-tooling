@@ -186,8 +186,10 @@ struct SkillCreatorDraftPane: View {
                     } label: {
                         Label("Reveal", systemImage: "folder")
                     }
+                    .labelStyle(.iconOnly)
                     .secondaryActionStyle()
                     .controlSize(.small)
+                    .help("Show in Finder")
                     .disabled(selection.selectedFile(in: result) == nil)
 
                     Button {
@@ -197,8 +199,10 @@ struct SkillCreatorDraftPane: View {
                     } label: {
                         Label("Copy", systemImage: "doc.on.doc")
                     }
+                    .labelStyle(.iconOnly)
                     .secondaryActionStyle()
                     .controlSize(.small)
+                    .help("Copy")
                     .disabled(selection.selectedContent(in: result) == nil)
                 }
                 .padding(.horizontal, Space.xxl)

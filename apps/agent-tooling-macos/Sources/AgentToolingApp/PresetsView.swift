@@ -500,7 +500,6 @@ struct PresetFollowSheet: View {
             HStack {
                 Text("Follow \(name)").font(AgentFont.title)
                 Spacer()
-                Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
             }.padding(Space.xxl)
             Hairline()
             VStack(alignment: .leading, spacing: Space.xxl) {
@@ -543,6 +542,7 @@ struct PresetFollowSheet: View {
                 Text("Following records the choice. Nothing moves until you catch up.")
                     .font(AgentFont.body).foregroundStyle(.secondary)
                 Spacer()
+                Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
                 Button("Follow") {
                     Task {
                         await session.link(presetID, destinations: destinations)
@@ -602,7 +602,6 @@ struct PresetEditorSheet: View {
             HStack {
                 Text(isRenaming ? "Rename preset" : "New preset").font(AgentFont.title)
                 Spacer()
-                Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
             }
             .padding(Space.xxl)
             Hairline()
@@ -629,6 +628,7 @@ struct PresetEditorSheet: View {
                 )
                 .font(AgentFont.body).foregroundStyle(.secondary)
                 Spacer()
+                Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
                 Button(isRenaming ? "Rename" : "Create preset") { commit() }
                     .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
