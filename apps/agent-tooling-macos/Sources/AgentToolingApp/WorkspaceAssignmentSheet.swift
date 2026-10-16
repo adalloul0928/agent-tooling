@@ -733,7 +733,7 @@ struct WorkspaceAssignmentSheet: View {
         let children = Dictionary(uniqueKeysWithValues: library.rows.flatMap(\.includedChildren).map { ($0.artifactID, $0) })
         return ids.compactMap { id in
             if let row = roots[id] {
-                let bundled = row.childCount == 0 ? "" : " · Includes \(row.childCount) bundled item\(row.childCount == 1 ? "" : "s")"
+                let bundled = row.childCount == 0 ? "" : " · Includes \(CountNoun("bundled item").phrase(row.childCount))"
                 return .init(id: id, name: row.displayName, kind: row.kind, detail: "\(ownershipLabel(row.ownership))\(bundled)")
             }
             if let child = children[id] {

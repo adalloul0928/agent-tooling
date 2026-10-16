@@ -628,7 +628,7 @@ struct OverviewView: View {
         let connections: [OverviewAttention] = health == 0 ? [] : [
             OverviewAttention(
                 id: "health",
-                title: health == 1 ? "1 connection needs attention" : "\(health) connections need attention",
+                title: "\(CountNoun.connection.phrase(health)) \(health == 1 ? "needs" : "need") attention",
                 detail: "Sign in again or reconnect on the Health tab.",
                 state: .attention, destination: .health)
         ]
@@ -691,7 +691,7 @@ struct OverviewView: View {
                     let open = checkup.openFindings.count + checkup.openRecommendations.count
                     StatusGlyph(state: open == 0 ? .healthy : ((checkup.audit.highestSeverity ?? .info) >= .medium ? .attention : .pending), size: Size.glyphLarge)
                     VStack(alignment: .leading, spacing: Space.xxs) {
-                        Text(open == 0 ? "Nothing needs attention" : "\(open) thing\(open == 1 ? "" : "s") to look at")
+                        Text(open == 0 ? "Nothing needs attention" : "\(CountNoun("thing").phrase(open)) to look at")
                             .font(AgentFont.bodyMedium)
                         Text("Checked \(SnapshotTime.compact(checkup.completedAt))" + (setup.isStale ? " · a new checkup is due" : ""))
                             .font(AgentFont.caption).foregroundStyle(.secondary)

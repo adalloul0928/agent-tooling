@@ -139,10 +139,10 @@ struct HistorySection: View {
                     group("Goes away", preview.removedItems, "minus.circle")
                     group("Changes", preview.changedItems, "pencil")
                     if preview.assignmentDifference != 0 {
+                        let difference = abs(preview.assignmentDifference)
                         Label(
-                            preview.assignmentDifference > 0
-                                ? "\(preview.assignmentDifference) more \(preview.assignmentDifference == 1 ? "place" : "places") a tool is asked for"
-                                : "\(-preview.assignmentDifference) fewer \(preview.assignmentDifference == -1 ? "place" : "places") a tool is asked for",
+                            "\(difference) \(preview.assignmentDifference > 0 ? "more" : "fewer") "
+                                + "\(Self.place.word(for: difference)) a tool is asked for",
                             systemImage: "square.grid.2x2"
                         )
                         .font(AgentFont.body)
@@ -190,10 +190,12 @@ struct HistorySection: View {
         return "Your apps are not touched. Install is still the only step that writes anything."
     }
 
+    /// The counted nouns a version is described by.
+    private static let tool = CountNoun("tool")
+    private static let place = CountNoun("place")
+
     private func summary(_ point: WorkspaceRestorePoint) -> String {
-        let items = point.itemCount == 1 ? "1 tool" : "\(point.itemCount) tools"
-        let places = point.assignmentCount == 1 ? "1 place" : "\(point.assignmentCount) places"
-        return "\(items) · \(places)"
+        "\(Self.tool.phrase(point.itemCount)) · \(Self.place.phrase(point.assignmentCount))"
     }
 
     private var context: String {
@@ -201,8 +203,7 @@ struct HistorySection: View {
             session.points.contains(where: { $0.revisionID == restored })
         else {
             if session.points.isEmpty { return "Earlier versions of this workspace" }
-            return session.points.count == 1
-                ? "1 version kept on this Mac" : "\(session.points.count) versions kept on this Mac"
+            return "\(CountNoun("version").phrase(session.points.count)) kept on this Mac"
         }
         return "Restored an earlier version. Install to put it into your apps."
     }

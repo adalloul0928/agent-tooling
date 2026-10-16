@@ -196,10 +196,12 @@ struct SyncCenterView: View {
             return PlanReviewLabels.readyLine(count: waiting.count, hasRemoval: waiting.contains(where: \.isRemoval))
         }
         if !scopedRequests.isEmpty {
-            return "\(scopedRequests.count) request\(scopedRequests.count == 1 ? "" : "s") waiting for review"
+            return "\(CountNoun.request.phrase(scopedRequests.count)) waiting for review"
         }
         let attention = workspace.device.attentionCount
-        if attention > 0 { return "\(attention) app\(attention == 1 ? " needs" : "s need") attention" }
+        if attention > 0 {
+            return "\(CountNoun("app").phrase(attention)) \(attention == 1 ? "needs" : "need") attention"
+        }
         return lastChecked.map { "Up to date · checked \(SnapshotTime.compact($0))" } ?? "Up to date"
     }
 
@@ -471,7 +473,7 @@ struct SyncCenterView: View {
         let visible = Array(scopedRequests.prefix(8))
         return TitledCard(
             "Waiting for review",
-            count: "\(scopedRequests.count) request\(scopedRequests.count == 1 ? "" : "s")"
+            count: CountNoun.request.phrase(scopedRequests.count)
         ) {
             Text("Local requests nobody has decided yet. None has changed an app.")
                 .font(AgentFont.caption)
@@ -494,7 +496,8 @@ struct SyncCenterView: View {
                 if request.id != visible.last?.id { Hairline() }
             }
             if scopedRequests.count > visible.count {
-                Text("\(scopedRequests.count - visible.count) more are waiting. Review these to reveal the rest.")
+                let more = scopedRequests.count - visible.count
+                Text("\(more) more \(more == 1 ? "is" : "are") waiting. Review these to reveal the rest.")
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .padding(Space.xl)
@@ -666,6 +669,12 @@ struct SyncCenterView: View {
         receipts =
             (try? await Task.detached { try reader.recentReceipts(store: store, limit: 50) }.value) ?? []
     }
+}
+
+extension CountNoun {
+    /// A local request in the review queue, counted in the line under the
+    /// title and on its card.
+    fileprivate static let request = CountNoun("request")
 }
 
 private struct ClientGroup: Identifiable {

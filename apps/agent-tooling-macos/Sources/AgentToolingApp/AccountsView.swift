@@ -120,8 +120,13 @@ struct AccountsView: View {
         guard let read = session.lastReadAt else { return "Accounts have not been read yet." }
         let pending = session.providers.compactMap { session.plan($0)?.outOfStep }.reduce(0, +)
         let checked = "Read \(SnapshotTime.compact(read))"
-        return pending == 0 ? checked : "\(checked) · \(pending) shared choice\(pending == 1 ? "" : "s") not applied here"
+        return pending == 0 ? checked : "\(checked) · \(CountNoun.sharedChoice.phrase(pending)) not applied here"
     }
+}
+
+extension CountNoun {
+    /// A choice every Mac shares, counted where this Mac does not follow it.
+    fileprivate static let sharedChoice = CountNoun("shared choice")
 }
 
 // MARK: - One account
@@ -212,7 +217,7 @@ private struct AccountCard: View {
         }
         if let plan = session.plan(provider), plan.outOfStep > 0 {
             AttentionBanner(
-                title: "This Mac does not follow \(plan.outOfStep) shared choice\(plan.outOfStep == 1 ? "" : "s")",
+                title: "This Mac does not follow \(CountNoun.sharedChoice.phrase(plan.outOfStep))",
                 message: plan.changes.isEmpty
                     ? plan.held.map { "\($0.key.label.capitalizedFirst): \($0.reason)" }.joined(separator: "\n")
                     : "Applying changes \(plan.file.relativePath) after copying it to Agent Tooling's trash."
@@ -613,7 +618,7 @@ struct AccountChangesReviewSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel", action: onClose).keyboardShortcut(.cancelAction)
-                Button(session.applyingProvider == plan.provider ? "Applying…" : "Apply \(plan.changes.count) change\(plan.changes.count == 1 ? "" : "s")") {
+                Button(session.applyingProvider == plan.provider ? "Applying…" : "Apply \(CountNoun.change.phrase(plan.changes.count))") {
                     Task {
                         if await session.apply(plan.provider, reviewed: plan) != nil { onClose() }
                     }
@@ -665,7 +670,7 @@ struct AccountContentsStrip: View {
             let counts = kinds.compactMap { kind -> String? in
                 let count = observation.items(kind).count
                 guard count > 0 else { return nil }
-                return "\(count) \(count == 1 ? kind.singularName : kind.pluralName.lowercased())"
+                return CountNoun(kind.singularName, plural: kind.pluralName.lowercased()).phrase(count)
             }
             guard !counts.isEmpty else { return nil }
             return "\(provider.client.rawValue) \(counts.joined(separator: ", "))"

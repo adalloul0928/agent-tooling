@@ -60,21 +60,22 @@ struct DeploymentPlanReview: Sendable {
         var parts: [String] = []
         let incomplete = contentRisks.values.count { !$0.isComplete }
         if incomplete > 0 {
-            parts.append("\(incomplete) package scan\(incomplete == 1 ? "" : "s") incomplete")
+            parts.append("\(CountNoun("package scan").phrase(incomplete)) incomplete")
         }
         let findings = contentRisks.values.flatMap(\.findings)
         let malicious = findings.count { $0.severity == .malicious }
         let risky = findings.count { $0.severity == .risky }
         if malicious > 0 {
-            parts.append("\(malicious) malicious content finding\(malicious == 1 ? "" : "s")")
+            parts.append(CountNoun("malicious content finding").phrase(malicious))
         }
-        if risky > 0 { parts.append("\(risky) risky content finding\(risky == 1 ? "" : "s")") }
+        if risky > 0 { parts.append(CountNoun("risky content finding").phrase(risky)) }
+        let step = CountNoun("step")
         if !commands.isEmpty {
-            parts.append("\(commands.count) step\(commands.count == 1 ? "" : "s") run a command")
+            // The verb agrees with the count: "1 step runs", "2 steps run".
+            parts.append("\(step.phrase(commands.count)) \(commands.count == 1 ? "runs" : "run") a command")
         }
         if !withoutCommand.isEmpty {
-            parts.append(
-                "\(withoutCommand.count) step\(withoutCommand.count == 1 ? "" : "s") cannot run yet")
+            parts.append("\(step.phrase(withoutCommand.count)) cannot run yet")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

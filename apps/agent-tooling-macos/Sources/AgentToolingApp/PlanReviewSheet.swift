@@ -87,8 +87,8 @@ struct PlanReviewSheet: View {
                             symbol: "exclamationmark.triangle",
                             title: "Nothing can be installed right now",
                             message:
-                                "\(plan.exclusions.count) requested "
-                                + "\(plan.exclusions.count == 1 ? "item is" : "items are") "
+                                "\(CountNoun("requested item").phrase(plan.exclusions.count)) "
+                                + "\(plan.exclusions.count == 1 ? "is" : "are") "
                                 + "not being installed. The reasons are listed below."
                         )
                         .frame(height: Size.emptyStateMinHeight)
