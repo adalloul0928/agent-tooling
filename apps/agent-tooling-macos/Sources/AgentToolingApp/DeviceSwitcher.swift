@@ -66,17 +66,6 @@ struct OtherMacSheet: View {
         }
     }
 
-    /// The kind said in words for an accessibility label, grouped the same way
-    /// the row's tile groups it: a connection, a skill, or everything else as a
-    /// package.
-    private func assignedKindLabel(for kind: ArtifactKind) -> String {
-        switch kind {
-        case .mcpServer: "connection"
-        case .skill: "skill"
-        default: "package"
-        }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: Space.lg) {
@@ -98,15 +87,14 @@ struct OtherMacSheet: View {
                     if let status {
                         TitledCard("Apps on \(device.name)", count: "\(status.apps.count)") {
                             ForEach(Array(status.apps.enumerated()), id: \.offset) { index, app in
+                                let line = DeviceLabels.appLine(app)
                                 HStack(spacing: Space.lg) {
                                     if let client = app.surface.client {
                                         ClientBrandIcon(client: client, size: Size.tileSmall).frame(width: Size.tile, height: Size.tile)
                                     }
                                     VStack(alignment: .leading, spacing: Space.xxs) {
                                         Text(app.surface.displayName).font(AgentFont.bodyMedium)
-                                        Text(app.installed
-                                             ? "\(app.version ?? "Installed") · \(app.skillCount) skills · \(app.pluginCount) plugins · \(app.mcpServerCount) servers"
-                                             : "Not found on that Mac")
+                                        Text(line.text)
                                             .font(AgentFont.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
@@ -117,9 +105,7 @@ struct OtherMacSheet: View {
                                 // from not found, so the row is one element whose
                                 // label carries that state in words.
                                 .accessibilityElement(children: .ignore)
-                                .accessibilityLabel(app.installed
-                                    ? "\(app.surface.displayName), installed, \(app.version ?? "version unknown"), \(app.skillCount) skills, \(app.pluginCount) plugins, \(app.mcpServerCount) servers"
-                                    : "\(app.surface.displayName), not found on that Mac")
+                                .accessibilityLabel(line.accessibilityLabel)
                                 if index < status.apps.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
                             }
                         }
@@ -152,21 +138,22 @@ struct OtherMacSheet: View {
                     }
                     TitledCard("Assigned to \(device.name)", count: "\(assigned.count)") {
                         if assigned.isEmpty {
-                            Text("Nothing from the library is assigned to this Mac.")
+                            Text("Nothing from the library is assigned to that Mac.")
                                 .font(AgentFont.body).foregroundStyle(.secondary)
                                 .padding(Space.xl).frame(maxWidth: .infinity, alignment: .leading)
                         } else {
                             ForEach(Array(assigned.enumerated()), id: \.element.artifactID) { index, row in
                                 HStack(spacing: Space.lg) {
-                                    KindTile(kind: row.kind == .mcpServer ? .mcpServer : (row.kind == .skill ? .skill : .plugin), size: Size.tileSmall)
+                                    KindTile(kind: ToolingKind(row.kind), size: Size.tileSmall)
                                     Text(row.displayName).font(AgentFont.body)
                                     Spacer()
                                 }
                                 .padding(.horizontal, Space.xl).frame(minHeight: Size.compactRowHeight)
                                 // The kind tile is the row's only sign of what
-                                // kind this is, so the label names it.
+                                // kind this is, so the label names it, in the
+                                // same words the tile's mapping uses.
                                 .accessibilityElement(children: .ignore)
-                                .accessibilityLabel("\(row.displayName), \(assignedKindLabel(for: row.kind))")
+                                .accessibilityLabel("\(row.displayName), \(DeviceLabels.kindName(row.kind))")
                                 if index < assigned.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tileSmall)) }
                             }
                         }

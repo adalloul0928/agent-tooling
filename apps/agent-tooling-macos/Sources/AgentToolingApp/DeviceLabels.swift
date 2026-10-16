@@ -18,6 +18,49 @@ enum DeviceLabels {
     static func lastSeen(_ date: Date) -> String {
         "Last seen \(SnapshotTime.compact(date))"
     }
+
+    /// One app's row in another Mac's summary, as the row shows it and as
+    /// VoiceOver reads it.
+    struct AppLine: Equatable {
+        /// The line under the app's name.
+        let text: String
+        /// The whole row in words. The row's glyph is the only other thing
+        /// that tells installed from not found, so the label says which.
+        let accessibilityLabel: String
+    }
+
+    /// What one app on another Mac holds, by that Mac's own report. The visible
+    /// line and the VoiceOver label are joined from the same parts, so they
+    /// cannot drift apart, and the parts count in the library's own nouns:
+    /// "1 plugin", "2 connections".
+    static func appLine(_ app: PublishedDeviceStatus.AppSummary) -> AppLine {
+        let name = app.surface.displayName
+        guard app.installed else {
+            let absent = "not found on that Mac"
+            return AppLine(text: absent.capitalizedFirst, accessibilityLabel: "\(name), \(absent)")
+        }
+        let held = [
+            CountNoun.skill.phrase(app.skillCount),
+            CountNoun.plugin.phrase(app.pluginCount),
+            CountNoun.connection.phrase(app.mcpServerCount),
+        ]
+        return AppLine(
+            text: ([app.version ?? "Installed"] + held).joined(separator: " · "),
+            accessibilityLabel: ([name, "installed", app.version ?? "version unknown"] + held)
+                .joined(separator: ", "))
+    }
+
+    /// A library item's kind in the words the app uses for it everywhere,
+    /// matching the tile its row draws (`ToolingKind`).
+    static func kindName(_ kind: ArtifactKind) -> String {
+        switch kind {
+        case .skill: CountNoun.skill.singular
+        case .mcpServer: CountNoun.connection.singular
+        case .nativePlugin, .package: CountNoun.plugin.singular
+        case .preset: "preset"
+        case .logicalProject: "project"
+        }
+    }
 }
 
 extension DeviceRecord {
