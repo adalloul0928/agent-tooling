@@ -339,7 +339,7 @@ struct WorkspaceAssignmentSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .opacity(selectable ? 1 : 0.55)
+        .opacity(selectable ? 1 : Opacity.unavailable)
         .help(status.help ?? "")
         .accessibilityLabel("\(client.rawValue), \(status.text)")
         .accessibilityAddTraits(selectedClients.contains(client) ? [.isSelected] : [])
@@ -447,8 +447,8 @@ struct WorkspaceAssignmentSheet: View {
             }
             .padding(Space.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AgentTheme.warning.opacity(0.10), in: RoundedRectangle.card)
-            .overlay { RoundedRectangle.card.strokeBorder(AgentTheme.warning.opacity(0.32), lineWidth: Hairline.width) }
+            .background(AgentTheme.warning.opacity(Opacity.bannerWash), in: RoundedRectangle.card)
+            .overlay { RoundedRectangle.card.strokeBorder(AgentTheme.warning.opacity(Opacity.bannerStroke), lineWidth: Hairline.width) }
 
             if let install, let plan = install.reviewPlan {
                 let running = install.runnableReviewItems

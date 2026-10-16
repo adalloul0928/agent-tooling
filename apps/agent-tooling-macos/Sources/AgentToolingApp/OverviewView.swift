@@ -92,10 +92,10 @@ struct OverviewView: View {
                             HStack(alignment: .top, spacing: Space.xl) {
                                 reviewColumn(attention: attention, updates: updates)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                                    .frame(minWidth: 420)
+                                    .frame(minWidth: Size.fieldWide)
                                 statusColumn
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                                    .frame(minWidth: 420)
+                                    .frame(minWidth: Size.fieldWide)
                             }
                             VStack(spacing: Space.xl) {
                                 reviewColumn(attention: attention, updates: updates)
@@ -378,7 +378,7 @@ struct OverviewView: View {
                         .padding(.horizontal, Space.xl)
                         .padding(.vertical, Space.md)
                         if receipt.id != recentReceipts.last?.id {
-                            Hairline(indent: Hairline.afterLeading(Size.glyph + 2))
+                            Hairline(indent: Hairline.afterLeading(Size.glyph + Space.xxs))
                         }
                     }
                 }
@@ -417,7 +417,7 @@ struct OverviewView: View {
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
-                    if incoming.hasWork { Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2)) }
+                    if incoming.hasWork { Hairline(indent: Hairline.afterLeading(Size.glyphLarge + Space.xxs)) }
                 }
                 ForEach(incoming.waiting) { arrival in
                     HStack(spacing: Space.lg) {
@@ -433,7 +433,7 @@ struct OverviewView: View {
                     }
                     .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
                     if arrival.id != incoming.waiting.last?.id || !incoming.heldForReview.isEmpty {
-                        Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2))
+                        Hairline(indent: Hairline.afterLeading(Size.glyphLarge + Space.xxs))
                     }
                 }
                 ForEach(incoming.heldForReview) { arrival in
@@ -447,7 +447,9 @@ struct OverviewView: View {
                         Button("Review") { reviewChanges() }.buttonStyle(.glass).controlSize(.small)
                     }
                     .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
-                    if arrival.id != incoming.heldForReview.last?.id { Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2)) }
+                    if arrival.id != incoming.heldForReview.last?.id {
+                        Hairline(indent: Hairline.afterLeading(Size.glyphLarge + Space.xxs))
+                    }
                 }
                 if let message = incoming.errorMessage {
                     Hairline()
@@ -509,7 +511,7 @@ struct OverviewView: View {
                         .padding(.horizontal, Space.xl)
                         .padding(.vertical, Space.lg)
                         if item.id != attentionItems.last?.id || !updateItems.isEmpty {
-                            Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2))
+                            Hairline(indent: Hairline.afterLeading(Size.glyphLarge + Space.xxs))
                         }
                     }
                     ForEach(updateItems) { item in
@@ -542,7 +544,7 @@ struct OverviewView: View {
                         .padding(.horizontal, Space.xl)
                         .padding(.vertical, Space.lg)
                         if item.id != updateItems.last?.id {
-                            Hairline(indent: Hairline.afterLeading(Size.glyphLarge + 2))
+                            Hairline(indent: Hairline.afterLeading(Size.glyphLarge + Space.xxs))
                         }
                     }
                 }
@@ -753,7 +755,7 @@ struct OverviewView: View {
                         .fill(statusDotColor(verdict.state))
                         .frame(width: Size.dot, height: Size.dot)
                         .overlay { Circle().strokeBorder(AgentTheme.controlBackground, lineWidth: Hairline.ring) }
-                        .offset(x: 3, y: 3)
+                        .offset(x: Size.badgeOverhang, y: Size.badgeOverhang)
                 }
                 Text(client.rawValue)
                     .font(AgentFont.captionMedium)
@@ -955,7 +957,7 @@ private struct BentoCard<Content: View>: View {
                     .foregroundStyle(.secondary)
                 Text(title.uppercased())
                     .font(AgentFont.captionSemibold)
-                    .kerning(0.7)
+                    .kerning(AgentFont.capsKerning)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: Space.md)
                 if let action {

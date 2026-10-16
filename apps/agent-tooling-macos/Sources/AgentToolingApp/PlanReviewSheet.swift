@@ -485,10 +485,10 @@ private struct PlanFindingPanel<Content: View>: View {
         }
         .padding(Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.07), in: RoundedRectangle.control)
+        .background(tint.opacity(Opacity.noticeWash), in: RoundedRectangle.control)
         .overlay {
             RoundedRectangle.control
-                .strokeBorder(tint.opacity(0.28), lineWidth: Hairline.width)
+                .strokeBorder(tint.opacity(Opacity.noticeStroke), lineWidth: Hairline.width)
         }
         .padding(.top, Space.xxs)
     }

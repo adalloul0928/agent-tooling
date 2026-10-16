@@ -120,7 +120,7 @@ struct SyncCenterView: View {
                             Spacer(minLength: Space.lg)
                         }
                         .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
-                        .background(AgentTheme.controlBackground.opacity(0.6), in: RoundedRectangle.card)
+                        .background(AgentTheme.controlBackground.opacity(Opacity.insetGround), in: RoundedRectangle.card)
                         .accessibilityLabel(added)
                     }
 
@@ -220,7 +220,7 @@ struct SyncCenterView: View {
                     actionTitle: "Choose apps…",
                     action: { showingClientSelection = true }
                 )
-                .frame(height: 180)
+                .frame(height: Size.emptyStatePanelHeight)
             } else {
                 HStack(alignment: .top, spacing: Space.lg) {
                     ForEach(enabledClients) { app in
@@ -805,7 +805,7 @@ struct WorkspaceLinkDestinationSheet: View {
                 .font(AgentFont.body).foregroundStyle(.secondary)
                 Picker("App", selection: $client) {
                     ForEach(clients) { value in Text(value.rawValue).tag(value) }
-                }.frame(maxWidth: 280)
+                }.frame(maxWidth: Size.fieldShort)
                 HStack(spacing: Space.lg) {
                     Button("Choose folder…") { choose() }
                     Text(folder?.path ?? "No folder chosen").foregroundStyle(.secondary).lineLimit(2)

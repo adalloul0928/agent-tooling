@@ -74,7 +74,7 @@ struct HistorySection: View {
                             .foregroundStyle(selected ? AgentTheme.onSelection : Color.primary)
                         Text(summary(point))
                             .font(AgentFont.caption)
-                            .foregroundStyle(selected ? AgentTheme.onSelection.opacity(0.78) : Color.secondary)
+                            .foregroundStyle(selected ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection) : Color.secondary)
                     }
                 }
                 .padding(.vertical, Space.sm)

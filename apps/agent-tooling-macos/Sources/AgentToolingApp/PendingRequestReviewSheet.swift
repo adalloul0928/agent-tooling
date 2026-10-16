@@ -26,7 +26,7 @@ struct PendingRequestReviewSheet: View {
                     .font(AgentFont.titleLarge)
                     .foregroundStyle(AgentTheme.selection)
                     .frame(width: Size.tileLarge, height: Size.tileLarge)
-                    .background(AgentTheme.selection.opacity(0.12), in: RoundedRectangle.control)
+                    .background(AgentTheme.selection.opacity(Opacity.tagWash), in: RoundedRectangle.control)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text(request.kind.displayName)
@@ -41,7 +41,7 @@ struct PendingRequestReviewSheet: View {
                     .foregroundStyle(AgentTheme.warning)
                     .padding(.horizontal, Space.lg)
                     .padding(.vertical, Space.xs)
-                    .background(AgentTheme.warning.opacity(0.11), in: Capsule())
+                    .background(AgentTheme.warning.opacity(Opacity.tagWash), in: Capsule())
             }
             .padding(Space.xxxl)
         } content: {
