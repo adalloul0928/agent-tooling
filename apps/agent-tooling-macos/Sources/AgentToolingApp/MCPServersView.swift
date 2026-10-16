@@ -440,9 +440,11 @@ struct MCPServersView: View {
         navigation.consumeRequestedItem(requested)
     }
 
-    /// Answers a palette request that names no row of its own. Both "Add MCP
-    /// server" and "Paste to import" land here on the same sheet: there is no
-    /// separate manual-entry form to send one of them to instead.
+    /// Answers a palette request that names no row of its own. The palette's
+    /// "Add connection…" and "Paste to import…" both open the paste sheet,
+    /// ready to read a pasted definition, which is what the add entry's line
+    /// in the palette promises. The toolbar's Add connection… opens the same
+    /// sheet to write a connection down by hand instead.
     private func consumeRequestedScreenRequest() {
         guard let requested = navigation.requestedScreenRequest, requested.section == .mcpServers else {
             return
