@@ -56,7 +56,12 @@ behavior belongs in native adapter manifests.
   library `AgentToolingCore` and the executables `AgentToolingApp`,
   `AgentToolingMCP`, and `AgentToolingCLI`.
 - Build and test with `swift build --disable-sandbox` and
-  `swift test --disable-sandbox`.
+  `swift test --disable-sandbox`. CI also builds in release with
+  `-Xswiftc -warnings-as-errors`, so a new warning fails it.
+- Shared test helpers live in `Tests/AgentToolingTestSupport`; reuse or extend
+  them instead of copying a helper into another suite.
+- Keep a Core declaration internal unless another target uses it;
+  `periphery scan` in the package finds unused and needlessly public code.
 - Design tokens live in `Sources/AgentToolingApp/DesignTokens.swift`. A raw
   number in a view is a bug; draw from the scales instead.
 - Never use `fixedSize(horizontal: false, vertical: true)`; use `.wrapsLines()`

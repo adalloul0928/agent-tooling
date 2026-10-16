@@ -1,0 +1,3 @@
+retain_codable_properties: true
+retain_swift_ui_previews: true
+relative_results: true

@@ -587,6 +587,15 @@ file helper, real-git fixtures (`GitTestFixture`), and `ScriptedCommandRunner` /
 builds clean under CI's release gate
 (`swift build --configuration release -Xswiftc -warnings-as-errors`).
 
+[Periphery](https://github.com/peripheryapp/periphery) finds unused code, the
+way knip does for JavaScript. With `brew install periphery`, run
+`periphery scan` in this folder; `.periphery.yml` holds the options. Some of
+what it lists is kept on purpose: protocol witnesses and the parameters a
+protocol requires, cases of public error enums, memberwise initializers of
+saved models, and a few subsystems only tests reach today. Its redundant-public
+check should report nothing: a Core declaration is `public` only when another
+target uses it.
+
 The opt-in inventory benchmark uses an isolated synthetic workspace with 500
 skills, 100 plugins, and 100 MCP servers. Run it alone, with no concurrent builds
 or tests, and compare the same configuration and machine:
