@@ -117,6 +117,9 @@ struct CompactPathText: View {
 }
 /// Native table cells can be recycled while their enclosing view is changing.
 /// Keep their content independent of required observable environment objects.
+///
+/// An app without the item leaves an empty ring in its slot (`AbsentMark`), so
+/// a column of marks says who has it by shape, not by how faded a mark is.
 struct TableClientMarks: View {
     let clients: [ClientKind]
     let present: Set<ClientKind>
@@ -124,9 +127,11 @@ struct TableClientMarks: View {
     var body: some View {
         HStack(spacing: Space.sm) {
             ForEach(clients) { client in
-                ClientBrandIcon(client: client, size: Size.brandMark)
-                    .opacity(present.contains(client) ? 1 : 0.22)
-                    .grayscale(present.contains(client) ? 0 : 1)
+                if present.contains(client) {
+                    ClientBrandIcon(client: client, size: Size.brandMark).help(client.rawValue)
+                } else {
+                    AbsentMark(size: Size.brandMark).help("Not in \(client.rawValue)")
+                }
             }
         }
         .accessibilityElement(children: .ignore)

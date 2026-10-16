@@ -98,7 +98,8 @@ struct SymbolTile: View {
 
 // MARK: - Clients
 
-/// All three marks, always in the same order; absent clients are dimmed.
+/// A slot for every client, always in the same order: its brand mark where it
+/// has the item, an empty ring (`AbsentMark`) where it does not.
 struct ClientMarks: View {
     let present: Set<ClientKind>
     var size: CGFloat = Size.brandMark
@@ -111,9 +112,11 @@ struct ClientMarks: View {
     var body: some View {
         HStack(spacing: Space.sm) {
             ForEach(order) { client in
-                ClientBrandIcon(client: client, size: size)
-                    .opacity(present.contains(client) ? 1 : 0.22)
-                    .grayscale(present.contains(client) ? 0 : 1)
+                if present.contains(client) {
+                    ClientBrandIcon(client: client, size: size).help(client.rawValue)
+                } else {
+                    AbsentMark(size: size).help("Not in \(client.rawValue)")
+                }
             }
         }
         .accessibilityElement(children: .ignore)
