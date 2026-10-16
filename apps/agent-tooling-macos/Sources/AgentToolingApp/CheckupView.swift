@@ -159,10 +159,13 @@ struct CheckupView: View {
     }
 
     private func appsLine(_ checkup: SetupCheckup) -> String {
-        let skills = checkup.audit.counts.values.reduce(0) { $0 + $1.skills }
-        let plugins = checkup.audit.counts.values.reduce(0) { $0 + $1.plugins }
-        let servers = checkup.audit.counts.values.reduce(0) { $0 + $1.mcpServers }
-        return "\(skills) skills · \(plugins) plugins · \(servers) servers"
+        let counts = checkup.audit.counts.values
+        let total = SetupAuditReport.HeldCounts(
+            skills: counts.reduce(0) { $0 + $1.skills },
+            plugins: counts.reduce(0) { $0 + $1.plugins },
+            mcpServers: counts.reduce(0) { $0 + $1.mcpServers }
+        )
+        return CheckupTriage.inventoryLine(total)
     }
 
     /// What the assistant said, one sentence at a time.
@@ -241,7 +244,7 @@ struct CheckupView: View {
             if showingFine { bucketCard(.fine, fine) }
         }
         if let checkup = session.checkup, !checkup.dismissedFindingIDs.isEmpty || !checkup.dismissedRecommendationIDs.isEmpty {
-            Text("\(checkup.dismissedFindingIDs.count + checkup.dismissedRecommendationIDs.count) dismissed. They come back if they change.")
+            Text(CheckupTriage.dismissedNote(checkup.dismissedFindingIDs.count + checkup.dismissedRecommendationIDs.count))
                 .font(AgentFont.micro).foregroundStyle(.tertiary)
         }
     }
@@ -432,7 +435,7 @@ struct FixAllSheet: View {
             HStack(spacing: Space.lg) {
                 Image(systemName: "checkmark.circle").font(.system(size: Size.heroSymbol)).foregroundStyle(AgentTheme.selection)
                 VStack(alignment: .leading, spacing: Space.xxs) {
-                    Text("Fix \(plan.total) thing\(plan.total == 1 ? "" : "s")").font(AgentFont.title)
+                    Text("Fix \(CountNoun("thing").phrase(plan.total))").font(AgentFont.title)
                     Text("Each runs through Agent Tooling's own reviewed path. Nothing is deleted: folders move to the workspace trash and configuration files are copied there first.")
                         .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
                 }
@@ -518,8 +521,8 @@ extension SetupFinding.Kind {
         case .toolUnavailable: "Apps whose command could not be run"
         case .neverChecked: "Apps never checked"
         case .skillWithoutDefinition: "Skill folders with no definition"
-        case .mcpServerRepeatedAcrossClients: "Servers configured in several apps"
-        case .mcpServerDefinedSeveralTimes: "Servers an app gets from several places"
+        case .mcpServerRepeatedAcrossClients: "Connections configured in several apps"
+        case .mcpServerDefinedSeveralTimes: "Connections an app gets from several places"
         case .pluginSkillsOverlap: "Plugins that carry the same skills"
         case .accountSignIn: "Apps not signed in with their accounts"
         case .accountShellOverride: "Shell variables that change an app's sign-in"

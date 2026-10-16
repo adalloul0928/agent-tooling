@@ -48,8 +48,8 @@ struct OnboardingChoiceRow: View {
         let skills = row.includedChildren.count { $0.kind == .skill }
         let servers = row.includedChildren.count { $0.kind == .mcpServer }
         var parts: [String] = []
-        if skills > 0 { parts.append("\(skills) \(skills == 1 ? "skill" : "skills")") }
-        if servers > 0 { parts.append("\(servers) \(servers == 1 ? "connection" : "connections")") }
+        if skills > 0 { parts.append(CountNoun.skill.phrase(skills)) }
+        if servers > 0 { parts.append(CountNoun.connection.phrase(servers)) }
         return parts.isEmpty ? "Bundle" : "Includes " + parts.joined(separator: " · ")
     }
 

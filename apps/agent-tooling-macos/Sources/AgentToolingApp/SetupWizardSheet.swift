@@ -45,6 +45,15 @@ enum SetupWizardStep: Hashable, Identifiable {
         }
     }
 
+    /// What the done step says is left, agreeing with how much there is.
+    static func leftOver(_ count: Int) -> String {
+        switch count {
+        case 0: "Nothing is left to look at."
+        case 1: "1 item left. It stays on the Checkup tab."
+        default: "\(count) items left. They stay on the Checkup tab."
+        }
+    }
+
     /// The categories a checkup actually has something in, in walking order.
     static func categories(in checkup: SetupCheckup) -> [SetupRecommendation.Category] {
         var present: Set<SetupRecommendation.Category> = []
@@ -261,7 +270,7 @@ struct SetupWizardSheet: View {
                             ClientDisc(client: client, size: Size.disc)
                             Text(client.rawValue).font(AgentFont.bodySemibold)
                         }
-                        Text(count.map { "\($0.skills) skills · \($0.plugins) plugins · \($0.mcpServers) servers" } ?? "Not checked")
+                        Text(count.map(CheckupTriage.inventoryLine) ?? "Not checked")
                             .font(AgentFont.caption).foregroundStyle(.secondary)
                         Text(mine.isEmpty ? "Nothing to fix" : "\(mine.count) to look at").font(AgentFont.captionMedium)
                             .foregroundStyle(mine.isEmpty ? AgentTheme.ok : AgentTheme.warning)
@@ -345,7 +354,8 @@ struct SetupWizardSheet: View {
             } else {
                 if !fixable.isEmpty {
                     HStack {
-                        Text("\(fixable.total) thing\(fixable.total == 1 ? "" : "s") can be fixed here in one go.").font(AgentFont.body).foregroundStyle(.secondary)
+                        Text("\(CountNoun("thing").phrase(fixable.total)) can be fixed here in one go.")
+                            .font(AgentFont.body).foregroundStyle(.secondary)
                         Spacer()
                         Button("Fix all \(fixable.total)") {
                             Task { await session.applyAll(fixable.actions, settings: fixable.settings.map { ($0.client, $0.key, $0.value) }) }
@@ -399,7 +409,7 @@ struct SetupWizardSheet: View {
                 let open = checkup.openFindings.count + checkup.openRecommendations.count
                 HStack(spacing: Space.lg) {
                     StatusGlyph(state: open == 0 ? .healthy : .attention, size: Size.glyphLarge)
-                    Text(open == 0 ? "Nothing is left to look at." : "\(open) item\(open == 1 ? "" : "s") left. They stay on the Checkup tab.")
+                    Text(SetupWizardStep.leftOver(open))
                         .font(AgentFont.body)
                     Spacer()
                 }

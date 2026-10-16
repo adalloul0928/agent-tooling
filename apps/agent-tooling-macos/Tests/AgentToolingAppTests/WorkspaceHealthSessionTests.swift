@@ -148,6 +148,28 @@ struct WorkspaceHealthSessionTests {
         #expect(session.errorMessage == nil)
     }
 
+    /// A bulk sign-in that leaves one connection behind says so in the
+    /// singular, and counts what it tried as connections.
+    @Test func aBulkTallyAgreesWithWhatIsLeft() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let runner = ScriptedRunner(answers: [
+            "claude mcp list": CommandOutput(
+                status: 0,
+                standardOutput:
+                    "one: https://one.example/sse - ! Needs authentication\n"
+                    + "two: https://two.example/sse - ! Needs authentication",
+                standardError: "")
+        ])
+        let login = ScriptedLogin(outcomes: ["two": .failed(status: 1, transcript: "The browser was closed.")])
+        let session = await makeSession(fixture: fixture, runner: runner, login: login)
+        await session.check()
+
+        await session.reauthenticateAll()
+
+        #expect(session.errorMessage == "Signed in to 1 of 2 connections. 1 still needs attention.")
+    }
+
     /// A login that fails surfaces its redacted stderr on that row and leaves
     /// the bulk tally honest.
     @Test func aFailedLoginSurfacesItsRedactedError() async throws {

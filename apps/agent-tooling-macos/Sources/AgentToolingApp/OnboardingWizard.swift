@@ -141,8 +141,9 @@ struct OnboardingWizard: View {
                         if index < min(6, library.rows.count) - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
                     }
                     if library.rows.count > 6 {
+                        let more = library.rows.count - 6
                         Hairline(indent: Hairline.afterLeading(Size.tile))
-                        Text("and \(library.rows.count - 6) more entries")
+                        Text("and \(more) more \(CountNoun("entry", plural: "entries").word(for: more))")
                             .font(AgentFont.caption).foregroundStyle(.secondary)
                             .padding(.horizontal, Space.lg).padding(.vertical, Space.md)
                     }
@@ -174,7 +175,7 @@ struct OnboardingWizard: View {
     private func librarySummary(_ library: WorkspaceLibraryReadModel) -> String {
         let nested = library.nestedToolCount
         let total = library.toolCount
-        let holds = total == 1 ? "It holds 1 tool." : "It holds \(total) tools."
+        let holds = "It holds \(CountNoun("tool").phrase(total))."
         guard nested > 0 else { return holds }
         return nested == 1
             ? "\(holds) One of them comes inside a plugin."

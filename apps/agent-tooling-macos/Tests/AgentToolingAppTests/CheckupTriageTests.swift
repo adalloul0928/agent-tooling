@@ -129,4 +129,30 @@ struct CheckupTriageTests {
         let sentences = CheckupView.sentences("Most of your setup works. The loudest alarms turned out to be false! What is left is small?")
         #expect(sentences == ["Most of your setup works.", "The loudest alarms turned out to be false!", "What is left is small?"])
     }
+
+    /// Checkup and the setup wizard both say what an audit counted. They count
+    /// in the library's nouns, so a connection is not a "server" here and a
+    /// "connection" one tab over, and one of anything is singular.
+    @Test func anAuditsCountsReadInTheLibrarysNouns() {
+        #expect(CheckupTriage.inventoryLine(.init(skills: 17, plugins: 5, mcpServers: 8)) == "17 skills · 5 plugins · 8 connections")
+        #expect(CheckupTriage.inventoryLine(.init(skills: 1, plugins: 1, mcpServers: 1)) == "1 skill · 1 plugin · 1 connection")
+        #expect(CheckupTriage.inventoryLine(.init(skills: 0, plugins: 0, mcpServers: 0)) == "0 skills · 0 plugins · 0 connections")
+    }
+
+    /// A group of configured entries is named as connections; only a server
+    /// process that cannot start is still an MCP server.
+    @Test func aGroupOfConfiguredEntriesIsCalledConnections() {
+        #expect(CheckupTriage.groupTitle(.mcpServerRepeatedAcrossClients, count: 1) == "A connection configured in several apps")
+        #expect(CheckupTriage.groupTitle(.mcpServerRepeatedAcrossClients, count: 3) == "3 connections configured in several apps")
+        #expect(CheckupTriage.groupTitle(.mcpServerDefinedSeveralTimes, count: 2) == "2 connections the app gets from several places")
+        #expect(CheckupTriage.groupTitle(.unreachableMCPCommand, count: 2) == "2 MCP servers that cannot start")
+        for kind in [SetupFinding.Kind.mcpServerRepeatedAcrossClients, .mcpServerDefinedSeveralTimes, .pluginSkillsOverlap] {
+            #expect(!CheckupTriage.groupDetail(kind, client: .claude).contains("server"), "\(kind)")
+        }
+    }
+
+    @Test func theDismissedNoteAgreesWithItsCount() {
+        #expect(CheckupTriage.dismissedNote(1) == "1 dismissed. It comes back if it changes.")
+        #expect(CheckupTriage.dismissedNote(3) == "3 dismissed. They come back if they change.")
+    }
 }

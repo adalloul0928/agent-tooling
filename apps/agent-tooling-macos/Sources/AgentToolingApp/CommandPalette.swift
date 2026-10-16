@@ -242,8 +242,7 @@ enum CommandPaletteCatalog {
             CommandPaletteItem(
                 id: "preset.\(preset.id.rawValue.uuidString.lowercased())",
                 title: preset.name,
-                subtitle: preset.memberArtifactIDs.count == 1
-                    ? "Preset · 1 item" : "Preset · \(preset.memberArtifactIDs.count) items",
+                subtitle: "Preset · \(CountNoun("item").phrase(preset.memberArtifactIDs.count))",
                 contextLabel: "Presets",
                 kind: .collection,
                 symbol: AppSection.presets.symbol,
@@ -420,7 +419,7 @@ struct CommandPaletteView: View {
             Label("Open", systemImage: "return")
             Label("Close", systemImage: "escape")
             Spacer()
-            Text("\(results.count) result\(results.count == 1 ? "" : "s")")
+            Text(CountNoun("result").phrase(results.count))
                 .monospacedDigit()
         }
         .font(AgentFont.caption)

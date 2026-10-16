@@ -147,9 +147,11 @@ final class WorkspaceHealthSession {
         }
         await check()
         let failed = eligible.count - succeeded
-        errorMessage = failed == 0
+        errorMessage =
+            failed == 0
             ? nil
-            : "Signed in to \(succeeded) of \(eligible.count). \(failed) still need attention."
+            : "Signed in to \(succeeded) of \(CountNoun.connection.phrase(eligible.count)). "
+                + "\(failed) still \(failed == 1 ? "needs" : "need") attention."
     }
 
     /// Opens the claude.ai connectors page, for a hosted connector that cannot

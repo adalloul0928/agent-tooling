@@ -79,7 +79,7 @@ struct HealthView: View {
     private func bulkHelp(_ eligible: [ConnectionHealthEntry]) -> String {
         guard !eligible.isEmpty else { return "No connections can be signed in to from here." }
         let commands = eligible.compactMap { session.loginCommandText(for: $0) }
-        return "Signs in to \(eligible.count) connection\(eligible.count == 1 ? "" : "s"), one at a time:\n"
+        return "Signs in to \(CountNoun.connection.phrase(eligible.count)), one at a time:\n"
             + commands.joined(separator: "\n")
     }
 
@@ -365,7 +365,7 @@ private struct HealthBadge: View {
 }
 
 /// The confirmation a person reads before signing in to several connections at
-/// once: exactly which servers, and the exact command each will run.
+/// once: exactly which connections, and the exact command each will run.
 struct BulkReauthenticateConfirmation: View {
     let entries: [ConnectionHealthEntry]
     let commandText: (ConnectionHealthEntry) -> String?
@@ -374,11 +374,13 @@ struct BulkReauthenticateConfirmation: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
-            Text("Sign in to \(entries.count) connection\(entries.count == 1 ? "" : "s")")
+            Text("Sign in to \(CountNoun.connection.phrase(entries.count))")
                 .font(AgentFont.heading)
-            Text("Each sign-in prints a page to visit; Agent Tooling opens it in your browser, one server after another, and waits for the tool to confirm.")
-                .font(AgentFont.body)
-                .foregroundStyle(.secondary)
+            Text(
+                "Each sign-in prints a page to visit; Agent Tooling opens it in your browser, one connection after another, and waits for the tool to confirm."
+            )
+            .font(AgentFont.body)
+            .foregroundStyle(.secondary)
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.md) {
                     ForEach(entries) { entry in

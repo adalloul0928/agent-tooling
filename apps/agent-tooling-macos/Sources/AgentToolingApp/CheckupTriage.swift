@@ -230,6 +230,25 @@ enum CheckupTriage {
 
     // MARK: Words
 
+    /// What an audit counted in one app, or in all of them together, in the
+    /// library's own nouns and in the singular where a count is one:
+    /// "17 skills · 1 plugin · 8 connections".
+    static func inventoryLine(_ counts: SetupAuditReport.HeldCounts) -> String {
+        [
+            CountNoun.skill.phrase(counts.skills),
+            CountNoun.plugin.phrase(counts.plugins),
+            CountNoun.connection.phrase(counts.mcpServers),
+        ].joined(separator: " · ")
+    }
+
+    /// The note under the buckets about rows a person dismissed, agreeing
+    /// with how many there are.
+    static func dismissedNote(_ count: Int) -> String {
+        count == 1
+            ? "1 dismissed. It comes back if it changes."
+            : "\(count) dismissed. They come back if they change."
+    }
+
     static func groupTitle(_ kind: SetupFinding.Kind, count: Int) -> String {
         let one = count == 1
         return switch kind {
@@ -242,8 +261,10 @@ enum CheckupTriage {
         case .toolUnavailable: "The app's command could not be run"
         case .neverChecked: "Never checked"
         case .skillWithoutDefinition: one ? "An empty skill folder" : "\(count) empty skill folders"
-        case .mcpServerRepeatedAcrossClients: one ? "A server configured in several apps" : "\(count) servers configured in several apps"
-        case .mcpServerDefinedSeveralTimes: one ? "A server the app gets from several places" : "\(count) servers the app gets from several places"
+        case .mcpServerRepeatedAcrossClients:
+            one ? "A connection configured in several apps" : "\(count) connections configured in several apps"
+        case .mcpServerDefinedSeveralTimes:
+            one ? "A connection the app gets from several places" : "\(count) connections the app gets from several places"
         case .pluginSkillsOverlap: one ? "Two plugins that carry the same skills" : "\(count) pairs of plugins that carry the same skills"
         case .accountSignIn: one ? "An app not signed in with its account" : "\(count) apps not signed in with their accounts"
         case .accountShellOverride: one ? "A shell variable that changes an app's sign-in" : "\(count) shell variables that change an app's sign-in"
@@ -265,9 +286,16 @@ enum CheckupTriage {
         case .toolUnavailable: return "Its configuration was read from disk, but without the command the app cannot confirm its version or ask it what is installed."
         case .neverChecked: return "This Mac manages \(app) but has never read what it holds."
         case .skillWithoutDefinition: return "Folders in \(app)'s skills folder with no SKILL.md. \(app) does not load them. Removing moves them to Agent Tooling's trash."
-        case .mcpServerRepeatedAcrossClients: return "Each app has its own copy of these servers' configuration. Managed from the library, each would be one definition placed in every app."
-        case .mcpServerDefinedSeveralTimes: return "\(app) gets each of these servers from its own configuration and from a plugin. Unless the two are configured identically, it runs both and lists both sets of tools. If the plugin's copy does what you need, the configured one can go."
-        case .pluginSkillsOverlap: return "\(app) lists each plugin's copy of a shared skill, so these appear twice. Removing a plugin takes its other skills and servers with it, so that is yours to decide on the Plugins screen."
+        case .mcpServerRepeatedAcrossClients:
+            return "Each app has its own copy of these connections. "
+                + "Managed from the library, each would be one definition placed in every app."
+        case .mcpServerDefinedSeveralTimes:
+            return "\(app) gets each of these connections from its own configuration and from a plugin. "
+                + "Unless the two are configured identically, it runs both and lists both sets of tools. "
+                + "If the plugin's copy does what you need, the configured one can go."
+        case .pluginSkillsOverlap:
+            return "\(app) lists each plugin's copy of a shared skill, so these appear twice. "
+                + "Removing a plugin takes its other skills and connections with it, so that is yours to decide on the Plugins screen."
         case .accountSignIn: return "Only a subscription sign-in brings an account's connectors, skills, plugins and apps to the app. Sign in again from a terminal."
         case .accountShellOverride: return "Your login shell exports variables that change how the app signs in when it runs in a terminal. Agent Tooling reads only their names."
         case .accountChoicesNotFollowed: return "Every Mac shares these choices. Applying them changes each app's own settings file after backing it up."

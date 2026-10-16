@@ -137,7 +137,7 @@ struct SettingsGeneralView: View {
         guard runtimes.mcpRuntimeError == nil else { return "" }
         return runtimes.servers.isEmpty
             ? "No ToolHive workloads were reported by the last successful refresh."
-            : runtimes.servers.count == 1 ? "1 ToolHive workload" : "\(runtimes.servers.count) ToolHive workloads"
+            : CountNoun("ToolHive workload").phrase(runtimes.servers.count)
     }
 
     private var behaviorCard: some View {
@@ -196,10 +196,10 @@ struct SettingsGeneralView: View {
                 Hairline()
                 policyRow(
                     "Plugins", kind: .plugin, symbol: "puzzlepiece.extension",
-                    detail: "Compared with their catalog. Installing asks the app to update its own package.")
+                    detail: "Compared with their catalog. Installing asks the app to update its own copy.")
                 Hairline()
                 policyRow(
-                    "MCP servers", kind: .mcpServer, symbol: "point.3.connected.trianglepath.dotted",
+                    "Connections", kind: .mcpServer, symbol: "point.3.connected.trianglepath.dotted",
                     detail: "Compared with the catalog entry of the same name, when there is one.")
             }
         }

@@ -126,7 +126,8 @@ struct EffectiveSettingsView: View {
                     }
                     if !configuration.unrecognized.isEmpty {
                         Hairline()
-                        DisclosureGroup("\(configuration.unrecognized.count) settings this app version manages itself") {
+                        let unrecognized = CountNoun("setting").phrase(configuration.unrecognized.count)
+                        DisclosureGroup("\(unrecognized) this app version manages itself") {
                             VStack(alignment: .leading, spacing: Space.xs) {
                                 ForEach(configuration.unrecognized, id: \.key) { entry in
                                     Text("\(entry.key) · \(label(entry.layer))")
@@ -182,12 +183,8 @@ struct EffectiveSettingsView: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text(breakdown.displayName).fontWeight(.medium)
                         Spacer(minLength: Space.lg)
-                        Text(
-                            breakdown.totalEntryCount == 1
-                                ? "1 in total, from 1 file"
-                                : "\(breakdown.totalEntryCount) in total, from \(breakdown.contributingFileCount) \(breakdown.contributingFileCount == 1 ? "file" : "files")"
-                        )
-                        .foregroundStyle(.secondary)
+                        Text("\(breakdown.totalEntryCount) in total, from \(CountNoun("file").phrase(breakdown.contributingFileCount))")
+                            .foregroundStyle(.secondary)
                     }
                     if breakdown.key == "hooks" {
                         Label(
