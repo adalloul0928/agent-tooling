@@ -89,6 +89,23 @@ struct CommandPaletteCatalogTests {
         }
     }
 
+    /// A tab can be named differently from its screen's title, and the name a
+    /// person reads on the tab has to find the screen. Typing "Receipts", the
+    /// Activity tab's name, found nothing.
+    @Test("A screen is found by the name on its tab")
+    func screensAreFoundByTheirTabNames() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let items = CommandPaletteCatalog.items(for: fixture.workspace)
+
+        #expect(CommandPaletteMatcher.rank(items, query: "Receipts").first?.outcome == .navigate(.activity))
+        #expect(CommandPaletteMatcher.rank(items, query: "General").first?.outcome == .navigate(.settings))
+        for section in AppSection.allCases {
+            let item = try #require(items.first { $0.id == "section.\(section.id)" })
+            #expect(item.keywords.contains(section.tabTitle), "\(section) cannot be found by its tab name")
+        }
+    }
+
     @Test("Typing a name selects the object; typing an action reaches the action")
     func rankingReachesObjectsAndActions() async throws {
         let fixture = try await ShellRenderFixture()

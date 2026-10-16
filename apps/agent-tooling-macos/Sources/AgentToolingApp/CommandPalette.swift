@@ -171,6 +171,9 @@ enum CommandPaletteCatalog {
         ]
     }
 
+    /// Every screen, by its title. The name on its tab is a keyword, because a
+    /// tab can be called something its screen's title is not: Activity's
+    /// first tab reads "Receipts", and Settings' reads "General".
     private static func sections() -> [CommandPaletteItem] {
         AppSection.allCases.map { section in
             CommandPaletteItem(
@@ -180,7 +183,7 @@ enum CommandPaletteCatalog {
                 contextLabel: "Go to",
                 kind: nil,
                 symbol: section.symbol,
-                keywords: [section.rawValue, section.workspaceTitle ?? ""],
+                keywords: [section.rawValue, section.tabTitle, section.workspaceTitle ?? ""],
                 priority: 60,
                 outcome: .navigate(section))
         }
