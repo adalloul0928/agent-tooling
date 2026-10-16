@@ -40,6 +40,13 @@ struct DeploymentPlanReview: Sendable {
 
     var stepsWithoutCommand: Int { withoutCommand.count }
 
+    /// The listed steps that will do something when the plan is approved:
+    /// every one but those no command could be built for. What the button
+    /// counts and the verb it uses both come from this one list.
+    func runnableSteps(of items: [WorkspaceDeploymentItem]) -> [WorkspaceDeploymentItem] {
+        items.filter { reasonNothingRuns(for: $0) == nil }
+    }
+
     /// Content that could not be read completely blocks its step.
     ///
     /// A partial scan must never borrow the reassuring semantics of a clean

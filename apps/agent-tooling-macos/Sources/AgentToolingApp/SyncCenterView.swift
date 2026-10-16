@@ -191,8 +191,10 @@ struct SyncCenterView: View {
             if workspace.deployment.isBusy { return "Working out what would change…" }
             return lastChecked.map { "Checked \(SnapshotTime.compact($0))" } ?? "Checked"
         }
-        let waiting = scoped(plan.items).count
-        if waiting > 0 { return "\(waiting) change\(waiting == 1 ? "" : "s") ready to install" }
+        let waiting = scoped(plan.items)
+        if !waiting.isEmpty {
+            return PlanReviewLabels.readyLine(count: waiting.count, hasRemoval: waiting.contains(where: \.isRemoval))
+        }
         if !scopedRequests.isEmpty {
             return "\(scopedRequests.count) request\(scopedRequests.count == 1 ? "" : "s") waiting for review"
         }
@@ -229,7 +231,7 @@ struct SyncCenterView: View {
                             verdict: workspace.device.verdict(for: app),
                             version: version(for: app),
                             held: held(for: app),
-                            waiting: (workspace.deployment.plan?.items ?? []).count { $0.surface.client == app },
+                            waiting: (workspace.deployment.plan?.items ?? []).filter { $0.surface.client == app },
                             selected: client == app
                         ) {
                             if client == app { onShowAllClients() } else { navigation.openClient(app) }
@@ -429,7 +431,7 @@ struct SyncCenterView: View {
     /// What a prepared plan would put where, by app. Reading, not doing: the
     /// review is where each step is approved.
     private func changesCard(_ items: [WorkspaceDeploymentItem]) -> some View {
-        TitledCard("Ready to install", count: "\(items.count)") {
+        TitledCard(PlanReviewLabels.readyTitle(hasRemoval: items.contains(where: \.isRemoval)), count: "\(items.count)") {
             Button("Review…", action: onReviewChanges)
                 .inlineActionStyle()
                 .disabled(workspace.deployment.isBusy)
@@ -667,7 +669,8 @@ private struct AppTile: View {
     let verdict: ClientVerdict
     let version: String?
     let held: Held?
-    let waiting: Int
+    /// The prepared plan's steps for this app.
+    let waiting: [WorkspaceDeploymentItem]
     let selected: Bool
     let action: () -> Void
 
@@ -695,8 +698,8 @@ private struct AppTile: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     Spacer(minLength: Space.sm)
-                    if waiting > 0 {
-                        Text("\(waiting) to install")
+                    if !waiting.isEmpty {
+                        Text(PlanReviewLabels.waitingCount(waiting.count, hasRemoval: waiting.contains(where: \.isRemoval)))
                             .font(AgentFont.captionSemibold)
                             .foregroundStyle(AgentTheme.selection)
                     }

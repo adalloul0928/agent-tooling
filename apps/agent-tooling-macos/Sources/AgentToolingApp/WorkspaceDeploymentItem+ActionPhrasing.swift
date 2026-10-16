@@ -12,6 +12,13 @@ import AgentToolingCore
 /// Tooling installed" in both sheets: the planner only ever offers to remove a
 /// copy it can prove it put there.
 extension WorkspaceDeploymentItem {
+    /// Whether this step takes something out rather than putting something in.
+    /// A plan holding one is not an install, so everything that names the plan
+    /// says apply (`PlanReviewLabels`).
+    var isRemoval: Bool {
+        if case .removeContent = action { true } else { false }
+    }
+
     /// The phrase for the assignment (install) sheet, where `app` is the
     /// destination app's display name.
     func installActionText(app: String) -> String {

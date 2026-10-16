@@ -783,6 +783,9 @@ final class WorkspaceDeploymentSession {
         await apply(plan: plan)
     }
 
+    /// Every failure caught here is raised before anything is written, so each
+    /// one says nothing was changed: a plan can remove as well as install, and
+    /// "nothing was installed" would answer for only half of it.
     private func apply(plan: WorkspaceDeploymentPlan) async {
         guard canApply, let contentStore else { return }
         isBusy = true
@@ -841,17 +844,17 @@ final class WorkspaceDeploymentSession {
         } catch WorkspaceDeploymentOperationError.missingProjectRoot {
             errorMessage = "One of these needs its project folder on this Mac. Nothing was changed."
         } catch WorkspaceDeploymentOperationError.destinationOccupied {
-            errorMessage = "A folder you pointed a destination at already holds something Agent Tooling did not put there. It was left exactly as it is, and nothing was installed."
+            errorMessage = "A folder you pointed a destination at already holds something Agent Tooling did not put there. It was left exactly as it is, and nothing was changed."
         } catch WorkspaceDeploymentOperationError.missingContent {
-            errorMessage = "The library has no verified copy of one of these tools, so nothing was installed."
+            errorMessage = "The library has no verified copy of one of these tools, so nothing was changed."
         } catch WorkspaceDeploymentOperationError.stagingFailed, WorkspaceDeploymentOperationError.invalidStagingRoot {
-            errorMessage = "The approved copy could not be prepared inside Agent Tooling's own library, so nothing was installed."
+            errorMessage = "The approved copy could not be prepared inside Agent Tooling's own library, so nothing was changed."
         } catch WorkspaceDeploymentOperationError.unsupportedSurface, WorkspaceDeploymentOperationError.unsupportedScope {
-            errorMessage = "One of these asks for a place Agent Tooling cannot install into yet, so nothing was installed."
+            errorMessage = "One of these asks for a place Agent Tooling cannot install into yet, so nothing was changed."
         } catch {
             // Anything else is named, because a sentence with no cause sends a
             // person hunting through logs for what this screen already knew.
-            errorMessage = "These tools could not be installed. Your apps were left as they are. (\(error.localizedDescription))"
+            errorMessage = "These changes could not be made. Your apps were left as they are. (\(error.localizedDescription))"
         }
     }
 }

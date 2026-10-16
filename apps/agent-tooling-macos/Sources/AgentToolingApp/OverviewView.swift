@@ -312,15 +312,18 @@ struct OverviewView: View {
 
     /// The steps a prepared plan is holding. A plan that has been applied has
     /// already re-read itself, so what shows here is what is still outstanding.
+    /// A removal is one of those changes, so a plan holding one is not called
+    /// an install.
     private var readyMiniCard: some View {
-        BentoCard(symbol: "arrow.down.circle", title: "Ready to install", fillsHeight: true) {
+        let waiting = workspace.deployment.plan?.items ?? []
+        let title = PlanReviewLabels.readyTitle(hasRemoval: waiting.contains(where: \.isRemoval))
+        return BentoCard(symbol: "arrow.down.circle", title: title, fillsHeight: true) {
             VStack(alignment: .leading, spacing: Space.sm) {
-                Text(workspace.deployment.plan?.items.count ?? 0, format: .number)
+                Text(waiting.count, format: .number)
                     .font(AgentFont.statLarge)
-                    .foregroundStyle(
-                        (workspace.deployment.plan?.items.isEmpty ?? true) ? Color.secondary : AgentTheme.selection)
+                    .foregroundStyle(waiting.isEmpty ? Color.secondary : AgentTheme.selection)
                 HStack(spacing: Space.md) {
-                    Text((workspace.deployment.plan?.items.count ?? 0) == 1 ? "change waiting" : "changes waiting")
+                    Text("\(CountNoun.change.word(for: waiting.count)) waiting")
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: Space.xs)

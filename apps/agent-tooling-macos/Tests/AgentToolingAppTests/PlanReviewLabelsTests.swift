@@ -51,4 +51,43 @@ struct PlanReviewLabelsTests {
             PlanReviewLabels.title(listedCount: 0, runnableCount: 0, hasRemoval: false, hasExclusions: true)
                 == "Nothing can be installed right now")
     }
+
+    /// Home's card, the line under Apps' title and each app's tile count what
+    /// a plan is holding. They counted a removal as something "ready to
+    /// install"; they now use the plan's one verb.
+    @Test("What counts a waiting plan uses the plan's verb")
+    func waitingWordingFollowsTheVerb() {
+        #expect(PlanReviewLabels.readyTitle(hasRemoval: false) == "Ready to install")
+        #expect(PlanReviewLabels.readyTitle(hasRemoval: true) == "Ready to apply")
+        #expect(PlanReviewLabels.readyLine(count: 3, hasRemoval: false) == "3 changes ready to install")
+        #expect(PlanReviewLabels.readyLine(count: 1, hasRemoval: false) == "1 change ready to install")
+        #expect(PlanReviewLabels.readyLine(count: 2, hasRemoval: true) == "2 changes ready to apply")
+        #expect(PlanReviewLabels.waitingCount(2, hasRemoval: false) == "2 to install")
+        #expect(PlanReviewLabels.waitingCount(1, hasRemoval: true) == "1 to apply")
+    }
+
+    @Test("A plan that stops or runs says what kind of plan it is")
+    func failureAndProgressFollowTheVerb() {
+        #expect(PlanReviewLabels.nothingDoneTitle(hasRemoval: false) == "Nothing was installed")
+        #expect(PlanReviewLabels.nothingDoneTitle(hasRemoval: true) == "Nothing was changed")
+        #expect(PlanReviewLabels.runningLabel(hasRemoval: false) == "Installing")
+        #expect(PlanReviewLabels.runningLabel(hasRemoval: true) == "Applying changes")
+    }
+
+    @Test("No wording for a plan that removes calls it an install")
+    func removalIsNeverAnInstall() {
+        let wording = [
+            PlanReviewLabels.verb(hasRemoval: true),
+            PlanReviewLabels.actionLabel(listedCount: 2, runnableCount: 2, hasRemoval: true),
+            PlanReviewLabels.title(listedCount: 2, runnableCount: 2, hasRemoval: true, hasExclusions: true),
+            PlanReviewLabels.nothingDoneTitle(hasRemoval: true),
+            PlanReviewLabels.runningLabel(hasRemoval: true),
+            PlanReviewLabels.readyTitle(hasRemoval: true),
+            PlanReviewLabels.readyLine(count: 2, hasRemoval: true),
+            PlanReviewLabels.waitingCount(2, hasRemoval: true),
+        ]
+        for text in wording {
+            #expect(!text.localizedCaseInsensitiveContains("install"), "\(text) calls a removal an install")
+        }
+    }
 }

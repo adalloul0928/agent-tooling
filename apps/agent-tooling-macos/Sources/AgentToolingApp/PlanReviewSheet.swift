@@ -51,7 +51,7 @@ struct PlanReviewSheet: View {
                 }
 
                 if let message = workspace.deployment.errorMessage {
-                    AttentionBanner(title: "Nothing was installed", message: message)
+                    AttentionBanner(title: PlanReviewLabels.nothingDoneTitle(hasRemoval: planHasRemoval), message: message)
                 }
 
                 switch reviewState {
@@ -155,7 +155,7 @@ struct PlanReviewSheet: View {
                     if isRunning {
                         ProgressView()
                             .controlSize(.small)
-                            .accessibilityLabel("Installing")
+                            .accessibilityLabel(PlanReviewLabels.runningLabel(hasRemoval: planHasRemoval))
                     } else {
                         Text(installLabel)
                     }
@@ -263,11 +263,14 @@ struct PlanReviewSheet: View {
             && !reviewed.hasBlockedItems
     }
 
-    /// Steps that will do something when Install is pressed. Until the review
-    /// has looked, every listed step is taken at its word.
-    private var runnableCount: Int {
-        plan.items.count - (review?.stepsWithoutCommand ?? 0)
+    /// Steps that will do something when the button is pressed. Until the
+    /// review has looked, every listed step is taken at its word; once it has,
+    /// a step it could build no command for is left out.
+    private var runnableSteps: [WorkspaceDeploymentItem] {
+        review?.runnableSteps(of: plan.items) ?? plan.items
     }
+
+    private var runnableCount: Int { runnableSteps.count }
 
     private var installLabel: String {
         PlanReviewLabels.actionLabel(
@@ -276,10 +279,11 @@ struct PlanReviewSheet: View {
             hasRemoval: planHasRemoval)
     }
 
-    /// True when any step in the plan removes content. A plan made only of
-    /// removals should not call itself an install, so the verb switches.
+    /// True when a step that will run removes content. The wording follows
+    /// what pressing the button does, so a plan that removes anything is never
+    /// called an install, and a step that will not run does not decide it.
     private var planHasRemoval: Bool {
-        plan.items.contains { if case .removeContent = $0.action { true } else { false } }
+        runnableSteps.contains(where: \.isRemoval)
     }
 
     private var review: DeploymentPlanReview? {
