@@ -524,8 +524,8 @@ else. A raw number in a view is treated the way a raw hex colour would be.
 
 - `AgentFont` — the type scale: `pageTitle` 20, `titleLarge` 17, `title` 15,
   `body` 13, `caption` 11, `micro` 10, plus `heading` for card titles, `mono`
-  for paths and commands, `stat` for a headline number, and `capsKerning` for
-  an all-caps label.
+  for paths and commands (`monoMicro` for a tool's raw output), `stat` for a
+  headline number, and `capsKerning` for an all-caps label.
 - `Space` — a 4-point grid (`xxs` 2 … `xxxl` 24, `huge` 32) for padding,
   stack spacing, and insets, with `nudge` 1 for lining a glyph up with the
   first line of text beside it.

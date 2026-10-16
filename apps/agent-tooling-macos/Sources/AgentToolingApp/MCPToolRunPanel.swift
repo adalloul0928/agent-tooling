@@ -206,11 +206,11 @@ private struct MCPToolOutcomeView: View {
             .padding(.vertical, Space.lg)
             if !outcome.text.isEmpty {
                 Hairline()
-                MCPResultText(text: outcome.text, font: .system(.caption, design: .monospaced), tint: .primary)
+                MCPResultText(text: outcome.text, font: AgentFont.monoMicro, tint: .primary)
             }
             if let structured = outcome.structuredText {
                 Hairline()
-                MCPResultText(text: structured, font: .system(.caption2, design: .monospaced), tint: .secondary)
+                MCPResultText(text: structured, font: AgentFont.monoMicro, tint: .secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

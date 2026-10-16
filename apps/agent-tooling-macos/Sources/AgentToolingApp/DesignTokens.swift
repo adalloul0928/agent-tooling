@@ -82,6 +82,9 @@ enum AgentFont {
     static let mono = Font.system(size: captionSize, design: .monospaced)
     /// Code the person is reading or editing, at body size.
     static let monoBody = Font.system(size: bodySize, design: .monospaced)
+    /// A tool's raw output in the test console, at micro size, so a long
+    /// answer stays compact under the controls that asked for it.
+    static let monoMicro = Font.system(size: microSize, design: .monospaced)
 
     /// One number that is the point of a card.
     static let stat = Font.system(size: statSize, weight: .semibold).monospacedDigit()
