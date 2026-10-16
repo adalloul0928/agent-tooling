@@ -245,4 +245,41 @@ struct WorkspaceSetupSessionTests {
         let kept = try FileManager.default.subpathsOfDirectory(atPath: trash).filter { $0.hasSuffix(".json") || $0.hasSuffix(".toml") }
         #expect(kept.count == 5, "\(kept)")
     }
+
+    /// `~/.claude.json` keeps every project's history, so it is the client
+    /// configuration most likely to grow past the read limit. Turning a server
+    /// off reads it bounded: one over the limit is refused by name and limit,
+    /// not read whole and taken for a file with no projects, and nothing is
+    /// written or copied to the trash.
+    @Test func turningAServerOffInAClaudeFileOverTheLimitSaysSoAndChangesNothing() async throws {
+        let fixture = try await ShellRenderFixture(setupServices: StubSetupServices())
+        defer { fixture.remove() }
+        let global = home(fixture).appending(path: ".claude.json")
+        let limit = BoundedFileAccess.maximumConfigurationBytes
+        let history = String(repeating: "x", count: limit)
+        try #"{"history":"\#(history)"}"#.write(to: global, atomically: true, encoding: .utf8)
+        let before = try Data(contentsOf: global)
+        let session = fixture.workspace.setup
+
+        await session.apply(.disableMCPServer(name: "slack", client: .claude))
+
+        #expect(session.errorMessage == ConfigurationFileTooLargeError(path: ".claude.json", maximumBytes: limit).errorDescription)
+        #expect(try Data(contentsOf: global) == before)
+        let trash = fixture.store.rootURL.appending(path: "trash").path(percentEncoded: false)
+        #expect((try? FileManager.default.subpathsOfDirectory(atPath: trash))?.isEmpty ?? true)
+    }
+
+    /// A `~/.claude.json` that is not JSON is not a Claude Code with no
+    /// projects yet. Nothing is turned off, and the message says why.
+    @Test func turningAServerOffInAClaudeFileThatIsNotJSONSaysSo() async throws {
+        let fixture = try await ShellRenderFixture(setupServices: StubSetupServices())
+        defer { fixture.remove() }
+        try #"{"projects": {"/Users/example/one": "#.write(
+            to: home(fixture).appending(path: ".claude.json"), atomically: true, encoding: .utf8)
+        let session = fixture.workspace.setup
+
+        await session.apply(.disableMCPServer(name: "slack", client: .claude))
+
+        #expect(session.errorMessage == ".claude.json could not be read as JSON, so no server was turned off.")
+    }
 }

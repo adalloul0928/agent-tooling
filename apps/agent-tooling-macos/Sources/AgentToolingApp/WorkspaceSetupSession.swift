@@ -491,9 +491,10 @@ final class WorkspaceSetupSession {
         case .kiro:
             edits = [.init(file: .kiroMCP, keyPath: ["mcpServers", name, "disabled"], value: .bool(true))]
         case .claude:
-            let global = ClientConfigurationFile.claudeGlobal.url(homeURL: homeRoot)
-            let root = (try? Data(contentsOf: global)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-            let projects = ((root["projects"] as? [String: Any]) ?? [:]).keys.sorted()
+            let home = homeRoot
+            let projects = try await Task.detached(priority: .userInitiated) {
+                try Self.claudeProjects(homeURL: home)
+            }.value
             guard !projects.isEmpty else {
                 throw SetupApplyError.unsupported("Claude Code turns servers off per project, and it has no projects recorded yet. Open a project in Claude Code and use /mcp there.")
             }
@@ -504,6 +505,22 @@ final class WorkspaceSetupSession {
         let note = client == .claude ? " in \(edits.count) project\(edits.count == 1 ? "" : "s")" : ""
         _ = try await runEdits(edits, title: "Turn \(name) off in \(client.rawValue)", client: client)
         return "Turned \(name) off in \(client.rawValue)\(note). Its configuration is kept."
+    }
+
+    /// The projects Claude Code records in `~/.claude.json`, the file it reads
+    /// each project's turned-off servers from. That file also keeps every
+    /// project's history, so it is the client configuration most likely to be
+    /// large: it is read bounded, off the main actor, and one over the limit
+    /// or one that is not JSON turns nothing off rather than reading as a file
+    /// with no projects.
+    nonisolated static func claudeProjects(homeURL: URL) throws -> [String] {
+        let file = ClientConfigurationFile.claudeGlobal
+        guard let text = try file.readText(homeURL: homeURL), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return [] }
+        guard let root = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] else {
+            throw SetupApplyError.unsupported("\(file.relativePath) could not be read as JSON, so no server was turned off.")
+        }
+        return ((root["projects"] as? [String: Any]) ?? [:]).keys.sorted()
     }
 
     private func runEdits(_ edits: [ClientConfigurationEdit], title: String, client: ClientKind) async throws -> String {
