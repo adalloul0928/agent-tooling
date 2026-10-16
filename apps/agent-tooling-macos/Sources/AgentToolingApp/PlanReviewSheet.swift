@@ -399,6 +399,12 @@ private struct PlanStepRow: View {
                 Text("\(clause) · \(item.surface.displayName)")
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
+                if let note = item.planActionNote {
+                    Text(note)
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                        .wrapsLines()
+                }
                 if let nothingRuns {
                     Text(nothingRuns)
                         .font(AgentFont.caption)

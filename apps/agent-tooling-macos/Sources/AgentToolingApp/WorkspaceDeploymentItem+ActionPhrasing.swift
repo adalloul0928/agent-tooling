@@ -46,10 +46,17 @@ extension WorkspaceDeploymentItem {
                 : "Update to your approved version \(place)"
         case .installNativePackage: "Ask its app to install it \(place)"
         case .configureManagedConnection: "Add the connection \(place)"
-        case .removeContent:
-            // The plan sheet keeps the reassurance that a hand-edited copy is
-            // left untouched; the install sheet has no room for it.
-            "Remove the copy Agent Tooling installed \(place). Anything you changed is left alone."
+        case .removeContent: "Remove the copy Agent Tooling installed \(place)"
         }
+    }
+
+    /// The sentence the plan review sheet sets on its own line under a step,
+    /// when the step needs one. A removal keeps the reassurance that a copy
+    /// someone edited is left untouched. It used to end the clause, so that
+    /// one step read as two sentences before the app's name; on its own line
+    /// the clause stays one clause, like every other step's. The install sheet
+    /// has no room for it.
+    var planActionNote: String? {
+        isRemoval ? "Anything you changed is left alone." : nil
     }
 }

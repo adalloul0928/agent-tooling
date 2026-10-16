@@ -69,7 +69,29 @@ struct WorkspaceDeploymentActionPhrasingTests {
                 == "Add the connection on this Mac")
         #expect(
             item(.removeContent(installed: digest)).planActionClause(place: account)
-                == "Remove the copy Agent Tooling installed on this Mac. Anything you changed is left alone.")
+                == "Remove the copy Agent Tooling installed on this Mac")
+    }
+
+    /// The sheet prints the app after each clause ("… on this Mac · Claude
+    /// Code"). A removal's clause ended in a second sentence, so it alone read
+    /// "… on this Mac. Anything you changed is left alone. · Claude Code".
+    @Test("Every plan clause is one clause, with no sentence before the app's name")
+    func everyClauseIsOneClause() {
+        for place in ["on this Mac", "in this project"] {
+            for action in everyAction {
+                let clause = item(action).planActionClause(place: place)
+                #expect(!clause.hasSuffix("."), "\(clause) ends a sentence before the app's name")
+                #expect(!clause.contains(". "), "\(clause) holds two sentences")
+            }
+        }
+    }
+
+    @Test("A removal keeps its reassurance as a note of its own; nothing else has one")
+    func onlyARemovalHasANote() {
+        #expect(item(.removeContent(installed: digest)).planActionNote == "Anything you changed is left alone.")
+        for action in everyAction where !item(action).isRemoval {
+            #expect(item(action).planActionNote == nil, "\(action) has a note")
+        }
     }
 
     /// Every action the planner can produce, once.

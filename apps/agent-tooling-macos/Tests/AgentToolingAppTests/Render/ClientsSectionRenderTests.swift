@@ -128,6 +128,21 @@ struct ClientsSectionRenderTests {
             PlanReviewSheet(
                 workspace: fixture.workspace, plan: ShellRenderFixture.deploymentPlan()))
     }
+
+    /// A removal step draws its reassurance on a line of its own under the
+    /// step's clause.
+    @Test func thePlanReviewSheetDrawsARemoval() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let removal = WorkspaceDeploymentItem(
+            artifactID: ShellRenderFixture.skill, displayName: "Standalone Skill",
+            physicalDestinationID: WorkspaceObjectID(), surface: .claudeCode, scope: .user,
+            logicalProjectID: nil, action: .removeContent(installed: .init(value: String(repeating: "a", count: 64))),
+            desiredEnabled: nil, reasons: [.manual])
+
+        try expectDrawn(
+            PlanReviewSheet(workspace: fixture.workspace, plan: .init(items: [removal], exclusions: [])))
+    }
     /// One app's page draws its review card empty, mid-run, and with a kept
     /// review in it.
     @Test func theClientPageDrawsItsReviewInEveryState() async throws {
