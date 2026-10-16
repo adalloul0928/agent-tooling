@@ -25,7 +25,7 @@
       "name": "create-skill-draft",
       "title": "Create Skill Draft",
       "subtitle": "Agent Tooling",
-      "description": "Create a Codex-authored skill draft for review in Agent Tooling.",
+      "description": "Create a skill draft with Codex or Claude Code for review in Agent Tooling.",
       "mode": "view"
     },
     {

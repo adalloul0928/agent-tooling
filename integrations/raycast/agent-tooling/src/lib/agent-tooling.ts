@@ -25,6 +25,7 @@ import {
 import { normalizeFilePreference } from "./paths";
 import { redactMessage } from "./redaction";
 import { AgentToolingRoute, routeURL } from "./routes";
+import { createSkillDraftArguments } from "./skill-request";
 
 export type { AgentToolingRoute } from "./routes";
 export { routeURL } from "./routes";
@@ -96,22 +97,7 @@ export async function checkAgentToolingSetup(): Promise<DoctorResponse> {
 export async function createSkillDraft(
   input: CreateSkillDraftInput,
 ): Promise<RequestReference> {
-  const args = [
-    "request",
-    "create-skill",
-    "--provider",
-    "codex",
-    "--scope",
-    input.scope,
-    "--targets",
-    input.targets.join(","),
-    "--instruction-stdin",
-    "--json",
-  ];
-  if (input.scope === "project" && input.projectPath) {
-    args.push("--project", input.projectPath);
-  }
-
+  const args = createSkillDraftArguments(input);
   const output = await runAgentTooling(args, {
     stdin: input.instruction,
     timeoutMs: 120_000,
