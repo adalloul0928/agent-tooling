@@ -52,9 +52,10 @@ struct WorkspaceLibraryProjectIndexTests {
     }
 
     private static func skill(_ name: String) -> ArtifactRecord {
-        .init(identity: .init(id: ArtifactID(), kind: .skill, displayName: name),
-              authority: .centralPersonal, declaredName: name.lowercased(),
-              contentDigest: .init(algorithm: .sha256TreeV1, value: String(repeating: "a", count: 64)))
+        .init(
+            identity: .init(id: ArtifactID(), kind: .skill, displayName: name),
+            authority: .centralPersonal, declaredName: name.lowercased(),
+            contentDigest: .init(algorithm: .sha256TreeV1, value: String(repeating: "a", count: 64)))
     }
 
     private static func assignment(
@@ -62,11 +63,13 @@ struct WorkspaceLibraryProjectIndexTests {
         project: ArtifactID?,
         surface: TargetSurface = .codexCLI
     ) -> AssignmentContribution {
-        .init(id: WorkspaceObjectID(), artifactID: artifact.identity.id,
-              destination: .init(surface: surface,
-                                 scope: project == nil ? .user : .project,
-                                 logicalProjectID: project),
-              reason: .manual, desiredPresence: true)
+        .init(
+            id: WorkspaceObjectID(), artifactID: artifact.identity.id,
+            destination: .init(
+                surface: surface,
+                scope: project == nil ? .user : .project,
+                logicalProjectID: project),
+            reason: .manual, desiredPresence: true)
     }
 
     private static func document(
@@ -76,16 +79,19 @@ struct WorkspaceLibraryProjectIndexTests {
     ) throws -> PortableWorkspaceDocument {
         // Every logical project also has its own artifact record.
         let projectArtifacts = projects.map {
-            ArtifactRecord(identity: .init(id: $0.id, kind: .logicalProject, displayName: $0.name),
-                           authority: .trackedOnly)
+            ArtifactRecord(
+                identity: .init(id: $0.id, kind: .logicalProject, displayName: $0.name),
+                authority: .trackedOnly)
         }
-        return try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: artifacts + projectArtifacts, logicalProjects: projects, assignments: assignments))
+        return try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: artifacts + projectArtifacts, logicalProjects: projects, assignments: assignments))
     }
 
     private static func snapshot(_ document: PortableWorkspaceDocument) -> WorkspaceApplicationSnapshot {
-        .init(document: document,
-              device: .init(workspaceID: document.workspaceID, deviceID: WorkspaceObjectID()))
+        .init(
+            document: document,
+            device: .init(workspaceID: document.workspaceID, deviceID: WorkspaceObjectID()))
     }
 }

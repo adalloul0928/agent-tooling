@@ -59,7 +59,17 @@ they fail to start if Doppler is not logged in.
 gh auth login
 doppler login
 doppler me                                  # identity only — never `doppler secrets`
+claude auth login                           # the claude.ai subscription; not --console
+claude auth status                          # expect "authMethod": "claude.ai"
 ```
+
+Sign Claude Code in with the claude.ai subscription, the same account as every
+other Mac. That sign-in is what brings the account's connectors, skills and
+plugins to Claude Code; an API key or a third-party provider replaces it. For
+the same reason, do not export `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+`CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK` or `CODEX_ACCESS_TOKEN`
+from the login shell: a terminal session would use it instead of the account.
+The macOS app's Checkup reports either case.
 
 ## Step 2 — clone, add the marketplace, install plugins
 
@@ -213,8 +223,13 @@ installed and working. Symlink it:
 
 ```bash
 ln -sf "/Applications/ChatGPT.app/Contents/Resources/codex" ~/.local/bin/codex
-codex --version                              # expect codex-cli 0.145.x
+codex --version                              # expect codex-cli 0.145.x or later
+codex login                                  # Sign in with ChatGPT, the same account as every Mac
+codex login status
 ```
+
+Signed in with ChatGPT, Codex gets the account's apps (`/apps` in the CLI, and
+the ChatGPT desktop app's Codex mode).
 
 Then add the marketplace and install the owned plugins, mirroring Step 2:
 
@@ -301,7 +316,8 @@ prints at the end of its run.
 
 | Item | Why |
 |---|---|
-| claude.ai connectors (Linear, Gmail, Drive, TickTick, Raindrop, …) | Account-side; enabled in the web UI. `claude mcp login <name>` can *authenticate* a connector but cannot *enable* one |
+| claude.ai connectors (Linear, Gmail, Drive, TickTick, Raindrop, …) | Account-side; enabled in the web UI. `claude mcp login <name>` can *authenticate* a connector but cannot *enable* one. The app's **Apps › Accounts** shows what reaches this Mac |
+| claude.ai account skills and plugins | Account-side; Claude Code 2.1.273+ downloads them at session start when signed in with claude.ai |
 | ChatGPT / Codex account apps | Account-side, and separate from local Codex MCPs |
 | OAuth grants | Require a human and a browser |
 | Scheduled tasks | Machine/account-local; Claude and Codex schedules must each be recreated and behaviorally verified |
@@ -309,10 +325,16 @@ prints at the end of its run.
 
 Note `disableClaudeAiConnectors: true` is set at user scope. That governs the
 **Claude Code CLI**, not every surface — the desktop/chat surface still exposes
-account connectors. Do not read it as "connectors are off everywhere."
+account connectors. Do not read it as "connectors are off everywhere." The
+app's "Account connectors in Claude Code" choice, under Apps › Accounts, writes
+this key on every Mac through a reviewed plan.
 
 ## Gotchas worth knowing before you hit them
 
+- **Every Mac needs an app build that reads workspace schema 6** before anyone
+  saves an account choice. The first saved choice raises the shared workspace
+  to schema 6, and an older build cannot open it. Update the app everywhere
+  first, then choose.
 - **Both installers default to the current directory, not the user.**
   `claude mcp add` needs `--scope user`; `skills add` needs `-g`. The committed
   recipes already do this, but a hand-run command without them registers the

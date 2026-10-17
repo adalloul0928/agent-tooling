@@ -100,7 +100,7 @@ public struct LinkSkillUpstreamCommand: Codable, Equatable, Sendable {
         guard bytes.count <= WorkspaceDocumentCoding.maximumDocumentBytes else {
             throw WorkspaceRevisionStoreError.recordTooLarge
         }
-        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: bytes).lowercaseHex
     }
 
     /// Writes the publisher source, the subscription and its lock, and moves the

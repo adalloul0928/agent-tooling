@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -53,23 +54,27 @@ struct WorkspaceProjectDeclarationTests {
     @Test func onlyACommitHashCountsAsALock() throws {
         // A version tag can be re-pointed and an opaque publisher revision makes
         // no promise this build can check. Neither restores the same bytes later.
-        for revision in [SourceRevision(kind: .semanticVersion, value: "1.2.0"),
-                         .init(kind: .opaquePublisherRevision, value: "release-7"),
-                         .init(kind: .gitCommitSHA1, value: "abc"),
-                         .init(kind: .gitCommitSHA1, value: String(repeating: "z", count: 40))] {
+        for revision in [
+            SourceRevision(kind: .semanticVersion, value: "1.2.0"),
+            .init(kind: .opaquePublisherRevision, value: "release-7"),
+            .init(kind: .gitCommitSHA1, value: "abc"),
+            .init(kind: .gitCommitSHA1, value: String(repeating: "z", count: 40)),
+        ] {
             #expect(throws: WorkspaceProjectDeclarationError.mutableRevision(name: "reviewer")) {
                 _ = try WorkspaceProjectLock(entries: [
-                    .init(name: "reviewer", kind: .skill, revision: revision,
-                          contentDigest: .init(value: String(repeating: "a", count: 64))),
+                    .init(
+                        name: "reviewer", kind: .skill, revision: revision,
+                        contentDigest: .init(value: String(repeating: "a", count: 64)))
                 ])
             }
         }
         // Both commit-hash algorithms are immutable and both are accepted.
         #expect(throws: Never.self) {
             _ = try WorkspaceProjectLock(entries: [
-                .init(name: "reviewer", kind: .skill,
-                      revision: .init(kind: .gitCommitSHA256, value: String(repeating: "a", count: 64)),
-                      contentDigest: .init(value: String(repeating: "b", count: 64))),
+                .init(
+                    name: "reviewer", kind: .skill,
+                    revision: .init(kind: .gitCommitSHA256, value: String(repeating: "a", count: 64)),
+                    contentDigest: .init(value: String(repeating: "b", count: 64)))
             ])
         }
     }
@@ -83,12 +88,14 @@ struct WorkspaceProjectDeclarationTests {
     }
 
     @Test func aCredentialInASourceAddressIsRefused() throws {
-        for url in ["https://token:secret@github.com/you/skills",
-                    "https://github.com/you/skills?access_token=abc",
-                    "http://github.com/you/skills"] {
+        for url in [
+            "https://token:secret@github.com/you/skills",
+            "https://github.com/you/skills?access_token=abc",
+            "http://github.com/you/skills",
+        ] {
             #expect(throws: WorkspaceProjectDeclarationError.invalidEntry(name: "reviewer")) {
                 _ = try WorkspaceProjectDeclaration(entries: [
-                    .init(name: "reviewer", kind: .skill, repositoryURL: url),
+                    .init(name: "reviewer", kind: .skill, repositoryURL: url)
                 ])
             }
         }
@@ -98,7 +105,7 @@ struct WorkspaceProjectDeclarationTests {
         for path in ["/Users/me/skills", "../escaped", "skills/../..", ""] {
             #expect(throws: WorkspaceProjectDeclarationError.invalidEntry(name: "reviewer")) {
                 _ = try WorkspaceProjectDeclaration(entries: [
-                    .init(name: "reviewer", kind: .skill, packageRelativePath: path),
+                    .init(name: "reviewer", kind: .skill, packageRelativePath: path)
                 ])
             }
         }
@@ -168,21 +175,24 @@ struct WorkspaceProjectDeclarationTests {
 
     private static func declaration(reversed: Bool = false) throws -> WorkspaceProjectDeclaration {
         let entries: [WorkspaceProjectDeclaration.Entry] = [
-            .init(name: "auditor", kind: .skill, repositoryURL: "https://github.com/you/skills",
-                  requestedRef: "main", packageRelativePath: "skills/auditor"),
-            .init(name: "reviewer", kind: .skill, repositoryURL: "https://github.com/you/skills",
-                  requestedRef: "main", packageRelativePath: "skills/reviewer"),
+            .init(
+                name: "auditor", kind: .skill, repositoryURL: "https://github.com/you/skills",
+                requestedRef: "main", packageRelativePath: "skills/auditor"),
+            .init(
+                name: "reviewer", kind: .skill, repositoryURL: "https://github.com/you/skills",
+                requestedRef: "main", packageRelativePath: "skills/reviewer"),
         ]
         return try .init(entries: reversed ? entries.reversed() : entries)
     }
 
     private static func lock() throws -> WorkspaceProjectLock {
         try .init(entries: [
-            .init(name: "auditor", kind: .skill, repositoryURL: "https://github.com/you/skills",
-                  requestedRef: "main",
-                  revision: .init(kind: .gitCommitSHA1, value: String(repeating: "a", count: 40)),
-                  contentDigest: .init(value: String(repeating: "b", count: 64)),
-                  packageRelativePath: "skills/auditor"),
+            .init(
+                name: "auditor", kind: .skill, repositoryURL: "https://github.com/you/skills",
+                requestedRef: "main",
+                revision: .init(kind: .gitCommitSHA1, value: String(repeating: "a", count: 40)),
+                contentDigest: .init(value: String(repeating: "b", count: 64)),
+                packageRelativePath: "skills/auditor")
         ])
     }
 
@@ -191,10 +201,7 @@ struct WorkspaceProjectDeclarationTests {
         let store: WorkspaceProjectDeclarationStore
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "project-declaration-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("project-declaration").url
             store = try WorkspaceProjectDeclarationStore(projectRoot: root)
         }
 

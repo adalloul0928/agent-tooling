@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -14,12 +15,16 @@ struct WorkspaceConflictResolutionTests {
         var remote = try Self.document(alpha: "B's name", beta: "Renamed on B")
         local.revision = .init(id: Self.localRevision, parentIDs: [base.revision.id], writerID: Self.writerID)
         remote.revision = .init(id: Self.remoteRevision, parentIDs: [base.revision.id], writerID: Self.writerID)
-        let conflicts = WorkspaceMergeEngine.merge(base: base, local: local, remote: remote,
-                                                   writerID: Self.writerID).conflicts
+        let conflicts = WorkspaceMergeEngine.merge(
+            base: base, local: local, remote: remote,
+            writerID: Self.writerID
+        ).conflicts
         #expect(conflicts.count == 1)
 
-        for (choice, expected) in [(WorkspaceConflictChoice.keepLocal, "A's name"),
-                                   (.takeRemote, "B's name")] {
+        for (choice, expected) in [
+            (WorkspaceConflictChoice.keepLocal, "A's name"),
+            (.takeRemote, "B's name"),
+        ] {
             let result = WorkspaceConflictResolver.resolve(
                 base: base, local: local, remote: remote, conflicts: conflicts,
                 resolutions: [.init(kind: .artifactField, artifactID: Self.alpha, choice: choice)],
@@ -39,8 +44,10 @@ struct WorkspaceConflictResolutionTests {
         var remote = try Self.document(alpha: "B's name", beta: "B's second")
         local.revision = .init(id: Self.localRevision, parentIDs: [base.revision.id], writerID: Self.writerID)
         remote.revision = .init(id: Self.remoteRevision, parentIDs: [base.revision.id], writerID: Self.writerID)
-        let conflicts = WorkspaceMergeEngine.merge(base: base, local: local, remote: remote,
-                                                   writerID: Self.writerID).conflicts
+        let conflicts = WorkspaceMergeEngine.merge(
+            base: base, local: local, remote: remote,
+            writerID: Self.writerID
+        ).conflicts
         #expect(conflicts.count == 2)
 
         let partial = WorkspaceConflictResolver.resolve(
@@ -61,8 +68,10 @@ struct WorkspaceConflictResolutionTests {
         remote.tombstones = [.init(artifactID: Self.alpha, deletedInRevisionID: Self.remoteRevision)]
         remote.revision = .init(id: Self.remoteRevision, parentIDs: [base.revision.id], writerID: Self.writerID)
         remote = try WorkspaceDocumentCoding.seal(remote)
-        let conflicts = WorkspaceMergeEngine.merge(base: base, local: local, remote: remote,
-                                                   writerID: Self.writerID).conflicts
+        let conflicts = WorkspaceMergeEngine.merge(
+            base: base, local: local, remote: remote,
+            writerID: Self.writerID
+        ).conflicts
         #expect(conflicts.map(\.kind) == [.deleteVersusEdit])
 
         let result = WorkspaceConflictResolver.resolve(
@@ -86,14 +95,19 @@ struct WorkspaceConflictResolutionTests {
         var remote = try Self.seal(artifacts: [first, second], assignments: [Self.assignment(Self.beta)])
         local.revision = .init(id: Self.localRevision, parentIDs: [base.revision.id], writerID: Self.writerID)
         remote.revision = .init(id: Self.remoteRevision, parentIDs: [base.revision.id], writerID: Self.writerID)
-        let conflicts = WorkspaceMergeEngine.merge(base: base, local: local, remote: remote,
-                                                   writerID: Self.writerID).conflicts
+        let conflicts = WorkspaceMergeEngine.merge(
+            base: base, local: local, remote: remote,
+            writerID: Self.writerID
+        ).conflicts
         let collision = try #require(conflicts.first { $0.kind == .destinationCollision })
 
         let result = WorkspaceConflictResolver.resolve(
             base: base, local: local, remote: remote, conflicts: conflicts,
-            resolutions: [.init(kind: collision.kind, artifactID: collision.artifactID,
-                                objectID: collision.objectID, choice: .keepLocal)],
+            resolutions: [
+                .init(
+                    kind: collision.kind, artifactID: collision.artifactID,
+                    objectID: collision.objectID, choice: .keepLocal)
+            ],
             writerID: Self.writerID)
 
         // Answering it changes nothing: two items still want one place, and
@@ -102,11 +116,11 @@ struct WorkspaceConflictResolutionTests {
         #expect(!result.isResolved)
     }
 
-    private static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
-    private static let beta = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
-    private static let writerID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000c3")!)
-    private static let localRevision = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-00000000001a")!)
-    private static let remoteRevision = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-00000000002b")!)
+    private static let alpha = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
+    private static let beta = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2"))
+    private static let writerID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000c3"))
+    private static let localRevision = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-00000000001a"))
+    private static let remoteRevision = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-00000000002b"))
 
     private static func name(_ document: PortableWorkspaceDocument, _ id: ArtifactID) -> String? {
         document.artifacts.first { $0.identity.id == id }?.identity.displayName
@@ -117,8 +131,11 @@ struct WorkspaceConflictResolutionTests {
     }
 
     private static func assignment(_ artifactID: ArtifactID) -> AssignmentContribution {
-        .init(id: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000"
-            + String(artifactID.rawValue.uuidString.suffix(2)) + "1")!),
+        .init(
+            id: WorkspaceObjectID(
+                fixtureUUID(
+                    "00000000-0000-0000-0000-000000000"
+                        + String(artifactID.rawValue.uuidString.suffix(2)) + "1")),
             artifactID: artifactID,
             destination: .init(surface: .codexCLI, scope: .user), reason: .manual)
     }
@@ -130,10 +147,12 @@ struct WorkspaceConflictResolutionTests {
     private static func seal(
         artifacts: [ArtifactRecord], assignments: [AssignmentContribution]
     ) throws -> PortableWorkspaceDocument {
-        try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e5")!),
-            revision: .init(id: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-00000000000b")!),
-                            writerID: writerID),
-            artifacts: artifacts, assignments: assignments))
+        try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000e5")),
+                revision: .init(
+                    id: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-00000000000b")),
+                    writerID: writerID),
+                artifacts: artifacts, assignments: assignments))
     }
 }

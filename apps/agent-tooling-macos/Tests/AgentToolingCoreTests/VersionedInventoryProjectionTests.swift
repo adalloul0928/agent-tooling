@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -44,16 +45,19 @@ struct VersionedInventoryProjectionTests {
         let inventory = try Self.inventory(
             artifacts: [Self.artifact(Self.alpha, "Alpha", kind: .skill, authority: .centralPersonal)],
             assignments: [
-                .init(artifactID: Self.alpha, destination: .init(surface: .codexCLI, scope: .user),
-                      reason: .manual),
+                .init(
+                    artifactID: Self.alpha, destination: .init(surface: .codexCLI, scope: .user),
+                    reason: .manual)
             ])
 
         let skill = try #require(inventory.skills.first)
         let state = try #require(skill.clients.first)
         #expect(state.client == .codex)
-        // The whole point: an ask is not a measurement.
+        // The whole point: an ask is not a measurement. Presence is unknown
+        // here — nil, never a false "not installed" — so a health check cannot
+        // read the placeholder as drift.
         #expect(state.state == .pending)
-        #expect(state.isInstalled == false)
+        #expect(state.isInstalled == nil)
         #expect(!state.reportsLocalPresence)
         #expect(state.detail.contains("Not checked against this Mac"))
     }
@@ -62,8 +66,9 @@ struct VersionedInventoryProjectionTests {
         let inventory = try Self.inventory(
             artifacts: [Self.artifact(Self.gamma, "A package", kind: .nativePlugin, authority: .trackedOnly)],
             assignments: [
-                .init(artifactID: Self.gamma, destination: .init(surface: .claudeCode, scope: .user),
-                      reason: .manual),
+                .init(
+                    artifactID: Self.gamma, destination: .init(surface: .claudeCode, scope: .user),
+                    reason: .manual)
             ])
 
         #expect(inventory.plugins.first?.installed == false)
@@ -75,12 +80,15 @@ struct VersionedInventoryProjectionTests {
         let inventory = try Self.inventory(
             artifacts: [Self.artifact(Self.alpha, "Alpha", kind: .skill, authority: .centralPersonal)],
             assignments: [
-                .init(artifactID: Self.alpha, destination: .init(surface: .codexCLI, scope: .user),
-                      reason: .manual),
-                .init(artifactID: Self.alpha,
-                      destination: .init(surface: .codexCLI, scope: .project,
-                                         logicalProjectID: Self.project),
-                      reason: .manual),
+                .init(
+                    artifactID: Self.alpha, destination: .init(surface: .codexCLI, scope: .user),
+                    reason: .manual),
+                .init(
+                    artifactID: Self.alpha,
+                    destination: .init(
+                        surface: .codexCLI, scope: .project,
+                        logicalProjectID: Self.project),
+                    reason: .manual),
             ],
             projects: [.init(id: Self.project, name: "Work")],
             projectArtifacts: true)
@@ -91,10 +99,12 @@ struct VersionedInventoryProjectionTests {
     }
 
     @Test func presetsAndProjectsAreNotThingsAnAgentCanInstall() throws {
-        let inventory = try Self.inventory(artifacts: [
-            .init(identity: .init(id: Self.alpha, kind: .preset, displayName: "Starter"),
-                  authority: .centralPersonal),
-        ], presets: [.init(id: Self.alpha, name: "Starter", revision: 1, memberArtifactIDs: [])])
+        let inventory = try Self.inventory(
+            artifacts: [
+                .init(
+                    identity: .init(id: Self.alpha, kind: .preset, displayName: "Starter"),
+                    authority: .centralPersonal)
+            ], presets: [.init(id: Self.alpha, name: "Starter", revision: 1, memberArtifactIDs: [])])
         _ = inventory
 
         #expect(inventory.skills.isEmpty)
@@ -102,10 +112,24 @@ struct VersionedInventoryProjectionTests {
         #expect(inventory.plugins.isEmpty)
     }
 
-    private static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
-    private static let beta = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
-    private static let gamma = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000c3")!)
-    private static let project = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000d4")!)
+    @Test func aLibrarySkillsFilesAndDescriptionAreUnknownUntilTheContentIsRead() throws {
+        let inventory = try Self.inventory(
+            artifacts: [Self.artifact(Self.alpha, "Alpha", kind: .skill, authority: .centralPersonal)])
+
+        let skill = try #require(inventory.skills.first)
+        // The projection reports requested intent, not read content: files and
+        // description are left empty (unknown), never a guessed value. The scan
+        // fills them from the captured tree; the placeholders here must not read
+        // as "no files" or "blank description" to a health check.
+        #expect(skill.files.isEmpty)
+        #expect(skill.summary.isEmpty)
+        #expect(skill.owned)
+    }
+
+    private static let alpha = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
+    private static let beta = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2"))
+    private static let gamma = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000c3"))
+    private static let project = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000d4"))
 
     private static func artifact(
         _ id: ArtifactID, _ name: String, kind: ArtifactKind, authority: ContentAuthority
@@ -124,15 +148,17 @@ struct VersionedInventoryProjectionTests {
         var artifacts = artifacts
         if projectArtifacts {
             artifacts += projects.map {
-                .init(identity: .init(id: $0.id, kind: .logicalProject, displayName: $0.name),
-                      authority: .centralPersonal)
+                .init(
+                    identity: .init(id: $0.id, kind: .logicalProject, displayName: $0.name),
+                    authority: .centralPersonal)
             }
         }
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e5")!),
-            revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: artifacts, logicalProjects: projects, assignments: assignments,
-            presets: presets, mcpDefinitions: definitions))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000e5")),
+                revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: artifacts, logicalProjects: projects, assignments: assignments,
+                presets: presets, mcpDefinitions: definitions))
         let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
         let model = try WorkspaceLibraryReadModel(
             snapshot: .init(document: document, device: device))

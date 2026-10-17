@@ -1,6 +1,6 @@
 import Foundation
 
-public enum NativeSkillDestinationError: Error, Equatable, Sendable {
+enum NativeSkillDestinationError: Error, Equatable, Sendable {
     case unsupportedScope
     case invalidHomeURL
     case missingProjectRoot
@@ -35,6 +35,7 @@ public enum NativeSkillDestination {
         case .claude: relativeDirectory = ".claude/skills"
         case .codex: relativeDirectory = ".agents/skills"
         case .gemini: relativeDirectory = ".gemini/skills"
+        case .kiro: relativeDirectory = ".kiro/skills"
         }
         return root.appending(path: relativeDirectory, directoryHint: .isDirectory)
     }
@@ -47,6 +48,12 @@ public enum NativeSkillDestination {
         projectRoot: URL?
     ) throws -> URL {
         try validateSkillID(skillID)
+        // Claude Code skips an authored skill at a reserved name, and writing
+        // one into `~/.claude/skills/synced` would land inside the folder it
+        // overwrites from the account.
+        if client == .claude, ClaudeAccountSync.isReservedSkillFolderName(skillID) {
+            throw NativeSkillDestinationError.invalidSkillID
+        }
         return try directory(client: client, homeURL: homeURL, scope: scope, projectRoot: projectRoot)
             .appending(path: skillID, directoryHint: .isDirectory)
     }
@@ -61,7 +68,8 @@ public enum NativeSkillDestination {
     /// the filesystem or reject an otherwise identical existing directory.
     static func isValidRoot(_ value: URL) -> Bool {
         guard value.isFileURL, value.host == nil || value.host == "" || value.host == "localhost",
-              value.query == nil, value.fragment == nil, value.user == nil, value.password == nil else { return false }
+            value.query == nil, value.fragment == nil, value.user == nil, value.password == nil
+        else { return false }
         let path = value.path(percentEncoded: false)
         let parts = path.split(separator: "/")
         return path.hasPrefix("/") && !path.contains("//") && !parts.contains(".") && !parts.contains("..")
@@ -70,9 +78,9 @@ public enum NativeSkillDestination {
 
     private static func validateSkillID(_ value: String) throws {
         guard !value.isEmpty,
-              value != ".", value != "..",
-              !value.contains("/"), !value.contains("\\"),
-              !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+            value != ".", value != "..",
+            !value.contains("/"), !value.contains("\\"),
+            !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
         else { throw NativeSkillDestinationError.invalidSkillID }
     }
 }

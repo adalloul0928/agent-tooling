@@ -42,7 +42,8 @@ public final class MarketplaceService {
         switch source.kind {
         case .localFolder, .gitRepository:
             return try inspectFolder(source)
-        case .agentPlugins, .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry:
+        case .agentPlugins, .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry,
+            .skillsShRegistry:
             // Vendor listings are intentionally represented as sources rather
             // than copied packages. Native CLIs remain the install authority.
             return []
@@ -66,6 +67,10 @@ public final class MarketplaceService {
             ToolingSource(
                 name: "MCP Registry", kind: .mcpRegistry, location: "https://registry.modelcontextprotocol.io",
                 trustSummary: "Server metadata only; credentials and target bindings are reviewed separately"),
+            ToolingSource(
+                name: "skills.sh", kind: .skillsShRegistry, location: "https://skills.sh",
+                trustSummary:
+                    "Community skill registry — answers Discover searches with skill listings and its own install counts"),
         ]
     }
 
@@ -94,9 +99,11 @@ public final class MarketplaceService {
                 guard !truncated || client == .codex else {
                     throw NativeCatalogError.incompleteResponse(client.rawValue)
                 }
-                let complete = !truncated && (client == .claude
-                    ? service.isCompleteClaudeCatalogJSON(result.standardOutput)
-                    : service.isCompleteCodexCatalogJSON(result.standardOutput))
+                let complete =
+                    !truncated
+                    && (client == .claude
+                        ? service.isCompleteClaudeCatalogJSON(result.standardOutput)
+                        : service.isCompleteCodexCatalogJSON(result.standardOutput))
                 var found =
                     client == .claude
                     ? service.packagesFromClaudeCatalogJSON(result.standardOutput)
@@ -115,8 +122,8 @@ public final class MarketplaceService {
                     else { throw NativeCatalogError.commandFailed(client.rawValue, "Installed plugin inventory unavailable") }
                     let marketplaceValues = entries.map { entry -> String? in
                         guard let id = entry["pluginId"] as? String,
-                              let name = id.split(separator: "@").last, id.contains("@"),
-                              !name.isEmpty, name.allSatisfy({ $0.isLetter || $0.isNumber || "-_.".contains($0) })
+                            let name = id.split(separator: "@").last, id.contains("@"),
+                            !name.isEmpty, name.allSatisfy({ $0.isLetter || $0.isNumber || "-_.".contains($0) })
                         else { return nil }
                         return String(name)
                     }
@@ -131,8 +138,9 @@ public final class MarketplaceService {
                             arguments: ["plugin", "list", "--marketplace", marketplace, "--available", "--json"],
                             currentDirectory: nil)
                         guard page.status == 0,
-                              !page.standardOutput.contains("[output truncated"),
-                              service.isCompleteCodexCatalogJSON(page.standardOutput) else {
+                            !page.standardOutput.contains("[output truncated"),
+                            service.isCompleteCodexCatalogJSON(page.standardOutput)
+                        else {
                             continue
                         }
                         found += service.packagesFromCodexCatalogJSON(page.standardOutput)
@@ -147,7 +155,8 @@ public final class MarketplaceService {
                 }
                 packages.append(contentsOf: found)
                 outcomes[client] = complete ? .complete : .incomplete
-                notes[client] = complete
+                notes[client] =
+                    complete
                     ? "\(found.count) plugins reported by \(client.rawValue)"
                     : "\(client.rawValue) catalog response was incomplete; cached entries were retained"
             } catch {
@@ -206,13 +215,16 @@ public final class MarketplaceService {
 
     private func isCompleteCodexCatalogJSON(_ text: String) -> Bool {
         guard let root = jsonDictionary(from: text),
-              root["error"] == nil, root["errors"] == nil,
-              root["installed"] != nil, root["available"] != nil else { return false }
+            root["error"] == nil, root["errors"] == nil,
+            root["installed"] != nil, root["available"] != nil
+        else { return false }
         var count = 0
         for key in ["installed", "available"] where root[key] != nil {
-            guard let entries = root[key] as? [[String: Any]], entries.allSatisfy({ entry in
-                safeCatalogIdentifier(string("pluginId", in: entry) ?? string("id", in: entry)) != nil
-            }) else { return false }
+            guard let entries = root[key] as? [[String: Any]],
+                entries.allSatisfy({ entry in
+                    safeCatalogIdentifier(string("pluginId", in: entry) ?? string("id", in: entry)) != nil
+                })
+            else { return false }
             count += entries.count
             guard count <= Limit.directoryEntries else { return false }
         }
@@ -264,7 +276,8 @@ public final class MarketplaceService {
         let entries: [[String: Any]]
         if let array = root as? [Any] {
             guard array.count <= Limit.directoryEntries,
-                  let typed = array as? [[String: Any]], typed.count == array.count else { return false }
+                let typed = array as? [[String: Any]], typed.count == array.count
+            else { return false }
             entries = typed
         } else if let dictionary = root as? [String: Any] {
             guard dictionary["error"] == nil, dictionary["errors"] == nil else { return false }
@@ -273,8 +286,9 @@ public final class MarketplaceService {
             var values: [[String: Any]] = []
             for key in knownKeys {
                 guard let raw = dictionary[key] as? [Any],
-                      let typed = raw as? [[String: Any]], typed.count == raw.count,
-                      values.count + typed.count <= Limit.directoryEntries else { return false }
+                    let typed = raw as? [[String: Any]], typed.count == raw.count,
+                    values.count + typed.count <= Limit.directoryEntries
+                else { return false }
                 values += typed
             }
             entries = values
@@ -283,9 +297,11 @@ public final class MarketplaceService {
         }
         guard pluginObjects(in: root).count == entries.count else { return false }
         return entries.allSatisfy { entry in
-            let isCandidate = entry["pluginName"] is String || entry["pluginId"] is String
-                || (entry["name"] is String && ["installed", "enabled", "version", "installPath", "scope", "description"]
-                    .contains { entry[$0] != nil })
+            let isCandidate =
+                entry["pluginName"] is String || entry["pluginId"] is String
+                || (entry["name"] is String
+                    && ["installed", "enabled", "version", "installPath", "scope", "description"]
+                        .contains { entry[$0] != nil })
             guard isCandidate else { return false }
             let name = safeCatalogIdentifier(
                 string("name", in: entry) ?? string("pluginName", in: entry) ?? string("pluginId", in: entry))
@@ -450,6 +466,13 @@ public final class MarketplaceService {
         // record and the tool list that actually exists, never an empty one.
         merged.lastUpdate = [current.lastUpdate, candidate.lastUpdate].compactMap { $0 }.max { $0.date < $1.date }
         merged.tools = preferred.tools ?? current.tools ?? candidate.tools
+        // The CLI and the HTTPS catalog describe the same Claude plugin from two
+        // angles: the CLI knows whether it is installed and how many installs it
+        // has, while the file supplies the category, homepage, and author the
+        // CLI leaves out. Neither is dropped — whichever source has each field
+        // keeps it, so a merged row carries both halves.
+        merged.installCount = preferred.installCount ?? current.installCount ?? candidate.installCount
+        merged.category = current.category ?? candidate.category
 
         var routesByID = Dictionary(uniqueKeysWithValues: current.nativeInstalls.map { ($0.id, $0) })
         for route in candidate.nativeInstalls {
@@ -517,7 +540,9 @@ public final class MarketplaceService {
         case .absent: portableManifestURL = nil
         case .regularFile(let url): portableManifestURL = url
         case .directory, .invalid:
-            throw MarketplaceError.invalidManifest(packageRoot.appending(path: "plugin.json").path(percentEncoded: false), "plugin.json must be a regular file inside the package.")
+            throw MarketplaceError.invalidManifest(
+                packageRoot.appending(path: "plugin.json").path(percentEncoded: false),
+                "plugin.json must be a regular file inside the package.")
         }
         let claudeManifestURL = try regularFile(packageRoot.appending(path: ".claude-plugin/plugin.json"), within: packageRoot)
         let codexManifestURL = try regularFile(packageRoot.appending(path: ".codex-plugin/plugin.json"), within: packageRoot)
@@ -604,9 +629,10 @@ public final class MarketplaceService {
         } else {
             packageLicense = try license(at: packageRoot)
         }
-        let portableMCPConflicts = portableMCP?.issues.map {
-            PackageConflict(id: "mcp:\($0.serverName)", summary: "\($0.serverName): \($0.message)")
-        } ?? []
+        let portableMCPConflicts =
+            portableMCP?.issues.map {
+                PackageConflict(id: "mcp:\($0.serverName)", summary: "\($0.serverName): \($0.message)")
+            } ?? []
         let manifestConflicts = (manifestInspection?.diagnostics ?? []).enumerated().map { index, diagnostic in
             PackageConflict(id: "manifest:\(index)", summary: manifestDiagnosticSummary(diagnostic))
         }
@@ -632,8 +658,8 @@ public final class MarketplaceService {
                 ? "Review invalid portable MCP entries before installing"
                 : !(manifestConflicts + componentConflicts).isEmpty
                     ? "Review manifest warnings before installing"
-                : executable
-                    ? "Review scripts, hooks, and permissions before installing" : "Review manifest and license before installing",
+                    : executable
+                        ? "Review scripts, hooks, and permissions before installing" : "Review manifest and license before installing",
             location: packageRoot.path(percentEncoded: false),
             conflicts: packageConflicts.isEmpty ? nil : packageConflicts,
             lastUpdate: lastUpdate
@@ -778,7 +804,9 @@ public final class MarketplaceService {
         guard case .directory(let skillsRoot) = location else {
             switch location {
             case .absent: return SkillInspection(directories: [], conflicts: [])
-            default: return SkillInspection(directories: [], conflicts: [PackageConflict(id: "skills:location", summary: "skills: invalid component location.")])
+            default:
+                return SkillInspection(
+                    directories: [], conflicts: [PackageConflict(id: "skills:location", summary: "skills: invalid component location.")])
             }
         }
         var result: [URL] = []
@@ -789,39 +817,53 @@ public final class MarketplaceService {
                     let entryLocation = fixedLocation(entry, within: root)
                     guard case .directory(let skillDirectory) = entryLocation else {
                         if case .invalid = entryLocation {
-                            conflicts.append(PackageConflict(id: "skill:\(entry.lastPathComponent)", summary: "\(entry.lastPathComponent): invalid skill location."))
+                            conflicts.append(
+                                PackageConflict(
+                                    id: "skill:\(entry.lastPathComponent)", summary: "\(entry.lastPathComponent): invalid skill location."))
                         }
                         continue
                     }
                     let skillFileLocation = fixedLocation(skillDirectory.appending(path: "SKILL.md"), within: root)
                     guard case .regularFile(let skillFile) = skillFileLocation else {
                         if case .absent = skillFileLocation { continue }
-                        conflicts.append(PackageConflict(id: "skill:\(skillDirectory.lastPathComponent)", summary: "\(skillDirectory.lastPathComponent): invalid SKILL.md location."))
+                        conflicts.append(
+                            PackageConflict(
+                                id: "skill:\(skillDirectory.lastPathComponent)",
+                                summary: "\(skillDirectory.lastPathComponent): invalid SKILL.md location."))
                         continue
                     }
                     guard try validSkill(at: skillFile, expectedName: skillDirectory.lastPathComponent) else {
-                        conflicts.append(PackageConflict(id: "skill:\(skillDirectory.lastPathComponent)", summary: "\(skillDirectory.lastPathComponent): invalid skill."))
+                        conflicts.append(
+                            PackageConflict(
+                                id: "skill:\(skillDirectory.lastPathComponent)",
+                                summary: "\(skillDirectory.lastPathComponent): invalid skill."))
                         continue
                     }
                     result.append(skillDirectory)
                 } catch {
-                    conflicts.append(PackageConflict(id: "skill:\(entry.lastPathComponent)", summary: "\(entry.lastPathComponent): invalid skill."))
+                    conflicts.append(
+                        PackageConflict(id: "skill:\(entry.lastPathComponent)", summary: "\(entry.lastPathComponent): invalid skill."))
                 }
             }
         } catch {
             conflicts.append(PackageConflict(id: "skills:scan", summary: "skills: unable to inspect component."))
         }
-        return SkillInspection(directories: result.sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }, conflicts: conflicts)
+        return SkillInspection(
+            directories: result.sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending },
+            conflicts: conflicts)
     }
 
     private func fixedLocation(_ url: URL, within root: URL) -> FixedLocation {
         let path = url.path(percentEncoded: false)
-        let exists = (try? fileManager.attributesOfItem(atPath: path)) != nil
+        let exists =
+            (try? fileManager.attributesOfItem(atPath: path)) != nil
             || (try? fileManager.destinationOfSymbolicLink(atPath: path)) != nil
         guard exists else { return .absent }
         let resolved = url.resolvingSymlinksInPath().standardizedFileURL
         guard contains(resolved, in: root) else { return .invalid("escapes") }
-        guard let values = try? resolved.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey]) else { return .invalid("unreadable") }
+        guard let values = try? resolved.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey]) else {
+            return .invalid("unreadable")
+        }
         if values.isRegularFile == true { return .regularFile(resolved) }
         if values.isDirectory == true { return .directory(resolved) }
         return .invalid("wrong kind")
@@ -928,9 +970,7 @@ public final class MarketplaceService {
     }
 
     private func contains(_ candidate: URL, in root: URL) -> Bool {
-        let rootPath = canonicalPath(root)
-        let candidatePath = canonicalPath(candidate)
-        return candidatePath == rootPath || candidatePath.hasPrefix(rootPath + "/")
+        PathContainment.containsResolved(candidate, in: root)
     }
 
     private func canonicalPath(_ url: URL) -> String {

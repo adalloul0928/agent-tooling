@@ -12,12 +12,15 @@ struct EffectiveConfigurationResolverTests {
         let result = EffectiveConfigurationResolver.resolve(
             adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0",
             layers: [
-                .init(kind: .managedPolicy, sourcePath: "/policy", isWritable: false,
-                      values: ["model": .string("policy-model")]),
-                .init(kind: .project, sourcePath: "/project", isWritable: true,
-                      values: ["model": .string("project-model")]),
-                .init(kind: .user, sourcePath: "/user", isWritable: true,
-                      values: ["model": .string("user-model")]),
+                .init(
+                    kind: .managedPolicy, sourcePath: "/policy", isWritable: false,
+                    values: ["model": .string("policy-model")]),
+                .init(
+                    kind: .project, sourcePath: "/project", isWritable: true,
+                    values: ["model": .string("project-model")]),
+                .init(
+                    kind: .user, sourcePath: "/user", isWritable: true,
+                    values: ["model": .string("user-model")]),
             ])
 
         let model = result.rows.first { $0.key == "model" }
@@ -35,10 +38,12 @@ struct EffectiveConfigurationResolverTests {
         let result = EffectiveConfigurationResolver.resolve(
             adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0",
             layers: [
-                .init(kind: .project, sourcePath: "/project", isWritable: true,
-                      values: ["model": .string("project-model")]),
-                .init(kind: .user, sourcePath: "/user", isWritable: true,
-                      values: ["model": .string("user-model")]),
+                .init(
+                    kind: .project, sourcePath: "/project", isWritable: true,
+                    values: ["model": .string("project-model")]),
+                .init(
+                    kind: .user, sourcePath: "/user", isWritable: true,
+                    values: ["model": .string("user-model")]),
             ])
 
         let model = result.rows.first { $0.key == "model" }
@@ -51,10 +56,12 @@ struct EffectiveConfigurationResolverTests {
         let result = EffectiveConfigurationResolver.resolve(
             adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0",
             layers: [
-                .init(kind: .project, sourcePath: "/project", isWritable: true,
-                      values: ["permissions.allow": .list([.string("Bash(git:*)")])]),
-                .init(kind: .user, sourcePath: "/user", isWritable: true,
-                      values: ["permissions.allow": .list([.string("Read"), .string("Grep")])]),
+                .init(
+                    kind: .project, sourcePath: "/project", isWritable: true,
+                    values: ["permissions.allow": .list([.string("Bash(git:*)")])]),
+                .init(
+                    kind: .user, sourcePath: "/user", isWritable: true,
+                    values: ["permissions.allow": .list([.string("Read"), .string("Grep")])]),
             ])
 
         let allowed = result.rows.first { $0.key == "permissions.allow" }
@@ -68,9 +75,10 @@ struct EffectiveConfigurationResolverTests {
         let result = EffectiveConfigurationResolver.resolve(
             adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0",
             layers: [
-                .init(kind: .user, sourcePath: "/user", isWritable: true,
-                      values: ["model": .string("user-model")],
-                      unrecognizedKeys: ["experimentalThing", "vendorExtension"]),
+                .init(
+                    kind: .user, sourcePath: "/user", isWritable: true,
+                    values: ["model": .string("user-model")],
+                    unrecognizedKeys: ["experimentalThing", "vendorExtension"])
             ])
 
         #expect(result.unrecognized.map(\.key) == ["experimentalThing", "vendorExtension"])
@@ -84,10 +92,12 @@ struct EffectiveConfigurationResolverTests {
             adapter: CodexConfigurationAdapter(installedClientVersion: "0.140.0"),
             installedClientVersion: "0.140.0",
             layers: [
-                .init(kind: .managedPolicy, sourcePath: "/policy", isWritable: false,
-                      values: ["model": .string("policy-model")]),
-                .init(kind: .user, sourcePath: "/config.toml", isWritable: true,
-                      values: ["model": .string("user-model")]),
+                .init(
+                    kind: .managedPolicy, sourcePath: "/policy", isWritable: false,
+                    values: ["model": .string("policy-model")]),
+                .init(
+                    kind: .user, sourcePath: "/config.toml", isWritable: true,
+                    values: ["model": .string("user-model")]),
             ])
 
         #expect(result.rows.first { $0.key == "model" }?.value == .string("user-model"))
@@ -108,17 +118,24 @@ struct EffectiveConfigurationResolverTests {
     @Test func unknownSessionOverridesAreStatedRatherThanAssumedAway() {
         let unknown = EffectiveConfigurationResolver.resolve(
             adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: nil,
-            layers: [.init(kind: .user, sourcePath: "/user", isWritable: true,
-                           values: ["model": .string("user-model")])])
+            layers: [
+                .init(
+                    kind: .user, sourcePath: "/user", isWritable: true,
+                    values: ["model": .string("user-model")])
+            ])
         #expect(unknown.sessionOverridesUnknown)
         #expect(unknown.summary == "Expected from local configuration; session overrides unknown.")
 
         let observed = EffectiveConfigurationResolver.resolve(
             adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0",
-            layers: [.init(kind: .session, sourcePath: nil, isWritable: false,
-                           values: ["model": .string("session-model")]),
-                     .init(kind: .user, sourcePath: "/user", isWritable: true,
-                           values: ["model": .string("user-model")])],
+            layers: [
+                .init(
+                    kind: .session, sourcePath: nil, isWritable: false,
+                    values: ["model": .string("session-model")]),
+                .init(
+                    kind: .user, sourcePath: "/user", isWritable: true,
+                    values: ["model": .string("user-model")]),
+            ],
             sessionOverridesUnknown: false)
         #expect(observed.rows.first { $0.key == "model" }?.value == .string("session-model"))
         #expect(observed.rows.first { $0.key == "model" }?.writableLayer == nil)

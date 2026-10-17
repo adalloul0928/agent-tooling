@@ -23,7 +23,9 @@ public struct WorkspaceRevision: Codable, Hashable, Sendable {
 }
 
 public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
-    public static let currentSchemaVersion: UInt = 5
+    public static let currentSchemaVersion: UInt = 6
+    /// The first schema that carries `accountPreferences`.
+    public static let accountPreferencesSchemaVersion: UInt = 6
 
     public var schemaVersion: UInt
     public var minimumReaderVersion: UInt
@@ -41,6 +43,15 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
     public var configurationState: WorkspaceConfigurationState?
     /// Absent from schema 1/2; an explicit array in schema 3.
     public var mcpDefinitions: [PortableMCPDefinitionRecord]?
+    /// The Macs sharing this workspace. Absent in documents written before any
+    /// Mac registered, which reads as an empty registry: every device then
+    /// takes shared assignments.
+    public var devices: [DeviceRecord]?
+    /// The person's choices about what their claude.ai and ChatGPT accounts
+    /// put in front of Claude Code and Codex, applied the same way on every
+    /// Mac. Absent before schema 6; an explicit record from schema 6 on. What
+    /// the accounts hold is never stored here: each account syncs itself.
+    public var accountPreferences: AccountPreferences?
 
     public init(
         schemaVersion: UInt = Self.currentSchemaVersion,
@@ -56,7 +67,9 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         presets: [PresetRecord] = [],
         tombstones: [ArtifactTombstone] = [],
         configurationState: WorkspaceConfigurationState? = .init(),
-        mcpDefinitions: [PortableMCPDefinitionRecord]? = nil
+        mcpDefinitions: [PortableMCPDefinitionRecord]? = nil,
+        devices: [DeviceRecord]? = nil,
+        accountPreferences: AccountPreferences? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.minimumReaderVersion = minimumReaderVersion
@@ -72,7 +85,30 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         self.tombstones = tombstones
         self.configurationState = configurationState
         self.mcpDefinitions = mcpDefinitions ?? (schemaVersion >= 3 ? [] : nil)
+        self.devices = (devices?.isEmpty ?? true) ? nil : devices
+        self.accountPreferences =
+            accountPreferences
+            ?? (schemaVersion >= Self.accountPreferencesSchemaVersion ? AccountPreferences() : nil)
     }
+
+    /// Moves a document to the first schema that can carry account choices.
+    /// Everything a later schema adds only widens what is allowed, so a
+    /// document that was valid before is valid after.
+    public mutating func raiseToAccountPreferencesSchema() {
+        guard schemaVersion < Self.accountPreferencesSchemaVersion else {
+            if accountPreferences == nil { accountPreferences = AccountPreferences() }
+            return
+        }
+        schemaVersion = Self.accountPreferencesSchemaVersion
+        minimumReaderVersion = Self.accountPreferencesSchemaVersion
+        minimumWriterVersion = Self.accountPreferencesSchemaVersion
+        if configurationState == nil { configurationState = WorkspaceConfigurationState() }
+        if mcpDefinitions == nil { mcpDefinitions = [] }
+        if accountPreferences == nil { accountPreferences = AccountPreferences() }
+    }
+
+    /// The registry, empty when no Mac has registered.
+    public var deviceRegistry: [DeviceRecord] { devices ?? [] }
 
     public func validateStructure() throws {
         guard (1...Self.currentSchemaVersion).contains(schemaVersion),
@@ -83,10 +119,12 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         else { throw WorkspaceDomainValidationError.unsupportedVersion(schemaVersion) }
 
         guard minimumReaderVersion == schemaVersion, minimumWriterVersion == schemaVersion,
-            ((schemaVersion == 1 && configurationState == nil && mcpDefinitions == nil)
-            || (schemaVersion == 2 && configurationState != nil && mcpDefinitions == nil)
-            || (schemaVersion >= 3 && configurationState != nil && mcpDefinitions != nil))
+            (schemaVersion == 1 && configurationState == nil && mcpDefinitions == nil)
+                || (schemaVersion == 2 && configurationState != nil && mcpDefinitions == nil)
+                || (schemaVersion >= 3 && configurationState != nil && mcpDefinitions != nil),
+            (schemaVersion >= Self.accountPreferencesSchemaVersion) == (accountPreferences != nil)
         else { throw WorkspaceDomainValidationError.invalidField("workspace schema feature version") }
+        try accountPreferences?.validate()
 
         try WorkspaceDomainValidation.requireDigest(revision.documentDigest.value, field: "revision.documentDigest")
         try requireUnique(revision.parentIDs, field: "revision.parentIDs")
@@ -98,6 +136,10 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         try requireUnique(sources.map(\.id), field: "source IDs")
         try requireUnique(subscriptions.map(\.id), field: "subscription IDs")
         try requireUnique(logicalProjects.map(\.id), field: "logical project IDs")
+        try requireUnique(deviceRegistry.map(\.id), field: "device IDs")
+        for device in deviceRegistry {
+            try WorkspaceDomainValidation.requireText(device.name, field: "device name", maximum: 256)
+        }
         try requireUnique(assignments.map(\.id), field: "assignment IDs")
         try requireUnique(presets.map(\.id), field: "preset IDs")
         try requireUnique(tombstones.map(\.artifactID), field: "tombstone IDs")
@@ -240,6 +282,7 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
     func canonicalized() -> Self {
         var value = self
         value.configurationState = value.configurationState?.canonicalized()
+        value.accountPreferences = value.accountPreferences?.canonicalized()
         value.mcpDefinitions?.sort { $0.artifactID < $1.artifactID }
         value.revision.createdAt = WorkspaceDomainValidation.canonicalDate(value.revision.createdAt)
         value.revision.parentIDs.sort()
@@ -264,9 +307,20 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
             project.repositoryHints.sort()
             return project
         }.sorted { $0.id < $1.id }
+        value.devices = value.devices.map { devices in
+            devices.map { device in
+                var device = device
+                device.registeredAt = WorkspaceDomainValidation.canonicalDate(device.registeredAt)
+                device.lastSeenAt = device.lastSeenAt.map(WorkspaceDomainValidation.canonicalDate)
+                device.retiredAt = device.retiredAt.map(WorkspaceDomainValidation.canonicalDate)
+                return device
+            }.sorted { $0.id < $1.id }
+        }
         value.assignments = value.assignments.map { assignment in
             var assignment = assignment
             assignment.destination.deviceIDs?.sort()
+            assignment.destination.excludedDeviceIDs?.sort()
+            if assignment.destination.excludedDeviceIDs?.isEmpty == true { assignment.destination.excludedDeviceIDs = nil }
             return assignment
         }.sorted { $0.id < $1.id }
         value.presets = value.presets.map { preset in
@@ -299,18 +353,21 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
                 // A native MCP declaration has no file of its own, and a package
                 // recorded without usable client evidence has no located member
                 // files at all. Both keep membership without claiming a path.
-                let nativeMCPDeclaration = schemaVersion >= 4
+                let nativeMCPDeclaration =
+                    schemaVersion >= 4
                     && artifact.identity.kind == .mcpServer
                     && artifact.authority == .nativeOwned
                     && parent.authority == .nativeOwned
-                let recordedPackageMember = schemaVersion >= 5
+                let recordedPackageMember =
+                    schemaVersion >= 5
                     && artifact.authority == .trackedOnly
                     && parent.authority == .trackedOnly
                 guard nativeMCPDeclaration || recordedPackageMember,
-                      artifact.declaredName != nil,
-                      artifact.contentDigest == nil,
-                      artifact.nativeRoutes.isEmpty,
-                      parent.identity.kind == .nativePlugin else {
+                    artifact.declaredName != nil,
+                    artifact.contentDigest == nil,
+                    artifact.nativeRoutes.isEmpty,
+                    parent.identity.kind == .nativePlugin
+                else {
                     throw WorkspaceDomainValidationError.missingReference("artifact parent package path")
                 }
             }

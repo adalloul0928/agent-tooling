@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -35,8 +36,9 @@ struct AgentInstructionInventoryTests {
         // Both clients allow organising these into subfolders, and a rule in
         // one still loads.
         #expect(result.entries(for: .claudeCode, kind: .rule).count == 2)
-        #expect(result.entries(for: .claudeCode, kind: .agent).map(\.scope).sorted { $0.rawValue < $1.rawValue }
-            == [.project, .user])
+        #expect(
+            result.entries(for: .claudeCode, kind: .agent).map(\.scope).sorted { $0.rawValue < $1.rawValue }
+                == [.project, .user])
     }
 
     @Test func aProjectWithOnlyAgentsMdIsToldClaudeCodeWillNotReadIt() throws {
@@ -90,8 +92,9 @@ struct AgentInstructionInventoryTests {
 
         // Codex uses the first *non-empty* one, so reporting the empty override
         // would name a file that contributes nothing.
-        #expect(result.entries(for: .codexCLI, kind: .instructions).first?
-            .path.hasSuffix("AGENTS.md") == true)
+        #expect(
+            result.entries(for: .codexCLI, kind: .instructions).first?
+                .path.hasSuffix("AGENTS.md") == true)
     }
 
     @Test func codexHomeInstructionsAreFoundSeparatelyFromTheProjects() throws {
@@ -138,9 +141,11 @@ struct AgentInstructionInventoryTests {
     @Test func everyRecordedLocationNamesThePageItWasReadFrom() {
         // A stale fact should be recheckable against its source rather than
         // argued about.
-        for source in [AgentInstructionInventory.Source.claudeInstructions,
-                       AgentInstructionInventory.Source.claudeAgents,
-                       AgentInstructionInventory.Source.codexInstructions] {
+        for source in [
+            AgentInstructionInventory.Source.claudeInstructions,
+            AgentInstructionInventory.Source.claudeAgents,
+            AgentInstructionInventory.Source.codexInstructions,
+        ] {
             #expect(source.hasPrefix("https://"))
         }
     }
@@ -156,16 +161,14 @@ struct AgentInstructionInventoryTests {
             home = root.appending(path: "home")
             project = root.appending(path: "project")
             for url in [home, project] {
-                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true,
+                try FileManager.default.createDirectory(
+                    at: url, withIntermediateDirectories: true,
                     attributes: [.posixPermissions: 0o700])
             }
         }
 
         func write(_ relativePath: String, in base: URL, _ contents: String) throws {
-            let url = base.appending(path: relativePath)
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                    withIntermediateDirectories: true)
-            try Data(contents.utf8).write(to: url)
+            try AgentToolingTestSupport.write(base.appending(path: relativePath), contents)
         }
 
         func scan() -> AgentInstructionInventory.Result {

@@ -37,6 +37,16 @@ final class WorkspaceMarketplaceSession {
     private(set) var sources: [ToolingSource] = []
     private(set) var isRefreshing = false
     private(set) var errorMessage: String?
+    /// The catalogs whose last refresh could not be read, each with the plain
+    /// words the Sources row shows for it. Discover reads this to explain an
+    /// empty result honestly — a banner when nothing came back, a one-line note
+    /// when some catalogs answered and others did not — and it is empty whenever
+    /// nothing failed.
+    private(set) var catalogFailures: [CatalogFailure] = []
+    /// Marketplaces whose listings are on screen from the published catalog
+    /// file while the client has not added the marketplace yet. Kept so the
+    /// detail pane can warn before an Apply would fail at the client.
+    private(set) var marketplacesNotAdded: [ClientKind: Set<String>] = [:]
     /// When the last refresh that reached a catalog finished. A refresh that
     /// only re-read this Mac's own record leaves it alone.
     private(set) var lastRefreshedAt: Date?
@@ -45,10 +55,35 @@ final class WorkspaceMarketplaceSession {
     /// Discover matches a catalog listing against this rather than against a
     /// name, so a namesake is never mistaken for the package you already have.
     private(set) var installedRoutes: [NativePackageRoute: LibraryMatch] = [:]
+    /// The connections the library already holds, by the name the managed-MCP
+    /// intake would give a listing, so an added server reads as held rather than
+    /// as offered again.
+    private(set) var heldConnections: [String: LibraryMatch] = [:]
 
     /// What adding the last listing did, or why it was refused.
     private(set) var adoption: AdoptionOutcome?
     private(set) var isAdopting = false
+    /// The listing being added right now, so only its card shows the work.
+    private(set) var adoptingPackageID: String?
+
+    /// Skills this library follows from a repository, keyed the way a skills.sh
+    /// listing is identified (`owner/repo/skill`), under both the folder's name
+    /// and the name the skill declares for itself.
+    private(set) var heldSkills: [String: LibraryMatch] = [:]
+
+    /// The one command that would let `client` install this listing, when its
+    /// marketplace has not been added to the client yet; nil when nothing
+    /// stands in the way. Only the official Claude catalog is known well
+    /// enough to name its add command.
+    func marketplaceAddCommand(for package: MarketplacePackage, client: ClientKind) -> String? {
+        guard client == .claude,
+            package.catalogKind == .claudeMarketplace,
+            let missing = marketplacesNotAdded[.claude],
+            missing.contains(ClaudePluginsOfficialCatalogProvider.marketplaceName),
+            package.id.hasSuffix("@\(ClaudePluginsOfficialCatalogProvider.marketplaceName)")
+        else { return nil }
+        return "claude plugin marketplace add anthropics/claude-plugins-official"
+    }
 
     /// One library row a catalog listing turned out to be.
     struct LibraryMatch: Equatable {
@@ -58,10 +93,18 @@ final class WorkspaceMarketplaceSession {
         var itemID: String { artifactID.rawValue.uuidString.lowercased() }
     }
 
+    /// A catalog that could not be read on the last refresh, named for a person
+    /// with the same words its Sources row carries.
+    struct CatalogFailure: Equatable, Identifiable {
+        let name: String
+        let reason: String
+        var id: String { name }
+    }
+
     /// What adding a listing does, and what it deliberately does not do.
     /// Stated once here so the button and the line under it cannot disagree.
     static let adoptionNote =
-        "Adding a package puts it in your library. Where it is installed is decided on the Apps screen."
+        "Install puts the listing in your library, then picks the apps and writes it."
 
     /// Said when the workspace itself cannot be written to, so a disabled
     /// control is never disabled without a reason. The words the rest of the
@@ -81,12 +124,31 @@ final class WorkspaceMarketplaceSession {
     static let noProviderNote =
         "No catalog provider is available in this build, so Discover shows only what this Mac already kept."
 
+    /// The empty-Discover message when no filter is active, so the reason an
+    /// unfiltered Discover is empty is told straight. When no provider can be
+    /// reached, that is the whole story. When every catalog that was asked
+    /// failed to read, the emptiness is the catalogs' fault, not the
+    /// publisher's, so point at the sources rather than blaming them. Only when
+    /// a catalog answered and still had nothing is it fair to say so.
+    static func unfilteredEmptyMessage(canReachCatalog: Bool, hasCatalogFailures: Bool) -> String {
+        if !canReachCatalog { return noProviderNote }
+        if hasCatalogFailures { return "No catalog could be read. Check the sources and refresh." }
+        return "Refresh the catalogs. Nothing this workspace records has published a package yet."
+    }
+
     private static let pageLimit = 100
 
     private let providers: [any MarketplaceProvider]
     private let service: WorkspaceApplicationService
     private let library: WorkspaceLibrarySession
     private let store: WorkspaceRevisionStore
+
+    /// Finds a registry skill's folder in its repository, and fetches it.
+    /// Replaceable so tests can stand in for the network.
+    typealias SkillLocator = @Sendable (_ skillID: String, _ repositoryURL: String, _ cacheURL: URL) async throws -> SkillRepositoryBinding
+    typealias SkillFetcher = @Sendable (_ binding: SkillRepositoryBinding, _ cacheURL: URL) async throws -> PreparedStandaloneSkill
+    private let locateSkill: SkillLocator
+    private let fetchSkill: SkillFetcher
 
     /// Deliberately does no work. This is built while the workspace is being
     /// opened, so anything read here would be read before the window existed.
@@ -95,12 +157,18 @@ final class WorkspaceMarketplaceSession {
         providers: [any MarketplaceProvider],
         service: WorkspaceApplicationService,
         library: WorkspaceLibrarySession,
-        store: WorkspaceRevisionStore
+        store: WorkspaceRevisionStore,
+        locateSkill: @escaping SkillLocator = {
+            try await WorkspaceSkillPreparation.locateUpstream(skillID: $0, repositoryURL: $1, cacheURL: $2)
+        },
+        fetchSkill: @escaping SkillFetcher = { try await WorkspaceSkillPreparation.fetchUpstream(binding: $0, cacheURL: $1) }
     ) {
         self.providers = providers
         self.service = service
         self.library = library
         self.store = store
+        self.locateSkill = locateSkill
+        self.fetchSkill = fetchSkill
     }
 
     /// True when there is a catalog to ask at all. A screen that cannot reach
@@ -113,9 +181,23 @@ final class WorkspaceMarketplaceSession {
     /// on a display name: `NativeCatalogPackageIdentity` refuses anything whose
     /// identifier, components, client and provenance do not all agree.
     func libraryMatch(for package: MarketplacePackage) -> LibraryMatch? {
-        guard let identity = NativeCatalogPackageIdentity.recognize(package) else { return nil }
-        return installedRoutes[
-            NativePackageRoute(client: identity.client, externalPluginID: identity.externalPluginID)]
+        if let listing = Self.skillsShListing(package) {
+            return heldSkills[Self.skillKey(repository: listing.repository, name: listing.skillID)]
+        }
+        if let identity = NativeCatalogPackageIdentity.recognize(package) {
+            return installedRoutes[
+                NativePackageRoute(client: identity.client, externalPluginID: identity.externalPluginID)]
+        }
+        // An MCP listing is held once a connection with the name its intake
+        // would record exists, whichever screen recorded it.
+        guard package.components.contains(.mcpServer),
+            case .reviewed(let draft) = ReviewedMarketplaceMCPServer.availability(for: package)
+        else { return nil }
+        return heldConnections[Self.connectionKey(draft.name)]
+    }
+
+    private static func connectionKey(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     // MARK: - Adding a listing to the library
@@ -141,8 +223,12 @@ final class WorkspaceMarketplaceSession {
     func adopt(_ package: MarketplacePackage, client: ClientKind) async {
         guard canAdopt, !isAdopting else { return }
         isAdopting = true
+        adoptingPackageID = package.id
         adoption = nil
-        defer { isAdopting = false }
+        defer {
+            isAdopting = false
+            adoptingPackageID = nil
+        }
         do {
             guard let head = try await service.snapshot()?.document.revision.id else {
                 adoption = .init(
@@ -154,7 +240,132 @@ final class WorkspaceMarketplaceSession {
                 .init(expectedRevisionID: head, package: package, client: client))
             adoption = .init(
                 packageID: package.id,
-                message: "Added to your library. Choose where it goes on the Apps screen.")
+                message: "Added to your library. Install picks the apps and writes it.")
+        } catch {
+            adoption = .init(packageID: package.id, message: Self.message(for: error))
+        }
+        await library.refresh()
+        reload()
+    }
+
+    // MARK: - Adding an MCP server listing to the library
+
+    /// What adding an MCP-server listing needs: a reviewed connection ready to
+    /// record, or a manual setup this app cannot complete on its own. Asked by
+    /// the screen so it can show one button or one sentence rather than four
+    /// dead per-client buttons.
+    ///
+    /// Returns `nil` when the listing is not an MCP server at all, so a plugin
+    /// listing keeps its per-client buttons.
+    func mcpAvailability(for package: MarketplacePackage) -> ReviewedMarketplaceMCPServer.Availability? {
+        ReviewedMarketplaceMCPServer.availability(for: package)
+    }
+
+    /// The sentence shown in place of buttons for an MCP-server listing with no
+    /// reviewed route. Stated once so the screen and this session agree. The
+    /// screen appends `mcpManualSetupCommandClause` only when the detail pane
+    /// actually renders an install command for the listing; a credentials-only
+    /// registry listing has no command row, so promising one below would be a
+    /// sentence pointing at nothing.
+    static let mcpManualSetupNote =
+        "This listing needs credentials or a manual install, so Agent Tooling cannot add it here."
+
+    /// Appended to `mcpManualSetupNote` only when a copyable install command is
+    /// shown beneath the sentence.
+    static let mcpManualSetupCommandClause = " Its install command is shown below."
+
+    /// Records a reviewed MCP-server listing through the same managed-MCP intake
+    /// the Paste sheet uses. The listing carries the reviewed transport, so this
+    /// builds the definition from it, writes one connection, and nothing else:
+    /// no server is started, contacted, or put in an app. On success the row
+    /// shows as held, with the words Discover uses for every added package.
+    /// A skills.sh listing: `owner/repo` and the skill's name, from the listing
+    /// URL the provider built. Nil for any other kind of listing.
+    static func skillsShListing(_ package: MarketplacePackage) -> (repository: String, skillID: String)? {
+        guard package.catalogKind == .skillsShRegistry, let url = URL(string: package.location) else { return nil }
+        let parts = url.path().split(separator: "/").map(String.init)
+        guard parts.count >= 3 else { return nil }
+        return ("\(parts[0])/\(parts[1])", parts[2])
+    }
+
+    static func skillKey(repository: String, name: String) -> String {
+        repository.lowercased() + "/" + SkillRepositoryBinding.comparableSkillName(name)
+    }
+
+    /// Where fetched repositories are unpacked while a listing is added; each
+    /// fetch works in its own folder under this one and removes it after.
+    private var skillCacheRoot: URL {
+        store.rootURL.appending(path: "cache/marketplace-skills", directoryHint: .isDirectory)
+    }
+
+    /// Brings a skills.sh listing into the library as a skill that follows its
+    /// repository: finds the skill's folder on the repository's default branch,
+    /// fetches that one folder, and records it with a source and subscription
+    /// so Updates can check it later. Nothing is installed; the picker does
+    /// that next. A second skill from the same repository reuses the source
+    /// the first one recorded.
+    func adoptSkill(_ package: MarketplacePackage) async {
+        guard canAdopt, !isAdopting, let listing = Self.skillsShListing(package) else { return }
+        isAdopting = true
+        adoptingPackageID = package.id
+        adoption = nil
+        defer {
+            isAdopting = false
+            adoptingPackageID = nil
+        }
+        do {
+            let repositoryURL = "https://github.com/\(listing.repository)"
+            let binding = try await locateSkill(listing.skillID, repositoryURL, skillCacheRoot)
+            let prepared = try await fetchSkill(binding, skillCacheRoot)
+            guard let snapshot = try await service.snapshot() else {
+                adoption = .init(packageID: package.id, message: "This workspace could not be read. Nothing was added.")
+                return
+            }
+            let document = snapshot.document
+            let existingSource = document.sources.first {
+                $0.role == .publisherRepository && $0.repositoryURL == prepared.review.upstream?.repositoryURL
+                    && $0.requestedRef == prepared.review.upstream?.requestedRef
+            }
+            _ = try await service.intakeStandaloneSkill(
+                .init(
+                    expectedRevisionID: document.revision.id, displayName: package.name, prepared: prepared,
+                    upstreamIDs: .init(sourceID: existingSource?.id ?? WorkspaceObjectID())),
+                prepared: prepared)
+            adoption = .init(
+                packageID: package.id,
+                message: "Added to your library from \(listing.repository), following its \(binding.ref) branch.")
+        } catch {
+            adoption = .init(packageID: package.id, message: Self.message(for: error))
+        }
+        await library.refresh()
+        reload()
+    }
+
+    func adoptMCPServer(_ package: MarketplacePackage) async {
+        guard canAdopt, !isAdopting else { return }
+        guard case .reviewed(let draft) = ReviewedMarketplaceMCPServer.availability(for: package) else {
+            adoption = .init(packageID: package.id, message: Self.mcpManualSetupNote)
+            return
+        }
+        isAdopting = true
+        adoptingPackageID = package.id
+        adoption = nil
+        defer {
+            isAdopting = false
+            adoptingPackageID = nil
+        }
+        do {
+            guard let head = try await service.snapshot()?.document.revision.id else {
+                adoption = .init(
+                    packageID: package.id,
+                    message: "This workspace could not be read. Nothing was added.")
+                return
+            }
+            let command = try ManagedMCPServerIntakeCommand(expectedRevisionID: head, draft: draft)
+            _ = try await service.intakeManagedMCPServer(command)
+            adoption = .init(
+                packageID: package.id,
+                message: "Added to your library. Install picks the apps and writes it.")
         } catch {
             adoption = .init(packageID: package.id, message: Self.message(for: error))
         }
@@ -166,6 +377,17 @@ final class WorkspaceMarketplaceSession {
     /// without pretending to know more about it than that it stopped the write.
     private static func message(for error: any Error) -> String {
         if let refusal = error as? NativePackageAdoptionError { return refusal.localizedDescription }
+        if let refusal = error as? ManagedMCPServerIntakeError { return refusal.localizedDescription }
+        if let repository = error as? SkillRepositoryError {
+            if repository == .sourceMissing {
+                return "The repository has no skill by that name on its default branch. Nothing was added."
+            }
+            return repository.localizedDescription + " Nothing was added."
+        }
+        if let preparation = error as? WorkspaceSkillPreparationError { return preparation.localizedDescription + " Nothing was added." }
+        if let command = error as? WorkspaceSkillCommandError, command == .upstreamAlreadyManaged {
+            return "This library already follows that skill."
+        }
         if case WorkspaceRevisionStoreError.staleRevision = error {
             return "This workspace changed while you were reading. Try again."
         }
@@ -235,12 +457,47 @@ final class WorkspaceMarketplaceSession {
                     }
                 },
             uniquingKeysWith: { first, _ in first })
+        heldConnections = Dictionary(
+            snapshot.document.artifacts
+                .filter { $0.identity.kind == .mcpServer && $0.identity.parentPackageID == nil }
+                .map {
+                    (
+                        Self.connectionKey($0.declaredName ?? $0.identity.displayName),
+                        LibraryMatch(artifactID: $0.identity.id, displayName: $0.identity.displayName)
+                    )
+                },
+            uniquingKeysWith: { first, _ in first })
+        heldSkills = Self.heldSkills(in: snapshot.document)
         // Only on the first read: a refresh that reached a catalog must not be
         // overwritten by what this Mac kept from the one before it.
         if packages.isEmpty {
             packages = MarketplaceSorting.sorted(
                 (snapshot.device.applicationState?.marketplacePackages ?? []).map(Self.unobserved), by: .name)
         }
+    }
+
+    /// Every followed skill, keyed as a skills.sh listing would name it: by the
+    /// folder it lives in and by the name it declares, both under its
+    /// repository. A GitHub source only; a registry lists nothing else.
+    static func heldSkills(in document: PortableWorkspaceDocument) -> [String: LibraryMatch] {
+        var held: [String: LibraryMatch] = [:]
+        let rows = Dictionary(document.artifacts.map { ($0.identity.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for subscription in document.subscriptions {
+            guard let row = rows[subscription.artifactID], row.identity.kind == .skill,
+                let source = document.sources.first(where: { $0.id == subscription.sourceID }),
+                let repositoryURL = source.repositoryURL,
+                let components = URLComponents(string: repositoryURL), components.host?.lowercased() == "github.com"
+            else { continue }
+            let parts = components.path.split(separator: "/").map(String.init)
+            guard parts.count == 2 else { continue }
+            let repository = "\(parts[0])/\(parts[1])"
+            let match = LibraryMatch(artifactID: row.identity.id, displayName: row.identity.displayName)
+            let folder = subscription.lock.packageRelativePath.split(separator: "/").last.map(String.init) ?? ""
+            for name in [folder, row.declaredName ?? "", row.identity.displayName] where !name.isEmpty && name != "." {
+                held[Self.skillKey(repository: repository, name: name)] = held[Self.skillKey(repository: repository, name: name)] ?? match
+            }
+        }
+        return held
     }
 
     /// Re-reads the recorded catalogs after a command changed which ones there
@@ -259,6 +516,7 @@ final class WorkspaceMarketplaceSession {
         let retained = packages
         var collected: [MarketplacePackage] = []
         var failures: [String] = []
+        var structuredFailures: [CatalogFailure] = []
         var learned = MarketplaceSourceReport()
         var answered = 0
 
@@ -279,7 +537,10 @@ final class WorkspaceMarketplaceSession {
                 // provider that refused says why, and a name says which one.
                 refused = SensitiveValueRedactor.redact(error.localizedDescription)
             }
-            if let refused { failures.append("\(provider.displayName): \(refused)") }
+            if let refused {
+                failures.append("\(provider.displayName): \(refused)")
+                structuredFailures.append(CatalogFailure(name: provider.displayName, reason: refused))
+            }
             guard let reporting = provider as? any CatalogSourceReporting else { continue }
             let report = await reporting.lastReport()
             learned.summaries.merge(report.summaries) { _, latest in latest }
@@ -287,6 +548,7 @@ final class WorkspaceMarketplaceSession {
             learned.refreshedKinds.formUnion(report.refreshedKinds)
             learned.refreshedFolders.formUnion(report.refreshedFolders)
             learned.incompletePackagePrefixes.formUnion(report.incompletePackagePrefixes)
+            learned.marketplacesNotAdded.merge(report.marketplacesNotAdded) { $0.union($1) }
             // A catalog that refused outright says so on its own row, since its
             // report has nothing newer to put there.
             if let refused {
@@ -307,6 +569,8 @@ final class WorkspaceMarketplaceSession {
             await retain(packages)
         }
         annotate(learned)
+        catalogFailures = structuredFailures
+        marketplacesNotAdded = learned.marketplacesNotAdded
         errorMessage = failures.isEmpty ? nil : failures.joined(separator: " · ")
     }
 

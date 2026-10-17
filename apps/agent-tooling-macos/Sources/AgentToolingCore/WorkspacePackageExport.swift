@@ -78,28 +78,36 @@ public enum WorkspacePackageExporter {
             let supportedComponents = Set(evidence.filter { $0.support == .supported }.map(\.component))
             let component = self.component(for: artifact.identity.kind)
             if let component, !supportedComponents.contains(component) {
-                notes.append(.init(kind: .unsupportedComponent,
-                    detail: "This target does not accept this kind of package.", relativePath: nil))
+                notes.append(
+                    .init(
+                        kind: .unsupportedComponent,
+                        detail: "This target does not accept this kind of package.", relativePath: nil))
             }
             for transport in declaredTransports.sorted() {
                 let supported = evidence.contains {
                     $0.component == .mcpServer && $0.transport == transport && $0.support == .supported
                 }
                 if !supported {
-                    notes.append(.init(kind: .unsupportedTransport,
-                        detail: "This target does not support the \(transport) connection type.",
-                        relativePath: nil))
+                    notes.append(
+                        .init(
+                            kind: .unsupportedTransport,
+                            detail: "This target does not support the \(transport) connection type.",
+                            relativePath: nil))
                 }
             }
             if artifact.authority == .nativeOwned {
-                notes.append(.init(kind: .nativeAdapterDependency,
-                    detail: "This package is installed and updated by its own app, not from an export.",
-                    relativePath: nil))
+                notes.append(
+                    .init(
+                        kind: .nativeAdapterDependency,
+                        detail: "This package is installed and updated by its own app, not from an export.",
+                        relativePath: nil))
             }
             for entry in executables.sorted(by: { $0.relativePath < $1.relativePath }) {
-                notes.append(.init(kind: .executableContent,
-                    detail: "This file runs when the package is used. Review it before trusting it.",
-                    relativePath: entry.relativePath))
+                notes.append(
+                    .init(
+                        kind: .executableContent,
+                        detail: "This file runs when the package is used. Review it before trusting it.",
+                        relativePath: entry.relativePath))
             }
             return .init(surface: surface, notes: notes)
         }
@@ -120,8 +128,9 @@ public enum WorkspacePackageExporter {
         to destination: URL
     ) throws {
         guard destination.isFileURL, destination.path.hasPrefix("/"),
-              !destination.path.contains("\0"),
-              destination.standardizedFileURL.path == destination.path else {
+            !destination.path.contains("\0"),
+            destination.standardizedFileURL.path == destination.path
+        else {
             throw WorkspacePackageExportError.invalidDestination
         }
         let manager = FileManager.default
@@ -129,33 +138,38 @@ public enum WorkspacePackageExporter {
             throw WorkspacePackageExportError.destinationNotEmpty
         }
         do {
-            try manager.createDirectory(at: destination, withIntermediateDirectories: true,
-                                        attributes: [.posixPermissions: 0o700])
+            try manager.createDirectory(
+                at: destination, withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
         } catch { throw WorkspacePackageExportError.writeFailed }
 
         // Directories first, so a file never creates its own parent implicitly
         // and an empty directory in the package survives the round trip.
         for entry in tree.entries.sorted(by: { $0.relativePath < $1.relativePath }) {
             let url = destination.appending(path: entry.relativePath)
-            guard url.standardizedFileURL.path.hasPrefix(destination.path + "/") else {
+            guard PathContainment.relativePath(of: url, under: destination) != nil else {
                 throw WorkspacePackageExportError.invalidDestination
             }
             do {
                 switch entry.kind {
                 case .directory:
-                    try manager.createDirectory(at: url, withIntermediateDirectories: true,
-                                                attributes: [.posixPermissions: 0o700])
+                    try manager.createDirectory(
+                        at: url, withIntermediateDirectories: true,
+                        attributes: [.posixPermissions: 0o700])
                 case .file(let bytes, let executable):
-                    try manager.createDirectory(at: url.deletingLastPathComponent(),
-                                                withIntermediateDirectories: true,
-                                                attributes: [.posixPermissions: 0o700])
+                    try manager.createDirectory(
+                        at: url.deletingLastPathComponent(),
+                        withIntermediateDirectories: true,
+                        attributes: [.posixPermissions: 0o700])
                     try bytes.write(to: url, options: .withoutOverwriting)
-                    try manager.setAttributes([.posixPermissions: executable ? 0o700 : 0o600],
-                                              ofItemAtPath: url.path)
+                    try manager.setAttributes(
+                        [.posixPermissions: executable ? 0o700 : 0o600],
+                        ofItemAtPath: url.path)
                 case .symbolicLink(let target):
-                    try manager.createDirectory(at: url.deletingLastPathComponent(),
-                                                withIntermediateDirectories: true,
-                                                attributes: [.posixPermissions: 0o700])
+                    try manager.createDirectory(
+                        at: url.deletingLastPathComponent(),
+                        withIntermediateDirectories: true,
+                        attributes: [.posixPermissions: 0o700])
                     try manager.createSymbolicLink(atPath: url.path, withDestinationPath: target)
                 }
             } catch { throw WorkspacePackageExportError.writeFailed }

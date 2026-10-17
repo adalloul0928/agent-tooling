@@ -7,7 +7,7 @@ import SwiftUI
 struct ToolIdentityIcon: View {
     let packageID: String
     var fallback: ToolingKind = .plugin
-    var size: CGFloat = 44
+    var size: CGFloat = Size.identityIconLarge
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -30,10 +30,10 @@ struct ToolIdentityIcon: View {
         }
         .frame(width: size, height: size)
         .background(artworkBackground)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: size * Proportion.iconCorner, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: size * 0.23, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: size * Proportion.iconCorner, style: .continuous)
+                .strokeBorder(AgentTheme.shadow, lineWidth: Hairline.width)
         }
         .accessibilityHidden(true)
     }
@@ -41,7 +41,7 @@ struct ToolIdentityIcon: View {
     private var fallbackSymbol: some View {
         Image(systemName: fallback.symbol)
             .symbolRenderingMode(.hierarchical)
-            .font(.system(size: size * 0.5, weight: .regular))
+            .font(.system(size: size * Proportion.tileSymbol, weight: .regular))
             .foregroundStyle(.secondary)
     }
 

@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -73,8 +74,9 @@ struct WorkspaceMergeEngineTests {
     }
 
     @Test func anAgreedDeletionRemovesTheItemAndItsRequests() throws {
-        let base = try Self.document(artifacts: [Self.skill(Self.alpha, "Alpha")],
-                                     assignments: [Self.assignment(Self.alpha)])
+        let base = try Self.document(
+            artifacts: [Self.skill(Self.alpha, "Alpha")],
+            assignments: [Self.assignment(Self.alpha)])
         var local = base
         local.artifacts = []
         local.assignments = []
@@ -92,9 +94,12 @@ struct WorkspaceMergeEngineTests {
     @Test func ownershipAndSourcePolicyChangesOnBothSidesStayExplicit() throws {
         let sourceID = WorkspaceObjectID()
         var base = try Self.document(artifacts: [Self.skill(Self.alpha, "Alpha")])
-        base.sources = [.init(id: sourceID, role: .publisherRepository,
-                              repositoryURL: "https://github.com/example/one",
-                              requestedRef: "main", packageRelativePaths: ["."])]
+        base.sources = [
+            .init(
+                id: sourceID, role: .publisherRepository,
+                repositoryURL: "https://github.com/example/one",
+                requestedRef: "main", packageRelativePaths: ["."])
+        ]
         var local = base
         local.artifacts[0].authority = .trackedOnly
         local.sources[0].requestedRef = "release"
@@ -214,9 +219,9 @@ struct WorkspaceMergeEngineTests {
         #expect(result.conflicts.map(\.kind) == [.unsupportedVersion])
     }
 
-    private static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
-    private static let beta = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
-    private static let writerID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000c3")!)
+    private static let alpha = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
+    private static let beta = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2"))
+    private static let writerID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000c3"))
 
     /// Each side is its own revision, as two Macs would produce.
     private static func merge(
@@ -226,8 +231,8 @@ struct WorkspaceMergeEngineTests {
     ) -> WorkspaceMergeResult {
         var mine = local
         var theirs = remote
-        mine.revision.id = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-00000000001a")!)
-        theirs.revision.id = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-00000000002b")!)
+        mine.revision.id = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-00000000001a"))
+        theirs.revision.id = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-00000000002b"))
         return WorkspaceMergeEngine.merge(base: base, local: mine, remote: theirs, writerID: writerID)
     }
 
@@ -240,17 +245,19 @@ struct WorkspaceMergeEngineTests {
     }
 
     private static func skill(_ id: ArtifactID, _ name: String) -> ArtifactRecord {
-        .init(identity: .init(id: id, kind: .skill, displayName: name), authority: .centralPersonal,
-              declaredName: name.lowercased(), contentDigest: digest("a"))
+        .init(
+            identity: .init(id: id, kind: .skill, displayName: name), authority: .centralPersonal,
+            declaredName: name.lowercased(), contentDigest: digest("a"))
     }
 
     /// Deterministic per item, so two Macs describing the same request agree.
     private static func assignment(_ artifactID: ArtifactID, enabled: Bool? = nil) -> AssignmentContribution {
-        .init(id: WorkspaceObjectID(UUID(uuidString:
-                "00000000-0000-0000-0000-0000000000" + String(artifactID.rawValue.uuidString.suffix(2)))!),
-              artifactID: artifactID,
-              destination: .init(surface: .codexCLI, scope: .user),
-              reason: .manual, desiredPresence: true, desiredEnabled: enabled)
+        .init(
+            id: WorkspaceObjectID(
+                fixtureUUID("00000000-0000-0000-0000-0000000000" + String(artifactID.rawValue.uuidString.suffix(2)))),
+            artifactID: artifactID,
+            destination: .init(surface: .codexCLI, scope: .user),
+            reason: .manual, desiredPresence: true, desiredEnabled: enabled)
     }
 
     private static func document(
@@ -258,7 +265,7 @@ struct WorkspaceMergeEngineTests {
         assignments: [AssignmentContribution] = []
     ) throws -> PortableWorkspaceDocument {
         var document = PortableWorkspaceDocument(
-            workspaceID: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e5")!),
+            workspaceID: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000e5")),
             revision: .init(id: WorkspaceObjectID(), writerID: writerID),
             artifacts: artifacts, assignments: assignments)
         document = document.canonicalized()

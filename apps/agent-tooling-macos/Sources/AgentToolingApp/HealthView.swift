@@ -1,0 +1,430 @@
+import AgentToolingCore
+import SwiftUI
+
+/// The connection Health screen: every managed client's listed connections,
+/// grouped by client and by state, with the one honest offer on each row.
+///
+/// Two things are kept apart, the way the rest of the app keeps them apart.
+/// Checking reads: it runs each client's own list command and shows what came
+/// back. Re-authenticating is the one action that changes anything, and it
+/// changes it in the client — the command it will run is shown in the button's
+/// help and again in the confirmation before anything runs. Nothing here runs
+/// on its own.
+struct HealthView: View {
+    let session: WorkspaceHealthSession
+    let device: WorkspaceDeviceSession
+
+    /// All connections, or only the ones worth looking at. Defaults to the
+    /// needs-attention view whenever there is anything to attend to, so opening
+    /// the screen lands on the problems rather than a long settled list.
+    private enum Filter: Hashable {
+        case needsAttention
+        case all
+    }
+
+    @State private var filter: Filter = .needsAttention
+    @State private var didChooseFilter = false
+    @State private var showingBulkConfirmation = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PageToolbar(title: "Apps", context: statusLine) {
+                Button {
+                    Task { await session.check() }
+                } label: {
+                    Label(session.isChecking ? "Checking…" : "Check now", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.glass)
+                .disabled(session.isChecking)
+                .help("Read each managed app's connections again. This runs each app's own list command and changes nothing.")
+
+                reauthenticateAllButton
+            }
+
+            content
+        }
+        .onAppear(perform: settleDefaultFilter)
+        .onChange(of: session.attentionCount) { _, _ in settleDefaultFilter() }
+    }
+
+    // MARK: - Toolbar
+
+    @ViewBuilder
+    private var reauthenticateAllButton: some View {
+        let eligible = session.reauthenticatableEntries
+        Button {
+            showingBulkConfirmation = true
+        } label: {
+            if let progress = session.bulkProgress {
+                Label("Signing in \(progress.completed) of \(progress.total)…", systemImage: "person.badge.key")
+            } else {
+                // It opens the confirmation below rather than signing in.
+                Label("Re-authenticate all (\(eligible.count))…", systemImage: "person.badge.key")
+            }
+        }
+        .buttonStyle(.glass)
+        .disabled(eligible.isEmpty || session.bulkProgress != nil || session.isChecking)
+        .help(bulkHelp(eligible))
+        .popover(isPresented: $showingBulkConfirmation, arrowEdge: .bottom) {
+            BulkReauthenticateConfirmation(
+                entries: eligible,
+                commandText: { session.loginCommandText(for: $0) },
+                onConfirm: {
+                    showingBulkConfirmation = false
+                    Task { await session.reauthenticateAll() }
+                },
+                onCancel: { showingBulkConfirmation = false })
+        }
+    }
+
+    private func bulkHelp(_ eligible: [ConnectionHealthEntry]) -> String {
+        guard !eligible.isEmpty else { return "No connections can be signed in to from here." }
+        return Self.bulkHelpText(
+            count: eligible.count, commands: eligible.compactMap { session.loginCommandText(for: $0) })
+    }
+
+    /// The bulk button's tooltip: how many it signs in to and the command for
+    /// each. Only several are signed in to one at a time.
+    static func bulkHelpText(count: Int, commands: [String]) -> String {
+        let pacing = count == 1 ? "" : ", one at a time"
+        return "Signs in to \(CountNoun.connection.phrase(count))\(pacing):\n" + commands.joined(separator: "\n")
+    }
+
+    private var statusLine: String {
+        guard let checkedAt = session.lastCheckedAt else {
+            return "Connections have not been checked yet."
+        }
+        let attention = session.attentionCount
+        let checked = "Checked \(SnapshotTime.compact(checkedAt))"
+        if attention == 0 { return "\(checked) · everything is connected" }
+        return "\(checked) · \(attention) need\(attention == 1 ? "s" : "") attention"
+    }
+
+    // MARK: - Body
+
+    @ViewBuilder
+    private var content: some View {
+        if session.lastCheckedAt == nil {
+            EmptyStateView(
+                symbol: "waveform.path.ecg",
+                title: "Nothing has been checked yet",
+                message: "Check each managed app's connections to see which are connected and which need signing in again.",
+                actionTitle: session.isChecking ? "Checking…" : "Check now",
+                isActionEnabled: !session.isChecking,
+                action: { Task { await session.check() } })
+        } else if session.entries.isEmpty && session.results.allSatisfy({ $0.unavailableReason == nil }) {
+            EmptyStateView(
+                symbol: "checkmark.circle",
+                title: "No connections found",
+                message: "None of the managed apps listed an MCP connection or connector.")
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.xxl) {
+                    filterPicker
+                    if let error = session.errorMessage {
+                        AttentionBanner(title: "Some connections still need attention", message: error)
+                    }
+                    ForEach(session.results, id: \.client) { result in
+                        clientGroup(result)
+                    }
+                    if visibleResults.allSatisfy({ visibleEntries(in: $0).isEmpty && $0.unavailableReason == nil }) {
+                        everythingConnectedNote
+                    }
+                }
+                .padding(WorkspaceLayout.pageInset)
+            }
+        }
+    }
+
+    private var filterPicker: some View {
+        WorkspaceSegmentedPicker(
+            "Which connections",
+            selection: Binding(
+                get: { filter },
+                set: {
+                    filter = $0
+                    didChooseFilter = true
+                })
+        ) {
+            Text("Needs attention").tag(Filter.needsAttention)
+            Text("All").tag(Filter.all)
+        }
+        .fixedSize()
+    }
+
+    private var everythingConnectedNote: some View {
+        EmptyStateView(
+            symbol: "checkmark.circle",
+            title: "Everything is connected",
+            message: "No connection needs attention. Switch to All to see every listed connection."
+        )
+        .frame(height: Size.emptyStatePaneHeight)
+    }
+
+    // MARK: - One client's connections
+
+    @ViewBuilder
+    private func clientGroup(_ result: ConnectionHealthClientResult) -> some View {
+        let entries = visibleEntries(in: result)
+        if let reason = result.unavailableReason {
+            TitledCard(result.client.rawValue) {
+                InfoRow(
+                    "Could not be checked",
+                    detail: reason,
+                    leading: { StatusGlyph(state: .pending) })
+            }
+        } else if !entries.isEmpty {
+            TitledCard(result.client.rawValue, count: "\(entries.count)") {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    if index > 0 { Hairline() }
+                    HealthRow(
+                        entry: entry,
+                        action: session.action(for: entry),
+                        actionState: session.actionState[entry.id] ?? .idle,
+                        commandText: session.loginCommandText(for: entry),
+                        authorizationURL: session.authorizationURLs[entry.id],
+                        onReauthenticate: { Task { await session.reauthenticate(entry) } },
+                        onOpenConnectors: { session.openConnectorsPage() },
+                        onOpenAuthorizationPage: { session.reopenAuthorizationPage(for: entry) })
+                }
+            }
+        }
+    }
+
+    /// The entries a client shows under the current filter, ordered so the ones
+    /// worth looking at come first within the client.
+    private func visibleEntries(in result: ConnectionHealthClientResult) -> [ConnectionHealthEntry] {
+        let entries = filter == .all ? result.entries : result.entries.filter { $0.status.needsAttention }
+        return entries.sorted { lhs, rhs in
+            if lhs.status.needsAttention != rhs.status.needsAttention {
+                return lhs.status.needsAttention && !rhs.status.needsAttention
+            }
+            return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        }
+    }
+
+    private var visibleResults: [ConnectionHealthClientResult] { session.results }
+
+    /// Lands on the needs-attention view the first time there is anything to
+    /// attend to, and never overrides a choice a person has made since.
+    private func settleDefaultFilter() {
+        guard !didChooseFilter else { return }
+        filter = session.attentionCount > 0 ? .needsAttention : .all
+    }
+}
+
+/// One connection: its state glyph, its name and where it came from, the
+/// command or URL it points at, any failure detail, and the one thing a person
+/// can do about it.
+private struct HealthRow: View {
+    let entry: ConnectionHealthEntry
+    let action: ConnectionHealthAction
+    let actionState: WorkspaceHealthSession.ActionState
+    let commandText: String?
+    /// Where the running sign-in sent the person, so the row can name it and
+    /// offer to open it again if the browser tab was closed early.
+    let authorizationURL: URL?
+    let onReauthenticate: () -> Void
+    let onOpenConnectors: () -> Void
+    let onOpenAuthorizationPage: () -> Void
+
+    @State private var showingHelp = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Space.lg) {
+            StatusGlyph(state: entry.status.healthState)
+                .padding(.top, Space.xxs)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                HStack(spacing: Space.md) {
+                    Text(entry.displayName)
+                        .font(AgentFont.bodyMedium)
+                        .lineLimit(1)
+                    sourceBadge
+                    Spacer(minLength: 0)
+                }
+                if !entry.summary.isEmpty {
+                    Text(entry.summary)
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                }
+                if let detail = HealthFailureText.statusDetail(of: entry, action: action) {
+                    Text(detail)
+                        .font(AgentFont.caption)
+                        .foregroundStyle(AgentTheme.failure)
+                        .wrapsLines()
+                }
+                resultText
+            }
+            Spacer(minLength: Space.lg)
+            trailing
+        }
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
+        .frame(minHeight: Size.rowHeight)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(entry.status.label)
+    }
+
+    @ViewBuilder
+    private var sourceBadge: some View {
+        if let plugin = entry.pluginName, !plugin.isEmpty {
+            HealthBadge(text: "Plugin · \(plugin)", tint: AgentTheme.plugin)
+        } else if entry.isClaudeAIConnector {
+            HealthBadge(text: "claude.ai connector", tint: AgentTheme.selection)
+        }
+    }
+
+    @ViewBuilder
+    private var resultText: some View {
+        switch actionState {
+        case .idle:
+            EmptyView()
+        case .running:
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Label(
+                    authorizationURL == nil
+                        ? "Signing in… waiting for the tool to print its sign-in page."
+                        : "Signing in… finish in the browser, then this row updates itself.",
+                    systemImage: "arrow.triangle.2.circlepath"
+                )
+                .font(AgentFont.caption)
+                .foregroundStyle(.secondary)
+                if let host = authorizationURL?.host() {
+                    Button("Open the sign-in page at \(host) again", action: onOpenAuthorizationPage)
+                        .inlineActionStyle()
+                        .font(AgentFont.caption)
+                        .help("Opens the same authorization page the sign-in printed, in case the browser tab was closed.")
+                }
+            }
+        case .finished(let message):
+            Text(message)
+                .font(AgentFont.caption)
+                .foregroundStyle(AgentTheme.ok)
+                .wrapsLines()
+        case .failed(let message):
+            Text(failureText(message))
+                .font(AgentFont.caption)
+                .foregroundStyle(AgentTheme.failure)
+                .wrapsLines()
+        }
+    }
+
+    /// What to show for a failure detail. The raw detail is often a CLI
+    /// fragment ("is Anthropic-hosted and doesn't support local OAuth") that
+    /// reads as a broken sentence. When the fix is the claude.ai connectors
+    /// page, the app has its own sentence for that; otherwise show the detail
+    /// with a capital first letter so at least it starts like a sentence.
+    private func failureText(_ detail: String) -> String {
+        let routesToConnectors: Bool = if case .openClaudeAIConnectors = action { true } else { false }
+        return HealthFailureText.text(detail: detail, routesToClaudeAIConnectors: routesToConnectors)
+    }
+
+    @ViewBuilder
+    private var trailing: some View {
+        switch action {
+        case .reauthenticate:
+            Button("Re-authenticate…", action: onReauthenticate)
+                .secondaryActionStyle()
+                .controlSize(.small)
+                .disabled(actionState == .running)
+                .help(
+                    commandText.map { "Runs \($0), then opens the sign-in page it prints in your browser. Nothing else is read or stored." }
+                        ?? "Signs in to this connection again.")
+        case .openClaudeAIConnectors:
+            Button("Open claude.ai…", action: onOpenConnectors)
+                .secondaryActionStyle()
+                .controlSize(.small)
+                .help("Opens https://claude.ai/customize/connectors, where a hosted connector is managed.")
+        case .reconnectOnly(let guidance):
+            Button("How to fix…") { showingHelp = true }
+                .secondaryActionStyle()
+                .controlSize(.small)
+                .help(guidance)
+                .popover(isPresented: $showingHelp, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: Space.md) {
+                        Text("How to fix this").font(AgentFont.bodySemibold)
+                        Text(guidance)
+                            .font(AgentFont.body)
+                            .foregroundStyle(.secondary)
+                            .wrapsLines()
+                    }
+                    .padding(Space.xl)
+                    .frame(width: Size.fieldStandard)
+                }
+        case .none:
+            EmptyView()
+        }
+    }
+}
+
+private struct HealthBadge: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Text(text)
+            .font(AgentFont.microMedium)
+            .lineLimit(1)
+            .padding(.horizontal, Space.md)
+            .frame(height: Size.chipHeight)
+            .background(tint.opacity(Opacity.badgeWash), in: Capsule())
+            .foregroundStyle(tint)
+    }
+}
+
+/// The confirmation a person reads before signing in to several connections at
+/// once: exactly which connections, and the exact command each will run.
+struct BulkReauthenticateConfirmation: View {
+    let entries: [ConnectionHealthEntry]
+    let commandText: (ConnectionHealthEntry) -> String?
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text("Sign in to \(CountNoun.connection.phrase(entries.count))")
+                .font(AgentFont.heading)
+            Text(Self.explanation(count: entries.count))
+                .font(AgentFont.body)
+                .foregroundStyle(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.md) {
+                    ForEach(entries) { entry in
+                        VStack(alignment: .leading, spacing: Space.xxs) {
+                            Text(entry.displayName).font(AgentFont.bodyMedium)
+                            if let command = commandText(entry) {
+                                Text(command)
+                                    .font(AgentFont.mono)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: Size.sheetScrollCap)
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button("Sign in", action: onConfirm)
+                    .keyboardShortcut(.defaultAction)
+                    .primaryActionStyle()
+            }
+        }
+        .padding(Space.xxl)
+        .frame(width: Size.fieldWide)
+    }
+
+    /// What signing in does, agreeing with the heading's count: several
+    /// connections are opened one after another, and one is simply opened.
+    static func explanation(count: Int) -> String {
+        guard count != 1 else {
+            return "The sign-in prints a page to visit; Agent Tooling opens it in your browser and waits for the tool to confirm."
+        }
+        return "Each sign-in prints a page to visit; Agent Tooling opens it in your browser, one connection after another, "
+            + "and waits for the tool to confirm."
+    }
+}

@@ -13,6 +13,9 @@ final class WorkspaceDeploymentSession {
     struct Result: Identifiable {
         let id = UUID()
         let title: String
+        /// The apps this operation wrote to. One operation is one app, so an
+        /// outcome can be attributed to the app it belongs to.
+        var surfaces: [TargetSurface] = []
         let succeeded: Int
         let failed: Int
         let outputs: [String]
@@ -29,6 +32,14 @@ final class WorkspaceDeploymentSession {
 
     private(set) var linkedDestinations: [LinkedDestination] = []
     private(set) var plan: WorkspaceDeploymentPlan?
+    /// Destinations the last plan proved this app installed. Kept so the
+    /// install picker can tell an update of our own copy from somebody else's
+    /// files without measuring the disk a second time.
+    private(set) var provenInstalls: Set<WorkspaceDeploymentInstallKey> = []
+    /// Proven installs whose files no longer match the fingerprint recorded
+    /// when they were installed: somebody edited them. Replacing one without
+    /// asking would lose that work, so the direct paths leave these alone.
+    private(set) var editedInstalls: Set<WorkspaceDeploymentInstallKey> = []
     private(set) var results: [Result] = []
     private(set) var isBusy = false
     private(set) var errorMessage: String?
@@ -69,10 +80,13 @@ final class WorkspaceDeploymentSession {
     /// Nothing moves: this records where a later install would write. What is
     /// already in that folder stays exactly as it is, and an install refuses
     /// rather than replacing it.
-    func linkDestination(surface: TargetSurface, scope: ToolingScope,
-                         projectID: ArtifactID?, to folder: URL) async {
+    func linkDestination(
+        surface: TargetSurface, scope: ToolingScope,
+        projectID: ArtifactID?, to folder: URL
+    ) async {
         guard !isBusy, library.access == .writable,
-              let head = library.state?.snapshot.document.revision.id else { return }
+            let head = library.state?.snapshot.document.revision.id
+        else { return }
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
@@ -102,7 +116,8 @@ final class WorkspaceDeploymentSession {
     /// Goes back to the app's own folder. Nothing at the old path is touched.
     func unlinkDestination(_ id: WorkspaceObjectID) async {
         guard !isBusy, library.access == .writable,
-              let head = library.state?.snapshot.document.revision.id else { return }
+            let head = library.state?.snapshot.document.revision.id
+        else { return }
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
@@ -139,6 +154,13 @@ final class WorkspaceDeploymentSession {
 
     /// The read itself, so applying can refresh without fighting its own busy
     /// flag and leaving a stale plan on screen.
+    ///
+    /// Split into small steps so each one is legible: gather the selectors this
+    /// Mac could hold something for, capture the ones that resolve to a real
+    /// destination, turn the ones that do not into plain-words reasons, measure
+    /// what is already there, and plan over all of it. A per-selector problem
+    /// (a project with no folder, a client not installed, an unsupported app)
+    /// is carried through as a reason rather than aborting the whole read.
     private func performPrepare() async {
         do {
             // A plan is over the library as read. With no read yet, which is
@@ -150,59 +172,183 @@ final class WorkspaceDeploymentSession {
                 errorMessage = library.errorMessage ?? "The library could not be read. Nothing was changed."
                 return
             }
-            // Every place this Mac could hold something: where things are asked
-            // for now, and where this app may have put something before. Without
-            // the second half, withdrawing an assignment would leave the old copy
-            // installed with nothing offering to remove it.
-            var selectors = Set(snapshot.document.assignments.map {
-                ResolvedAssignmentSelector(destination: $0.destination)
-            })
-            for observation in snapshot.device.observations where observation.installed {
-                selectors.insert(.init(surface: observation.surface, scope: .user, logicalProjectID: nil))
-                for root in snapshot.device.projectRoots ?? [] {
-                    selectors.insert(.init(surface: observation.surface, scope: .project,
-                                           logicalProjectID: root.projectID))
-                }
-            }
-            let ordered = selectors.sorted {
-                [$0.surface.rawValue, $0.scope.rawValue, $0.logicalProjectID?.rawValue.uuidString ?? ""]
-                    .lexicographicallyPrecedes(
-                        [$1.surface.rawValue, $1.scope.rawValue, $1.logicalProjectID?.rawValue.uuidString ?? ""])
-            }
-            let captured = try await WorkspaceSkillTargetCapture.capture(
-                homeURL: homeRoot, deviceID: snapshot.device.deviceID, selectors: ordered,
-                projectRoots: snapshot.device.projectRoots ?? [],
-                observations: snapshot.device.observations,
-                capabilityEvidence: snapshot.device.capabilityEvidence)
-            // Measure what is actually at each destination now, so "already
-            // there" is an observation rather than an assumption.
-            // Only destinations this app can prove it installed may be offered
-            // for removal; anything else is somebody else's.
-            let proven = Self.provenInstalls(snapshot: snapshot, targets: captured,
-                                             store: store)
-            let observations =
-                await Self.measure(snapshot: snapshot, targets: captured, alsoMeasuring: proven)
-                + Self.reportedNativePackages(snapshot: snapshot, targets: captured)
-            // A native package is only offered where the person's own retained
-            // record holds an install command for that exact client and package.
-            // Without one there is nothing to run, and offering it anyway would
-            // be an install claim with no command behind it.
-            plan = try await service.deploymentPlan(
-                targets: captured.map(\.target), observations: observations,
-                provenInstalls: proven,
-                nativeInstallRoutes: Self.reviewedNativeRoutes(snapshot: snapshot))
-            let projects = Dictionary(snapshot.document.logicalProjects.map { ($0.id, $0.name) },
-                                      uniquingKeysWith: { first, _ in first })
-            linkedDestinations = snapshot.device.destinations.map {
-                .init(id: $0.id, surface: $0.selector.surface, scope: $0.selector.scope,
-                      projectName: $0.selector.logicalProjectID.flatMap { projects[$0] },
-                      path: $0.resolvedPath)
-            }.sorted { $0.path < $1.path }
+            let captured = try await captureTargets(snapshot: snapshot)
+            // A selector that resolved to no destination is not a failure of the
+            // whole read: it becomes a named reason the plan can show, so the
+            // items that did resolve still install.
+            let unavailable = Self.unavailableDestinations(
+                snapshot: snapshot, skipped: captured.skipped)
+            plan = await buildPlan(
+                snapshot: snapshot, captured: captured.targets, unavailable: unavailable)
+            linkedDestinations = Self.linkedDestinations(snapshot: snapshot)
         } catch is CancellationError {
             errorMessage = "Checking your apps was cancelled. Nothing was changed."
+        } catch let error as WorkspaceSkillTargetCaptureError {
+            plan = nil
+            errorMessage = Self.message(for: error)
+        } catch let error as WorkspaceRevisionStoreError {
+            plan = nil
+            errorMessage = Self.message(for: error)
         } catch {
             plan = nil
             errorMessage = "This Mac's apps could not be checked. Nothing was changed."
+        }
+    }
+
+    /// Every place this Mac could hold something — where things are asked for
+    /// now, and where this app may have put something before — captured into
+    /// real destinations, with the selectors it could not reach reported
+    /// alongside. Without the second half, withdrawing an assignment would
+    /// leave the old copy installed with nothing offering to remove it.
+    private func captureTargets(
+        snapshot: WorkspaceApplicationSnapshot
+    ) async throws -> WorkspaceSkillTargetCaptureResult {
+        var selectors = Set(
+            snapshot.document.assignments.map {
+                ResolvedAssignmentSelector(destination: $0.destination)
+            })
+        // Only surfaces the skill capture can actually place into are worth a
+        // removal selector; an unsupported surface would only ever be skipped.
+        for observation in snapshot.device.observations
+        where observation.installed
+            && TargetSurfaceCapability.skillClient(for: observation.surface) != nil
+        {
+            selectors.insert(.init(surface: observation.surface, scope: .user, logicalProjectID: nil))
+            for root in snapshot.device.projectRoots ?? [] {
+                selectors.insert(
+                    .init(
+                        surface: observation.surface, scope: .project,
+                        logicalProjectID: root.projectID))
+            }
+        }
+        let ordered = selectors.sorted {
+            [$0.surface.rawValue, $0.scope.rawValue, $0.logicalProjectID?.rawValue.uuidString ?? ""]
+                .lexicographicallyPrecedes(
+                    [$1.surface.rawValue, $1.scope.rawValue, $1.logicalProjectID?.rawValue.uuidString ?? ""])
+        }
+        return try await WorkspaceSkillTargetCapture.capture(
+            homeURL: homeRoot, deviceID: snapshot.device.deviceID, selectors: ordered,
+            projectRoots: snapshot.device.projectRoots ?? [],
+            observations: snapshot.device.observations,
+            capabilityEvidence: snapshot.device.capabilityEvidence)
+    }
+
+    /// Measures what is at each destination now, then plans over the captured
+    /// targets and the named destinations this Mac could not reach.
+    private func buildPlan(
+        snapshot: WorkspaceApplicationSnapshot,
+        captured: [CapturedSkillAssignmentTarget],
+        unavailable: [ResolvedAssignmentSelector: String]
+    ) async -> WorkspaceDeploymentPlan {
+        // Only destinations this app can prove it installed may be offered for
+        // removal; anything else is somebody else's.
+        let (proven, edited) = Self.provenInstalls(snapshot: snapshot, targets: captured, store: store)
+        provenInstalls = proven
+        editedInstalls = edited
+        // Measure what is actually at each destination now, so "already there"
+        // is an observation rather than an assumption.
+        let observations =
+            await Self.measure(snapshot: snapshot, targets: captured, alsoMeasuring: proven)
+            + Self.reportedNativePackages(snapshot: snapshot, targets: captured)
+        // The service reads the held content itself and forwards everything to
+        // the planner, so the unavailable-destination reasons this screen built
+        // reach the plan without the screen re-reading the content store.
+        do {
+            return try await service.deploymentPlan(
+                targets: captured.map(\.target),
+                observations: observations, provenInstalls: proven,
+                nativeInstallRoutes: Self.reviewedNativeRoutes(snapshot: snapshot),
+                unavailableDestinations: unavailable)
+        } catch {
+            // The snapshot was read a moment ago; a plan over an empty library
+            // is a truthful "nothing to do" rather than a fabricated one.
+            return WorkspaceDeploymentPlanner.plan(
+                document: snapshot.document, device: snapshot.device,
+                targets: captured.map(\.target), observations: observations,
+                provenInstalls: proven,
+                nativeInstallRoutes: Self.reviewedNativeRoutes(snapshot: snapshot),
+                unavailableDestinations: unavailable)
+        }
+    }
+
+    /// Turns each skipped selector into a reason in a person's words, naming
+    /// the project or the app so the plan says what to do rather than showing a
+    /// code word. A project's name comes from the document's own logical
+    /// projects; a surface names itself.
+    private nonisolated static func unavailableDestinations(
+        snapshot: WorkspaceApplicationSnapshot,
+        skipped: [SkippedSkillAssignmentSelector]
+    ) -> [ResolvedAssignmentSelector: String] {
+        let projectNames = Dictionary(
+            snapshot.document.logicalProjects.map { ($0.id, $0.name) },
+            uniquingKeysWith: { first, _ in first })
+        var result: [ResolvedAssignmentSelector: String] = [:]
+        for entry in skipped {
+            let detail: String
+            switch entry.reason {
+            case .missingProject(let id):
+                let name = projectNames[id] ?? "This project"
+                detail = "\(name) has no folder on this Mac yet. Choose one on the Projects screen."
+            case .unavailableClient(let surface):
+                detail = "\(surface.displayName) is not installed on this Mac."
+            case .unsupportedSurface(let surface):
+                detail = "Agent Tooling cannot install into \(surface.displayName) yet."
+            case .invalidSelectors, .invalidProjectBindings, .missingObservation,
+                .ambiguousObservation, .invalidRoot, .unreadableDirectory,
+                .changedDuringCapture:
+                // These are structural and are thrown, not skipped; if one ever
+                // arrives here, a neutral sentence is safer than a code word.
+                detail = "This destination could not be checked on this Mac."
+            }
+            result[entry.selector] = detail
+        }
+        return result
+    }
+
+    /// Where this Mac writes something other than the client's default folder.
+    private nonisolated static func linkedDestinations(
+        snapshot: WorkspaceApplicationSnapshot
+    ) -> [LinkedDestination] {
+        let projects = Dictionary(
+            snapshot.document.logicalProjects.map { ($0.id, $0.name) },
+            uniquingKeysWith: { first, _ in first })
+        return snapshot.device.destinations.map {
+            .init(
+                id: $0.id, surface: $0.selector.surface, scope: $0.selector.scope,
+                projectName: $0.selector.logicalProjectID.flatMap { projects[$0] },
+                path: $0.resolvedPath)
+        }.sorted { $0.path < $1.path }
+    }
+
+    /// A typed capture error in a person's words, naming the surface or project.
+    private nonisolated static func message(for error: WorkspaceSkillTargetCaptureError) -> String {
+        switch error {
+        case .missingObservation(let surface):
+            return "\(surface.displayName) has not been checked on this Mac yet. Check your apps again."
+        case .ambiguousObservation(let surface):
+            return "This Mac has more than one record for \(surface.displayName), so its apps could not be checked. Check your apps again."
+        case .unsupportedSurface(let surface):
+            return "Agent Tooling cannot install into \(surface.displayName) yet."
+        case .unavailableClient(let surface):
+            return "\(surface.displayName) is not installed on this Mac."
+        case .missingProject:
+            return "One of these needs its project folder on this Mac. Choose one on the Projects screen."
+        case .invalidRoot, .unreadableDirectory:
+            return "A destination folder on this Mac could not be read. Nothing was changed."
+        case .changedDuringCapture:
+            return "This Mac's folders changed while they were being checked. Check your apps again."
+        case .invalidSelectors, .invalidProjectBindings:
+            return "This Mac's apps could not be checked. Nothing was changed."
+        }
+    }
+
+    /// A revision-store error in plain words rather than a generic banner.
+    private nonisolated static func message(for error: WorkspaceRevisionStoreError) -> String {
+        switch error {
+        case .notInitialized:
+            return "The library has not been set up yet, so there is nothing to check."
+        default:
+            return "The library could not be read on this Mac. Nothing was changed."
         }
     }
 
@@ -215,18 +361,22 @@ final class WorkspaceDeploymentSession {
         targets: [CapturedSkillAssignmentTarget],
         alsoMeasuring proven: Set<WorkspaceDeploymentInstallKey>
     ) async -> [WorkspaceDeploymentObservation] {
-        let artifacts = Dictionary(snapshot.document.artifacts.map { ($0.identity.id, $0) },
-                                   uniquingKeysWith: { first, _ in first })
-        let byDestination = Dictionary(targets.map { ($0.target.physicalDestinationID, $0) },
-                                       uniquingKeysWith: { first, _ in first })
+        let artifacts = Dictionary(
+            snapshot.document.artifacts.map { ($0.identity.id, $0) },
+            uniquingKeysWith: { first, _ in first })
+        let byDestination = Dictionary(
+            targets.map { ($0.target.physicalDestinationID, $0) },
+            uniquingKeysWith: { first, _ in first })
         // Where things are asked for, plus where this app already put them, so
         // a withdrawn item is still measured and can be offered for removal.
-        var pairs = Set(snapshot.document.assignments.compactMap { assignment -> WorkspaceDeploymentInstallKey? in
-            let selector = ResolvedAssignmentSelector(destination: assignment.destination)
-            guard let captured = targets.first(where: { $0.target.selector == selector }) else { return nil }
-            return .init(artifactID: assignment.artifactID,
-                         physicalDestinationID: captured.target.physicalDestinationID)
-        })
+        var pairs = Set(
+            snapshot.document.assignments.compactMap { assignment -> WorkspaceDeploymentInstallKey? in
+                let selector = ResolvedAssignmentSelector(destination: assignment.destination)
+                guard let captured = targets.first(where: { $0.target.selector == selector }) else { return nil }
+                return .init(
+                    artifactID: assignment.artifactID,
+                    physicalDestinationID: captured.target.physicalDestinationID)
+            })
         pairs.formUnion(proven)
         var results: [WorkspaceDeploymentObservation] = []
         for pair in pairs.sorted(by: { $0.artifactID.rawValue.uuidString < $1.artifactID.rawValue.uuidString }) {
@@ -240,16 +390,21 @@ final class WorkspaceDeploymentSession {
             let folder = captured.plannedDirectory.appending(path: name, directoryHint: .isDirectory)
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory),
-                  isDirectory.boolValue else {
-                results.append(.init(artifactID: pair.artifactID,
-                                     physicalDestinationID: pair.physicalDestinationID,
-                                     isPresent: false))
+                isDirectory.boolValue
+            else {
+                results.append(
+                    .init(
+                        artifactID: pair.artifactID,
+                        physicalDestinationID: pair.physicalDestinationID,
+                        isPresent: false))
                 continue
             }
             let digest = try? await PackageTreeCapture().capture(directory: folder).digest
-            results.append(.init(artifactID: pair.artifactID,
-                                 physicalDestinationID: pair.physicalDestinationID,
-                                 isPresent: true, contentDigest: digest))
+            results.append(
+                .init(
+                    artifactID: pair.artifactID,
+                    physicalDestinationID: pair.physicalDestinationID,
+                    isPresent: true, contentDigest: digest))
         }
         return results
     }
@@ -318,20 +473,28 @@ final class WorkspaceDeploymentSession {
         snapshot: WorkspaceApplicationSnapshot,
         targets: [CapturedSkillAssignmentTarget],
         store: WorkspaceRevisionStore
-    ) -> Set<WorkspaceDeploymentInstallKey> {
+    ) -> (proven: Set<WorkspaceDeploymentInstallKey>, edited: Set<WorkspaceDeploymentInstallKey>) {
         let authority = ManagedInstallAuthority.fromStore(store)
         var keys = Set<WorkspaceDeploymentInstallKey>()
+        var edited = Set<WorkspaceDeploymentInstallKey>()
         for artifact in snapshot.document.artifacts {
             guard artifact.identity.parentPackageID == nil,
-                  let name = artifact.declaredName, !name.isEmpty else { continue }
+                let name = artifact.declaredName, !name.isEmpty
+            else { continue }
             for captured in targets {
                 let folder = captured.plannedDirectory.appending(path: name, directoryHint: .isDirectory)
-                guard authority.proof(forDestination: folder.path) != nil else { continue }
-                keys.insert(.init(artifactID: artifact.identity.id,
-                                  physicalDestinationID: captured.target.physicalDestinationID))
+                guard let proof = authority.proof(forDestination: folder.path) else { continue }
+                let key = WorkspaceDeploymentInstallKey(
+                    artifactID: artifact.identity.id, physicalDestinationID: captured.target.physicalDestinationID)
+                keys.insert(key)
+                // The same comparison the setup check makes: the tree on disk
+                // against the fingerprint approved at install.
+                if case .modifiedSinceReview = InstalledPackageDriftInspector.drift(for: proof.record).state {
+                    edited.insert(key)
+                }
             }
         }
-        return keys
+        return (keys, edited)
     }
 
     /// Routes whose install command this build has recorded, with the client
@@ -346,10 +509,11 @@ final class WorkspaceDeploymentSession {
         let routes = snapshot.document.artifacts
             .filter { $0.identity.parentPackageID == nil }
             .flatMap(\.nativeRoutes)
-        return Set(routes.filter {
-            NativePluginInstallRegister.command(
-                for: $0.client, externalPluginID: $0.externalPluginID) != nil
-        })
+        return Set(
+            routes.filter {
+                NativePluginInstallRegister.command(
+                    for: $0.client, externalPluginID: $0.externalPluginID) != nil
+            })
     }
 
     /// What `commandPlans` found: the commands it could build, and the steps
@@ -493,7 +657,7 @@ final class WorkspaceDeploymentSession {
         if let refusal = refusal as? WorkspaceNativePluginCommandPlanningError {
             switch refusal {
             case .blockedByManagedPolicy, .unresolvedManagedPolicy:
-                return "A managed policy on this Mac blocks this package in \(client.rawValue)."
+                return "A managed policy on this Mac blocks this plugin in \(client.rawValue)."
             case .unsupportedScope, .unsupportedSurface, .unsupportedEnablement:
                 return "\(client.rawValue) cannot be asked to do this here."
             default:
@@ -523,10 +687,12 @@ final class WorkspaceDeploymentSession {
         var paths = Set<String>()
         for item in plan.items {
             guard let name = names[item.artifactID],
-                  let binding = WorkspaceLinkedDestinations.binding(
-                      for: .init(surface: item.surface, scope: item.scope,
-                                 logicalProjectID: item.logicalProjectID),
-                      in: snapshot.device) else { continue }
+                let binding = WorkspaceLinkedDestinations.binding(
+                    for: .init(
+                        surface: item.surface, scope: item.scope,
+                        logicalProjectID: item.logicalProjectID),
+                    in: snapshot.device)
+            else { continue }
             let folder = URL(fileURLWithPath: binding.resolvedPath)
                 .appending(path: name, directoryHint: .isDirectory).standardizedFileURL
             guard authority.proof(forDestination: folder.path) != nil else { continue }
@@ -535,9 +701,118 @@ final class WorkspaceDeploymentSession {
         return paths
     }
 
+    /// The prepared plan narrowed to some items: what installing just those
+    /// would do on this Mac. Exclusions that name one of the items are kept, so
+    /// "cannot be carried out" still shows for the thing somebody just chose;
+    /// removals and other items' work are left out, because they are not what
+    /// the button said.
+    func plan(
+        for artifactIDs: Set<ArtifactID>, includingRemovals: Bool = false,
+        excluding heldBack: Set<WorkspaceDeploymentInstallKey> = [],
+        onlyRemovalKeys: Set<WorkspaceDeploymentInstallKey>? = nil
+    ) -> WorkspaceDeploymentPlan? {
+        guard let plan else { return nil }
+        return WorkspaceDeploymentPlan(
+            items: plan.items.filter { item in
+                if case .removeContent = item.action {
+                    if !includingRemovals { return false }
+                    // Scoping by artifact alone sweeps up every removal the
+                    // planner offers for that artifact, including one pending at
+                    // a destination this caller never touched. When a caller
+                    // knows the exact places it wrote, it narrows removals to
+                    // those keys so an unrelated pending removal is left alone.
+                    if let onlyRemovalKeys, !onlyRemovalKeys.contains(Self.installKey(item)) { return false }
+                }
+                if heldBack.contains(Self.installKey(item)) { return false }
+                return artifactIDs.contains(item.artifactID)
+            },
+            exclusions: plan.exclusions.filter { $0.artifactID.map(artifactIDs.contains) ?? false },
+            requirements: plan.requirements, resolvedTargets: plan.resolvedTargets)
+    }
+
+    /// Whether installing just these items can run from the button that asked
+    /// for it, and if not, why a person should look first.
+    func risk(for artifactIDs: Set<ArtifactID>, requestedByAgent: Bool = false) -> OperationPlanRiskClassifier.Verdict? {
+        guard let scoped = plan(for: artifactIDs) else { return nil }
+        return OperationPlanRiskClassifier.classify(
+            scoped,
+            context: .init(provenInstalls: provenInstalls, editedInstalls: editedInstalls, requestedByAgent: requestedByAgent))
+    }
+
+    /// Applies only the items for these artifacts, through the same staged,
+    /// receipted path `apply()` uses. The caller has already decided, from
+    /// `risk(for:)`, that nobody needs to look first.
+    func apply(
+        only artifactIDs: Set<ArtifactID>, includingRemovals: Bool = false,
+        excluding heldBack: Set<WorkspaceDeploymentInstallKey> = [],
+        onlyRemovalKeys: Set<WorkspaceDeploymentInstallKey>? = nil
+    ) async {
+        guard
+            let scoped = plan(
+                for: artifactIDs, includingRemovals: includingRemovals,
+                excluding: heldBack, onlyRemovalKeys: onlyRemovalKeys),
+            !scoped.items.isEmpty
+        else { return }
+        await apply(plan: scoped)
+    }
+
+    /// The steps a direct path must leave alone: copies this app cannot prove
+    /// it installed, and copies somebody edited since. One rule, so the
+    /// install, update and arrival paths cannot disagree about it.
+    func heldBack(in plan: WorkspaceDeploymentPlan) -> [WorkspaceDeploymentItem] {
+        plan.items.filter { cannotOverwrite($0) || editedSinceInstall($0) }
+    }
+
+    /// Applies only these artifacts' steps that a direct path may run, and
+    /// returns the steps it left alone. The one call every direct path makes.
+    @discardableResult
+    func applyDirect(_ artifactIDs: Set<ArtifactID>) async -> [WorkspaceDeploymentItem] {
+        guard let scoped = plan(for: artifactIDs) else { return [] }
+        let leftAlone = heldBack(in: scoped)
+        await apply(only: artifactIDs, excluding: Set(leftAlone.map(Self.installKey)))
+        return leftAlone
+    }
+
+    /// Replaces the copies of these artifacts this app proved it installed
+    /// and nobody edited since. The path an update takes after the library has
+    /// new content. Returns the steps it left alone, which wait on the Apps
+    /// screen's review.
+    @discardableResult
+    func replaceProvenCopies(of artifactIDs: Set<ArtifactID>) async -> [WorkspaceDeploymentItem] {
+        await applyDirect(artifactIDs)
+    }
+
+    /// Whether this step would replace a copy of ours that was edited since.
+    func editedSinceInstall(_ item: WorkspaceDeploymentItem) -> Bool {
+        guard case .updateContent = item.action else { return false }
+        return editedInstalls.contains(Self.installKey(item))
+    }
+
+    /// Whether the executor will refuse this step no matter who approves it:
+    /// it would replace files at a place Agent Tooling cannot prove it
+    /// installed (somebody's hand-made skill folder, for example). The engine
+    /// checks the same thing again right before writing; this lets a caller
+    /// say so up front and leave the step out instead of watching it fail.
+    func cannotOverwrite(_ item: WorkspaceDeploymentItem) -> Bool {
+        guard case .updateContent = item.action else { return false }
+        return !provenInstalls.contains(Self.installKey(item))
+    }
+
+    static func installKey(_ item: WorkspaceDeploymentItem) -> WorkspaceDeploymentInstallKey {
+        .init(artifactID: item.artifactID, physicalDestinationID: item.physicalDestinationID)
+    }
+
     /// Applies the prepared plan through the reviewed operation path.
     func apply() async {
-        guard canApply, let plan, let contentStore else { return }
+        guard let plan else { return }
+        await apply(plan: plan)
+    }
+
+    /// Every failure caught here is raised before anything is written, so each
+    /// one says nothing was changed: a plan can remove as well as install, and
+    /// "nothing was installed" would answer for only half of it.
+    private func apply(plan: WorkspaceDeploymentPlan) async {
+        guard canApply, let contentStore else { return }
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
@@ -546,18 +821,20 @@ final class WorkspaceDeploymentSession {
             var content: [ContentDigest: CapturedPackageTree] = [:]
             for artifact in snapshot.document.artifacts {
                 guard let digest = artifact.contentDigest, content[digest] == nil,
-                      plan.items.contains(where: {
-                          if case .removeContent = $0.action { return false }
-                          return $0.artifactID == artifact.identity.id
-                      }) else { continue }
+                    plan.items.contains(where: {
+                        if case .removeContent = $0.action { return false }
+                        return $0.artifactID == artifact.identity.id
+                    })
+                else { continue }
                 content[digest] = try await contentStore.read(digest)
             }
             // Staging lives inside the app's managed library; the executor
             // refuses to copy from anywhere else.
             try store.prepareManagedDirectories()
             let staging = store.libraryURL.appending(path: "staged-deployments")
-            try? FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true,
-                                                     attributes: [.posixPermissions: 0o700])
+            try? FileManager.default.createDirectory(
+                at: staging, withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
             let projectRoots = Dictionary(
                 (snapshot.device.projectRoots ?? []).map { ($0.projectID, URL(fileURLWithPath: $0.rootPath)) },
                 uniquingKeysWith: { first, _ in first })
@@ -566,8 +843,9 @@ final class WorkspaceDeploymentSession {
                 plan, artifacts: snapshot.document.artifacts, content: content,
                 stagingRoot: staging, homeURL: homeRoot, projectRoots: projectRoots,
                 device: snapshot.device,
-                provenInstalls: Self.provenLinkedPaths(plan: plan, snapshot: snapshot,
-                                                       store: store))
+                provenInstalls: Self.provenLinkedPaths(
+                    plan: plan, snapshot: snapshot,
+                    store: store))
             // Only the folders this device registered, and only those. The
             // executor still applies every other rule inside them.
             let executor = OperationExecutor(
@@ -576,16 +854,19 @@ final class WorkspaceDeploymentSession {
                     URL(fileURLWithPath: $0.resolvedPath)
                 })
             var collected: [Result] = []
-            let operations = WorkspaceDeploymentOperations.operations(for: staged)
+            let operations =
+                WorkspaceDeploymentOperations.operations(for: staged)
                 + WorkspaceDeploymentOperations.operations(
                     nativePlugins: commandPlans.plugins, managedConnections: commandPlans.connections)
             for operation in operations {
                 let receipt = await executor.execute(operation)
-                collected.append(.init(
-                    title: operation.title,
-                    succeeded: receipt.results.filter { $0.status == .succeeded }.count,
-                    failed: receipt.results.filter { $0.status == .failed }.count,
-                    outputs: receipt.results.filter { $0.status == .failed }.map(\.output)))
+                collected.append(
+                    .init(
+                        title: operation.title,
+                        surfaces: operation.targetSurfaces,
+                        succeeded: receipt.results.filter { $0.status == .succeeded }.count,
+                        failed: receipt.results.filter { $0.status == .failed }.count,
+                        outputs: receipt.results.filter { $0.status == .failed }.map(\.output)))
             }
             results = collected
             // Re-read, so what is shown next reflects what actually happened.
@@ -593,9 +874,18 @@ final class WorkspaceDeploymentSession {
         } catch WorkspaceDeploymentOperationError.missingProjectRoot {
             errorMessage = "One of these needs its project folder on this Mac. Nothing was changed."
         } catch WorkspaceDeploymentOperationError.destinationOccupied {
-            errorMessage = "A folder you pointed a destination at already holds something Agent Tooling did not put there. It was left exactly as it is, and nothing was installed."
+            errorMessage =
+                "A folder you pointed a destination at already holds something Agent Tooling did not put there. It was left exactly as it is, and nothing was changed."
+        } catch WorkspaceDeploymentOperationError.missingContent {
+            errorMessage = "The library has no verified copy of one of these tools, so nothing was changed."
+        } catch WorkspaceDeploymentOperationError.stagingFailed, WorkspaceDeploymentOperationError.invalidStagingRoot {
+            errorMessage = "The approved copy could not be prepared inside Agent Tooling's own library, so nothing was changed."
+        } catch WorkspaceDeploymentOperationError.unsupportedSurface, WorkspaceDeploymentOperationError.unsupportedScope {
+            errorMessage = "One of these asks for a place Agent Tooling cannot install into yet, so nothing was changed."
         } catch {
-            errorMessage = "These tools could not be installed. Your apps were left as they are."
+            // Anything else is named, because a sentence with no cause sends a
+            // person hunting through logs for what this screen already knew.
+            errorMessage = "These changes could not be made. Your apps were left as they are. (\(error.localizedDescription))"
         }
     }
 }

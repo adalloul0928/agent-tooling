@@ -59,7 +59,6 @@ struct OnboardingWizard: View {
     let workspace: WorkspaceLaunch.Workspace
     var onFinish: () -> Void
 
-    @Environment(AppNavigationState.self) private var navigation
     @Environment(\.workspaceNavigate) private var workspaceNavigate
     @State private var step: OnboardingStep
     @State private var isAssigning = false
@@ -73,55 +72,54 @@ struct OnboardingWizard: View {
     var body: some View {
         VStack(spacing: 0) {
             PageToolbar(title: "Get started", context: "Choose what each app should have") {}
-            Divider()
+            Hairline()
             progressHeader
-            Divider()
-            VStack(alignment: .leading, spacing: 6) {
-                Text(step.title).font(.system(size: 21, weight: .semibold))
-                Text(step.subtitle).font(.system(size: 14)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            Hairline()
+            VStack(alignment: .leading, spacing: Space.sm) {
+                Text(step.title).font(AgentFont.pageTitle)
+                Text(step.subtitle).font(AgentFont.body).foregroundStyle(.secondary)
+                    .wrapsLines()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 28).padding(.top, 20).padding(.bottom, 16)
+            .padding(.horizontal, WorkspaceLayout.pageInset).padding(.top, Space.xxl).padding(.bottom, Space.xl)
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                     switch step {
                     case .found: foundStep
                     case .apps: appsStep
                     case .assign: assignStep
                     }
                 }
-                .padding(.horizontal, 28).padding(.bottom, 24)
+                .padding(.horizontal, WorkspaceLayout.pageInset).padding(.bottom, Space.xxxl)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Divider()
+            Hairline()
             footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AgentTheme.contentBackground)
-        .frame(minWidth: 720, minHeight: 480)
+        .frame(minWidth: SheetSize.onboardingMinimum.width, minHeight: SheetSize.onboardingMinimum.height)
         .sheet(isPresented: $isAssigning) {
             OnboardingAssignmentPickerSheet(session: workspace.library)
         }
     }
 
     private var progressHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.lg) {
             Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 17, weight: .medium)).foregroundStyle(.secondary)
-            Text("Set up Agent Tooling").font(.system(size: 14, weight: .semibold))
+                .font(.system(size: Size.symbol, weight: .medium)).foregroundStyle(.secondary)
+            Text("Set up Agent Tooling").font(AgentFont.bodySemibold)
             Spacer()
             Text("Step \(step.rawValue + 1) of \(OnboardingStep.allCases.count) · \(step.label)")
-                .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
-            HStack(spacing: 4) {
+                .font(AgentFont.captionMedium).foregroundStyle(.secondary)
+            HStack(spacing: Space.xs) {
                 ForEach(OnboardingStep.allCases) { candidate in
-                    Capsule().fill(candidate.rawValue <= step.rawValue ? AgentTheme.blue : Color.secondary.opacity(0.18))
-                        .frame(width: 22, height: 4)
+                    Capsule().fill(candidate.rawValue <= step.rawValue ? AgentTheme.selection : Color.secondary.opacity(Opacity.track))
+                        .frame(width: Size.glyphSlot, height: Space.xs)
                 }
             }.accessibilityHidden(true)
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 14)
+        .padding(.horizontal, WorkspaceLayout.pageInset)
+        .padding(.vertical, Space.xl)
     }
 
     // MARK: - Found
@@ -129,39 +127,40 @@ struct OnboardingWizard: View {
     @ViewBuilder
     private var foundStep: some View {
         if let library = workspace.library.state?.library {
-            VStack(alignment: .leading, spacing: 22) {
-                Text(librarySummary(library)).font(.system(size: 14)).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
+                Text(librarySummary(library)).font(AgentFont.body).foregroundStyle(.secondary)
                 TitledCard("Apps on this Mac", count: "\(workspace.device.availableClients.count)") {
                     ForEach(Array(workspace.device.availableClients.enumerated()), id: \.element) { index, client in
                         foundClientRow(client)
-                        if index < workspace.device.availableClients.count - 1 { Divider().padding(.leading, 54) }
+                        if index < workspace.device.availableClients.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
                     }
                 }
                 TitledCard("In your library", count: "\(library.rows.count)") {
                     ForEach(Array(library.rows.prefix(6).enumerated()), id: \.element.id) { index, row in
                         foundLibraryRow(row)
-                        if index < min(6, library.rows.count) - 1 { Divider().padding(.leading, 54) }
+                        if index < min(6, library.rows.count) - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
                     }
                     if library.rows.count > 6 {
-                        Divider().padding(.leading, 54)
-                        Text("and \(library.rows.count - 6) more entries")
-                            .font(.system(size: 12)).foregroundStyle(.secondary)
-                            .padding(.horizontal, 13).padding(.vertical, 9)
+                        let more = library.rows.count - 6
+                        Hairline(indent: Hairline.afterLeading(Size.tile))
+                        Text("and \(more) more \(CountNoun("entry", plural: "entries").word(for: more))")
+                            .font(AgentFont.caption).foregroundStyle(.secondary)
+                            .padding(.horizontal, Space.lg).padding(.vertical, Space.md)
                     }
                 }
                 Text("This covers local agent setup. Cloud account connections and desktop-only settings remain in their own apps.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .font(AgentFont.caption).foregroundStyle(.secondary)
             }
         } else {
             ProgressView("Reading your library…")
-                .frame(maxWidth: .infinity, minHeight: 200)
+                .frame(maxWidth: .infinity, minHeight: Size.emptyStateMinHeight)
         }
     }
 
     private func foundClientRow(_ client: ClientKind) -> some View {
         let verdict = workspace.device.verdict(for: client)
         return InfoRow(client.rawValue, detail: clientScope(client)) {
-            ClientBrandIcon(client: client, size: 22).frame(width: 28, height: 28)
+            ClientBrandIcon(client: client, size: Size.tileSmall).frame(width: Size.tile, height: Size.tile)
         } trailing: {
             StatusBadge(state: verdict.state, text: verdict.text)
         }
@@ -169,14 +168,14 @@ struct OnboardingWizard: View {
 
     private func foundLibraryRow(_ row: WorkspaceLibraryReadModelRow) -> some View {
         InfoRow(row.displayName, detail: row.ownershipLabel) {
-            KindTile(kind: toolingKind(row.kind), size: 26)
+            KindTile(kind: ToolingKind(row.kind), size: Size.tile)
         }
     }
 
     private func librarySummary(_ library: WorkspaceLibraryReadModel) -> String {
         let nested = library.nestedToolCount
         let total = library.toolCount
-        let holds = total == 1 ? "It holds 1 tool." : "It holds \(total) tools."
+        let holds = "It holds \(CountNoun("tool").phrase(total))."
         guard nested > 0 else { return holds }
         return nested == 1
             ? "\(holds) One of them comes inside a plugin."
@@ -186,31 +185,31 @@ struct OnboardingWizard: View {
     // MARK: - Apps
 
     private var appsStep: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
             VStack(spacing: 0) {
                 ForEach(Array(workspace.device.availableClients.enumerated()), id: \.element) { index, client in
-                    if index > 0 { Divider().padding(.leading, 64) }
+                    if index > 0 { Hairline(indent: Hairline.afterLeading(Size.tileLarge, gap: Space.xl)) }
                     Toggle(isOn: clientBinding(client)) {
-                        HStack(spacing: 14) {
-                            ClientBrandIcon(client: client, size: 28)
-                                .frame(width: 36, height: 40)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(client.rawValue).font(.system(size: 16, weight: .semibold))
-                                Text(clientScope(client)).font(.system(size: 14)).foregroundStyle(.secondary)
+                        HStack(spacing: Space.xl) {
+                            ClientBrandIcon(client: client, size: Size.tile)
+                                .frame(width: Size.tileLarge, height: Size.tileLarge)
+                            VStack(alignment: .leading, spacing: Space.xs) {
+                                Text(client.rawValue).font(AgentFont.title)
+                                Text(clientScope(client)).font(AgentFont.body).foregroundStyle(.secondary)
                             }
                             Spacer()
                         }
                     }
                     .toggleStyle(.checkbox)
-                    .padding(18)
+                    .padding(Space.xxl)
                     .accessibilityLabel("Have this Mac manage \(client.rawValue)")
                 }
             }
-            .standardPanel(cornerRadius: 14)
+            .standardPanel()
             Text(
                 "Tracking follows your library either way. Turning an app off here only stops this Mac from keeping it in sync — nothing already installed changes."
             )
-            .font(.system(size: 13)).foregroundStyle(.secondary)
+            .font(AgentFont.body).foregroundStyle(.secondary)
             if let error = workspace.device.errorMessage {
                 AttentionBanner(title: "Couldn’t save that choice", message: error)
             }
@@ -229,20 +228,20 @@ struct OnboardingWizard: View {
     private var assignStep: some View {
         if workspace.library.state == nil {
             ProgressView("Reading your library…")
-                .frame(maxWidth: .infinity, minHeight: 200)
+                .frame(maxWidth: .infinity, minHeight: Size.emptyStateMinHeight)
         } else if isDone {
             doneCard
         } else {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: Space.xl) {
                 Text(
                     "Nothing is assigned yet. Choosing tools here records where you want them; installing them into your apps stays a separate step you review."
                 )
-                .font(.system(size: 14)).foregroundStyle(.secondary)
+                .font(AgentFont.body).foregroundStyle(.secondary)
                 if !canAssign {
                     AttentionBanner(
-                        title: "Nothing is ready to assign yet",
+                        title: "Nothing can be assigned yet",
                         message:
-                            "A first run only tracks what it finds. Manage an item from the library before assigning it here, or skip this for now."
+                            "Nothing can be assigned yet: a first run only tracks what it finds. Manage a tool from the Library first, or finish now and come back."
                     )
                 }
                 if let error = workspace.library.errorMessage {
@@ -253,32 +252,32 @@ struct OnboardingWizard: View {
     }
 
     private var doneCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: Space.xxl) {
+            HStack(spacing: Space.xl) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 28)).foregroundStyle(AgentTheme.ok)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Your assignments are saved").font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: Size.heroSymbol)).foregroundStyle(AgentTheme.ok)
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text("Your assignments are saved").font(AgentFont.title)
                     Text("Review installation changes to make them available in your apps.")
-                        .font(.system(size: 13)).foregroundStyle(.secondary)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
                 }
                 Spacer()
             }
-            Text("Make it yours").font(.system(size: 15, weight: .semibold))
+            Text("Make it yours").font(AgentFont.title)
             VStack(spacing: 0) {
                 nextStepRow(
                     "Review app changes", detail: "Compare your saved assignments with this Mac.",
                     symbol: "arrow.triangle.2.circlepath", destination: .syncCenter)
-                Divider().padding(.leading, 54)
+                Hairline(indent: Hairline.afterLeading(Size.tile))
                 nextStepRow(
                     "Set up a backup", detail: "Keep a local backup or choose an encrypted sync folder.",
                     symbol: "externaldrive", destination: .settings)
-                Divider().padding(.leading, 54)
+                Hairline(indent: Hairline.afterLeading(Size.tile))
                 nextStepRow(
                     "Find useful skills", detail: "Choose whether to review recent work in Insights.",
                     symbol: "lightbulb", destination: .insights)
             }
-            .standardPanel(cornerRadius: 14)
+            .standardPanel()
         }
     }
 
@@ -287,15 +286,15 @@ struct OnboardingWizard: View {
             onFinish()
             workspaceNavigate(destination)
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: symbol).font(.system(size: 18)).foregroundStyle(.secondary).frame(width: 26)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 14, weight: .semibold))
-                    Text(detail).font(.system(size: 13)).foregroundStyle(.secondary)
+            HStack(spacing: Space.lg) {
+                Image(systemName: symbol).font(.system(size: Size.symbol)).foregroundStyle(.secondary).frame(width: Size.tile)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(title).font(AgentFont.bodySemibold)
+                    Text(detail).font(AgentFont.body).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
-            }.padding(15).contentShape(Rectangle())
+                Image(systemName: "chevron.right").font(AgentFont.caption).foregroundStyle(.tertiary)
+            }.padding(Space.xl).contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
 
@@ -308,7 +307,7 @@ struct OnboardingWizard: View {
     // MARK: - Footer
 
     private var footer: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.lg) {
             if step != .assign || !isDone {
                 Button("Set up later", action: onFinish)
                     .buttonStyle(.plain).foregroundStyle(.secondary)
@@ -318,20 +317,38 @@ struct OnboardingWizard: View {
                 Button("Back") { step = OnboardingStep(rawValue: step.rawValue - 1) ?? .found }
                     .buttonStyle(.glass)
             }
+            if step == .assign {
+                // The thorough route: audit this Mac and have the assistant
+                // read the results, category by category, on the Checkup tab.
+                // It only goes there, so it takes no ellipsis.
+                Button("Check this Mac", action: finishToSetup)
+                    .buttonStyle(.glass)
+                    .help("Find what is broken, duplicated, or unmanaged, and walk through what to change.")
+            }
             Button(primaryTitle, action: advance)
-                .buttonStyle(.glassProminent)
+                .primaryActionStyle()
                 .keyboardShortcut(.defaultAction)
-                .disabled(step == .assign && !isDone && !canAssign)
         }
         .controlSize(.large)
-        .padding(.horizontal, 28)
-        .padding(.vertical, 16)
+        .padding(.horizontal, WorkspaceLayout.pageInset)
+        .padding(.vertical, Space.xl)
     }
 
     private var primaryTitle: String {
         switch step {
         case .found, .apps: "Continue"
-        case .assign: isDone ? "Go to Home" : "Choose tools to assign…"
+        case .assign:
+            if isDone {
+                "Go to Home"
+            }
+            // A first run that found nothing a client already owns has nothing
+            // to assign. Rather than trapping a person behind a disabled
+            // button, the step offers a plain finish.
+            else if canAssign {
+                "Choose tools to assign…"
+            } else {
+                "Done"
+            }
         }
     }
 
@@ -341,23 +358,33 @@ struct OnboardingWizard: View {
         case .apps: step = .assign
         case .assign:
             if isDone {
-                onFinish()
-                navigation.open(.section(.overview))
-            } else {
+                finishToHome()
+            } else if canAssign {
                 workspace.library.discardReview()
                 isAssigning = true
+            } else {
+                // Nothing to assign: finishing is the only sensible move, so
+                // "Done" ends onboarding and lands on Home the same way the
+                // done state's "Go to Home" does.
+                finishToHome()
             }
         }
     }
 
-    private func toolingKind(_ kind: ArtifactKind) -> ToolingKind {
-        switch kind {
-        case .skill: .skill
-        case .mcpServer: .mcpServer
-        case .package, .nativePlugin: .plugin
-        case .preset: .profile
-        case .logicalProject: .library
-        }
+    /// Ends onboarding and navigates Home through the shell. One mechanism for
+    /// every exit here, so "Go to Home", "Done", and the next-step rows all
+    /// leave the wizard the same way rather than one going through the
+    /// navigation state and the others through the shell.
+    private func finishToHome() {
+        onFinish()
+        workspaceNavigate(.overview)
+    }
+
+    /// Ends onboarding on Apps · Checkup, where the audit and the assistant's
+    /// read of it are, for a person who wants them right away.
+    private func finishToSetup() {
+        onFinish()
+        workspaceNavigate(.checkup)
     }
 
     private func clientScope(_ client: ClientKind) -> String {
@@ -365,6 +392,7 @@ struct OnboardingWizard: View {
         case .codex: "Agent configuration shared by Codex app and CLI"
         case .claude: "Claude Code skills, plugins, and MCP configuration"
         case .gemini: "Gemini CLI extensions and local configuration"
+        case .kiro: "Kiro CLI skills and MCP configuration"
         }
     }
 }
@@ -373,7 +401,7 @@ struct OnboardingWizard: View {
 /// unselected, and nothing here is enabled, removed, or installed for an item
 /// nobody chose — the same browser, the same review and the same save as
 /// everywhere else in the app.
-private struct OnboardingAssignmentPickerSheet: View {
+struct OnboardingAssignmentPickerSheet: View {
     let session: WorkspaceLibrarySession
     @Environment(\.dismiss) private var dismiss
     @State private var selection: Set<ArtifactID> = []
@@ -383,21 +411,21 @@ private struct OnboardingAssignmentPickerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Choose tools to assign").font(.title3.weight(.semibold))
+                Text("Choose tools to assign").font(AgentFont.title)
                 Spacer()
-            }.padding(20)
-            Divider()
+            }.padding(Space.xxl)
+            Hairline()
             if let library = session.state?.library {
                 let visible = library.filteredRows(matching: search)
-                HStack(spacing: 16) {
+                HStack(spacing: Space.xl) {
                     InventorySearchField(placeholder: "Search your library", text: $search)
                     Button(search.isEmpty ? "Select all" : "Select results") { setSelected(visible, to: true) }
                         .disabled(!visible.contains(where: \.isAssignable))
                     Button("Clear") { setSelected(visible, to: false) }
                         .disabled(!visible.contains { selection.contains($0.artifactID) })
                 }
-                .font(.system(size: 13)).buttonStyle(.plain)
-                .padding(.horizontal, 20).padding(.bottom, 12)
+                .font(AgentFont.body).buttonStyle(.plain)
+                .padding(.horizontal, Space.xxl).padding(.bottom, Space.lg)
                 if visible.isEmpty {
                     ContentUnavailableView(
                         search.isEmpty ? "Nothing to assign" : "No matches",
@@ -410,26 +438,26 @@ private struct OnboardingAssignmentPickerSheet: View {
                 } else {
                     List(visible) { row in
                         OnboardingChoiceRow(row: row, isSelected: rowBinding(row))
-                            .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
-                            .listRowBackground(AgentTheme.controlBackground)
+                            .collectionRowChrome(selected: false)
                     }
-                    .listStyle(.plain).scrollContentBackground(.hidden)
+                    .collectionListChrome()
                 }
             } else {
                 ProgressView("Loading library…").frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            Divider()
+            Hairline()
             HStack {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
                 Text(selection.isEmpty ? "Nothing selected yet." : "\(selection.count) selected")
                     .foregroundStyle(.secondary)
-                Button("Continue") { isReviewing = true }
-                    .buttonStyle(.borderedProminent)
+                // It opens the assignment review sheet, so it says so.
+                Button("Continue…") { isReviewing = true }
+                    .primaryActionStyle()
                     .disabled(selection.isEmpty || session.isBusy)
-            }.padding(20)
+            }.padding(Space.xxl)
         }
-        .frame(width: 720, height: 560)
+        .sheetSize(SheetSize.large)
         .background(AgentTheme.contentBackground)
         .sheet(
             isPresented: $isReviewing, onDismiss: { dismiss() },

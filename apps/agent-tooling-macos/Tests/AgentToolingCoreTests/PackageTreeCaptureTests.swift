@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Darwin
 import Foundation
 import Testing
@@ -14,8 +15,8 @@ struct PackageTreeCaptureTests {
         }
     }
 
-    @Test func rejectsNonFileURLsBeforeStartingCapture() async {
-        let remote = URL(string: "https://example.com/package")!
+    @Test func rejectsNonFileURLsBeforeStartingCapture() async throws {
+        let remote = try #require(URL(string: "https://example.com/package"))
         await #expect(throws: PackageTreeError.invalidPath) {
             _ = try await PackageTreeCapture().capture(directory: remote)
         }
@@ -34,10 +35,11 @@ struct PackageTreeCaptureTests {
 
         let captured = try await PackageTreeCapture().capture(directory: root)
         #expect(captured.totalFileBytes == 42)
-        #expect(Set(captured.entries.map(\.relativePath)) == [
-            ".codex-plugin", ".codex-plugin/plugin.json", "assets", "assets/.hidden", "empty",
-            "scripts", "scripts/run.sh", "skills", "skills/demo", "skills/demo/SKILL.md",
-        ])
+        #expect(
+            Set(captured.entries.map(\.relativePath)) == [
+                ".codex-plugin", ".codex-plugin/plugin.json", "assets", "assets/.hidden", "empty",
+                "scripts", "scripts/run.sh", "skills", "skills/demo", "skills/demo/SKILL.md",
+            ])
         #expect(file(captured, "skills/demo/SKILL.md") == Data("# Skill\n".utf8))
         #expect(executable(captured, "scripts/run.sh") == true)
         #expect(captured.entries.contains { $0.relativePath == "empty" && isDirectory($0) })
@@ -242,7 +244,6 @@ struct PackageTreeCaptureTests {
             }
         }
 
-
         let unicodeRoot = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: unicodeRoot) }
         let composed = "\u{00e9}"
@@ -265,25 +266,27 @@ struct PackageTreeCaptureTests {
     }
 
     private func write(_ value: String, to url: URL) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data(value.utf8).write(to: url)
+        try AgentToolingTestSupport.write(url, value)
     }
 
     private func file(_ tree: CapturedPackageTree, _ path: String) -> Data? {
         guard let entry = tree.entries.first(where: { $0.relativePath == path }),
-            case .file(let bytes, _) = entry.kind else { return nil }
+            case .file(let bytes, _) = entry.kind
+        else { return nil }
         return bytes
     }
 
     private func executable(_ tree: CapturedPackageTree, _ path: String) -> Bool? {
         guard let entry = tree.entries.first(where: { $0.relativePath == path }),
-            case .file(_, let executable) = entry.kind else { return nil }
+            case .file(_, let executable) = entry.kind
+        else { return nil }
         return executable
     }
 
     private func link(_ tree: CapturedPackageTree, _ path: String) -> String? {
         guard let entry = tree.entries.first(where: { $0.relativePath == path }),
-            case .symbolicLink(let target) = entry.kind else { return nil }
+            case .symbolicLink(let target) = entry.kind
+        else { return nil }
         return target
     }
 

@@ -60,7 +60,7 @@ struct NativeSkillDestinationTests {
     @Test func rejectsNonFileAndNonNormalizedRoots() {
         #expect(throws: NativeSkillDestinationError.invalidHomeURL) {
             try NativeSkillDestination.directory(
-                client: .gemini, homeURL: URL(string: "https://example.com/home")!, scope: .user, projectRoot: nil
+                client: .gemini, homeURL: try #require(URL(string: "https://example.com/home")), scope: .user, projectRoot: nil
             )
         }
         #expect(throws: NativeSkillDestinationError.invalidHomeURL) {

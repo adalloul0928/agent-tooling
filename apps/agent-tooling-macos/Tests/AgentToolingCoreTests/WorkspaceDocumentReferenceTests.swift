@@ -49,11 +49,13 @@ struct WorkspaceDocumentReferenceTests {
         let presetID = ArtifactID()
         let artifacts = [
             ArtifactRecord(
-                identity: ArtifactIdentity(id: packageID, kind: .package, displayName: "My workflows",
+                identity: ArtifactIdentity(
+                    id: packageID, kind: .package, displayName: "My workflows",
                     aliases: [.init(namespace: "legacy.plugin", value: "my-workflows")]),
                 authority: .centralPersonal, declaredName: "my-workflows"),
             ArtifactRecord(
-                identity: ArtifactIdentity(id: skillID, kind: .skill, displayName: "Review",
+                identity: ArtifactIdentity(
+                    id: skillID, kind: .skill, displayName: "Review",
                     aliases: [.init(namespace: "legacy.skill", value: "review")], parentPackageID: packageID),
                 authority: .centralPersonal, declaredName: "review", packageRelativePath: "skills/review"),
             ArtifactRecord(identity: .init(id: projectID, kind: .logicalProject, displayName: "Project"), authority: .trackedOnly),
@@ -63,9 +65,12 @@ struct WorkspaceDocumentReferenceTests {
             revision: WorkspaceRevision(writerID: WorkspaceObjectID(), createdAt: Date(timeIntervalSince1970: 0)),
             artifacts: artifacts,
             logicalProjects: [.init(id: projectID, name: "Project", repositoryHints: ["https://github.com/example/project"])],
-            assignments: [.init(artifactID: skillID,
-                destination: .init(surface: .claudeCode, scope: .project, logicalProjectID: projectID),
-                reason: .preset(presetID: presetID), desiredEnabled: true)],
+            assignments: [
+                .init(
+                    artifactID: skillID,
+                    destination: .init(surface: .claudeCode, scope: .project, logicalProjectID: projectID),
+                    reason: .preset(presetID: presetID), desiredEnabled: true)
+            ],
             presets: [.init(id: presetID, name: "Daily work", revision: 1, memberArtifactIDs: [skillID])])
     }
 }

@@ -255,7 +255,8 @@ public struct WorkspaceConfigurationState: Codable, Hashable, Sendable {
         try unique(identityMap.map(\.legacy), "legacy aliases")
         try unique(identityMap.map(\.objectID), "legacy reserved identities")
 
-        let objectIDs = configurations.map(\.id) + managedPolicies.map(\.id) + collections.map(\.id)
+        let objectIDs =
+            configurations.map(\.id) + managedPolicies.map(\.id) + collections.map(\.id)
             + catalogSources.map(\.id)
         let allUUIDs = artifacts.map(\.identity.id.rawValue) + objectIDs.map(\.rawValue)
         try unique(allUUIDs, "workspace object identities")
@@ -291,9 +292,11 @@ public struct WorkspaceConfigurationState: Codable, Hashable, Sendable {
         for configuration in configurations {
             try text(configuration.name, "configuration name", 4_096)
             try optionalText(configuration.summary, "configuration summary", 65_536)
-            guard let configurationIdentity = identityMap.first(where: {
-                $0.legacy.domain == .configuration && $0.objectID == configuration.id
-            }) else { throw WorkspaceDomainValidationError.missingReference("configuration identity alias") }
+            guard
+                let configurationIdentity = identityMap.first(where: {
+                    $0.legacy.domain == .configuration && $0.objectID == configuration.id
+                })
+            else { throw WorkspaceDomainValidationError.missingReference("configuration identity alias") }
             switch configuration.scope {
             case .project, .localProject:
                 guard let projectID = configuration.logicalProjectID, projectIDs.contains(projectID) else {
@@ -333,10 +336,12 @@ public struct WorkspaceConfigurationState: Codable, Hashable, Sendable {
             try validateArtifactReferences(configuration.requiredMCPs, domain: .mcpServer, identityByLegacy: identityByLegacy)
             try validateArtifactReferences(configuration.requiredSkills, domain: .skill, identityByLegacy: identityByLegacy)
             try validateReferences(configuration.includedCollections, domain: .collection, identityByLegacy: identityByLegacy)
-            guard configuration.includedCollections.allSatisfy({
-                if case .object(let id) = $0.resolution { return collectionIDs.contains(id) }
-                return false
-            }) else { throw WorkspaceDomainValidationError.missingReference("included collection") }
+            guard
+                configuration.includedCollections.allSatisfy({
+                    if case .object(let id) = $0.resolution { return collectionIDs.contains(id) }
+                    return false
+                })
+            else { throw WorkspaceDomainValidationError.missingReference("included collection") }
             try unique(configuration.checkDefinitions.map(\.id), "configuration checks")
             for check in configuration.checkDefinitions {
                 try text(check.id, "configuration check ID", 512)
@@ -423,7 +428,8 @@ public struct WorkspaceConfigurationState: Codable, Hashable, Sendable {
                 try requireReference(relationship.destination, domain: .skill, identityByLegacy: identityByLegacy, allowUnresolved: true)
             case .pluginProfile:
                 try requireReference(relationship.source, domain: .plugin, identityByLegacy: identityByLegacy, allowUnresolved: true)
-                try requireReference(relationship.destination, domain: .configuration, identityByLegacy: identityByLegacy, allowUnresolved: false)
+                try requireReference(
+                    relationship.destination, domain: .configuration, identityByLegacy: identityByLegacy, allowUnresolved: false)
             case .skillBundle:
                 try requireReference(relationship.source, domain: .skill, identityByLegacy: identityByLegacy, allowUnresolved: true)
                 try requireReference(relationship.destination, domain: .plugin, identityByLegacy: identityByLegacy, allowUnresolved: true)
@@ -476,7 +482,10 @@ public struct WorkspaceConfigurationState: Codable, Hashable, Sendable {
         return value
     }
 
-    private struct TargetKey: Hashable { var reference: LegacyReferenceKey; var client: ClientKind }
+    private struct TargetKey: Hashable {
+        var reference: LegacyReferenceKey
+        var client: ClientKind
+    }
 
     private func validateConfigurationCycles(_ configurations: [WorkspaceObjectID: WorkspaceConfigurationRecord]) throws {
         for id in configurations.keys {
@@ -487,8 +496,12 @@ public struct WorkspaceConfigurationState: Codable, Hashable, Sendable {
                     throw WorkspaceDomainValidationError.invalidField("configuration inheritance cycle")
                 }
                 if let parent = configurations[cursor]?.inheritedFrom,
-                    case .object(let parentID) = parent.resolution { current = parentID }
-                else { current = nil }
+                    case .object(let parentID) = parent.resolution
+                {
+                    current = parentID
+                } else {
+                    current = nil
+                }
             }
         }
     }
@@ -546,7 +559,8 @@ public struct WorkspaceConfigurationState: Codable, Hashable, Sendable {
         var result: [WorkspaceReference] = []
         for configuration in configurations {
             if let parent = configuration.inheritedFrom { result.append(parent) }
-            result += configuration.enabledPlugins + configuration.requiredMCPs + configuration.requiredSkills
+            result +=
+                configuration.enabledPlugins + configuration.requiredMCPs + configuration.requiredSkills
                 + configuration.includedCollections + (configuration.targetBindings?.map(\.item) ?? [])
         }
         for policy in managedPolicies {

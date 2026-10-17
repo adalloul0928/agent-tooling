@@ -71,13 +71,16 @@ final class WorkspaceProjectDeclarationSession {
         writtenPaths = []
         preview = nil
         let document = snapshot.document
-        let wanted = Set(document.assignments
-            .filter { $0.destination.logicalProjectID == projectID && $0.desiredPresence }
-            .map(\.artifactID))
-        let subscriptions = Dictionary(document.subscriptions.map { ($0.artifactID, $0) },
-                                       uniquingKeysWith: { first, _ in first })
-        let sources = Dictionary(document.sources.map { ($0.id, $0) },
-                                 uniquingKeysWith: { first, _ in first })
+        let wanted = Set(
+            document.assignments
+                .filter { $0.destination.logicalProjectID == projectID && $0.desiredPresence }
+                .map(\.artifactID))
+        let subscriptions = Dictionary(
+            document.subscriptions.map { ($0.artifactID, $0) },
+            uniquingKeysWith: { first, _ in first })
+        let sources = Dictionary(
+            document.sources.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first })
 
         var declared: [WorkspaceProjectDeclaration.Entry] = []
         var locked: [WorkspaceProjectLock.Entry] = []
@@ -87,10 +90,11 @@ final class WorkspaceProjectDeclarationSession {
             let name = artifact.declaredName ?? artifact.identity.displayName
             let subscription = subscriptions[artifact.identity.id]
             let repository = subscription.flatMap { sources[$0.sourceID]?.repositoryURL }
-            declared.append(.init(
-                name: name, kind: artifact.identity.kind, repositoryURL: repository,
-                requestedRef: subscription?.lock.requestedRef,
-                packageRelativePath: subscription?.lock.packageRelativePath))
+            declared.append(
+                .init(
+                    name: name, kind: artifact.identity.kind, repositoryURL: repository,
+                    requestedRef: subscription?.lock.requestedRef,
+                    packageRelativePath: subscription?.lock.packageRelativePath))
             guard let subscription else {
                 unlocked.append(name)
                 continue
@@ -141,7 +145,8 @@ final class WorkspaceProjectDeclarationSession {
             try store.write(declaration: preview.declaration, lock: preview.lock)
             writtenPaths = [store.declarationURL.path] + (preview.lock == nil ? [] : [store.lockURL.path])
         } catch WorkspaceProjectDeclarationError.foreignFile {
-            errorMessage = "There is already a file with that name that Agent Tooling did not write. It was left alone and nothing was written."
+            errorMessage =
+                "There is already a file with that name that Agent Tooling did not write. It was left alone and nothing was written."
         } catch WorkspaceProjectDeclarationError.invalidRoot {
             errorMessage = "Choose a folder on this Mac to write into."
         } catch {

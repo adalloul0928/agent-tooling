@@ -164,14 +164,15 @@ public struct ToolHiveRuntimeInspection: Sendable {
         // digits, dot, underscore, hyphen; max 100 bytes), with a stricter
         // command-line boundary: a leading hyphen would be parsed as an option.
         guard !workloadName.isEmpty,
-              workloadName.utf8.count <= 100,
-              !workloadName.hasPrefix("-"),
-              workloadName.unicodeScalars.allSatisfy({ scalar in
-                  switch scalar.value {
-                  case 48...57, 65...90, 97...122, 45, 46, 95: true
-                  default: false
-                  }
-              }) else {
+            workloadName.utf8.count <= 100,
+            !workloadName.hasPrefix("-"),
+            workloadName.unicodeScalars.allSatisfy({ scalar in
+                switch scalar.value {
+                case 48...57, 65...90, 97...122, 45, 46, 95: true
+                default: false
+                }
+            })
+        else {
             throw ToolHiveRuntimeInspectionError.invalidWorkloadName
         }
     }
@@ -281,12 +282,12 @@ public struct ToolHiveLogSnapshot: Hashable, Sendable {
     }
 }
 
-public enum ToolHiveRuntimeInspectionError: LocalizedError, Sendable, Equatable {
+enum ToolHiveRuntimeInspectionError: LocalizedError, Sendable, Equatable {
     case invalidWorkloadName
     case invalidLogLimit
     case commandFailed(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .invalidWorkloadName:
             return "ToolHive workload names must use ToolHive's safe workload-name grammar."

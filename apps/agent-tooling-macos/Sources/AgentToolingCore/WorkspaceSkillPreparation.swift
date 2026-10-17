@@ -20,12 +20,6 @@ public struct StandaloneSkillContentReview: Codable, Sendable, Equatable {
     public let contentDigest: ContentDigest
     public let excludedRootGitMetadata: Bool
     public let upstream: PreparedSkillUpstream?
-
-    init(contentDigest: ContentDigest, excludedRootGitMetadata: Bool, upstream: PreparedSkillUpstream?) {
-        self.contentDigest = contentDigest
-        self.excludedRootGitMetadata = excludedRootGitMetadata
-        self.upstream = upstream
-    }
 }
 
 public struct PreparedSkillUpstream: Codable, Sendable, Equatable {
@@ -34,20 +28,6 @@ public struct PreparedSkillUpstream: Codable, Sendable, Equatable {
     public let revision: SourceRevision
     public let packageRelativePath: String
     public let publisherID: String
-
-    init(
-        repositoryURL: String,
-        requestedRef: String,
-        revision: SourceRevision,
-        packageRelativePath: String,
-        publisherID: String
-    ) {
-        self.repositoryURL = repositoryURL
-        self.requestedRef = requestedRef
-        self.revision = revision
-        self.packageRelativePath = packageRelativePath
-        self.publisherID = publisherID
-    }
 }
 
 public enum WorkspaceSkillPreparationError: Error, Equatable, Sendable {
@@ -75,6 +55,28 @@ public enum WorkspaceSkillPreparation {
         cacheURL: URL
     ) async throws -> PreparedStandaloneSkill {
         try await fetchUpstream(binding: binding, cacheURL: cacheURL, runner: ProcessCommandRunner())
+    }
+
+    /// The binding for a skill a registry named by repository and name alone:
+    /// the repository's default branch and the folder that holds the skill.
+    /// Fetch it with `fetchUpstream(binding:cacheURL:)` afterwards.
+    public static func locateUpstream(
+        skillID: String,
+        repositoryURL: String,
+        cacheURL: URL
+    ) async throws -> SkillRepositoryBinding {
+        try await locateUpstream(skillID: skillID, repositoryURL: repositoryURL, cacheURL: cacheURL, runner: ProcessCommandRunner())
+    }
+
+    static func locateUpstream(
+        skillID: String,
+        repositoryURL: String,
+        cacheURL: URL,
+        runner: any CommandRunning
+    ) async throws -> SkillRepositoryBinding {
+        try Task.checkCancellation()
+        return try await SkillRepositoryService(cacheURL: cacheURL, runner: runner)
+            .locate(skillID: skillID, repositoryURL: repositoryURL)
     }
 
     static func fetchUpstream(
@@ -112,11 +114,13 @@ public enum WorkspaceSkillPreparation {
         revision: String
     ) -> PreparedSkillUpstream? {
         guard let components = URLComponents(string: binding.repositoryURL),
-              components.scheme?.lowercased() == "https",
-              components.host?.lowercased() == "github.com" else { return nil }
+            components.scheme?.lowercased() == "https",
+            components.host?.lowercased() == "github.com"
+        else { return nil }
         let parts = components.path.split(separator: "/").map(String.init)
         guard parts.count == 2,
-              SkillRepositoryBinding.isHash(revision, lengths: [40, 64]) else { return nil }
+            SkillRepositoryBinding.isHash(revision, lengths: [40, 64])
+        else { return nil }
         let owner = parts[0].lowercased()
         let repository = parts[1].lowercased()
         return PreparedSkillUpstream(
@@ -136,10 +140,11 @@ private func validatedStandaloneFrontmatter(_ tree: CapturedPackageTree) throws 
     // cased package marker still denotes a package, not a standalone skill.
     let paths = index.keys.map { $0.lowercased() }
     guard !paths.contains("plugin.json"),
-          !paths.contains("agent-plugin.json"),
-          !paths.contains(".agents/plugin.json"),
-          !paths.contains(where: { $0 == ".claude-plugin" || $0.hasPrefix(".claude-plugin/") }),
-          !paths.contains(where: { $0 == ".codex-plugin" || $0.hasPrefix(".codex-plugin/") }) else {
+        !paths.contains("agent-plugin.json"),
+        !paths.contains(".agents/plugin.json"),
+        !paths.contains(where: { $0 == ".claude-plugin" || $0.hasPrefix(".claude-plugin/") }),
+        !paths.contains(where: { $0 == ".codex-plugin" || $0.hasPrefix(".codex-plugin/") })
+    else {
         throw WorkspaceSkillPreparationError.pluginPackageRoot
     }
     guard case .file(let bytes, _)? = index["SKILL.md"] else {

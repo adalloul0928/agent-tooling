@@ -18,15 +18,6 @@ public struct VersionedInventorySource: Sendable {
         self.store = store
     }
 
-    /// Read fresh every time, so an item added in the app between two calls is
-    /// visible on the second without restarting anything.
-    public func inventory() throws -> VersionedInventoryProjection.Inventory {
-        guard let snapshot = try store.snapshot() else {
-            throw WorkspaceRevisionStoreError.notInitialized
-        }
-        return VersionedInventoryProjection.inventory(try WorkspaceLibraryReadModel(snapshot: snapshot))
-    }
-
     /// The whole read-only picture, in the shape the integration surfaces speak.
     ///
     /// Everything comes from the versioned store: items from the library,
@@ -36,14 +27,12 @@ public struct VersionedInventorySource: Sendable {
         guard let snapshot = try store.snapshot() else {
             throw WorkspaceRevisionStoreError.notInitialized
         }
-        let inventory = VersionedInventoryProjection
+        let inventory =
+            VersionedInventoryProjection
             .inventory(try WorkspaceLibraryReadModel(snapshot: snapshot))
         return .init(
             skills: inventory.skills, mcpServers: inventory.mcpServers, plugins: inventory.plugins,
             operationReceipts: try store.operationReceipts(limit: receiptLimit),
             targetObservations: snapshot.device.observations)
     }
-
-    /// The queue an agent adds to and a person answers.
-    public var requestStore: WorkspaceRevisionStore { store }
 }

@@ -46,8 +46,9 @@ public actor EncryptedFolderWorkspaceTransport {
     /// somewhere unexpected would be the wrong answer to a mistyped path.
     public init(folder: URL, key: SymmetricKey) throws {
         guard folder.isFileURL, folder.path.hasPrefix("/"), !folder.path.contains("\0"),
-              folder.standardizedFileURL.path == folder.path,
-              (try? folder.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
+            folder.standardizedFileURL.path == folder.path,
+            (try? folder.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+        else {
             throw EncryptedFolderTransportError.invalidFolder
         }
         self.folder = folder
@@ -65,15 +66,15 @@ public actor EncryptedFolderWorkspaceTransport {
             return .init(head: nil, document: nil)
         }
         let bytes: Data
-        do { bytes = try Data(contentsOf: file, options: [.mappedIfSafe]) }
-        catch { throw EncryptedFolderTransportError.unsupportedFormat }
+        do { bytes = try Data(contentsOf: file, options: [.mappedIfSafe]) } catch { throw EncryptedFolderTransportError.unsupportedFormat }
         guard bytes.count <= Self.documentLimit else {
             throw EncryptedFolderTransportError.documentTooLarge
         }
         let head = Self.digest(bytes)
         let envelope: Envelope
-        do { envelope = try AgentToolingCoding.decoder().decode(Envelope.self, from: bytes) }
-        catch { throw EncryptedFolderTransportError.unsupportedFormat }
+        do { envelope = try AgentToolingCoding.decoder().decode(Envelope.self, from: bytes) } catch {
+            throw EncryptedFolderTransportError.unsupportedFormat
+        }
         guard envelope.formatVersion == Self.formatVersion else {
             throw EncryptedFolderTransportError.unsupportedFormat
         }
@@ -116,8 +117,9 @@ public actor EncryptedFolderWorkspaceTransport {
         let temporary = folder.appending(path: Self.documentFileName + ".partial")
         do {
             try bytes.write(to: temporary, options: .atomic)
-            try? FileManager.default.setAttributes([.posixPermissions: 0o600],
-                                                   ofItemAtPath: temporary.path)
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: temporary.path)
         } catch { throw EncryptedFolderTransportError.writeFailed }
         // One last look before replacing: a Mac that published between the read
         // above and this moment must not be overwritten.
@@ -126,26 +128,25 @@ public actor EncryptedFolderWorkspaceTransport {
             throw EncryptedFolderTransportError.remoteAdvanced(
                 remoteHead: try Self.currentHead(of: file) ?? "")
         }
-        do { _ = try FileManager.default.replaceItemAt(file, withItemAt: temporary) }
-        catch {
+        do { _ = try FileManager.default.replaceItemAt(file, withItemAt: temporary) } catch {
             try? FileManager.default.removeItem(at: temporary)
             throw EncryptedFolderTransportError.writeFailed
         }
-        return .init(commit: Self.digest(bytes), previousHead: observed,
-                     revisionID: document.revision.id)
+        return .init(
+            commit: Self.digest(bytes), previousHead: observed,
+            revisionID: document.revision.id)
     }
 
     private static func currentHead(of file: URL) throws -> String? {
         guard FileManager.default.fileExists(atPath: file.path) else { return nil }
         let bytes: Data
-        do { bytes = try Data(contentsOf: file, options: [.mappedIfSafe]) }
-        catch { throw EncryptedFolderTransportError.unsupportedFormat }
+        do { bytes = try Data(contentsOf: file, options: [.mappedIfSafe]) } catch { throw EncryptedFolderTransportError.unsupportedFormat }
         guard bytes.count <= documentLimit else { throw EncryptedFolderTransportError.documentTooLarge }
         return digest(bytes)
     }
 
     private static func digest(_ bytes: Data) -> String {
-        SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        SHA256.hash(data: bytes).lowercaseHex
     }
 
     private static func encode(_ document: PortableWorkspaceDocument) throws -> Data {
@@ -159,10 +160,8 @@ public actor EncryptedFolderWorkspaceTransport {
 
     private static func decode(_ bytes: Data) throws -> PortableWorkspaceDocument {
         let document: PortableWorkspaceDocument
-        do { document = try WorkspaceDocumentCoding.decode(bytes) }
-        catch { throw EncryptedFolderTransportError.invalidDocument }
-        do { try document.validateStructure() }
-        catch { throw EncryptedFolderTransportError.invalidDocument }
+        do { document = try WorkspaceDocumentCoding.decode(bytes) } catch { throw EncryptedFolderTransportError.invalidDocument }
+        do { try document.validateStructure() } catch { throw EncryptedFolderTransportError.invalidDocument }
         return document
     }
 
@@ -172,4 +171,20 @@ public actor EncryptedFolderWorkspaceTransport {
     }
 }
 
-extension EncryptedFolderWorkspaceTransport: WorkspaceRevisionTransport {}
+extension EncryptedFolderWorkspaceTransport: WorkspaceRevisionTransport {
+    /// The sealed box holds the document only. Content and status do not
+    /// travel this way; the caller sees `carriesContent == false` and keeps
+    /// them local.
+    public nonisolated var carriesContent: Bool { false }
+
+    public func publish(
+        document: PortableWorkspaceDocument,
+        content: [CapturedPackageTree],
+        status: PublishedDeviceStatus?,
+        expectedRemoteHead: String?
+    ) async throws -> GitWorkspacePublishReceipt {
+        try await publish(document: document, expectedRemoteHead: expectedRemoteHead)
+    }
+
+    public func content(for digest: ContentDigest) async throws -> CapturedPackageTree? { nil }
+}

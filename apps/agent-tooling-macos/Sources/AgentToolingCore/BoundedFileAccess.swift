@@ -11,6 +11,27 @@ enum BoundedFileAccess {
         maximumBytes: Int = maximumTextBytes,
         allowSymbolicLink: Bool = true
     ) throws -> String {
+        let data = try readData(at: url, maximumBytes: maximumBytes, allowSymbolicLink: allowSymbolicLink)
+        guard let contents = String(data: data, encoding: .utf8) else {
+            throw BoundedFileAccessError.invalidUTF8(url.lastPathComponent)
+        }
+        return contents
+    }
+
+    /// The file's bytes exactly as they are on disk, for a caller that must
+    /// keep them that way: a fingerprint or a backup of the file. The size is
+    /// checked before anything is read, at most one byte past the limit is
+    /// read, and the file is checked afterwards, against values read from the
+    /// disk again, to be the one that was sized and unchanged since.
+    ///
+    /// - Parameter afterReading: runs once the bytes are read and before the
+    ///   check, so a test can change the file in between. Nothing else passes it.
+    static func readData(
+        at url: URL,
+        maximumBytes: Int = maximumTextBytes,
+        allowSymbolicLink: Bool = true,
+        afterReading: () throws -> Void = {}
+    ) throws -> Data {
         let originalValues = try url.resourceValues(forKeys: [.isSymbolicLinkKey])
         guard allowSymbolicLink || originalValues.isSymbolicLink != true else {
             throw BoundedFileAccessError.symbolicLink(url.path(percentEncoded: false))
@@ -33,18 +54,21 @@ enum BoundedFileAccess {
         let handle = try FileHandle(forReadingFrom: resolvedURL)
         defer { try? handle.close() }
         let data = try handle.read(upToCount: maximumBytes + 1) ?? Data()
+        try afterReading()
         guard data.count <= maximumBytes, data.count == fileSize else {
             if data.count > maximumBytes {
                 throw BoundedFileAccessError.fileTooLarge(url.lastPathComponent, maximumBytes)
             }
             throw BoundedFileAccessError.changedWhileReading(url.lastPathComponent)
         }
-        guard let contents = String(data: data, encoding: .utf8) else {
-            throw BoundedFileAccessError.invalidUTF8(url.lastPathComponent)
-        }
 
         let resourceIdentifier = values.fileResourceIdentifier.map { String(describing: $0) }
-        let finalValues = try resolvedURL.resourceValues(forKeys: [
+        // A URL keeps the resource values it fetched, so asking the same URL
+        // again would only repeat the ones above and the check could never
+        // fail. Clear them, so the file is looked at as it is now.
+        var finalURL = resolvedURL
+        finalURL.removeAllCachedResourceValues()
+        let finalValues = try finalURL.resourceValues(forKeys: [
             .contentModificationDateKey,
             .fileResourceIdentifierKey,
             .isRegularFileKey,
@@ -58,7 +82,7 @@ enum BoundedFileAccess {
         else {
             throw BoundedFileAccessError.changedWhileReading(url.lastPathComponent)
         }
-        return contents
+        return data
     }
 
     static func descendantDirectories(
@@ -149,16 +173,13 @@ enum BoundedFileAccess {
     }
 
     private static func contains(_ child: URL, within root: URL) -> Bool {
-        let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let childPath = child.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
+        // Callers pass already-resolved URLs, so the bytes given are compared.
+        PathContainment.containsAsGiven(child, in: root)
     }
 
     private static func relativePath(of child: URL, under root: URL) -> String? {
-        let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let childPath = child.standardizedFileURL.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard childPath.hasPrefix(rootPath + "/") else { return nil }
-        return String(childPath.dropFirst(rootPath.count + 1))
+        // The root is already resolved; the enumerated item is standardized.
+        PathContainment.relativePath(of: child, under: root)
     }
 }
 

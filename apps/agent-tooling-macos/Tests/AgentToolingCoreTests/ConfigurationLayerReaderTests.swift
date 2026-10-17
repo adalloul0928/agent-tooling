@@ -10,12 +10,16 @@ struct ConfigurationLayerReaderTests {
     @Test func claudeLayersAreReadInPrecedenceOrderAndExplainOneValue() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        try fixture.write(".claude/settings.json", in: fixture.home, """
-        {"model":"user-model","permissions":{"allow":["Read"],"other":true},"experimental":{"x":1}}
-        """)
-        try fixture.write(".claude/settings.json", in: fixture.project, """
-        {"model":"project-model","permissions":{"allow":["Bash(git:*)"]}}
-        """)
+        try fixture.write(
+            ".claude/settings.json", in: fixture.home,
+            """
+            {"model":"user-model","permissions":{"allow":["Read"],"other":true},"experimental":{"x":1}}
+            """)
+        try fixture.write(
+            ".claude/settings.json", in: fixture.project,
+            """
+            {"model":"project-model","permissions":{"allow":["Bash(git:*)"]}}
+            """)
         let before = try fixture.contents(".claude/settings.json", in: fixture.home)
 
         let layers = try ConfigurationLayerReader()
@@ -65,16 +69,20 @@ struct ConfigurationLayerReaderTests {
     @Test func codexReadsItsLocalConfigurationAndOnlyUsesProfileFilesWhenTheReleaseDoes() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        try fixture.write(".codex/config.toml", in: fixture.home, """
-        # base
-        model = "gpt-5-codex"
-        approval_policy = "on-request"
-        [mcp_servers.files]
-        command = "npx"
-        """)
-        try fixture.write(".codex/work.config.toml", in: fixture.home, """
-        model = "gpt-5"
-        """)
+        try fixture.write(
+            ".codex/config.toml", in: fixture.home,
+            """
+            # base
+            model = "gpt-5-codex"
+            approval_policy = "on-request"
+            [mcp_servers.files]
+            command = "npx"
+            """)
+        try fixture.write(
+            ".codex/work.config.toml", in: fixture.home,
+            """
+            model = "gpt-5"
+            """)
 
         let modern = try ConfigurationLayerReader().codexLayers(
             homeRoot: fixture.home,
@@ -96,15 +104,32 @@ struct ConfigurationLayerReaderTests {
         #expect(older.first?.values["mcp_servers.files"] == .opaque("Configured"))
     }
 
-    @Test func anOversizedFileIsRefusedRatherThanRead() throws {
+    /// Over the limit every client configuration read shares, a file is
+    /// refused before it is loaded, with the error that names it and the
+    /// limit, so the screen can say which file and why.
+    @Test func aFileOverTheSharedConfigurationLimitIsRefusedByNameAndLimit() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let padding = String(repeating: "x", count: ConfigurationLayerReader.maximumFileBytes)
-        try fixture.write(".claude/settings.json", in: fixture.home, #"{"model":"\#(padding)"}"#)
+        let limit = BoundedFileAccess.maximumConfigurationBytes
+        try fixture.write(".claude/settings.json", in: fixture.home, #"{"model":"\#(String(repeating: "x", count: limit))"}"#)
+        let path = fixture.home.appending(path: ".claude/settings.json").path(percentEncoded: false)
 
-        #expect(throws: ConfigurationLayerReadError.fileTooLarge) {
+        #expect(throws: ConfigurationFileTooLargeError(path: path, maximumBytes: limit)) {
             _ = try ConfigurationLayerReader().claudeCodeLayers(homeRoot: fixture.home)
         }
+    }
+
+    /// The reader once kept a 1 MB cap of its own. A file past it and under
+    /// the shared limit is one the editor reads, so it is read here too.
+    @Test func aFileUnderTheSharedConfigurationLimitIsRead() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let padding = String(repeating: "x", count: 1 << 20)
+        try fixture.write(".claude/settings.json", in: fixture.home, #"{"model":"\#(padding)"}"#)
+
+        let layers = try ConfigurationLayerReader().claudeCodeLayers(homeRoot: fixture.home)
+
+        #expect(layers.first?.values["model"] == .string(padding))
     }
 
     private struct Fixture {
@@ -118,14 +143,16 @@ struct ConfigurationLayerReaderTests {
             home = root.appending(path: "home")
             project = root.appending(path: "project")
             for url in [home, project] {
-                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true,
+                try FileManager.default.createDirectory(
+                    at: url, withIntermediateDirectories: true,
                     attributes: [.posixPermissions: 0o700])
             }
         }
 
         func write(_ relativePath: String, in directory: URL, _ contents: String) throws {
             let url = directory.appending(path: relativePath)
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             try Data(contents.utf8).write(to: url)
         }

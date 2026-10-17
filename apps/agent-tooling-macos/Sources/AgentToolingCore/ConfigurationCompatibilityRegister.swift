@@ -44,45 +44,56 @@ public struct ConfigurationCompatibilityEntry: Hashable, Sendable {
 }
 
 public enum ConfigurationCompatibilityRegister {
-    public static let recordedOn = "2026-09-09"
-
     public static let entries: [ConfigurationCompatibilityEntry] = [
-        .init(surface: .claudeCode, key: "model", versionRange: "2.x",
-              sourceURL: "https://code.claude.com/docs/en/settings", direction: .readAndWrite),
-        .init(surface: .claudeCode, key: "permissions.allow", versionRange: "2.x",
-              sourceURL: "https://code.claude.com/docs/en/settings", direction: .readAndWrite,
-              limitation: "Layers combine; writing replaces only this file's own list."),
-        .init(surface: .claudeCode, key: "permissions.deny", versionRange: "2.x",
-              sourceURL: "https://code.claude.com/docs/en/settings", direction: .readAndWrite,
-              limitation: "Layers combine; writing replaces only this file's own list."),
-        .init(surface: .claudeCode, key: "hooks", versionRange: "2.x",
-              sourceURL: "https://code.claude.com/docs/en/settings", direction: .read,
-              limitation: "Hook definitions may need a native trust step this build cannot grant."),
-        .init(surface: .claudeCode, key: "env", versionRange: "2.x",
-              sourceURL: "https://code.claude.com/docs/en/settings", direction: .read,
-              limitation: "Values can carry secrets, so this build reports rather than edits them."),
-        .init(surface: .claudeCode, key: "includeCoAuthoredBy", versionRange: "2.x",
-              sourceURL: "https://code.claude.com/docs/en/settings", direction: .readAndWrite),
-        .init(surface: .claudeCode, key: "cleanupPeriodDays", versionRange: "2.x",
-              sourceURL: "https://code.claude.com/docs/en/settings", direction: .readAndWrite),
-        .init(surface: .codexCLI, key: "model", versionRange: "0.134.0+",
-              sourceURL: "https://learn.chatgpt.com/docs/config-file/config-basic", direction: .read,
-              limitation: "TOML keeps comments and formatting this build cannot reproduce faithfully."),
-        .init(surface: .codexCLI, key: "model_provider", versionRange: "0.134.0+",
-              sourceURL: "https://learn.chatgpt.com/docs/config-file/config-basic", direction: .read,
-              limitation: "TOML keeps comments and formatting this build cannot reproduce faithfully."),
-        .init(surface: .codexCLI, key: "approval_policy", versionRange: "0.134.0+",
-              sourceURL: "https://learn.chatgpt.com/docs/config-file/config-basic", direction: .read,
-              limitation: "TOML keeps comments and formatting this build cannot reproduce faithfully."),
-        .init(surface: .codexCLI, key: "sandbox_mode", versionRange: "0.134.0+",
-              sourceURL: "https://learn.chatgpt.com/docs/config-file/config-basic", direction: .read,
-              limitation: "TOML keeps comments and formatting this build cannot reproduce faithfully."),
-        .init(surface: .codexCLI, key: "profile", versionRange: "0.134.0+",
-              sourceURL: "https://learn.chatgpt.com/docs/config-file/config-advanced", direction: .read,
-              limitation: "Named profiles moved to separate files in 0.134.0; older layouts are read, never rewritten."),
-        .init(surface: .codexCLI, key: "mcp_servers", versionRange: "0.134.0+",
-              sourceURL: "https://learn.chatgpt.com/docs/config-file/config-advanced", direction: .read,
-              limitation: "Recorded by name only; this build does not interpret a server table's contents."),
+        .init(
+            surface: .claudeCode, key: "model", versionRange: "2.x",
+            sourceURL: "https://code.claude.com/docs/en/settings", direction: .readAndWrite),
+        .init(
+            surface: .claudeCode, key: "permissions.allow", versionRange: "2.x",
+            sourceURL: "https://code.claude.com/docs/en/settings", direction: .readAndWrite,
+            limitation: "Layers combine; writing replaces only this file's own list."),
+        .init(
+            surface: .claudeCode, key: "permissions.deny", versionRange: "2.x",
+            sourceURL: "https://code.claude.com/docs/en/settings", direction: .readAndWrite,
+            limitation: "Layers combine; writing replaces only this file's own list."),
+        .init(
+            surface: .claudeCode, key: "hooks", versionRange: "2.x",
+            sourceURL: "https://code.claude.com/docs/en/settings", direction: .read,
+            limitation: "Hook definitions may need a native trust step this build cannot grant."),
+        .init(
+            surface: .claudeCode, key: "env", versionRange: "2.x",
+            sourceURL: "https://code.claude.com/docs/en/settings", direction: .read,
+            limitation: "Values can carry secrets, so this build reports rather than edits them."),
+        .init(
+            surface: .claudeCode, key: "includeCoAuthoredBy", versionRange: "2.x",
+            sourceURL: "https://code.claude.com/docs/en/settings", direction: .readAndWrite),
+        .init(
+            surface: .claudeCode, key: "cleanupPeriodDays", versionRange: "2.x",
+            sourceURL: "https://code.claude.com/docs/en/settings", direction: .readAndWrite),
+        .init(
+            surface: .codexCLI, key: "model", versionRange: "0.134.0+",
+            sourceURL: "https://learn.chatgpt.com/docs/config-file/config-basic", direction: .read,
+            limitation: "TOML keeps comments and formatting this build cannot reproduce faithfully."),
+        .init(
+            surface: .codexCLI, key: "model_provider", versionRange: "0.134.0+",
+            sourceURL: "https://learn.chatgpt.com/docs/config-file/config-basic", direction: .read,
+            limitation: "TOML keeps comments and formatting this build cannot reproduce faithfully."),
+        .init(
+            surface: .codexCLI, key: "approval_policy", versionRange: "0.134.0+",
+            sourceURL: "https://learn.chatgpt.com/docs/config-file/config-basic", direction: .read,
+            limitation: "TOML keeps comments and formatting this build cannot reproduce faithfully."),
+        .init(
+            surface: .codexCLI, key: "sandbox_mode", versionRange: "0.134.0+",
+            sourceURL: "https://learn.chatgpt.com/docs/config-file/config-basic", direction: .read,
+            limitation: "TOML keeps comments and formatting this build cannot reproduce faithfully."),
+        .init(
+            surface: .codexCLI, key: "profile", versionRange: "0.134.0+",
+            sourceURL: "https://learn.chatgpt.com/docs/config-file/config-advanced", direction: .read,
+            limitation: "Named profiles moved to separate files in 0.134.0; older layouts are read, never rewritten."),
+        .init(
+            surface: .codexCLI, key: "mcp_servers", versionRange: "0.134.0+",
+            sourceURL: "https://learn.chatgpt.com/docs/config-file/config-advanced", direction: .read,
+            limitation: "Recorded by name only; this build does not interpret a server table's contents."),
     ]
 
     public static func entry(surface: TargetSurface, key: String) -> ConfigurationCompatibilityEntry? {

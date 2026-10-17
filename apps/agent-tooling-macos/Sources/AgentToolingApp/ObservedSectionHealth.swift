@@ -31,8 +31,8 @@ extension SectionHealth {
         verdicts[.mcpServers] = mcpHealth(inventory.mcpServers)
 
         let unreachable = Set(
-            device.availableClients.filter {
-                device.isEnabled($0) && device.verdict(for: $0).state == .attention
+            device.managedClients.filter {
+                device.verdict(for: $0).state == .attention
             })
         guard !unreachable.isEmpty else { return SectionHealth(verdicts: verdicts) }
         for row in library.rows where stopped(row, by: unreachable) {

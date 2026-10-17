@@ -21,7 +21,7 @@ struct ActivityView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageToolbar(title: AppSection.activity.navigationTitle, context: "\(session.activities.count) receipts") {
+            PageToolbar(title: AppSection.activity.navigationTitle, context: activityContext) {
                 Button {
                     selectedID = displayedActivities.first?.id
                 } label: {
@@ -34,18 +34,18 @@ struct ActivityView: View {
             if !driftReports.isEmpty {
                 InstallDriftNotice(reports: driftReports)
                     .padding(.horizontal, WorkspaceLayout.pageInset)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, Space.lg)
             }
 
             if selectedID == nil {
                 activityList
             } else {
                 HSplitView {
-                    activityList.frame(minWidth: 320, idealWidth: 500)
+                    activityList.frame(minWidth: Size.listPaneMin, idealWidth: Size.paneIdealWide)
                     VStack(spacing: 0) {
                         InspectorHeader(title: "Activity details") { selectedID = nil }
                         activityDetail
-                    }.frame(minWidth: 400, idealWidth: 620)
+                    }.frame(minWidth: Size.detailPaneMin, idealWidth: Size.paneIdealWide)
                 }
             }
         }
@@ -59,52 +59,59 @@ struct ActivityView: View {
         .onExitCommand { selectedID = nil }
     }
 
+    /// The list's heading. The tab over it already says "Receipts", so the
+    /// heading says what the tab does not: every receipt here was written on
+    /// this Mac. History's "Versions" under its "History" tab is the model.
+    nonisolated static let listHeading = "Recorded on this Mac"
+
     private var activityList: some View {
         VStack(spacing: 0) {
-            PanelHeader("Receipts") {
-                Text(session.activities.count == 1 ? "1 total" : "\(session.activities.count) total")
+            PanelHeader(Self.listHeading) {
+                Text(mergedActivities.count == 1 ? "1 total" : "\(mergedActivities.count) total")
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 InventorySearchField(placeholder: "Search activity", text: $query)
                     .accessibilityLabel("Search activity")
-                Picker("Filter", selection: $filter) {
+                WorkspaceSegmentedPicker("Activity filter", selection: $filter) {
                     ForEach(ActivityFilter.allCases) { item in Text(item.rawValue).tag(item) }
                 }
-                .labelsHidden()
+                .fixedSize()
                 .accessibilityLabel("Activity filter")
-                .frame(width: 142)
             }
             .padding(.horizontal, WorkspaceLayout.pageInset)
-            .padding(.vertical, 10)
+            .padding(.vertical, Space.lg)
 
             if displayedActivities.isEmpty {
                 EmptyStateView(
                     symbol: "clock.arrow.circlepath",
-                    title: session.activities.isEmpty ? "No activity yet" : "No matching activity",
-                    message: session.activities.isEmpty
+                    title: mergedActivities.isEmpty ? "No activity yet" : "No matching activity",
+                    message: mergedActivities.isEmpty
                         ? "Checks, reviewed changes, and account attestations will appear here."
                         : "Try another kind or clear the search.",
-                    actionTitle: session.activities.isEmpty ? nil : "Clear Filters"
+                    actionTitle: mergedActivities.isEmpty ? nil : "Clear filters"
                 ) {
                     query = ""
                     filter = .all
                 }
             } else {
+                // The day titles are rows of the list rather than native
+                // section headers: a `List` section header draws its own
+                // rule and ground, which is what put black lines between
+                // the days on this screen and nowhere else in the app.
                 List(selection: $selectedID) {
                     ForEach(activityGroups) { group in
-                        Section(group.title) {
-                            ForEach(group.receipts) { receipt in
-                                ActivityCollectionRow(receipt: receipt, selected: selectedID == receipt.id)
-                                    .tag(receipt.id)
-                                    .listRowBackground(SelectionRowBackground(selected: selectedID == receipt.id))
-                                    .accessibilityLabel(receipt.displayTitle)
-                                    .accessibilityValue(selectedID == receipt.id ? "Selected" : "")
-                            }
+                        CollectionSectionHeader(title: group.title)
+                        ForEach(group.receipts) { receipt in
+                            ActivityCollectionRow(receipt: receipt, selected: selectedID == receipt.id)
+                                .tag(receipt.id)
+                                .collectionRowChrome(selected: selectedID == receipt.id)
+                                .accessibilityLabel(receipt.displayTitle)
+                                .accessibilityValue(selectedID == receipt.id ? "Selected" : "")
                         }
                     }
                 }
-                .listStyle(.inset)
-                .scrollContentBackground(.hidden)
+                .collectionListChrome()
+                .collectionSurface()
             }
         }
         .paneMaterial()
@@ -130,8 +137,14 @@ struct ActivityView: View {
         }
     }
 
+    /// The journal and the synthesized operation-receipt rows as one list, the
+    /// collection every count, filter, and selection on this screen reads from.
+    private var mergedActivities: [ActivityReceipt] { session.mergedActivities }
+
+    private var activityContext: String { CountNoun("receipt").phrase(mergedActivities.count) }
+
     private var filteredActivities: [ActivityReceipt] {
-        session.activities.filter { receipt in
+        mergedActivities.filter { receipt in
             (filter.kind == nil || receipt.kind == filter.kind)
                 && (query.isEmpty
                     || [receipt.displayTitle, receipt.detail, receipt.command ?? ""].joined(separator: " ")
@@ -165,14 +178,14 @@ struct ActivityView: View {
         return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
     }
 
-    private var selectedReceipt: ActivityReceipt? { session.activities.first { $0.id == selectedID } }
+    private var selectedReceipt: ActivityReceipt? { mergedActivities.first { $0.id == selectedID } }
 
     /// A palette result that named one receipt reveals it and nothing more;
     /// consuming the request is how this screen tells the shell it arrived.
     private func consumeRequest() {
         guard let id = navigation.requestedItemID,
             let uuid = UUID(uuidString: id),
-            session.activities.contains(where: { $0.id == uuid })
+            mergedActivities.contains(where: { $0.id == uuid })
         else { return }
         query = ""
         filter = .all
@@ -214,69 +227,73 @@ private struct ActivityCollectionRow: View {
     let selected: Bool
 
     var body: some View {
-        HStack(spacing: 11) {
-            StatusGlyph(state: receipt.state, size: 16, tint: selected ? Color.white : nil)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: Space.lg) {
+            StatusGlyph(state: receipt.state, size: Size.glyphLarge, tint: selected ? AgentTheme.onSelection : nil)
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(receipt.displayTitle)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .font(AgentFont.bodyMedium)
+                    .foregroundStyle(selected ? AgentTheme.onSelection : Color.primary)
                     .lineLimit(1)
                 Text(receipt.detail)
-                    .font(.caption)
-                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                    .font(AgentFont.caption)
+                    .foregroundStyle(selected ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection) : Color.secondary)
                     .lineLimit(1)
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.lg)
             Text(SnapshotTime.standalone(receipt.date))
-                .font(.caption2)
-                .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                .font(AgentFont.caption)
+                .foregroundStyle(selected ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection) : Color.secondary)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, Space.sm)
     }
 }
 
 /// Drift is information, not an accusation. Editing an installed skill in place
 /// is a normal thing to do, so this states what changed and stops there.
-private struct InstallDriftNotice: View {
+struct InstallDriftNotice: View {
     let reports: [InstalledPackageDrift]
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: Space.lg) {
             Image(systemName: "square.and.pencil")
-                .font(.callout)
+                .font(AgentFont.body)
                 .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.callout.weight(.medium))
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(title).font(AgentFont.bodyMedium)
                 ForEach(reports.prefix(6)) { report in
-                    HStack(spacing: 6) {
+                    HStack(spacing: Space.sm) {
                         Text(report.packageName)
-                            .font(.caption.weight(.medium))
+                            .font(AgentFont.captionMedium)
                         Text(report.headline)
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
                         PathInfoButton(path: report.destinationPath)
                     }
                 }
                 if reports.count > 6 {
-                    Text("and \(reports.count - 6) more").font(.caption2).foregroundStyle(.tertiary)
+                    Text("and \(reports.count - 6) more").font(AgentFont.micro).foregroundStyle(.tertiary)
                 }
                 Text(
                     "Re-install from the library whenever you want Agent Tooling's record to match the files again. Nothing was changed."
                 )
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .standardPanel(cornerRadius: 12)
+        .standardPanel()
     }
 
-    private var title: String {
-        let count = reports.count
-        return "\(count) installed package\(count == 1 ? "" : "s") differ\(count == 1 ? "s" : "") from what you reviewed"
+    private var title: String { Self.title(count: reports.count) }
+
+    /// An installed skill or plugin is a copy of the library's, the word the
+    /// plan and the setup check use for it too, never a "package".
+    nonisolated static func title(count: Int) -> String {
+        let copies = CountNoun("installed copy", plural: "installed copies")
+        return "\(copies.phrase(count)) \(count == 1 ? "differs" : "differ") from what you reviewed"
     }
 }
 
@@ -286,12 +303,12 @@ private struct ActivityReceiptDetail: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 14) {
-                    KindTile(kind: .activity, size: 40)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(receipt.displayTitle).font(.title3.weight(.semibold))
-                        Text(receipt.detail).font(.callout).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Space.xl) {
+                HStack(spacing: Space.lg) {
+                    KindTile(kind: .activity, size: Size.tileLarge)
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text(receipt.displayTitle).font(AgentFont.title)
+                        Text(receipt.detail).font(AgentFont.body).foregroundStyle(.secondary)
                     }
                     Spacer()
                     StatusBadge(state: receipt.state, text: statusText)
@@ -299,30 +316,30 @@ private struct ActivityReceiptDetail: View {
 
                 TitledCard("Receipt") {
                     LabeledValueRow("Operation") { Text(receipt.kind.rawValue.capitalized) }
-                    Divider()
+                    Hairline()
                     LabeledValueRow("Started") { Text(receipt.date.formatted(date: .abbreviated, time: .standard)) }
                     if let duration = receipt.duration {
-                        Divider()
+                        Hairline()
                         LabeledValueRow("Duration") {
                             Text(duration.formatted(.number.precision(.fractionLength(1))) + " seconds")
                         }
                     }
-                    Divider()
+                    Hairline()
                     LabeledValueRow("Receipt ID") {
-                        Text(receipt.id.uuidString.lowercased()).font(.system(.caption, design: .monospaced))
+                        Text(receipt.id.uuidString.lowercased()).font(AgentFont.mono)
                     }
                 }
 
                 if let operationReceipt, !operationReceipt.itemOutcomes.isEmpty {
                     TitledCard("Each item in this batch", count: "\(operationReceipt.itemOutcomes.count)") {
                         Text(operationReceipt.outcomeTally)
-                            .font(.callout.weight(.medium).monospacedDigit())
+                            .font(AgentFont.bodyMedium.monospacedDigit())
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                        Divider()
+                            .padding(Space.xl)
+                        Hairline()
                         ForEach(Array(operationReceipt.itemOutcomes.enumerated()), id: \.element.id) { index, outcome in
                             ItemOutcomeRow(outcome: outcome)
-                            if index < operationReceipt.itemOutcomes.count - 1 { Divider() }
+                            if index < operationReceipt.itemOutcomes.count - 1 { Hairline() }
                         }
                     }
                 }
@@ -337,10 +354,10 @@ private struct ActivityReceiptDetail: View {
                     if receipt.affectedPaths.isEmpty {
                         HStack {
                             Image(systemName: "minus.circle").foregroundStyle(.secondary)
-                            Text("No file changes recorded").foregroundStyle(.secondary)
+                            Text("No file changes recorded").font(AgentFont.body).foregroundStyle(.secondary)
                             Spacer()
                         }
-                        .padding(13)
+                        .padding(Space.xl)
                     } else {
                         ForEach(Array(receipt.affectedPaths.enumerated()), id: \.offset) { index, path in
                             HStack {
@@ -348,20 +365,21 @@ private struct ActivityReceiptDetail: View {
                                 LocationText(path: path)
                                 Spacer()
                             }
-                            .padding(12)
-                            if index < receipt.affectedPaths.count - 1 { Divider() }
+                            .padding(Space.lg)
+                            if index < receipt.affectedPaths.count - 1 { Hairline() }
                         }
                     }
                 }
 
-                HStack(spacing: 8) {
+                HStack(spacing: Space.md) {
                     Image(systemName: "lock.shield").foregroundStyle(.secondary)
-                    Text("Sensitive values were redacted before this receipt was stored.").font(.caption).foregroundStyle(.secondary)
+                    Text("Sensitive values were redacted before this receipt was stored.").font(AgentFont.caption).foregroundStyle(
+                        .secondary)
                 }
-                .padding(12)
-                .standardPanel(cornerRadius: 12)
+                .padding(Space.lg)
+                .standardPanel()
             }
-            .padding(22)
+            .padding(WorkspaceLayout.paneInset)
         }
     }
 
@@ -382,25 +400,25 @@ private struct ItemOutcomeRow: View {
     let outcome: OperationItemOutcome
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            StatusGlyph(state: state, size: 14)
-                .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 7) {
-                    Text(outcome.title).font(.callout.weight(.medium))
+        HStack(alignment: .top, spacing: Space.lg) {
+            StatusGlyph(state: state, size: Size.glyph)
+                .padding(.top, Space.nudge)
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                HStack(spacing: Space.sm) {
+                    Text(outcome.title).font(AgentFont.bodyMedium)
                     Text(outcome.status.displayName)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
                 Text(outcome.reason)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                     .textSelection(.enabled)
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(Space.lg)
     }
 
     private var state: HealthState {

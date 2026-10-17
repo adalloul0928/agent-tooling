@@ -44,10 +44,14 @@ struct WorkspaceFirstRunTests {
 
     @Test func aMemberKeepsItsMembershipAndItsPackageStaysResponsibleForIt() throws {
         let result = try WorkspaceFirstRun.prepare(
-            observations: [Self.observation(.codexCLI, skills: ["browse"], plugins: ["browser"],
-                                            memberships: ["browse": "browser"])],
-            inventory: .init(skills: [Self.skill("browse")], mcpServers: [],
-                             plugins: [Self.plugin("browser", members: ["browse"])]))
+            observations: [
+                Self.observation(
+                    .codexCLI, skills: ["browse"], plugins: ["browser"],
+                    memberships: ["browse": "browser"])
+            ],
+            inventory: .init(
+                skills: [Self.skill("browse")], mcpServers: [],
+                plugins: [Self.plugin("browser", members: ["browse"])]))
 
         let package = try #require(result.document.artifacts.first { $0.identity.kind == .nativePlugin })
         let member = try #require(result.document.artifacts.first { $0.identity.kind == .skill })
@@ -67,8 +71,9 @@ struct WorkspaceFirstRunTests {
         // at would be a claim with nothing behind it.
         let result = try WorkspaceFirstRun.prepare(
             observations: [Self.observation(.codexCLI, skills: ["browse"], plugins: ["browser"])],
-            inventory: .init(skills: [Self.skill("browse")], mcpServers: [],
-                             plugins: [Self.plugin("browser", members: ["browse"])]))
+            inventory: .init(
+                skills: [Self.skill("browse")], mcpServers: [],
+                plugins: [Self.plugin("browser", members: ["browse"])]))
 
         let package = try #require(result.document.artifacts.first { $0.identity.kind == .nativePlugin })
         #expect(package.authority == .trackedOnly)
@@ -81,9 +86,12 @@ struct WorkspaceFirstRunTests {
     @Test func anItemTwoPackagesClaimBelongsToNeitherRatherThanArbitrarilyToOne() throws {
         let result = try WorkspaceFirstRun.prepare(
             observations: [Self.observation(.codexCLI, skills: ["shared"], plugins: ["one", "two"])],
-            inventory: .init(skills: [Self.skill("shared")], mcpServers: [],
-                             plugins: [Self.plugin("one", members: ["shared"]),
-                                       Self.plugin("two", members: ["shared"])]))
+            inventory: .init(
+                skills: [Self.skill("shared")], mcpServers: [],
+                plugins: [
+                    Self.plugin("one", members: ["shared"]),
+                    Self.plugin("two", members: ["shared"]),
+                ]))
 
         // Claimed by both, so it is recorded standalone rather than assigned to
         // whichever sorted first.
@@ -92,10 +100,14 @@ struct WorkspaceFirstRunTests {
 
     @Test func aPackagesMemberIsNotAlsoRecordedAsAStandaloneThing() throws {
         let result = try WorkspaceFirstRun.prepare(
-            observations: [Self.observation(.codexCLI, skills: ["browse"], plugins: ["browser"],
-                                            memberships: ["browse": "browser"])],
-            inventory: .init(skills: [Self.skill("browse")], mcpServers: [],
-                             plugins: [Self.plugin("browser", members: [])]))
+            observations: [
+                Self.observation(
+                    .codexCLI, skills: ["browse"], plugins: ["browser"],
+                    memberships: ["browse": "browser"])
+            ],
+            inventory: .init(
+                skills: [Self.skill("browse")], mcpServers: [],
+                plugins: [Self.plugin("browser", members: [])]))
 
         let skills = result.document.artifacts.filter { $0.identity.kind == .skill }
         #expect(skills.count == 1)
@@ -154,11 +166,13 @@ struct WorkspaceFirstRunTests {
         let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
             .appending(path: "first-run-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
+        try FileManager.default.createDirectory(
+            at: root, withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700])
         let prepared = try WorkspaceFirstRun.prepare(
             observations: [], inventory: .init(skills: [], mcpServers: [], plugins: []))
-        let store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "store"),
+        let store = try WorkspaceRevisionStore(
+            containerRoot: root.appending(path: "store"),
             workspaceID: prepared.document.workspaceID, deviceID: prepared.device.deviceID)
         try store.initialize(document: prepared.document, device: prepared.device)
 
@@ -183,14 +197,16 @@ struct WorkspaceFirstRunTests {
     }
 
     private static func skill(_ id: String) -> Skill {
-        .init(id: id, name: id, displayName: id.capitalized, summary: "Fixture", bundle: "standalone",
-              scope: "This Mac", owned: false, triggers: [], negativeTrigger: "",
-              files: ["SKILL.md"], clients: [], validationCount: 0)
+        .init(
+            id: id, name: id, displayName: id.capitalized, summary: "Fixture", bundle: "standalone",
+            scope: "This Mac", owned: false, triggers: [], negativeTrigger: "",
+            files: ["SKILL.md"], clients: [], validationCount: 0)
     }
 
     private static func plugin(_ id: String, members: [String]) -> Plugin {
-        .init(id: id, name: id.capitalized, summary: "Fixture", source: "Codex", scope: "This Mac",
-              revision: "current", skills: members, profiles: [], clients: [], installed: true)
+        .init(
+            id: id, name: id.capitalized, summary: "Fixture", source: "Codex", scope: "This Mac",
+            revision: "current", skills: members, profiles: [], clients: [], installed: true)
     }
 
     private static let packageRoot = "/Users/fixture/.codex/plugins/browser"
@@ -215,10 +231,11 @@ struct WorkspaceFirstRunTests {
                 .init(path: "\(packageRoot)/skills/member/SKILL.md", source: $0, providerPluginID: $0)
             },
             pluginMetadata: pluginMetadata,
-            capabilities: .init(supportsPluginInstall: true, supportsProjectScope: true,
-                                supportsLocalMarketplace: false, supportsMCPAuthentication: false,
-                                supportsConnectorDiscovery: false, requiresNewSession: true,
-                                requiresRestart: false, supportsMachineReadableOutput: true),
+            capabilities: .init(
+                supportsPluginInstall: true, supportsProjectScope: true,
+                supportsLocalMarketplace: false, supportsMCPAuthentication: false,
+                supportsConnectorDiscovery: false, requiresNewSession: true,
+                requiresRestart: false, supportsMachineReadableOutput: true),
             lastScannedAt: Date(timeIntervalSince1970: 1_700_000_000))
     }
 }

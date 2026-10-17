@@ -44,7 +44,8 @@ public struct AttachedAuthoringIntakeCommand: Sendable {
         aliases: [ExternalAlias] = []
     ) throws {
         guard directory.isFileURL, directory.path.hasPrefix("/"), !directory.path.contains("\0"),
-              directory.standardizedFileURL.path == directory.path, directory.path.count <= 4_096 else {
+            directory.standardizedFileURL.path == directory.path, directory.path.count <= 4_096
+        else {
             throw WorkspaceAttachedAuthoringError.invalidDirectory
         }
         guard prepared.review.upstream == nil else {
@@ -63,35 +64,35 @@ public struct AttachedAuthoringIntakeCommand: Sendable {
     }
 
     func inputDigest() -> String {
-        var fields = ["attached-authoring.intake.v1",
-                      expectedRevisionID.rawValue.uuidString.lowercased(),
-                      idempotencyKey.rawValue.uuidString.lowercased(),
-                      artifactID.rawValue.uuidString.lowercased(),
-                      sourceID.rawValue.uuidString.lowercased(),
-                      displayName, declaredName, directoryPath]
+        var fields = [
+            "attached-authoring.intake.v1",
+            expectedRevisionID.rawValue.uuidString.lowercased(),
+            idempotencyKey.rawValue.uuidString.lowercased(),
+            artifactID.rawValue.uuidString.lowercased(),
+            sourceID.rawValue.uuidString.lowercased(),
+            displayName, declaredName, directoryPath,
+        ]
         fields += aliases.flatMap { [$0.namespace, $0.value] }
-        let framed = fields.map {
-            let value = $0.precomposedStringWithCanonicalMapping
-            return String(value.utf8.count) + ":" + value
-        }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).map { String(format: "%02x", $0) }.joined()
+        return framedDigest(fields: fields)
     }
 
     func apply(to document: inout PortableWorkspaceDocument) throws -> [ArtifactID] {
         guard !document.artifacts.contains(where: { $0.identity.id == artifactID }),
-              !document.tombstones.contains(where: { $0.artifactID == artifactID }),
-              artifactID.rawValue != sourceID.rawValue,
-              !document.sources.contains(where: { $0.id == sourceID }),
-              !document.subscriptions.contains(where: { $0.id == sourceID }) else {
+            !document.tombstones.contains(where: { $0.artifactID == artifactID }),
+            artifactID.rawValue != sourceID.rawValue,
+            !document.sources.contains(where: { $0.id == sourceID }),
+            !document.subscriptions.contains(where: { $0.id == sourceID })
+        else {
             throw WorkspaceAttachedAuthoringError.identityCollision
         }
         document.sources.append(.init(id: sourceID, role: .attachedAuthoring, packageRelativePaths: ["."]))
         // No content digest: the folder is the content, and this workspace does
         // not hold a copy that could drift from it.
-        document.artifacts.append(.init(
-            identity: .init(id: artifactID, kind: .skill, displayName: displayName, aliases: aliases),
-            authority: .attachedAuthoring(sourceRootID: sourceID),
-            declaredName: declaredName))
+        document.artifacts.append(
+            .init(
+                identity: .init(id: artifactID, kind: .skill, displayName: displayName, aliases: aliases),
+                authority: .attachedAuthoring(sourceRootID: sourceID),
+                declaredName: declaredName))
         return [artifactID]
     }
 
@@ -126,11 +127,13 @@ public struct AttachedAuthoringDetachCommand: Sendable {
     }
 
     func inputDigest() -> String {
-        let framed = ["attached-authoring.detach.v1",
-                      expectedRevisionID.rawValue.uuidString.lowercased(),
-                      idempotencyKey.rawValue.uuidString.lowercased(),
-                      artifactID.rawValue.uuidString.lowercased()].joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).map { String(format: "%02x", $0) }.joined()
+        let framed = [
+            "attached-authoring.detach.v1",
+            expectedRevisionID.rawValue.uuidString.lowercased(),
+            idempotencyKey.rawValue.uuidString.lowercased(),
+            artifactID.rawValue.uuidString.lowercased(),
+        ].joined(separator: "|")
+        return SHA256.hash(data: Data(framed.utf8)).lowercaseHex
     }
 
     func apply(to document: inout PortableWorkspaceDocument) throws -> (affected: [ArtifactID], sourceID: WorkspaceObjectID) {
@@ -151,9 +154,11 @@ public struct AttachedAuthoringDetachCommand: Sendable {
         if !document.artifacts.contains(where: { $0.authority == .attachedAuthoring(sourceRootID: sourceID) }) {
             document.sources.removeAll { $0.id == sourceID }
         }
-        document.tombstones.append(.init(artifactID: artifactID,
-                                         aliases: document.artifacts.isEmpty ? [] : [],
-                                         deletedInRevisionID: document.revision.id))
+        document.tombstones.append(
+            .init(
+                artifactID: artifactID,
+                aliases: document.artifacts.isEmpty ? [] : [],
+                deletedInRevisionID: document.revision.id))
         return ([artifactID], sourceID)
     }
 }

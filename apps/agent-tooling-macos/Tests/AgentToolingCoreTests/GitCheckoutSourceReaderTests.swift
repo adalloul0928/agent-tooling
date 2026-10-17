@@ -19,7 +19,6 @@ struct GitCheckoutSourceReaderTests {
         #expect(recognition.checkout.upstream?.requestedRef == "main")
         #expect(recognition.checkout.upstream?.repositoryURL == "https://github.com/example/skill-library")
         #expect(recognition.checkout.headCommit?.kind == .gitCommitSHA1)
-        #expect(!recognition.checkout.isLinkedWorktree)
         #expect(try fixture.gitFiles() == before)
 
         let artifact = ArtifactRecord(identity: .init(id: id, kind: .skill, displayName: "A display name"), authority: .trackedOnly)
@@ -29,7 +28,7 @@ struct GitCheckoutSourceReaderTests {
         #expect(candidate.packagePath == "skills/one")
         #expect(candidate.requestedRef == "main")
         #expect(candidate.observedCommit == recognition.checkout.headCommit)
-        #expect(candidate.integrity.isEmpty) // A Git commit is not a content digest.
+        #expect(candidate.integrity.isEmpty)  // A Git commit is not a content digest.
     }
 
     @Test func realLinkedWorktreeIsDistinctAndDetachedHEADDoesNotInventSourceRef() async throws {
@@ -40,7 +39,6 @@ struct GitCheckoutSourceReaderTests {
         try await fixture.git(["worktree", "add", "--detach", linked.path, "HEAD"])
         let main = try await GitCheckoutSourceReader().capture(directory: fixture.root)
         let other = try await GitCheckoutSourceReader().recognize(artifactID: .init(), directory: linked)
-        #expect(other.checkout.isLinkedWorktree)
         #expect(other.checkout.commonGitDirectory == main.commonGitDirectory)
         #expect(other.checkout.gitDirectory != main.gitDirectory)
         #expect(other.checkout.headCommit == main.headCommit)
@@ -74,7 +72,8 @@ struct GitCheckoutSourceReaderTests {
         let reader = GitCheckoutSourceReader()
         #expect(try await reader.recognize(artifactID: .init(), directory: fixture.skill).observations.count == 1)
         let omitted = fixture.container.appendingPathComponent("omitted-config")
-        try "[remote \"private\"]\nurl = https://user:private-token@github.com/example/private\n".write(to: omitted, atomically: true, encoding: .utf8)
+        try "[remote \"private\"]\nurl = https://user:private-token@github.com/example/private\n".write(
+            to: omitted, atomically: true, encoding: .utf8)
         try await fixture.git(["config", "include.path", omitted.path])
         let result = try await reader.recognize(artifactID: .init(), directory: fixture.skill)
         #expect(result.checkout.diagnostics.contains(.includedConfigurationOmitted))
@@ -86,7 +85,9 @@ struct GitCheckoutSourceReaderTests {
 
     @Test func remoteNormalizationNeverRetainsCredentialValuesOrGuessesOtherHosts() {
         let normalized = "https://github.com/example/library"
-        for input in ["https://GitHub.com/Example/Library.git", "git@github.com:Example/Library.git", "ssh://git@github.com/Example/Library.git"] {
+        for input in [
+            "https://GitHub.com/Example/Library.git", "git@github.com:Example/Library.git", "ssh://git@github.com/Example/Library.git",
+        ] {
             #expect(GitCheckoutSourceReader.canonicalRemoteURL(input) == normalized)
         }
         for input in [
@@ -104,7 +105,8 @@ struct GitCheckoutSourceReaderTests {
     @Test func unsafeAndCompetingRemotesAreSanitizedAndNeverChooseFirst() async throws {
         let fixture = try CheckoutFixture()
         defer { fixture.remove() }
-        let config = "remote.origin.url\nhttps://user:secret@github.com/example/library\0"
+        let config =
+            "remote.origin.url\nhttps://user:secret@github.com/example/library\0"
             + "remote.origin.url\nhttps://github.com/example/other\0"
             + "branch.work.remote\norigin\0branch.work.merge\nrefs/heads/main\0"
         let runner = CheckoutReaderStub(root: fixture.root, config: config)
@@ -184,7 +186,10 @@ struct GitCheckoutSourceReaderTests {
         #expect(calls.count == 10)
         for call in calls {
             #expect(call.executable == "/usr/bin/git")
-            #expect(call.arguments.prefix(6) == ["--no-optional-locks", "--no-pager", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"])
+            #expect(
+                call.arguments.prefix(6) == [
+                    "--no-optional-locks", "--no-pager", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+                ])
             #expect(["rev-parse", "symbolic-ref", "config"].contains(call.arguments[6]))
             if call.arguments[6] == "config" {
                 #expect(call.arguments.contains("--no-includes"))
@@ -228,8 +233,10 @@ private struct CheckoutFixture {
     func initialize(commit: Bool = true) async throws {
         try await git(["init", "--template=", "--initial-branch=work"])
         if commit {
-            try await git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
-                           "commit", "--allow-empty", "--no-gpg-sign", "-m", "Fixture"])
+            try await git([
+                "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                "commit", "--allow-empty", "--no-gpg-sign", "-m", "Fixture",
+            ])
         }
     }
 
@@ -260,8 +267,12 @@ private struct CheckoutFixture {
 
 private actor CheckoutReaderStub: CommandRunning {
     enum Mode { case normal, changedCommit, changedConfig, oversized, relativeRoot, malformedCommit, malformedConfig, failure, cancelled }
-    struct Call: Sendable { let executable: String; let arguments: [String] }
-    static let validConfig = "remote.origin.url\nhttps://github.com/example/library\0branch.work.remote\norigin\0branch.work.merge\nrefs/heads/main\0"
+    struct Call: Sendable {
+        let executable: String
+        let arguments: [String]
+    }
+    static let validConfig =
+        "remote.origin.url\nhttps://github.com/example/library\0branch.work.remote\norigin\0branch.work.merge\nrefs/heads/main\0"
     let root: URL
     let mode: Mode
     let config: String

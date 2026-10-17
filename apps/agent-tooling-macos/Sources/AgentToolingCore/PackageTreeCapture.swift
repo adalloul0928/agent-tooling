@@ -87,7 +87,8 @@ public struct PackageTreeCapture: Sendable {
         else { throw PackageTreeError.limitExceeded }
         let rootPath = directory.path(percentEncoded: false)
         guard rootPath.hasPrefix("/"),
-              !rootPath.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+            !rootPath.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        else {
             throw PackageTreeError.invalidPath
         }
         var pathStatus = stat()
@@ -229,11 +230,12 @@ public struct PackageTreeCapture: Sendable {
                     guard fstat(childFD, &after) == 0,
                         sameIdentityAndMetadata(opened, after, includeSize: false)
                     else { throw PackageTreeError.changedDuringCapture }
-                    state.observations.append(.init(
-                        rawComponents: rawParentComponents + [rawName],
-                        metadata: FileMetadata(after),
-                        includeSize: false
-                    ))
+                    state.observations.append(
+                        .init(
+                            rawComponents: rawParentComponents + [rawName],
+                            metadata: FileMetadata(after),
+                            includeSize: false
+                        ))
                 } catch {
                     Darwin.close(childFD)
                     throw error
@@ -247,15 +249,17 @@ public struct PackageTreeCapture: Sendable {
                     before: before,
                     state: &state
                 )
-                state.entries.append(.init(
-                    relativePath: relativePath,
-                    kind: .file(bytes: captured.bytes, executable: captured.executable)
-                ))
-                state.observations.append(.init(
-                    rawComponents: rawParentComponents + [rawName],
-                    metadata: captured.metadata,
-                    includeSize: true
-                ))
+                state.entries.append(
+                    .init(
+                        relativePath: relativePath,
+                        kind: .file(bytes: captured.bytes, executable: captured.executable)
+                    ))
+                state.observations.append(
+                    .init(
+                        rawComponents: rawParentComponents + [rawName],
+                        metadata: captured.metadata,
+                        includeSize: true
+                    ))
 
             case S_IFLNK:
                 let captured = try readSymbolicLink(
@@ -264,15 +268,17 @@ public struct PackageTreeCapture: Sendable {
                     before: before,
                     limits: state.limits
                 )
-                state.entries.append(.init(
-                    relativePath: relativePath,
-                    kind: .symbolicLink(target: captured.target.precomposedStringWithCanonicalMapping)
-                ))
-                state.observations.append(.init(
-                    rawComponents: rawParentComponents + [rawName],
-                    metadata: captured.metadata,
-                    includeSize: true
-                ))
+                state.entries.append(
+                    .init(
+                        relativePath: relativePath,
+                        kind: .symbolicLink(target: captured.target.precomposedStringWithCanonicalMapping)
+                    ))
+                state.observations.append(
+                    .init(
+                        rawComponents: rawParentComponents + [rawName],
+                        metadata: captured.metadata,
+                        includeSize: true
+                    ))
 
             default:
                 throw PackageTreeError.unsupportedItem

@@ -2,7 +2,6 @@ import Foundation
 import Testing
 
 @testable import AgentToolingCore
-@testable import AgentToolingMCP
 
 /// What the server answers inventory questions from.
 ///
@@ -17,12 +16,15 @@ struct InventoryAnswerTests {
         try harness.initialize()
 
         let search = try harness.callTool("search_inventory", arguments: ["query": .string("")])
-        #expect((search["results"]?.arrayValue ?? []).compactMap { $0.objectValue?["name"]?.stringValue }
-            == ["Release summary"])
+        #expect(
+            (search["results"]?.arrayValue ?? []).compactMap { $0.objectValue?["name"]?.stringValue }
+                == ["Release summary"])
 
-        let component = try harness.callTool("get_component", arguments: [
-            "kind": .string("skill"), "id": .string(harness.identifier(of: "release-summary")),
-        ])
+        let component = try harness.callTool(
+            "get_component",
+            arguments: [
+                "kind": .string("skill"), "id": .string(harness.identifier(of: "release-summary")),
+            ])
         #expect(component["name"]?.stringValue == "Release summary")
     }
 
@@ -30,9 +32,12 @@ struct InventoryAnswerTests {
         let harness = try MCPTestHarness(artifacts: [Self.skill("Release summary", "release-summary")])
         try harness.initialize()
 
-        let missing = try #require(harness.rawCallTool("get_component", arguments: [
-            "kind": .string("skill"), "id": .string("nothing-by-that-name"),
-        ]))
+        let missing = try #require(
+            harness.rawCallTool(
+                "get_component",
+                arguments: [
+                    "kind": .string("skill"), "id": .string("nothing-by-that-name"),
+                ]))
 
         #expect(missing["result"]?.objectValue?["isError"]?.boolValue == true)
     }
@@ -41,14 +46,19 @@ struct InventoryAnswerTests {
         let skill = Self.skill("Release summary", "release-summary")
         let harness = try MCPTestHarness(
             artifacts: [skill],
-            assignments: [.init(artifactID: skill.identity.id,
-                                destination: .init(surface: .codexCLI, scope: .user),
-                                reason: .manual)])
+            assignments: [
+                .init(
+                    artifactID: skill.identity.id,
+                    destination: .init(surface: .codexCLI, scope: .user),
+                    reason: .manual)
+            ])
         try harness.initialize()
 
-        let component = try harness.callTool("get_component", arguments: [
-            "kind": .string("skill"), "id": .string(harness.identifier(of: "release-summary")),
-        ])
+        let component = try harness.callTool(
+            "get_component",
+            arguments: [
+                "kind": .string("skill"), "id": .string(harness.identifier(of: "release-summary")),
+            ])
 
         let client = try #require(component["clients"]?.arrayValue?.first?.objectValue)
         #expect(client["client"]?.stringValue == "codex")
@@ -60,19 +70,26 @@ struct InventoryAnswerTests {
     @Test func receiptsAndObservationsComeFromTheSameStoreAsTheItems() throws {
         let harness = try MCPTestHarness(
             artifacts: [Self.skill("Release summary", "release-summary")],
-            observations: [.init(surface: .codexCLI, installed: true, commandAvailable: true,
-                                 version: "1.0.0",
-                                 capabilities: .init(supportsPluginInstall: false, supportsProjectScope: true,
-                                                     supportsLocalMarketplace: false,
-                                                     supportsMCPAuthentication: false,
-                                                     supportsConnectorDiscovery: false,
-                                                     requiresNewSession: true, requiresRestart: false,
-                                                     supportsMachineReadableOutput: true),
-                                 lastScannedAt: Date(timeIntervalSince1970: 1_700_000_000))],
-            receipts: [.init(planID: UUID(), kind: .installSkill, title: "Installed something",
-                             state: .healthy, targetSurfaces: [.codexCLI], results: [],
-                             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
-                             verificationSummary: "Verified in place.")])
+            observations: [
+                .init(
+                    surface: .codexCLI, installed: true, commandAvailable: true,
+                    version: "1.0.0",
+                    capabilities: .init(
+                        supportsPluginInstall: false, supportsProjectScope: true,
+                        supportsLocalMarketplace: false,
+                        supportsMCPAuthentication: false,
+                        supportsConnectorDiscovery: false,
+                        requiresNewSession: true, requiresRestart: false,
+                        supportsMachineReadableOutput: true),
+                    lastScannedAt: Date(timeIntervalSince1970: 1_700_000_000))
+            ],
+            receipts: [
+                .init(
+                    planID: UUID(), kind: .installSkill, title: "Installed something",
+                    state: .healthy, targetSurfaces: [.codexCLI], results: [],
+                    createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+                    verificationSummary: "Verified in place.")
+            ])
         try harness.initialize()
 
         // Nothing is left for a second store to supply.
@@ -81,8 +98,9 @@ struct InventoryAnswerTests {
     }
 
     private static func skill(_ displayName: String, _ declaredName: String) -> ArtifactRecord {
-        .init(identity: .init(id: ArtifactID(), kind: .skill, displayName: displayName),
-              authority: .centralPersonal, declaredName: declaredName,
-              contentDigest: .init(value: String(repeating: "a", count: 64)))
+        .init(
+            identity: .init(id: ArtifactID(), kind: .skill, displayName: displayName),
+            authority: .centralPersonal, declaredName: declaredName,
+            contentDigest: .init(value: String(repeating: "a", count: 64)))
     }
 }

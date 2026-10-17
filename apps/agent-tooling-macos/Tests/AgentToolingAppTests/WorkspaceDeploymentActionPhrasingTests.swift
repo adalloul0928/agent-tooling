@@ -1,0 +1,127 @@
+import Foundation
+import Testing
+
+@testable import AgentToolingApp
+@testable import AgentToolingCore
+
+/// Pins the wording for every deployment action in both plan views. The two
+/// sheets drew the same action in different words before this; the shared
+/// extension is the single source, and these cases fail if either sheet drifts
+/// from it again.
+@Suite("Deployment action phrasing")
+struct WorkspaceDeploymentActionPhrasingTests {
+    private func item(
+        _ action: WorkspaceDeploymentAction,
+        scope: ToolingScope = .user,
+        surface: TargetSurface = .claudeCode
+    ) -> WorkspaceDeploymentItem {
+        WorkspaceDeploymentItem(
+            artifactID: ArtifactID(),
+            displayName: "Example",
+            physicalDestinationID: WorkspaceObjectID(),
+            surface: surface,
+            scope: scope,
+            logicalProjectID: nil,
+            action: action,
+            desiredEnabled: nil,
+            reasons: [.manual]
+        )
+    }
+
+    private let digest = ContentDigest(value: "a")
+
+    @Test("The install sheet names the app once per action")
+    func installSheetPhrases() {
+        #expect(item(.installContent(digest: digest)).installActionText(app: "Claude Code") == "Install in Claude Code")
+        #expect(
+            item(.updateContent(from: nil, to: digest)).installActionText(app: "Claude Code")
+                == "Replace what is there now in Claude Code")
+        #expect(
+            item(.updateContent(from: digest, to: digest)).installActionText(app: "Claude Code")
+                == "Update to your approved version in Claude Code")
+        #expect(
+            item(.installNativePackage(route: .init(client: .claude, externalPluginID: "x")))
+                .installActionText(app: "Claude Code") == "Ask Claude Code to install it")
+        #expect(
+            item(.configureManagedConnection(transport: .http)).installActionText(app: "Claude Code")
+                == "Add the connection to Claude Code")
+        #expect(
+            item(.removeContent(installed: digest)).installActionText(app: "Claude Code")
+                == "Remove the copy Agent Tooling installed in Claude Code")
+    }
+
+    @Test("The plan sheet uses the same verbs with the place, not the app")
+    func planSheetPhrases() {
+        let account = "on this Mac"
+        let project = "in this project"
+        #expect(item(.installContent(digest: digest)).planActionClause(place: account) == "Install on this Mac")
+        #expect(
+            item(.updateContent(from: nil, to: digest)).planActionClause(place: account)
+                == "Replace what is there now on this Mac")
+        #expect(
+            item(.updateContent(from: digest, to: digest)).planActionClause(place: project)
+                == "Update to your approved version in this project")
+        #expect(
+            item(.installNativePackage(route: .init(client: .claude, externalPluginID: "x")))
+                .planActionClause(place: account) == "Ask its app to install it on this Mac")
+        #expect(
+            item(.configureManagedConnection(transport: .http)).planActionClause(place: account)
+                == "Add the connection on this Mac")
+        #expect(
+            item(.removeContent(installed: digest)).planActionClause(place: account)
+                == "Remove the copy Agent Tooling installed on this Mac")
+    }
+
+    /// The sheet prints the app after each clause ("… on this Mac · Claude
+    /// Code"). A removal's clause ended in a second sentence, so it alone read
+    /// "… on this Mac. Anything you changed is left alone. · Claude Code".
+    @Test("Every plan clause is one clause, with no sentence before the app's name")
+    func everyClauseIsOneClause() {
+        for place in ["on this Mac", "in this project"] {
+            for action in everyAction {
+                let clause = item(action).planActionClause(place: place)
+                #expect(!clause.hasSuffix("."), "\(clause) ends a sentence before the app's name")
+                #expect(!clause.contains(". "), "\(clause) holds two sentences")
+            }
+        }
+    }
+
+    @Test("A removal keeps its reassurance as a note of its own; nothing else has one")
+    func onlyARemovalHasANote() {
+        #expect(item(.removeContent(installed: digest)).planActionNote == "Anything you changed is left alone.")
+        for action in everyAction where !item(action).isRemoval {
+            #expect(item(action).planActionNote == nil, "\(action) has a note")
+        }
+    }
+
+    /// Every action the planner can produce, once.
+    private var everyAction: [WorkspaceDeploymentAction] {
+        [
+            .installContent(digest: digest),
+            .updateContent(from: nil, to: digest),
+            .updateContent(from: digest, to: digest),
+            .installNativePackage(route: .init(client: .claude, externalPluginID: "x")),
+            .configureManagedConnection(transport: .http),
+            .removeContent(installed: digest),
+        ]
+    }
+
+    @Test("The place follows every plan clause the same way, with no comma before it")
+    func placeFollowsWithoutAComma() {
+        for place in ["on this Mac", "in this project"] {
+            for action in everyAction {
+                let clause = item(action).planActionClause(place: place)
+                #expect(clause.contains(" \(place)"), "\(clause) does not name \(place)")
+                #expect(!clause.contains(", \(place)"), "\(clause) sets \(place) off with a comma")
+            }
+        }
+    }
+
+    @Test("Both sheets call a removal by the same words")
+    func oneRemovalWording() {
+        let removal = item(.removeContent(installed: digest))
+        let phrase = "Remove the copy Agent Tooling installed"
+        #expect(removal.installActionText(app: "Codex").hasPrefix(phrase))
+        #expect(removal.planActionClause(place: "on this Mac").hasPrefix(phrase))
+    }
+}

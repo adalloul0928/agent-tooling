@@ -1,7 +1,9 @@
 # Portable MCP delivery — contract v1 (AP5)
 
-Status: mapping implemented with conformance fixtures. This maps; it does not
-launch. A resolved route is not evidence the server works.
+Status: mapping built and tested with conformance fixtures, but nothing in the
+app calls it yet: installs do not route a package's servers through the mapper
+yet. This maps; it does not launch. A resolved route is not evidence the server
+works.
 
 ## The distinction this closes
 

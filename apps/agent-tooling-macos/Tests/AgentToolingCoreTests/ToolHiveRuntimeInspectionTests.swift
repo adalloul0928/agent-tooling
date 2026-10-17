@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -76,13 +77,14 @@ struct ToolHiveRuntimeInspectionTests {
         let runner = ToolHiveInspectionRunner(results: [
             CommandOutput(
                 status: 0,
-                standardOutput: #"{"version":"v0.8.0","commit":"abc123","build_date":"2026-09-09T00:00:00Z","go_version":"go1.25","platform":"darwin/arm64"}"#,
+                standardOutput:
+                    #"{"version":"v0.8.0","commit":"abc123","build_date":"2026-09-09T00:00:00Z","go_version":"go1.25","platform":"darwin/arm64"}"#,
                 standardError: ""
             )
         ])
         let result = try await ToolHiveRuntimeInspection(runner: runner).version()
 
-        guard case let .available(version, diagnostic) = result else {
+        guard case .available(let version, let diagnostic) = result else {
             Issue.record("expected a typed ToolHive version")
             return
         }
@@ -94,19 +96,22 @@ struct ToolHiveRuntimeInspectionTests {
     }
 
     @Test func versionDistinguishesUnavailableFromUnsupportedJSON() async throws {
-        let unavailable = ToolHiveRuntimeInspection(runner: ToolHiveInspectionRunner(results: [
-            CommandOutput(status: 127, standardOutput: "", standardError: "not found")
-        ]))
+        let unavailable = ToolHiveRuntimeInspection(
+            runner: ToolHiveInspectionRunner(results: [
+                CommandOutput(status: 127, standardOutput: "", standardError: "not found")
+            ]))
         #expect(try await unavailable.version() == .unavailable(diagnostic: "not found"))
 
-        let failed = ToolHiveRuntimeInspection(runner: ToolHiveInspectionRunner(results: [
-            CommandOutput(status: 2, standardOutput: "", standardError: "unknown flag: --format")
-        ]))
+        let failed = ToolHiveRuntimeInspection(
+            runner: ToolHiveInspectionRunner(results: [
+                CommandOutput(status: 2, standardOutput: "", standardError: "unknown flag: --format")
+            ]))
         #expect(try await failed.version() == .commandFailed(diagnostic: "unknown flag: --format"))
 
-        let unsupported = ToolHiveRuntimeInspection(runner: ToolHiveInspectionRunner(results: [
-            CommandOutput(status: 0, standardOutput: "{\"version\":true}", standardError: "")
-        ]))
+        let unsupported = ToolHiveRuntimeInspection(
+            runner: ToolHiveInspectionRunner(results: [
+                CommandOutput(status: 0, standardOutput: "{\"version\":true}", standardError: "")
+            ]))
         guard case .unsupportedResponse = try await unsupported.version() else {
             Issue.record("expected unsupported JSON")
             return
@@ -117,13 +122,14 @@ struct ToolHiveRuntimeInspectionTests {
         let runner = ToolHiveInspectionRunner(results: [
             CommandOutput(
                 status: 0,
-                standardOutput: #"{"name":"files","status":"running","health":"unknown","package":"registry/files","url":"http://127.0.0.1:8080/mcp","port":8080,"transport":"streamable-http","proxy_mode":"enabled","group":"local","uptime":"1m"}"#,
+                standardOutput:
+                    #"{"name":"files","status":"running","health":"unknown","package":"registry/files","url":"http://127.0.0.1:8080/mcp","port":8080,"transport":"streamable-http","proxy_mode":"enabled","group":"local","uptime":"1m"}"#,
                 standardError: "warning: token=secret"
             )
         ])
         let result = try await ToolHiveRuntimeInspection(runner: runner).status(workloadName: "files")
 
-        guard case let .available(status, diagnostic) = result else {
+        guard case .available(let status, let diagnostic) = result else {
             Issue.record("expected typed status")
             return
         }
@@ -135,26 +141,52 @@ struct ToolHiveRuntimeInspectionTests {
         #expect(statusCalls.map { $0.1 } == [["status", "files", "--format", "json"]])
     }
 
+    /// An absent ToolHive is not a failing command. The shell's 127 for a
+    /// missing `thv` reads as unavailable, so a caller can offer installation,
+    /// while an installed ToolHive whose status command fails reads as a
+    /// failed command, the way `version` tells them apart.
+    @Test func statusTellsAnAbsentToolHiveFromAFailingCommand() async throws {
+        let absent = ToolHiveRuntimeInspection(runner: RefusingCommandRunner())
+        #expect(try await absent.status(workloadName: "files") == .unavailable(diagnostic: "command not found: thv"))
+
+        let arguments = ["status", "files", "--format", "json"]
+        let failing = ScriptedCommandRunner([
+            arguments: CommandOutput(status: 1, standardOutput: "", standardError: "workload files not found")
+        ])
+        let failed = try await ToolHiveRuntimeInspection(runner: failing).status(workloadName: "files")
+        #expect(failed == .commandFailed(diagnostic: "workload files not found"))
+        #expect(await failing.calls == [arguments])
+    }
+
     @Test func mismatchedOrOversizedStatusResponsesAreUnsupportedBeforeUse() async throws {
-        let mismatch = ToolHiveRuntimeInspection(runner: ToolHiveInspectionRunner(results: [
-            CommandOutput(status: 0, standardOutput: #"{"name":"other","status":"running","package":"p","url":"u","port":1,"transport":"stdio"}"#, standardError: "")
-        ]))
+        let mismatch = ToolHiveRuntimeInspection(
+            runner: ToolHiveInspectionRunner(results: [
+                CommandOutput(
+                    status: 0, standardOutput: #"{"name":"other","status":"running","package":"p","url":"u","port":1,"transport":"stdio"}"#,
+                    standardError: "")
+            ]))
         guard case .unsupportedResponse = try await mismatch.status(workloadName: "files") else {
             Issue.record("expected name mismatch to be unsupported")
             return
         }
 
-        let emptyIdentity = ToolHiveRuntimeInspection(runner: ToolHiveInspectionRunner(results: [
-            CommandOutput(status: 0, standardOutput: #"{"name":"files","status":" ","package":"p","url":"u","port":1,"transport":"stdio"}"#, standardError: "")
-        ]))
+        let emptyIdentity = ToolHiveRuntimeInspection(
+            runner: ToolHiveInspectionRunner(results: [
+                CommandOutput(
+                    status: 0, standardOutput: #"{"name":"files","status":" ","package":"p","url":"u","port":1,"transport":"stdio"}"#,
+                    standardError: "")
+            ]))
         guard case .unsupportedResponse = try await emptyIdentity.status(workloadName: "files") else {
             Issue.record("expected incomplete identity to be unsupported")
             return
         }
 
-        let oversized = ToolHiveRuntimeInspection(runner: ToolHiveInspectionRunner(results: [
-            CommandOutput(status: 0, standardOutput: String(repeating: "x", count: ToolHiveRuntimeInspection.maximumJSONBytes + 1), standardError: "")
-        ]))
+        let oversized = ToolHiveRuntimeInspection(
+            runner: ToolHiveInspectionRunner(results: [
+                CommandOutput(
+                    status: 0, standardOutput: String(repeating: "x", count: ToolHiveRuntimeInspection.maximumJSONBytes + 1),
+                    standardError: "")
+            ]))
         guard case .unsupportedResponse = try await oversized.status(workloadName: "files") else {
             Issue.record("expected oversize response to be unsupported")
             return
@@ -175,9 +207,11 @@ struct ToolHiveRuntimeInspectionTests {
         #expect(snapshot.isTruncated)
         #expect(snapshot.output.count <= 12)
         #expect(snapshot.output.contains("secret") == false)
-        let upstream = try await ToolHiveRuntimeInspection(runner: ToolHiveInspectionRunner(results: [
-            CommandOutput(status: 0, standardOutput: "one\n[output truncated after 1048576 bytes]", standardError: "")
-        ])).logs(workloadName: "files", maximumCharacters: 64)
+        let upstream = try await ToolHiveRuntimeInspection(
+            runner: ToolHiveInspectionRunner(results: [
+                CommandOutput(status: 0, standardOutput: "one\n[output truncated after 1048576 bytes]", standardError: "")
+            ])
+        ).logs(workloadName: "files", maximumCharacters: 64)
         #expect(upstream.isTruncated)
         let logCalls = await runner.recordedCalls()
         #expect(logCalls.map { $0.1 } == [["logs", "files", "--proxy"]])

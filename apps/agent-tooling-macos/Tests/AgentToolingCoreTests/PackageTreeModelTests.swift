@@ -57,14 +57,21 @@ struct PackageTreeModelTests {
     }
 
     @Test func resolvesRelativeLinksAgainstTheirContainingDirectory() throws {
-        _ = try CapturedPackageTree(entries: [directory("dir"), directory("dir/linkdir"), file("dir/x", "x"), link("dir/linkdir/up", "../x")])
-        _ = try CapturedPackageTree(entries: [directory("real"), directory("real/nested"), file("real/x", "x"),
-                                             link("linkdir", "real/nested"), link("through-link", "linkdir/../x"), link("root", ".")])
+        _ = try CapturedPackageTree(entries: [
+            directory("dir"), directory("dir/linkdir"), file("dir/x", "x"), link("dir/linkdir/up", "../x"),
+        ])
+        _ = try CapturedPackageTree(entries: [
+            directory("real"), directory("real/nested"), file("real/x", "x"),
+            link("linkdir", "real/nested"), link("through-link", "linkdir/../x"), link("root", "."),
+        ])
         // A lexical `..` collapse would incorrectly accept root `x`; POSIX
         // resolution expands linkdir first, then applies `..` inside real.
-        #expect(throws: PackageTreeError.self) { _ = try CapturedPackageTree(entries: [
-            directory("real"), directory("real/nested"), file("x", "root"), link("linkdir", "real/nested"), link("wrong", "linkdir/../x"),
-        ]) }
+        #expect(throws: PackageTreeError.self) {
+            _ = try CapturedPackageTree(entries: [
+                directory("real"), directory("real/nested"), file("x", "root"), link("linkdir", "real/nested"),
+                link("wrong", "linkdir/../x"),
+            ])
+        }
     }
 
     @Test func enforcesEntryFileTotalDepthAndPathLimits() {
@@ -90,6 +97,10 @@ struct PackageTreeModelTests {
     }
 
     private func directory(_ path: String) -> PackageTreeEntry { .init(relativePath: path, kind: .directory) }
-    private func file(_ path: String, _ text: String, executable: Bool = false) -> PackageTreeEntry { .init(relativePath: path, kind: .file(bytes: Data(text.utf8), executable: executable)) }
-    private func link(_ path: String, _ target: String) -> PackageTreeEntry { .init(relativePath: path, kind: .symbolicLink(target: target)) }
+    private func file(_ path: String, _ text: String, executable: Bool = false) -> PackageTreeEntry {
+        .init(relativePath: path, kind: .file(bytes: Data(text.utf8), executable: executable))
+    }
+    private func link(_ path: String, _ target: String) -> PackageTreeEntry {
+        .init(relativePath: path, kind: .symbolicLink(target: target))
+    }
 }

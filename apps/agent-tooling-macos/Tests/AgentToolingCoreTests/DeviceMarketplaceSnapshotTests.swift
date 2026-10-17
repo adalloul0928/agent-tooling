@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import AgentToolingCore
 
 struct DeviceMarketplaceSnapshotTests {
@@ -15,7 +16,8 @@ struct DeviceMarketplaceSnapshotTests {
             components: [.plugin, .skill, .mcpServer], supportedClients: [.codex, .claude, .gemini],
             authentication: package.authentication, hasExecutableContent: package.hasExecutableContent, trustSummary: package.trustSummary,
             location: package.location, isInstalled: package.isInstalled, requestedCredentialNames: [], conflicts: [], tools: [])
-        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let bytes = try encoder.encode(DeviceMarketplaceSnapshot(package))
         #expect(bytes == (try encoder.encode(DeviceMarketplaceSnapshot(reversed))))
         #expect(String(decoding: bytes, as: UTF8.self).contains("supportedClients"))

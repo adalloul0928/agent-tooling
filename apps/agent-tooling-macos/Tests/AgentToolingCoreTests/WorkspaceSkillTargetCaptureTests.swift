@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Darwin
 import Foundation
 import Testing
@@ -20,7 +21,8 @@ struct WorkspaceSkillTargetCaptureTests {
         let captured = try await WorkspaceSkillTargetCapture.capture(
             homeURL: fixture.home, deviceID: deviceID,
             selectors: [.init(surface: .claudeCode, scope: .user), .init(surface: .codexCLI, scope: .user)],
-            observations: Self.observations(surfaces: [.claudeCode, .codexCLI]))
+            observations: Self.observations(surfaces: [.claudeCode, .codexCLI])
+        ).targets
         let canonicalShared = try Self.canonicalExistingDirectory(shared).path
         #expect(captured.map(\.canonicalDirectory.path) == [canonicalShared, canonicalShared])
         #expect(Set(captured.map(\.target.physicalDestinationID)).count == 1)
@@ -29,17 +31,20 @@ struct WorkspaceSkillTargetCaptureTests {
         let digest = ContentDigest(value: String(repeating: "a", count: 64))
         let contributions = captured.enumerated().map { index, item in
             AssignmentContribution(
-                id: Self.object(index == 0
-                    ? "00000000-0000-0000-0000-000000000012"
-                    : "00000000-0000-0000-0000-000000000013"),
+                id: Self.object(
+                    index == 0
+                        ? "00000000-0000-0000-0000-000000000012"
+                        : "00000000-0000-0000-0000-000000000013"),
                 artifactID: skillID,
                 destination: .init(surface: item.target.selector.surface, scope: .user),
                 reason: .manual)
         }
         let resolution = WorkspaceAssignmentResolver.resolve(
-            artifacts: [.init(
-                identity: .init(id: skillID, kind: .skill, displayName: "Skill"),
-                authority: .centralPersonal, contentDigest: digest)],
+            artifacts: [
+                .init(
+                    identity: .init(id: skillID, kind: .skill, displayName: "Skill"),
+                    authority: .centralPersonal, contentDigest: digest)
+            ],
             contributions: contributions, currentDeviceID: deviceID,
             targets: captured.map(\.target),
             capabilityEvidence: Self.capabilities(surfaces: [.claudeCode, .codexCLI]),
@@ -56,11 +61,13 @@ struct WorkspaceSkillTargetCaptureTests {
         let first = try await WorkspaceSkillTargetCapture.capture(
             homeURL: fixture.home,
             deviceID: Self.object("00000000-0000-0000-0000-000000000020"),
-            selectors: selector, observations: Self.observations(surfaces: [.codexCLI]))
+            selectors: selector, observations: Self.observations(surfaces: [.codexCLI])
+        ).targets
         let second = try await WorkspaceSkillTargetCapture.capture(
             homeURL: fixture.home,
             deviceID: Self.object("00000000-0000-0000-0000-000000000021"),
-            selectors: selector, observations: Self.observations(surfaces: [.codexCLI]))
+            selectors: selector, observations: Self.observations(surfaces: [.codexCLI])
+        ).targets
         #expect(first[0].canonicalDirectory == second[0].canonicalDirectory)
         #expect(first[0].target.physicalDestinationID != second[0].target.physicalDestinationID)
     }
@@ -70,7 +77,8 @@ struct WorkspaceSkillTargetCaptureTests {
         defer { fixture.remove() }
         let captured = try await WorkspaceSkillTargetCapture.capture(
             homeURL: fixture.home, deviceID: Self.object("00000000-0000-0000-0000-000000000030"),
-            selectors: Self.selectors(scope: .user), observations: Self.observations())
+            selectors: Self.selectors(scope: .user), observations: Self.observations()
+        ).targets
         #expect(captured.count == 3)
         let canonicalHome = try Self.canonicalExistingDirectory(fixture.home)
         for item in captured {
@@ -104,10 +112,12 @@ struct WorkspaceSkillTargetCaptureTests {
         }
     }
 
-    @Test func rejectsMissingDuplicateUnsupportedAndMissingProjectEvidence() async throws {
+    @Test func missingAndDuplicateObservationsThrowWhileUnsupportedAndMissingProjectSkip() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let deviceID = Self.object("00000000-0000-0000-0000-000000000040")
+        // A surface with no observation at all is a structural problem the
+        // caller cannot recover from, so it still throws.
         await #expect(throws: WorkspaceSkillTargetCaptureError.missingObservation(.codexCLI)) {
             _ = try await WorkspaceSkillTargetCapture.capture(
                 homeURL: fixture.home, deviceID: deviceID,
@@ -119,18 +129,63 @@ struct WorkspaceSkillTargetCaptureTests {
                 selectors: [.init(surface: .codexCLI, scope: .user)],
                 observations: Self.observations(surfaces: [.codexCLI, .codexCLI]))
         }
-        await #expect(throws: WorkspaceSkillTargetCaptureError.unsupportedSurface(.codexDesktop)) {
-            _ = try await WorkspaceSkillTargetCapture.capture(
-                homeURL: fixture.home, deviceID: deviceID,
-                selectors: [.init(surface: .codexDesktop, scope: .user)], observations: [])
-        }
+        // An unsupported surface is skipped, not fatal: the result carries no
+        // target and names the skip, so every other client still resolves.
+        let unsupported = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: deviceID,
+            selectors: [.init(surface: .codexDesktop, scope: .user)], observations: [])
+        #expect(unsupported.targets.isEmpty)
+        #expect(unsupported.skipped.map(\.reason) == [.unsupportedSurface(.codexDesktop)])
+
+        // A project with no folder on this Mac is skipped too, and the rest of
+        // the capture still runs.
         let missingProject = Self.artifactID("00000000-0000-0000-0000-000000000041")
-        await #expect(throws: WorkspaceSkillTargetCaptureError.missingProject(missingProject)) {
-            _ = try await WorkspaceSkillTargetCapture.capture(
-                homeURL: fixture.home, deviceID: deviceID,
-                selectors: [.init(surface: .codexCLI, scope: .project, logicalProjectID: missingProject)],
-                observations: Self.observations(surfaces: [.codexCLI]))
-        }
+        let noRoot = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: deviceID,
+            selectors: [
+                .init(surface: .codexCLI, scope: .project, logicalProjectID: missingProject),
+                .init(surface: .codexCLI, scope: .user),
+            ],
+            observations: Self.observations(surfaces: [.codexCLI]))
+        #expect(noRoot.targets.map(\.target.selector.scope) == [.user])
+        #expect(noRoot.skipped.map(\.reason) == [.missingProject(missingProject)])
+    }
+
+    @Test func aClientThatIsNotInstalledIsSkippedAndTheRestStillCapture() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        // Codex is installed; Claude Code is not. The uninstalled one is skipped
+        // and the installed one still resolves — the Kiro-on-this-Mac bug was
+        // exactly this taking every client down together.
+        let result = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: Self.object("00000000-0000-0000-0000-000000000045"),
+            selectors: [
+                .init(surface: .claudeCode, scope: .user),
+                .init(surface: .codexCLI, scope: .user),
+            ],
+            observations: [
+                Self.observation(.claudeCode, installed: false),
+                Self.observation(.codexCLI),
+            ])
+        #expect(result.targets.map(\.target.selector.surface) == [.codexCLI])
+        #expect(result.skipped.map(\.reason) == [.unavailableClient(.claudeCode)])
+    }
+
+    @Test func aKiroSkillDestinationIsCaptured() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        // The reported bug: a Kiro selector aborted the whole capture. It must
+        // now resolve to a real destination like any other CLI, since Kiro has
+        // a native skill folder.
+        let captured = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: Self.object("00000000-0000-0000-0000-000000000046"),
+            selectors: [.init(surface: .kiroCLI, scope: .user)],
+            observations: [Self.observation(.kiroCLI)]
+        ).targets
+        #expect(captured.count == 1)
+        let canonicalHome = try Self.canonicalExistingDirectory(fixture.home)
+        #expect(captured.first?.canonicalDirectory.path == canonicalHome.appending(path: ".kiro/skills").path)
+        #expect(captured.first?.target.selector.surface == .kiroCLI)
     }
 
     @Test func capturedRouteDoesNotManufactureCapabilityAndNilVersionBlocks() async throws {
@@ -141,26 +196,34 @@ struct WorkspaceSkillTargetCaptureTests {
         let target = try await WorkspaceSkillTargetCapture.capture(
             homeURL: fixture.home, deviceID: deviceID,
             selectors: [.init(surface: .codexCLI, scope: .user)],
-            observations: [Self.observation(.codexCLI, version: nil)])
+            observations: [Self.observation(.codexCLI, version: nil)]
+        ).targets
         let contribution = AssignmentContribution(
             artifactID: artifact, destination: .init(surface: .codexCLI, scope: .user), reason: .manual)
         let resolution = WorkspaceAssignmentResolver.resolve(
-            artifacts: [.init(
-                identity: .init(id: artifact, kind: .skill, displayName: "Skill"),
-                authority: .centralPersonal)],
+            artifacts: [
+                .init(
+                    identity: .init(id: artifact, kind: .skill, displayName: "Skill"),
+                    authority: .centralPersonal)
+            ],
             contributions: [contribution], currentDeviceID: deviceID,
             targets: target.map(\.target), capabilityEvidence: [])
         #expect(resolution.requirements.isEmpty)
-        #expect(resolution.issues.map(\.kind) == [.invalidResolvedTarget])
+        // A well-formed target whose client never said its version is refused
+        // for that reason, not as a malformed target.
+        #expect(resolution.issues.map(\.kind) == [.unknownClientVersion])
 
         let versioned = try await WorkspaceSkillTargetCapture.capture(
             homeURL: fixture.home, deviceID: deviceID,
             selectors: [.init(surface: .codexCLI, scope: .user)],
-            observations: Self.observations(surfaces: [.codexCLI]))
+            observations: Self.observations(surfaces: [.codexCLI])
+        ).targets
         let missingCapability = WorkspaceAssignmentResolver.resolve(
-            artifacts: [.init(
-                identity: .init(id: artifact, kind: .skill, displayName: "Skill"),
-                authority: .centralPersonal)],
+            artifacts: [
+                .init(
+                    identity: .init(id: artifact, kind: .skill, displayName: "Skill"),
+                    authority: .centralPersonal)
+            ],
             contributions: [contribution], currentDeviceID: deviceID,
             targets: versioned.map(\.target), capabilityEvidence: [])
         #expect(missingCapability.requirements.isEmpty)
@@ -203,7 +266,6 @@ struct WorkspaceSkillTargetCaptureTests {
             try FileManager.default.createDirectory(at: project, withIntermediateDirectories: false)
         }
 
-
         func remove() { try? FileManager.default.removeItem(at: container) }
     }
 
@@ -222,9 +284,9 @@ struct WorkspaceSkillTargetCaptureTests {
     }
 
     private static func observation(
-        _ surface: TargetSurface, version: String? = "1.0"
+        _ surface: TargetSurface, version: String? = "1.0", installed: Bool = true
     ) -> TargetObservation {
-        .init(surface: surface, installed: true, version: version, capabilities: emptyCapabilities)
+        .init(surface: surface, installed: installed, version: version, capabilities: emptyCapabilities)
     }
 
     private static var emptyCapabilities: TargetCapabilities {
@@ -246,11 +308,11 @@ struct WorkspaceSkillTargetCaptureTests {
     }
 
     private static func object(_ value: String) -> WorkspaceObjectID {
-        WorkspaceObjectID(UUID(uuidString: value)!)
+        WorkspaceObjectID(fixtureUUID(value))
     }
 
     private static func artifactID(_ value: String) -> ArtifactID {
-        ArtifactID(UUID(uuidString: value)!)
+        ArtifactID(fixtureUUID(value))
     }
 
     private static func indexedArtifact(_ value: Int) -> ArtifactID {

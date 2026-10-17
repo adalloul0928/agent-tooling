@@ -94,8 +94,9 @@ struct AgentToolingCLI {
     /// store is laid out. Nothing is created: a CLI that made a workspace by
     /// being run would make one nobody chose to have.
     private static func openWorkspace(root: URL?) throws -> WorkspaceRevisionStore {
-        let locator = try WorkspaceLocator(root: root?.standardizedFileURL
-            ?? (try WorkspaceLocator.defaultRoot()))
+        let locator = try WorkspaceLocator(
+            root: root?.standardizedFileURL
+                ?? (try WorkspaceLocator.defaultRoot()))
         guard let store = try locator.open() else { throw CLIError.noWorkspace }
         return store
     }
@@ -122,8 +123,13 @@ struct AgentToolingCLI {
             flagOptions: ["--instruction-stdin", "--json"]
         )
         try options.requireNoPositionals()
-        guard options.value(for: "--provider") == "codex" else {
-            throw CLIError.invalidProvider
+        // The assistant that writes the draft. Both run locally, signed in as
+        // the person; the app shows every file before anything is saved.
+        let client: ClientKind
+        switch options.value(for: "--provider") {
+        case "codex": client = .codex
+        case "claude", "claude-code": client = .claude
+        default: throw CLIError.invalidProvider
         }
         guard options.contains("--instruction-stdin") else {
             throw CLIError.missingOption("--instruction-stdin")
@@ -131,11 +137,11 @@ struct AgentToolingCLI {
         let instruction =
             try BoundedInputReader.readUTF8(
                 from: .standardInput,
-                maximumBytes: CodexSkillDraftRequest.maximumInstructionBytes
+                maximumBytes: SkillDraftRequest.maximumInstructionBytes
             )
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !instruction.isEmpty,
-            instruction.count <= CodexSkillDraftRequest.maximumInstructionCharacters,
+            instruction.count <= SkillDraftRequest.maximumInstructionCharacters,
             !IntegrationTextSanitizer.containsUnsupportedControlCharacter(instruction, allowsLineBreaks: true)
         else { throw CLIError.invalidInstruction }
 
@@ -190,8 +196,9 @@ struct AgentToolingCLI {
             clientLabel: "Agent Tooling CLI",
             store: store
         )
-        let draftRequest = CodexSkillDraftRequest(
+        let draftRequest = SkillDraftRequest(
             id: outcome.request.id,
+            client: client,
             instruction: instruction,
             proposedName: proposedName,
             scope: scope,
@@ -251,7 +258,7 @@ struct AgentToolingCLI {
               scan [--home PATH]
               doctor [--home PATH]
               search [--query TEXT] [--limit 1...100] [--workspace PATH] [--json]
-              request create-skill --provider codex --scope global|project --targets LIST --instruction-stdin [--project PATH]
+              request create-skill --provider claude|codex --scope global|project --targets LIST --instruction-stdin [--project PATH]
               export-diagnostics OUTPUT.json [--workspace PATH] [--home PATH] [--app-version VERSION]
 
             scan, doctor, search, and diagnostics are read-only. Requests only add bounded items to the app's review
@@ -330,7 +337,8 @@ private enum CLIError: LocalizedError {
         case .missingPositional(let label): "Provide exactly one \(label)."
         case .unexpectedArguments: "This command does not accept positional arguments."
         case .invalidValue(let option): "The value for '\(option)' is invalid."
-        case .invalidProvider: "Only the authenticated local Codex provider is supported for skill creation."
+        case .invalidProvider:
+            "Skill creation runs in your signed-in local Claude Code or Codex: pass --provider claude or --provider codex."
         case .invalidInstruction: "Provide a non-empty UTF-8 instruction no larger than 64 KB."
         case .unknownRequest(let request): "Unknown request type '\(request)'."
         case .noWorkspace:

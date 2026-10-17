@@ -1,24 +1,18 @@
 import Foundation
 
-public struct ValidatedConnectorDraft: Sendable, Equatable {
-    public var name: String
-    public var provider: String
-    public var secretReferenceNames: [String]
-
-    public init(name: String, provider: String, secretReferenceNames: [String]) {
-        self.name = name
-        self.provider = provider
-        self.secretReferenceNames = secretReferenceNames
-    }
+struct ValidatedConnectorDraft: Sendable, Equatable {
+    var name: String
+    var provider: String
+    var secretReferenceNames: [String]
 }
 
-public enum ConnectorValidator {
-    public static let maximumNameLength = 128
-    public static let maximumProviderLength = 128
-    public static let maximumSecretReferences = 64
-    public static let maximumSecretReferenceLength = 128
+enum ConnectorValidator {
+    static let maximumNameLength = 128
+    static let maximumProviderLength = 128
+    static let maximumSecretReferences = 64
+    static let maximumSecretReferenceLength = 128
 
-    public static func validate(
+    static func validate(
         name: String,
         provider: String,
         target: TargetSurface,

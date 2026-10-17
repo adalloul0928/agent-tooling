@@ -51,8 +51,10 @@ public final class WorkspaceLibrarySession {
     @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var readsLanded = 0
 
-    public init(service: any WorkspaceLibraryServing, workspaceID: WorkspaceObjectID,
-                deviceID: WorkspaceObjectID, access: WorkspaceLibraryAccess = .readOnly) {
+    public init(
+        service: any WorkspaceLibraryServing, workspaceID: WorkspaceObjectID,
+        deviceID: WorkspaceObjectID, access: WorkspaceLibraryAccess = .readOnly
+    ) {
         self.service = service
         self.workspaceID = workspaceID
         self.deviceID = deviceID
@@ -179,8 +181,9 @@ public final class WorkspaceLibrarySession {
 
     private func accept(_ next: WorkspaceLibraryState) throws {
         guard next.snapshot.document.workspaceID == workspaceID,
-              next.snapshot.device.workspaceID == workspaceID,
-              next.snapshot.device.deviceID == deviceID else {
+            next.snapshot.device.workspaceID == workspaceID,
+            next.snapshot.device.deviceID == deviceID
+        else {
             throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice
         }
         state = next

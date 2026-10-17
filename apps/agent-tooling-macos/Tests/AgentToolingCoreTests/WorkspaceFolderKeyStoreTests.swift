@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import CryptoKit
 import Foundation
 import Testing
@@ -57,7 +58,8 @@ struct WorkspaceFolderKeyStoreTests {
         let key = WorkspaceFolderKeyStore.generate()
         let phrase = WorkspaceFolderKeyStore.recoveryPhrase(for: key)
         // Someone reading it off a screen types O for zero and l for one.
-        let mistyped = phrase
+        let mistyped =
+            phrase
             .replacingOccurrences(of: "0", with: "O")
             .replacingOccurrences(of: "1", with: "l")
 
@@ -100,10 +102,7 @@ struct WorkspaceFolderKeyStoreTests {
         var file: URL { root.appending(path: "folder-sync-key.json") }
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "folder-key-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("folder-key").url
             store = try WorkspaceFolderKeyStore(containerRoot: root)
         }
 

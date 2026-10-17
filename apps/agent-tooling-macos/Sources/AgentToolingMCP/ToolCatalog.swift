@@ -194,10 +194,12 @@ enum ToolCatalog {
                 """,
             inputSchema: ToolSchema.object(
                 properties: [
-                    "client": ToolSchema.string("Which agent to report: 'claude-code' or 'codex'.",
-                                                maximumLength: 32),
-                    "project_path": ToolSchema.string("Optional absolute path to a project whose files also apply.",
-                                                      maximumLength: 4_096),
+                    "client": ToolSchema.string(
+                        "Which agent to report: 'claude-code' or 'codex'.",
+                        maximumLength: 32),
+                    "project_path": ToolSchema.string(
+                        "Optional absolute path to a project whose files also apply.",
+                        maximumLength: 4_096),
                 ],
                 required: ["client"]
             )
@@ -317,11 +319,15 @@ enum ToolCatalog {
                 properties: [
                     "instruction": ToolSchema.string(
                         "What the skill should do, in plain language.",
-                        maximumLength: CodexSkillDraftRequest.maximumInstructionCharacters
+                        maximumLength: SkillDraftRequest.maximumInstructionCharacters
                     ),
                     "proposedName": ToolSchema.string(
                         "Suggested skill identifier, lower case with hyphens.",
                         maximumLength: 96
+                    ),
+                    "assistant": ToolSchema.enumeration(
+                        "Which signed-in local app drafts the skill with the person. Codex when omitted.",
+                        values: ["claude-code", "codex"]
                     ),
                     "scope": ToolSchema.scope,
                     "projectRoot": ToolSchema.projectRoot,

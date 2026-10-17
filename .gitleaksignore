@@ -2,3 +2,6 @@
 # A test fixture that proves the MCP intake refuses an inline ACCESS_TOKEN; the literal
 # was split in a later commit, but the scan reads every commit in a pull request.
 2335145f530f76ff93f90c7a87d3451afea623bc:apps/agent-tooling-macos/Tests/AgentToolingCoreTests/ManagedMCPServerIntakeCommandTests.swift:generic-api-key:140
+# Synthetic redaction-test token in the original snapshot commit. The current
+# fixture constructs the token from parts; PR scans still inspect this commit.
+ceccd64eb77aa330c1762cc0a4729e57762e6a9c:apps/agent-tooling-macos/Tests/AgentToolingCoreTests/InsightsDeepDiveTests.swift:generic-api-key:16

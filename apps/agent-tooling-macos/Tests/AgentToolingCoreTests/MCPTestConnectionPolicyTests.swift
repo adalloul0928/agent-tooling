@@ -161,13 +161,80 @@ struct MCPTestConnectionPolicyTests {
             temporaryDirectory: URL(fileURLWithPath: "/tmp/example")
         )
 
-        #expect(Set(environment.keys) == ["PATH", "HOME", "TMPDIR", "LANG", "USER", "LOGNAME", "MCP_TEST_CONNECTION"])
+        // Built on the shared child-environment builder, so it carries the same
+        // keys a real client command gets (TERM and LC_CTYPE included) plus the
+        // test marker.
+        #expect(
+            Set(environment.keys)
+                == ["PATH", "HOME", "TMPDIR", "LANG", "LC_CTYPE", "TERM", "USER", "LOGNAME", "MCP_TEST_CONNECTION"]
+        )
         #expect(environment["HOME"] == "/Users/example")
         #expect(environment["PATH"]?.contains("/Users/example/.local/bin") == true)
+        #expect(environment["MCP_TEST_CONNECTION"] == "agent-tooling")
         // Whatever the app itself was launched with must not be visible here.
         for key in ProcessInfo.processInfo.environment.keys where !environment.keys.contains(key) {
             #expect(environment[key] == nil)
         }
+    }
+
+    @Test func theTestChildPathMatchesTheRunnersAndFindsVoltaAndPnpmTools() {
+        let home = URL(fileURLWithPath: "/Users/example")
+        let environment = MCPTestConnectionPolicy.childEnvironment(homeURL: home)
+
+        // The one list: a server under test is found the same way a real
+        // client command is, including tools installed through Volta or pnpm.
+        #expect(environment["PATH"] == ProcessCommandRunner.searchPath(home: "/Users/example").joined(separator: ":"))
+        #expect(environment["PATH"]?.contains("/Users/example/.volta/bin") == true)
+        #expect(environment["PATH"]?.contains("/Users/example/Library/pnpm") == true)
+    }
+
+    /// Amazon Toolbox installs every tool as a link in `~/.toolbox/bin` to one
+    /// shared dispatcher, which works out what to run from the name it was
+    /// started by. Checkup counts such a server reachable, so a live test has
+    /// to find it on the same path and start it by that name, not as the
+    /// dispatcher the link leads to.
+    @Test func aToolboxServerCheckupFindsResolvesAndStartsByItsOwnName() throws {
+        let tree = try TemporaryTree()
+        defer { tree.remove() }
+        let dispatcher = try tree.makeExecutable(named: "toolbox-exec")
+        let bin = tree.root.appending(path: ".toolbox/bin", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let shim = bin.appending(path: "fixture-toolbox-mcp", directoryHint: .notDirectory)
+        try FileManager.default.createSymbolicLink(at: shim, withDestinationURL: dispatcher)
+
+        #expect(SetupAuditor(homeURL: tree.root).commandIsReachable("fixture-toolbox-mcp"))
+        let target = try MCPTestConnectionPolicy.resolveStdio(["fixture-toolbox-mcp", "--stdio"], homeURL: tree.root)
+
+        guard case .stdio(let executableURL, let arguments) = target else {
+            Issue.record("Expected a stdio target")
+            return
+        }
+        #expect(executableURL.path(percentEncoded: false) == shim.path(percentEncoded: false))
+        #expect(arguments == ["--stdio"])
+        #expect(target.displayCommand.hasSuffix(".toolbox/bin/fixture-toolbox-mcp --stdio"))
+    }
+
+    @Test func aSecretInTheParentNeverReachesATestChild() {
+        // childEnvironment ignores the process environment entirely, so even a
+        // secret exported into this test process cannot ride along.
+        setenv("AGENT_TOOLING_TEST_SECRET", "do-not-leak", 1)
+        defer { unsetenv("AGENT_TOOLING_TEST_SECRET") }
+
+        let environment = MCPTestConnectionPolicy.childEnvironment(homeURL: URL(fileURLWithPath: "/Users/example"))
+
+        #expect(environment["AGENT_TOOLING_TEST_SECRET"] == nil)
+        #expect(!environment.values.contains("do-not-leak"))
+    }
+
+    @Test func aTrailingSlashHomeDoesNotLeaveDoubledSeparators() {
+        // A directory URL keeps its trailing slash; the policy must strip it so
+        // HOME does not end in "/" and PATH entries do not contain "//".
+        let environment = MCPTestConnectionPolicy.childEnvironment(
+            homeURL: URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        )
+
+        #expect(environment["HOME"] == "/Users/example")
+        #expect(environment["PATH"]?.contains("//") == false)
     }
 
     @Test func theConsentSummaryNamesWhatIsAboutToHappen() throws {
@@ -184,9 +251,9 @@ struct MCPTestConnectionPolicyTests {
         #expect(MCPTestConnectionPolicy.consentSummary(for: http, serverName: "Fixture").contains("mcp.example.com"))
     }
 
-    @Test func anHTTP307RedirectIsRefusedInsteadOfFollowingItsLocation() async {
+    @Test func anHTTP307RedirectIsRefusedInsteadOfFollowingItsLocation() async throws {
         let channel = MCPHTTPTestChannel(
-            testingURL: URL(string: "https://approved.example/mcp")!,
+            testingURL: try #require(URL(string: "https://approved.example/mcp")),
             protocolClasses: [RedirectingMCPURLProtocol.self]
         )
         do {
@@ -200,9 +267,9 @@ struct MCPTestConnectionPolicyTests {
         await channel.shutdown()
     }
 
-    @Test func aResponseAttributedToAnotherOriginIsRefused() async {
+    @Test func aResponseAttributedToAnotherOriginIsRefused() async throws {
         let channel = MCPHTTPTestChannel(
-            testingURL: URL(string: "https://approved.example/mcp")!,
+            testingURL: try #require(URL(string: "https://approved.example/mcp")),
             protocolClasses: [MismatchedOriginMCPURLProtocol.self]
         )
         do {

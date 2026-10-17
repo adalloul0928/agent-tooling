@@ -52,7 +52,6 @@ enum ManagedInstallPath {
 /// The app's own record of what it installed and where. Ownership proof and
 /// drift detection both read from here.
 public struct ManagedInstallLedger: Codable, Hashable, Sendable {
-    public static let storageKey = "managed-install-ledger"
     public static let maximumRecords = 512
 
     public var records: [ManagedInstallRecord]
@@ -144,15 +143,6 @@ public struct ManagedInstallAuthority: Sendable {
             result.append(record)
         }
         return result
-    }
-
-    /// Identifies a step by the plan it belongs to as well as by itself. Step
-    /// identifiers are decoded from plan files, so they are attacker-chosen;
-    /// pairing on the identifier alone would let a receipt for one plan vouch
-    /// for a step in another that simply reused it.
-    private struct PlanStepIdentity: Hashable {
-        var planID: UUID
-        var stepID: UUID
     }
 
 }
@@ -273,36 +263,6 @@ public enum InstalledPackageDriftInspector {
         )
     }
 
-    /// One calm sentence for the setup check. Drift is reported as a fact.
-    ///
-    /// A package the app cannot read is reported too. Staying silent about it
-    /// would be the most useful outcome for anyone tampering with an installed
-    /// copy: a single symlink inside the folder makes the fingerprint
-    /// unreadable, and "no news" would then read as "unchanged".
-    public static func summary(for reports: [InstalledPackageDrift]) -> String? {
-        let drifted = reports.filter(\.hasDrifted)
-        let removed = reports.filter { $0.state == .removed }
-        let unreadable = reports.filter { $0.state == .unreadable }
-        var parts: [String] = []
-        if !drifted.isEmpty {
-            let names = drifted.map(\.packageName).sorted().joined(separator: ", ")
-            parts.append(
-                "\(drifted.count) installed package\(drifted.count == 1 ? " is" : "s are") modified since you reviewed \(drifted.count == 1 ? "it" : "them"): \(names)."
-            )
-        }
-        if !removed.isEmpty {
-            let names = removed.map(\.packageName).sorted().joined(separator: ", ")
-            parts.append(
-                "\(removed.count) previously installed package\(removed.count == 1 ? " is" : "s are") no longer present: \(names).")
-        }
-        if !unreadable.isEmpty {
-            let names = unreadable.map(\.packageName).sorted().joined(separator: ", ")
-            parts.append(
-                "\(unreadable.count) installed package\(unreadable.count == 1 ? "" : "s") could not be read to compare against \(unreadable.count == 1 ? "its" : "their") review: \(names)."
-            )
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " ")
-    }
 }
 
 /// The managed locations an operation writes into, and where its receipt goes.

@@ -193,7 +193,7 @@ struct MCPServerCapabilitiesPane: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Space.xl) {
             MCPTestConsoleSection(server: server, resolution: resolution, console: console)
             MCPCapabilitySection(
                 serverID: server.id,
@@ -219,7 +219,7 @@ private struct MCPTestConsoleSection: View {
     @State private var pendingRun: MCPPendingToolRun?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: Space.sm) {
             header
             switch resolution {
             case .success(let target): connectableBody(target)
@@ -254,30 +254,30 @@ private struct MCPTestConsoleSection: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Text("Live test").font(.subheadline.weight(.semibold))
+        HStack(spacing: Space.md) {
+            Text("Live test").font(AgentFont.heading)
             Spacer()
             statusBadge
         }
-        .padding(.horizontal, 2)
+        .padding(.horizontal, Space.xxs)
     }
 
     @ViewBuilder
     private var statusBadge: some View {
         switch console.phase {
         case .idle:
-            Text("Not tested").font(.caption).foregroundStyle(.secondary)
+            Text("Not tested").font(AgentFont.caption).foregroundStyle(.secondary)
         case .connecting:
-            HStack(spacing: 6) {
+            HStack(spacing: Space.sm) {
                 ProgressView().controlSize(.small)
-                Text("Connecting…").font(.caption).foregroundStyle(.secondary)
+                Text("Connecting…").font(AgentFont.caption).foregroundStyle(.secondary)
             }
         case .live:
             if let observation = console.observation {
                 StatusBadge(state: .healthy, text: observation.headline)
             }
         case .stopped:
-            Text("Stopped").font(.caption).foregroundStyle(.secondary)
+            Text("Stopped").font(AgentFont.caption).foregroundStyle(.secondary)
         case .failed:
             StatusBadge(state: .attention, text: "Did not respond")
         }
@@ -286,19 +286,19 @@ private struct MCPTestConsoleSection: View {
     // MARK: Unavailable
 
     private func unavailableBody(_ error: any Error) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: Space.lg) {
             Image(systemName: "bolt.slash").foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("A live test is not possible for this server")
-                    .font(.callout.weight(.medium))
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("A live test is not possible for this connection")
+                    .font(AgentFont.bodyMedium)
                 Text(error.localizedDescription)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             Spacer(minLength: 0)
         }
-        .padding(14)
+        .padding(Space.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
         .standardPanel()
     }
@@ -309,18 +309,18 @@ private struct MCPTestConsoleSection: View {
     private func connectableBody(_ target: MCPTestTarget) -> some View {
         VStack(spacing: 0) {
             commandRow(target)
-            Divider().opacity(0.45)
+            Hairline()
             controlRow(target)
             if console.isLive, let observation = console.observation {
-                Divider().opacity(0.45)
+                Hairline()
                 MCPObservationSummary(observation: observation)
             }
             if let failure = console.failure {
-                Divider().opacity(0.45)
+                Hairline()
                 messageRow(failure, state: console.phase == .failed ? HealthState.attention : .pending)
             }
             if !console.diagnostics.isEmpty {
-                Divider().opacity(0.45)
+                Hairline()
                 diagnosticsRow
             }
         }
@@ -354,19 +354,19 @@ private struct MCPTestConsoleSection: View {
 
     private func commandRow(_ target: MCPTestTarget) -> some View {
         LabeledValueRow(target.isProcessLaunch ? "Runs" : "Contacts") {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: Space.md) {
                 Text(target.displayCommand)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(AgentFont.mono)
                     .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
+                    .wrapsLines()
+                Spacer(minLength: Space.md)
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(target.displayCommand, forType: .string)
                 } label: {
                     Image(systemName: "doc.on.doc")
                 }
-                .buttonStyle(.borderless)
+                .inlineActionStyle()
                 .controlSize(.small)
                 .accessibilityLabel("Copy the test command")
             }
@@ -375,7 +375,7 @@ private struct MCPTestConsoleSection: View {
 
     @ViewBuilder
     private func controlRow(_ target: MCPTestTarget) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.lg) {
             if console.isLive, let connectedAt = console.connectedAt {
                 MCPLiveIndicator(connectedAt: connectedAt, expiresAt: console.expiresAt)
             } else {
@@ -384,51 +384,51 @@ private struct MCPTestConsoleSection: View {
                         ? "Starts \(server.name)'s own program on this Mac. Nothing runs until you confirm."
                         : "Opens one MCP session with this endpoint. Nothing is contacted until you confirm."
                 )
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.lg)
             if console.isLive || console.phase == .connecting {
                 Button("Stop", role: .destructive) { console.stop() }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .controlSize(.small)
             } else {
                 Button(console.phase == .idle ? "Test connection…" : "Test again…") { isShowingConsent = true }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .controlSize(.small)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
     }
 
     private func messageRow(_ text: String, state: HealthState) -> some View {
-        HStack(alignment: .top, spacing: 9) {
-            StatusGlyph(state: state, size: 13)
+        HStack(alignment: .top, spacing: Space.md) {
+            StatusGlyph(state: state, size: Size.glyph)
             Text(text)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
     }
 
     private var diagnosticsRow: some View {
         DisclosureGroup {
             Text(console.diagnostics)
-                .font(.system(.caption2, design: .monospaced))
+                .font(AgentFont.mono)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 8)
+                .padding(.top, Space.md)
         } label: {
-            Text("Server output").font(.caption)
+            Text("Server output").font(AgentFont.caption)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
     }
 
     // MARK: Support
@@ -443,645 +443,4 @@ private struct MCPPendingToolRun: Identifiable {
     var id: String { tool.name }
     let tool: MCPLiveTool
     let arguments: [String: JSONValue]
-}
-
-// MARK: - Live indicator
-
-private struct MCPLiveIndicator: View {
-    let connectedAt: Date
-    let expiresAt: Date?
-
-    var body: some View {
-        TimelineView(.periodic(from: connectedAt, by: 1)) { context in
-            HStack(spacing: 7) {
-                Circle()
-                    .fill(AgentTheme.ok)
-                    .frame(width: 7, height: 7)
-                    .opacity(Int(context.date.timeIntervalSince(connectedAt)) % 2 == 0 ? 1 : 0.35)
-                Text(label(at: context.date))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Live connection open")
-        }
-    }
-
-    private func label(at date: Date) -> String {
-        let elapsed = max(0, Int(date.timeIntervalSince(connectedAt)))
-        guard let expiresAt else { return "Live · \(elapsed)s" }
-        let remaining = max(0, Int(expiresAt.timeIntervalSince(date)))
-        return "Live · \(elapsed)s open · stops in \(remaining)s"
-    }
-}
-
-// MARK: - Observation summary
-
-private struct MCPObservationSummary: View {
-    let observation: MCPLiveObservation
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                counter("Tools", observation.declaresTools ? "\(observation.tools.count)" : "—")
-                Divider().frame(height: 30).opacity(0.45)
-                counter("Resources", observation.declaresResources ? "\(observation.resourceCount)" : "—")
-                Divider().frame(height: 30).opacity(0.45)
-                counter("Prompts", observation.declaresPrompts ? "\(observation.promptCount)" : "—")
-                Divider().frame(height: 30).opacity(0.45)
-                counter("Handshake", "\(Int(observation.handshakeMilliseconds.rounded())) ms")
-                Divider().frame(height: 30).opacity(0.45)
-                counter("Inventory", "\(Int(observation.inventoryMilliseconds.rounded())) ms")
-            }
-            .padding(.vertical, 11)
-            Divider().opacity(0.45)
-            LabeledValueRow("Reported by server") {
-                Text(identity)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-            if observation.unannotatedToolCount > 0 || observation.destructiveToolCount > 0 {
-                Divider().opacity(0.45)
-                LabeledValueRow("Before you run") {
-                    Text(warning)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Divider().opacity(0.45)
-            LabeledValueRow("Recorded") {
-                Text(
-                    "Nothing. This is what one connection saw at \(observation.observedAt.formatted(date: .omitted, time: .standard)), not this server's saved status."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private func counter(_ title: String, _ value: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(.title3.weight(.semibold).monospacedDigit())
-            Text(title).font(.caption2).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var identity: String {
-        let name = observation.serverName ?? "an unnamed server"
-        let version = observation.serverVersion.map { " \($0)" } ?? ""
-        return "\(name)\(version) · MCP \(observation.protocolVersion)"
-    }
-
-    private var warning: String {
-        var parts: [String] = []
-        if observation.destructiveToolCount > 0 {
-            parts.append("\(observation.destructiveToolCount) declared destructive")
-        }
-        if observation.unannotatedToolCount > 0 {
-            parts.append("\(observation.unannotatedToolCount) with no annotations, which MCP treats as able to change or delete data")
-        }
-        return parts.joined(separator: " · ")
-    }
-}
-
-// MARK: - Tool inventory
-
-private struct MCPToolInventoryList: View {
-    private static let visibleLimit = 60
-
-    let tools: [MCPLiveTool]
-    @Binding var selectedToolName: String?
-    let isBusy: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text("Tools this connection offered").font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("\(tools.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 2)
-
-            VStack(spacing: 0) {
-                ForEach(Array(visibleTools.enumerated()), id: \.element.id) { index, tool in
-                    row(tool)
-                    if index < visibleTools.count - 1 { Divider().opacity(0.45) }
-                }
-                if tools.count > Self.visibleLimit {
-                    Divider().opacity(0.45)
-                    Text("\(tools.count - Self.visibleLimit) more tools are not listed here.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(14)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .standardPanel()
-        }
-    }
-
-    private var visibleTools: [MCPLiveTool] { Array(tools.prefix(Self.visibleLimit)) }
-
-    private func row(_ tool: MCPLiveTool) -> some View {
-        HStack(alignment: .top, spacing: 11) {
-            Image(systemName: tool.safety.symbolName)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(tool.safety == .readOnly ? Color.secondary : AgentTheme.warning)
-                .frame(width: 18)
-                .padding(.top, 1)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 7) {
-                    Text(tool.name)
-                        .font(.system(.callout, design: .monospaced).weight(.medium))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    MCPSafetyTag(text: tool.safety.label, isWarning: tool.safety != .readOnly)
-                    if tool.declaresIdempotent { MCPSafetyTag(text: "Idempotent", isWarning: false) }
-                    if tool.declaresOpenWorld { MCPSafetyTag(text: "Open world", isWarning: false) }
-                }
-                if let summary = tool.summary {
-                    Text(summary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer(minLength: 12)
-            Button(selectedToolName == tool.name ? "Selected" : "Run…") {
-                selectedToolName = tool.name
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(isBusy || selectedToolName == tool.name)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(tool.name), \(tool.safety.label)")
-    }
-}
-
-private struct MCPSafetyTag: View {
-    let text: String
-    let isWarning: Bool
-
-    var body: some View {
-        Text(text)
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(isWarning ? AgentTheme.warning : Color.secondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(
-                Capsule().fill((isWarning ? AgentTheme.warning : AgentTheme.graphite).opacity(0.14))
-            )
-    }
-}
-
-// MARK: - Run panel
-
-/// The generated form for one tool, plus its result.
-///
-/// Module-internal rather than file-private so a render test can exercise the
-/// destructive path: this is the surface where a person turns a schema into a
-/// real call, and it should fail in a test rather than in front of somebody.
-struct MCPToolRunPanel: View {
-    let tool: MCPLiveTool
-    let serverName: String
-    let isRunning: Bool
-    let needsConfirmation: Bool
-    let outcome: MCPToolCallOutcome?
-    let failure: String?
-    let onRun: ([String: JSONValue], Bool) -> Void
-
-    @State private var values: [String: String] = [:]
-    @State private var rawObject = "{}"
-    @State private var validationError: String?
-
-    private var form: MCPToolInputForm { MCPToolInputForm.make(from: tool.inputSchema) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text("Run \(tool.name)").font(.subheadline.weight(.semibold))
-                Spacer()
-                MCPSafetyTag(text: tool.safety.label, isWarning: tool.safety != .readOnly)
-            }
-            .padding(.horizontal, 2)
-
-            VStack(spacing: 0) {
-                if tool.safety != .readOnly {
-                    HStack(alignment: .top, spacing: 9) {
-                        StatusGlyph(state: .attention, size: 13)
-                        Text(tool.safety.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    Divider().opacity(0.45)
-                }
-
-                if form.takesNoArguments && !form.requiresRawObjectEditor {
-                    LabeledValueRow("Arguments") {
-                        Text("This tool takes none.").font(.caption).foregroundStyle(.secondary)
-                    }
-                } else if form.requiresRawObjectEditor && form.fields.isEmpty {
-                    rawEditor
-                } else {
-                    ForEach(form.fields) { field in
-                        fieldRow(field)
-                        Divider().opacity(0.45)
-                    }
-                    if form.requiresRawObjectEditor { rawEditor }
-                }
-
-                Divider().opacity(0.45)
-                HStack(spacing: 10) {
-                    if let validationError {
-                        Label(validationError, systemImage: "exclamationmark.triangle")
-                            .font(.caption)
-                            .foregroundStyle(AgentTheme.warning)
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        Text("Calls the running \(serverName) server for real.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 12)
-                    if isRunning { ProgressView().controlSize(.small) }
-                    Button(needsConfirmation ? "Run tool…" : "Run tool") { attemptRun() }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .disabled(isRunning)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .standardPanel()
-
-            if let failure {
-                Label(failure, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(AgentTheme.warning)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 2)
-            }
-            if let outcome { MCPToolOutcomeView(outcome: outcome) }
-        }
-        .onChange(of: tool.name) { _, _ in
-            values = [:]
-            rawObject = "{}"
-            validationError = nil
-        }
-    }
-
-    private var rawEditor: some View {
-        LabeledValueRow("Arguments (JSON)") {
-            TextEditor(text: $rawObject)
-                .font(.system(.caption, design: .monospaced))
-                .frame(minHeight: 76)
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(AgentTheme.separator.opacity(0.55), lineWidth: 0.5)
-                }
-                .accessibilityLabel("Arguments as JSON")
-        }
-    }
-
-    @ViewBuilder
-    private func fieldRow(_ field: MCPToolInputField) -> some View {
-        LabeledValueRow(field.displayName + (field.isRequired ? " *" : "")) {
-            VStack(alignment: .leading, spacing: 4) {
-                control(field)
-                if let summary = field.summary {
-                    Text(summary)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func control(_ field: MCPToolInputField) -> some View {
-        let binding = Binding(
-            get: { values[field.name] ?? field.defaultText ?? "" },
-            set: { values[field.name] = $0 }
-        )
-        switch field.kind {
-        case .boolean:
-            Toggle("", isOn: Binding(get: { binding.wrappedValue == "true" }, set: { binding.wrappedValue = $0 ? "true" : "false" }))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .accessibilityLabel(field.displayName)
-        case .choice(let options):
-            Picker("", selection: binding) {
-                Text("Not set").tag("")
-                ForEach(options, id: \.self) { Text($0).tag($0) }
-            }
-            .labelsHidden()
-            .frame(maxWidth: 240, alignment: .leading)
-            .accessibilityLabel(field.displayName)
-        case .text(let multiline) where multiline:
-            TextEditor(text: binding)
-                .font(.system(.caption, design: .monospaced))
-                .frame(minHeight: 60)
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(AgentTheme.separator.opacity(0.55), lineWidth: 0.5)
-                }
-                .accessibilityLabel(field.displayName)
-        case .text, .number:
-            TextField("", text: binding, prompt: Text(field.name))
-                .textFieldStyle(.roundedBorder)
-                .accessibilityLabel(field.displayName)
-        case .rawJSON:
-            TextField("", text: binding, prompt: Text("JSON value"))
-                .textFieldStyle(.roundedBorder)
-                .font(.system(.caption, design: .monospaced))
-                .accessibilityLabel("\(field.displayName) as JSON")
-        }
-    }
-
-    private func attemptRun() {
-        do {
-            let arguments = try MCPToolArgumentBuilder.build(form: form, values: values, rawObject: rawObject)
-            validationError = nil
-            onRun(arguments, needsConfirmation)
-        } catch {
-            validationError = error.localizedDescription
-        }
-    }
-}
-
-private struct MCPToolOutcomeView: View {
-    let outcome: MCPToolCallOutcome
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 9) {
-                StatusGlyph(state: outcome.isError ? .attention : .healthy, size: 13)
-                Text(outcome.isError ? "The server reported a tool error" : "The server answered")
-                    .font(.callout.weight(.medium))
-                Spacer(minLength: 12)
-                Text("\(Int(outcome.latencyMilliseconds.rounded())) ms")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            if !outcome.text.isEmpty {
-                Divider().opacity(0.45)
-                MCPResultText(text: outcome.text, font: .system(.caption, design: .monospaced), tint: .primary)
-            }
-            if let structured = outcome.structuredText {
-                Divider().opacity(0.45)
-                MCPResultText(text: structured, font: .system(.caption2, design: .monospaced), tint: .secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .standardPanel()
-    }
-}
-
-/// Server output grows to fit short answers and scrolls inside a fixed box only
-/// once it would otherwise take over the pane.
-private struct MCPResultText: View {
-    private static let inlineLineLimit = 12
-    private static let inlineCharacterLimit = 900
-    private static let scrollHeight: CGFloat = 200
-
-    let text: String
-    let font: Font
-    let tint: Color
-
-    var body: some View {
-        Group {
-            if isShort {
-                content
-            } else {
-                ScrollView(.vertical) { content }
-                    .frame(height: Self.scrollHeight)
-            }
-        }
-        .padding(14)
-    }
-
-    private var content: some View {
-        Text(text)
-            .font(font)
-            .foregroundStyle(tint)
-            .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var isShort: Bool {
-        text.count <= Self.inlineCharacterLimit
-            && text.split(separator: "\n", omittingEmptySubsequences: false).count <= Self.inlineLineLimit
-    }
-}
-
-// MARK: - Argument encoding
-
-enum MCPToolArgumentError: LocalizedError {
-    case missingRequired(String)
-    case badNumber(String)
-    case badJSON(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .missingRequired(let name): "\(name) is required."
-        case .badNumber(let name): "\(name) needs a number."
-        case .badJSON(let name): "\(name) needs valid JSON."
-        }
-    }
-}
-
-enum MCPToolArgumentBuilder {
-    static func build(form: MCPToolInputForm, values: [String: String], rawObject: String) throws -> [String: JSONValue] {
-        var arguments: [String: JSONValue] = [:]
-        if form.requiresRawObjectEditor || (form.fields.isEmpty && !form.takesNoArguments) {
-            arguments = try decodeObject(rawObject, name: "Arguments")
-        }
-        for field in form.fields {
-            let raw = (values[field.name] ?? field.defaultText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !raw.isEmpty else {
-                if field.isRequired { throw MCPToolArgumentError.missingRequired(field.displayName) }
-                continue
-            }
-            switch field.kind {
-            case .boolean: arguments[field.name] = .bool(raw == "true")
-            case .number(let isInteger):
-                guard let number = Double(raw), number.isFinite, !isInteger || number == number.rounded() else {
-                    throw MCPToolArgumentError.badNumber(field.displayName)
-                }
-                arguments[field.name] = .number(number)
-            case .text, .choice: arguments[field.name] = .string(raw)
-            case .rawJSON: arguments[field.name] = try decodeValue(raw, name: field.displayName)
-            }
-        }
-        return arguments
-    }
-
-    private static func decodeObject(_ text: String, name: String) throws -> [String: JSONValue] {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [:] }
-        guard case .object(let body) = try decodeValue(trimmed, name: name) else {
-            throw MCPToolArgumentError.badJSON(name)
-        }
-        return body
-    }
-
-    private static func decodeValue(_ text: String, name: String) throws -> JSONValue {
-        guard let data = text.data(using: .utf8),
-            data.count <= MCPTestConnectionPolicy.maximumArgumentBytes,
-            let value = try? AgentToolingCoding.decoder().decode(JSONValue.self, from: data)
-        else {
-            throw MCPToolArgumentError.badJSON(name)
-        }
-        return value
-    }
-}
-
-// MARK: - Consent
-
-/// The one screen that turns "Agent Tooling manages this definition" into
-/// "Agent Tooling is about to run somebody else's code on your Mac".
-private struct MCPTestConsentSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let serverName: String
-    let target: MCPTestTarget
-    let onConfirm: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                SymbolTile(symbol: target.isProcessLaunch ? "bolt.badge.clock" : "network", size: 40)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(target.isProcessLaunch ? "Start \(serverName) for a live test" : "Open a live test session")
-                        .font(.title3.weight(.semibold))
-                    Text("This is the only thing Agent Tooling will run or contact.")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            .padding(22)
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        SectionCaption(text: target.isProcessLaunch ? "Exact command" : "Exact endpoint")
-                        Text(target.displayCommand)
-                            .font(.system(.callout, design: .monospaced))
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(13)
-                            .standardPanel()
-                    }
-
-                    Text(MCPTestConnectionPolicy.consentSummary(for: target, serverName: serverName))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    VStack(spacing: 0) {
-                        ForEach(Array(boundaries.enumerated()), id: \.offset) { index, item in
-                            HStack(alignment: .top, spacing: 10) {
-                                Image(systemName: item.symbol)
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 18)
-                                Text(item.text)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 0)
-                            }
-                            .padding(13)
-                            if index < boundaries.count - 1 { Divider().opacity(0.45) }
-                        }
-                    }
-                    .standardPanel()
-                }
-                .padding(22)
-            }
-
-            Divider()
-            HStack {
-                Spacer()
-                Button("Cancel") { dismiss() }
-                    .buttonStyle(.bordered)
-                    .keyboardShortcut(.cancelAction)
-                Button(target.isProcessLaunch ? "Start and connect" : "Connect") {
-                    onConfirm()
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding(16)
-        }
-        .frame(width: 640, height: 560)
-        .background(AgentTheme.contentBackground)
-    }
-
-    private var boundaries: [(symbol: String, text: String)] {
-        var items: [(String, String)] = []
-        if target.isProcessLaunch {
-            items.append(
-                (
-                    "shield.lefthalf.filled",
-                    "Only this program starts. Shells, `env`, and privilege wrappers are refused, so the line above is what runs."
-                )
-            )
-            items.append(
-                (
-                    "key.slash",
-                    "It gets a fresh, minimal environment — PATH, HOME, TMPDIR, LANG, USER. None of your exported keys or tokens are passed, "
-                        + "so a server that needs credentials will say so instead of using them."
-                )
-            )
-        } else {
-            items.append(("key.slash", "No Authorization header, cookies, or saved credentials are sent."))
-        }
-        items.append(
-            (
-                "stopwatch",
-                "Every step is time-limited, and the whole session stops after "
-                    + "\(MCPTestConnectionPolicy.sessionLifetimeSeconds) seconds or whenever you press Stop."
-            )
-        )
-        items.append(
-            (
-                "doc.badge.gearshape",
-                "No client configuration changes, and the result is not saved as this server's status. It is one observation, shown once."
-            )
-        )
-        items.append(
-            (
-                "hand.raised",
-                "Running a tool afterwards is a real call. Agent Tooling asks again before the first run of any tool "
-                    + "that is not annotated read-only."
-            )
-        )
-        return items
-    }
 }

@@ -58,14 +58,16 @@ public enum MCPDefinitionValidator {
         var total = 0
         for argument in arguments {
             guard argument.utf8.count <= maximumDestinationLength,
-                  !argument.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+                !argument.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+            else {
                 throw MCPDefinitionValidationError.destinationTooLong
             }
             total += argument.utf8.count
             guard total <= maximumDestinationLength else { throw MCPDefinitionValidationError.destinationTooLong }
         }
         guard !containsInlineSecret(arguments),
-              !arguments.contains(where: { SensitiveValueRedactor.containsCredentialValue(in: $0) }) else {
+            !arguments.contains(where: { SensitiveValueRedactor.containsCredentialValue(in: $0) })
+        else {
             throw MCPDefinitionValidationError.inlineSecret
         }
     }

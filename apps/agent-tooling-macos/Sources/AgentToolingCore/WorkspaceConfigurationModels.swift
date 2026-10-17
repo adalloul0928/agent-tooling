@@ -180,18 +180,3 @@ public struct ManagedPolicy: Identifiable, Codable, Hashable, Sendable {
         self.profiles = profiles
     }
 }
-
-public struct BackupConflict: Identifiable, Codable, Hashable, Sendable {
-    public var id: String { "\(kind):\(identifier)" }
-    public var kind: String
-    public var identifier: String
-    public var localSummary: String
-    public var backupSummary: String
-
-    public init(kind: String, identifier: String, localSummary: String, backupSummary: String) {
-        self.kind = kind
-        self.identifier = identifier
-        self.localSummary = localSummary
-        self.backupSummary = backupSummary
-    }
-}

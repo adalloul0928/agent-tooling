@@ -27,7 +27,7 @@ extension WorkspaceMergeConflictKind {
             false
         case .artifactField, .artifactContent, .deleteVersusEdit, .ownership, .sourcePolicy,
             .subscriptionLock, .subscriptionContentMismatch, .assignmentEnablement, .assignmentField,
-            .catalogSource, .projectField:
+            .catalogSource, .projectField, .deviceField, .accountPreference:
             true
         }
     }
@@ -57,11 +57,11 @@ public struct WorkspaceConflictResolution: Hashable, Sendable {
     }
 }
 
-public struct WorkspaceConflictResolutionResult: Sendable {
-    public let document: PortableWorkspaceDocument?
+struct WorkspaceConflictResolutionResult: Sendable {
+    let document: PortableWorkspaceDocument?
     /// Conflicts still waiting for a decision.
-    public let remaining: [WorkspaceMergeConflict]
-    public var isResolved: Bool { document != nil && remaining.isEmpty }
+    let remaining: [WorkspaceMergeConflict]
+    var isResolved: Bool { document != nil && remaining.isEmpty }
 }
 
 /// Applies a person's conflict decisions by re-running the merge with the
@@ -72,8 +72,8 @@ public struct WorkspaceConflictResolutionResult: Sendable {
 /// usable when every one of them has an answer. Choosing a side is expressed by
 /// rewriting the *ancestor* for that fact, so the engine's own rules still
 /// decide the outcome rather than this type editing the document directly.
-public enum WorkspaceConflictResolver {
-    public static func resolve(
+enum WorkspaceConflictResolver {
+    static func resolve(
         base: PortableWorkspaceDocument?,
         local: PortableWorkspaceDocument,
         remote: PortableWorkspaceDocument,
@@ -95,12 +95,14 @@ public enum WorkspaceConflictResolver {
             let loser = resolution.choice == .keepLocal ? remote : local
             adjust(&adjusted, away: loser, resolution: resolution)
             if resolution.kind == .deleteVersusEdit, resolution.choice == .keepLocal,
-               let id = resolution.artifactID {
+                let id = resolution.artifactID
+            {
                 keptItems.insert(id)
             }
         }
-        let merge = WorkspaceMergeEngine.merge(base: adjusted, local: local, remote: remote,
-                                               writerID: writerID, settingAsideDeletionsOf: keptItems)
+        let merge = WorkspaceMergeEngine.merge(
+            base: adjusted, local: local, remote: remote,
+            writerID: writerID, settingAsideDeletionsOf: keptItems)
         return .init(document: merge.document, remaining: merge.conflicts)
     }
 }
@@ -120,14 +122,16 @@ private extension WorkspaceConflictResolver {
         // merge then drops because nothing names it any more.
         case .artifactField, .artifactContent, .ownership, .projectField, .subscriptionContentMismatch:
             guard let id = resolution.artifactID,
-                  let losing = loser.artifacts.first(where: { $0.identity.id == id }) else { return }
+                let losing = loser.artifacts.first(where: { $0.identity.id == id })
+            else { return }
             if let index = ancestor.artifacts.firstIndex(where: { $0.identity.id == id }) {
                 ancestor.artifacts[index] = losing
             } else {
                 ancestor.artifacts.append(losing)
             }
             if resolution.kind == .projectField,
-               let project = loser.logicalProjects.first(where: { $0.id == id }) {
+                let project = loser.logicalProjects.first(where: { $0.id == id })
+            {
                 if let index = ancestor.logicalProjects.firstIndex(where: { $0.id == id }) {
                     ancestor.logicalProjects[index] = project
                 } else {
@@ -140,12 +144,36 @@ private extension WorkspaceConflictResolver {
             // happened; keeping the item is handled by setting the deletion
             // aside in the merge itself.
             guard resolution.choice == .takeRemote, let id = resolution.artifactID,
-                  let losing = loser.artifacts.first(where: { $0.identity.id == id }) else { return }
+                let losing = loser.artifacts.first(where: { $0.identity.id == id })
+            else { return }
             if let index = ancestor.artifacts.firstIndex(where: { $0.identity.id == id }) {
                 ancestor.artifacts[index] = losing
             } else {
                 ancestor.artifacts.append(losing)
             }
+
+        case .deviceField:
+            guard let id = resolution.objectID,
+                let losing = loser.deviceRegistry.first(where: { $0.id == id })
+            else { return }
+            var devices = ancestor.deviceRegistry
+            if let index = devices.firstIndex(where: { $0.id == id }) {
+                devices[index] = losing
+            } else {
+                devices.append(losing)
+            }
+            ancestor.devices = devices
+
+        case .accountPreference:
+            // The losing side's value for this one switch becomes the
+            // ancestor's, absent included, so the chosen side is the only one
+            // that moved it.
+            guard let id = resolution.objectID else { return }
+            var entries = (ancestor.accountPreferences?.entries ?? []).filter { $0.key.objectID != id }
+            if let losing = loser.accountPreferences?.entries.first(where: { $0.key.objectID == id }) {
+                entries.append(losing)
+            }
+            ancestor.accountPreferences = AccountPreferences(entries: entries)
 
         case .sourcePolicy, .subscriptionLock:
             guard let id = resolution.objectID else { return }
@@ -166,7 +194,8 @@ private extension WorkspaceConflictResolver {
 
         case .assignmentEnablement, .assignmentField:
             guard let id = resolution.objectID,
-                  let losing = loser.assignments.first(where: { $0.id == id }) else { return }
+                let losing = loser.assignments.first(where: { $0.id == id })
+            else { return }
             if let index = ancestor.assignments.firstIndex(where: { $0.id == id }) {
                 ancestor.assignments[index] = losing
             } else {

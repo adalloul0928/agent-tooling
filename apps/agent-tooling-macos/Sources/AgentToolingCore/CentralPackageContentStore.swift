@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 
-public enum CentralPackageStoreError: Error, Equatable, Sendable {
+enum CentralPackageStoreError: Error, Equatable, Sendable {
     case invalidRoot, invalidDigest, missingContent, corruptContent, changedStore, ioFailure, busy
 }
 
@@ -51,9 +51,10 @@ public actor CentralPackageContentStore {
         }
         try handles.validateBindings()
         guard identity.matches(parent: handles.objects, name: digest.value),
-              payloadIdentity.matches(parent: object, name: "payload"),
-              try ContentStoreFS.names(object) == ["payload"], !tree.excludedRootGitMetadata,
-              tree.digest == digest else {
+            payloadIdentity.matches(parent: object, name: "payload"),
+            try ContentStoreFS.names(object) == ["payload"], !tree.excludedRootGitMetadata,
+            tree.digest == digest
+        else {
             throw CentralPackageStoreError.corruptContent
         }
         return tree
@@ -63,8 +64,9 @@ public actor CentralPackageContentStore {
     /// silently. Old versions remain available; retention/GC belongs to revision policy.
     public func store(_ input: CapturedPackageTree) async throws -> StoredPackageContent {
         try Task.checkCancellation()
-        let tree = try CapturedPackageTree(entries: input.entries, limits: limits,
-                                           excludedRootGitMetadata: input.excludedRootGitMetadata)
+        let tree = try CapturedPackageTree(
+            entries: input.entries, limits: limits,
+            excludedRootGitMetadata: input.excludedRootGitMetadata)
         try handles.validateBindings()
         do {
             return summary(try await read(tree.digest))
@@ -128,7 +130,8 @@ public actor CentralPackageContentStore {
         // macOS requires write permission on the directory being renamed. Protect
         // the wrapper immediately afterward; all payload bytes were already protected.
         guard fchmod(stage, 0o500) == 0, fsync(stage) == 0,
-              fsync(handles.objects) == 0, fsync(handles.staging) == 0 else {
+            fsync(handles.objects) == 0, fsync(handles.staging) == 0
+        else {
             throw CentralPackageStoreError.ioFailure
         }
         // Recheck the public object before returning a receipt. A cancelled caller may
@@ -137,8 +140,9 @@ public actor CentralPackageContentStore {
     }
 
     private func validate(_ digest: ContentDigest) throws {
-        do { try WorkspaceDomainValidation.requireDigest(digest.value, field: "content digest") }
-        catch { throw CentralPackageStoreError.invalidDigest }
+        do { try WorkspaceDomainValidation.requireDigest(digest.value, field: "content digest") } catch {
+            throw CentralPackageStoreError.invalidDigest
+        }
     }
 
     private func summary(_ tree: CapturedPackageTree) -> StoredPackageContent {
@@ -180,12 +184,14 @@ private final class ContentStoreHandles: @unchecked Sendable {
 
     init(directory: URL, marker: Data, initializeIfEmpty: Bool) throws {
         guard directory.isFileURL, directory.path.hasPrefix("/"),
-              !directory.path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+            !directory.path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        else {
             throw CentralPackageStoreError.invalidRoot
         }
         var original = stat()
         guard lstat(directory.path, &original) == 0, original.st_mode & S_IFMT == S_IFDIR,
-              let resolved = directory.path.withCString({ realpath($0, nil) }) else {
+            let resolved = directory.path.withCString({ realpath($0, nil) })
+        else {
             throw CentralPackageStoreError.invalidRoot
         }
         defer { free(resolved) }
@@ -196,7 +202,8 @@ private final class ContentStoreHandles: @unchecked Sendable {
         defer { if !keepRoot { close(root) } }
         var opened = stat()
         guard fstat(root, &opened) == 0, opened.st_dev == original.st_dev, opened.st_ino == original.st_ino,
-              opened.st_uid == geteuid(), opened.st_mode & 0o077 == 0 else {
+            opened.st_uid == geteuid(), opened.st_mode & 0o077 == 0
+        else {
             throw CentralPackageStoreError.invalidRoot
         }
         // Serialize cooperating initializers without blocking the calling thread. A
@@ -214,7 +221,8 @@ private final class ContentStoreHandles: @unchecked Sendable {
             guard fsync(root) == 0 else { throw CentralPackageStoreError.ioFailure }
         }
         guard Set(try ContentStoreFS.names(root)).isSubset(of: ["format", "objects", "staging"]),
-              try ContentStoreFS.readSmallFile(parent: root, name: "format", limit: 128) == marker else {
+            try ContentStoreFS.readSmallFile(parent: root, name: "format", limit: 128) == marker
+        else {
             throw CentralPackageStoreError.invalidRoot
         }
         let objects = try ContentStoreFS.ensurePrivateDirectory(parent: root, name: "objects", create: initializeIfEmpty)
@@ -240,15 +248,20 @@ private final class ContentStoreHandles: @unchecked Sendable {
         keepStaging = true
     }
 
-    deinit { close(staging); close(objects); close(root) }
+    deinit {
+        close(staging)
+        close(objects)
+        close(root)
+    }
 
     func validateBindings() throws {
         guard rootIdentity.matches(parent: AT_FDCWD, name: rootPath),
-              objectsIdentity.matches(parent: root, name: "objects"),
-              stagingIdentity.matches(parent: root, name: "staging"),
-              ContentStoreFS.isPrivateDirectory(root),
-              ContentStoreFS.isPrivateDirectory(objects),
-              ContentStoreFS.isPrivateDirectory(staging) else {
+            objectsIdentity.matches(parent: root, name: "objects"),
+            stagingIdentity.matches(parent: root, name: "staging"),
+            ContentStoreFS.isPrivateDirectory(root),
+            ContentStoreFS.isPrivateDirectory(objects),
+            ContentStoreFS.isPrivateDirectory(staging)
+        else {
             throw CentralPackageStoreError.changedStore
         }
         do {
@@ -272,7 +285,10 @@ private enum ContentStoreFS {
         // Opening '.' gets an independent directory stream offset; dup alone shares it.
         let copy = openat(descriptor, ".", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
         guard copy >= 0 else { throw CentralPackageStoreError.ioFailure }
-        guard let stream = fdopendir(copy) else { close(copy); throw CentralPackageStoreError.ioFailure }
+        guard let stream = fdopendir(copy) else {
+            close(copy)
+            throw CentralPackageStoreError.ioFailure
+        }
         defer { closedir(stream) }
         var names: [String] = []
         while true {
@@ -348,8 +364,9 @@ private enum ContentStoreFS {
         defer { close(descriptor) }
         var value = stat()
         guard fstat(descriptor, &value) == 0, value.st_mode & S_IFMT == S_IFREG,
-              value.st_uid == geteuid(), value.st_mode & 0o077 == 0,
-              value.st_size >= 0, value.st_size <= limit else { throw CentralPackageStoreError.invalidRoot }
+            value.st_uid == geteuid(), value.st_mode & 0o077 == 0,
+            value.st_size >= 0, value.st_size <= limit
+        else { throw CentralPackageStoreError.invalidRoot }
         var bytes = [UInt8](repeating: 0, count: limit + 1)
         var count: Int
         repeat { count = read(descriptor, &bytes, bytes.count) } while count < 0 && errno == EINTR

@@ -12,9 +12,11 @@ struct SourceLockEvidenceTests {
                 repositoryURL: "https://github.com/owner/repo", baseURL: nil),
             revision: .requestedRef("main"),
             skillPath: "skills/same-name/SKILL.md",
-            integrity: [.init(
-                algorithm: .githubSkillFolderTreeObjectID,
-                value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")])
+            integrity: [
+                .init(
+                    algorithm: .githubSkillFolderTreeObjectID,
+                    value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            ])
 
         #expect(evidence.skillNameHint == "same-name")
         #expect(evidence.revision == .requestedRef("main"))

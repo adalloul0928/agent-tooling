@@ -83,6 +83,56 @@ struct OperationCommandPolicyTests {
         }
     }
 
+    /// The read-only listings, the per-server lookup, and the OAuth login the
+    /// Health screen runs are all admitted, under a safe server name.
+    @Test func theConnectionHealthCommandsAreAdmitted() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let allowed: [(String, [String])] = [
+            ("claude", ["mcp", "list"]),
+            ("claude", ["mcp", "get", "linear"]),
+            ("claude", ["mcp", "login", "linear"]),
+            ("claude", ["mcp", "login", "linear", "--no-browser"]),
+            ("codex", ["mcp", "list"]),
+            ("codex", ["mcp", "list", "--json"]),
+            ("codex", ["mcp", "get", "docs"]),
+            ("codex", ["mcp", "login", "docs"]),
+            ("codex", ["mcp", "login", "docs", "--no-browser"]),
+            ("kiro-cli", ["mcp", "list"]),
+        ]
+        for (executable, arguments) in allowed {
+            #expect(throws: Never.self, "\(executable) \(arguments.joined(separator: " ")) was refused") {
+                try fixture.policy.validate(executable: executable, arguments: arguments)
+            }
+        }
+    }
+
+    /// The login shape is guarded: an unsafe server name, a bad flag, or a
+    /// login for a client that has none is still refused.
+    @Test func unsafeOrUnknownConnectionHealthArgumentsAreRefused() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let refused: [(String, [String])] = [
+            ("claude", ["mcp", "login", "--all"]),
+            ("claude", ["mcp", "login", "a b"]),
+            ("claude", ["mcp", "login", "linear", "--browser"]),
+            ("claude", ["mcp", "login", "linear", "--no-browser", "x"]),
+            ("claude", ["mcp", "list", "--json"]),
+            ("codex", ["mcp", "login", "-x"]),
+            ("kiro-cli", ["mcp", "login", "fetch"]),
+            ("kiro-cli", ["mcp", "list", "--json"]),
+            ("claude", ["mcp", "logout", "linear"]),
+        ]
+        for (executable, arguments) in refused {
+            #expect(
+                throws: OperationEngineError.self,
+                "\(executable) \(arguments.joined(separator: " ")) was accepted"
+            ) {
+                try fixture.policy.validate(executable: executable, arguments: arguments)
+            }
+        }
+    }
+
     private struct Fixture {
         let root: URL
         let home: URL

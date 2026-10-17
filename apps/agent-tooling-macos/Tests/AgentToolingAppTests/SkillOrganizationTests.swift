@@ -6,6 +6,21 @@ import Testing
 
 @Suite("Skill ownership classification")
 struct SkillOrganizationTests {
+    /// The App filter offers one entry per client the registry knows. A client
+    /// left out of it cannot be filtered to, and reads as if the app did not
+    /// manage it — which is how Kiro went missing from the menu.
+    @Test func theAppFilterOffersEveryClient() {
+        let offered = Set(SkillClientFilter.allCases.compactMap(\.client))
+        #expect(offered == Set(ClientKind.allCases))
+        #expect(SkillClientFilter.allCases.first?.client == nil, "the first choice is every app")
+        for client in ClientKind.allCases {
+            let filter = SkillClientFilter.allCases.first { $0.client == client }
+            #expect(filter?.rawValue == client.rawValue)
+            #expect(filter?.matches([client]) == true)
+            #expect(filter?.matches([]) == false)
+        }
+    }
+
     @Test func standaloneSkillsDoNotShareOwnership() {
         #expect(
             SkillOrganization.ownershipKey(skillID: "custom", pluginID: nil)
@@ -228,6 +243,34 @@ struct SkillInventoryIndexTests {
         let row = try #require(index.skills.first)
         #expect(row.requestedClients == [.claude])
         #expect(index.observedClients[skill] == nil)
+    }
+
+    /// Two plugins re-ship one skill and AIM copies it into Kiro's folder:
+    /// three entries, one skill. The list shows one row, the copies say where
+    /// each one is and whether they match, and AIM's copy is AIM's.
+    @Test func copiesOfOneSkillAreOneRowWithTheirDifferencesKept() throws {
+        let scenario = try SkillCopiesScenario()
+        let index = scenario.index
+        let (wootSkill, coreSkill, loose) = (scenario.wootSkill, scenario.coreSkill, scenario.loose)
+        let entry = try #require(index.skills.first { $0.id == loose })
+        let copies = index.copies(of: entry)
+        #expect(copies.map(\.id).first == wootSkill, "the copy found in the most apps leads")
+        #expect(Set(copies.map(\.id)) == [wootSkill, coreSkill, loose])
+        #expect(index.distinctCount == 1)
+        #expect(index.versions(among: copies).map(\.count) == [2, 1], "two match, AIM's Kiro copy differs")
+        #expect(index.management(of: entry) == .byTool(.init(tool: "AIM", package: "core-skills")))
+        #expect(index.management(of: entry).label == "AIM")
+
+        let flat = SkillListPresentation.groups(
+            skills: index.skills, grouping: .none, presentation: index.presentation(for:), copies: index.copies(of:))
+        #expect(flat.flatMap(\.skills).map(\.id) == [wootSkill], "one row")
+        #expect(flat.first?.members(of: copies[0]).count == 3)
+        let byPlugin = SkillListPresentation.groups(
+            skills: index.skills, grouping: .plugin, presentation: index.presentation(for:), copies: index.copies(of:))
+        #expect(byPlugin.flatMap(\.skills).count == 3, "grouped by plugin, each plugin still shows its own copy")
+        #expect(SkillCopySummary(copies: 3, versions: 2)?.label == "2 versions")
+        #expect(SkillCopySummary(copies: 3, versions: 1)?.label == "3 copies")
+        #expect(SkillCopySummary(copies: 1, versions: 1) == nil)
     }
 
     private static func snapshot(artifacts: [ArtifactRecord]) throws -> WorkspaceApplicationSnapshot {

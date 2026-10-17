@@ -10,10 +10,12 @@ import Testing
 struct CombinedSettingBreakdownTests {
     @Test func everyFilesEntriesAreCountedNotJustTheOneWithTheMostSay() {
         let configuration = Self.resolve(layers: [
-            .init(kind: .project, sourcePath: "/p/.claude/settings.json", isWritable: true,
-                  values: ["hooks": .list([.opaque("a"), .opaque("b")])]),
-            .init(kind: .user, sourcePath: "/h/.claude/settings.json", isWritable: true,
-                  values: ["hooks": .list([.opaque("c")])]),
+            .init(
+                kind: .project, sourcePath: "/p/.claude/settings.json", isWritable: true,
+                values: ["hooks": .list([.opaque("a"), .opaque("b")])]),
+            .init(
+                kind: .user, sourcePath: "/h/.claude/settings.json", isWritable: true,
+                values: ["hooks": .list([.opaque("c")])]),
         ])
 
         let hooks = configuration.combinedBreakdowns.first { $0.key == "hooks" }
@@ -26,10 +28,12 @@ struct CombinedSettingBreakdownTests {
 
     @Test func aSettingThatReplacesGetsNoBreakdownAtAll() {
         let configuration = Self.resolve(layers: [
-            .init(kind: .project, sourcePath: "/p/.claude/settings.json", isWritable: true,
-                  values: ["model": .string("project-model")]),
-            .init(kind: .user, sourcePath: "/h/.claude/settings.json", isWritable: true,
-                  values: ["model": .string("user-model")]),
+            .init(
+                kind: .project, sourcePath: "/p/.claude/settings.json", isWritable: true,
+                values: ["model": .string("project-model")]),
+            .init(
+                kind: .user, sourcePath: "/h/.claude/settings.json", isWritable: true,
+                values: ["model": .string("user-model")]),
         ])
 
         // A breakdown would imply the lower file still matters. It does not.
@@ -39,10 +43,12 @@ struct CombinedSettingBreakdownTests {
 
     @Test func aFileThatMentionsTheKeyButAddsNothingIsNotAContributingFile() {
         let configuration = Self.resolve(layers: [
-            .init(kind: .project, sourcePath: "/p/.claude/settings.json", isWritable: true,
-                  values: ["hooks": .list([])]),
-            .init(kind: .user, sourcePath: "/h/.claude/settings.json", isWritable: true,
-                  values: ["hooks": .list([.opaque("a")])]),
+            .init(
+                kind: .project, sourcePath: "/p/.claude/settings.json", isWritable: true,
+                values: ["hooks": .list([])]),
+            .init(
+                kind: .user, sourcePath: "/h/.claude/settings.json", isWritable: true,
+                values: ["hooks": .list([.opaque("a")])]),
         ])
 
         let hooks = configuration.combinedBreakdowns.first { $0.key == "hooks" }
@@ -55,20 +61,23 @@ struct CombinedSettingBreakdownTests {
 
     @Test func everyContributionNamesTheFileItCameFrom() {
         let configuration = Self.resolve(layers: [
-            .init(kind: .user, sourcePath: "/h/.claude/settings.json", isWritable: true,
-                  values: ["hooks": .list([.opaque("a")])]),
+            .init(
+                kind: .user, sourcePath: "/h/.claude/settings.json", isWritable: true,
+                values: ["hooks": .list([.opaque("a")])])
         ])
 
         // The honest answer to "what does this hook do" is to take the person to
         // the file, which needs the file's own path.
-        #expect(configuration.combinedBreakdowns.first?.contributions.first?.sourcePath
-            == "/h/.claude/settings.json")
+        #expect(
+            configuration.combinedBreakdowns.first?.contributions.first?.sourcePath
+                == "/h/.claude/settings.json")
     }
 
     @Test func aWorkspaceWithNoCombinedSettingsHasNothingToBreakDown() {
         let configuration = Self.resolve(layers: [
-            .init(kind: .user, sourcePath: "/h/.claude/settings.json", isWritable: true,
-                  values: ["model": .string("user-model")]),
+            .init(
+                kind: .user, sourcePath: "/h/.claude/settings.json", isWritable: true,
+                values: ["model": .string("user-model")])
         ])
 
         #expect(configuration.combinedBreakdowns.allSatisfy { $0.contributingFileCount == 0 })

@@ -36,6 +36,7 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
     private static let maximumCapturedBytes = 1_048_576
     private static let maximumStandardInputBytes = 1_048_576
     private static let readChunkBytes = 65_536
+    private static let pipeIOQueue = DispatchQueue(label: "AgentTooling.ProcessCommandRunner.pipeIO", qos: .userInitiated)
     private let timeout: Duration
     private let homeURL: URL
 
@@ -129,7 +130,7 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         }
     }
 
-    private static func dispatchInterval(for duration: Duration) -> DispatchTimeInterval {
+    static func dispatchInterval(for duration: Duration) -> DispatchTimeInterval {
         let components = duration.components
         let seconds = max(
             0,
@@ -154,16 +155,20 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
             homeURL: homeURL
         )
         process.environment = environment
-        if let resolvedExecutable = canonicalExecutableURL(
+        if let launchExecutable = launchExecutableURL(
             for: executable,
             environment: environment,
             currentDirectory: currentDirectory
         ) {
-            // Foundation's Process launch path does not consistently follow a
-            // PATH-installed symlink when the app itself was launched outside
-            // a login shell. Resolve it first so app-bundled CLI targets (such
-            // as ~/.local/bin/codex -> ChatGPT.app/.../codex) launch directly.
-            process.executableURL = resolvedExecutable
+            // Foundation's Process launch path does not consistently find a
+            // PATH-installed tool when the app itself was launched outside a
+            // login shell, so the tool is found here and launched by absolute
+            // path. The path is the installed one, not the file it links to:
+            // a shim such as Amazon Toolbox's dispatches on the name it was
+            // invoked by, and a launch through the resolved target would lose
+            // that name. What the link leads to has already been checked to
+            // be a runnable file.
+            process.executableURL = launchExecutable
             process.arguments = arguments
         } else {
             // Preserve the existing command-not-found behavior for probes of
@@ -185,21 +190,19 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         process.terminationHandler = { _ in exitWaiter.signal() }
         try process.run()
         controller.install(process)
+        defer { controller.finish(process) }
         // Start draining before writing input so a process that emits output
         // before consuming stdin cannot fill a pipe and deadlock the caller.
         async let output = drain(standardOutput.fileHandleForReading)
         async let error = drain(standardError.fileHandleForReading)
         if let standardInput, let inputPipe {
             do {
-                try inputPipe.fileHandleForWriting.write(contentsOf: standardInput)
-                try inputPipe.fileHandleForWriting.close()
+                try await write(standardInput, to: inputPipe.fileHandleForWriting)
             } catch {
-                try? inputPipe.fileHandleForWriting.close()
                 controller.terminate()
                 throw error
             }
         }
-        defer { controller.finish(process) }
         // Native catalog commands can emit hundreds of kilobytes. Drain both
         // pipes while the child runs; waiting first can fill a pipe buffer and
         // deadlock setup checks indefinitely.
@@ -229,6 +232,21 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         currentDirectory: URL?,
         fileManager: FileManager = .default
     ) -> URL? {
+        launchExecutableURL(for: executable, environment: environment, currentDirectory: currentDirectory, fileManager: fileManager)
+            .map { $0.resolvingSymlinksInPath().standardizedFileURL }
+    }
+
+    /// The installed path to launch: the first candidate — the absolute path
+    /// given, or the tool by name on the launch `PATH` — whose target, after
+    /// following every link, is a runnable regular file. The candidate itself
+    /// is returned, links unresolved, because a shim dispatches on the name it
+    /// is launched by.
+    static func launchExecutableURL(
+        for executable: String,
+        environment: [String: String],
+        currentDirectory: URL?,
+        fileManager: FileManager = .default
+    ) -> URL? {
         guard !executable.isEmpty, !executable.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
         else { return nil }
 
@@ -245,12 +263,13 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         }
 
         for candidate in candidates {
-            let canonical = candidate.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
+            let installed = candidate.standardizedFileURL
+            let canonical = installed.resolvingSymlinksInPath().standardizedFileURL
             guard let values = try? canonical.resourceValues(forKeys: [.isRegularFileKey]),
                 values.isRegularFile == true,
                 fileManager.isExecutableFile(atPath: canonical.path(percentEncoded: false))
             else { continue }
-            return canonical
+            return installed
         }
         return nil
     }
@@ -265,9 +284,40 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         homeURL: URL,
         temporaryDirectory: URL = FileManager.default.temporaryDirectory
     ) -> [String: String] {
-        let rawHome = homeURL.standardizedFileURL.path(percentEncoded: false)
-        let home = rawHome.count > 1 && rawHome.hasSuffix("/") ? String(rawHome.dropLast()) : rawHome
-        let paths = [
+        let home = plainPath(of: homeURL)
+        let user = parent["USER"].flatMap(safeEnvironmentAtom) ?? NSUserName()
+        let language = parent["LANG"].flatMap(safeLocale) ?? "en_US.UTF-8"
+        var environment = [
+            "HOME": home,
+            "USER": user,
+            "LOGNAME": parent["LOGNAME"].flatMap(safeEnvironmentAtom) ?? user,
+            "TMPDIR": temporaryDirectory.standardizedFileURL.path(percentEncoded: false),
+            "PATH": searchPath(home: home).joined(separator: ":"),
+            "LANG": language,
+            "LC_CTYPE": parent["LC_CTYPE"].flatMap(safeLocale) ?? language,
+            "TERM": "dumb",
+        ]
+        if parent["NO_COLOR"] != nil { environment["NO_COLOR"] = "1" }
+        return environment
+    }
+
+    /// The fixed search path handed to every child this app launches, and the
+    /// one list of folders this app looks in for a command by name. The audit
+    /// counts a server's command reachable when it is in one of them and the
+    /// client-tool locator checks every one, so a command either of them finds
+    /// is a command a child can start: a server under test, a real client
+    /// command, or a tool installed through Volta or pnpm, all alike.
+    ///
+    /// When two folders hold the same name the earlier one wins, so a folder
+    /// is only ever added at the end: putting it ahead of another would change
+    /// which file a name that already resolves runs. After the system folders
+    /// come Amazon Toolbox's shims, a common npm global prefix, AIM's MCP
+    /// servers, the mise and asdf shims, and the person's own `~/bin`.
+    ///
+    /// `home` must already be a plain path with no trailing slash, so the
+    /// entries never contain `//`.
+    static func searchPath(home: String) -> [String] {
+        [
             "\(home)/.local/bin",
             "\(home)/.cargo/bin",
             "\(home)/.volta/bin",
@@ -279,21 +329,26 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
             "/bin",
             "/usr/sbin",
             "/sbin",
+            "\(home)/.toolbox/bin",
+            "\(home)/.npm-global/bin",
+            "\(home)/.aim/mcp-servers",
+            "\(home)/.local/share/mise/shims",
+            "\(home)/.asdf/shims",
+            "\(home)/bin",
         ]
-        let user = parent["USER"].flatMap(safeEnvironmentAtom) ?? NSUserName()
-        let language = parent["LANG"].flatMap(safeLocale) ?? "en_US.UTF-8"
-        var environment = [
-            "HOME": home,
-            "USER": user,
-            "LOGNAME": parent["LOGNAME"].flatMap(safeEnvironmentAtom) ?? user,
-            "TMPDIR": temporaryDirectory.standardizedFileURL.path(percentEncoded: false),
-            "PATH": paths.joined(separator: ":"),
-            "LANG": language,
-            "LC_CTYPE": parent["LC_CTYPE"].flatMap(safeLocale) ?? language,
-            "TERM": "dumb",
-        ]
-        if parent["NO_COLOR"] != nil { environment["NO_COLOR"] = "1" }
-        return environment
+    }
+
+    /// The same folders, in the same order, as directory URLs: for a caller
+    /// that looks a command up itself rather than handing its name to a child.
+    static func searchDirectories(homeURL: URL) -> [URL] {
+        searchPath(home: plainPath(of: homeURL)).map { URL(filePath: $0, directoryHint: .isDirectory) }
+    }
+
+    /// A home folder as a plain path with no trailing slash, so `HOME` does not
+    /// end in `/` and no search-path entry contains `//`.
+    static func plainPath(of homeURL: URL) -> String {
+        let raw = homeURL.standardizedFileURL.path(percentEncoded: false)
+        return raw.count > 1 && raw.hasSuffix("/") ? String(raw.dropLast()) : raw
     }
 
     private static func safeEnvironmentAtom(_ value: String) -> String? {
@@ -313,21 +368,75 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
     }
 
     private static func drain(_ handle: FileHandle) async throws -> CapturedStream {
-        var captured = Data()
-        var wasTruncated = false
-        while let chunk = try handle.read(upToCount: readChunkBytes), !chunk.isEmpty {
-            let remaining = maximumCapturedBytes - captured.count
-            if remaining > 0 { captured.append(chunk.prefix(remaining)) }
-            if chunk.count > remaining { wasTruncated = true }
+        try await withCheckedThrowingContinuation { continuation in
+            let captured = ProcessStreamCapture(limit: maximumCapturedBytes)
+            let channel = DispatchIO(type: .stream, fileDescriptor: handle.fileDescriptor, queue: pipeIOQueue) { _ in
+                try? handle.close()
+            }
+            channel.setLimit(highWater: readChunkBytes)
+            channel.read(offset: 0, length: Int.max, queue: pipeIOQueue) { done, chunk, error in
+                if let chunk { captured.append(chunk) }
+                guard done else { return }
+                channel.close()
+                if error == 0 {
+                    continuation.resume(returning: captured.result())
+                } else {
+                    continuation.resume(throwing: POSIXError(POSIXErrorCode(rawValue: error) ?? .EIO))
+                }
+            }
         }
-        var text = String(decoding: captured, as: UTF8.self)
-        if wasTruncated { text += "\n[output truncated after \(maximumCapturedBytes) bytes]" }
-        return CapturedStream(text: text)
+    }
+
+    private static func write(_ data: Data, to handle: FileHandle) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            let channel = DispatchIO(type: .stream, fileDescriptor: handle.fileDescriptor, queue: pipeIOQueue) { _ in
+                // EOF must reach the child even if the caller is cancelled or a write fails.
+                try? handle.close()
+            }
+            let bytes = data.withUnsafeBytes { DispatchData(bytes: $0) }
+            channel.write(offset: 0, data: bytes, queue: pipeIOQueue) { done, _, error in
+                guard done else { return }
+                channel.close()
+                if error == 0 {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: POSIXError(POSIXErrorCode(rawValue: error) ?? .EIO))
+                }
+            }
+        }
     }
 }
 
 private struct CapturedStream: Sendable {
     var text: String
+}
+
+/// DispatchIO drains ready pipe data without parking a Swift concurrency worker.
+private final class ProcessStreamCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private let limit: Int
+    private var captured = Data()
+    private var wasTruncated = false
+
+    init(limit: Int) {
+        self.limit = limit
+    }
+
+    func append(_ chunk: DispatchData) {
+        lock.withLock {
+            let remaining = limit - captured.count
+            if remaining > 0 { captured.append(contentsOf: chunk.prefix(remaining)) }
+            if chunk.count > remaining { wasTruncated = true }
+        }
+    }
+
+    func result() -> CapturedStream {
+        lock.withLock {
+            var text = String(decoding: captured, as: UTF8.self)
+            if wasTruncated { text += "\n[output truncated after \(limit) bytes]" }
+            return CapturedStream(text: text)
+        }
+    }
 }
 
 private final class ProcessExitWaiter: @unchecked Sendable {

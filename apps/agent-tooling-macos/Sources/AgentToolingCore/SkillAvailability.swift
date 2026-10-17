@@ -50,19 +50,24 @@ enum SkillAvailability {
 
     /// A settings document is parsed once for all installed skills during a refresh.
     struct CodexDocument {
-        private static let incompatible = try! NSRegularExpression(
-            pattern: #"(?m)^\s*(?:skills\s*\.\s*config\s*=|\[skills\.config\]|config\s*=)"#)
-        private static let quotedPath = try! NSRegularExpression(pattern: #"^"(?:\\.|[^"\\])*""#)
+        private static let incompatible = Result {
+            try NSRegularExpression(pattern: #"(?m)^\s*(?:skills\s*\.\s*config\s*=|\[skills\.config\]|config\s*=)"#)
+        }
+        private static let quotedPath = Result {
+            try NSRegularExpression(pattern: #"^"(?:\\.|[^"\\])*""#)
+        }
         var lines: [String]
         private var rangesByPath: [String: [Range<Int>]] = [:]
 
         init(_ text: String) throws {
+            let incompatible = try Self.incompatible.get()
+            let quotedPath = try Self.quotedPath.get()
             // Only edit the documented array-of-tables spelling. Other valid TOML
             // encodings are left to the native editor instead of guessing at a merge.
             if text.contains("\"\"\"") || text.contains("'''") {
                 throw Failure.unsupported("This Codex configuration uses multiline TOML. Use Codex's Skills controls for this file.")
             }
-            guard Self.incompatible.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) == nil else {
+            guard incompatible.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) == nil else {
                 throw Failure.unsupported(
                     "This Codex file uses a different skill configuration format. Edit availability in Codex instead.")
             }
@@ -76,7 +81,7 @@ enum SkillAvailability {
                     let line = lines[index].trimmingCharacters(in: .whitespaces)
                     guard line.hasPrefix("path"), let equal = line.firstIndex(of: "=") else { continue }
                     let raw = String(line[line.index(after: equal)...]).trimmingCharacters(in: .whitespaces)
-                    guard let range = Self.quotedPath.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw))?.range,
+                    guard let range = quotedPath.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw))?.range,
                         let swiftRange = Range(range, in: raw),
                         let parsed = try? JSONDecoder().decode(String.self, from: Data(raw[swiftRange].utf8))
                     else {

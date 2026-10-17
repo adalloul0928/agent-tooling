@@ -12,17 +12,23 @@ struct AgentPluginMCPRuntimeMappingTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
 
-        let result = fixture.resolve(["server": .stdio(.init(
-            command: "./bin/run",
-            arguments: ["--root", "${PLUGIN_ROOT}/config", "--state", "${PLUGIN_DATA}"],
-            environment: ["CACHE": "${PLUGIN_DATA}/cache", "MODE": "quiet"],
-            currentDirectory: "${PLUGIN_DATA}"))])
+        let result = fixture.resolve([
+            "server": .stdio(
+                .init(
+                    command: "./bin/run",
+                    arguments: ["--root", "${PLUGIN_ROOT}/config", "--state", "${PLUGIN_DATA}"],
+                    environment: ["CACHE": "${PLUGIN_DATA}/cache", "MODE": "quiet"],
+                    currentDirectory: "${PLUGIN_DATA}"))
+        ])
 
         #expect(result.refused.isEmpty, "\(result.refused)")
         let server = try #require(result.resolved.first)
         #expect(server.executable == fixture.packageRoot.appending(path: "bin/run").path)
-        #expect(server.arguments == ["--root", fixture.packageRoot.appending(path: "config").path,
-                                     "--state", fixture.dataRoot.path])
+        #expect(
+            server.arguments == [
+                "--root", fixture.packageRoot.appending(path: "config").path,
+                "--state", fixture.dataRoot.path,
+            ])
         #expect(server.environment["CACHE"] == fixture.dataRoot.appending(path: "cache").path)
         #expect(server.environment["MODE"] == "quiet")
         // The client owns these two, and nothing declared can shadow them.
@@ -86,8 +92,11 @@ struct AgentPluginMCPRuntimeMappingTests {
         try FileManager.default.createSymbolicLink(
             at: fixture.dataRoot.appending(path: "link"), withDestinationURL: elsewhere)
 
-        let result = fixture.resolve(["server": .stdio(.init(
-            command: "run", currentDirectory: "${PLUGIN_DATA}/link"))])
+        let result = fixture.resolve([
+            "server": .stdio(
+                .init(
+                    command: "run", currentDirectory: "${PLUGIN_DATA}/link"))
+        ])
 
         #expect(result.refused.first?.reason == .escapesPackage)
     }
@@ -160,8 +169,12 @@ struct AgentPluginMCPRuntimeMappingTests {
         defer { fixture.remove() }
 
         let result = fixture.resolve(
-            ["remote": .streamableHTTP(.init(url: "https://example.com/mcp",
-                                            headers: ["X-Client": "agent-tooling"]))],
+            [
+                "remote": .streamableHTTP(
+                    .init(
+                        url: "https://example.com/mcp",
+                        headers: ["X-Client": "agent-tooling"]))
+            ],
             evidence: [Fixture.evidence(transport: "streamable-http")])
 
         let server = try #require(result.resolved.first)
@@ -196,21 +209,26 @@ struct AgentPluginMCPRuntimeMappingTests {
                 .appending(path: "mcp-runtime-\(UUID())")
             packageRoot = root.appending(path: "package")
             dataRoot = root.appending(path: "data")
-            for url in [packageRoot.appending(path: "bin"), packageRoot.appending(path: "config"),
-                        dataRoot] {
-                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true,
+            for url in [
+                packageRoot.appending(path: "bin"), packageRoot.appending(path: "config"),
+                dataRoot,
+            ] {
+                try FileManager.default.createDirectory(
+                    at: url, withIntermediateDirectories: true,
                     attributes: [.posixPermissions: 0o700])
             }
             let executable = packageRoot.appending(path: "bin/run")
             try Data("#!/bin/sh\necho hi\n".utf8).write(to: executable)
-            try FileManager.default.setAttributes([.posixPermissions: 0o700],
-                                                  ofItemAtPath: executable.path)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o700],
+                ofItemAtPath: executable.path)
         }
 
         static func evidence(transport: String) -> TargetCapabilityEvidence {
-            .init(surface: .codexCLI, installedClientVersion: "1.0.0", adapterContractVersion: 1,
-                  component: .mcpServer, transport: transport, scopes: [.user], support: .supported,
-                  observedAt: Date(timeIntervalSince1970: 1_700_000_000))
+            .init(
+                surface: .codexCLI, installedClientVersion: "1.0.0", adapterContractVersion: 1,
+                component: .mcpServer, transport: transport, scopes: [.user], support: .supported,
+                observedAt: Date(timeIntervalSince1970: 1_700_000_000))
         }
 
         func resolve(

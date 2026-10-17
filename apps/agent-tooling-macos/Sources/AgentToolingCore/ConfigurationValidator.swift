@@ -1,57 +1,8 @@
 import Foundation
 
-public struct ValidatedConfigurationFields: Sendable, Equatable {
-    public var name: String
-    public var summary: String
-    public var projectRoot: String?
-
-    public init(name: String, summary: String, projectRoot: String?) {
-        self.name = name
-        self.summary = summary
-        self.projectRoot = projectRoot
-    }
-}
-
 public enum ConfigurationValidator {
     public static let editableScopes: Set<ToolingScope> = [.user, .project, .localProject, .workspace]
-    public static let maximumNameLength = 128
-    public static let maximumSummaryLength = 4_096
     public static let maximumProjectPathLength = 4_096
-    public static let maximumDesiredStateItems = 1_024
-    public static let maximumDesiredStateIDLength = 512
-
-    public static func validateProfile(
-        name: String,
-        summary: String,
-        scope: ToolingScope,
-        projectRoot: String?,
-        fileManager: FileManager = .default
-    ) throws -> ValidatedConfigurationFields {
-        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard editableScopes.contains(scope) else {
-            throw ConfigurationValidationError.unsupportedScope
-        }
-        guard !normalizedName.isEmpty,
-            normalizedName.count <= maximumNameLength,
-            !normalizedName.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
-            (try? WorkspaceLibrary.normalizedIdentifier(normalizedName)) != nil
-        else {
-            throw ConfigurationValidationError.invalidName
-        }
-        let normalizedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalizedSummary.count <= maximumSummaryLength,
-            !normalizedSummary.unicodeScalars.contains(where: isUnsafeControlCharacter)
-        else {
-            throw ConfigurationValidationError.invalidSummary
-        }
-        let root = try normalizedScopedRoot(
-            scope: scope,
-            value: projectRoot,
-            noun: "configuration",
-            fileManager: fileManager
-        )
-        return ValidatedConfigurationFields(name: normalizedName, summary: normalizedSummary, projectRoot: root)
-    }
 
     public static func normalizedScopedRoot(
         scope: ToolingScope,
@@ -81,31 +32,6 @@ public enum ConfigurationValidator {
             throw ConfigurationValidationError.invalidProjectRoot(noun, rawValue)
         }
         return url.path(percentEncoded: false)
-    }
-
-    public static func normalizedDesiredStateIDs(_ values: [String], kind: String) throws -> [String] {
-        guard values.count <= maximumDesiredStateItems else {
-            throw ConfigurationValidationError.tooManyItems(kind)
-        }
-        var result = Set<String>()
-        for rawValue in values {
-            let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !value.isEmpty,
-                value.count <= maximumDesiredStateIDLength,
-                !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
-            else {
-                throw ConfigurationValidationError.invalidItem(kind, rawValue)
-            }
-            guard !value.hasPrefix("-") else {
-                throw ConfigurationValidationError.invalidItem(kind, rawValue)
-            }
-            result.insert(value)
-        }
-        return result.sorted()
-    }
-
-    private static func isUnsafeControlCharacter(_ scalar: UnicodeScalar) -> Bool {
-        scalar.value < 0x20 && ![0x09, 0x0A, 0x0D].contains(scalar.value)
     }
 }
 

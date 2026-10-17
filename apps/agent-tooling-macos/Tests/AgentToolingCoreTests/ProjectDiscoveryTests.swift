@@ -181,6 +181,70 @@ struct ProjectDiscoveryTests {
         #expect(inspected.gitBranch == "side-branch")
     }
 
+    @Test func inspectionReadsTheOriginRemoteAsARepositoryHint() throws {
+        let root = try temporaryDirectory()
+        let project = root.appending(path: "work/cloned", directoryHint: .isDirectory)
+        try write("# notes", to: project.appending(path: "CLAUDE.md"))
+        try write("ref: refs/heads/main\n", to: project.appending(path: ".git/HEAD"))
+        try write(
+            """
+            [core]
+            \trepositoryformatversion = 0
+            [remote "upstream"]
+            \turl = https://github.com/other/fork.git
+            [Remote "origin"]
+            \tURL = git@github.com:acme/project.git
+            \tfetch = +refs/heads/*:refs/remotes/origin/*
+            """, to: project.appending(path: ".git/config"))
+
+        let inspected = try #require(ProjectDiscovery.inspect(root: project, origins: []))
+        #expect(inspected.repositoryHint == "https://github.com/acme/project")
+    }
+
+    /// A worktree's `.git` is a pointer, and its remotes live in the main
+    /// checkout's directory, which `commondir` names relative to the worktree's
+    /// own Git directory.
+    @Test func inspectionReadsAWorktreesRemoteFromTheMainCheckout() throws {
+        let root = try temporaryDirectory()
+        let main = root.appending(path: "repo/.git", directoryHint: .isDirectory)
+        try write("[remote \"origin\"]\n\turl = ssh://git@git.example.com/team/repo.git\n", to: main.appending(path: "config"))
+        let worktreeGit = main.appending(path: "worktrees/feature", directoryHint: .isDirectory)
+        try write("ref: refs/heads/side-branch\n", to: worktreeGit.appending(path: "HEAD"))
+        try write("../..\n", to: worktreeGit.appending(path: "commondir"))
+        let project = root.appending(path: "work/worktree", directoryHint: .isDirectory)
+        try write("# notes", to: project.appending(path: "CLAUDE.md"))
+        try write("gitdir: \(worktreeGit.path(percentEncoded: false))\n", to: project.appending(path: ".git"))
+
+        let inspected = try #require(ProjectDiscovery.inspect(root: project, origins: []))
+        #expect(inspected.gitBranch == "side-branch")
+        #expect(inspected.repositoryHint == "https://git.example.com/team/repo")
+    }
+
+    @Test func aCheckoutWithoutARemoteOrALocalRemoteHasNoHint() throws {
+        let root = try temporaryDirectory()
+        let project = root.appending(path: "work/local", directoryHint: .isDirectory)
+        try write("# notes", to: project.appending(path: "CLAUDE.md"))
+        try write("ref: refs/heads/main\n", to: project.appending(path: ".git/HEAD"))
+        try write("[remote \"origin\"]\n\turl = /Volumes/backup/local.git\n", to: project.appending(path: ".git/config"))
+        #expect(ProjectDiscovery.inspect(root: project, origins: [])?.repositoryHint == nil)
+
+        let plain = root.appending(path: "work/plain", directoryHint: .isDirectory)
+        try write("# notes", to: plain.appending(path: "AGENTS.md"))
+        #expect(ProjectDiscovery.inspect(root: plain, origins: [])?.repositoryHint == nil)
+    }
+
+    @Test func inspectionReadsKiroProjectSkills() throws {
+        let root = try temporaryDirectory()
+        let project = root.appending(path: "work/kiro", directoryHint: .isDirectory)
+        try write("---\nname: deploy\n---\n", to: project.appending(path: ".kiro/skills/deploy/SKILL.md"))
+        try write("{\"mcpServers\": {\"docs\": {\"command\": \"npx\"}}}", to: project.appending(path: ".kiro/settings/mcp.json"))
+
+        let inspected = try #require(ProjectDiscovery.inspect(root: project, origins: []))
+        #expect(inspected.skills.map(\.client) == [.kiro])
+        #expect(inspected.skills.map(\.id) == ["deploy"])
+        #expect(inspected.mcpServers.contains { $0.client == .kiro && $0.id == "docs" })
+    }
+
     @Test func scanningAFolderFindsOnlyProjectLookingChildren() throws {
         let root = try temporaryDirectory()
         let workspace = root.appending(path: "ws", directoryHint: .isDirectory)

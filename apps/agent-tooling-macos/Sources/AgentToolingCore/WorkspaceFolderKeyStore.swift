@@ -30,8 +30,9 @@ public struct WorkspaceFolderKeyStore: Sendable {
 
     public init(containerRoot: URL) throws {
         guard containerRoot.isFileURL, containerRoot.path.hasPrefix("/"),
-              !containerRoot.path.contains("\0"),
-              containerRoot.standardizedFileURL.path == containerRoot.path else {
+            !containerRoot.path.contains("\0"),
+            containerRoot.standardizedFileURL.path == containerRoot.path
+        else {
             throw WorkspaceFolderKeyError.invalidRoot
         }
         file = containerRoot.appending(path: "folder-sync-key.json")
@@ -43,12 +44,12 @@ public struct WorkspaceFolderKeyStore: Sendable {
     public func read() throws -> SymmetricKey? {
         guard FileManager.default.fileExists(atPath: file.path) else { return nil }
         let bytes: Data
-        do { bytes = try Data(contentsOf: file, options: [.mappedIfSafe]) }
-        catch { throw WorkspaceFolderKeyError.unreadable }
+        do { bytes = try Data(contentsOf: file, options: [.mappedIfSafe]) } catch { throw WorkspaceFolderKeyError.unreadable }
         guard bytes.count <= 8_192 else { throw WorkspaceFolderKeyError.unsupportedFormat }
         let record: Record
-        do { record = try AgentToolingCoding.decoder().decode(Record.self, from: bytes) }
-        catch { throw WorkspaceFolderKeyError.unsupportedFormat }
+        do { record = try AgentToolingCoding.decoder().decode(Record.self, from: bytes) } catch {
+            throw WorkspaceFolderKeyError.unsupportedFormat
+        }
         guard record.formatVersion == Self.formatVersion, record.key.count == 32 else {
             throw WorkspaceFolderKeyError.unsupportedFormat
         }
@@ -56,11 +57,11 @@ public struct WorkspaceFolderKeyStore: Sendable {
     }
 
     public func write(_ key: SymmetricKey) throws {
-        let record = Record(formatVersion: Self.formatVersion,
-                            key: key.withUnsafeBytes { Data($0) })
+        let record = Record(
+            formatVersion: Self.formatVersion,
+            key: key.withUnsafeBytes { Data($0) })
         let bytes = try AgentToolingCoding.encoder().encode(record)
-        do { try bytes.write(to: file, options: .atomic) }
-        catch { throw WorkspaceFolderKeyError.unreadable }
+        do { try bytes.write(to: file, options: .atomic) } catch { throw WorkspaceFolderKeyError.unreadable }
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
     }
 
@@ -68,8 +69,7 @@ public struct WorkspaceFolderKeyStore: Sendable {
     /// stays readable by any Mac that still holds the phrase.
     public func remove() throws {
         guard FileManager.default.fileExists(atPath: file.path) else { return }
-        do { try FileManager.default.removeItem(at: file) }
-        catch { throw WorkspaceFolderKeyError.unreadable }
+        do { try FileManager.default.removeItem(at: file) } catch { throw WorkspaceFolderKeyError.unreadable }
     }
 
     public static func generate() -> SymmetricKey { SymmetricKey(size: .bits256) }

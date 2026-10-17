@@ -34,7 +34,9 @@ struct NativePluginInstallRegisterTests {
         let claude = try #require(
             NativePluginInstallRegister.command(for: .claude, externalPluginID: "browser"))
         #expect(claude.installArguments == ["plugin", "install", "browser", "--scope", "user"])
-        #expect(claude.removeArguments == ["plugin", "uninstall", "browser"])
+        // Uninstall takes the same scope as install; without it Claude asks
+        // which scope, and the policy refuses the shorter form.
+        #expect(claude.removeArguments == ["plugin", "uninstall", "browser", "--scope", "user"])
 
         let codex = try #require(
             NativePluginInstallRegister.command(for: .codex, externalPluginID: "browser"))
@@ -46,21 +48,26 @@ struct NativePluginInstallRegisterTests {
         // The identifier becomes an argument, so anything that could be read as
         // a flag or a path never reaches one.
         for identifier in ["--force", "../escape", "with space", "", "a;b"] {
-            #expect(NativePluginInstallRegister.command(
-                for: .codex, externalPluginID: identifier) == nil, "'\(identifier)' produced a command")
+            #expect(
+                NativePluginInstallRegister.command(
+                    for: .codex, externalPluginID: identifier) == nil, "'\(identifier)' produced a command")
         }
     }
 
     @Test func theCommandPolicyAcceptsEveryCommandTheRegisterProduces() throws {
         // The register and the executor's policy must agree, or a recorded
         // command would be offered and then refused at the moment of running.
-        let policy = OperationCommandPolicy(libraryURL: URL(fileURLWithPath: "/"),
-                                            gitBackupRoot: URL(fileURLWithPath: "/"))
+        let policy = OperationCommandPolicy(
+            libraryURL: URL(fileURLWithPath: "/"),
+            gitBackupRoot: URL(fileURLWithPath: "/"))
         for client in [ClientKind.claude, .codex] {
             let command = try #require(
                 NativePluginInstallRegister.command(for: client, externalPluginID: "browser"))
-            #expect(throws: Never.self) {
-                try policy.validate(executable: command.executable, arguments: command.installArguments)
+            // Install, remove and update alike: a plan may carry any of them.
+            for arguments in [command.installArguments, command.removeArguments, command.updateArguments].compactMap({ $0 }) {
+                #expect(throws: Never.self, "\(client) \(arguments)") {
+                    try policy.validate(executable: command.executable, arguments: arguments)
+                }
             }
         }
     }

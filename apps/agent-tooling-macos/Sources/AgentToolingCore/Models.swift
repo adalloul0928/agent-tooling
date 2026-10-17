@@ -11,8 +11,21 @@ public enum ClientKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case codex = "Codex"
     case claude = "Claude Code"
     case gemini = "Gemini CLI"
+    case kiro = "Kiro CLI"
 
     public var id: String { rawValue }
+
+    /// The surface a bare client maps to when a channel is not specified.
+    /// `TargetSurface.client` owns the inverse (surface → client); this is the
+    /// forward default every client-to-surface switch had re-derived by hand.
+    public var defaultSurface: TargetSurface {
+        switch self {
+        case .claude: .claudeCode
+        case .codex: .codexCLI
+        case .gemini: .geminiCLI
+        case .kiro: .kiroCLI
+        }
+    }
 }
 
 public enum SkillAuthoringOrigin: String, Codable, Hashable, Sendable {
@@ -60,6 +73,13 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
     public var triggers: [String]
     public var negativeTrigger: String
     public var files: [String]
+    /// Whether `files` came from reading a real package tree on disk. An empty
+    /// `files` list is otherwise ambiguous: a skill whose captured tree was
+    /// never read has no files listed yet, which is not the same as a skill
+    /// that was inventoried and genuinely holds none. Older snapshots omit this
+    /// and decode as `false`, so an un-enriched projection is treated as
+    /// unknown rather than as an empty inventory.
+    public var filesKnown: Bool
     public var clients: [ClientState]
     public var validationCount: Int
     /// Older snapshots omit this field. Generated packages use it to avoid
@@ -82,7 +102,8 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
         validationCount: Int,
         projectRoot: String? = nil,
         authoringOrigin: SkillAuthoringOrigin? = nil,
-        repositoryBinding: SkillRepositoryBinding? = nil
+        repositoryBinding: SkillRepositoryBinding? = nil,
+        filesKnown: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -95,6 +116,7 @@ public struct Skill: Identifiable, Codable, Hashable, Sendable {
         self.triggers = triggers
         self.negativeTrigger = negativeTrigger
         self.files = files
+        self.filesKnown = filesKnown
         self.clients = clients
         self.validationCount = validationCount
         self.authoringOrigin = authoringOrigin
@@ -222,6 +244,16 @@ public struct ProfileCheck: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+/// Saved with a configuration so a setup captured from one Mac does not turn
+/// into an instruction to install every item into every enabled client.
+public struct OnboardingTargetBinding: Identifiable, Codable, Hashable, Sendable {
+    public var id: String { "\(item.id):\(client.rawValue)" }
+    public let item: ToolingItemReference
+    public let client: ClientKind
+    public let enabled: Bool?
+
+}
+
 public struct ToolingProfile: Identifiable, Codable, Hashable, Sendable {
     public let id: String
     public var name: String
@@ -347,29 +379,6 @@ public struct ActivityReceipt: Identifiable, Codable, Hashable, Sendable {
     /// immutable history in the workspace database.
     public var displayTitle: String {
         title == "Reality scan completed" ? "Setup check completed" : title
-    }
-}
-
-public enum SyncStageState: String, Codable, CaseIterable, Sendable {
-    case waiting
-    case running
-    case complete
-    case attention
-}
-
-public struct SyncStage: Identifiable, Codable, Hashable, Sendable {
-    public let id: String
-    public var title: String
-    public var detail: String
-    public var symbol: String
-    public var state: SyncStageState
-
-    public init(id: String, title: String, detail: String, symbol: String, state: SyncStageState) {
-        self.id = id
-        self.title = title
-        self.detail = detail
-        self.symbol = symbol
-        self.state = state
     }
 }
 

@@ -172,10 +172,45 @@ struct ReviewQueueTests {
         #expect(rows.count == 1)
         #expect(payload["state"]?.stringValue == "pending-review")
 
-        let draft = try harness.store.requestDraft(rows[0].id, as: CodexSkillDraftRequest.self)
+        let draft = try harness.store.requestDraft(rows[0].id, as: SkillDraftRequest.self)
         let resolved = try #require(draft)
         #expect(resolved.proposedName == "release-summary")
         #expect(resolved.targets == [.claude, .codex])
+        // Nobody named an assistant, so the draft is Codex's, as every request
+        // before there was a choice was.
+        #expect(resolved.client == .codex)
+    }
+
+    @Test func aCreateSkillRequestCanNameClaudeAsTheAssistant() throws {
+        let harness = try MCPTestHarness()
+        try harness.initialize()
+
+        _ = try harness.callTool(
+            "request_create_skill",
+            arguments: [
+                "instruction": .string("Summarize a release branch before tagging."),
+                "assistant": .string("claude-code"),
+                "scope": .string("user"),
+                "targets": .array([.string("claude-code")]),
+            ]
+        )
+        let request = try #require(harness.pendingRequests().first)
+        #expect(try harness.store.requestDraft(request.id, as: SkillDraftRequest.self)?.client == .claude)
+
+        // An assistant this app cannot talk to is an invalid argument, so it is
+        // refused as one, before anything is queued.
+        let refused = try #require(
+            harness.rawCallTool(
+                "request_create_skill",
+                arguments: [
+                    "instruction": .string("Summarize a release branch before tagging."),
+                    "assistant": .string("gemini"),
+                    "scope": .string("user"),
+                    "targets": .array([.string("codex")]),
+                ]
+            ))
+        #expect(refused["error"]?.objectValue?["message"]?.stringValue?.contains("assistant") == true)
+        #expect(try harness.pendingRequests().count == 1)
     }
 
     @Test func aCollapsedCreateSkillRequestRepairsItsMissingDraftPayload() throws {
@@ -196,8 +231,9 @@ struct ReviewQueueTests {
 
         #expect(repeated["collapsedIntoExistingRequest"]?.boolValue == true)
         #expect(try harness.pendingRequests().count == 1)
-        #expect(try harness.store.requestDraft(request.id, as: CodexSkillDraftRequest.self)?
-            .proposedName == "release-summary")
+        #expect(
+            try harness.store.requestDraft(request.id, as: SkillDraftRequest.self)?
+                .proposedName == "release-summary")
     }
 
     @Test func aRequestWithAnInlineSecretIsRefused() throws {

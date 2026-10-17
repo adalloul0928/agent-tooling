@@ -22,7 +22,8 @@ struct WorkspaceDeviceSessionTests {
         #expect(await observer.calls == 0)
         #expect(session.observations.isEmpty)
         #expect(session.lastCheckedAt == nil)
-        #expect(session.verdict(for: .claude) == ClientVerdict(state: .pending, text: "Not checked yet"))
+        #expect(session.verdict(for: .claude).state == .pending)
+        #expect(session.verdict(for: .claude).text == "Not checked yet")
     }
 
     @Test func aClientWhoseCommandAnswersIsHealthyAndSaysWhenItWasChecked() async throws {
@@ -33,8 +34,9 @@ struct WorkspaceDeviceSessionTests {
             observer: ScriptedObserver(results: [
                 .success([
                     // The later of the two is the one reported, so a stale
-                    // surface cannot make a fresh check look old.
-                    Fixture.claudeCode(commandAvailable: true, scannedAt: .now),
+                    // surface cannot make a fresh check look old. A version is
+                    // present, so the client is genuinely healthy.
+                    Fixture.claudeCode(commandAvailable: true, version: "2.1.263", scannedAt: .now),
                     Fixture.observation(
                         .claudeDesktop, installed: true, commandAvailable: false,
                         scannedAt: earlier),
@@ -58,16 +60,14 @@ struct WorkspaceDeviceSessionTests {
         let earlier = Date.now.addingTimeInterval(-40 * 24 * 60 * 60)
         let session = await fixture.session(
             observer: ScriptedObserver(results: [
-                .success([Fixture.claudeCode(commandAvailable: true, scannedAt: earlier)])
+                .success([Fixture.claudeCode(commandAvailable: true, version: "2.1.263", scannedAt: earlier)])
             ]))
 
         await session.refresh()
 
-        #expect(
-            session.verdict(for: .claude)
-                == ClientVerdict(
-                    state: .healthy,
-                    text: "Checked \(earlier.formatted(.dateTime.month(.abbreviated).day()))"))
+        let verdict = session.verdict(for: .claude)
+        #expect(verdict.state == .healthy)
+        #expect(verdict.text == "Checked \(earlier.formatted(.dateTime.month(.abbreviated).day()))")
     }
 
     @Test func filesWithoutACommandAreDistinguishedFromNothingAtAll() async throws {
@@ -83,14 +83,159 @@ struct WorkspaceDeviceSessionTests {
 
         await session.refresh()
 
-        #expect(
-            session.verdict(for: .claude)
-                == ClientVerdict(state: .attention, text: "Command unavailable"))
-        #expect(session.verdict(for: .codex) == ClientVerdict(state: .attention, text: "Not found"))
+        #expect(session.verdict(for: .claude).state == .attention)
+        #expect(session.verdict(for: .claude).text == "Command unavailable")
+        #expect(session.verdict(for: .codex).state == .attention)
+        #expect(session.verdict(for: .codex).text == "Not found")
         // Never scanned is not the same as looked for and missing.
+        #expect(session.verdict(for: .gemini).state == .pending)
+        #expect(session.verdict(for: .gemini).text == "Not checked yet")
+    }
+
+    /// A command that ran but reported no version has not said what it accepts,
+    /// so it is neither healthy nor missing: it is attention, and the words say
+    /// why a tool asked for in it would wait.
+    @Test func aCommandThatAnsweredWithoutAVersionIsAttentionNotHealthy() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session(
+            observer: ScriptedObserver(results: [
+                .success([Fixture.claudeCode(commandAvailable: true, version: nil)])
+            ]))
+
+        await session.refresh()
+
+        let verdict = session.verdict(for: .claude)
+        #expect(verdict.state == .attention)
+        #expect(verdict.text == "Found, version unknown")
+        #expect(verdict.detail.contains("did not answer --version"))
+        #expect(verdict.detail.contains("wait until it does"))
+        // A blank version string is treated the same as none.
+        let blank = await fixture.session(
+            observer: ScriptedObserver(results: [
+                .success([Fixture.claudeCode(commandAvailable: true, version: "")])
+            ]))
+        await blank.refresh()
+        #expect(blank.verdict(for: .claude).state == .attention)
+        #expect(blank.verdict(for: .claude).text == "Found, version unknown")
+    }
+
+    /// Every state carries a plain explanation for a tooltip or an
+    /// accessibility value, and it names the client it is about.
+    @Test func everyVerdictStateCarriesAPlainExplanation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session(
+            observer: ScriptedObserver(results: [
+                .success([
+                    Fixture.claudeCode(commandAvailable: true, version: "2.1.263"),
+                    Fixture.observation(.codexCLI, installed: false, commandAvailable: false),
+                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: false),
+                ])
+            ]))
+
+        // Before any check: "Run Check apps to look."
+        #expect(session.verdict(for: .kiro).detail == "Run Check apps to look.")
+
+        await session.refresh()
+
+        #expect(session.verdict(for: .claude).detail == "Claude Code answered and reported version 2.1.263.")
+        #expect(session.verdict(for: .codex).detail == "Nothing from Codex was found on this Mac.")
+        #expect(session.verdict(for: .gemini).detail.contains("files were found on this Mac, but its command-line tool was not"))
+        // Kiro was in this scan at all only if the scan reported it; it did not,
+        // so it stays "not checked" with its own instruction.
+        #expect(session.verdict(for: .kiro).detail == "Run Check apps to look.")
+    }
+
+    /// The managed set is every available client this Mac has been left
+    /// managing, in the registry's own order, and it narrows exactly as the
+    /// choice does.
+    @Test func managedClientsFollowTheChoiceInRegistryOrder() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        #expect(session.managedClients == ClientKind.allCases)
+
+        await session.setEnabled(.gemini, false)
+        #expect(session.managedClients == [.codex, .claude, .kiro])
+        // Order is the registry's (ClientKind.allCases), not the order clients
+        // were toggled in.
+        await session.setEnabled(.gemini, true)
+        #expect(session.managedClients == ClientKind.allCases)
+    }
+
+    // MARK: - Catching the library up
+
+    /// A first run writes what it saw. Every check after it used to update
+    /// only the marks, so a skill a client gained afterwards was visible to
+    /// the client and invisible here.
+    @Test func aCheckAddsWhatAClientGainedSinceTheLibraryWasWritten() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        var claude = Fixture.claudeCode(commandAvailable: true, version: "2.1.263")
+        let packageRoot = fixture.home.appending(path: ".claude/plugins/cache/aim/core/1.0").path(percentEncoded: false)
+        claude.discoveredPlugins = ["core@aim"]
+        claude.discoveredSkills = ["core:brazil", "docx"]
+        claude.pluginMetadata = [
+            "core@aim": .init(name: "Core", source: packageRoot, scope: "User", enabled: true, skillIDs: ["core:brazil"])
+        ]
+        claude.skillMetadata = [
+            "core:brazil": .init(path: "\(packageRoot)/skills/brazil/", source: "core@aim", providerPluginID: "core@aim"),
+            "docx": .init(
+                path: fixture.home.appending(path: ".claude/skills/docx/").path(percentEncoded: false),
+                source: "Standalone Claude Code skill"),
+        ]
+        let session = await fixture.session(observer: ScriptedObserver(results: [.success([claude])]))
+        let before = try #require(fixture.library.state).library.rows
+
+        await session.refresh()
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        let rows = try #require(fixture.library.state).library.rows
+        // The package and the standalone skill are rows; the package's member
+        // is listed inside it.
+        #expect(rows.count == before.count + 2)
+        let package = try #require(rows.first { $0.kind == .nativePlugin && $0.declaredName == "core@aim" })
+        #expect(package.includedChildren.map(\.displayName) == ["Brazil"])
+        #expect(package.includedChildren.first?.kind == .skill)
+        let standalone = try #require(rows.first { $0.kind == .skill && $0.declaredName == "docx" })
+        #expect(standalone.ownership == .trackedOnly)
+        // The one row that was here before is untouched, and nothing gained an
+        // assignment: where a found skill is used is still a choice to make.
+        #expect(rows.first { $0.artifactID == Fixture.skill }?.displayName == "Standalone Skill")
+        #expect(rows.allSatisfy { $0.requestedAssignments.isEmpty })
+        #expect(session.libraryUpdateMessage == "Added 2 skills and 1 package this Mac's apps have that the library did not.")
+
+        // A second check that finds the same things adds nothing and says so
+        // by saying nothing.
+        await session.refresh()
+        #expect(try #require(fixture.library.state).library.rows.count == before.count + 2)
+        #expect(session.libraryUpdateMessage == nil)
+    }
+
+    @Test func theLibraryUpdateSentenceCountsEachKindItAdded() throws {
+        func plan(skills: Int, packages: Int, connections: Int) -> WorkspaceObservationReconciliation.Plan {
+            var additions: [ArtifactRecord] = []
+            for index in 0..<packages {
+                additions.append(
+                    .init(identity: .init(id: ArtifactID(), kind: .nativePlugin, displayName: "P\(index)"), authority: .trackedOnly))
+            }
+            for index in 0..<skills {
+                additions.append(.init(identity: .init(id: ArtifactID(), kind: .skill, displayName: "S\(index)"), authority: .trackedOnly))
+            }
+            for index in 0..<connections {
+                additions.append(
+                    .init(identity: .init(id: ArtifactID(), kind: .mcpServer, displayName: "C\(index)"), authority: .trackedOnly))
+            }
+            return .init(additions: additions)
+        }
+        #expect(WorkspaceDeviceSession.libraryUpdateSentence(for: plan(skills: 0, packages: 0, connections: 0)) == nil)
         #expect(
-            session.verdict(for: .gemini)
-                == ClientVerdict(state: .pending, text: "Not checked yet"))
+            WorkspaceDeviceSession.libraryUpdateSentence(for: plan(skills: 1, packages: 0, connections: 0))
+                == "Added 1 skill this Mac's apps have that the library did not.")
+        #expect(
+            WorkspaceDeviceSession.libraryUpdateSentence(for: plan(skills: 135, packages: 3, connections: 2))
+                == "Added 135 skills, 3 packages, and 2 connections this Mac's apps have that the library did not.")
     }
 
     @Test func onlyTheAppsThisMacManagesAreCountedAsNeedingAttention() async throws {
@@ -101,10 +246,22 @@ struct WorkspaceDeviceSessionTests {
                 .success([
                     Fixture.observation(.claudeCode, installed: true, commandAvailable: false),
                     Fixture.observation(.codexCLI, installed: false, commandAvailable: false),
-                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true),
+                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true, version: "1.4.0"),
                 ])
             ]))
         await session.refresh()
+        // Nobody has chosen, so the check decides what is shown — and set up
+        // means the tool runs. Gemini's does and reports a version, so it is
+        // healthy; Claude's files without a runnable tool do not count, and
+        // Codex is not here at all.
+        #expect(session.enabledClients == [.gemini])
+        #expect(session.attentionCount == 0)
+
+        // Turning a broken app on explicitly is the opt-in: its missing tool
+        // becomes this Mac's problem because somebody said so.
+        await session.setEnabled(.claude, true)
+        #expect(session.attentionCount == 1)
+        await session.setEnabled(.codex, true)
         #expect(session.attentionCount == 2)
 
         await session.setEnabled(.codex, false)
@@ -112,7 +269,8 @@ struct WorkspaceDeviceSessionTests {
         // The verdict is still known and still honest; it is just not this
         // Mac's problem any more.
         #expect(session.attentionCount == 1)
-        #expect(session.verdict(for: .codex) == ClientVerdict(state: .attention, text: "Not found"))
+        #expect(session.verdict(for: .codex).state == .attention)
+        #expect(session.verdict(for: .codex).text == "Not found")
     }
 
     @Test func choosingWhichAppsThisMacManagesIsRememberedOnThisMacOnly() async throws {
@@ -131,15 +289,66 @@ struct WorkspaceDeviceSessionTests {
         #expect(session.isEnabled(nil))
 
         let snapshot = try #require(try fixture.store.snapshot())
-        #expect(snapshot.device.applicationState?.preferences.enabledClients == [.claude, .codex])
+        #expect(snapshot.device.applicationState?.preferences.enabledClients == [.claude, .codex, .kiro])
+        #expect(snapshot.device.applicationState?.preferences.chosenClients == [.claude, .codex, .kiro])
         // The choice is this Mac's. Nothing about it goes into portable bytes.
         #expect(snapshot.document.artifacts.map(\.identity.id) == [Fixture.skill])
         #expect(snapshot.document.assignments.isEmpty)
 
         // A session opened over the same store reads the choice back.
         let reopened = await fixture.session()
-        #expect(reopened.enabledClients == [.claude, .codex])
+        #expect(reopened.enabledClients == [.claude, .codex, .kiro])
         #expect(reopened.attentionCount == 0)
+    }
+
+    /// Finding a missing tool records where it lives, says so, and the message
+    /// leaves on its own once a check finds nothing missing any more.
+    @Test func findingAMissingToolRecordsItsFolderAndTheMessageDoesNotStrand() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let toolDirectory = fixture.root.appending(path: "elsewhere/bin", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: toolDirectory, withIntermediateDirectories: true)
+        let tool = toolDirectory.appending(path: "claude")
+        try Data("#!/bin/sh\n".utf8).write(to: tool)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tool.path)
+
+        struct ShellRunner: CommandRunning {
+            let answer: String
+            func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput {
+                guard executable == "/bin/zsh", arguments.last?.hasSuffix("claude") == true else {
+                    return CommandOutput(status: 1, standardOutput: "", standardError: "")
+                }
+                return CommandOutput(status: 0, standardOutput: answer, standardError: "")
+            }
+        }
+
+        let session = await fixture.session(
+            observer: ScriptedObserver(results: [
+                .success([
+                    Fixture.observation(.claudeCode, installed: true, commandAvailable: false),
+                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true, version: "1.4.0"),
+                ]),
+                .success([
+                    Fixture.observation(.claudeCode, installed: true, commandAvailable: true, version: "2.1.263"),
+                    Fixture.observation(.geminiCLI, installed: true, commandAvailable: true, version: "1.4.0"),
+                ]),
+            ]),
+            toolProbeRunner: ShellRunner(answer: tool.path))
+        await session.refresh()
+        // Claude's tool did not run, so it is hidden until managed explicitly.
+        await session.setEnabled(.claude, true)
+        #expect(session.missingManagedClients == [.claude])
+
+        await session.smartFindTools()
+
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(
+            snapshot.device.applicationState?.preferences.customToolDirectories
+                == [toolDirectory.path])
+        // The find re-checked, the second check found everything, and the
+        // message left with the work instead of stranding as a problem.
+        #expect(session.missingManagedClients.isEmpty)
+        #expect(session.smartFindMessage == nil)
     }
 
     @Test func managingAnAppAgainIsRememberedTheSameWay() async throws {
@@ -154,7 +363,7 @@ struct WorkspaceDeviceSessionTests {
         let snapshot = try #require(try fixture.store.snapshot())
         #expect(
             snapshot.device.applicationState?.preferences.enabledClients
-                == [.claude, .codex, .gemini])
+                == [.claude, .codex, .gemini, .kiro])
     }
 
     @Test func automaticHealthChecksDefaultOnAndAreRememberedOnThisMacOnly() async throws {
@@ -192,6 +401,183 @@ struct WorkspaceDeviceSessionTests {
         #expect(snapshot.device.applicationState?.preferences.automaticallyCheckHealth == true)
     }
 
+    /// Two quick flips of a client toggle, fired without awaiting between them,
+    /// must leave the stored choice at the last flip's position. The toggle's
+    /// setter starts an unstructured task per flip; without serialization both
+    /// tasks read the same head, the first commits, and the second commits
+    /// against a stale head, throws, and reverts in memory — so the stored
+    /// value lands on the first flip, not the last one the person made.
+    @Test func twoQuickClientFlipsLeaveTheStoredChoiceAtTheLastFlip() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        #expect(session.isEnabled(.gemini))
+
+        // Off then on, the way two taps in a row reach the setter: each flip
+        // is its own main-actor task, started in order, and neither waits for
+        // the other.
+        let first = Task { await session.setEnabled(.gemini, false) }
+        let second = Task { await session.setEnabled(.gemini, true) }
+        _ = await (first.value, second.value)
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        #expect(session.isEnabled(.gemini))
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(
+            snapshot.device.applicationState?.preferences.enabledClients
+                == ClientKind.allCases.sorted { $0.rawValue < $1.rawValue })
+    }
+
+    /// The same guarantee for the automatic-health toggle, which writes the
+    /// same device record through the same head check.
+    @Test func twoQuickHealthFlipsLeaveTheStoredChoiceAtTheLastFlip() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        #expect(session.automaticallyCheckHealth)
+
+        let first = Task { await session.setAutomaticallyCheckHealth(false) }
+        let second = Task { await session.setAutomaticallyCheckHealth(true) }
+        _ = await (first.value, second.value)
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        #expect(session.automaticallyCheckHealth)
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.automaticallyCheckHealth == true)
+    }
+
+    // MARK: - Writes that fail, and writes that overlap
+
+    /// A flip whose write fails goes back to what is recorded and says so,
+    /// rather than showing a toggle this Mac will not act on.
+    @Test func aFlipThatDoesNotSaveGoesBackAndSaysNothingWasChanged() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let recorder = ScriptedRecorder(service: fixture.service, failing: [1])
+        let session = await fixture.session(recorder: recorder)
+
+        await session.setAutomaticallyCheckHealth(false)
+
+        #expect(session.automaticallyCheckHealth)
+        #expect(session.errorMessage == "This Mac could not record that choice. Nothing was changed.")
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.automaticallyCheckHealth == true)
+    }
+
+    /// On, off, on, off, with the first write failing while the other two wait
+    /// behind it. Putting back the whole value saved before the first flip
+    /// would show "on" over a store that holds "off", under a message that
+    /// says nothing was changed after two writes that changed something.
+    @Test func anEarlierFlipThatFailsWhileLaterOnesWaitDoesNotUndoThem() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let recorder = ScriptedRecorder(service: fixture.service, failing: [1])
+        let session = await fixture.session(recorder: recorder)
+        #expect(session.automaticallyCheckHealth)
+
+        let first = Task { await session.setAutomaticallyCheckHealth(false) }
+        let second = Task { await session.setAutomaticallyCheckHealth(true) }
+        let third = Task { await session.setAutomaticallyCheckHealth(false) }
+        _ = await (first.value, second.value, third.value)
+
+        #expect(await recorder.calls == 3)
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.automaticallyCheckHealth == false)
+        #expect(session.automaticallyCheckHealth == false)
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+    }
+
+    /// Two different apps turned off at once are both turned off: each write
+    /// is a difference against what the one before it recorded.
+    @Test func twoAppsFlippedAtOnceAreBothRecorded() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+
+        let first = Task { await session.setEnabled(.gemini, false) }
+        let second = Task { await session.setEnabled(.kiro, false) }
+        _ = await (first.value, second.value)
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        #expect(session.enabledClients == [.claude, .codex])
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.chosenClients == [.claude, .codex])
+    }
+
+    /// When the first of two apps flipped at once does not save, only that app
+    /// goes back. The other one saved, so the screen keeps it and no longer
+    /// says nothing was changed.
+    @Test func whenOneOfTwoAppsFlippedAtOnceFailsOnlyThatOneGoesBack() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        // An explicit choice is already recorded, so every write here is a
+        // difference against it.
+        try await fixture.recordChosenClients(ClientKind.allCases)
+        let recorder = ScriptedRecorder(service: fixture.service, failing: [1])
+        let session = await fixture.session(recorder: recorder)
+
+        let first = Task { await session.setEnabled(.gemini, false) }
+        let second = Task { await session.setEnabled(.kiro, false) }
+        _ = await (first.value, second.value)
+
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.chosenClients == [.claude, .codex, .gemini])
+        #expect(session.enabledClients == [.claude, .codex, .gemini])
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+    }
+
+    /// The first explicit choice is written against what was shown before it.
+    /// When that first flip fails, the flip after it must not write it anyway
+    /// by starting from a screen that already had it — and with a choice now
+    /// recorded, the next check no longer decides what is shown.
+    @Test func aFirstChoiceThatFailsIsNotWrittenByTheFlipAfterIt() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let recorder = ScriptedRecorder(service: fixture.service, failing: [1])
+        let session = await fixture.session(
+            observer: ScriptedObserver(results: [.success([Fixture.claudeCode(commandAvailable: true, version: "2.1.263")])]),
+            recorder: recorder)
+        #expect(session.enabledClients == Set(ClientKind.allCases))
+
+        let first = Task { await session.setEnabled(.gemini, false) }
+        let second = Task { await session.setEnabled(.kiro, false) }
+        _ = await (first.value, second.value)
+
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.applicationState?.preferences.chosenClients == [.claude, .codex, .gemini])
+        #expect(session.enabledClients == [.claude, .codex, .gemini])
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+
+        // A check that finds only Claude Code leaves the recorded choice alone.
+        await session.refresh()
+        #expect(session.enabledClients == [.claude, .codex, .gemini])
+    }
+
+    /// A flip made while a check is under way: the check records what it found
+    /// and the flip records the choice, and neither is refused as stale because
+    /// the other moved the workspace between its read and its write.
+    @Test func aFlipMadeWhileACheckRecordsIsNeitherRacedNorRefused() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let observed = [
+            Fixture.claudeCode(
+                commandAvailable: true, version: "2.1.263", scannedAt: Date(timeIntervalSince1970: 1_700_000_000))
+        ]
+        let observer = ObserverThatFlipsMidCheck(observed: observed)
+        let session = await fixture.session(observer: observer)
+        await observer.duringTheCheck { await session.setEnabled(.gemini, false) }
+
+        await session.refresh()
+        let flip = try #require(await observer.flip)
+        await flip.value
+
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        #expect(session.enabledClients == [.claude, .codex, .kiro])
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.observations == observed)
+        #expect(snapshot.device.applicationState?.preferences.chosenClients == [.claude, .codex, .kiro])
+    }
+
     @Test func anOverlappingCheckJoinsTheOneAlreadyRunning() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -220,7 +606,7 @@ struct WorkspaceDeviceSessionTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let observer = ScriptedObserver(results: [
-            .success([Fixture.claudeCode(commandAvailable: true)]),
+            .success([Fixture.claudeCode(commandAvailable: true, version: "2.1.263")]),
             .failure(ScanFailure()),
         ])
         let session = await fixture.session(observer: observer)
@@ -380,6 +766,52 @@ struct WorkspaceDeviceSessionTests {
         }
     }
 
+    private struct WriteFailure: Error {}
+
+    /// The real service, with the writes a test names made to fail. Writes are
+    /// counted from 1 in the order the session sends them, which is the order
+    /// they were asked for.
+    private actor ScriptedRecorder: DeviceStateRecording {
+        private let service: WorkspaceApplicationService
+        private let failing: Set<Int>
+        private(set) var calls = 0
+
+        init(service: WorkspaceApplicationService, failing: Set<Int>) {
+            self.service = service
+            self.failing = failing
+        }
+
+        func recordDeviceChange(
+            _ change: @escaping @Sendable (inout DeviceWorkspaceState) throws -> Void
+        ) async throws -> DeviceWorkspaceState {
+            calls += 1
+            guard !failing.contains(calls) else { throw WriteFailure() }
+            return try await service.recordDeviceChange(change)
+        }
+    }
+
+    /// A check during which somebody flips a toggle. The flip starts from
+    /// inside the scan, so it reaches the session after the check began and
+    /// before the check records what it found — the moment a flip used to
+    /// read the same head as that record and lose to it, or beat it.
+    private actor ObserverThatFlipsMidCheck: DeviceObserving {
+        private let observed: [TargetObservation]
+        private var action: (@MainActor @Sendable () async -> Void)?
+        /// The flip, once the scan started it.
+        private(set) var flip: Task<Void, Never>?
+
+        init(observed: [TargetObservation]) { self.observed = observed }
+
+        func duringTheCheck(_ action: @escaping @MainActor @Sendable () async -> Void) {
+            self.action = action
+        }
+
+        func observe(homeRoot: URL) async throws -> [TargetObservation] {
+            if let action { flip = Task { @MainActor in await action() } }
+            return observed
+        }
+    }
+
     /// A real store in a temporary folder, wired the way the app wires it.
     @MainActor private struct Fixture {
         /// One artifact, only so the document has something in it that this
@@ -420,12 +852,29 @@ struct WorkspaceDeviceSessionTests {
                 access: .writable)
         }
 
-        func session(observer: any DeviceObserving = ScriptedObserver(results: [.success([])]))
-            async -> WorkspaceDeviceSession
-        {
+        func session(
+            observer: any DeviceObserving = ScriptedObserver(results: [.success([])]),
+            toolProbeRunner: (any CommandRunning)? = nil,
+            recorder: (any DeviceStateRecording)? = nil
+        ) async -> WorkspaceDeviceSession {
             await library.refresh()
             return WorkspaceDeviceSession(
-                service: service, library: library, store: store, homeRoot: home, observer: observer)
+                service: service, library: library, store: store, homeRoot: home, observer: observer,
+                toolProbeRunner: toolProbeRunner, recorder: recorder)
+        }
+
+        /// Records an explicit choice of apps, the way an earlier launch would
+        /// have left it.
+        func recordChosenClients(_ clients: [ClientKind]) async throws {
+            let sorted = clients.sorted { $0.rawValue < $1.rawValue }
+            _ = try await service.recordDeviceChange { device in
+                guard var application = device.applicationState else {
+                    throw WorkspaceRevisionStoreError.notInitialized
+                }
+                application.preferences.chosenClients = sorted
+                application.preferences.enabledClients = sorted
+                device.applicationState = application
+            }
         }
 
         static func observation(

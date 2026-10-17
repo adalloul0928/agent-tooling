@@ -69,8 +69,9 @@ enum ReadOnlyTools {
                 "value": .string(row.value.displayText),
                 "defined_by": .string(row.definedBy.rawValue),
                 "combines_layers": .bool(row.rule == .combineList),
-                "overridden_in": .array(row.contributions.filter(\.isOverridden)
-                    .map { .string($0.layer.rawValue) }),
+                "overridden_in": .array(
+                    row.contributions.filter(\.isOverridden)
+                        .map { .string($0.layer.rawValue) }),
                 "fixed_by_higher_layer": .bool(row.isConstrained),
                 "requires_new_session": .bool(row.requiresNewSession),
             ])

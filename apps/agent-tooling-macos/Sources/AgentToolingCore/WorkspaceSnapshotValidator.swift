@@ -227,7 +227,8 @@ enum WorkspaceSnapshotValidator {
             if let bindings = profile.targetBindings {
                 try requireUnique(bindings.map(\.id), field: "configuration target bindings")
                 for binding in bindings {
-                    try validateText(binding.item.identifier, field: "target binding identifier", maximum: Limit.identifierCharacters, required: true)
+                    try validateText(
+                        binding.item.identifier, field: "target binding identifier", maximum: Limit.identifierCharacters, required: true)
                 }
             }
             for check in profile.checks {
@@ -291,7 +292,7 @@ enum WorkspaceSnapshotValidator {
             } else {
                 try validateWebURL(source.location, field: "Agent Plugins source")
             }
-        case .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry:
+        case .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry, .skillsShRegistry:
             try validateWebURL(source.location, field: "catalog source")
         }
     }
@@ -357,7 +358,7 @@ enum WorkspaceSnapshotValidator {
         }
     }
 
-    private static func validate(_ observation: TargetObservation) throws {
+    static func validate(_ observation: TargetObservation) throws {
         let collections = [
             observation.configurationPaths,
             observation.discoveredSkills,
@@ -394,6 +395,16 @@ enum WorkspaceSnapshotValidator {
             try validateText(
                 metadata.providerPluginID ?? "", field: "skill provider plugin identifier", maximum: Limit.identifierCharacters)
             try requireRedacted(metadata.source, field: "observed skill source")
+            if let digest = metadata.definitionDigest {
+                guard digest.count == 64, digest.allSatisfy({ $0.isHexDigit && !$0.isUppercase }) else {
+                    throw WorkspaceSnapshotValidationError.invalidField("observed skill definition digest")
+                }
+            }
+            if let manager = metadata.externalManager {
+                try validateText(manager.tool, field: "skill manager", maximum: Limit.shortTextCharacters, required: true)
+                try validateText(manager.package ?? "", field: "skill manager package", maximum: Limit.shortTextCharacters)
+                try requireRedacted(manager.label, field: "skill manager")
+            }
         }
         for (id, metadata) in observation.pluginMetadata {
             try validateText(id, field: "observed plugin identifier", maximum: Limit.identifierCharacters, required: true)
@@ -415,6 +426,13 @@ enum WorkspaceSnapshotValidator {
             try validateText(metadata.source, field: "observed MCP source", maximum: Limit.pathCharacters)
             try requireRedacted(metadata.authentication, field: "observed MCP authentication")
             try requireRedacted(metadata.source, field: "observed MCP source")
+            let others = metadata.additionalSources ?? []
+            guard others.count <= Limit.childRecords else { throw WorkspaceSnapshotValidationError.tooManyRecords }
+            try requireUnique(others, field: "observed MCP sources")
+            for other in others {
+                try validateText(other, field: "observed MCP source", maximum: Limit.pathCharacters, required: true)
+                try requireRedacted(other, field: "observed MCP source")
+            }
         }
         try validateDate(observation.lastScannedAt, field: "target scan timestamp")
     }
@@ -675,77 +693,5 @@ enum WorkspaceSnapshotValidationError: LocalizedError, Sendable {
         case .invalidField(let field): "Workspace state contains an invalid \(field)."
         case .inconsistent(let reason): "Workspace state is inconsistent. \(reason)"
         }
-    }
-}
-
-extension WorkspaceSnapshot {
-    func portableDesiredState() -> WorkspaceSnapshot {
-        var portable = self
-        portable.preferences.enabledClients = Set(ClientKind.allCases)
-        portable.skills = skills.filter(\.owned).map { skill in
-            var copy = skill
-            copy.projectRoot = nil
-            copy.clients = skill.clients.map {
-                ClientState(client: $0.client, state: .pending, detail: "Selected installation target")
-            }
-            return copy
-        }
-        portable.mcpServers = mcpServers.filter(\.isManagedDefinition).map { server in
-            var copy = server
-            copy.projectRoot = nil
-            copy.clients = server.clients.map {
-                ClientState(client: $0.client, state: .pending, detail: "Selected configuration target")
-            }
-            copy.repairCommand = nil
-            return copy
-        }
-        portable.plugins = []
-        portable.profiles = profiles.map { profile in
-            var copy = profile
-            copy.projectRoot = nil
-            return copy
-        }
-        portable.activities = []
-        portable.operationReceipts = []
-        portable.targetObservations = []
-        portable.sources = sources.filter { source in
-            guard let scheme = URLComponents(string: source.location)?.scheme?.lowercased() else { return false }
-            return ["http", "https"].contains(scheme)
-        }
-        portable.marketplacePackages = []
-        portable.accountSurfaces = accountSurfaces.map { account in
-            var copy = account
-            copy.status = .manual
-            copy.lastVerifiedAt = nil
-            return copy
-        }
-        portable.connectors = connectors.map { connector in
-            var copy = connector
-            copy.bindings = connector.bindings.map { binding in
-                var copy = binding
-                copy.status = .manual
-                copy.lastVerifiedAt = nil
-                return copy
-            }
-            return copy
-        }
-        // Collections and tags are portable by construction: they name items,
-        // never machine paths, and never a credential.
-        portable.collections = collections
-        portable.tagAssignments = tagAssignments
-        portable.importedRepositoryPath = nil
-        portable.backupConfiguration = .init()
-        portable.encryptedSyncConfiguration = .init()
-        portable.managedPolicies = managedPolicies.map { policy in
-            var copy = policy
-            copy.sourcePath = URL(fileURLWithPath: policy.sourcePath).lastPathComponent
-            copy.profiles = policy.profiles.map { profile in
-                var copy = profile
-                copy.projectRoot = nil
-                return copy
-            }
-            return copy
-        }
-        return portable
     }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-public enum WorkspaceLocatorError: Error, Equatable, Sendable {
+enum WorkspaceLocatorError: Error, Equatable, Sendable {
     case invalidRoot
     case unreadable
     case unsupportedFormat
@@ -36,15 +36,20 @@ public struct WorkspaceLocator: Sendable {
     /// `root` is this app's own support folder.
     public init(root: URL) throws {
         guard root.isFileURL, root.path.hasPrefix("/"), !root.path.contains("\0"),
-              root.standardizedFileURL.path == root.path else {
+            root.standardizedFileURL.path == root.path
+        else {
             throw WorkspaceLocatorError.invalidRoot
         }
         self.root = root
     }
 
     public static func defaultRoot(fileManager: FileManager = .default) throws -> URL {
-        guard let support = fileManager.urls(for: .applicationSupportDirectory,
-                                             in: .userDomainMask).first else {
+        guard
+            let support = fileManager.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first
+        else {
             throw WorkspaceLocatorError.invalidRoot
         }
         return support.appending(path: "Agent Tooling", directoryHint: .isDirectory).standardizedFileURL
@@ -63,11 +68,11 @@ public struct WorkspaceLocator: Sendable {
     public func read() throws -> Record? {
         guard FileManager.default.fileExists(atPath: recordURL.path) else { return nil }
         let bytes: Data
-        do { bytes = try Data(contentsOf: recordURL, options: [.mappedIfSafe]) }
-        catch { throw WorkspaceLocatorError.unreadable }
+        do { bytes = try Data(contentsOf: recordURL, options: [.mappedIfSafe]) } catch { throw WorkspaceLocatorError.unreadable }
         guard bytes.count <= 8_192,
-              let record = try? AgentToolingCoding.decoder().decode(Record.self, from: bytes),
-              record.formatVersion == Self.formatVersion else {
+            let record = try? AgentToolingCoding.decoder().decode(Record.self, from: bytes),
+            record.formatVersion == Self.formatVersion
+        else {
             throw WorkspaceLocatorError.unsupportedFormat
         }
         return record
@@ -78,8 +83,9 @@ public struct WorkspaceLocator: Sendable {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
             try AgentToolingCoding.encoder().encode(record).write(to: recordURL, options: .atomic)
         } catch { throw WorkspaceLocatorError.unreadable }
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600],
-                                               ofItemAtPath: recordURL.path)
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: recordURL.path)
     }
 
     /// Opens the workspace this Mac uses, or `nil` when it has none yet.
@@ -103,8 +109,10 @@ public struct WorkspaceLocator: Sendable {
         if let existing = try open() { return existing }
         let created = try await WorkspaceFirstRun.begin(
             containerRoot: containerRoot, homeURL: homeURL, runner: runner, registry: registry)
-        try write(.init(workspaceID: created.result.document.workspaceID,
-                        deviceID: created.result.device.deviceID))
+        try write(
+            .init(
+                workspaceID: created.result.document.workspaceID,
+                deviceID: created.result.device.deviceID))
         return created.store
     }
 }

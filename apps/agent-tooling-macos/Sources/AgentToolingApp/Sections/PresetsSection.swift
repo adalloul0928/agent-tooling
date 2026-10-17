@@ -15,9 +15,19 @@ struct PresetsSection: View {
                 EmptyStateView(
                     symbol: AppSection.presets.symbol,
                     title: "Presets unavailable",
-                    message: "This Mac's linked presets could not be opened, so following a preset is unavailable here.")
+                    message: presetsUnavailableMessage)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    /// Names the cause when the workspace kept one, so the pane says why rather
+    /// than only that something went wrong. Falls back to the plain sentence
+    /// when no reason was captured.
+    private var presetsUnavailableMessage: String {
+        if let reason = workspace.presetsUnavailableReason {
+            return "Presets unavailable — \(reason)"
+        }
+        return "This Mac's linked presets could not be opened, so following a preset is unavailable here."
     }
 }

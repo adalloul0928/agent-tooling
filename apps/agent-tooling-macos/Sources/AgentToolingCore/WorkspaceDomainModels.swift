@@ -23,6 +23,24 @@ public struct WorkspaceObjectID: RawRepresentable, Codable, Hashable, Comparable
     public static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.rawValue.uuidString.lowercased() < rhs.rawValue.uuidString.lowercased()
     }
+
+    /// Stamps 16 digest bytes into a deterministic version-8, RFC 4122 variant
+    /// object ID. Each caller frames its own input and hashes it; this is the
+    /// shared tail from the first 16 SHA-256 bytes to the ID, so two call sites
+    /// that frame the same bytes land on the same identity. The caller passes
+    /// the first 16 bytes of its digest.
+    static func stampingVersion8(digestPrefix bytes: [UInt8]) -> WorkspaceObjectID {
+        precondition(bytes.count == 16, "a version-8 object ID needs 16 digest bytes")
+        var digest = bytes
+        digest[6] = (digest[6] & 0x0F) | 0x80  // version 8
+        digest[8] = (digest[8] & 0x3F) | 0x80  // RFC 4122 variant
+        let uuid = UUID(
+            uuid: (
+                digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6], digest[7],
+                digest[8], digest[9], digest[10], digest[11], digest[12], digest[13], digest[14], digest[15]
+            ))
+        return WorkspaceObjectID(rawValue: uuid)
+    }
 }
 
 public struct ArtifactID: RawRepresentable, Codable, Hashable, Comparable, Sendable {
@@ -275,6 +293,37 @@ public struct UpstreamSubscription: Codable, Hashable, Sendable {
     }
 }
 
+/// One Mac that shares this workspace. The id is the device's own, minted when
+/// its store was created and never derived from its name: a renamed Mac is the
+/// same Mac. The name is for people and may be changed from any Mac.
+public struct DeviceRecord: Codable, Hashable, Sendable, Identifiable {
+    public var id: WorkspaceObjectID
+    public var name: String
+    /// Whether destinations for "every Mac" apply here. Off makes a Mac opt-in:
+    /// it gets only what names it. A deliberately limited machine.
+    public var receivesSharedAssignments: Bool
+    public var registeredAt: Date
+    /// Stamped by the device itself on each sync pass. Informational.
+    public var lastSeenAt: Date?
+    /// Set when a person retires the device. The record stays for history;
+    /// a retired device takes nothing and its name is not reused silently.
+    public var retiredAt: Date?
+
+    public init(
+        id: WorkspaceObjectID, name: String, receivesSharedAssignments: Bool = true,
+        registeredAt: Date = .now, lastSeenAt: Date? = nil, retiredAt: Date? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.receivesSharedAssignments = receivesSharedAssignments
+        self.registeredAt = registeredAt
+        self.lastSeenAt = lastSeenAt
+        self.retiredAt = retiredAt
+    }
+
+    public var isRetired: Bool { retiredAt != nil }
+}
+
 public struct LogicalProjectRecord: Codable, Hashable, Sendable {
     public var id: ArtifactID
     public var name: String
@@ -291,19 +340,39 @@ public struct PortableDestination: Codable, Hashable, Sendable {
     public var surface: TargetSurface
     public var scope: ToolingScope
     public var logicalProjectID: ArtifactID?
-    /// Nil targets all enrolled devices. Empty targets none.
+    /// Nil targets every device that takes shared assignments. Empty targets
+    /// none. A list names exactly those devices, whether or not they take
+    /// shared assignments.
     public var deviceIDs: [WorkspaceObjectID]?
+    /// Devices a shared (`deviceIDs == nil`) destination leaves out. Meaningless
+    /// alongside an explicit list and refused there. Absent in documents written
+    /// before it existed, which reads as empty.
+    public var excludedDeviceIDs: [WorkspaceObjectID]?
 
     public init(
         surface: TargetSurface,
         scope: ToolingScope,
         logicalProjectID: ArtifactID? = nil,
-        deviceIDs: [WorkspaceObjectID]? = nil
+        deviceIDs: [WorkspaceObjectID]? = nil,
+        excludedDeviceIDs: [WorkspaceObjectID]? = nil
     ) {
         self.surface = surface
         self.scope = scope
         self.logicalProjectID = logicalProjectID
         self.deviceIDs = deviceIDs
+        self.excludedDeviceIDs = (excludedDeviceIDs?.isEmpty ?? true) ? nil : excludedDeviceIDs
+    }
+
+    /// Whether this destination applies on `device`, given what the registry
+    /// says about it. The one rule every Mac uses to decide what is for it:
+    /// a list names devices exactly; otherwise the device must take shared
+    /// assignments and not be excluded. A device the registry does not know
+    /// (a store from before the registry existed) takes shared assignments.
+    public func applies(to device: WorkspaceObjectID, registry: [DeviceRecord]) -> Bool {
+        if let deviceIDs { return deviceIDs.contains(device) }
+        if excludedDeviceIDs?.contains(device) == true { return false }
+        guard let record = registry.first(where: { $0.id == device }) else { return true }
+        return record.retiredAt == nil && record.receivesSharedAssignments
     }
 }
 

@@ -4,6 +4,8 @@ export const MAX_JSON_BYTES = 1_048_576;
 export type ComponentKind = "skill" | "mcp-server" | "plugin";
 export type SkillScope = "global" | "project";
 export type SkillTarget = "codex" | "claude-code" | "gemini";
+/** The assistant that writes the draft, as the CLI's `--provider` names it. */
+export type SkillProvider = "codex" | "claude";
 
 export interface SearchResult {
   id: string;
@@ -42,6 +44,7 @@ export interface RequestResponse {
 
 export interface CreateSkillDraftInput {
   instruction: string;
+  provider: SkillProvider;
   scope: SkillScope;
   targets: SkillTarget[];
   projectPath?: string;

@@ -28,9 +28,11 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
         try snapshot.device.validateStructure(against: snapshot.document)
 
         let artifacts = Dictionary(uniqueKeysWithValues: snapshot.document.artifacts.map { ($0.identity.id, $0) })
-        let childrenByParent = Dictionary(grouping: snapshot.document.artifacts.compactMap { artifact in
-            artifact.identity.parentPackageID.map { ($0, artifact) }
-        }, by: \.0).mapValues { $0.map(\.1) }
+        let childrenByParent = Dictionary(
+            grouping: snapshot.document.artifacts.compactMap { artifact in
+                artifact.identity.parentPackageID.map { ($0, artifact) }
+            }, by: \.0
+        ).mapValues { $0.map(\.1) }
         let sources = Dictionary(uniqueKeysWithValues: snapshot.document.sources.map { ($0.id, $0) })
         let subscriptions = Dictionary(uniqueKeysWithValues: snapshot.document.subscriptions.map { ($0.id, $0) })
         let assignments = Dictionary(grouping: snapshot.document.assignments, by: \.artifactID)
@@ -57,7 +59,8 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
                             assignments[child.identity.id] ?? [], deviceID: snapshot.device.deviceID
                         ),
                         nativeRoutes: Self.routes(child.nativeRoutes),
-                        connection: connections[child.identity.id]
+                        connection: connections[child.identity.id],
+                        contentDigest: child.contentDigest
                     )
                 }
                 .sorted(by: Self.order)
@@ -81,11 +84,12 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
                 ),
                 isAssignable: authority != .trackedOnly,
                 assignmentExplanation: authority == .trackedOnly
-                    ? "Tracked in this library. Choose how to manage it before assigning."
+                    ? "Not managed by this app. It was found where it is and this library holds no copy, so it cannot be placed from here."
                     : nil,
                 assignableReasons: authority == .trackedOnly ? [] : [.manual, .preset],
                 nativeRoutes: Self.routes(artifact.nativeRoutes),
-                connection: connections[artifact.identity.id]
+                connection: connections[artifact.identity.id],
+                contentDigest: artifact.contentDigest
             )
         }.sorted(by: Self.order)
         let presets: [WorkspaceLibraryPresetReadModel] = snapshot.document.presets.map {
@@ -97,9 +101,10 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
         self.rows = rows
         self.presets = presets
         self.projects = projects
-        self.searchableRows = Dictionary(uniqueKeysWithValues: rows.map {
-            ($0.artifactID, Self.searchText(for: $0))
-        })
+        self.searchableRows = Dictionary(
+            uniqueKeysWithValues: rows.map {
+                ($0.artifactID, Self.searchText(for: $0))
+            })
         var byProject: [ArtifactID: [ArtifactID]] = [:]
         var global: [ArtifactID] = []
         let known = Set(projects.map(\.id))
@@ -107,7 +112,10 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
             var seen = Set<ArtifactID>()
             var isGlobal = false
             for assignment in row.requestedAssignments {
-                guard let projectID = assignment.destination.logicalProjectID else { isGlobal = true; continue }
+                guard let projectID = assignment.destination.logicalProjectID else {
+                    isGlobal = true
+                    continue
+                }
                 guard known.contains(projectID), seen.insert(projectID).inserted else { continue }
                 byProject[projectID, default: []].append(row.artifactID)
             }
@@ -199,11 +207,15 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
         contributions.map {
             let scope: WorkspaceLibraryDeviceScope
             switch $0.destination.deviceIDs {
-            case nil: scope = .allEnrolledDevices
+            case nil:
+                scope =
+                    $0.destination.excludedDeviceIDs?.contains(deviceID) == true
+                    ? .otherDevices : .allEnrolledDevices
             case []: scope = .noDevices
             case let ids?:
                 let containsCurrent = ids.contains(deviceID)
-                scope = containsCurrent
+                scope =
+                    containsCurrent
                     ? (ids.count == 1 ? .thisDevice : .thisAndOtherDevices)
                     : .otherDevices
             }
@@ -267,26 +279,28 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
 
     private static func observedDescriptions(_ inventory: DeviceInventoryState?) -> [ArtifactID: String] {
         guard let inventory else { return [:] }
-        return Dictionary(uniqueKeysWithValues: inventory.records.map { record in
-            let description: String
-            switch record.captured {
-            case .skill(let skill): description = skill.summary
-            case .mcpServer(let server): description = server.summary
-            case .plugin(let plugin): description = plugin.summary
-            }
-            return (record.artifactID, description)
-        })
+        return Dictionary(
+            uniqueKeysWithValues: inventory.records.map { record in
+                let description: String
+                switch record.captured {
+                case .skill(let skill): description = skill.summary
+                case .mcpServer(let server): description = server.summary
+                case .plugin(let plugin): description = plugin.summary
+                }
+                return (record.artifactID, description)
+            })
     }
 
     private static func searchText(for row: WorkspaceLibraryReadModelRow) -> String {
-        let values = [
-            row.displayName, row.kind.rawValue, row.ownership.rawValue, row.parentPluginLabel ?? "", row.sourceLabel ?? "",
-            row.observedDescription ?? ""
-        ]
-        + row.nativeRoutes.map(\.externalPluginID)
-        + row.includedChildren.map {
-            $0.displayName + " " + $0.kind.rawValue + " " + $0.nativeRoutes.map(\.externalPluginID).joined(separator: " ")
-        }
+        let values =
+            [
+                row.displayName, row.kind.rawValue, row.ownership.rawValue, row.parentPluginLabel ?? "", row.sourceLabel ?? "",
+                row.observedDescription ?? "",
+            ]
+            + row.nativeRoutes.map(\.externalPluginID)
+            + row.includedChildren.map {
+                $0.displayName + " " + $0.kind.rawValue + " " + $0.nativeRoutes.map(\.externalPluginID).joined(separator: " ")
+            }
         return normalized(values.joined(separator: " "))
     }
 
@@ -399,6 +413,10 @@ public struct WorkspaceLibraryIncludedItem: Sendable, Equatable, Identifiable {
     public let nativeRoutes: [WorkspaceLibraryNativeRoute]
     /// Present only for a connection this workspace holds a definition for.
     public let connection: WorkspaceLibraryMCPConnection?
+    /// The content-store digest of this item's captured tree, when the library
+    /// pins one. It is the key the insights scan uses to read the real SKILL.md
+    /// for a library-authored skill; nil means nothing was captured to read.
+    public let contentDigest: ContentDigest?
 
     public init(
         artifactID: ArtifactID,
@@ -410,7 +428,8 @@ public struct WorkspaceLibraryIncludedItem: Sendable, Equatable, Identifiable {
         observedDescription: String?,
         requestedAssignments: [WorkspaceLibraryRequestedAssignment],
         nativeRoutes: [WorkspaceLibraryNativeRoute],
-        connection: WorkspaceLibraryMCPConnection? = nil
+        connection: WorkspaceLibraryMCPConnection? = nil,
+        contentDigest: ContentDigest? = nil
     ) {
         self.artifactID = artifactID
         self.displayName = displayName
@@ -422,6 +441,7 @@ public struct WorkspaceLibraryIncludedItem: Sendable, Equatable, Identifiable {
         self.requestedAssignments = requestedAssignments
         self.nativeRoutes = nativeRoutes
         self.connection = connection
+        self.contentDigest = contentDigest
     }
 }
 
@@ -448,6 +468,10 @@ public struct WorkspaceLibraryReadModelRow: Sendable, Equatable, Identifiable {
     public let nativeRoutes: [WorkspaceLibraryNativeRoute]
     /// Present only for a connection this workspace holds a definition for.
     public let connection: WorkspaceLibraryMCPConnection?
+    /// The content-store digest of this row's captured tree, when the library
+    /// pins one. It is the key the insights scan uses to read the real SKILL.md
+    /// for a library-authored skill; nil means nothing was captured to read.
+    public let contentDigest: ContentDigest?
 
     public init(
         artifactID: ArtifactID,
@@ -464,7 +488,8 @@ public struct WorkspaceLibraryReadModelRow: Sendable, Equatable, Identifiable {
         assignmentExplanation: String?,
         assignableReasons: [WorkspaceLibraryAssignableReason],
         nativeRoutes: [WorkspaceLibraryNativeRoute],
-        connection: WorkspaceLibraryMCPConnection? = nil
+        connection: WorkspaceLibraryMCPConnection? = nil,
+        contentDigest: ContentDigest? = nil
     ) {
         self.artifactID = artifactID
         self.displayName = displayName
@@ -481,6 +506,7 @@ public struct WorkspaceLibraryReadModelRow: Sendable, Equatable, Identifiable {
         self.assignableReasons = assignableReasons
         self.nativeRoutes = nativeRoutes
         self.connection = connection
+        self.contentDigest = contentDigest
     }
 }
 

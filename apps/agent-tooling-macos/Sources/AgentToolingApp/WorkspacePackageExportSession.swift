@@ -38,7 +38,8 @@ final class WorkspacePackageExportSession {
         self.artifactID = artifactID
         defer { isBusy = false }
         guard let state = library.state,
-              let artifact = state.snapshot.document.artifacts.first(where: { $0.identity.id == artifactID }) else {
+            let artifact = state.snapshot.document.artifacts.first(where: { $0.identity.id == artifactID })
+        else {
             errorMessage = "That item is no longer in this workspace."
             return
         }
@@ -102,7 +103,7 @@ final class WorkspacePackageExportSession {
         for artifact: ArtifactRecord, in document: PortableWorkspaceDocument
     ) -> [String] {
         guard artifact.identity.kind == .mcpServer,
-              let definition = document.mcpDefinitions?.first(where: { $0.artifactID == artifact.identity.id })
+            let definition = document.mcpDefinitions?.first(where: { $0.artifactID == artifact.identity.id })
         else { return [] }
         return [definition.connection.transport.rawValue]
     }

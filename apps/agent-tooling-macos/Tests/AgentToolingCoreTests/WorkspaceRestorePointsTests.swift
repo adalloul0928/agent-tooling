@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -56,13 +57,17 @@ struct WorkspaceRestorePointsTests {
         defer { fixture.remove() }
         let before = try fixture.commit {
             $0.artifacts = [Fixture.artifact(Self.alpha, "Alpha"), Fixture.artifact(Self.beta, "Beta")]
-            $0.assignments = [.init(artifactID: Self.alpha, destination: Fixture.codex, reason: .manual),
-                              .init(artifactID: Self.beta, destination: Fixture.codex, reason: .manual)]
+            $0.assignments = [
+                .init(artifactID: Self.alpha, destination: Fixture.codex, reason: .manual),
+                .init(artifactID: Self.beta, destination: Fixture.codex, reason: .manual),
+            ]
         }
         // Alpha is dropped, Beta is renamed, and something new arrives.
         _ = try fixture.commit {
-            $0.artifacts = [Fixture.artifact(Self.beta, "Beta, renamed"),
-                            Fixture.artifact(Self.gamma, "Gamma")]
+            $0.artifacts = [
+                Fixture.artifact(Self.beta, "Beta, renamed"),
+                Fixture.artifact(Self.gamma, "Gamma"),
+            ]
             $0.assignments = [.init(artifactID: Self.beta, destination: Fixture.codex, reason: .manual)]
         }
 
@@ -94,7 +99,10 @@ struct WorkspaceRestorePointsTests {
             $0.artifacts = [Fixture.artifact(Self.alpha, "Alpha")]
             $0.assignments = [.init(artifactID: Self.alpha, destination: Fixture.codex, reason: .manual)]
         }
-        let regretted = try fixture.commit { $0.artifacts = []; $0.assignments = [] }
+        let regretted = try fixture.commit {
+            $0.artifacts = []
+            $0.assignments = []
+        }
 
         let receipt = try WorkspaceRestorePoints.restore(
             before, in: fixture.store, expectedRevisionID: regretted, writerID: fixture.writerID)
@@ -130,8 +138,9 @@ struct WorkspaceRestorePointsTests {
         #expect(preview.deletedSinceItems == ["Alpha"])
         #expect(preview.restoredItems.isEmpty)
 
-        _ = try WorkspaceRestorePoints.restore(before, in: fixture.store,
-                                               expectedRevisionID: deletion, writerID: fixture.writerID)
+        _ = try WorkspaceRestorePoints.restore(
+            before, in: fixture.store,
+            expectedRevisionID: deletion, writerID: fixture.writerID)
 
         let document = try #require(try fixture.store.snapshot()).document
         #expect(document.artifacts.map(\.identity.id) == [Self.beta])
@@ -176,8 +185,9 @@ struct WorkspaceRestorePointsTests {
             _ = try WorkspaceRestorePoints.restore(
                 before, in: fixture.store, expectedRevisionID: seen, writerID: fixture.writerID)
         }
-        #expect(try #require(try fixture.store.snapshot()).document
-            .artifacts.map(\.identity.id) == [Self.gamma])
+        #expect(
+            try #require(try fixture.store.snapshot()).document
+                .artifacts.map(\.identity.id) == [Self.gamma])
     }
 
     @Test func aPointThisWorkspaceNeverHadIsNotAPlaceItCanGo() throws {
@@ -187,9 +197,10 @@ struct WorkspaceRestorePointsTests {
 
         #expect(try WorkspaceRestorePoints.preview(restoring: stranger, in: fixture.store) == nil)
         #expect(throws: WorkspaceRevisionStoreError.missingArtifact) {
-            _ = try WorkspaceRestorePoints.restore(stranger, in: fixture.store,
-                                                   expectedRevisionID: fixture.head(),
-                                                   writerID: fixture.writerID)
+            _ = try WorkspaceRestorePoints.restore(
+                stranger, in: fixture.store,
+                expectedRevisionID: fixture.head(),
+                writerID: fixture.writerID)
         }
     }
 
@@ -205,13 +216,14 @@ struct WorkspaceRestorePointsTests {
         // inputs must differ, or the second would silently replay the first's
         // result instead of being refused as a reused key.
         let key = WorkspaceObjectID()
-        #expect(WorkspaceRestorePoints.inputDigest(first, second, key)
-            != WorkspaceRestorePoints.inputDigest(second, second, key))
+        #expect(
+            WorkspaceRestorePoints.inputDigest(first, second, key)
+                != WorkspaceRestorePoints.inputDigest(second, second, key))
     }
 
-    private static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
-    private static let beta = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
-    private static let gamma = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000c3")!)
+    private static let alpha = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
+    private static let beta = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2"))
+    private static let gamma = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000c3"))
 
     private struct Fixture {
         static let codex = PortableDestination(surface: .codexCLI, scope: .user)
@@ -220,14 +232,13 @@ struct WorkspaceRestorePointsTests {
         let writerID = WorkspaceObjectID()
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "restore-points-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+            root = try TemporaryFolder("restore-points").url
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
-            store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "store"),
+            store = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "store"),
                 workspaceID: document.workspaceID, deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
         }

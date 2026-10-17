@@ -28,7 +28,8 @@ struct WorkspaceUpstreamSkillCommandTests {
         #expect(first.device == fixture.device)
 
         let next = try prepared(body: "Updated by publisher", revision: "b")
-        let update = StandaloneSkillUpdateCommand(expectedRevisionID: receipt.committedRevisionID,
+        let update = StandaloneSkillUpdateCommand(
+            expectedRevisionID: receipt.committedRevisionID,
             artifactID: command.artifactID, expectedContentDigest: original.tree.digest, prepared: next)
         let result = try await fixture.service.updateStandaloneSkill(update, prepared: next)
         let after = try #require(try fixture.store.snapshot())
@@ -38,10 +39,16 @@ struct WorkspaceUpstreamSkillCommandTests {
         #expect(after.document.subscriptions[0].id == ids.subscriptionID)
         #expect(after.document.subscriptions[0].lock.approvedContent == next.tree.digest)
         #expect(after.document.subscriptions[0].lock.approvedRevision.value == String(repeating: "b", count: 40))
-        #expect(try await fixture.service.skillContent(artifactID: command.artifactID,
-            revisionID: receipt.committedRevisionID).tree == original.tree)
-        #expect(try await fixture.service.skillContent(artifactID: command.artifactID,
-            revisionID: result.committedRevisionID).tree == next.tree)
+        #expect(
+            try await fixture.service.skillContent(
+                artifactID: command.artifactID,
+                revisionID: receipt.committedRevisionID
+            ).tree == original.tree)
+        #expect(
+            try await fixture.service.skillContent(
+                artifactID: command.artifactID,
+                revisionID: result.committedRevisionID
+            ).tree == next.tree)
         #expect(try await fixture.service.updateStandaloneSkill(update, prepared: next) == result)
 
         let serialized = String(decoding: try WorkspaceDocumentCoding.encode(after.document), as: UTF8.self)
@@ -58,7 +65,8 @@ struct WorkspaceUpstreamSkillCommandTests {
         let saved = try await fixture.service.intakeStandaloneSkill(firstCommand, prepared: first)
         let second = try prepared(path: "skills/another", body: "Another skill")
         let secondIDs = StandaloneSkillUpstreamIDs(sourceID: firstIDs.sourceID)
-        let secondCommand = StandaloneSkillIntakeCommand(expectedRevisionID: saved.committedRevisionID,
+        let secondCommand = StandaloneSkillIntakeCommand(
+            expectedRevisionID: saved.committedRevisionID,
             displayName: "Another", prepared: second, upstreamIDs: secondIDs)
         let result = try await fixture.service.intakeStandaloneSkill(secondCommand, prepared: second)
         let document = try #require(try fixture.store.snapshot()?.document)
@@ -67,12 +75,14 @@ struct WorkspaceUpstreamSkillCommandTests {
         #expect(document.subscriptions.count == 2)
         #expect(document.subscriptions.first(where: { $0.id == firstIDs.subscriptionID })?.lock.approvedContent == first.tree.digest)
 
-        let duplicate = StandaloneSkillIntakeCommand(expectedRevisionID: result.committedRevisionID,
+        let duplicate = StandaloneSkillIntakeCommand(
+            expectedRevisionID: result.committedRevisionID,
             displayName: "Duplicate", prepared: second, upstreamIDs: .init(sourceID: firstIDs.sourceID))
         await #expect(throws: WorkspaceSkillCommandError.upstreamAlreadyManaged) {
             try await fixture.service.intakeStandaloneSkill(duplicate, prepared: second)
         }
-        let differentID = StandaloneSkillIntakeCommand(expectedRevisionID: result.committedRevisionID,
+        let differentID = StandaloneSkillIntakeCommand(
+            expectedRevisionID: result.committedRevisionID,
             displayName: "Duplicate source", prepared: second, upstreamIDs: .init())
         await #expect(throws: WorkspaceSkillCommandError.sourceIdentityConflict) {
             try await fixture.service.intakeStandaloneSkill(differentID, prepared: second)
@@ -87,7 +97,8 @@ struct WorkspaceUpstreamSkillCommandTests {
         let intake = fixture.intake(original, ids: .init())
         let receipt = try await fixture.service.intakeStandaloneSkill(intake, prepared: original)
         let personal = try WorkspaceSkillPreparation.personal(tree: original.tree)
-        let personalUpdate = StandaloneSkillUpdateCommand(expectedRevisionID: receipt.committedRevisionID,
+        let personalUpdate = StandaloneSkillUpdateCommand(
+            expectedRevisionID: receipt.committedRevisionID,
             artifactID: intake.artifactID, expectedContentDigest: original.tree.digest, prepared: personal)
         await #expect(throws: WorkspaceSkillCommandError.unsupportedAuthority) {
             try await fixture.service.updateStandaloneSkill(personalUpdate, prepared: personal)
@@ -99,7 +110,8 @@ struct WorkspaceUpstreamSkillCommandTests {
             try prepared(publisher: "github:another"),
         ]
         for change in changes {
-            let update = StandaloneSkillUpdateCommand(expectedRevisionID: receipt.committedRevisionID,
+            let update = StandaloneSkillUpdateCommand(
+                expectedRevisionID: receipt.committedRevisionID,
                 artifactID: intake.artifactID, expectedContentDigest: original.tree.digest, prepared: change)
             await #expect(throws: WorkspaceSkillCommandError.upstreamBindingChanged) {
                 try await fixture.service.updateStandaloneSkill(update, prepared: change)
@@ -152,7 +164,8 @@ struct WorkspaceUpstreamSkillCommandTests {
         let saved = try await fixture.service.intakeStandaloneSkill(intake, prepared: first)
         let second = try prepared(revision: "c")
         #expect(first.tree.digest == second.tree.digest)
-        let update = StandaloneSkillUpdateCommand(expectedRevisionID: saved.committedRevisionID,
+        let update = StandaloneSkillUpdateCommand(
+            expectedRevisionID: saved.committedRevisionID,
             artifactID: intake.artifactID, expectedContentDigest: first.tree.digest, prepared: second)
         _ = try await fixture.service.updateStandaloneSkill(update, prepared: second)
         #expect(try fixture.store.snapshot()?.document.subscriptions[0].lock.approvedRevision == second.review.upstream?.revision)
@@ -182,20 +195,27 @@ struct WorkspaceUpstreamSkillCommandTests {
         revision: Character = "a", publisher: String = "github:publisher"
     ) throws -> PreparedStandaloneSkill {
         let tree = try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .file(bytes: Data("""
-                ---
-                name: publisher-skill
-                description: A useful published skill
-                vendor-extension: preserved
-                ---
-                \(body)
-                """.utf8), executable: false)),
+            .init(
+                relativePath: "SKILL.md",
+                kind: .file(
+                    bytes: Data(
+                        """
+                        ---
+                        name: publisher-skill
+                        description: A useful published skill
+                        vendor-extension: preserved
+                        ---
+                        \(body)
+                        """.utf8), executable: false)),
             .init(relativePath: "resources", kind: .directory),
             .init(relativePath: "resources/data.bin", kind: .file(bytes: Data([0, 255, 42]), executable: false)),
         ])
-        return try PreparedStandaloneSkill(tree: tree, upstream: .init(repositoryURL: repository,
-            requestedRef: ref, revision: .init(kind: .gitCommitSHA1, value: String(repeating: revision, count: 40)),
-            packageRelativePath: path, publisherID: publisher))
+        return try PreparedStandaloneSkill(
+            tree: tree,
+            upstream: .init(
+                repositoryURL: repository,
+                requestedRef: ref, revision: .init(kind: .gitCommitSHA1, value: String(repeating: revision, count: 40)),
+                packageRelativePath: path, publisherID: publisher))
     }
 
     private struct Fixture {
@@ -209,7 +229,8 @@ struct WorkspaceUpstreamSkillCommandTests {
         init() throws {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appending(path: "upstream-command-\(UUID())")
             contentRoot = root.appending(path: "content")
-            try FileManager.default.createDirectory(at: contentRoot, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try FileManager.default.createDirectory(
+                at: contentRoot, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             let writerID = WorkspaceObjectID()
             document = try WorkspaceDocumentCoding.seal(.init(revision: .init(writerID: writerID)))
             device = .init(workspaceID: document.workspaceID)

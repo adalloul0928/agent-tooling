@@ -56,15 +56,17 @@ public enum WorkspaceProjectDeclarationReconciliation {
         let locked = Dictionary(
             (lock?.entries ?? []).map { (Key(name: $0.name, kind: $0.kind), $0) },
             uniquingKeysWith: { first, _ in first })
-        let subscriptions = Dictionary(document.subscriptions.map { ($0.artifactID, $0) },
-                                       uniquingKeysWith: { first, _ in first })
+        let subscriptions = Dictionary(
+            document.subscriptions.map { ($0.artifactID, $0) },
+            uniquingKeysWith: { first, _ in first })
         // Matched on the name the item goes by and its kind, which is what the
         // declaration records. Workspace identifiers are per-workspace and mean
         // nothing in a file another Mac reads.
         var held: [Key: ArtifactRecord] = [:]
         for artifact in document.artifacts where artifact.identity.parentPackageID == nil {
-            let key = Key(name: artifact.declaredName ?? artifact.identity.displayName,
-                          kind: artifact.identity.kind)
+            let key = Key(
+                name: artifact.declaredName ?? artifact.identity.displayName,
+                kind: artifact.identity.kind)
             if held[key] == nil { held[key] = artifact }
         }
 
@@ -72,8 +74,9 @@ public enum WorkspaceProjectDeclarationReconciliation {
             let key = Key(name: entry.name, kind: entry.kind)
             let pinned = locked[key]?.revision.value
             guard let artifact = held[key] else {
-                return .init(name: entry.name, kind: entry.kind, state: .missing,
-                             artifactID: nil, lockedRevision: pinned, heldRevision: nil)
+                return .init(
+                    name: entry.name, kind: entry.kind, state: .missing,
+                    artifactID: nil, lockedRevision: pinned, heldRevision: nil)
             }
             let mine = subscriptions[artifact.identity.id]?.lock.approvedRevision.value
             let state: State
@@ -82,9 +85,10 @@ public enum WorkspaceProjectDeclarationReconciliation {
             } else {
                 state = .heldUnpinned
             }
-            return .init(name: entry.name, kind: entry.kind, state: state,
-                         artifactID: artifact.identity.id, lockedRevision: pinned,
-                         heldRevision: mine)
+            return .init(
+                name: entry.name, kind: entry.kind, state: state,
+                artifactID: artifact.identity.id, lockedRevision: pinned,
+                heldRevision: mine)
         }
         return .init(items: items)
     }

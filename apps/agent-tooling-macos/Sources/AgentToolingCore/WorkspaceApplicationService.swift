@@ -53,8 +53,10 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
     /// separate native plan; a metadata receipt cannot report those postconditions.
     public func applyAssignmentBatch(_ command: WorkspaceAssignmentBatchCommand) throws -> WorkspaceCommandReceipt {
         try Task.checkCancellation()
-        return try store.commitMetadata(expectedRevisionID: command.expectedRevisionID,
-            idempotencyKey: command.idempotencyKey, inputDigest: command.inputDigest(), writerID: writerID) { document in
+        return try store.commitMetadata(
+            expectedRevisionID: command.expectedRevisionID,
+            idempotencyKey: command.idempotencyKey, inputDigest: command.inputDigest(), writerID: writerID
+        ) { document in
             try command.apply(to: &document)
         }
     }
@@ -65,7 +67,8 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
     public func skillContent(artifactID: ArtifactID, revisionID: WorkspaceObjectID) async throws -> WorkspaceSkillContentSnapshot {
         guard let contentStore else { throw WorkspaceSkillCommandError.contentStoreUnavailable }
         guard let document = try store.revision(revisionID),
-              let artifact = document.artifacts.first(where: { $0.identity.id == artifactID }) else {
+            let artifact = document.artifacts.first(where: { $0.identity.id == artifactID })
+        else {
             throw WorkspaceRevisionStoreError.missingArtifact
         }
         try requireCentralStandaloneSkill(artifact)
@@ -86,7 +89,9 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
         if let replay = try store.preflightMetadata(
             expectedRevisionID: command.expectedRevisionID, idempotencyKey: command.idempotencyKey, inputDigest: digest,
             mutation: { try command.apply(to: &$0, declaredName: prepared.frontmatter.name) }
-        ) { return replay }
+        ) {
+            return replay
+        }
         try await publishReviewedSkill(prepared)
         return try store.commitMetadata(
             expectedRevisionID: command.expectedRevisionID, idempotencyKey: command.idempotencyKey,
@@ -110,7 +115,9 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
         if let replay = try store.preflightMetadata(
             expectedRevisionID: command.expectedRevisionID, idempotencyKey: command.idempotencyKey, inputDigest: digest,
             mutation: { try command.apply(to: &$0, declaredName: prepared.frontmatter.name) }
-        ) { return replay }
+        ) {
+            return replay
+        }
         guard let contentStore else { throw WorkspaceSkillCommandError.contentStoreUnavailable }
         // Preserve a usable prior revision for review/restore. Do not silently
         // repair a damaged old object while accepting an unrelated new version.
@@ -125,7 +132,7 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
         }
     }
 
-    private func publishReviewedSkill(_ prepared: PreparedStandaloneSkill) async throws {
+    func publishReviewedSkill(_ prepared: PreparedStandaloneSkill) async throws {
         guard let contentStore else { throw WorkspaceSkillCommandError.contentStoreUnavailable }
         let stored = try await contentStore.store(prepared.tree)
         guard stored.digest == prepared.review.contentDigest else { throw WorkspaceSkillCommandError.reviewMismatch }
@@ -147,7 +154,8 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
         targets: [ResolvedAssignmentTarget],
         observations: [WorkspaceDeploymentObservation] = [],
         provenInstalls: Set<WorkspaceDeploymentInstallKey> = [],
-        nativeInstallRoutes: Set<NativePackageRoute> = []
+        nativeInstallRoutes: Set<NativePackageRoute> = [],
+        unavailableDestinations: [ResolvedAssignmentSelector: String] = [:]
     ) async throws -> WorkspaceDeploymentPlan {
         guard let snapshot = try store.snapshot() else {
             throw WorkspaceRevisionStoreError.notInitialized
@@ -164,7 +172,8 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
         return WorkspaceDeploymentPlanner.plan(
             document: snapshot.document, device: snapshot.device, targets: targets,
             availableContent: available, observations: observations,
-            provenInstalls: provenInstalls, nativeInstallRoutes: nativeInstallRoutes)
+            provenInstalls: provenInstalls, nativeInstallRoutes: nativeInstallRoutes,
+            unavailableDestinations: unavailableDestinations)
     }
 
     /// Registers a folder this person already authors in. The folder is not
@@ -195,7 +204,8 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
             mutation: { document in
                 let result = try command.apply(to: &document)
                 // Only unbind the folder when the document no longer names it.
-                removedSourceID = document.sources.contains(where: { $0.id == result.sourceID })
+                removedSourceID =
+                    document.sources.contains(where: { $0.id == result.sourceID })
                     ? nil : result.sourceID
                 return result.affected
             })
@@ -245,6 +255,73 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
             mutation: { _ in [] })
     }
 
+    /// Creates a logical project: one artifact and its project record, in one
+    /// transaction. A project made by hand is where assignments point before
+    /// any tool exists in it, so nothing else is written — no assignment, no
+    /// root binding, no scan.
+    public func createProject(_ command: CreateProjectCommand) throws -> WorkspaceCommandReceipt {
+        let digest = try command.inputDigest()
+        return try store.commitMetadata(
+            expectedRevisionID: command.expectedRevisionID,
+            idempotencyKey: command.idempotencyKey,
+            inputDigest: digest,
+            writerID: writerID
+        ) { document in
+            let name = command.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            try WorkspaceDomainValidation.requireText(name, field: "project.name", maximum: 512)
+            guard
+                !document.logicalProjects.contains(where: {
+                    $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+                })
+            else { throw WorkspaceDomainValidationError.duplicate("project name") }
+            let hints = try Self.normalizedRepositoryHints(command.repositoryHints)
+            let projectID = ArtifactID()
+            document.artifacts.append(
+                .init(
+                    identity: .init(id: projectID, kind: .logicalProject, displayName: name),
+                    authority: .centralPersonal))
+            document.logicalProjects.append(.init(id: projectID, name: name, repositoryHints: hints))
+            return [projectID]
+        }
+    }
+
+    /// Records that a project is a checkout of one more repository. The hint
+    /// is normalised the way every hint is, so two spellings of one remote
+    /// never become two hints; a hint the project already carries is a no-op.
+    public func addProjectRepositoryHint(_ command: AddProjectRepositoryHintCommand) throws -> WorkspaceCommandReceipt {
+        let digest = try command.inputDigest()
+        return try store.commitMetadata(
+            expectedRevisionID: command.expectedRevisionID,
+            idempotencyKey: command.idempotencyKey,
+            inputDigest: digest,
+            writerID: writerID
+        ) { document in
+            guard let index = document.logicalProjects.firstIndex(where: { $0.id == command.projectID }) else {
+                throw WorkspaceRevisionStoreError.missingArtifact
+            }
+            guard let hint = RepositoryIdentity.hint(fromRemote: command.repository) else {
+                throw WorkspaceDomainValidationError.invalidField("repository hint")
+            }
+            if !document.logicalProjects[index].repositoryHints.contains(where: { RepositoryIdentity.matches($0, hint) }) {
+                document.logicalProjects[index].repositoryHints.append(hint)
+            }
+            return [command.projectID]
+        }
+    }
+
+    /// Hints as the document stores them: normalised, unique, sorted; anything
+    /// that is not a repository is refused rather than silently dropped.
+    static func normalizedRepositoryHints(_ raw: [String]) throws -> [String] {
+        var hints: [String] = []
+        for value in raw {
+            guard let hint = RepositoryIdentity.hint(fromRemote: value) else {
+                throw WorkspaceDomainValidationError.invalidField("repository hint")
+            }
+            if !hints.contains(where: { RepositoryIdentity.matches($0, hint) }) { hints.append(hint) }
+        }
+        return hints.sorted()
+    }
+
     public func renameArtifact(_ command: RenameArtifactCommand) throws -> WorkspaceCommandReceipt {
         let digest = try command.inputDigest()
         return try store.commitMetadata(
@@ -271,6 +348,60 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
     }
 }
 
+public struct CreateProjectCommand: Codable, Sendable, Equatable {
+    public let expectedRevisionID: WorkspaceObjectID
+    public let idempotencyKey: WorkspaceObjectID
+    public let name: String
+    /// The repositories this project is a checkout of, as `RepositoryIdentity`
+    /// spells them. They travel with the project, so another Mac that finds a
+    /// checkout of the same repository can recognise it as this project.
+    public var repositoryHints: [String] = []
+
+    public init(
+        expectedRevisionID: WorkspaceObjectID, idempotencyKey: WorkspaceObjectID = WorkspaceObjectID(),
+        name: String, repositoryHints: [String] = []
+    ) {
+        self.expectedRevisionID = expectedRevisionID
+        self.idempotencyKey = idempotencyKey
+        self.name = name
+        self.repositoryHints = repositoryHints
+    }
+
+    func inputDigest() throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        var bytes = Data("agent-tooling.create-project.v1\n".utf8)
+        bytes.append(try encoder.encode(self))
+        return SHA256.hash(data: bytes).lowercaseHex
+    }
+}
+
+public struct AddProjectRepositoryHintCommand: Codable, Sendable, Equatable {
+    public let expectedRevisionID: WorkspaceObjectID
+    public let idempotencyKey: WorkspaceObjectID
+    public let projectID: ArtifactID
+    /// A remote as Git spells it, or a hint; normalised on apply.
+    public let repository: String
+
+    public init(
+        expectedRevisionID: WorkspaceObjectID, idempotencyKey: WorkspaceObjectID = WorkspaceObjectID(),
+        projectID: ArtifactID, repository: String
+    ) {
+        self.expectedRevisionID = expectedRevisionID
+        self.idempotencyKey = idempotencyKey
+        self.projectID = projectID
+        self.repository = repository
+    }
+
+    func inputDigest() throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        var bytes = Data("agent-tooling.add-project-repository-hint.v1\n".utf8)
+        bytes.append(try encoder.encode(self))
+        return SHA256.hash(data: bytes).lowercaseHex
+    }
+}
+
 public struct RenameArtifactCommand: Codable, Sendable, Equatable {
     public let expectedRevisionID: WorkspaceObjectID
     public let idempotencyKey: WorkspaceObjectID
@@ -294,7 +425,7 @@ public struct RenameArtifactCommand: Codable, Sendable, Equatable {
         // payload from accidentally sharing an idempotency identity.
         var bytes = Data("agent-tooling.rename-artifact.v1\n".utf8)
         bytes.append(try encoder.encode(self))
-        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: bytes).lowercaseHex
     }
 }
 

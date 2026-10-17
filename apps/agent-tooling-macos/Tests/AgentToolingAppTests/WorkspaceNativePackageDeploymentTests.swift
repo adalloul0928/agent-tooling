@@ -1,9 +1,10 @@
+import AgentToolingTestSupport
 import Darwin
 import Foundation
 import Testing
 
-@testable import AgentToolingCore
 @testable import AgentToolingApp
+@testable import AgentToolingCore
 
 /// A native package reaches the Install surface when this build has a recorded
 /// command for that client, and is excluded by name when it does not.
@@ -17,8 +18,9 @@ struct WorkspaceNativePackageDeploymentTests {
         await session.prepare()
 
         let plan = try #require(session.plan)
-        #expect(plan.exclusions.filter { $0.reason == .missingNativeRoute }.isEmpty,
-                "\(plan.exclusions)")
+        #expect(
+            plan.exclusions.filter { $0.reason == .missingNativeRoute }.isEmpty,
+            "\(plan.exclusions)")
         guard case .installNativePackage(let route) = try #require(plan.items.first).action else {
             Issue.record("Expected a native package install, got \(String(describing: plan.items.first?.action))")
             return
@@ -79,7 +81,7 @@ struct WorkspaceNativePackageDeploymentTests {
     }
 
     @MainActor private struct Fixture {
-        static let pluginID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
+        static let pluginID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
         let root: URL
         let home: URL
         let store: WorkspaceRevisionStore
@@ -91,7 +93,8 @@ struct WorkspaceNativePackageDeploymentTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
                 .appending(path: "native-package-\(UUID())")
             home = root.appending(path: "home")
-            try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(
+                at: home, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
             if installClientTool {
                 let bin = home.appending(path: ".local/bin")
@@ -99,48 +102,61 @@ struct WorkspaceNativePackageDeploymentTests {
                 for name in ["codex", "gemini"] {
                     let tool = bin.appending(path: name)
                     try Data("#!/bin/sh\n".utf8).write(to: tool)
-                    try FileManager.default.setAttributes([.posixPermissions: 0o755],
-                                                          ofItemAtPath: tool.path)
+                    try FileManager.default.setAttributes(
+                        [.posixPermissions: 0o755],
+                        ofItemAtPath: tool.path)
                 }
             }
 
             let surface: TargetSurface = client == .codex ? .codexCLI : .geminiCLI
             let writerID = WorkspaceObjectID()
             let route = NativePackageRoute(client: client, externalPluginID: "browser")
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID),
-                artifacts: [.init(
-                    identity: .init(id: Self.pluginID, kind: .nativePlugin, displayName: "Browser"),
-                    authority: .nativeOwned, declaredName: "browser", nativeRoutes: [route])],
-                assignments: [.init(artifactID: Self.pluginID,
-                                    destination: .init(surface: surface, scope: .user),
-                                    reason: .manual)]))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID),
+                    artifacts: [
+                        .init(
+                            identity: .init(id: Self.pluginID, kind: .nativePlugin, displayName: "Browser"),
+                            authority: .nativeOwned, declaredName: "browser", nativeRoutes: [route])
+                    ],
+                    assignments: [
+                        .init(
+                            artifactID: Self.pluginID,
+                            destination: .init(surface: surface, scope: .user),
+                            reason: .manual)
+                    ]))
             var device = DeviceWorkspaceState(workspaceID: document.workspaceID)
             device.capabilityEvidence = [
-                .init(surface: surface, installedClientVersion: "1.0.0", adapterContractVersion: 1,
-                      component: .plugin, scopes: [.user], support: .supported,
-                      observedAt: Date(timeIntervalSince1970: 1_700_000_000)),
+                .init(
+                    surface: surface, installedClientVersion: "1.0.0", adapterContractVersion: 1,
+                    component: .plugin, scopes: [.user], support: .supported,
+                    observedAt: Date(timeIntervalSince1970: 1_700_000_000))
             ]
             device.observations = [
-                .init(surface: surface, installed: true, commandAvailable: true, version: "1.0.0",
-                      capabilities: .init(supportsPluginInstall: true, supportsProjectScope: true,
-                                          supportsLocalMarketplace: false, supportsMCPAuthentication: false,
-                                          supportsConnectorDiscovery: false, requiresNewSession: true,
-                                          requiresRestart: false, supportsMachineReadableOutput: true),
-                      lastScannedAt: Date(timeIntervalSince1970: 1_700_000_000)),
+                .init(
+                    surface: surface, installed: true, commandAvailable: true, version: "1.0.0",
+                    capabilities: .init(
+                        supportsPluginInstall: true, supportsProjectScope: true,
+                        supportsLocalMarketplace: false, supportsMCPAuthentication: false,
+                        supportsConnectorDiscovery: false, requiresNewSession: true,
+                        requiresRestart: false, supportsMachineReadableOutput: true),
+                    lastScannedAt: Date(timeIntervalSince1970: 1_700_000_000))
             ]
-            store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "store"),
+            store = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "store"),
                 workspaceID: document.workspaceID, deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
             service = WorkspaceApplicationService(store: store, writerID: writerID)
-            library = WorkspaceLibrarySession(service: service, workspaceID: document.workspaceID,
-                                              deviceID: device.deviceID, access: .writable)
+            library = WorkspaceLibrarySession(
+                service: service, workspaceID: document.workspaceID,
+                deviceID: device.deviceID, access: .writable)
         }
 
         func session() async -> WorkspaceDeploymentSession {
             await library.refresh()
-            return WorkspaceDeploymentSession(service: service, library: library, store: store,
-                                              homeRoot: home, contentStore: nil)
+            return WorkspaceDeploymentSession(
+                service: service, library: library, store: store,
+                homeRoot: home, contentStore: nil)
         }
 
         func remove() {

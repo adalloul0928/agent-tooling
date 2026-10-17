@@ -34,11 +34,13 @@ struct WorkspaceSyncEnrollmentTests {
         // Written before the field existed: connecting already meant this, so
         // that is what it keeps meaning rather than becoming a refusal to read.
         let file = fixture.root.appending(path: "sync-enrollment.json")
-        try Data("""
+        try Data(
+            """
             {"formatVersion":1,"workspaceID":"\(fixture.workspaceID.rawValue.uuidString.lowercased())",\
             "remote":"https://github.com/you/workspace.git",\
             "checkoutPath":"\(fixture.checkout.path)","branch":"main"}
-            """.replacingOccurrences(of: "\\\n", with: "").utf8).write(to: file)
+            """.replacingOccurrences(of: "\\\n", with: "").utf8
+        ).write(to: file)
 
         let reopened = try #require(try WorkspaceSyncEnrollmentStore(containerRoot: fixture.root).read())
         #expect(reopened.isAutomatic)
@@ -55,26 +57,31 @@ struct WorkspaceSyncEnrollmentTests {
         try fixture.store.write(off)
 
         #expect(!off.isAutomatic)
-        #expect(off.remote == record.remote && off.checkoutPath == record.checkoutPath
-            && off.branch == record.branch && off.workspaceID == record.workspaceID)
+        #expect(
+            off.remote == record.remote && off.checkoutPath == record.checkoutPath
+                && off.branch == record.branch && off.workspaceID == record.workspaceID)
         #expect(try WorkspaceSyncEnrollmentStore(containerRoot: fixture.root).read() == off)
     }
 
     @Test func aRemoteCarryingCredentialsOrAnUnsafePathIsRefused() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        for remote in ["https://token:secret@github.com/you/workspace.git",
-                       "--upload-pack=/bin/sh", "ftp://example.com/x.git"] {
+        for remote in [
+            "https://token:secret@github.com/you/workspace.git",
+            "--upload-pack=/bin/sh", "ftp://example.com/x.git",
+        ] {
             #expect(throws: WorkspaceSyncEnrollmentError.invalidRemote) {
-                _ = try WorkspaceSyncEnrollment(workspaceID: fixture.workspaceID, remote: remote,
-                                                checkoutPath: fixture.checkout.path)
+                _ = try WorkspaceSyncEnrollment(
+                    workspaceID: fixture.workspaceID, remote: remote,
+                    checkoutPath: fixture.checkout.path)
             }
         }
         for path in ["relative/path", "/tmp/with\u{0}null"] {
             #expect(throws: WorkspaceSyncEnrollmentError.invalidCheckout) {
-                _ = try WorkspaceSyncEnrollment(workspaceID: fixture.workspaceID,
-                                                remote: "https://github.com/you/workspace.git",
-                                                checkoutPath: path)
+                _ = try WorkspaceSyncEnrollment(
+                    workspaceID: fixture.workspaceID,
+                    remote: "https://github.com/you/workspace.git",
+                    checkoutPath: path)
             }
         }
     }
@@ -94,9 +101,11 @@ struct WorkspaceSyncEnrollmentTests {
     @Test func disconnectingClearsOnlyThisMacsRecord() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        try fixture.store.write(try .init(workspaceID: fixture.workspaceID,
-                                          remote: "https://github.com/you/workspace.git",
-                                          checkoutPath: fixture.checkout.path))
+        try fixture.store.write(
+            try .init(
+                workspaceID: fixture.workspaceID,
+                remote: "https://github.com/you/workspace.git",
+                checkoutPath: fixture.checkout.path))
 
         try fixture.store.remove()
 
@@ -117,7 +126,8 @@ struct WorkspaceSyncEnrollmentTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
                 .appending(path: "sync-enrollment-\(UUID())")
             checkout = root.appending(path: "checkout")
-            try FileManager.default.createDirectory(at: checkout, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(
+                at: checkout, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
             store = try WorkspaceSyncEnrollmentStore(containerRoot: root)
         }

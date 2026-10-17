@@ -27,17 +27,18 @@ public enum WorkspaceLibrary {
     public static let maximumNegativeTriggerLength = 4_096
 
     public static func normalizedIdentifier(_ rawValue: String) throws -> String {
-        let lowered = rawValue
+        let lowered =
+            rawValue
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
             .replacingOccurrences(of: " ", with: "-")
         let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-")
         guard !lowered.isEmpty,
-              lowered.count <= maximumIdentifierLength,
-              lowered.unicodeScalars.allSatisfy({ allowed.contains($0) }),
-              !lowered.hasPrefix("-"),
-              !lowered.hasSuffix("-"),
-              !lowered.contains("--")
+            lowered.count <= maximumIdentifierLength,
+            lowered.unicodeScalars.allSatisfy({ allowed.contains($0) }),
+            !lowered.hasPrefix("-"),
+            !lowered.hasSuffix("-"),
+            !lowered.contains("--")
         else {
             throw WorkspaceIdentifierError.invalidIdentifier(rawValue)
         }

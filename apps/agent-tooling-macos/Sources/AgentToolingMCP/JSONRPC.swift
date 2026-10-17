@@ -47,8 +47,6 @@ struct JSONRPCRequest: Sendable {
     var id: JSONRPCID?
     var method: String
     var params: JSONValue?
-
-    var isNotification: Bool { id == nil }
 }
 
 /// A message that could not be turned into a request, carrying whatever

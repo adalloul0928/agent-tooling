@@ -44,8 +44,9 @@ struct LinkedInstallSafetyTests {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }
         let plan = try fixture.plan(baseline: baseline)
-        let review = OperationPlanSafetyReviewer(authority: .init(), managedRoots: []).review(plan)
-        #expect(review.hasBlockedSteps)
+        let ownership = DestinationOwnershipInspector.ownership(
+            of: fixture.destination, managedRoots: [], authority: .init(), expectedFingerprint: baseline)
+        #expect(!ownership.isProven)
         let receipt = await OperationEngine(store: fixture.store, homeURL: fixture.home).execute(plan)
         #expect(receipt.results.first?.status == .failed)
         #expect(try fixture.contents() == "baseline")
@@ -55,9 +56,11 @@ struct LinkedInstallSafetyTests {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }
         let plan = try fixture.plan(baseline: DirectoryFingerprint.sha256(of: fixture.destination))
+        let baseline = try DirectoryFingerprint.sha256(of: fixture.destination)
         try FileManager.default.removeItem(at: fixture.destination)
-        let review = OperationPlanSafetyReviewer(authority: .init(), managedRoots: []).review(plan)
-        #expect(review.hasBlockedSteps)
+        let ownership = DestinationOwnershipInspector.ownership(
+            of: fixture.destination, managedRoots: [], authority: .init(), expectedFingerprint: baseline)
+        #expect(!ownership.isProven)
         let receipt = await OperationEngine(store: fixture.store, homeURL: fixture.home).execute(plan)
         #expect(receipt.results.first?.status == .failed)
         #expect(!FileManager.default.fileExists(atPath: fixture.destination.path))
@@ -69,8 +72,9 @@ struct LinkedInstallSafetyTests {
         defer { fixture.cleanUp() }
         let baseline = try DirectoryFingerprint.sha256(of: fixture.destination)
         try ManagedInstallLedger(records: [
-            .init(destinationPath: fixture.destination.path, sourcePath: fixture.source.path,
-                  reviewedFingerprint: baseline, reviewedAt: .now)
+            .init(
+                destinationPath: fixture.destination.path, sourcePath: fixture.source.path,
+                reviewedFingerprint: baseline, reviewedAt: .now)
         ]).save(to: fixture.store)
         let plan = try fixture.plan(baseline: baseline)
         let fileManager = LinkedDestinationMutationFileManager(destination: fixture.destination, moment: moment)
@@ -78,7 +82,9 @@ struct LinkedInstallSafetyTests {
 
         #expect(receipt.results.first?.status == .failed)
         #expect(try fixture.contents() == "local edit during copy")
-        #expect(ManagedInstallLedger.load(from: fixture.store).record(forDestination: fixture.destination.path)?.reviewedFingerprint == baseline)
+        #expect(
+            ManagedInstallLedger.load(from: fixture.store).record(forDestination: fixture.destination.path)?.reviewedFingerprint == baseline
+        )
         let remaining = try FileManager.default.contentsOfDirectory(atPath: fixture.destination.deletingLastPathComponent().path)
         #expect(!remaining.contains { $0.hasPrefix(".agent-tooling-directory-") })
     }
@@ -105,10 +111,12 @@ struct LinkedInstallSafetyTests {
 
         init() throws {
             root = FileManager.default.temporaryDirectory.appending(path: "linked-install-safety-\(UUID().uuidString)")
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
-            store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "workspace"),
+            store = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "workspace"),
                 workspaceID: document.workspaceID, deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
             try store.prepareManagedDirectories()
@@ -125,11 +133,13 @@ struct LinkedInstallSafetyTests {
             OperationPlan(
                 kind: .installSkill, title: "Update linked skill", summary: "Reviewed upstream update",
                 targetSurfaces: [.codexCLI], scope: .user,
-                steps: [.init(
-                    kind: .copyDirectory, title: "Update example", detail: "Replace the matching linked installation",
-                    sourcePath: source.path, sourceFingerprint: try DirectoryFingerprint.sha256(of: source),
-                    destinationPath: destination.path, destinationFingerprint: baseline
-                )]
+                steps: [
+                    .init(
+                        kind: .copyDirectory, title: "Update example", detail: "Replace the matching linked installation",
+                        sourcePath: source.path, sourceFingerprint: try DirectoryFingerprint.sha256(of: source),
+                        destinationPath: destination.path, destinationFingerprint: baseline
+                    )
+                ]
             )
         }
 

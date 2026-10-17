@@ -1,4 +1,5 @@
 import AgentToolingCore
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -10,12 +11,14 @@ import Testing
 /// to `internal` this file would stop compiling — which is the failure worth
 /// having, since the screen would go quietly empty instead.
 struct MarketplaceProviderRegistryTests {
-    @Test func theBuiltInCatalogIsTheOfficialRegistry() {
+    @Test func theBuiltInCatalogsAreTheOfficialRegistryClaudeAndSkillsSh() {
         let providers = MarketplaceProviderRegistry.builtIn()
 
-        #expect(providers.count == 1)
-        #expect(providers.first?.id == "mcp.official-registry")
+        #expect(providers.count == 3)
+        #expect(providers.map(\.id) == ["mcp.official-registry", "claude.plugins-official", "skills-sh.registry"])
         #expect(providers.first?.displayName == "Official MCP Registry")
+        #expect(providers.map(\.displayName).contains("claude-plugins-official"))
+        #expect(providers.last?.displayName == "skills.sh")
     }
 
     /// The registry provider is constructed, never searched: building one is an
@@ -27,7 +30,7 @@ struct MarketplaceProviderRegistryTests {
         }
     }
 
-    /// The five catalogs Discover lists before anybody adds one. They are
+    /// The six catalogs Discover lists before anybody adds one. They are
     /// reference rows: `inspect` returns nothing for them, because a vendor
     /// listing is a place to look rather than a folder to read.
     @Test func theDefaultSourcesAreTheVendorCatalogsAndNoneOfThemIsAFolder() throws {
@@ -37,7 +40,10 @@ struct MarketplaceProviderRegistryTests {
 
         #expect(
             Set(sources.map(\.kind))
-                == [.agentPlugins, .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry])
+                == [
+                    .agentPlugins, .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry,
+                    .skillsShRegistry,
+                ])
         for source in sources {
             #expect(try service.inspect(source).isEmpty)
         }
@@ -80,9 +86,5 @@ struct MarketplaceProviderRegistryTests {
     }
 }
 
-/// A client CLI that is not installed. Nothing here launches a process.
-private struct RefusingCommandRunner: CommandRunning {
-    func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput {
-        CommandOutput(status: 127, standardOutput: "", standardError: "command not found: \(executable)")
-    }
-}
+/// A client CLI that is not installed is modeled by the shared
+/// `RefusingCommandRunner` in the test-support target.

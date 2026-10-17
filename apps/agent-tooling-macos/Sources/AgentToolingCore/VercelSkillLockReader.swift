@@ -1,28 +1,29 @@
 import CoreFoundation
 import Foundation
 
-public enum VercelSkillLockReader {
-    public static let maximumBytes = 4 * 1_024 * 1_024
-    public static let globalVersion = 3
-    public static let projectVersion = 1
+enum VercelSkillLockReader {
+    static let maximumBytes = 4 * 1_024 * 1_024
+    static let globalVersion = 3
+    static let projectVersion = 1
 
-    public static func globalContext(homeDirectory: String, xdgStateHome: String? = nil) throws -> SourceLockContext {
+    static func globalContext(homeDirectory: String, xdgStateHome: String? = nil) throws -> SourceLockContext {
         let explicitXDG = xdgStateHome.flatMap { $0.isEmpty ? nil : $0 }
         try requireAbsoluteNormalized(homeDirectory)
         let root = explicitXDG ?? append(".agents", to: homeDirectory)
         try requireAbsoluteNormalized(root)
-        let path = explicitXDG == nil
+        let path =
+            explicitXDG == nil
             ? append(".skill-lock.json", to: root)
             : append(".skill-lock.json", to: append("skills", to: root))
         return .global(lockFilePath: path)
     }
 
-    public static func projectContext(projectRoot: String) throws -> SourceLockContext {
+    static func projectContext(projectRoot: String) throws -> SourceLockContext {
         try requireAbsoluteNormalized(projectRoot)
         return .project(lockFilePath: append("skills-lock.json", to: projectRoot), projectRoot: projectRoot)
     }
 
-    public static func read(bytes: Data, context: SourceLockContext) -> SourceLockReadResult {
+    static func read(bytes: Data, context: SourceLockContext) -> SourceLockReadResult {
         let format = context.format
         guard isValid(context: context) else {
             return SourceLockReadResult(

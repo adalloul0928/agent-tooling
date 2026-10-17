@@ -29,7 +29,8 @@ struct ProcessRunnerHomeOverrideTests {
         let result = try await runner.run(executable: "/usr/bin/printenv", arguments: ["HOME"])
 
         #expect(result.status == 0)
-        #expect(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-            == FileManager.default.homeDirectoryForCurrentUser.path)
+        #expect(
+            result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                == FileManager.default.homeDirectoryForCurrentUser.path)
     }
 }

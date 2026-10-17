@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -66,8 +67,9 @@ struct WorkspaceLinkedPresetStoreTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let subscriptions = (0..<(WorkspaceLinkedPresetStore.maximumSubscriptions + 1)).map { _ in
-            LinkedPresetSubscription(presetID: ArtifactID(), appliedRevision: 1,
-                                     destinations: [.init(surface: .codexCLI, scope: .user)])
+            LinkedPresetSubscription(
+                presetID: ArtifactID(), appliedRevision: 1,
+                destinations: [.init(surface: .codexCLI, scope: .user)])
         }
 
         #expect(throws: WorkspaceLinkedPresetStoreError.tooManySubscriptions) {
@@ -78,14 +80,17 @@ struct WorkspaceLinkedPresetStoreTests {
     @Test func theFileIsReadableOnlyByThePersonWhoOwnsIt() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        try fixture.store.write([.init(presetID: Self.presetID, appliedRevision: 1,
-                                       destinations: [.init(surface: .codexCLI, scope: .user)])])
+        try fixture.store.write([
+            .init(
+                presetID: Self.presetID, appliedRevision: 1,
+                destinations: [.init(surface: .codexCLI, scope: .user)])
+        ])
 
         let attributes = try FileManager.default.attributesOfItem(atPath: fixture.file.path)
         #expect(attributes[.posixPermissions] as? NSNumber == 0o600)
     }
 
-    private static let presetID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000c3")!)
+    private static let presetID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000c3"))
 
     private struct Fixture {
         let root: URL
@@ -93,10 +98,7 @@ struct WorkspaceLinkedPresetStoreTests {
         var file: URL { root.appending(path: "linked-presets.json") }
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "linked-preset-store-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("linked-preset-store").url
             store = try WorkspaceLinkedPresetStore(containerRoot: root)
         }
 

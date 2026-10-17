@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -62,12 +63,14 @@ struct WorkspaceOperationalRecordTests {
                 Fixture.receipt(title: "Run \(index)", at: 1_700_000_000 + Double(index)))
         }
 
-        #expect(try fixture.store.operationReceipts(limit: 10_000).count
-            == WorkspaceRevisionStore.maximumReceipts)
+        #expect(
+            try fixture.store.operationReceipts(limit: 10_000).count
+                == WorkspaceRevisionStore.maximumReceipts)
         // The oldest go first, so what is kept is what a person is most likely
         // to still be asking about.
-        #expect(try fixture.store.operationReceipts(limit: 1).first?.title
-            == "Run \(WorkspaceRevisionStore.maximumReceipts + extra - 1)")
+        #expect(
+            try fixture.store.operationReceipts(limit: 1).first?.title
+                == "Run \(WorkspaceRevisionStore.maximumReceipts + extra - 1)")
         let device = try #require(try fixture.store.snapshot()).device
         #expect(device.receiptIDs.count == WorkspaceRevisionStore.maximumReceipts)
     }
@@ -117,12 +120,14 @@ struct WorkspaceOperationalRecordTests {
         defer { fixture.remove() }
         struct Journal: Codable, Equatable { var entries: [String] }
 
-        #expect(try fixture.store.activityJournal(as: Journal.self, default: .init(entries: []))
-            == Journal(entries: []))
+        #expect(
+            try fixture.store.activityJournal(as: Journal.self, default: .init(entries: []))
+                == Journal(entries: []))
         try fixture.store.saveActivityJournal(Journal(entries: ["search_inventory"]))
 
-        #expect(try fixture.reopen().activityJournal(as: Journal.self, default: .init(entries: []))
-            == Journal(entries: ["search_inventory"]))
+        #expect(
+            try fixture.reopen().activityJournal(as: Journal.self, default: .init(entries: []))
+                == Journal(entries: ["search_inventory"]))
     }
 
     @Test func aStoreWithNoOperationalHistoryReportsNoneRatherThanFailing() throws {
@@ -141,30 +146,31 @@ struct WorkspaceOperationalRecordTests {
         let deviceID: WorkspaceObjectID
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "operational-records-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+            root = try TemporaryFolder("operational-records").url
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
             workspaceID = document.workspaceID
             let device = DeviceWorkspaceState(workspaceID: workspaceID)
             deviceID = device.deviceID
-            store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "store"),
+            store = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "store"),
                 workspaceID: workspaceID, deviceID: deviceID)
             try store.initialize(document: document, device: device)
         }
 
         func reopen() throws -> WorkspaceRevisionStore {
-            try WorkspaceRevisionStore(containerRoot: root.appending(path: "store"),
-                                       workspaceID: workspaceID, deviceID: deviceID)
+            try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "store"),
+                workspaceID: workspaceID, deviceID: deviceID)
         }
 
         static func receipt(title: String, at seconds: TimeInterval = 1_700_000_000) -> OperationReceipt {
-            .init(planID: UUID(), kind: .installSkill, title: title, state: .healthy,
-                  targetSurfaces: [.codexCLI], results: [],
-                  createdAt: Date(timeIntervalSince1970: seconds),
-                  verificationSummary: "Verified in place.")
+            .init(
+                planID: UUID(), kind: .installSkill, title: title, state: .healthy,
+                targetSurfaces: [.codexCLI], results: [],
+                createdAt: Date(timeIntervalSince1970: seconds),
+                verificationSummary: "Verified in place.")
         }
 
         static func request(_ label: String) -> PendingAgentRequest {

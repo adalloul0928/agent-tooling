@@ -1,8 +1,9 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
-@testable import AgentToolingCore
 @testable import AgentToolingApp
+@testable import AgentToolingCore
 
 /// Looking through earlier versions changes nothing. Going back to one is a
 /// separate step, refused when the workspace moved under the preview.
@@ -87,8 +88,9 @@ struct WorkspaceHistorySessionTests {
 
         await session.restore()
 
-        #expect(session.errorMessage?.contains("Nothing was restored") == true,
-                "\(session.errorMessage ?? "")")
+        #expect(
+            session.errorMessage?.contains("Nothing was restored") == true,
+            "\(session.errorMessage ?? "")")
         let names = try #require(try fixture.store.snapshot()).document.artifacts
             .map(\.identity.displayName).sorted()
         #expect(names == ["Alpha", "Gamma"])
@@ -111,9 +113,9 @@ struct WorkspaceHistorySessionTests {
     }
 
     @MainActor private struct Fixture {
-        static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
-        static let beta = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
-        static let gamma = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000c3")!)
+        static let alpha = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
+        static let beta = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2"))
+        static let gamma = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000c3"))
         let root: URL
         let store: WorkspaceRevisionStore
         let library: WorkspaceLibrarySession
@@ -122,14 +124,13 @@ struct WorkspaceHistorySessionTests {
         let withBoth: WorkspaceObjectID
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "history-session-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+            root = try TemporaryFolder("history-session").url
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
-            store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "store"),
+            store = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "store"),
                 workspaceID: document.workspaceID, deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
             let codex = PortableDestination(surface: .codexCLI, scope: .user)
@@ -181,8 +182,9 @@ struct WorkspaceHistorySessionTests {
 
         func session(access: WorkspaceLibraryAccess = .writable) async -> WorkspaceHistorySession {
             await library.refresh()
-            return WorkspaceHistorySession(store: store, library: library,
-                                           writerID: writerID, access: access)
+            return WorkspaceHistorySession(
+                store: store, library: library,
+                writerID: writerID, access: access)
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }

@@ -14,17 +14,17 @@ import Foundation
 /// claims no authority over its content. Nothing becomes `centralPersonal` from
 /// a scan — taking ownership of somebody's files is a decision they make, not
 /// one a first launch makes for them.
-public enum WorkspaceFirstRun {
-    public struct Result: Sendable {
-        public let document: PortableWorkspaceDocument
-        public let device: DeviceWorkspaceState
-        public let skillCount: Int
-        public let packageCount: Int
-        public let connectionCount: Int
+enum WorkspaceFirstRun {
+    struct Result: Sendable {
+        let document: PortableWorkspaceDocument
+        let device: DeviceWorkspaceState
+        let skillCount: Int
+        let packageCount: Int
+        let connectionCount: Int
     }
 
     /// Builds the first revision from a completed scan. Pure: it writes nothing.
-    public static func prepare(
+    static func prepare(
         observations: [TargetObservation],
         inventory: ScannedInventory,
         workspaceID: WorkspaceObjectID = WorkspaceObjectID(),
@@ -39,8 +39,10 @@ public enum WorkspaceFirstRun {
             for (parent, metadata) in observation.pluginMetadata {
                 for (child, childMetadata) in observation.skillMetadata
                 where childMetadata.providerPluginID == parent {
-                    guard let relative = relativeMemberDirectory(
-                        childMetadata.path, packageRoot: metadata.source) else { continue }
+                    guard
+                        let relative = relativeMemberDirectory(
+                            childMetadata.path, packageRoot: metadata.source)
+                    else { continue }
                     memberPaths[child] = relative
                 }
             }
@@ -50,7 +52,8 @@ public enum WorkspaceFirstRun {
         for plugin in inventory.plugins.sorted(by: { $0.id < $1.id }) {
             let id = ArtifactID()
             packageIDs[plugin.id] = id
-            let routes = observations
+            let routes =
+                observations
                 .filter { $0.discoveredPlugins.contains(plugin.id) }
                 .compactMap { $0.surface.client }
                 .sorted { $0.rawValue < $1.rawValue }
@@ -60,51 +63,61 @@ public enum WorkspaceFirstRun {
             // no located member file, and claiming the client owns something
             // this build cannot point at would be a claim with nothing behind
             // it. Either gap makes the package a record and nothing more.
-            let members = claimedMembers(of: plugin.id, inventory: inventory,
-                                         observations: observations)
+            let members = claimedMembers(
+                of: plugin.id, inventory: inventory,
+                observations: observations)
             let locatable = members.filter { skillIdentifiers.contains($0) }
                 .allSatisfy { memberPaths[$0] != nil }
-            artifacts.append(.init(
-                identity: .init(id: id, kind: .nativePlugin, displayName: plugin.name),
-                authority: routes.isEmpty || !locatable ? .trackedOnly : .nativeOwned,
-                declaredName: plugin.id, nativeRoutes: routes.isEmpty || !locatable ? [] : routes))
+            artifacts.append(
+                .init(
+                    identity: .init(id: id, kind: .nativePlugin, displayName: plugin.name),
+                    authority: routes.isEmpty || !locatable ? .trackedOnly : .nativeOwned,
+                    declaredName: plugin.id, nativeRoutes: routes.isEmpty || !locatable ? [] : routes))
         }
 
         // A member's authority is its parent's. The package owns it either way,
         // and a child that claimed a different authority from the thing that
         // delivers it would make two things responsible for one file.
-        let authorities = Dictionary(artifacts.map { ($0.identity.id, $0.authority) },
-                                     uniquingKeysWith: { first, _ in first })
+        let authorities = Dictionary(
+            artifacts.map { ($0.identity.id, $0.authority) },
+            uniquingKeysWith: { first, _ in first })
         let bundled = bundledIdentifiers(inventory: inventory, observations: observations)
         for skill in inventory.skills.sorted(by: { $0.id < $1.id }) {
-            let parent = parentPackage(of: skill.id, inventory: inventory,
-                                       observations: observations, packageIDs: packageIDs)
+            let parent = parentPackage(
+                of: skill.id, inventory: inventory,
+                observations: observations, packageIDs: packageIDs)
             // Bundled but with no single package claiming it: recorded as
             // nothing rather than as a standalone thing it is not.
             guard parent != nil || !bundled.contains(skill.id) else { continue }
-            artifacts.append(.init(
-                identity: .init(id: ArtifactID(), kind: .skill,
-                                displayName: skill.displayName, parentPackageID: parent),
-                authority: parent.flatMap { authorities[$0] } ?? .trackedOnly,
-                declaredName: skill.id,
-                // A native-owned member has to say where it lives inside its
-                // package; only an MCP declaration may omit one.
-                packageRelativePath: parent.flatMap { authorities[$0] } == .nativeOwned
-                    ? memberPaths[skill.id] : nil))
+            artifacts.append(
+                .init(
+                    identity: .init(
+                        id: ArtifactID(), kind: .skill,
+                        displayName: skill.displayName, parentPackageID: parent),
+                    authority: parent.flatMap { authorities[$0] } ?? .trackedOnly,
+                    declaredName: skill.id,
+                    // A native-owned member has to say where it lives inside its
+                    // package; only an MCP declaration may omit one.
+                    packageRelativePath: parent.flatMap { authorities[$0] } == .nativeOwned
+                        ? memberPaths[skill.id] : nil))
         }
         for server in inventory.mcpServers.sorted(by: { $0.id < $1.id }) {
-            let parent = parentPackage(of: server.id, inventory: inventory,
-                                       observations: observations, packageIDs: packageIDs)
+            let parent = parentPackage(
+                of: server.id, inventory: inventory,
+                observations: observations, packageIDs: packageIDs)
             guard parent != nil || !bundled.contains(server.id) else { continue }
-            artifacts.append(.init(
-                identity: .init(id: ArtifactID(), kind: .mcpServer,
-                                displayName: server.name, parentPackageID: parent),
-                authority: parent.flatMap { authorities[$0] } ?? .trackedOnly,
-                declaredName: server.id))
+            artifacts.append(
+                .init(
+                    identity: .init(
+                        id: ArtifactID(), kind: .mcpServer,
+                        displayName: server.name, parentPackageID: parent),
+                    authority: parent.flatMap { authorities[$0] } ?? .trackedOnly,
+                    declaredName: server.id))
         }
 
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: workspaceID, revision: .init(writerID: writerID), artifacts: artifacts))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: workspaceID, revision: .init(writerID: writerID), artifacts: artifacts))
         var device = DeviceWorkspaceState(workspaceID: workspaceID, deviceID: deviceID)
         device.observations = observations.sorted { $0.surface.rawValue < $1.surface.rawValue }
         // What each client that answered can be asked to carry, from the same
@@ -128,7 +141,7 @@ public enum WorkspaceFirstRun {
     /// first, and starting over on top of an existing one would discard whatever
     /// that workspace had decided.
     @discardableResult
-    public static func begin(
+    static func begin(
         containerRoot: URL,
         homeURL: URL,
         runner: any CommandRunning,
@@ -149,8 +162,9 @@ public enum WorkspaceFirstRun {
     }
 
     /// Everything this package claims, by its own record or by what a client
-    /// reported.
-    private static func claimedMembers(
+    /// reported. Shared with the reconciliation a later check runs, so the two
+    /// cannot disagree about what belongs to a package.
+    static func claimedMembers(
         of packageID: String, inventory: ScannedInventory, observations: [TargetObservation]
     ) -> Set<String> {
         var members = Set(inventory.plugins.first { $0.id == packageID }?.skills ?? [])
@@ -169,14 +183,12 @@ public enum WorkspaceFirstRun {
 
     static func relativeMemberDirectory(_ path: String, packageRoot: String) -> String? {
         guard path.hasPrefix("/"), packageRoot.hasPrefix("/"),
-              !path.contains("\0"), !packageRoot.contains("\0") else { return nil }
+            !path.contains("\0"), !packageRoot.contains("\0")
+        else { return nil }
         let root = URL(fileURLWithPath: packageRoot).standardizedFileURL
         var child = URL(fileURLWithPath: path).standardizedFileURL
         if child.lastPathComponent == "SKILL.md" { child.deleteLastPathComponent() }
-        let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        guard child.path.hasPrefix(prefix) else { return nil }
-        let relative = String(child.path.dropFirst(prefix.count))
-        return relative.isEmpty ? nil : relative
+        return PathContainment.relativePath(ofNormalizedChild: child.path, inNormalizedRoot: root.path)
     }
 
     /// Every identifier some package claims, by its own record or by what a
@@ -201,7 +213,7 @@ public enum WorkspaceFirstRun {
     ///
     /// Two packages claiming one item is not a parent to pick between, so it is
     /// recorded as belonging to neither rather than arbitrarily to one.
-    private static func parentPackage(
+    static func parentPackage(
         of identifier: String,
         inventory: ScannedInventory,
         observations: [TargetObservation],

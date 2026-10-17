@@ -29,7 +29,8 @@ struct WorkspaceSkillCommandTests {
         #expect(content.tree == prepared.tree)
         #expect(content.tree.entries.contains { $0.relativePath == "resources" && $0.kind == .directory })
         #expect(content.tree.entries.contains { $0.relativePath == "empty" && $0.kind == .directory })
-        #expect(content.tree.entries.contains { $0.relativePath == "bin/run" && $0.kind == .file(bytes: Data("first".utf8), executable: true) })
+        #expect(
+            content.tree.entries.contains { $0.relativePath == "bin/run" && $0.kind == .file(bytes: Data("first".utf8), executable: true) })
         #expect(content.tree.entries.contains { $0.relativePath == "current" && $0.kind == .symbolicLink(target: "bin/run") })
     }
 
@@ -43,11 +44,12 @@ struct WorkspaceSkillCommandTests {
             reason: .manual,
             desiredPresence: true,
             desiredEnabled: nil)
-        let fixture = try Fixture(document: initialDocument(
-            artifactID: artifactID,
-            content: first,
-            aliases: [.init(namespace: "legacy.skill", value: "first")],
-            assignments: [assignment]))
+        let fixture = try Fixture(
+            document: initialDocument(
+                artifactID: artifactID,
+                content: first,
+                aliases: [.init(namespace: "legacy.skill", value: "first")],
+                assignments: [assignment]))
         defer { fixture.remove() }
         _ = try await fixture.contentStore.store(first.tree)
         let command = StandaloneSkillUpdateCommand(
@@ -130,15 +132,18 @@ struct WorkspaceSkillCommandTests {
 
         let parentID = ArtifactID()
         let childID = ArtifactID()
-        let native = try WorkspaceDocumentCoding.seal(PortableWorkspaceDocument(
-            workspaceID: WorkspaceObjectID(),
-            revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: [
-                .init(identity: .init(id: parentID, kind: .nativePlugin, displayName: "Native"), authority: .nativeOwned,
-                      nativeRoutes: [.init(client: .codex, externalPluginID: "native")]),
-                .init(identity: .init(id: childID, kind: .skill, displayName: "Native child", parentPackageID: parentID),
-                      authority: .nativeOwned, packageRelativePath: "SKILL.md", contentDigest: first.tree.digest),
-            ]))
+        let native = try WorkspaceDocumentCoding.seal(
+            PortableWorkspaceDocument(
+                workspaceID: WorkspaceObjectID(),
+                revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: [
+                    .init(
+                        identity: .init(id: parentID, kind: .nativePlugin, displayName: "Native"), authority: .nativeOwned,
+                        nativeRoutes: [.init(client: .codex, externalPluginID: "native")]),
+                    .init(
+                        identity: .init(id: childID, kind: .skill, displayName: "Native child", parentPackageID: parentID),
+                        authority: .nativeOwned, packageRelativePath: "SKILL.md", contentDigest: first.tree.digest),
+                ]))
         let nativeFixture = try Fixture(document: native)
         defer { nativeFixture.remove() }
         let update = StandaloneSkillUpdateCommand(
@@ -165,7 +170,8 @@ struct WorkspaceSkillCommandTests {
 
         let receiptFailure = try Fixture()
         defer { receiptFailure.remove() }
-        try receiptFailure.sql("CREATE TRIGGER reject_receipt BEFORE INSERT ON command_receipts BEGIN SELECT RAISE(ABORT, 'injected'); END;")
+        try receiptFailure.sql(
+            "CREATE TRIGGER reject_receipt BEFORE INSERT ON command_receipts BEGIN SELECT RAISE(ABORT, 'injected'); END;")
         let command = StandaloneSkillIntakeCommand(
             expectedRevisionID: receiptFailure.document.revision.id, displayName: "Receipt failure", prepared: prepared)
         await #expect(throws: WorkspaceRevisionStoreError.self) {
@@ -207,7 +213,8 @@ struct WorkspaceSkillCommandTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let first = try personalSkill("first")
-        let command = StandaloneSkillIntakeCommand(expectedRevisionID: fixture.document.revision.id,
+        let command = StandaloneSkillIntakeCommand(
+            expectedRevisionID: fixture.document.revision.id,
             displayName: "Cancelled", prepared: first)
         let task = Task {
             withUnsafeCurrentTask { $0?.cancel() }
@@ -221,7 +228,8 @@ struct WorkspaceSkillCommandTests {
         let incomplete = try Fixture(document: initialDocument(artifactID: artifactID, content: first, aliases: [], assignments: []))
         defer { incomplete.remove() }
         let next = try personalSkill("second")
-        let update = StandaloneSkillUpdateCommand(expectedRevisionID: incomplete.document.revision.id,
+        let update = StandaloneSkillUpdateCommand(
+            expectedRevisionID: incomplete.document.revision.id,
             artifactID: artifactID, expectedContentDigest: first.tree.digest, prepared: next)
         await #expect(throws: CentralPackageStoreError.missingContent) {
             try await incomplete.service.updateStandaloneSkill(update, prepared: next)
@@ -238,7 +246,9 @@ struct WorkspaceSkillCommandTests {
             .init(relativePath: "bin", kind: .directory),
             .init(relativePath: "bin/run", kind: .file(bytes: Data(payload.utf8), executable: true)),
             .init(relativePath: "current", kind: .symbolicLink(target: "bin/run")),
-            .init(relativePath: "SKILL.md", kind: .file(bytes: Data("---\nname: reviewed-skill\ndescription: Reviewed skill\n---\nUse it.\n".utf8), executable: false)),
+            .init(
+                relativePath: "SKILL.md",
+                kind: .file(bytes: Data("---\nname: reviewed-skill\ndescription: Reviewed skill\n---\nUse it.\n".utf8), executable: false)),
         ])
         return try WorkspaceSkillPreparation.personal(tree: tree)
     }
@@ -249,15 +259,18 @@ struct WorkspaceSkillCommandTests {
         aliases: [ExternalAlias],
         assignments: [AssignmentContribution]
     ) throws -> PortableWorkspaceDocument {
-        try WorkspaceDocumentCoding.seal(PortableWorkspaceDocument(
-            workspaceID: WorkspaceObjectID(),
-            revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: [.init(
-                identity: .init(id: artifactID, kind: .skill, displayName: "Reviewed label", aliases: aliases),
-                authority: .centralPersonal,
-                declaredName: content.frontmatter.name,
-                contentDigest: content.tree.digest)],
-            assignments: assignments))
+        try WorkspaceDocumentCoding.seal(
+            PortableWorkspaceDocument(
+                workspaceID: WorkspaceObjectID(),
+                revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: [
+                    .init(
+                        identity: .init(id: artifactID, kind: .skill, displayName: "Reviewed label", aliases: aliases),
+                        authority: .centralPersonal,
+                        declaredName: content.frontmatter.name,
+                        contentDigest: content.tree.digest)
+                ],
+                assignments: assignments))
     }
 
     private struct Fixture {
@@ -273,11 +286,15 @@ struct WorkspaceSkillCommandTests {
         init(document: PortableWorkspaceDocument? = nil, contentLimits: PackageTreeLimits = .default) throws {
             root = FileManager.default.temporaryDirectory.appending(path: "workspace-skill-command-\(UUID())")
             contentURL = root.appending(path: "content")
-            try FileManager.default.createDirectory(at: contentURL, withIntermediateDirectories: true,
-                                                    attributes: [.posixPermissions: 0o700])
+            try FileManager.default.createDirectory(
+                at: contentURL, withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
             writerID = document?.revision.writerID ?? WorkspaceObjectID()
-            self.document = try document ?? WorkspaceDocumentCoding.seal(PortableWorkspaceDocument(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID)))
+            self.document =
+                try document
+                ?? WorkspaceDocumentCoding.seal(
+                    PortableWorkspaceDocument(
+                        workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID)))
             device = DeviceWorkspaceState(workspaceID: self.document.workspaceID)
             store = try WorkspaceRevisionStore(
                 containerRoot: root, workspaceID: self.document.workspaceID, deviceID: device.deviceID)
@@ -310,7 +327,8 @@ struct WorkspaceSkillCommandTests {
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
             guard sqlite3_prepare_v2(database, command, -1, &statement, nil) == SQLITE_OK,
-                  sqlite3_step(statement) == SQLITE_ROW else {
+                sqlite3_step(statement) == SQLITE_ROW
+            else {
                 throw WorkspaceRevisionStoreError.corruptState
             }
             return sqlite3_column_int(statement, 0)

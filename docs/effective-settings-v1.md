@@ -1,9 +1,10 @@
 # Effective native settings v1
 
-Status: the resolver and two versioned vendor adapters are implemented and
-fixture-tested. No file reader, inspector UI or editor exists yet, and no
-adapter has been checked against a live installed client, so this does not
-establish effective-settings coverage for any real setup.
+Status: the resolver, two versioned vendor adapters, the file reader, the
+inspector UI and its editor for the settings recorded as writable are
+implemented and fixture-tested. No adapter has been checked against a live
+installed client, so this does not establish effective-settings coverage for
+every real setup.
 
 ## Contract
 
@@ -49,8 +50,10 @@ session overrides unknown."
 `ConfigurationLayerReader` turns files on disk into layers. It only reads:
 nothing is rewritten, reformatted or normalized. A file that is absent produces
 no layer, while a file that exists but cannot be parsed is an error — treating a
-broken file as empty would present a partial picture as complete. Files above
-1 MB are refused rather than read.
+broken file as empty would present a partial picture as complete. Each file is
+read under the 4 MB limit every reader of a client configuration file shares,
+the editor included: a file above it is refused before it is loaded, and the
+screen names the file and the limit.
 
 Claude Code's user, project, local-project and managed-policy files are read as
 JSON. Managed policy is never writable. `permissions.allow` and `permissions.deny`
@@ -89,10 +92,18 @@ An MCP tool, `get_effective_settings`, reports the same explanation to an agent.
 It reads the agent's own files and writes nothing; settings this build does not
 interpret are listed separately and never presented as effective.
 
-## Not yet implemented
+## Still open
 
-Project trust gating, Claude Desktop MCP discovery, an editing UI, hooks/agents/
-instructions views, and the dated compatibility register with upstream
-schema-change detection all remain open. Gemini has no adapter; its current TOML
-discovery must not be presented as effective-settings support. No adapter has
-been checked against a live installed client.
+App settings edits a setting only when the compatibility register records it as
+writable, the resolver says this app can write the layer that decides it, that
+layer is a JSON file, and the value is not a list combined across files; today
+that is a few Claude Code settings, and Codex stays read-only. Standing
+instructions, rules and agent definitions are listed beside the settings,
+read-only, as standing-instructions-v1.md describes. Hooks appear only as a
+count per contributing file, so a view of individual hooks remains open, as do
+project trust gating and Claude Desktop MCP discovery.
+`ConfigurationCompatibilityRegister` records each understood setting with a
+version range, the vendor page it came from and whether it can be written;
+dated entries and upstream schema-change detection remain open. Gemini has no
+adapter; its current TOML discovery must not be presented as effective-settings
+support. No adapter has been checked against a live installed client.

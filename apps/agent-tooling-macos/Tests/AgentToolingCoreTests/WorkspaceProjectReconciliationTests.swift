@@ -78,8 +78,9 @@ struct WorkspaceProjectReconciliationTests {
     }
 
     @Test func anEmptyDeclarationIsNotQuietlyCalledSatisfied() throws {
-        let result = try Self.reconcile(declared: [], locked: [],
-                                        document: try Self.document(holding: []))
+        let result = try Self.reconcile(
+            declared: [], locked: [],
+            document: try Self.document(holding: []))
 
         #expect(result.items.isEmpty)
         #expect(!result.isFullySatisfied)
@@ -89,15 +90,17 @@ struct WorkspaceProjectReconciliationTests {
     private static let commitB = String(repeating: "b", count: 40)
 
     private static func entry(_ name: String) -> WorkspaceProjectDeclaration.Entry {
-        .init(name: name, kind: .skill, repositoryURL: "https://github.com/you/skills",
-              requestedRef: "main", packageRelativePath: "skills/\(name)")
+        .init(
+            name: name, kind: .skill, repositoryURL: "https://github.com/you/skills",
+            requestedRef: "main", packageRelativePath: "skills/\(name)")
     }
 
     private static func lockEntry(_ name: String, _ commit: String) -> WorkspaceProjectLock.Entry {
-        .init(name: name, kind: .skill, repositoryURL: "https://github.com/you/skills",
-              requestedRef: "main", revision: .init(kind: .gitCommitSHA1, value: commit),
-              contentDigest: .init(value: String(repeating: "c", count: 64)),
-              packageRelativePath: "skills/\(name)")
+        .init(
+            name: name, kind: .skill, repositoryURL: "https://github.com/you/skills",
+            requestedRef: "main", revision: .init(kind: .gitCommitSHA1, value: commit),
+            contentDigest: .init(value: String(repeating: "c", count: 64)),
+            packageRelativePath: "skills/\(name)")
     }
 
     private static func reconcile(
@@ -119,31 +122,38 @@ struct WorkspaceProjectReconciliationTests {
         for (index, item) in items.enumerated() {
             let artifactID = ArtifactID()
             guard let commit = item.1 else {
-                artifacts.append(.init(
-                    identity: .init(id: artifactID, kind: .skill, displayName: item.0.capitalized),
-                    authority: .centralPersonal, declaredName: item.0,
-                    contentDigest: .init(value: String(repeating: "d", count: 64))))
+                artifacts.append(
+                    .init(
+                        identity: .init(id: artifactID, kind: .skill, displayName: item.0.capitalized),
+                        authority: .centralPersonal, declaredName: item.0,
+                        contentDigest: .init(value: String(repeating: "d", count: 64))))
                 continue
             }
             let sourceID = WorkspaceObjectID()
             let subscriptionID = WorkspaceObjectID()
-            sources.append(.init(id: sourceID, role: .publisherRepository,
-                                 repositoryURL: "https://github.com/you/skills",
-                                 requestedRef: "main", packageRelativePaths: ["skills/\(item.0)"]))
-            subscriptions.append(.init(
-                id: subscriptionID, artifactID: artifactID, sourceID: sourceID,
-                lock: .init(publisherID: "github:you", sourceRootID: sourceID, requestedRef: "main",
-                            approvedRevision: .init(kind: .gitCommitSHA1, value: commit),
-                            approvedContent: .init(value: String(repeating: "c", count: 64)),
-                            packageRelativePath: "skills/\(item.0)")))
-            artifacts.append(.init(
-                identity: .init(id: artifactID, kind: .skill, displayName: item.0.capitalized),
-                authority: .centralUpstream(subscriptionID: subscriptionID), declaredName: item.0,
-                contentDigest: .init(value: String(repeating: "c", count: 64))))
+            sources.append(
+                .init(
+                    id: sourceID, role: .publisherRepository,
+                    repositoryURL: "https://github.com/you/skills",
+                    requestedRef: "main", packageRelativePaths: ["skills/\(item.0)"]))
+            subscriptions.append(
+                .init(
+                    id: subscriptionID, artifactID: artifactID, sourceID: sourceID,
+                    lock: .init(
+                        publisherID: "github:you", sourceRootID: sourceID, requestedRef: "main",
+                        approvedRevision: .init(kind: .gitCommitSHA1, value: commit),
+                        approvedContent: .init(value: String(repeating: "c", count: 64)),
+                        packageRelativePath: "skills/\(item.0)")))
+            artifacts.append(
+                .init(
+                    identity: .init(id: artifactID, kind: .skill, displayName: item.0.capitalized),
+                    authority: .centralUpstream(subscriptionID: subscriptionID), declaredName: item.0,
+                    contentDigest: .init(value: String(repeating: "c", count: 64))))
             _ = index
         }
-        return try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: artifacts, sources: sources, subscriptions: subscriptions))
+        return try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: artifacts, sources: sources, subscriptions: subscriptions))
     }
 }

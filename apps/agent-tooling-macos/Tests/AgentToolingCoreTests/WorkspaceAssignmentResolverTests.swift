@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -101,10 +102,12 @@ struct WorkspaceAssignmentResolverTests {
         let assignment = contribution(
             "00000000-0000-0000-0000-000000001001", artifactID: nativeID, surface: .claudeCode
         )
-        let artifact = nativePlugin(nativeID, routes: [
-            .init(client: .claude, externalPluginID: "claude-plugin"),
-            .init(client: .codex, externalPluginID: "codex-plugin"),
-        ])
+        let artifact = nativePlugin(
+            nativeID,
+            routes: [
+                .init(client: .claude, externalPluginID: "claude-plugin"),
+                .init(client: .codex, externalPluginID: "codex-plugin"),
+            ])
         let output = resolve(
             artifacts: [artifact], contributions: [assignment],
             targets: [target(.claudeCode, component: .plugin)],
@@ -130,11 +133,13 @@ struct WorkspaceAssignmentResolverTests {
         let output = resolve(
             artifacts: [child, nativePlugin(parentID, routes: [.init(client: .claude, externalPluginID: "only-claude")])],
             contributions: [childAssignment, rootAssignment],
-            targets: [.init(
-                selector: .init(surface: .codexCLI, scope: .user), physicalDestinationID: physical,
-                installedClientVersion: "1.0", adapterContractVersion: 7,
-                componentContexts: [.init(component: .skill), .init(component: .plugin)]
-            )],
+            targets: [
+                .init(
+                    selector: .init(surface: .codexCLI, scope: .user), physicalDestinationID: physical,
+                    installedClientVersion: "1.0", adapterContractVersion: 7,
+                    componentContexts: [.init(component: .skill), .init(component: .plugin)]
+                )
+            ],
             evidence: [capability(.codexCLI), capability(.codexCLI, component: .plugin)]
         )
         #expect(output.requirements.isEmpty)
@@ -165,10 +170,14 @@ struct WorkspaceAssignmentResolverTests {
             "00000000-0000-0000-0000-000000001002", artifactID: nativeID, surface: .codexCLI
         )
         let output = resolve(
-            artifacts: [nativePlugin(nativeID, routes: [
-                .init(client: .claude, externalPluginID: "claude-id"),
-                .init(client: .codex, externalPluginID: "codex-id"),
-            ])],
+            artifacts: [
+                nativePlugin(
+                    nativeID,
+                    routes: [
+                        .init(client: .claude, externalPluginID: "claude-id"),
+                        .init(client: .codex, externalPluginID: "codex-id"),
+                    ])
+            ],
             contributions: [claude, codex],
             targets: [target(.claudeCode, component: .plugin), target(.codexCLI, component: .plugin)],
             evidence: [capability(.claudeCode, component: .plugin), capability(.codexCLI, component: .plugin)]
@@ -283,8 +292,10 @@ struct WorkspaceAssignmentResolverTests {
             portableDefinitions: [definition], deviceBindings: [binding])
 
         #expect(output.issues.isEmpty)
-        #expect(try #require(output.requirements.first).strategy == .managedMCP(
-            definition: definition, deviceBinding: binding))
+        #expect(
+            try #require(output.requirements.first).strategy
+                == .managedMCP(
+                    definition: definition, deviceBinding: binding))
 
         let missing = resolve(
             artifacts: [artifact], contributions: [assignment],
@@ -308,12 +319,16 @@ struct WorkspaceAssignmentResolverTests {
             artifactID: mcpID, connection: .remoteHTTPS(url: "https://mcp.example.com/v1"))
         let missingRoot = resolve(
             artifacts: [artifact], contributions: [assignment],
-            targets: [target(
-                .codexCLI, scope: .workspace, component: .mcpServer,
-                transport: MCPTransport.http.rawValue)],
-            evidence: [capability(
-                .codexCLI, scope: .workspace, component: .mcpServer,
-                transport: MCPTransport.http.rawValue)],
+            targets: [
+                target(
+                    .codexCLI, scope: .workspace, component: .mcpServer,
+                    transport: MCPTransport.http.rawValue)
+            ],
+            evidence: [
+                capability(
+                    .codexCLI, scope: .workspace, component: .mcpServer,
+                    transport: MCPTransport.http.rawValue)
+            ],
             portableDefinitions: [definition])
         #expect(missingRoot.requirements.isEmpty)
         #expect(missingRoot.issues.contains { $0.kind == .missingDeviceMCPBinding })
@@ -322,12 +337,16 @@ struct WorkspaceAssignmentResolverTests {
             artifactID: mcpID, workspaceRootPath: "/workspace/project")
         let capturedRoot = resolve(
             artifacts: [artifact], contributions: [assignment],
-            targets: [target(
-                .codexCLI, scope: .workspace, component: .mcpServer,
-                transport: MCPTransport.http.rawValue)],
-            evidence: [capability(
-                .codexCLI, scope: .workspace, component: .mcpServer,
-                transport: MCPTransport.http.rawValue)],
+            targets: [
+                target(
+                    .codexCLI, scope: .workspace, component: .mcpServer,
+                    transport: MCPTransport.http.rawValue)
+            ],
+            evidence: [
+                capability(
+                    .codexCLI, scope: .workspace, component: .mcpServer,
+                    transport: MCPTransport.http.rawValue)
+            ],
             portableDefinitions: [definition], deviceBindings: [binding])
         #expect(capturedRoot.issues.isEmpty)
         #expect(capturedRoot.requirements.count == 1)
@@ -572,10 +591,10 @@ struct WorkspaceAssignmentResolverTests {
     }
 
     private func artifactID(_ value: String) -> ArtifactID {
-        ArtifactID(UUID(uuidString: value)!)
+        ArtifactID(fixtureUUID(value))
     }
 
     private func objectID(_ value: String) -> WorkspaceObjectID {
-        WorkspaceObjectID(UUID(uuidString: value)!)
+        WorkspaceObjectID(fixtureUUID(value))
     }
 }

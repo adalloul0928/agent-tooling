@@ -72,7 +72,7 @@ struct MarketplaceProviderTests {
 
     @Test func officialRegistryRejectsInsecureSourcesAndBadResponses() async throws {
         #expect(throws: MarketplaceProviderError.self) {
-            _ = try OfficialMCPRegistryProvider(baseURL: URL(string: "http://registry.example")!)
+            _ = try OfficialMCPRegistryProvider(baseURL: try #require(URL(string: "http://registry.example")))
         }
 
         let stub = MarketplaceHTTPStub(payload: Data("{}".utf8), statusCode: 503)
@@ -114,13 +114,24 @@ struct MarketplaceProviderTests {
         let page = try await provider.search(MarketplaceQuery())
 
         let remote = try #require(page.packages.first(where: { $0.name == "com.example/remote-docs" }))
-        #expect(remote.nativeInstalls.count == 3)
+        #expect(remote.nativeInstalls.count == 4)
+        #expect(
+            remote.nativeInstalls.first(where: { $0.client == .kiro })?.arguments
+                == ["mcp", "add", "--name", "remote-docs", "--url", "https://example.com/mcp", "--scope", "global", "--force"]
+        )
         #expect(
             remote.nativeInstalls.first(where: { $0.client == .codex })?.arguments
                 == ["mcp", "add", "remote-docs", "--url", "https://example.com/mcp"]
         )
         let local = try #require(page.packages.first(where: { $0.name == "com.example/local-search" }))
-        #expect(local.nativeInstalls.count == 3)
+        #expect(local.nativeInstalls.count == 4)
+        #expect(
+            local.nativeInstalls.first(where: { $0.client == .kiro })?.arguments
+                == [
+                    "mcp", "add", "--name", "local-search", "--command", "npx", "--scope", "global", "--force",
+                    "--args", "-y", "--args", "@example/local-search@3.0.0",
+                ]
+        )
         #expect(
             local.nativeInstalls.first(where: { $0.client == .claude })?.arguments
                 == [

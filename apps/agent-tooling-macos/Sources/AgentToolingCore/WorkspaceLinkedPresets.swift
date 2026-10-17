@@ -70,8 +70,10 @@ public enum WorkspaceLinkedPresetResolver {
         for destination in subscription.destinations.sorted(by: order) {
             let existing = Set(mine.filter { $0.destination == destination }.map(\.artifactID))
             for artifactID in members.subtracting(existing).sorted(by: idOrder) where live.contains(artifactID) {
-                changes.append(.init(kind: .add, presetID: subscription.presetID, artifactID: artifactID,
-                                     destination: destination, remainingReasons: []))
+                changes.append(
+                    .init(
+                        kind: .add, presetID: subscription.presetID, artifactID: artifactID,
+                        destination: destination, remainingReasons: []))
             }
             for artifactID in existing.subtracting(members).sorted(by: idOrder) {
                 // Anything else asking for this destination keeps it.
@@ -79,14 +81,16 @@ public enum WorkspaceLinkedPresetResolver {
                     $0.artifactID == artifactID && $0.destination == destination
                         && $0.reason != .preset(presetID: subscription.presetID)
                 }.map(\.reason)
-                changes.append(.init(
-                    kind: others.isEmpty ? .removeContribution : .retainedByOtherReason,
-                    presetID: subscription.presetID, artifactID: artifactID,
-                    destination: destination, remainingReasons: others))
+                changes.append(
+                    .init(
+                        kind: others.isEmpty ? .removeContribution : .retainedByOtherReason,
+                        presetID: subscription.presetID, artifactID: artifactID,
+                        destination: destination, remainingReasons: others))
             }
         }
-        return .init(presetID: subscription.presetID, fromRevision: subscription.appliedRevision,
-                     toRevision: preset.revision, changes: changes)
+        return .init(
+            presetID: subscription.presetID, fromRevision: subscription.appliedRevision,
+            toRevision: preset.revision, changes: changes)
     }
 
     /// Applies exactly the reviewed changes. A destination another reason still
@@ -103,10 +107,12 @@ public enum WorkspaceLinkedPresetResolver {
                 let contribution = AssignmentContribution(
                     id: identifiers(), artifactID: change.artifactID, destination: change.destination,
                     reason: .preset(presetID: change.presetID), desiredPresence: true)
-                guard !document.assignments.contains(where: {
-                    $0.artifactID == contribution.artifactID && $0.destination == contribution.destination
-                        && $0.reason == contribution.reason
-                }) else { continue }
+                guard
+                    !document.assignments.contains(where: {
+                        $0.artifactID == contribution.artifactID && $0.destination == contribution.destination
+                            && $0.reason == contribution.reason
+                    })
+                else { continue }
                 document.assignments.append(contribution)
                 affected.append(change.artifactID)
             case .removeContribution, .retainedByOtherReason:
@@ -125,27 +131,35 @@ public enum WorkspaceLinkedPresetResolver {
     /// Names every change that was shown, so a repeat of the same reviewed
     /// catch-up replays and a different one does not.
     public static func inputDigest(_ update: LinkedPresetUpdate) -> String {
-        var fields = ["linked-preset.catch-up.v1",
-                      update.presetID.rawValue.uuidString.lowercased(),
-                      String(update.fromRevision), String(update.toRevision)]
+        var fields = [
+            "linked-preset.catch-up.v1",
+            update.presetID.rawValue.uuidString.lowercased(),
+            String(update.fromRevision), String(update.toRevision),
+        ]
         for change in update.changes {
-            fields += [change.kind.rawValue,
-                       change.artifactID.rawValue.uuidString.lowercased(),
-                       change.destination.surface.rawValue,
-                       change.destination.scope.rawValue,
-                       change.destination.logicalProjectID?.rawValue.uuidString.lowercased() ?? ""]
+            fields += [
+                change.kind.rawValue,
+                change.artifactID.rawValue.uuidString.lowercased(),
+                change.destination.surface.rawValue,
+                change.destination.scope.rawValue,
+                change.destination.logicalProjectID?.rawValue.uuidString.lowercased() ?? "",
+            ]
         }
         let payload = Data(fields.joined(separator: "\u{0}").utf8)
-        return SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: payload).lowercaseHex
     }
 }
 
 private extension WorkspaceLinkedPresetResolver {
     static func order(_ lhs: PortableDestination, _ rhs: PortableDestination) -> Bool {
-        let left = [lhs.surface.rawValue, lhs.scope.rawValue,
-                    lhs.logicalProjectID?.rawValue.uuidString ?? ""]
-        let right = [rhs.surface.rawValue, rhs.scope.rawValue,
-                     rhs.logicalProjectID?.rawValue.uuidString ?? ""]
+        let left = [
+            lhs.surface.rawValue, lhs.scope.rawValue,
+            lhs.logicalProjectID?.rawValue.uuidString ?? "",
+        ]
+        let right = [
+            rhs.surface.rawValue, rhs.scope.rawValue,
+            rhs.logicalProjectID?.rawValue.uuidString ?? "",
+        ]
         return left.lexicographicallyPrecedes(right)
     }
 }

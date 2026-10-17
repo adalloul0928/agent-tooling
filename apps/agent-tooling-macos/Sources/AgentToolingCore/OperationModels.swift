@@ -5,7 +5,10 @@ public enum OperationKind: String, Codable, CaseIterable, Sendable {
     case createSkill
     case installSkill
     case installPlugin
+    case updateSkill
+    case updatePlugin
     case configureMCP
+    case updateMCP
     case importSource
     case exportBackup
     case restoreBackup
@@ -24,6 +27,19 @@ public enum OperationStepKind: String, Codable, CaseIterable, Sendable {
     /// Removes a directory this app can prove it installed and that still
     /// matches what was approved. It never touches anything else.
     case removeManagedDirectory
+    /// Removes one app's copy of a skill that this app did not install: a
+    /// folder or a symlink directly inside a known skills folder, moved into
+    /// this workspace's trash first so it can be put back. Never a folder the
+    /// library holds, never anything outside a skills folder.
+    case removeUnmanagedSkillCopy
+    /// Removes one cached version of a plugin that its client no longer uses:
+    /// a version folder directly inside a plugin's cache folder, moved into
+    /// this workspace's trash first. Never the version in use.
+    case removeUnmanagedPluginCache
+    /// Changes one key in one of the client configuration files this app
+    /// knows, after copying the file into the workspace trash. The edit is in
+    /// `contents` as JSON; the file is `destinationPath`.
+    case editClientConfiguration
     case replaceManagedLibrary
     case command
     case scan

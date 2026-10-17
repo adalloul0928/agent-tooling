@@ -34,7 +34,9 @@ public enum WorkspaceDeploymentAction: Hashable, Sendable {
     /// Ask the native client to install a whole package it owns.
     case installNativePackage(route: NativePackageRoute)
     /// Add or reconfigure a managed connection this device holds locally.
-    case configureManagedConnection(transport: MCPTransport)
+    /// `replacesExisting` is true when the client already has a connection
+    /// under this name and the step changes it, which a person should see.
+    case configureManagedConnection(transport: MCPTransport, replacesExisting: Bool = false)
     /// Remove a copy this app installed that is no longer requested here.
     case removeContent(installed: ContentDigest)
 }
@@ -50,6 +52,12 @@ public enum WorkspaceDeploymentExclusionReason: String, Hashable, Sendable, Case
     case missingNativeRoute
     /// The adapter cannot express this scope or this on/off request.
     case unsupportedByAdapter
+    /// This app did not report its version, so what it accepts is unknown.
+    /// Different from `unsupportedByAdapter`: the answer is unknown, not no.
+    case unknownClientVersion
+    /// This destination does not exist on this Mac yet — a project with no
+    /// folder chosen, a client that is not installed, or an unsupported surface.
+    case noDestination
     /// The resolver could not produce a usable requirement.
     case needsAssignmentReview
     /// The destination already holds exactly this, by observation.
@@ -101,7 +109,6 @@ public struct WorkspaceDeploymentPlan: Sendable {
     /// the thing being approved is the thing that was resolved.
     public let requirements: [EffectiveAssignmentRequirement]
     public let resolvedTargets: [ResolvedAssignmentTarget]
-    public var isEmpty: Bool { items.isEmpty }
 
     public init(
         items: [WorkspaceDeploymentItem],
@@ -135,7 +142,14 @@ public enum WorkspaceDeploymentPlanner {
         /// Destinations the caller proved this app installed itself. Only these
         /// can ever be offered for removal; anything else stays untouched.
         provenInstalls: Set<WorkspaceDeploymentInstallKey> = [],
-        nativeInstallRoutes: Set<NativePackageRoute> = []
+        nativeInstallRoutes: Set<NativePackageRoute> = [],
+        /// Selectors this Mac has no destination for right now — a project with
+        /// no folder chosen, a client that is not installed, an unsupported
+        /// surface — each with a plain-words detail. An assignment aimed at one
+        /// of these is excluded by name with `.noDestination` and that detail,
+        /// rather than falling through to a generic "needs review" once the
+        /// resolver cannot find a target for it.
+        unavailableDestinations: [ResolvedAssignmentSelector: String] = [:]
     ) -> WorkspaceDeploymentPlan {
         var items: [WorkspaceDeploymentItem] = []
         var exclusions: [WorkspaceDeploymentExclusion] = []
@@ -145,8 +159,24 @@ public enum WorkspaceDeploymentPlanner {
             _ destination: WorkspaceObjectID?,
             _ detail: String
         ) {
-            exclusions.append(.init(artifactID: artifactID, physicalDestinationID: destination,
-                                    reason: reason, detail: detail))
+            exclusions.append(
+                .init(
+                    artifactID: artifactID, physicalDestinationID: destination,
+                    reason: reason, detail: detail))
+        }
+
+        // An assignment aimed at a destination this Mac cannot reach right now
+        // is excluded by name here, before the resolver — which never saw a
+        // target for it — would report it as a generic review. The detail is
+        // the caller's plain-words reason, naming the project or the app.
+        var unavailableArtifacts = Set<ArtifactID>()
+        if !unavailableDestinations.isEmpty {
+            for assignment in document.assignments {
+                let selector = ResolvedAssignmentSelector(destination: assignment.destination)
+                guard let detail = unavailableDestinations[selector] else { continue }
+                exclude(.noDestination, assignment.artifactID, nil, detail)
+                unavailableArtifacts.insert(assignment.artifactID)
+            }
         }
 
         let resolution = WorkspaceAssignmentResolver.resolve(
@@ -157,52 +187,76 @@ public enum WorkspaceDeploymentPlanner {
             capabilityEvidence: device.capabilityEvidence,
             contentEvidence: availableContent,
             portableMCPDefinitions: document.mcpDefinitions ?? [],
-            deviceMCPBindings: device.mcpBindings ?? [])
+            deviceMCPBindings: device.mcpBindings ?? [],
+            deviceRegistry: document.deviceRegistry)
 
         for issue in resolution.issues {
-            exclude(reason(for: issue.kind), issue.artifactID, issue.physicalDestinationID,
-                    describe(issue.kind))
+            // A `missingResolvedTarget` for an artifact whose selector this Mac
+            // could not reach is the same fact `.noDestination` already reported
+            // in plain words above; do not also report it as a generic review.
+            // An available selector for the same artifact resolves to a
+            // requirement, so this never hides a different destination's problem.
+            if issue.kind == .missingResolvedTarget,
+                let artifactID = issue.artifactID,
+                unavailableArtifacts.contains(artifactID)
+            {
+                continue
+            }
+            exclude(
+                reason(for: issue.kind), issue.artifactID, issue.physicalDestinationID,
+                describe(issue.kind))
         }
 
-        let artifacts = Dictionary(document.artifacts.map { ($0.identity.id, $0) },
-                                   uniquingKeysWith: { first, _ in first })
-        let targetsByID = Dictionary(targets.map { ($0.physicalDestinationID, $0) },
-                                     uniquingKeysWith: { first, _ in first })
-        let observed = Dictionary(observations.map {
-            (ObservationKey(artifactID: $0.artifactID, destination: $0.physicalDestinationID), $0)
-        }, uniquingKeysWith: { first, _ in first })
+        let artifacts = Dictionary(
+            document.artifacts.map { ($0.identity.id, $0) },
+            uniquingKeysWith: { first, _ in first })
+        let targetsByID = Dictionary(
+            targets.map { ($0.physicalDestinationID, $0) },
+            uniquingKeysWith: { first, _ in first })
+        let observed = Dictionary(
+            observations.map {
+                (ObservationKey(artifactID: $0.artifactID, destination: $0.physicalDestinationID), $0)
+            }, uniquingKeysWith: { first, _ in first })
 
         for requirement in resolution.requirements.sorted(by: order) {
             guard let artifact = artifacts[requirement.artifactID],
-                  let target = targetsByID[requirement.physicalDestinationID] else {
-                exclude(.needsAssignmentReview, requirement.artifactID, requirement.physicalDestinationID,
-                        "This request no longer matches a known item or destination.")
+                let target = targetsByID[requirement.physicalDestinationID]
+            else {
+                exclude(
+                    .needsAssignmentReview, requirement.artifactID, requirement.physicalDestinationID,
+                    "This request no longer matches a known item or destination.")
                 continue
             }
             guard artifact.identity.parentPackageID == nil else {
-                exclude(.packageMember, artifact.identity.id, requirement.physicalDestinationID,
-                        "Bundled tools are delivered by their package.")
+                exclude(
+                    .packageMember, artifact.identity.id, requirement.physicalDestinationID,
+                    "Bundled tools are delivered by their package.")
                 continue
             }
-            let current = observed[.init(artifactID: artifact.identity.id,
-                                         destination: requirement.physicalDestinationID)]
+            let current = observed[
+                .init(
+                    artifactID: artifact.identity.id,
+                    destination: requirement.physicalDestinationID)]
             let action: WorkspaceDeploymentAction
             switch requirement.strategy {
             case .content:
                 guard artifact.authority != .trackedOnly else {
-                    exclude(.trackedOwnership, artifact.identity.id, requirement.physicalDestinationID,
-                            "Tracked items record what exists; the library does not install them.")
+                    exclude(
+                        .trackedOwnership, artifact.identity.id, requirement.physicalDestinationID,
+                        "Not managed by this app: this library records that it exists and does not install it.")
                     continue
                 }
                 guard let digest = artifact.contentDigest else {
-                    exclude(.missingContent, artifact.identity.id, requirement.physicalDestinationID,
-                            "The library holds no verified content for this item yet.")
+                    exclude(
+                        .missingContent, artifact.identity.id, requirement.physicalDestinationID,
+                        "The library holds no verified content for this item yet.")
                     continue
                 }
                 if let current, current.isPresent {
                     guard current.contentDigest != digest else {
-                        exclude(.alreadyPresent, artifact.identity.id, requirement.physicalDestinationID,
-                                "This destination already holds the approved version.")
+                        exclude(
+                            .alreadyPresent, artifact.identity.id, requirement.physicalDestinationID,
+                            "This destination already holds the approved version.")
                         continue
                     }
                     action = .updateContent(from: current.contentDigest, to: digest)
@@ -212,78 +266,95 @@ public enum WorkspaceDeploymentPlanner {
 
             case .nativePlugin(let route):
                 guard nativeInstallRoutes.contains(route) else {
-                    exclude(.missingNativeRoute, artifact.identity.id, requirement.physicalDestinationID,
-                            "This Mac has no reviewed install route for this app's package.")
+                    exclude(
+                        .missingNativeRoute, artifact.identity.id, requirement.physicalDestinationID,
+                        "This Mac has no reviewed install route for this app's package.")
                     continue
                 }
                 // A native package's own client owns enable/disable; asking for
                 // it here would be an install claim the adapter cannot make.
                 guard requirement.desiredEnabled == nil else {
-                    exclude(.unsupportedByAdapter, artifact.identity.id, requirement.physicalDestinationID,
-                            "Turning an app-managed package on or off is done in that app.")
+                    exclude(
+                        .unsupportedByAdapter, artifact.identity.id, requirement.physicalDestinationID,
+                        "Turning an app-managed package on or off is done in that app.")
                     continue
                 }
                 if let current, current.isPresent {
-                    exclude(.alreadyPresent, artifact.identity.id, requirement.physicalDestinationID,
-                            "This app already reports the package installed.")
+                    exclude(
+                        .alreadyPresent, artifact.identity.id, requirement.physicalDestinationID,
+                        "This app already reports the package installed.")
                     continue
                 }
                 action = .installNativePackage(route: route)
 
             case .managedMCP(let definition, let binding):
                 guard binding != nil else {
-                    exclude(.needsAssignmentReview, artifact.identity.id, requirement.physicalDestinationID,
-                            "This connection has no local setup on this Mac yet.")
+                    exclude(
+                        .needsAssignmentReview, artifact.identity.id, requirement.physicalDestinationID,
+                        "This connection has no local setup on this Mac yet.")
                     continue
                 }
                 if let current, current.isPresent, current.isEnabled == requirement.desiredEnabled {
-                    exclude(.alreadyPresent, artifact.identity.id, requirement.physicalDestinationID,
-                            "This connection is already set up here as requested.")
+                    exclude(
+                        .alreadyPresent, artifact.identity.id, requirement.physicalDestinationID,
+                        "This connection is already set up here as requested.")
                     continue
                 }
-                action = .configureManagedConnection(transport: definition.connection.transport)
+                action = .configureManagedConnection(
+                    transport: definition.connection.transport, replacesExisting: current?.isPresent == true)
             }
 
-            items.append(.init(
-                artifactID: artifact.identity.id,
-                displayName: artifact.identity.displayName,
-                physicalDestinationID: requirement.physicalDestinationID,
-                surface: target.selector.surface,
-                scope: target.selector.scope,
-                logicalProjectID: target.selector.logicalProjectID,
-                action: action,
-                desiredEnabled: requirement.desiredEnabled,
-                reasons: uniqueReasons(requirement.contributions)))
+            items.append(
+                .init(
+                    artifactID: artifact.identity.id,
+                    displayName: artifact.identity.displayName,
+                    physicalDestinationID: requirement.physicalDestinationID,
+                    surface: target.selector.surface,
+                    scope: target.selector.scope,
+                    logicalProjectID: target.selector.logicalProjectID,
+                    action: action,
+                    desiredEnabled: requirement.desiredEnabled,
+                    reasons: uniqueReasons(requirement.contributions)))
         }
         // Anything this app installed that nobody asks for any more is offered
         // for removal. A copy someone else put there is never touched.
-        let requested = Set(resolution.requirements.map {
-            WorkspaceDeploymentInstallKey(artifactID: $0.artifactID,
-                                          physicalDestinationID: $0.physicalDestinationID)
-        })
+        let requested = Set(
+            resolution.requirements.map {
+                WorkspaceDeploymentInstallKey(
+                    artifactID: $0.artifactID,
+                    physicalDestinationID: $0.physicalDestinationID)
+            })
         for key in provenInstalls.subtracting(requested).sorted(by: keyOrder) {
-            guard let observation = observed[.init(artifactID: key.artifactID,
-                                                   destination: key.physicalDestinationID)],
-                  observation.isPresent, let digest = observation.contentDigest else {
+            guard
+                let observation = observed[
+                    .init(
+                        artifactID: key.artifactID,
+                        destination: key.physicalDestinationID)],
+                observation.isPresent, let digest = observation.contentDigest
+            else {
                 // Without a measurement there is nothing to prove it is safe to
                 // remove, so it is left where it is.
                 continue
             }
             guard let target = targetsByID[key.physicalDestinationID] else { continue }
-            items.append(.init(
-                artifactID: key.artifactID,
-                displayName: artifacts[key.artifactID]?.identity.displayName ?? "Removed item",
-                physicalDestinationID: key.physicalDestinationID,
-                surface: target.selector.surface, scope: target.selector.scope,
-                logicalProjectID: target.selector.logicalProjectID,
-                action: .removeContent(installed: digest), desiredEnabled: nil, reasons: []))
+            items.append(
+                .init(
+                    artifactID: key.artifactID,
+                    displayName: artifacts[key.artifactID]?.identity.displayName ?? "Removed item",
+                    physicalDestinationID: key.physicalDestinationID,
+                    surface: target.selector.surface, scope: target.selector.scope,
+                    logicalProjectID: target.selector.logicalProjectID,
+                    action: .removeContent(installed: digest), desiredEnabled: nil, reasons: []))
         }
-        return .init(items: items, exclusions: exclusions.sorted(by: order),
-                     requirements: resolution.requirements, resolvedTargets: targets)
+        return .init(
+            items: items, exclusions: exclusions.sorted(by: order),
+            requirements: resolution.requirements, resolvedTargets: targets)
     }
 }
 
-private extension WorkspaceDeploymentPlanner {
+// Internal (not private) so the exclusion-description sentences can be unit
+// tested directly: a leaked enum raw value must be catchable in a test.
+extension WorkspaceDeploymentPlanner {
     struct ObservationKey: Hashable {
         let artifactID: ArtifactID
         let destination: WorkspaceObjectID
@@ -313,28 +384,39 @@ private extension WorkspaceDeploymentPlanner {
         case .missingMaterializedContent, .ambiguousContentEvidence: .missingContent
         case .nativeChildAssignment: .packageMember
         case .missingNativeRoute, .ambiguousNativeRoute, .invalidNativeRoute: .missingNativeRoute
-        case .unsupportedCapability, .unknownCapability, .missingCapabilityEvidence,
-             .contradictoryCapabilityEvidence: .unsupportedByAdapter
+        // The app answered but cannot express this: a real no.
+        case .unsupportedCapability, .unknownCapability, .contradictoryCapabilityEvidence:
+            .unsupportedByAdapter
+        // The app never said what it accepts, so the answer is unknown, not no.
+        case .missingCapabilityEvidence, .unknownClientVersion: .unknownClientVersion
         default: .needsAssignmentReview
         }
     }
 
+    /// One plain sentence per issue kind, and never the raw enum name. A
+    /// person reading this should learn what to do, not read a code word. The
+    /// fallback stays generic on purpose: leaking the kind was the bug.
     static func describe(_ kind: WorkspaceAssignmentIssueKind) -> String {
         switch kind {
-        case .trackedOnlyOwnership: "Tracked items record what exists; the library does not install them."
+        case .trackedOnlyOwnership:
+            "Not managed by this app: this library records that it exists and does not install it."
         case .missingMaterializedContent:
-            "The library holds no verified content for this item yet."
+            "The library holds no verified copy of this item yet."
         case .ambiguousContentEvidence:
-            "This item has more than one recorded content version in the library."
-        case .nativeChildAssignment: "Bundled tools are delivered by their package."
+            "This item has more than one recorded version in the library, so it is not clear which to install."
+        case .nativeChildAssignment:
+            "This tool comes with its package and is installed as part of it."
         case .missingNativeRoute, .ambiguousNativeRoute, .invalidNativeRoute:
-            "This app's package has no single confirmed route on this Mac."
+            "This app's package has no single confirmed way to install it on this Mac."
         case .unsupportedCapability, .unknownCapability:
-            "The installed app version does not support this destination."
-        case .missingCapabilityEvidence, .contradictoryCapabilityEvidence:
-            "This Mac has no dependable record of what the installed app supports."
-        // Naming the check that refused is what makes this actionable.
-        default: "This request needs review before it can be applied: \(kind.rawValue)."
+            "The installed app cannot accept this here."
+        case .contradictoryCapabilityEvidence:
+            "This Mac has conflicting records of what the installed app accepts, so it is not safe to proceed."
+        case .missingCapabilityEvidence, .unknownClientVersion:
+            "This app did not report its version, so Agent Tooling cannot confirm it accepts this. "
+                + "Check your apps again once it answers."
+        default:
+            "This request needs a second look before it can be applied."
         }
     }
 

@@ -26,8 +26,9 @@ private let regressionCeiling = 10
 
 @Suite("Library interaction latency")
 struct LibraryInteractionLatencyTests {
-    @Test("Building the library index stays far inside the routine-feedback ceiling",
-          .enabled(if: runsLatency), arguments: [500, 5_000])
+    @Test(
+        "Building the library index stays far inside the routine-feedback ceiling",
+        .enabled(if: runsLatency), arguments: [500, 5_000])
     func indexBuild(count: Int) throws {
         let snapshot = try Self.snapshot(count: count)
         // One warm-up, so the measurement is the steady state a person sees
@@ -39,12 +40,14 @@ struct LibraryInteractionLatencyTests {
         }
 
         Self.report("index build", count: count, elapsed: elapsed, target: routineFeedbackTarget)
-        #expect(elapsed < routineFeedbackTarget * regressionCeiling,
-                "Building \(count) rows took \(elapsed), far past anything hardware explains.")
+        #expect(
+            elapsed < routineFeedbackTarget * regressionCeiling,
+            "Building \(count) rows took \(elapsed), far past anything hardware explains.")
     }
 
-    @Test("Filtering a warm library stays far inside the warm-response ceiling",
-          .enabled(if: runsLatency), arguments: [500, 5_000])
+    @Test(
+        "Filtering a warm library stays far inside the warm-response ceiling",
+        .enabled(if: runsLatency), arguments: [500, 5_000])
     func warmFilter(count: Int) throws {
         let model = try WorkspaceLibraryReadModel(snapshot: try Self.snapshot(count: count))
         _ = model.filteredRows(matching: "skill 4")
@@ -54,8 +57,9 @@ struct LibraryInteractionLatencyTests {
         }
 
         Self.report("warm filter", count: count, elapsed: elapsed, target: warmFilterTarget)
-        #expect(elapsed < warmFilterTarget * regressionCeiling,
-                "Filtering \(count) rows took \(elapsed), far past anything hardware explains.")
+        #expect(
+            elapsed < warmFilterTarget * regressionCeiling,
+            "Filtering \(count) rows took \(elapsed), far past anything hardware explains.")
     }
 
     /// Median rather than mean: one scheduling hiccup should not become the
@@ -71,7 +75,8 @@ struct LibraryInteractionLatencyTests {
     }
 
     private static func report(_ what: String, count: Int, elapsed: Duration, target: Duration) {
-        let millis = Double(elapsed.components.seconds) * 1_000
+        let millis =
+            Double(elapsed.components.seconds) * 1_000
             + Double(elapsed.components.attoseconds) / 1e15
         let verdict = elapsed < target ? "within" : "over"
         // Printed rather than asserted: the plan wants these calibrated on
@@ -87,9 +92,10 @@ struct LibraryInteractionLatencyTests {
                 authority: .centralPersonal, declaredName: "skill-\(offset)",
                 contentDigest: .init(value: String(repeating: "a", count: 64)))
         }
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: workspaceID, revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: artifacts))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: workspaceID, revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: artifacts))
         return .init(document: document, device: .init(workspaceID: workspaceID))
     }
 }

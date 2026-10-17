@@ -48,8 +48,10 @@ struct MCPRuntimeTests {
             """#
         let available = ToolHiveMCPRuntimeProvider(
             runner: MCPRuntimeRunnerStub(
-                versionResult: CommandOutput(status: 0,
-                    standardOutput: #"{"version":"0.34.0","commit":"abc","build_date":"fixture","go_version":"go1.25","platform":"darwin/arm64"}"#,
+                versionResult: CommandOutput(
+                    status: 0,
+                    standardOutput:
+                        #"{"version":"0.34.0","commit":"abc","build_date":"fixture","go_version":"go1.25","platform":"darwin/arm64"}"#,
                     standardError: ""),
                 listResult: CommandOutput(status: 0, standardOutput: workloadJSON, standardError: "")
             ))

@@ -58,9 +58,10 @@ public struct WorkspaceSyncEnrollment: Codable, Hashable, Sendable {
             throw WorkspaceSyncEnrollmentError.invalidRemote
         }
         guard checkoutPath.hasPrefix("/"), !checkoutPath.contains("\0"),
-              checkoutPath.count <= 4_096,
-              URL(fileURLWithPath: checkoutPath).standardizedFileURL.path == checkoutPath,
-              GitWorkspaceTransport.isValidBranch(branch) else {
+            checkoutPath.count <= 4_096,
+            URL(fileURLWithPath: checkoutPath).standardizedFileURL.path == checkoutPath,
+            GitWorkspaceTransport.isValidBranch(branch)
+        else {
             throw WorkspaceSyncEnrollmentError.invalidCheckout
         }
         formatVersion = Self.formatVersion
@@ -89,8 +90,9 @@ public struct WorkspaceSyncEnrollment: Codable, Hashable, Sendable {
 
     /// The same connection with automatic passes turned on or off.
     public func settingAutomatic(_ value: Bool) throws -> Self {
-        try .init(workspaceID: workspaceID, remote: remote, checkoutPath: checkoutPath,
-                  branch: branch, kind: kind, isAutomatic: value)
+        try .init(
+            workspaceID: workspaceID, remote: remote, checkoutPath: checkoutPath,
+            branch: branch, kind: kind, isAutomatic: value)
     }
 }
 
@@ -100,8 +102,9 @@ public struct WorkspaceSyncEnrollmentStore: Sendable {
 
     public init(containerRoot: URL) throws {
         guard containerRoot.isFileURL, containerRoot.path.hasPrefix("/"),
-              !containerRoot.path.contains("\0"),
-              containerRoot.standardizedFileURL.path == containerRoot.path else {
+            !containerRoot.path.contains("\0"),
+            containerRoot.standardizedFileURL.path == containerRoot.path
+        else {
             throw WorkspaceSyncEnrollmentError.invalidRoot
         }
         file = containerRoot.appending(path: "sync-enrollment.json")
@@ -113,18 +116,19 @@ public struct WorkspaceSyncEnrollmentStore: Sendable {
     public func read() throws -> WorkspaceSyncEnrollment? {
         guard FileManager.default.fileExists(atPath: file.path) else { return nil }
         let bytes: Data
-        do { bytes = try Data(contentsOf: file, options: [.mappedIfSafe]) }
-        catch { throw WorkspaceSyncEnrollmentError.unreadable }
+        do { bytes = try Data(contentsOf: file, options: [.mappedIfSafe]) } catch { throw WorkspaceSyncEnrollmentError.unreadable }
         guard bytes.count <= 64_000 else { throw WorkspaceSyncEnrollmentError.unsupportedFormat }
         let value: WorkspaceSyncEnrollment
-        do { value = try AgentToolingCoding.decoder().decode(WorkspaceSyncEnrollment.self, from: bytes) }
-        catch { throw WorkspaceSyncEnrollmentError.unsupportedFormat }
+        do { value = try AgentToolingCoding.decoder().decode(WorkspaceSyncEnrollment.self, from: bytes) } catch {
+            throw WorkspaceSyncEnrollmentError.unsupportedFormat
+        }
         // A folder connection has no remote address, and a Git one must not
         // pick up a folder's empty locator by decoding an older or edited file.
         guard value.formatVersion == WorkspaceSyncEnrollment.formatVersion,
-              value.kind == .encryptedFolder || GitWorkspaceTransport.isValidRemote(value.remote),
-              value.kind == .git || value.remote.isEmpty,
-              GitWorkspaceTransport.isValidBranch(value.branch) else {
+            value.kind == .encryptedFolder || GitWorkspaceTransport.isValidRemote(value.remote),
+            value.kind == .git || value.remote.isEmpty,
+            GitWorkspaceTransport.isValidBranch(value.branch)
+        else {
             throw WorkspaceSyncEnrollmentError.unsupportedFormat
         }
         return value
@@ -132,8 +136,7 @@ public struct WorkspaceSyncEnrollmentStore: Sendable {
 
     public func write(_ enrollment: WorkspaceSyncEnrollment) throws {
         let bytes = try AgentToolingCoding.encoder().encode(enrollment)
-        do { try bytes.write(to: file, options: .atomic) }
-        catch { throw WorkspaceSyncEnrollmentError.unreadable }
+        do { try bytes.write(to: file, options: .atomic) } catch { throw WorkspaceSyncEnrollmentError.unreadable }
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
     }
 
@@ -141,7 +144,6 @@ public struct WorkspaceSyncEnrollmentStore: Sendable {
     /// only this Mac stops using it.
     public func remove() throws {
         guard FileManager.default.fileExists(atPath: file.path) else { return }
-        do { try FileManager.default.removeItem(at: file) }
-        catch { throw WorkspaceSyncEnrollmentError.unreadable }
+        do { try FileManager.default.removeItem(at: file) } catch { throw WorkspaceSyncEnrollmentError.unreadable }
     }
 }
