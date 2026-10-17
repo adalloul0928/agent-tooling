@@ -27,16 +27,17 @@ struct SkillCreatorOptions: Equatable {
             && isDirectory.boolValue
     }
 
-    /// What the draft will be told about itself, in one line, until the person
-    /// opens Options to change it.
+    /// What the draft will be told about itself, until the person opens
+    /// Options to change it: who names the skill, where it is saved, and which
+    /// apps are offered it after review. Each fact has its own clause, so "on
+    /// this Mac" reads as where the skill goes, not where its name is chosen.
     func summaryText(client: ClientKind) -> String {
-        let name = proposedName.isEmpty ? "\(client.rawValue) chooses the name" : "named \(proposedName)"
-        let offered = targets.isEmpty
-            ? "offered to no app yet"
-            : "offered to \(targets.sorted { $0.rawValue < $1.rawValue }.map(\.rawValue).joined(separator: ", "))"
+        let name = proposedName.isEmpty ? "\(client.rawValue) names the skill." : "The skill is named \(proposedName)."
         // The home scope is "on this Mac" here, as on every other screen.
-        let placement = scope == .project ? "for a project" : "on this Mac"
-        return "\(name), \(placement), \(offered) after review. Change these under Options before the first message."
+        let placement = scope == .project ? "in the project folder" : "on this Mac"
+        let apps = targets.map(\.rawValue).sorted()
+        let offered = apps.isEmpty ? "but not offered to any app yet" : "and offered to \(apps.formatted(.list(type: .and)))"
+        return "\(name) After review, it is saved \(placement) \(offered). Change these under Options before the first message."
     }
 
     /// Why the first message cannot be sent yet, or nil when it can. After a

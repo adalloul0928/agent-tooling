@@ -14,11 +14,11 @@ struct SkillCreatorOptionsTests {
     @Test func summaryNamesTheAssistantsChoiceWhenNoNameIsSuggested() {
         let options = SkillCreatorOptions(proposedName: "", scope: .user, projectRoot: "", targets: [])
         let text = options.summaryText(client: .claude)
-        #expect(text.contains("Claude Code chooses the name"))
+        #expect(text.hasPrefix("Claude Code names the skill."))
         // The home scope has one name across the app.
-        #expect(text.contains("on this Mac"))
+        #expect(text.contains("saved on this Mac"))
         #expect(!text.contains("for you"))
-        #expect(text.contains("offered to no app yet"))
+        #expect(text.contains("but not offered to any app yet"))
     }
 
     @Test func summaryReflectsASuggestedNameProjectScopeAndTargets() {
@@ -26,10 +26,20 @@ struct SkillCreatorOptionsTests {
             proposedName: "release-readiness", scope: .project, projectRoot: "/tmp",
             targets: [.codex, .claude])
         let text = options.summaryText(client: .codex)
-        #expect(text.contains("named release-readiness"))
-        #expect(text.contains("for a project"))
+        #expect(text.hasPrefix("The skill is named release-readiness."))
+        #expect(text.contains("saved in the project folder"))
         // Targets read in a stable, name-sorted order.
-        #expect(text.contains("offered to Claude Code, Codex"))
+        #expect(text.contains("offered to Claude Code and Codex"))
+    }
+
+    /// It read "Claude Code chooses the name, on this Mac, offered to …",
+    /// where "on this Mac" seemed to say where the name is chosen.
+    @Test func summaryGivesEachFactItsOwnClause() {
+        let options = SkillCreatorOptions(scope: .user, targets: [.codex])
+        #expect(
+            options.summaryText(client: .claude)
+                == "Claude Code names the skill. After review, it is saved on this Mac and offered to Codex. "
+                + "Change these under Options before the first message.")
     }
 
     @Test func anUnmanagedClientCannotBeAsked() {
