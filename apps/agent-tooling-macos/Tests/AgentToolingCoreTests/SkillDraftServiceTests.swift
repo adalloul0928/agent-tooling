@@ -46,7 +46,7 @@ private actor SkillDraftRunnerStub: StandardInputCommandRunning {
         guard let currentDirectory else {
             return CommandOutput(status: 64, standardOutput: "", standardError: "missing current directory")
         }
-        let reply = Self.replyOutput(executable: executable, arguments: arguments)
+        let reply = try Self.replyOutput(executable: executable, arguments: arguments)
         switch behavior {
         case .valid(let name):
             try Self.writePackage(name: name, at: currentDirectory.appending(path: "draft", directoryHint: .isDirectory))
@@ -125,13 +125,13 @@ private actor SkillDraftRunnerStub: StandardInputCommandRunning {
                 try Self.writePackage(name: name, at: currentDirectory.appending(path: "draft", directoryHint: .isDirectory))
                 return CommandOutput(
                     status: 0,
-                    standardOutput: Self.replyOutput(
+                    standardOutput: try Self.replyOutput(
                         executable: executable, arguments: arguments, text: "Done. I wrote the package at ./draft."),
                     standardError: "")
             }
             return CommandOutput(
                 status: 0,
-                standardOutput: Self.replyOutput(
+                standardOutput: try Self.replyOutput(
                     executable: executable, arguments: arguments, text: "Which checks matter most to you?"),
                 standardError: "")
         }
@@ -139,13 +139,14 @@ private actor SkillDraftRunnerStub: StandardInputCommandRunning {
 
     /// One turn's output in the client's own wire format: Claude prints one
     /// JSON document, Codex one JSON event per line. Both name the session.
-    static func replyOutput(executable: String, arguments: [String], text: String = "I wrote the draft.") -> String {
+    static func replyOutput(executable: String, arguments: [String], text: String = "I wrote the draft.") throws -> String {
         if executable == "claude" {
-            let sessionID = arguments.firstIndex(where: { $0 == "--session-id" || $0 == "--resume" })
+            let sessionID =
+                arguments.firstIndex(where: { $0 == "--session-id" || $0 == "--resume" })
                 .map { arguments[$0 + 1] } ?? "00000000-0000-0000-0000-000000000000"
             return """
                 {"type":"result","subtype":"success","is_error":false,"duration_ms":1200,"num_turns":3,\
-                "result":\(Self.jsonString(text)),"session_id":"\(sessionID)","permission_denials":[]}
+                "result":\(try Self.jsonString(text)),"session_id":"\(sessionID)","permission_denials":[]}
 
                 """
         }
@@ -153,7 +154,7 @@ private actor SkillDraftRunnerStub: StandardInputCommandRunning {
         return """
             {"type":"thread.started","thread_id":"\(threadID)"}
             {"type":"turn.started"}
-            {"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":\(Self.jsonString(text))}}
+            {"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":\(try Self.jsonString(text))}}
             {"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}
 
             """
@@ -165,8 +166,8 @@ private actor SkillDraftRunnerStub: StandardInputCommandRunning {
         arguments.count > 2 && arguments[1] == "resume" || arguments.contains("--resume")
     }
 
-    private static func jsonString(_ text: String) -> String {
-        let data = try! JSONSerialization.data(withJSONObject: [text])
+    private static func jsonString(_ text: String) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: [text])
         var literal = String(decoding: data, as: UTF8.self)
         literal.removeFirst()
         literal.removeLast()
@@ -224,7 +225,7 @@ private actor BlockingCodexSkillDraftRunner: StandardInputCommandRunning {
             at: currentDirectory.appending(path: "draft", directoryHint: .isDirectory)
         )
         return CommandOutput(
-            status: 0, standardOutput: SkillDraftRunnerStub.replyOutput(executable: "codex", arguments: []),
+            status: 0, standardOutput: try SkillDraftRunnerStub.replyOutput(executable: "codex", arguments: []),
             standardError: "")
     }
 
@@ -276,7 +277,8 @@ struct SkillDraftServiceTests {
         #expect(!invocation.arguments.contains("--ephemeral"))
         #expect(!invocation.arguments.contains("--ignore-user-config"))
         #expect(invocation.arguments.contains("--ignore-rules"))
-        #expect(invocation.arguments == SkillCreatorCommandShapes.codexStart(requestDirectory: invocation.currentDirectory!))
+        let invocationDirectory = try #require(invocation.currentDirectory)
+        #expect(invocation.arguments == SkillCreatorCommandShapes.codexStart(requestDirectory: invocationDirectory))
         let optionPairs = Array(zip(invocation.arguments, invocation.arguments.dropFirst()))
         #expect(optionPairs.contains { $0 == "--disable" && $1 == "plugins" })
         #expect(optionPairs.contains { $0 == "--disable" && $1 == "hooks" })
@@ -505,10 +507,11 @@ struct SkillDraftServiceTests {
             Issue.record("expected the creator to be missing")
             return
         }
-        #expect(install.map(\.arguments) == [
-            SkillCreatorCommandShapes.claudeOfficialMarketplaceAddArguments,
-            SkillCreatorCommandShapes.claudeSkillCreatorInstallArguments,
-        ])
+        #expect(
+            install.map(\.arguments) == [
+                SkillCreatorCommandShapes.claudeOfficialMarketplaceAddArguments,
+                SkillCreatorCommandShapes.claudeSkillCreatorInstallArguments,
+            ])
         // Every step the offer would run is one the policy admits.
         let policy = OperationCommandPolicy(
             libraryURL: root.appending(path: "library"), gitBackupRoot: root.appending(path: "backup"), homeURL: root)
@@ -538,7 +541,7 @@ struct SkillDraftServiceTests {
         // home, a folder that is not a request folder, a thread that is not a
         // UUID: each is one token off and each is refused.
         var permissive = SkillCreatorCommandShapes.claude(sessionID: sessionID, resuming: false)
-        permissive[permissive.firstIndex(of: "acceptEdits")!] = "bypassPermissions"
+        permissive[try #require(permissive.firstIndex(of: "acceptEdits"))] = "bypassPermissions"
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "claude", arguments: permissive) }
         #expect(throws: OperationEngineError.self) {
             try policy.validate(
@@ -549,13 +552,14 @@ struct SkillDraftServiceTests {
         #expect(throws: OperationEngineError.self) {
             try policy.validate(
                 executable: "codex",
-                arguments: SkillCreatorCommandShapes.codexStart(requestDirectory: home.appending(path: "Documents", directoryHint: .isDirectory)))
+                arguments: SkillCreatorCommandShapes.codexStart(
+                    requestDirectory: home.appending(path: "Documents", directoryHint: .isDirectory)))
         }
         #expect(throws: OperationEngineError.self) {
             try policy.validate(executable: "codex", arguments: SkillCreatorCommandShapes.codexResume(threadID: "latest"))
         }
         var wider = SkillCreatorCommandShapes.codexStart(requestDirectory: requestDirectory)
-        wider[wider.firstIndex(of: "workspace-write")!] = "danger-full-access"
+        wider[try #require(wider.firstIndex(of: "workspace-write"))] = "danger-full-access"
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "codex", arguments: wider) }
     }
 
@@ -1088,7 +1092,8 @@ struct SkillDraftServiceTests {
         )
         let plugins = root.appending(path: ".claude/plugins", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: plugins, withIntermediateDirectories: true)
-        let installed = claudeHasSkillCreator
+        let installed =
+            claudeHasSkillCreator
             ? #"{"version":2,"plugins":{"skill-creator@claude-plugins-official":[{"scope":"user","version":"1.0.0"}]}}"#
             : #"{"version":2,"plugins":{}}"#
         try installed.write(to: plugins.appending(path: "installed_plugins.json"), atomically: true, encoding: .utf8)

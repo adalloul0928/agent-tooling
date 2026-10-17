@@ -77,9 +77,10 @@ public struct WorkspaceProjectDeclaration: Codable, Hashable, Sendable {
         var seen = Set<String>()
         for entry in entries {
             guard !entry.name.isEmpty, entry.name.count <= 200,
-                  !entry.name.contains("/"), entry.name != "." , entry.name != "..",
-                  entry.repositoryURL.map(isCredentialFreeHTTPS) ?? true,
-                  entry.packageRelativePath.map(isRelativeContainedPath) ?? true else {
+                !entry.name.contains("/"), entry.name != ".", entry.name != "..",
+                entry.repositoryURL.map(isCredentialFreeHTTPS) ?? true,
+                entry.packageRelativePath.map(isRelativeContainedPath) ?? true
+            else {
                 throw WorkspaceProjectDeclarationError.invalidEntry(name: entry.name)
             }
             guard seen.insert(entry.name + "\u{0}" + entry.kind.rawValue).inserted else {
@@ -136,22 +137,25 @@ public struct WorkspaceProjectLock: Codable, Hashable, Sendable {
         var seen = Set<String>()
         for entry in entries {
             guard !entry.name.isEmpty, entry.name.count <= 200, !entry.name.contains("/"),
-                  entry.repositoryURL.map(isCredentialFreeHTTPS) ?? true,
-                  entry.packageRelativePath.map(isRelativeContainedPath) ?? true,
-                  !entry.contentDigest.value.isEmpty else {
+                entry.repositoryURL.map(isCredentialFreeHTTPS) ?? true,
+                entry.packageRelativePath.map(isRelativeContainedPath) ?? true,
+                !entry.contentDigest.value.isEmpty
+            else {
                 throw WorkspaceProjectDeclarationError.invalidEntry(name: entry.name)
             }
             // The whole point of a lock. A commit hash names one set of bytes
             // forever; a version tag can be re-pointed, and an opaque publisher
             // revision makes no promise this build can check. Neither of those
             // restores the same bytes later, so neither is a lock.
-            let expected: Int? = switch entry.revision.kind {
-            case .gitCommitSHA1: 40
-            case .gitCommitSHA256: 64
-            case .semanticVersion, .opaquePublisherRevision: nil
-            }
+            let expected: Int? =
+                switch entry.revision.kind {
+                case .gitCommitSHA1: 40
+                case .gitCommitSHA256: 64
+                case .semanticVersion, .opaquePublisherRevision: nil
+                }
             guard let expected, entry.revision.value.count == expected,
-                  entry.revision.value.allSatisfy(\.isHexDigit) else {
+                entry.revision.value.allSatisfy(\.isHexDigit)
+            else {
                 throw WorkspaceProjectDeclarationError.mutableRevision(name: entry.name)
             }
             guard seen.insert(entry.name + "\u{0}" + entry.kind.rawValue).inserted else {
@@ -175,8 +179,9 @@ public struct WorkspaceProjectDeclarationStore: Sendable {
 
     public init(projectRoot: URL) throws {
         guard projectRoot.isFileURL, projectRoot.path.hasPrefix("/"),
-              !projectRoot.path.contains("\0"),
-              projectRoot.standardizedFileURL.path == projectRoot.path else {
+            !projectRoot.path.contains("\0"),
+            projectRoot.standardizedFileURL.path == projectRoot.path
+        else {
             throw WorkspaceProjectDeclarationError.invalidRoot
         }
         directory = projectRoot.appending(path: Self.directoryName, directoryHint: .isDirectory)
@@ -186,15 +191,17 @@ public struct WorkspaceProjectDeclarationStore: Sendable {
     public var lockURL: URL { directory.appending(path: Self.lockFileName) }
 
     public func readDeclaration() throws -> WorkspaceProjectDeclaration? {
-        try read(declarationURL, as: WorkspaceProjectDeclaration.self,
-                 marker: WorkspaceProjectDeclaration.marker,
-                 version: WorkspaceProjectDeclaration.formatVersion)
+        try read(
+            declarationURL, as: WorkspaceProjectDeclaration.self,
+            marker: WorkspaceProjectDeclaration.marker,
+            version: WorkspaceProjectDeclaration.formatVersion)
     }
 
     public func readLock() throws -> WorkspaceProjectLock? {
-        try read(lockURL, as: WorkspaceProjectLock.self,
-                 marker: WorkspaceProjectLock.marker,
-                 version: WorkspaceProjectLock.formatVersion)
+        try read(
+            lockURL, as: WorkspaceProjectLock.self,
+            marker: WorkspaceProjectLock.marker,
+            version: WorkspaceProjectLock.formatVersion)
     }
 
     public func write(
@@ -224,8 +231,7 @@ public struct WorkspaceProjectDeclarationStore: Sendable {
 
     private func write(_ value: some Encodable, to url: URL) throws {
         let bytes = try Self.encode(value)
-        do { try bytes.write(to: url, options: .atomic) }
-        catch { throw WorkspaceProjectDeclarationError.unreadable }
+        do { try bytes.write(to: url, options: .atomic) } catch { throw WorkspaceProjectDeclarationError.unreadable }
     }
 
     /// A file without this app's marker belongs to someone else. Overwriting it
@@ -233,12 +239,12 @@ public struct WorkspaceProjectDeclarationStore: Sendable {
     private func requireOursOrAbsent(_ url: URL) throws {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         let bytes: Data
-        do { bytes = try Data(contentsOf: url, options: [.mappedIfSafe]) }
-        catch { throw WorkspaceProjectDeclarationError.unreadable }
+        do { bytes = try Data(contentsOf: url, options: [.mappedIfSafe]) } catch { throw WorkspaceProjectDeclarationError.unreadable }
         guard bytes.count <= Self.maximumBytes,
-              let object = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
-              let marker = object["marker"] as? String,
-              marker == WorkspaceProjectDeclaration.marker || marker == WorkspaceProjectLock.marker else {
+            let object = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+            let marker = object["marker"] as? String,
+            marker == WorkspaceProjectDeclaration.marker || marker == WorkspaceProjectLock.marker
+        else {
             throw WorkspaceProjectDeclarationError.foreignFile(path: url.path)
         }
     }
@@ -248,13 +254,13 @@ public struct WorkspaceProjectDeclarationStore: Sendable {
     ) throws -> Value? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let bytes: Data
-        do { bytes = try Data(contentsOf: url, options: [.mappedIfSafe]) }
-        catch { throw WorkspaceProjectDeclarationError.unreadable }
+        do { bytes = try Data(contentsOf: url, options: [.mappedIfSafe]) } catch { throw WorkspaceProjectDeclarationError.unreadable }
         guard bytes.count <= Self.maximumBytes,
-              let object = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
-              object["marker"] as? String == marker,
-              object["formatVersion"] as? Int == version,
-              let value = try? JSONDecoder().decode(Value.self, from: bytes) else {
+            let object = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+            object["marker"] as? String == marker,
+            object["formatVersion"] as? Int == version,
+            let value = try? JSONDecoder().decode(Value.self, from: bytes)
+        else {
             throw WorkspaceProjectDeclarationError.unsupportedFormat
         }
         return value
@@ -264,17 +270,19 @@ public struct WorkspaceProjectDeclarationStore: Sendable {
 /// No user name, no password, no query that could carry a token.
 private func isCredentialFreeHTTPS(_ value: String) -> Bool {
     guard value.count <= 2_048, let components = URLComponents(string: value),
-          components.scheme?.lowercased() == "https",
-          components.user == nil, components.password == nil,
-          components.query == nil, components.fragment == nil,
-          let host = components.host, !host.isEmpty else { return false }
+        components.scheme?.lowercased() == "https",
+        components.user == nil, components.password == nil,
+        components.query == nil, components.fragment == nil,
+        let host = components.host, !host.isEmpty
+    else { return false }
     return true
 }
 
 /// Relative, contained, and never a machine's own path.
 private func isRelativeContainedPath(_ value: String) -> Bool {
     guard !value.isEmpty, value.count <= 1_024, !value.hasPrefix("/"),
-          !value.contains("\0"), !value.contains("\\") else { return false }
+        !value.contains("\0"), !value.contains("\\")
+    else { return false }
     let parts = value.split(separator: "/", omittingEmptySubsequences: false)
     return !parts.isEmpty && parts.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
 }

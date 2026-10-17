@@ -398,8 +398,10 @@ struct InsightsView: View {
                     VStack(alignment: .leading, spacing: Space.xxs) {
                         Text("\(deepDiveClient?.rawValue ?? "Your assistant") is reading your recent conversations…")
                             .font(AgentFont.bodyMedium)
-                        Text("This takes a few minutes. The findings below are the instant keyword pass; the considered read replaces them here when it lands.")
-                            .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
+                        Text(
+                            "This takes a few minutes. The findings below are the instant keyword pass; the considered read replaces them here when it lands."
+                        )
+                        .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                     }
                     Spacer()
                 }
@@ -622,7 +624,8 @@ struct InsightsView: View {
         guard let client = deepDiveClient else {
             return "A deep dive needs Claude Code or Codex; this Mac is not managing either."
         }
-        return "Runs the keyword pass, then has your signed-in \(client.rawValue) read digests of the selected conversations and say what you keep doing by hand. Runs on its own once a day when the app opens."
+        return
+            "Runs the keyword pass, then has your signed-in \(client.rawValue) read digests of the selected conversations and say what you keep doing by hand. Runs on its own once a day when the app opens."
     }
 
     /// Why there is nothing to scan, when there is nothing to scan. An app this

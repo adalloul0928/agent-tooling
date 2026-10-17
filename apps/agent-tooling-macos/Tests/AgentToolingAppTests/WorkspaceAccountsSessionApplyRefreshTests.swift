@@ -81,7 +81,7 @@ struct WorkspaceAccountsSessionApplyRefreshTests {
         // one settings file.
         let fixture = try await ShellRenderFixture(
             deviceObserver: StubDeviceObserver(observations: [
-                ShellRenderFixture.observation(.claudeCode, installed: true, commandAvailable: true, version: "2.1.300"),
+                ShellRenderFixture.observation(.claudeCode, installed: true, commandAvailable: true, version: "2.1.300")
             ]),
             accountReader: StubAccountReader())
         defer { fixture.remove() }
@@ -115,8 +115,9 @@ struct WorkspaceAccountsSessionApplyRefreshTests {
         _ = await applied.value
         await background.value
 
-        #expect(session.observation(.claude)?.effectiveValue(of: .init(.skillSync)) == .off,
-                "the applied file is read back even though a read was in flight")
+        #expect(
+            session.observation(.claude)?.effectiveValue(of: .init(.skillSync)) == .off,
+            "the applied file is read back even though a read was in flight")
         #expect(session.plan(.claude)?.isEmpty == true, "and the plan follows what was applied")
         let written = try #require(try? String(contentsOf: settings, encoding: .utf8))
         #expect(written.contains("syncClaudeAiSkills"))

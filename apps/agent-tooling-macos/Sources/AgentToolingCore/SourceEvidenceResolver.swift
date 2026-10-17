@@ -5,13 +5,6 @@ struct ConfirmedSourceBinding: Hashable, Sendable {
     var repositoryURL: String
     var requestedRef: String
     var packagePath: String
-
-    init(artifactID: ArtifactID, repositoryURL: String, requestedRef: String, packagePath: String) {
-        self.artifactID = artifactID
-        self.repositoryURL = repositoryURL
-        self.requestedRef = requestedRef
-        self.packagePath = packagePath
-    }
 }
 
 enum SourceEvidenceMatchContext: String, Hashable, Sendable {
@@ -85,11 +78,6 @@ enum SourceEvidenceUnresolvedReason: String, Hashable, Sendable {
 struct SourceEvidenceUnresolved: Hashable, Sendable {
     var artifactID: ArtifactID
     var reason: SourceEvidenceUnresolvedReason
-
-    init(artifactID: ArtifactID, reason: SourceEvidenceUnresolvedReason) {
-        self.artifactID = artifactID
-        self.reason = reason
-    }
 }
 
 enum SourceEvidenceResolverDiagnostic: String, Hashable, Sendable {
@@ -100,23 +88,12 @@ enum SourceEvidenceResolverDiagnostic: String, Hashable, Sendable {
 struct SourceEvidenceFetchArtifact: Hashable, Sendable {
     var artifactID: ArtifactID
     var packagePath: String
-
-    init(artifactID: ArtifactID, packagePath: String) {
-        self.artifactID = artifactID
-        self.packagePath = packagePath
-    }
 }
 
 struct SourceEvidenceFetchGroup: Hashable, Sendable {
     var repositoryURL: String
     var requestedRef: String
     var artifactPaths: [SourceEvidenceFetchArtifact]
-
-    init(repositoryURL: String, requestedRef: String, artifactPaths: [SourceEvidenceFetchArtifact]) {
-        self.repositoryURL = repositoryURL
-        self.requestedRef = requestedRef
-        self.artifactPaths = artifactPaths
-    }
 }
 
 struct SourceEvidenceResolution: Hashable, Sendable {
@@ -126,19 +103,6 @@ struct SourceEvidenceResolution: Hashable, Sendable {
     var unresolved: [SourceEvidenceUnresolved]
     var proposedFetchGroups: [SourceEvidenceFetchGroup]
     var diagnostics: [SourceEvidenceResolverDiagnostic]
-
-    init(
-        confirmedBindings: [ConfirmedSourceBinding], candidates: [SourceEvidenceCandidate],
-        conflicts: [SourceEvidenceConflict], unresolved: [SourceEvidenceUnresolved],
-        proposedFetchGroups: [SourceEvidenceFetchGroup], diagnostics: [SourceEvidenceResolverDiagnostic]
-    ) {
-        self.confirmedBindings = confirmedBindings
-        self.candidates = candidates
-        self.conflicts = conflicts
-        self.unresolved = unresolved
-        self.proposedFetchGroups = proposedFetchGroups
-        self.diagnostics = diagnostics
-    }
 }
 
 /// Reconciles caller-provided evidence without file, network, or native-client operations.
@@ -187,7 +151,8 @@ enum SourceEvidenceResolver {
         for observation in observations {
             let id = observation.artifactID
             guard let artifact = uniqueArtifact(id, in: artifactsByID) else {
-                let reason: SourceEvidenceUnresolvedReason = duplicateArtifactIDs.contains(id)
+                let reason: SourceEvidenceUnresolvedReason =
+                    duplicateArtifactIDs.contains(id)
                     ? .duplicateArtifactIdentity : .unknownArtifact
                 unresolved.insert(.init(artifactID: id, reason: reason))
                 diagnostics.insert(reason == .unknownArtifact ? .unknownArtifactObservation : .duplicateArtifactIdentity)
@@ -240,11 +205,12 @@ enum SourceEvidenceResolver {
                 reject(id, .invalidObservedCommit, unresolved: &unresolved, diagnostics: &diagnostics)
                 continue
             }
-            observedByID[id, default: []].append(.init(
-                artifactID: id, repositoryURL: repositoryURL, requestedRef: requestedRef,
-                packagePath: packagePath, observedCommit: observation.observedCommit,
-                integrity: sortedIntegrity(observation.evidence.integrity)
-            ))
+            observedByID[id, default: []].append(
+                .init(
+                    artifactID: id, repositoryURL: repositoryURL, requestedRef: requestedRef,
+                    packagePath: packagePath, observedCommit: observation.observedCommit,
+                    integrity: sortedIntegrity(observation.evidence.integrity)
+                ))
         }
 
         var candidates: [SourceEvidenceCandidate] = []
@@ -258,9 +224,11 @@ enum SourceEvidenceResolver {
             } else if alternatives.count == 1 {
                 candidates.append(alternatives[0])
             } else {
-                let locatorCount = Set(alternatives.map {
-                    "\($0.repositoryURL)\n\($0.requestedRef)\n\($0.packagePath)"
-                }).count
+                let locatorCount = Set(
+                    alternatives.map {
+                        "\($0.repositoryURL)\n\($0.requestedRef)\n\($0.packagePath)"
+                    }
+                ).count
                 let kind: SourceEvidenceConflictKind = locatorCount > 1 ? .competingObservations : .competingEvidenceFacts
                 let reason: SourceEvidenceUnresolvedReason = locatorCount > 1 ? .competingObservations : .competingEvidenceFacts
                 unresolved.insert(.init(artifactID: id, reason: reason))
@@ -425,8 +393,10 @@ enum SourceEvidenceResolver {
     }
 
     private static func candidateKey(_ value: SourceEvidenceCandidate) -> [String] {
-        [value.artifactID.rawValue.uuidString, value.repositoryURL, value.requestedRef, value.packagePath,
-         value.observedCommit?.kind.rawValue ?? "", value.observedCommit?.value ?? ""]
+        [
+            value.artifactID.rawValue.uuidString, value.repositoryURL, value.requestedRef, value.packagePath,
+            value.observedCommit?.kind.rawValue ?? "", value.observedCommit?.value ?? "",
+        ]
     }
 
     private static func unresolvedOrder(_ lhs: SourceEvidenceUnresolved, _ rhs: SourceEvidenceUnresolved) -> Bool {

@@ -28,9 +28,11 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
         try snapshot.device.validateStructure(against: snapshot.document)
 
         let artifacts = Dictionary(uniqueKeysWithValues: snapshot.document.artifacts.map { ($0.identity.id, $0) })
-        let childrenByParent = Dictionary(grouping: snapshot.document.artifacts.compactMap { artifact in
-            artifact.identity.parentPackageID.map { ($0, artifact) }
-        }, by: \.0).mapValues { $0.map(\.1) }
+        let childrenByParent = Dictionary(
+            grouping: snapshot.document.artifacts.compactMap { artifact in
+                artifact.identity.parentPackageID.map { ($0, artifact) }
+            }, by: \.0
+        ).mapValues { $0.map(\.1) }
         let sources = Dictionary(uniqueKeysWithValues: snapshot.document.sources.map { ($0.id, $0) })
         let subscriptions = Dictionary(uniqueKeysWithValues: snapshot.document.subscriptions.map { ($0.id, $0) })
         let assignments = Dictionary(grouping: snapshot.document.assignments, by: \.artifactID)
@@ -99,9 +101,10 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
         self.rows = rows
         self.presets = presets
         self.projects = projects
-        self.searchableRows = Dictionary(uniqueKeysWithValues: rows.map {
-            ($0.artifactID, Self.searchText(for: $0))
-        })
+        self.searchableRows = Dictionary(
+            uniqueKeysWithValues: rows.map {
+                ($0.artifactID, Self.searchText(for: $0))
+            })
         var byProject: [ArtifactID: [ArtifactID]] = [:]
         var global: [ArtifactID] = []
         let known = Set(projects.map(\.id))
@@ -109,7 +112,10 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
             var seen = Set<ArtifactID>()
             var isGlobal = false
             for assignment in row.requestedAssignments {
-                guard let projectID = assignment.destination.logicalProjectID else { isGlobal = true; continue }
+                guard let projectID = assignment.destination.logicalProjectID else {
+                    isGlobal = true
+                    continue
+                }
                 guard known.contains(projectID), seen.insert(projectID).inserted else { continue }
                 byProject[projectID, default: []].append(row.artifactID)
             }
@@ -202,12 +208,14 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
             let scope: WorkspaceLibraryDeviceScope
             switch $0.destination.deviceIDs {
             case nil:
-                scope = $0.destination.excludedDeviceIDs?.contains(deviceID) == true
+                scope =
+                    $0.destination.excludedDeviceIDs?.contains(deviceID) == true
                     ? .otherDevices : .allEnrolledDevices
             case []: scope = .noDevices
             case let ids?:
                 let containsCurrent = ids.contains(deviceID)
-                scope = containsCurrent
+                scope =
+                    containsCurrent
                     ? (ids.count == 1 ? .thisDevice : .thisAndOtherDevices)
                     : .otherDevices
             }
@@ -271,26 +279,28 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
 
     private static func observedDescriptions(_ inventory: DeviceInventoryState?) -> [ArtifactID: String] {
         guard let inventory else { return [:] }
-        return Dictionary(uniqueKeysWithValues: inventory.records.map { record in
-            let description: String
-            switch record.captured {
-            case .skill(let skill): description = skill.summary
-            case .mcpServer(let server): description = server.summary
-            case .plugin(let plugin): description = plugin.summary
-            }
-            return (record.artifactID, description)
-        })
+        return Dictionary(
+            uniqueKeysWithValues: inventory.records.map { record in
+                let description: String
+                switch record.captured {
+                case .skill(let skill): description = skill.summary
+                case .mcpServer(let server): description = server.summary
+                case .plugin(let plugin): description = plugin.summary
+                }
+                return (record.artifactID, description)
+            })
     }
 
     private static func searchText(for row: WorkspaceLibraryReadModelRow) -> String {
-        let values = [
-            row.displayName, row.kind.rawValue, row.ownership.rawValue, row.parentPluginLabel ?? "", row.sourceLabel ?? "",
-            row.observedDescription ?? ""
-        ]
-        + row.nativeRoutes.map(\.externalPluginID)
-        + row.includedChildren.map {
-            $0.displayName + " " + $0.kind.rawValue + " " + $0.nativeRoutes.map(\.externalPluginID).joined(separator: " ")
-        }
+        let values =
+            [
+                row.displayName, row.kind.rawValue, row.ownership.rawValue, row.parentPluginLabel ?? "", row.sourceLabel ?? "",
+                row.observedDescription ?? "",
+            ]
+            + row.nativeRoutes.map(\.externalPluginID)
+            + row.includedChildren.map {
+                $0.displayName + " " + $0.kind.rawValue + " " + $0.nativeRoutes.map(\.externalPluginID).joined(separator: " ")
+            }
         return normalized(values.joined(separator: " "))
     }
 

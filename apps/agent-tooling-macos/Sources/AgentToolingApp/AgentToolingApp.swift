@@ -155,7 +155,8 @@ struct AgentToolingApplication: App {
         } catch GitWorkspaceTransportError.invalidRemote {
             joinError = WorkspaceJoinError.invalidRemote.localizedDescription
         } catch {
-            joinError = "That repository could not be read from this Mac. Check the address and your access. (\(error.localizedDescription))"
+            joinError =
+                "That repository could not be read from this Mac. Check the address and your access. (\(error.localizedDescription))"
         }
     }
 
@@ -283,9 +284,11 @@ struct FirstLaunchChooser: View {
                     Button("Join another Mac’s workspace", systemImage: "arrow.triangle.2.circlepath") { showsJoin = true }
                         .secondaryActionStyle()
                 }
-                Text("Starting here scans this Mac’s apps and builds a library from them. Joining takes the library another Mac already shares, and this Mac becomes one of its Macs.")
-                    .font(AgentFont.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center).wrapsLines()
-                    .frame(maxWidth: Size.firstLaunchFormWidth)
+                Text(
+                    "Starting here scans this Mac’s apps and builds a library from them. Joining takes the library another Mac already shares, and this Mac becomes one of its Macs."
+                )
+                .font(AgentFont.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center).wrapsLines()
+                .frame(maxWidth: Size.firstLaunchFormWidth)
             }
         }
         .padding(Space.xxxl)

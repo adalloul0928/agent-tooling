@@ -15,7 +15,7 @@ jobs:
   build:
     name: Test and package
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: apps/agent-tooling-macos
@@ -47,21 +47,67 @@ jobs:
           "$RUNNER_TEMP/shellcheck-v${shellcheck_version}/shellcheck" -x scripts/package-app.sh scripts/create-dmg.sh
           plutil -lint Resources/Info.plist
 
-      - name: Run tests and strict release build
+      # Keep fixture and rendering load within the runner's capacity. The two
+      # complementary filters run every test; concurrency inside tests is retained.
+      - name: Run Core and MCP tests
         run: |
-          swift test --disable-sandbox
-          swift test --disable-sandbox --sanitize=thread
+          swift test --disable-sandbox --no-parallel --skip '^AgentToolingAppTests\.'
+
+      - name: Run UI tests
+        run: swift test --disable-sandbox --skip-build --no-parallel --filter '^AgentToolingAppTests\.'
+
+      - name: Run Core and MCP tests with Thread Sanitizer
+        run: swift test --disable-sandbox --sanitize=thread --no-parallel --skip '^AgentToolingAppTests\.'
+
+      - name: Run UI tests with Thread Sanitizer
+        run: swift test --disable-sandbox --sanitize=thread --skip-build --no-parallel --filter '^AgentToolingAppTests\.'
+
+      - name: Build release with warnings as errors
+        run: |
           swift build --configuration release -Xswiftc -warnings-as-errors
-          # The packaged app is a release build. A validator once compiled to a
-          # function that refused every input only in release, so the suite runs
-          # there too.
-          swift test --disable-sandbox --configuration release
+
+      # A validator once refused every input only in release, so the full suite
+      # also runs against the configuration that is packaged.
+      - name: Run Core and MCP release tests
+        run: swift test --disable-sandbox --configuration release --no-parallel --skip '^AgentToolingAppTests\.'
+
+      - name: Run UI release tests
+        run: swift test --disable-sandbox --configuration release --skip-build --no-parallel --filter '^AgentToolingAppTests\.'
 
       - name: Smoke test Raycast CLI contract
         run: |
           cli=$(swift build --configuration release --show-bin-path)/agent-tooling
           workspace="$RUNNER_TEMP/raycast-cli-workspace"
-          mkdir -p "$workspace"
+          # The CLI opens an existing workspace; first-run setup belongs to the app.
+          # Seed an empty one through the same API without scanning the runner's clients.
+          fixture=$(mktemp -d "$RUNNER_TEMP/raycast-cli-fixture.XXXXXX")
+          mkdir -p "$workspace" "$fixture/Sources/SeedWorkspace"
+          cat > "$fixture/Package.swift" <<SWIFT
+          // swift-tools-version: 6.2
+          import PackageDescription
+
+          let package = Package(
+              name: "RaycastCLIFixture",
+              platforms: [.macOS(.v26)],
+              dependencies: [.package(path: "$PWD")],
+              targets: [
+                  .executableTarget(
+                      name: "SeedWorkspace",
+                      dependencies: [.product(name: "AgentToolingCore", package: "agent-tooling-macos")])
+              ])
+          SWIFT
+          cat > "$fixture/Sources/SeedWorkspace/main.swift" <<'SWIFT'
+          import AgentToolingCore
+          import Foundation
+
+          let root = URL(fileURLWithPath: CommandLine.arguments[1]).standardizedFileURL
+          let home = root.appending(path: "home", directoryHint: .isDirectory)
+          try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+          _ = try await WorkspaceLocator(root: root).openOrCreate(
+              homeURL: home, runner: ProcessCommandRunner(homeURL: home),
+              registry: ClientAdapterRegistry(adapters: []))
+          SWIFT
+          swift run --disable-sandbox --configuration release --package-path "$fixture" SeedWorkspace "$workspace"
           printf '%s' 'Create a reusable release-readiness review skill.' \
             | "$cli" request create-skill \
                 --provider codex \

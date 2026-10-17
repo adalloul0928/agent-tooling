@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -20,10 +21,13 @@ struct WorkspaceDeploymentOperationsTests {
         #expect(deployment.deploymentName == "personal")
         #expect(deployment.destinationPath == fixture.home.appending(path: ".agents/skills/personal").path)
         // The staged folder is the approved tree, byte for byte.
-        #expect(try Data(contentsOf: URL(fileURLWithPath: deployment.stagingPath)
-            .appending(path: "SKILL.md")) == fixture.skillBytes)
-        #expect(deployment.fingerprint
-            == (try DirectoryFingerprint.sha256(of: URL(fileURLWithPath: deployment.stagingPath))))
+        #expect(
+            try Data(
+                contentsOf: URL(fileURLWithPath: deployment.stagingPath)
+                    .appending(path: "SKILL.md")) == fixture.skillBytes)
+        #expect(
+            deployment.fingerprint
+                == (try DirectoryFingerprint.sha256(of: URL(fileURLWithPath: deployment.stagingPath))))
         // Staging touches nothing in the client's own folder.
         #expect(!FileManager.default.fileExists(atPath: deployment.destinationPath))
     }
@@ -52,12 +56,14 @@ struct WorkspaceDeploymentOperationsTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let route = NativePackageRoute(client: .codex, externalPluginID: "browser")
-        let plan = WorkspaceDeploymentPlan(items: [
-            .init(artifactID: fixture.artifact.identity.id, displayName: "Browser",
-                  physicalDestinationID: WorkspaceObjectID(), surface: .codexCLI, scope: .user,
-                  logicalProjectID: nil, action: .installNativePackage(route: route),
-                  desiredEnabled: nil, reasons: [.manual]),
-        ], exclusions: [])
+        let plan = WorkspaceDeploymentPlan(
+            items: [
+                .init(
+                    artifactID: fixture.artifact.identity.id, displayName: "Browser",
+                    physicalDestinationID: WorkspaceObjectID(), surface: .codexCLI, scope: .user,
+                    logicalProjectID: nil, action: .installNativePackage(route: route),
+                    desiredEnabled: nil, reasons: [.manual])
+            ], exclusions: [])
 
         let staged = try WorkspaceDeploymentOperations.stage(
             plan, artifacts: [fixture.artifact], content: [:],
@@ -182,14 +188,16 @@ struct WorkspaceDeploymentOperationsTests {
         let destination = try #require(fixture.plan.items.first).physicalDestinationID
         let artifactID = fixture.artifact.identity.id
         let key = WorkspaceDeploymentInstallKey(artifactID: artifactID, physicalDestinationID: destination)
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: [fixture.artifact]))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: [fixture.artifact]))
         var device = DeviceWorkspaceState(workspaceID: document.workspaceID)
         device.capabilityEvidence = [
-            .init(surface: .codexCLI, installedClientVersion: "1.0.0", adapterContractVersion: 1,
-                  component: .skill, scopes: [.user], support: .supported,
-                  observedAt: Date(timeIntervalSince1970: 1_700_000_000)),
+            .init(
+                surface: .codexCLI, installedClientVersion: "1.0.0", adapterContractVersion: 1,
+                component: .skill, scopes: [.user], support: .supported,
+                observedAt: Date(timeIntervalSince1970: 1_700_000_000))
         ]
         let target = ResolvedAssignmentTarget(
             selector: .init(surface: .codexCLI, scope: .user, logicalProjectID: nil),
@@ -247,10 +255,14 @@ struct WorkspaceDeploymentOperationsTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         try Data("---\nname: personal\ndescription: Edited by hand\n---\n".utf8).write(to: file)
 
-        let removal = OperationPlan(kind: .installSkill, title: "Remove", summary: "",
-            steps: [.init(id: UUID(), kind: .removeManagedDirectory, title: "Remove personal",
-                          detail: "", destinationPath: destinationPath,
-                          destinationFingerprint: try #require(installed.first).fingerprint)])
+        let removal = OperationPlan(
+            kind: .installSkill, title: "Remove", summary: "",
+            steps: [
+                .init(
+                    id: UUID(), kind: .removeManagedDirectory, title: "Remove personal",
+                    detail: "", destinationPath: destinationPath,
+                    destinationFingerprint: try #require(installed.first).fingerprint)
+            ])
         let receipt = await executor.execute(removal)
 
         // The edited folder survives; nothing this app did not approve is deleted.
@@ -291,11 +303,12 @@ struct WorkspaceDeploymentOperationsTests {
     @Test func theOperationTitleTellsAFirstInstallFromAnUpdateFromARemoval() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let destination = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000101")!)
+        let destination = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000101"))
         func item(_ action: WorkspaceDeploymentAction) -> WorkspaceDeploymentItem {
-            .init(artifactID: fixture.artifact.identity.id, displayName: "Personal",
-                  physicalDestinationID: destination, surface: .codexCLI, scope: .user,
-                  logicalProjectID: nil, action: action, desiredEnabled: nil, reasons: [.manual])
+            .init(
+                artifactID: fixture.artifact.identity.id, displayName: "Personal",
+                physicalDestinationID: destination, surface: .codexCLI, scope: .user,
+                logicalProjectID: nil, action: action, desiredEnabled: nil, reasons: [.manual])
         }
         func title(_ action: WorkspaceDeploymentAction) throws -> String {
             let plan = WorkspaceDeploymentPlan(items: [item(action)], exclusions: [])
@@ -321,28 +334,33 @@ struct WorkspaceDeploymentOperationsTests {
     @Test func aMixOfFirstInstallsAndUpdatesInOneFolderIsAChange() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let destination = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000101")!)
+        let destination = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000101"))
         // A second artifact so one folder can hold both an install and an update.
-        let secondID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
+        let secondID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2"))
         let secondTree = try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md",
-                  kind: .file(bytes: Data("---\nname: second\ndescription: Second\n---\n".utf8),
-                              executable: false)),
+            .init(
+                relativePath: "SKILL.md",
+                kind: .file(
+                    bytes: Data("---\nname: second\ndescription: Second\n---\n".utf8),
+                    executable: false))
         ])
         let second = ArtifactRecord(
             identity: .init(id: secondID, kind: .skill, displayName: "Second"),
             authority: .centralPersonal, declaredName: "second", contentDigest: secondTree.digest)
-        let plan = WorkspaceDeploymentPlan(items: [
-            .init(artifactID: fixture.artifact.identity.id, displayName: "Personal",
-                  physicalDestinationID: destination, surface: .codexCLI, scope: .user,
-                  logicalProjectID: nil, action: .installContent(digest: fixture.tree.digest),
-                  desiredEnabled: nil, reasons: [.manual]),
-            .init(artifactID: secondID, displayName: "Second",
-                  physicalDestinationID: destination, surface: .codexCLI, scope: .user,
-                  logicalProjectID: nil,
-                  action: .updateContent(from: fixture.otherDigest, to: secondTree.digest),
-                  desiredEnabled: nil, reasons: [.manual]),
-        ], exclusions: [])
+        let plan = WorkspaceDeploymentPlan(
+            items: [
+                .init(
+                    artifactID: fixture.artifact.identity.id, displayName: "Personal",
+                    physicalDestinationID: destination, surface: .codexCLI, scope: .user,
+                    logicalProjectID: nil, action: .installContent(digest: fixture.tree.digest),
+                    desiredEnabled: nil, reasons: [.manual]),
+                .init(
+                    artifactID: secondID, displayName: "Second",
+                    physicalDestinationID: destination, surface: .codexCLI, scope: .user,
+                    logicalProjectID: nil,
+                    action: .updateContent(from: fixture.otherDigest, to: secondTree.digest),
+                    desiredEnabled: nil, reasons: [.manual]),
+            ], exclusions: [])
         let staged = try WorkspaceDeploymentOperations.stage(
             plan, artifacts: [fixture.artifact, second],
             content: [fixture.tree.digest: fixture.tree, secondTree.digest: secondTree],
@@ -423,7 +441,7 @@ struct WorkspaceDeploymentOperationsTests {
         let tree: CapturedPackageTree
         let artifact: ArtifactRecord
         let plan: WorkspaceDeploymentPlan
-        let projectID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f6")!)
+        let projectID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000f6"))
         let skillBytes = Data("---\nname: personal\ndescription: Fixture\n---\n\n# Personal\n".utf8)
         /// A stand-in digest for "something different is already there", used by
         /// the update-vs-install title tests.
@@ -433,10 +451,12 @@ struct WorkspaceDeploymentOperationsTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
                 .appending(path: "deployment-operations-\(UUID())")
             home = root.appending(path: "home")
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
-            store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "workspace", directoryHint: .isDirectory),
+            store = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "workspace", directoryHint: .isDirectory),
                 workspaceID: document.workspaceID, deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
             try store.prepareManagedDirectories()
@@ -444,24 +464,28 @@ struct WorkspaceDeploymentOperationsTests {
             // executor refuses to copy content from anywhere else.
             staging = store.libraryURL.appending(path: "staged-deployments")
             for url in [home, staging] {
-                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true,
+                try FileManager.default.createDirectory(
+                    at: url, withIntermediateDirectories: true,
                     attributes: [.posixPermissions: 0o700])
             }
             tree = try CapturedPackageTree(entries: [
-                .init(relativePath: "SKILL.md", kind: .file(bytes: skillBytes, executable: false)),
+                .init(relativePath: "SKILL.md", kind: .file(bytes: skillBytes, executable: false))
             ])
-            let artifactID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
-            artifact = .init(identity: .init(id: artifactID, kind: .skill, displayName: "Personal"),
-                             authority: .centralPersonal, declaredName: "personal", contentDigest: tree.digest)
-            plan = .init(items: [
-                .init(artifactID: artifactID, displayName: "Personal",
-                      physicalDestinationID: WorkspaceObjectID(
-                          UUID(uuidString: "00000000-0000-0000-0000-000000000101")!),
-                      surface: .codexCLI, scope: scope,
-                      logicalProjectID: scope == .project ? projectID : nil,
-                      action: .installContent(digest: tree.digest),
-                      desiredEnabled: nil, reasons: [.manual]),
-            ], exclusions: [])
+            let artifactID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
+            artifact = .init(
+                identity: .init(id: artifactID, kind: .skill, displayName: "Personal"),
+                authority: .centralPersonal, declaredName: "personal", contentDigest: tree.digest)
+            plan = .init(
+                items: [
+                    .init(
+                        artifactID: artifactID, displayName: "Personal",
+                        physicalDestinationID: WorkspaceObjectID(
+                            fixtureUUID("00000000-0000-0000-0000-000000000101")),
+                        surface: .codexCLI, scope: scope,
+                        logicalProjectID: scope == .project ? projectID : nil,
+                        action: .installContent(digest: tree.digest),
+                        desiredEnabled: nil, reasons: [.manual])
+                ], exclusions: [])
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }

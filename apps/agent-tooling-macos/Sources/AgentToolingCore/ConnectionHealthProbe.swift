@@ -134,9 +134,10 @@ public struct ConnectionHealthLoginResult: Equatable, Sendable {
 
 /// Runs the pseudo-terminal sign-in. Injected so tests can script the flow
 /// without spawning a process.
-public typealias InteractiveLoginRun = @Sendable (
-    _ executable: String, _ arguments: [String], _ onAuthorizationURL: @escaping @Sendable (URL) -> Void
-) async throws -> InteractiveLoginOutcome
+public typealias InteractiveLoginRun =
+    @Sendable (
+        _ executable: String, _ arguments: [String], _ onAuthorizationURL: @escaping @Sendable (URL) -> Void
+    ) async throws -> InteractiveLoginOutcome
 
 /// Signs in to one MCP server through the client's own `mcp login` flow.
 ///
@@ -159,10 +160,11 @@ public struct ConnectionHealthLoginRunner: Sendable {
     ) {
         self.homeURL = homeURL
         self.locate = locate
-        self.run = run ?? { executable, arguments, onAuthorizationURL in
-            try await InteractiveLoginProcess(homeURL: homeURL)
-                .run(executable: executable, arguments: arguments, onAuthorizationURL: onAuthorizationURL)
-        }
+        self.run =
+            run ?? { executable, arguments, onAuthorizationURL in
+                try await InteractiveLoginProcess(homeURL: homeURL)
+                    .run(executable: executable, arguments: arguments, onAuthorizationURL: onAuthorizationURL)
+            }
         // Only the home directory matters for admitting a located absolute
         // path; the library and backup roots guard the git shapes this type
         // never emits, so they are given placeholders under the same home.
@@ -292,7 +294,8 @@ public struct ConnectionHealthLoginRunner: Sendable {
                 output.unicodeScalars.append(scalar)
             }
         }
-        return output
+        return
+            output
             .split(separator: "\n", omittingEmptySubsequences: true)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }

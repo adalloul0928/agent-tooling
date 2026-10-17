@@ -12,13 +12,14 @@ enum ToolingKind {
     /// The one mapping from a library record's kind to how it is drawn.
     /// Presets draw as collections everywhere, matching their own screen.
     init(_ kind: ArtifactKind) {
-        self = switch kind {
-        case .skill: .skill
-        case .mcpServer: .mcpServer
-        case .package, .nativePlugin: .plugin
-        case .preset: .collection
-        case .logicalProject: .library
-        }
+        self =
+            switch kind {
+            case .skill: .skill
+            case .mcpServer: .mcpServer
+            case .package, .nativePlugin: .plugin
+            case .preset: .collection
+            case .logicalProject: .library
+            }
     }
 
     var color: Color {
@@ -274,4 +275,3 @@ struct AttentionBanner<Action: View>: View {
         }
     }
 }
-

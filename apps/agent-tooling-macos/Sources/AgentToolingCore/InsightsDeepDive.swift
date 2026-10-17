@@ -75,7 +75,8 @@ enum InsightsDeepDiveCommandShapes {
             "--permission-mode", "plan",
             "--strict-mcp-config",
             "--setting-sources", "user",
-            "--disallowedTools", "Bash", "Edit", "Write", "MultiEdit", "NotebookEdit", "WebFetch", "WebSearch", "Task", "Read", "Glob", "Grep",
+            "--disallowedTools", "Bash", "Edit", "Write", "MultiEdit", "NotebookEdit", "WebFetch", "WebSearch", "Task", "Read", "Glob",
+            "Grep",
         ]
     }
 
@@ -111,47 +112,51 @@ enum InsightsDeepDiveCommandShapes {
     /// bounded, so the model cannot answer with a transcript. Built on each
     /// call: a `[String: Any]` cannot be a shared constant under strict
     /// concurrency, and the JSON string below is what callers actually use.
-    static var responseSchema: [String: Any] { [
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["summary", "themes", "recommendations"],
-        "properties": [
-            "summary": ["type": "string", "maxLength": 600],
-            "themes": [
-                "type": "array", "maxItems": 8,
-                "items": [
-                    "type": "object", "additionalProperties": false,
-                    "required": ["title", "detail", "conversation_count", "clients"],
-                    "properties": [
-                        "title": ["type": "string", "maxLength": 80],
-                        "detail": ["type": "string", "maxLength": 400],
-                        "conversation_count": ["type": "integer", "minimum": 1],
-                        "clients": ["type": "array", "items": ["type": "string", "enum": ["claude", "codex", "kiro"]]],
+    static var responseSchema: [String: Any] {
+        [
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["summary", "themes", "recommendations"],
+            "properties": [
+                "summary": ["type": "string", "maxLength": 600],
+                "themes": [
+                    "type": "array", "maxItems": 8,
+                    "items": [
+                        "type": "object", "additionalProperties": false,
+                        "required": ["title", "detail", "conversation_count", "clients"],
+                        "properties": [
+                            "title": ["type": "string", "maxLength": 80],
+                            "detail": ["type": "string", "maxLength": 400],
+                            "conversation_count": ["type": "integer", "minimum": 1],
+                            "clients": ["type": "array", "items": ["type": "string", "enum": ["claude", "codex", "kiro"]]],
+                        ],
+                    ],
+                ],
+                "recommendations": [
+                    "type": "array", "maxItems": 10,
+                    "items": [
+                        "type": "object", "additionalProperties": false,
+                        "required": ["kind", "title", "summary", "rationale", "confidence", "conversation_count"],
+                        "properties": [
+                            "kind": ["type": "string", "enum": ["create_skill", "use_existing_skill", "improve_skill"]],
+                            "title": ["type": "string", "maxLength": 80],
+                            "summary": ["type": "string", "maxLength": 300],
+                            "rationale": ["type": "string", "maxLength": 400],
+                            "confidence": ["type": "string", "enum": ["high", "medium", "exploratory"]],
+                            "conversation_count": ["type": "integer", "minimum": 1],
+                            "existing_skill": ["type": "string", "maxLength": 128],
+                            "draft_instruction": ["type": "string", "maxLength": 1500],
+                        ],
                     ],
                 ],
             ],
-            "recommendations": [
-                "type": "array", "maxItems": 10,
-                "items": [
-                    "type": "object", "additionalProperties": false,
-                    "required": ["kind", "title", "summary", "rationale", "confidence", "conversation_count"],
-                    "properties": [
-                        "kind": ["type": "string", "enum": ["create_skill", "use_existing_skill", "improve_skill"]],
-                        "title": ["type": "string", "maxLength": 80],
-                        "summary": ["type": "string", "maxLength": 300],
-                        "rationale": ["type": "string", "maxLength": 400],
-                        "confidence": ["type": "string", "enum": ["high", "medium", "exploratory"]],
-                        "conversation_count": ["type": "integer", "minimum": 1],
-                        "existing_skill": ["type": "string", "maxLength": 128],
-                        "draft_instruction": ["type": "string", "maxLength": 1500],
-                    ],
-                ],
-            ],
-        ],
-    ] }
+        ]
+    }
 
     static var responseSchemaJSON: String {
-        let data = try! JSONSerialization.data(withJSONObject: responseSchema, options: [.sortedKeys])
+        guard let data = try? JSONSerialization.data(withJSONObject: responseSchema, options: [.sortedKeys]) else {
+            preconditionFailure("The built-in deep dive response schema must be JSON encodable.")
+        }
         return String(decoding: data, as: UTF8.self)
     }
 }
@@ -179,7 +184,8 @@ enum InsightsDeepDivePrompt {
             ## Skills the person already has (name — description)
 
             """
-        let skillLines = skills
+        let skillLines =
+            skills
             .sorted { $0.id < $1.id }
             .prefix(400)
             .map { skill -> String in
@@ -270,7 +276,8 @@ public struct InsightsDeepDiveService: Sendable {
         try fileManager.createDirectory(at: requestURL, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         defer { try? fileManager.removeItem(at: requestURL) }
 
-        let executable = ClientExecutableLocator.locate(client, homeURL: homeURL)?.path(percentEncoded: false)
+        let executable =
+            ClientExecutableLocator.locate(client, homeURL: homeURL)?.path(percentEncoded: false)
             ?? ClientExecutableLocator.executableName(for: client)
         let arguments: [String]
         switch client {
@@ -314,7 +321,8 @@ public struct InsightsDeepDiveService: Sendable {
             throw InsightsDeepDiveError.clientFailed(client, output.status, Self.diagnostic(output))
         }
         if (document["is_error"] as? Bool) == true {
-            throw InsightsDeepDiveError.clientFailed(client, output.status, Self.diagnostic(output, fallback: document["result"] as? String))
+            throw InsightsDeepDiveError.clientFailed(
+                client, output.status, Self.diagnostic(output, fallback: document["result"] as? String))
         }
         if let structured = document["structured_output"] as? [String: Any] { return structured }
         if let text = document["result"] as? String, let parsed = Self.firstJSONObject(in: text) { return parsed }

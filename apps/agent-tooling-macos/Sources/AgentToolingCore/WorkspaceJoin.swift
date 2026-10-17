@@ -10,7 +10,8 @@ public enum WorkspaceJoinError: Error, Equatable, Sendable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .emptyRemote: "That repository holds no workspace yet. Connect the Mac that has your library first, so it publishes one."
-        case .alreadyHasWorkspace: "This Mac already has a workspace. Joining another would leave two sources of truth; disconnect or remove this one first."
+        case .alreadyHasWorkspace:
+            "This Mac already has a workspace. Joining another would leave two sources of truth; disconnect or remove this one first."
         case .invalidRemote: "Enter a repository address without a user name or password in it."
         }
     }
@@ -76,9 +77,10 @@ public enum WorkspaceJoin {
         let name = (deviceName ?? Host.current().localizedName ?? "Mac").trimmingCharacters(in: .whitespacesAndNewlines)
         let writerID = WorkspaceObjectID()
         let service = WorkspaceApplicationService(store: store, writerID: writerID, contentStore: contentStore)
-        _ = try await service.registerDevice(.init(
-            expectedRevisionID: document.revision.id, deviceID: device.deviceID,
-            name: Self.uniqueName(name, among: document.deviceRegistry)))
+        _ = try await service.registerDevice(
+            .init(
+                expectedRevisionID: document.revision.id, deviceID: device.deviceID,
+                name: Self.uniqueName(name, among: document.deviceRegistry)))
 
         let enrollment = try WorkspaceSyncEnrollment(
             workspaceID: document.workspaceID, remote: remote,
@@ -89,8 +91,9 @@ public enum WorkspaceJoin {
         let imported = await coordinator.lastContentReport.imported.count
 
         try locator?.write(.init(workspaceID: document.workspaceID, deviceID: device.deviceID))
-        return .init(store: store, enrollment: enrollment, deviceID: device.deviceID,
-                     deviceName: name, importedContent: imported)
+        return .init(
+            store: store, enrollment: enrollment, deviceID: device.deviceID,
+            deviceName: name, importedContent: imported)
     }
 
     /// A joining Mac whose name another living Mac already uses gets a numbered

@@ -14,16 +14,22 @@ import Testing
 /// type and what this device observed, and those are what this exercises.
 private func compromisingArtifacts() -> [ArtifactRecord] {
     [
-        .init(identity: .init(id: ArtifactID(), kind: .skill,
-                              displayName: "Release summary /Users/testperson/Projects/secret-product"),
-              authority: .centralPersonal, declaredName: "release-summary",
-              contentDigest: .init(value: String(repeating: "a", count: 64))),
-        .init(identity: .init(id: ArtifactID(), kind: .mcpServer,
-                              displayName: "Weather sk-live-SUPERSECRET"),
-              authority: .trackedOnly, declaredName: "weather"),
-        .init(identity: .init(id: ArtifactID(), kind: .nativePlugin,
-                              displayName: "Developer workflows"),
-              authority: .trackedOnly, declaredName: "developer-workflows"),
+        .init(
+            identity: .init(
+                id: ArtifactID(), kind: .skill,
+                displayName: "Release summary /Users/testperson/Projects/secret-product"),
+            authority: .centralPersonal, declaredName: "release-summary",
+            contentDigest: .init(value: String(repeating: "a", count: 64))),
+        .init(
+            identity: .init(
+                id: ArtifactID(), kind: .mcpServer,
+                displayName: "Weather sk-live-SUPERSECRET"),
+            authority: .trackedOnly, declaredName: "weather"),
+        .init(
+            identity: .init(
+                id: ArtifactID(), kind: .nativePlugin,
+                displayName: "Developer workflows"),
+            authority: .trackedOnly, declaredName: "developer-workflows"),
     ]
 }
 
@@ -58,10 +64,13 @@ private func compromisingReceipts() -> [OperationReceipt] {
         OperationReceipt(
             planID: UUID(), kind: .installSkill, title: "Installed a skill",
             state: .healthy, targetSurfaces: [.claudeCode],
-            results: [.init(stepID: UUID(), status: .succeeded,
-                            output: "Copied into /Users/testperson/.claude/skills/release-summary",
-                            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
-                            finishedAt: Date(timeIntervalSince1970: 1_700_000_001))],
+            results: [
+                .init(
+                    stepID: UUID(), status: .succeeded,
+                    output: "Copied into /Users/testperson/.claude/skills/release-summary",
+                    startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+                    finishedAt: Date(timeIntervalSince1970: 1_700_000_001))
+            ],
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             verificationSummary: "Verified against /Users/testperson/.claude/settings.json")
     ]
@@ -101,17 +110,21 @@ struct ReadOnlyDisclosureTests {
         let harness = try MCPTestHarness(artifacts: compromisingArtifacts())
         try harness.initialize()
 
-        let server = try harness.callTool("get_component", arguments: [
-            "kind": .string("mcp-server"), "id": .string(harness.identifier(of: "weather")),
-        ])
+        let server = try harness.callTool(
+            "get_component",
+            arguments: [
+                "kind": .string("mcp-server"), "id": .string(harness.identifier(of: "weather")),
+            ])
 
         // Stronger than redaction: an address lives in this Mac's own client
         // files, and the library has no field for one. There is nothing to
         // strip because there is nothing to carry.
         #expect(server["endpointSummary"]?.stringValue?.isEmpty != false)
-        let skill = try harness.callTool("get_component", arguments: [
-            "kind": .string("skill"), "id": .string(harness.identifier(of: "release-summary")),
-        ])
+        let skill = try harness.callTool(
+            "get_component",
+            arguments: [
+                "kind": .string("skill"), "id": .string(harness.identifier(of: "release-summary")),
+            ])
         #expect(skill["isProjectScoped"]?.boolValue == false)
         assertNothingSensitive(server, tool: "get_component(mcp-server)")
         assertNothingSensitive(skill, tool: "get_component(skill)")
@@ -121,9 +134,11 @@ struct ReadOnlyDisclosureTests {
         let harness = try MCPTestHarness(artifacts: compromisingArtifacts())
         try harness.initialize()
 
-        let plugin = try harness.callTool("get_component", arguments: [
-            "kind": .string("plugin"), "id": .string(harness.identifier(of: "developer-workflows")),
-        ])
+        let plugin = try harness.callTool(
+            "get_component",
+            arguments: [
+                "kind": .string("plugin"), "id": .string(harness.identifier(of: "developer-workflows")),
+            ])
         assertNothingSensitive(plugin, tool: "get_component(plugin)")
     }
 

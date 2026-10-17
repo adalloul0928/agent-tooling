@@ -70,11 +70,13 @@ public actor CodexAppServerSession {
 
     /// The handshake. Returns what the server said about itself.
     public func initialize(clientName: String, clientTitle: String, version: String) async throws -> JSONValue {
-        let result = try await request("initialize", params: .object([
-            "clientInfo": .object([
-                "name": .string(clientName), "title": .string(clientTitle), "version": .string(version),
-            ]),
-        ]))
+        let result = try await request(
+            "initialize",
+            params: .object([
+                "clientInfo": .object([
+                    "name": .string(clientName), "title": .string(clientTitle), "version": .string(version),
+                ])
+            ]))
         try await notify("initialized")
         return result
     }
@@ -139,7 +141,7 @@ public actor CodexAppServerSession {
                 throw CodexAppServerError.stopped(await transport.diagnostics())
             }
             guard let message = try? AgentToolingCoding.decoder().decode(JSONValue.self, from: line),
-                  case .object(let body) = message
+                case .object(let body) = message
             else {
                 skipped += 1
                 guard skipped <= maximumSkippedMessages else { throw CodexAppServerError.malformedResponse(method) }

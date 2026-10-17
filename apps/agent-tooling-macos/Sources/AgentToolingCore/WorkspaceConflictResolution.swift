@@ -95,12 +95,14 @@ enum WorkspaceConflictResolver {
             let loser = resolution.choice == .keepLocal ? remote : local
             adjust(&adjusted, away: loser, resolution: resolution)
             if resolution.kind == .deleteVersusEdit, resolution.choice == .keepLocal,
-               let id = resolution.artifactID {
+                let id = resolution.artifactID
+            {
                 keptItems.insert(id)
             }
         }
-        let merge = WorkspaceMergeEngine.merge(base: adjusted, local: local, remote: remote,
-                                               writerID: writerID, settingAsideDeletionsOf: keptItems)
+        let merge = WorkspaceMergeEngine.merge(
+            base: adjusted, local: local, remote: remote,
+            writerID: writerID, settingAsideDeletionsOf: keptItems)
         return .init(document: merge.document, remaining: merge.conflicts)
     }
 }
@@ -120,14 +122,16 @@ private extension WorkspaceConflictResolver {
         // merge then drops because nothing names it any more.
         case .artifactField, .artifactContent, .ownership, .projectField, .subscriptionContentMismatch:
             guard let id = resolution.artifactID,
-                  let losing = loser.artifacts.first(where: { $0.identity.id == id }) else { return }
+                let losing = loser.artifacts.first(where: { $0.identity.id == id })
+            else { return }
             if let index = ancestor.artifacts.firstIndex(where: { $0.identity.id == id }) {
                 ancestor.artifacts[index] = losing
             } else {
                 ancestor.artifacts.append(losing)
             }
             if resolution.kind == .projectField,
-               let project = loser.logicalProjects.first(where: { $0.id == id }) {
+                let project = loser.logicalProjects.first(where: { $0.id == id })
+            {
                 if let index = ancestor.logicalProjects.firstIndex(where: { $0.id == id }) {
                     ancestor.logicalProjects[index] = project
                 } else {
@@ -140,7 +144,8 @@ private extension WorkspaceConflictResolver {
             // happened; keeping the item is handled by setting the deletion
             // aside in the merge itself.
             guard resolution.choice == .takeRemote, let id = resolution.artifactID,
-                  let losing = loser.artifacts.first(where: { $0.identity.id == id }) else { return }
+                let losing = loser.artifacts.first(where: { $0.identity.id == id })
+            else { return }
             if let index = ancestor.artifacts.firstIndex(where: { $0.identity.id == id }) {
                 ancestor.artifacts[index] = losing
             } else {
@@ -149,7 +154,8 @@ private extension WorkspaceConflictResolver {
 
         case .deviceField:
             guard let id = resolution.objectID,
-                  let losing = loser.deviceRegistry.first(where: { $0.id == id }) else { return }
+                let losing = loser.deviceRegistry.first(where: { $0.id == id })
+            else { return }
             var devices = ancestor.deviceRegistry
             if let index = devices.firstIndex(where: { $0.id == id }) {
                 devices[index] = losing
@@ -188,7 +194,8 @@ private extension WorkspaceConflictResolver {
 
         case .assignmentEnablement, .assignmentField:
             guard let id = resolution.objectID,
-                  let losing = loser.assignments.first(where: { $0.id == id }) else { return }
+                let losing = loser.assignments.first(where: { $0.id == id })
+            else { return }
             if let index = ancestor.assignments.firstIndex(where: { $0.id == id }) {
                 ancestor.assignments[index] = losing
             } else {

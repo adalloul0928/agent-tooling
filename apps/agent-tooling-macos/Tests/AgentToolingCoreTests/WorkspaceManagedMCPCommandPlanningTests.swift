@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -11,12 +12,14 @@ struct WorkspaceManagedMCPCommandPlanningTests {
         let client = try #require(surface.client)
         let destination = try MCPDefinitionValidator.validate(fixture.endpoint, transport: .http)
 
-        #expect(plan.arguments == MCPClientCommand.addArguments(
-            serverID: fixture.serverID,
-            transport: .http,
-            destination: destination,
-            client: client,
-            scope: .user))
+        #expect(
+            plan.arguments
+                == MCPClientCommand.addArguments(
+                    serverID: fixture.serverID,
+                    transport: .http,
+                    destination: destination,
+                    client: client,
+                    scope: .user))
         #expect(plan.executable == MCPClientCommand.executable(for: client))
         #expect(plan.executableURL == fixture.executableURL)
         #expect(plan.workingDirectoryPath == nil)
@@ -35,10 +38,11 @@ struct WorkspaceManagedMCPCommandPlanningTests {
 
         let plan = try fixture.plan()
 
-        #expect(plan.arguments == [
-            "mcp", "add", "--transport", "stdio", "--scope", "user",
-            fixture.serverID, "--", "mcp-runner", "--label", "two words", "--empty", "",
-        ])
+        #expect(
+            plan.arguments == [
+                "mcp", "add", "--transport", "stdio", "--scope", "user",
+                fixture.serverID, "--", "mcp-runner", "--label", "two words", "--empty", "",
+            ])
     }
 
     @Test func projectAndLocalProjectUseOnlyTheCurrentDeviceLogicalProjectRoot() throws {
@@ -50,10 +54,11 @@ struct WorkspaceManagedMCPCommandPlanningTests {
         let local = try Fixture(surface: .geminiCLI, scope: .localProject, projectRoot: "/work/local")
         let localPlan = try local.plan()
         #expect(localPlan.workingDirectoryPath == "/work/local")
-        #expect(localPlan.arguments == [
-            "mcp", "add", "--scope", "project", "--transport", "http",
-            local.serverID, local.endpoint,
-        ])
+        #expect(
+            localPlan.arguments == [
+                "mcp", "add", "--scope", "project", "--transport", "http",
+                local.serverID, local.endpoint,
+            ])
     }
 
     @Test func workspaceUsesOnlyTheTypedDeviceBindingRoot() throws {
@@ -127,7 +132,7 @@ struct WorkspaceManagedMCPCommandPlanningTests {
             _ = try fixture.plan(executableURL: URL(fileURLWithPath: "/usr/local/bin/codex"))
         }
         #expect(throws: WorkspaceManagedMCPCommandPlanningError.invalidCLIURL) {
-            _ = try fixture.plan(executableURL: URL(string: "https://example.com/claude")!)
+            _ = try fixture.plan(executableURL: try #require(URL(string: "https://example.com/claude")))
         }
     }
 
@@ -161,7 +166,7 @@ struct WorkspaceManagedMCPCommandPlanningTests {
         var fixture = try Fixture(surface: .claudeCode)
         fixture.document.assignments[0].desiredEnabled = true
         var opposing = fixture.requirement.contributions[0]
-        opposing.id = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000109")!)
+        opposing.id = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000109"))
         opposing.destination.surface = .codexCLI
         opposing.desiredEnabled = false
         fixture.document.assignments.append(opposing)
@@ -175,7 +180,7 @@ struct WorkspaceManagedMCPCommandPlanningTests {
     @Test func omittedTargetForAnotherApplicableAssignmentBlocksTheSelectedRequirement() throws {
         var fixture = try Fixture(surface: .claudeCode)
         var omitted = fixture.requirement.contributions[0]
-        omitted.id = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000110")!)
+        omitted.id = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000110"))
         omitted.destination.surface = .codexCLI
         fixture.document.assignments.append(omitted)
         fixture.document = try WorkspaceDocumentCoding.seal(fixture.document)
@@ -202,9 +207,11 @@ struct WorkspaceManagedMCPCommandPlanningTests {
     @Test func anotherDevicesExplicitDisablementDoesNotBlockCurrentDevicePresence() throws {
         var fixture = try Fixture(surface: .claudeCode)
         var remote = fixture.requirement.contributions[0]
-        remote.id = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000111")!)
-        remote.destination.deviceIDs = [WorkspaceObjectID(
-            UUID(uuidString: "00000000-0000-0000-0000-000000000112")!)]
+        remote.id = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000111"))
+        remote.destination.deviceIDs = [
+            WorkspaceObjectID(
+                fixtureUUID("00000000-0000-0000-0000-000000000112"))
+        ]
         remote.desiredEnabled = false
         fixture.document.assignments.append(remote)
         fixture.document = try WorkspaceDocumentCoding.seal(fixture.document)
@@ -242,10 +249,10 @@ struct WorkspaceManagedMCPCommandPlanningTests {
     }
 
     private struct Fixture {
-        static let artifactID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000101")!)
-        static let projectID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000102")!)
-        static let deviceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000103")!)
-        static let physicalID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000104")!)
+        static let artifactID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000101"))
+        static let projectID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000102"))
+        static let deviceID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000103"))
+        static let physicalID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000104"))
 
         let serverID = "reviewed-server"
         let endpoint = "https://mcp.example.com/v1"
@@ -271,7 +278,7 @@ struct WorkspaceManagedMCPCommandPlanningTests {
                 logicalProjectID: logicalProjectID,
                 deviceIDs: [Self.deviceID])
             let contribution = AssignmentContribution(
-                id: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000105")!),
+                id: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000105")),
                 artifactID: Self.artifactID,
                 destination: destination,
                 reason: .manual,
@@ -280,27 +287,31 @@ struct WorkspaceManagedMCPCommandPlanningTests {
             let definition = PortableMCPDefinitionRecord(
                 artifactID: Self.artifactID,
                 connection: connection)
-            var artifacts = [ArtifactRecord(
-                identity: .init(id: Self.artifactID, kind: .mcpServer, displayName: "Managed server"),
-                authority: .centralPersonal,
-                declaredName: serverID)]
+            var artifacts = [
+                ArtifactRecord(
+                    identity: .init(id: Self.artifactID, kind: .mcpServer, displayName: "Managed server"),
+                    authority: .centralPersonal,
+                    declaredName: serverID)
+            ]
             var projects: [LogicalProjectRecord] = []
             if logicalProjectID != nil {
-                artifacts.append(ArtifactRecord(
-                    identity: .init(id: Self.projectID, kind: .logicalProject, displayName: "Project"),
-                    authority: .trackedOnly))
+                artifacts.append(
+                    ArtifactRecord(
+                        identity: .init(id: Self.projectID, kind: .logicalProject, displayName: "Project"),
+                        authority: .trackedOnly))
                 projects = [.init(id: Self.projectID, name: "Project")]
             }
-            let resolvedDocument = try WorkspaceDocumentCoding.seal(PortableWorkspaceDocument(
-                workspaceID: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000106")!),
-                revision: .init(
-                    id: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000107")!),
-                    writerID: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000108")!),
-                    createdAt: Date(timeIntervalSince1970: 1_700_000_000)),
-                artifacts: artifacts,
-                logicalProjects: projects,
-                assignments: [contribution],
-                mcpDefinitions: [definition]))
+            let resolvedDocument = try WorkspaceDocumentCoding.seal(
+                PortableWorkspaceDocument(
+                    workspaceID: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000106")),
+                    revision: .init(
+                        id: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000107")),
+                        writerID: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000108")),
+                        createdAt: Date(timeIntervalSince1970: 1_700_000_000)),
+                    artifacts: artifacts,
+                    logicalProjects: projects,
+                    assignments: [contribution],
+                    mcpDefinitions: [definition]))
             let resolvedCapability = TargetCapabilityEvidence(
                 surface: surface,
                 installedClientVersion: "1.0.0",
@@ -339,7 +350,8 @@ struct WorkspaceManagedMCPCommandPlanningTests {
             target = resolvedTarget
             resolvedTargets = [resolvedTarget]
             capability = resolvedCapability
-            executableURL = URL(fileURLWithPath: "/usr/local/bin/\(MCPClientCommand.executable(for: surface.client!))")
+            let client = try #require(surface.client)
+            executableURL = URL(fileURLWithPath: "/usr/local/bin/\(MCPClientCommand.executable(for: client))")
             try device.validateStructure(against: document)
         }
 

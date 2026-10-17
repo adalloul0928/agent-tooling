@@ -9,17 +9,20 @@ import Testing
 @Suite("Configuration editor")
 struct ConfigurationEditorTests {
     @Test func oneSettingChangesWhileEveryOtherKeyAndUnknownFieldSurvives() throws {
-        let fixture = try Fixture(#"""
-        {"model":"old-model","permissions":{"allow":["Read"],"vendorOnly":true},\#
-        "unknownThing":{"nested":[1,2]},"cleanupPeriodDays":30}
-        """#)
+        let fixture = try Fixture(
+            #"""
+            {"model":"old-model","permissions":{"allow":["Read"],"vendorOnly":true},\#
+            "unknownThing":{"nested":[1,2]},"cleanupPeriodDays":30}
+            """#)
         defer { fixture.remove() }
         let editor = ConfigurationEditor()
-        let edit = ConfigurationEdit(key: "model", layer: .user, sourcePath: fixture.path,
+        let edit = ConfigurationEdit(
+            key: "model", layer: .user, sourcePath: fixture.path,
             newValue: .string("new-model"), expectedFingerprint: try editor.fingerprint(of: fixture.path))
 
-        let receipt = try editor.apply(edit, adapter: ClaudeCodeConfigurationAdapter(),
-                                       installedClientVersion: "2.0.0")
+        let receipt = try editor.apply(
+            edit, adapter: ClaudeCodeConfigurationAdapter(),
+            installedClientVersion: "2.0.0")
 
         #expect(receipt.effectiveValue == .string("new-model"))
         let object = try fixture.object()
@@ -43,8 +46,10 @@ struct ConfigurationEditorTests {
         try fixture.rewrite(#"{"model":"changed-by-someone-else"}"#)
 
         #expect(throws: ConfigurationEditError.self) {
-            _ = try editor.apply(.init(key: "model", layer: .user, sourcePath: fixture.path,
-                newValue: .string("new-model"), expectedFingerprint: stale),
+            _ = try editor.apply(
+                .init(
+                    key: "model", layer: .user, sourcePath: fixture.path,
+                    newValue: .string("new-model"), expectedFingerprint: stale),
                 adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0")
         }
         #expect(try fixture.object()["model"] as? String == "changed-by-someone-else")
@@ -56,16 +61,19 @@ struct ConfigurationEditorTests {
         let configuration = EffectiveConfigurationResolver.resolve(
             adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0",
             layers: [
-                .init(kind: .managedPolicy, sourcePath: "/policy", isWritable: false,
-                      values: ["model": .string("policy-model")]),
-                .init(kind: .user, sourcePath: fixture.path, isWritable: true,
-                      values: ["model": .string("user-model")]),
+                .init(
+                    kind: .managedPolicy, sourcePath: "/policy", isWritable: false,
+                    values: ["model": .string("policy-model")]),
+                .init(
+                    kind: .user, sourcePath: fixture.path, isWritable: true,
+                    values: ["model": .string("user-model")]),
             ])
 
         #expect(throws: ConfigurationEditError.constrainedByHigherLayer) {
             try ConfigurationEditor().validate(
-                .init(key: "model", layer: .user, sourcePath: fixture.path,
-                      newValue: .string("mine"), expectedFingerprint: nil),
+                .init(
+                    key: "model", layer: .user, sourcePath: fixture.path,
+                    newValue: .string("mine"), expectedFingerprint: nil),
                 against: configuration)
         }
     }
@@ -75,13 +83,17 @@ struct ConfigurationEditorTests {
         defer { fixture.remove() }
         let configuration = EffectiveConfigurationResolver.resolve(
             adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0",
-            layers: [.init(kind: .user, sourcePath: fixture.path, isWritable: true,
-                           values: ["model": .string("user-model"), "unknownThing": .number(1)])])
+            layers: [
+                .init(
+                    kind: .user, sourcePath: fixture.path, isWritable: true,
+                    values: ["model": .string("user-model"), "unknownThing": .number(1)])
+            ])
 
         #expect(throws: ConfigurationEditError.unsupportedSetting) {
             try ConfigurationEditor().validate(
-                .init(key: "unknownThing", layer: .user, sourcePath: fixture.path,
-                      newValue: .number(2), expectedFingerprint: nil),
+                .init(
+                    key: "unknownThing", layer: .user, sourcePath: fixture.path,
+                    newValue: .number(2), expectedFingerprint: nil),
                 against: configuration)
         }
         // The unknown key is still visible, just not editable here.
@@ -95,9 +107,10 @@ struct ConfigurationEditorTests {
 
         #expect(throws: ConfigurationEditError.valueRejected) {
             _ = try ConfigurationEditor().apply(
-                .init(key: "model", layer: .user, sourcePath: fixture.path,
-                      newValue: .opaque("Configured"),
-                      expectedFingerprint: try ConfigurationEditor().fingerprint(of: fixture.path)),
+                .init(
+                    key: "model", layer: .user, sourcePath: fixture.path,
+                    newValue: .opaque("Configured"),
+                    expectedFingerprint: try ConfigurationEditor().fingerprint(of: fixture.path)),
                 adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0")
         }
         #expect(try fixture.contents() == before)
@@ -135,9 +148,10 @@ struct ConfigurationEditorTests {
         let editor = ConfigurationEditor()
 
         let receipt = try editor.apply(
-            .init(key: "permissions.allow", layer: .user, sourcePath: fixture.path,
-                  newValue: .list([.string("Read"), .string("Grep")]),
-                  expectedFingerprint: try editor.fingerprint(of: fixture.path)),
+            .init(
+                key: "permissions.allow", layer: .user, sourcePath: fixture.path,
+                newValue: .list([.string("Read"), .string("Grep")]),
+                expectedFingerprint: try editor.fingerprint(of: fixture.path)),
             adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0")
 
         #expect(receipt.effectiveValue == .list([.string("Read"), .string("Grep")]))

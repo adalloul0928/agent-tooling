@@ -207,7 +207,6 @@ struct MCPSafetyTag: View {
     }
 }
 
-
 // MARK: - Consent
 
 /// The one screen that turns "Agent Tooling manages this definition" into

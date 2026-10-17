@@ -75,7 +75,8 @@ final class WorkspaceSettingsSession {
     ) {
         self.homeRoot = homeRoot
         self.library = library
-        self.managedPolicyPath = managedPolicyPath
+        self.managedPolicyPath =
+            managedPolicyPath
             ?? ConfigurationLayerReader.managedPolicyPath(for: .claudeCode)
     }
 
@@ -88,9 +89,10 @@ final class WorkspaceSettingsSession {
     /// Whether this exact setting can be changed from here, and nothing wider.
     func isEditable(_ row: EffectiveConfigurationRow, surface: TargetSurface) -> Bool {
         guard ConfigurationCompatibilityRegister.isWritable(surface: surface, key: row.key),
-              let writable = row.writableLayer,
-              let contribution = row.contributions.first(where: { $0.layer == writable }),
-              let path = contribution.sourcePath, path.hasSuffix(".json") else { return false }
+            let writable = row.writableLayer,
+            let contribution = row.contributions.first(where: { $0.layer == writable }),
+            let path = contribution.sourcePath, path.hasSuffix(".json")
+        else { return false }
         // A list combined from several files is not one value to replace.
         return row.rule == .replace
     }
@@ -98,13 +100,15 @@ final class WorkspaceSettingsSession {
     /// Prepares a change without writing it, recording the file as it is now.
     func beginEdit(_ row: EffectiveConfigurationRow, surface: Surface) {
         guard !isBusy, isEditable(row, surface: surface.id),
-              let writable = row.writableLayer,
-              let path = row.contributions.first(where: { $0.layer == writable })?.sourcePath else { return }
+            let writable = row.writableLayer,
+            let path = row.contributions.first(where: { $0.layer == writable })?.sourcePath
+        else { return }
         editMessage = nil
         lastReceipt = nil
-        pendingEdit = .init(surface: surface.id, surfaceTitle: surface.title, row: row,
-                            layer: writable, sourcePath: path,
-                            fingerprint: try? ConfigurationEditor().fingerprint(of: path))
+        pendingEdit = .init(
+            surface: surface.id, surfaceTitle: surface.title, row: row,
+            layer: writable, sourcePath: path,
+            fingerprint: try? ConfigurationEditor().fingerprint(of: path))
     }
 
     func discardEdit() {
@@ -123,9 +127,10 @@ final class WorkspaceSettingsSession {
             (library.state?.snapshot.device.capabilityEvidence ?? []).compactMap { evidence in
                 evidence.installedClientVersion.map { (evidence.surface, $0) }
             }, uniquingKeysWith: { first, _ in first })
-        let command = ConfigurationEdit(key: edit.row.key, layer: edit.layer,
-                                        sourcePath: edit.sourcePath, newValue: value,
-                                        expectedFingerprint: edit.fingerprint)
+        let command = ConfigurationEdit(
+            key: edit.row.key, layer: edit.layer,
+            sourcePath: edit.sourcePath, newValue: value,
+            expectedFingerprint: edit.fingerprint)
         do {
             let editor = ConfigurationEditor()
             guard let configuration = surfaces.first(where: { $0.id == edit.surface })?.configuration else {
@@ -135,8 +140,9 @@ final class WorkspaceSettingsSession {
             try editor.validate(command, against: configuration)
             switch edit.surface {
             case .claudeCode:
-                lastReceipt = try editor.apply(command, adapter: ClaudeCodeConfigurationAdapter(),
-                                               installedClientVersion: versions[.claudeCode])
+                lastReceipt = try editor.apply(
+                    command, adapter: ClaudeCodeConfigurationAdapter(),
+                    installedClientVersion: versions[.claudeCode])
             default:
                 // Only Claude Code has a JSON layer this build rewrites. Codex
                 // keeps comments and formatting in TOML that cannot be
@@ -208,29 +214,38 @@ final class WorkspaceSettingsSession {
             var results: [Surface] = []
             if readsClaude {
                 do {
-                    let layers = try reader.claudeCodeLayers(homeRoot: home, projectRoot: projectRoot,
-                                                            managedPolicyPath: policy)
-                    results.append(.init(id: .claudeCode, title: "Claude Code",
-                        configuration: EffectiveConfigurationResolver.resolve(
-                            adapter: ClaudeCodeConfigurationAdapter(),
-                            installedClientVersion: versions[.claudeCode], layers: layers),
-                        errorMessage: nil))
+                    let layers = try reader.claudeCodeLayers(
+                        homeRoot: home, projectRoot: projectRoot,
+                        managedPolicyPath: policy)
+                    results.append(
+                        .init(
+                            id: .claudeCode, title: "Claude Code",
+                            configuration: EffectiveConfigurationResolver.resolve(
+                                adapter: ClaudeCodeConfigurationAdapter(),
+                                installedClientVersion: versions[.claudeCode], layers: layers),
+                            errorMessage: nil))
                 } catch {
-                    results.append(.init(id: .claudeCode, title: "Claude Code", configuration: nil,
-                        errorMessage: Self.describe(error)))
+                    results.append(
+                        .init(
+                            id: .claudeCode, title: "Claude Code", configuration: nil,
+                            errorMessage: Self.describe(error)))
                 }
             }
             if readsCodex {
                 do {
                     let adapter = CodexConfigurationAdapter(installedClientVersion: versions[.codexCLI])
                     let layers = try reader.codexLayers(homeRoot: home, adapter: adapter)
-                    results.append(.init(id: .codexCLI, title: "Codex",
-                        configuration: EffectiveConfigurationResolver.resolve(
-                            adapter: adapter, installedClientVersion: versions[.codexCLI], layers: layers),
-                        errorMessage: nil))
+                    results.append(
+                        .init(
+                            id: .codexCLI, title: "Codex",
+                            configuration: EffectiveConfigurationResolver.resolve(
+                                adapter: adapter, installedClientVersion: versions[.codexCLI], layers: layers),
+                            errorMessage: nil))
                 } catch {
-                    results.append(.init(id: .codexCLI, title: "Codex", configuration: nil,
-                        errorMessage: Self.describe(error)))
+                    results.append(
+                        .init(
+                            id: .codexCLI, title: "Codex", configuration: nil,
+                            errorMessage: Self.describe(error)))
                 }
             }
             return results
@@ -242,7 +257,7 @@ final class WorkspaceSettingsSession {
         case ConfigurationEditError.fileChangedSinceReview:
             "That file changed since you opened it. Nothing was written — look at it again."
         case ConfigurationEditError.constrainedByHigherLayer,
-             ConfigurationEditError.layerNotWritable:
+            ConfigurationEditError.layerNotWritable:
             "Something with more say than this file decides that setting, so changing it here would not take effect."
         case ConfigurationEditError.unsupportedSetting:
             "Agent Tooling does not know that setting well enough to change it."

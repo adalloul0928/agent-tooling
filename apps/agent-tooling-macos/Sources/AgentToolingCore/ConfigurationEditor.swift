@@ -112,16 +112,18 @@ public struct ConfigurationEditor: Sendable {
         // A backup before the write, so the person's own file is recoverable
         // whatever happens next.
         let backupPath = edit.sourcePath + ".agent-tooling-backup"
-        do { try original.write(to: URL(fileURLWithPath: backupPath), options: .atomic) }
-        catch { throw ConfigurationEditError.backupFailed }
+        do { try original.write(to: URL(fileURLWithPath: backupPath), options: .atomic) } catch {
+            throw ConfigurationEditError.backupFailed
+        }
 
         let updated: Data
         do {
             updated = try JSONSerialization.data(
                 withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
         } catch { throw ConfigurationEditError.valueRejected }
-        do { try updated.write(to: URL(fileURLWithPath: edit.sourcePath), options: .atomic) }
-        catch { throw ConfigurationEditError.writeFailed }
+        do { try updated.write(to: URL(fileURLWithPath: edit.sourcePath), options: .atomic) } catch {
+            throw ConfigurationEditError.writeFailed
+        }
 
         // Re-read and resolve again: the write is only a success if the client
         // would now actually use this value. A file that cannot be read back
@@ -137,16 +139,19 @@ public struct ConfigurationEditor: Sendable {
             adapter: adapter, installedClientVersion: installedClientVersion,
             layers: layer.map { [$0] } ?? [])
         guard let row = resolved.rows.first(where: { $0.key == edit.key }),
-              row.value == edit.newValue else {
+            row.value == edit.newValue
+        else {
             throw ConfigurationEditError.notEffectiveAfterWrite
         }
         guard let newFingerprint = try fingerprint(of: edit.sourcePath),
-              let previous = try fingerprint(of: backupPath) else {
+            let previous = try fingerprint(of: backupPath)
+        else {
             throw ConfigurationEditError.writeFailed
         }
-        return .init(key: edit.key, sourcePath: edit.sourcePath, backupPath: backupPath,
-                     previousFingerprint: previous, newFingerprint: newFingerprint,
-                     effectiveValue: row.value)
+        return .init(
+            key: edit.key, sourcePath: edit.sourcePath, backupPath: backupPath,
+            previousFingerprint: previous, newFingerprint: newFingerprint,
+            effectiveValue: row.value)
     }
 }
 

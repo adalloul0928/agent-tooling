@@ -44,8 +44,9 @@ public struct WorkspaceConfigurationDeviceState: Codable, Hashable, Sendable {
             try requireConfiguration(observation.configurationID)
             try WorkspaceDomainValidation.requireText(observation.checkID, field: "check ID", maximum: 512)
             if let portable {
-                guard portable.configurations.first(where: { $0.id == observation.configurationID })?
-                    .checkDefinitions.contains(where: { $0.id == observation.checkID }) == true
+                guard
+                    portable.configurations.first(where: { $0.id == observation.configurationID })?
+                        .checkDefinitions.contains(where: { $0.id == observation.checkID }) == true
                 else { throw WorkspaceDomainValidationError.missingReference("device configuration check") }
             }
         }

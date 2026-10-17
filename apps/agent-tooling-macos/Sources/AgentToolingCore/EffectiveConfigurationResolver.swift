@@ -50,8 +50,9 @@ public enum ConfigurationValue: Hashable, Sendable {
     public var displayText: String {
         switch self {
         case .string(let value): value
-        case .number(let value): value == value.rounded() && abs(value) < 1e15
-            ? String(Int64(value)) : String(value)
+        case .number(let value):
+            value == value.rounded() && abs(value) < 1e15
+                ? String(Int64(value)) : String(value)
         case .boolean(let value): value ? "On" : "Off"
         case .list(let values): values.map(\.displayText).joined(separator: ", ")
         case .opaque(let value): value
@@ -154,11 +155,13 @@ public struct EffectiveConfiguration: Hashable, Sendable {
     /// do not.
     public var combinedBreakdowns: [CombinedSettingBreakdown] {
         rows.filter { $0.rule == .combineList }.map { row in
-            .init(key: row.key, displayName: row.displayName,
-                  contributions: row.contributions.map { contribution in
-                      .init(layer: contribution.layer, sourcePath: contribution.sourcePath,
-                            entryCount: Self.count(contribution.value))
-                  })
+            .init(
+                key: row.key, displayName: row.displayName,
+                contributions: row.contributions.map { contribution in
+                    .init(
+                        layer: contribution.layer, sourcePath: contribution.sourcePath,
+                        entryCount: Self.count(contribution.value))
+                })
         }
     }
 
@@ -215,10 +218,11 @@ public enum EffectiveConfigurationResolver {
             case .combineList:
                 // Hooks and instruction lists add up rather than replace; a
                 // lower layer still contributes even when a higher one is set.
-                value = .list(present.flatMap { entry -> [ConfigurationValue] in
-                    if case .list(let items) = entry.1 { return items }
-                    return [entry.1]
-                })
+                value = .list(
+                    present.flatMap { entry -> [ConfigurationValue] in
+                        if case .list(let items) = entry.1 { return items }
+                        return [entry.1]
+                    })
             }
             let contributions = present.map { entry in
                 ConfigurationContribution(
@@ -228,15 +232,18 @@ public enum EffectiveConfigurationResolver {
             // Only a writable layer at or above the winning one can change what
             // the client uses; writing underneath a fixed value cannot.
             let winningIndex = order.firstIndex(of: winner.0.kind) ?? order.count
-            let writable = ordered.first {
-                $0.isWritable && (order.firstIndex(of: $0.kind) ?? order.count) <= winningIndex
-            }?.kind ?? (definition.rule == .combineList
-                ? ordered.first(where: \.isWritable)?.kind : nil)
-            rows.append(.init(
-                key: definition.key, displayName: definition.displayName, value: value,
-                definedBy: winner.0.kind, definingSourcePath: winner.0.sourcePath,
-                contributions: contributions, rule: definition.rule,
-                writableLayer: writable, requiresNewSession: definition.requiresNewSession))
+            let writable =
+                ordered.first {
+                    $0.isWritable && (order.firstIndex(of: $0.kind) ?? order.count) <= winningIndex
+                }?.kind
+                ?? (definition.rule == .combineList
+                    ? ordered.first(where: \.isWritable)?.kind : nil)
+            rows.append(
+                .init(
+                    key: definition.key, displayName: definition.displayName, value: value,
+                    definedBy: winner.0.kind, definingSourcePath: winner.0.sourcePath,
+                    contributions: contributions, rule: definition.rule,
+                    writableLayer: writable, requiresNewSession: definition.requiresNewSession))
         }
 
         // Anything present in a file that this adapter has no definition for is

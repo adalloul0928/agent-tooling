@@ -149,18 +149,25 @@ final class WorkspaceUpdateSession {
                 availability: availability, cannotUpdate: pluginUpdateRefusal(for: row))
         }
         for row in state.library.rows where row.kind == .mcpServer {
-            guard let package = marketplace.packages.first(where: { package in
-                package.components.contains(.mcpServer)
-                    && package.name.caseInsensitiveCompare(row.displayName) == .orderedSame
-            }), let status = package.updateStatus else { continue }
-            let availability: UpdateAvailability = switch status {
-            case .updateAvailable: .updateAvailable(installed: "the recorded connection", available: package.revision ?? "a newer listing")
-            case .current: .upToDate(revision: package.revision ?? "the current listing")
-            case .locallyModified, .conflict, .unknown: .unknown(reason: "\(package.sourceName) could not say whether this connection changed.")
-            }
+            guard
+                let package = marketplace.packages.first(where: { package in
+                    package.components.contains(.mcpServer)
+                        && package.name.caseInsensitiveCompare(row.displayName) == .orderedSame
+                }), let status = package.updateStatus
+            else { continue }
+            let availability: UpdateAvailability =
+                switch status {
+                case .updateAvailable:
+                    .updateAvailable(installed: "the recorded connection", available: package.revision ?? "a newer listing")
+                case .current: .upToDate(revision: package.revision ?? "the current listing")
+                case .locallyModified, .conflict, .unknown:
+                    .unknown(reason: "\(package.sourceName) could not say whether this connection changed.")
+                }
             next[row.artifactID] = .init(
                 id: row.artifactID, displayName: row.displayName, kind: .mcpServer, availability: availability,
-                cannotUpdate: "Connections are set up once; a changed listing is applied by removing and adding it again from the Connections screen.")
+                cannotUpdate:
+                    "Connections are set up once; a changed listing is applied by removing and adding it again from the Connections screen."
+            )
         }
 
         entries = next
@@ -183,7 +190,7 @@ final class WorkspaceUpdateSession {
     @discardableResult
     func update(_ artifactID: ArtifactID) async -> Bool {
         guard let entry = entries[artifactID], entry.availability.hasUpdate, !updating.contains(artifactID),
-              entry.cannotUpdate == nil
+            entry.cannotUpdate == nil
         else { return false }
         updating.insert(artifactID)
         errorMessage = nil
@@ -217,8 +224,8 @@ final class WorkspaceUpdateSession {
         // read the head again rather than apply against the one before.
         await library.refresh()
         guard let prepared = fetched[entry.id],
-              let head = library.state?.snapshot.document.revision.id,
-              let digest = library.state?.library.rows.first(where: { $0.artifactID == entry.id })?.contentDigest
+            let head = library.state?.snapshot.document.revision.id,
+            let digest = library.state?.library.rows.first(where: { $0.artifactID == entry.id })?.contentDigest
         else {
             errorMessage = "Check for updates again before installing this one."
             return false
@@ -245,7 +252,8 @@ final class WorkspaceUpdateSession {
             // the plan's changes, and the edited copies are in that plan, so a
             // title quoted here ("Review changes…") never matched the button
             // ("Review 1 change…") it sent a person to.
-            notice = "\(apps) kept \(leftAlone.count == 1 ? "a copy" : "copies") of \(entry.displayName) that "
+            notice =
+                "\(apps) kept \(leftAlone.count == 1 ? "a copy" : "copies") of \(entry.displayName) that "
                 + "\(leftAlone.count == 1 ? "was" : "were") edited after Agent Tooling installed \(them). "
                 + "Review the changes on the Apps screen to replace \(them)."
         }
@@ -256,12 +264,13 @@ final class WorkspaceUpdateSession {
     /// which apps have one; the policy inside the executor checks it again.
     private func updatePlugin(_ entry: Entry) async -> Bool {
         guard let row = library.state?.library.rows.first(where: { $0.artifactID == entry.id }),
-              let route = row.nativeRoutes.first,
-              let command = NativePluginInstallRegister.command(for: route.client, externalPluginID: route.externalPluginID),
-              let arguments = command.updateArguments,
-              let executable = ClientExecutableLocator.locate(route.client, homeURL: homeRoot)
+            let route = row.nativeRoutes.first,
+            let command = NativePluginInstallRegister.command(for: route.client, externalPluginID: route.externalPluginID),
+            let arguments = command.updateArguments,
+            let executable = ClientExecutableLocator.locate(route.client, homeURL: homeRoot)
         else {
-            errorMessage = pluginUpdateRefusal(for: library.state?.library.rows.first { $0.artifactID == entry.id })
+            errorMessage =
+                pluginUpdateRefusal(for: library.state?.library.rows.first { $0.artifactID == entry.id })
                 ?? "\(entry.displayName) cannot be updated from here."
             return false
         }
@@ -272,9 +281,10 @@ final class WorkspaceUpdateSession {
             summary: "Asks the app to update its own plugin.",
             targetSurfaces: surface.map { [$0] } ?? [],
             steps: [
-                .init(kind: .command, title: "Update \(route.externalPluginID)",
-                      detail: "Runs the app's own update command.",
-                      executable: executable.path, arguments: arguments),
+                .init(
+                    kind: .command, title: "Update \(route.externalPluginID)",
+                    detail: "Runs the app's own update command.",
+                    executable: executable.path, arguments: arguments)
             ])
         let executor = OperationExecutor(store: store, homeURL: homeRoot)
         let receipt = await executor.execute(plan)
@@ -303,9 +313,9 @@ final class WorkspaceUpdateSession {
         let rows = Dictionary(state.library.rows.map { ($0.artifactID, $0) }, uniquingKeysWith: { first, _ in first })
         return document.subscriptions.compactMap { subscription in
             guard let row = rows[subscription.artifactID], row.kind == .skill,
-                  let source = document.sources.first(where: { $0.id == subscription.sourceID }),
-                  let repositoryURL = source.repositoryURL,
-                  let binding = try? SkillRepositoryBinding(
+                let source = document.sources.first(where: { $0.id == subscription.sourceID }),
+                let repositoryURL = source.repositoryURL,
+                let binding = try? SkillRepositoryBinding(
                     repositoryURL: repositoryURL, ref: subscription.lock.requestedRef,
                     subdirectory: subscription.lock.packageRelativePath == "." ? "" : subscription.lock.packageRelativePath)
             else { return nil }

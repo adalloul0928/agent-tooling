@@ -34,8 +34,9 @@ struct WorkspaceSyncCoordinatorTests {
         #expect(adopted.document.revision.id == receipt.committedRevisionID)
         #expect(adopted.document.artifacts.contains { $0.identity.displayName == "Renamed on A" })
         // Adoption keeps the shared revision's identity, so both heads agree.
-        #expect(adopted.document.revision.id
-            == (try #require(try fixture.storeA.snapshot())).document.revision.id)
+        #expect(
+            adopted.document.revision.id
+                == (try #require(try fixture.storeA.snapshot())).document.revision.id)
     }
 
     @Test func independentEditsOnBothDevicesConverge() async throws {
@@ -59,8 +60,9 @@ struct WorkspaceSyncCoordinatorTests {
             let names = Set((try #require(try store.snapshot())).document.artifacts.map(\.identity.displayName))
             #expect(names == ["Renamed on A", "Renamed on B"])
         }
-        #expect(try #require(try fixture.storeA.snapshot()).document.revision.id
-            == (try #require(try fixture.storeB.snapshot())).document.revision.id)
+        #expect(
+            try #require(try fixture.storeA.snapshot()).document.revision.id
+                == (try #require(try fixture.storeB.snapshot())).document.revision.id)
     }
 
     @Test func aConflictStopsThePassWithoutCommittingOrPublishing() async throws {
@@ -86,8 +88,9 @@ struct WorkspaceSyncCoordinatorTests {
         // Nothing was committed here and nothing was pushed.
         #expect(try #require(try fixture.storeB.snapshot()).document.revision.id == headBefore)
         #expect(try await fixture.transportB.remoteState().head == remoteBefore)
-        #expect(try #require(try fixture.storeB.snapshot())
-            .document.artifacts.contains { $0.identity.displayName == "B's name" })
+        #expect(
+            try #require(try fixture.storeB.snapshot())
+                .document.artifacts.contains { $0.identity.displayName == "B's name" })
     }
 
     @Test func decidingAConflictConvergesBothDevicesOnTheChosenResult() async throws {
@@ -110,9 +113,10 @@ struct WorkspaceSyncCoordinatorTests {
             return
         }
 
-        let decided = try await fixture.b.resolve(conflicts.map {
-            .init(kind: $0.kind, artifactID: $0.artifactID, objectID: $0.objectID, choice: .keepLocal)
-        })
+        let decided = try await fixture.b.resolve(
+            conflicts.map {
+                .init(kind: $0.kind, artifactID: $0.artifactID, objectID: $0.objectID, choice: .keepLocal)
+            })
         guard case .merged = decided else {
             Issue.record("Expected the decision to be applied, got \(decided).")
             return
@@ -121,11 +125,13 @@ struct WorkspaceSyncCoordinatorTests {
 
         for store in [fixture.storeA, fixture.storeB] {
             let snapshot = try #require(try store.snapshot())
-            #expect(snapshot.document.artifacts.first { $0.identity.id == Fixture.alpha }?
-                .identity.displayName == "B's name")
+            #expect(
+                snapshot.document.artifacts.first { $0.identity.id == Fixture.alpha }?
+                    .identity.displayName == "B's name")
         }
-        #expect(try #require(try fixture.storeA.snapshot()).document.revision.id
-            == (try #require(try fixture.storeB.snapshot())).document.revision.id)
+        #expect(
+            try #require(try fixture.storeA.snapshot()).document.revision.id
+                == (try #require(try fixture.storeB.snapshot())).document.revision.id)
     }
 
     @Test func repeatingAPassReturnsItsOriginalResult() async throws {
@@ -137,7 +143,8 @@ struct WorkspaceSyncCoordinatorTests {
         let key = WorkspaceObjectID()
 
         guard case .adopted(let first) = try await fixture.b.sync(idempotencyKey: key) else {
-            Issue.record("Expected an adoption."); return
+            Issue.record("Expected an adoption.")
+            return
         }
         let repeated = try await fixture.b.sync(idempotencyKey: key)
 
@@ -149,8 +156,8 @@ struct WorkspaceSyncCoordinatorTests {
     }
 
     private struct Fixture {
-        static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
-        static let beta = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
+        static let alpha = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
+        static let beta = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2"))
 
         let root: URL
         let storeA: WorkspaceRevisionStore
@@ -163,30 +170,42 @@ struct WorkspaceSyncCoordinatorTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
                 .appending(path: "workspace-sync-\(UUID())")
             let remote = root.appending(path: "remote.git")
-            try FileManager.default.createDirectory(at: remote, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(
+                at: remote, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
             try GitTestFixture.git(["init", "--bare", "--initial-branch", "main", remote.path], in: root)
 
-            let workspaceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e5")!)
+            let workspaceID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000e5"))
             let writerA = WorkspaceObjectID()
             let writerB = WorkspaceObjectID()
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: workspaceID, revision: .init(writerID: writerA),
-                artifacts: [
-                    .init(identity: .init(id: Self.alpha, kind: .skill, displayName: "From A"),
-                          authority: .trackedOnly),
-                    .init(identity: .init(id: Self.beta, kind: .skill, displayName: "Second"),
-                          authority: .trackedOnly),
-                ]))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: workspaceID, revision: .init(writerID: writerA),
+                    artifacts: [
+                        .init(
+                            identity: .init(id: Self.alpha, kind: .skill, displayName: "From A"),
+                            authority: .trackedOnly),
+                        .init(
+                            identity: .init(id: Self.beta, kind: .skill, displayName: "Second"),
+                            authority: .trackedOnly),
+                    ]))
             // Each device keeps its own store and its own device identity.
-            storeA = try WorkspaceRevisionStore(containerRoot: root.appending(path: "store-a"),
+            storeA = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "store-a"),
                 workspaceID: workspaceID, deviceID: WorkspaceObjectID())
-            try storeA.initialize(document: document, device: .init(workspaceID: workspaceID,
-                deviceID: storeA.deviceID))
-            storeB = try WorkspaceRevisionStore(containerRoot: root.appending(path: "store-b"),
+            try storeA.initialize(
+                document: document,
+                device: .init(
+                    workspaceID: workspaceID,
+                    deviceID: storeA.deviceID))
+            storeB = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "store-b"),
                 workspaceID: workspaceID, deviceID: WorkspaceObjectID())
-            try storeB.initialize(document: document, device: .init(workspaceID: workspaceID,
-                deviceID: storeB.deviceID))
+            try storeB.initialize(
+                document: document,
+                device: .init(
+                    workspaceID: workspaceID,
+                    deviceID: storeB.deviceID))
 
             let transportA = try await GitTestFixture.enroll(remote: remote, checkout: root.appending(path: "checkout-a"))
             transportB = try await GitTestFixture.enroll(remote: remote, checkout: root.appending(path: "checkout-b"))

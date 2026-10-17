@@ -197,10 +197,16 @@ public struct DeviceWorkspaceState: Codable, Hashable, Sendable {
         guard (1...Self.currentSchemaVersion).contains(schemaVersion) else {
             throw WorkspaceDomainValidationError.unsupportedVersion(schemaVersion)
         }
-        guard (schemaVersion == 1 && configurationState == nil && mcpBindings == nil && applicationState == nil && projectRoots == nil && inventoryState == nil)
-            || (schemaVersion == 2 && configurationState != nil && mcpBindings == nil && applicationState == nil && projectRoots == nil && inventoryState == nil)
-            || (schemaVersion == 3 && configurationState != nil && mcpBindings != nil && applicationState == nil && projectRoots == nil && inventoryState == nil)
-            || (schemaVersion == 4 && configurationState != nil && mcpBindings != nil && applicationState != nil && projectRoots != nil && inventoryState != nil) else {
+        guard
+            (schemaVersion == 1 && configurationState == nil && mcpBindings == nil && applicationState == nil && projectRoots == nil
+                && inventoryState == nil)
+                || (schemaVersion == 2 && configurationState != nil && mcpBindings == nil && applicationState == nil && projectRoots == nil
+                    && inventoryState == nil)
+                || (schemaVersion == 3 && configurationState != nil && mcpBindings != nil && applicationState == nil && projectRoots == nil
+                    && inventoryState == nil)
+                || (schemaVersion == 4 && configurationState != nil && mcpBindings != nil && applicationState != nil && projectRoots != nil
+                    && inventoryState != nil)
+        else {
             throw WorkspaceDomainValidationError.invalidField("device schema feature version")
         }
         if let portable, configurationState != nil, portable.configurationState == nil {
@@ -225,8 +231,9 @@ public struct DeviceWorkspaceState: Codable, Hashable, Sendable {
             if let configuration = configurationState {
                 for record in portable?.configurationState?.configurations ?? [] {
                     guard let projectID = record.logicalProjectID,
-                          let root = projectRoots.first(where: { $0.projectID == projectID }),
-                          let configurationRoot = configuration.configurationBindings.first(where: { $0.configurationID == record.id }) else { continue }
+                        let root = projectRoots.first(where: { $0.projectID == projectID }),
+                        let configurationRoot = configuration.configurationBindings.first(where: { $0.configurationID == record.id })
+                    else { continue }
                     guard root.rootPath == configurationRoot.projectRoot else {
                         throw WorkspaceDomainValidationError.invalidField("configuration project root mapping")
                     }
@@ -243,7 +250,8 @@ public struct DeviceWorkspaceState: Codable, Hashable, Sendable {
             }
             // With a portable document present, an absent older-version field
             // means no definitions, not permission to accept unbound device data.
-            try WorkspaceMCPDefinitionValidation.validateDevice(mcpBindings,
+            try WorkspaceMCPDefinitionValidation.validateDevice(
+                mcpBindings,
                 definitions: portable.map { $0.mcpDefinitions ?? [] })
         }
         if let portable, portable.workspaceID != workspaceID {

@@ -274,7 +274,8 @@ final class WorkspaceAccountsSession {
             errorMessage = "This workspace changed while you were choosing. Try again."
             return false
         } catch {
-            errorMessage = "That choice could not be saved: \((error as? any LocalizedError)?.errorDescription ?? error.localizedDescription)"
+            errorMessage =
+                "That choice could not be saved: \((error as? any LocalizedError)?.errorDescription ?? error.localizedDescription)"
             return false
         }
         await library.refresh()
@@ -337,7 +338,8 @@ final class WorkspaceAccountsSession {
             errorMessage = "\(failed.count) of \(receipt.results.count) changes did not go through. First: \(first.output)"
             return nil
         }
-        lastApplyMessage = "\(provider.client.rawValue) now follows \(plan.changes.count) shared choice\(plan.changes.count == 1 ? "" : "s"). Restart open \(provider.client.rawValue) sessions to pick them up."
+        lastApplyMessage =
+            "\(provider.client.rawValue) now follows \(plan.changes.count) shared choice\(plan.changes.count == 1 ? "" : "s"). Restart open \(provider.client.rawValue) sessions to pick them up."
         return lastApplyMessage
     }
 
@@ -392,14 +394,14 @@ final class WorkspaceAccountsSession {
     static func knownMarketplaceSource(named name: String, homeURL: URL) -> String? {
         let url = homeURL.appending(path: ".claude/plugins/known_marketplaces.json")
         guard let text = boundedText(at: url),
-              let data = text.data(using: .utf8),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let entry = root[name] as? [String: Any],
-              let source = entry["source"] as? [String: Any]
+            let data = text.data(using: .utf8),
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let entry = root[name] as? [String: Any],
+            let source = entry["source"] as? [String: Any]
         else { return nil }
         let candidate = (source["repo"] as? String) ?? (source["url"] as? String)
         guard let candidate, !candidate.isEmpty, candidate.count <= 512,
-              SensitiveValueRedactor.redact(candidate) == candidate
+            SensitiveValueRedactor.redact(candidate) == candidate
         else { return nil }
         return candidate
     }

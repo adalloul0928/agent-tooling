@@ -53,8 +53,10 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
     /// separate native plan; a metadata receipt cannot report those postconditions.
     public func applyAssignmentBatch(_ command: WorkspaceAssignmentBatchCommand) throws -> WorkspaceCommandReceipt {
         try Task.checkCancellation()
-        return try store.commitMetadata(expectedRevisionID: command.expectedRevisionID,
-            idempotencyKey: command.idempotencyKey, inputDigest: command.inputDigest(), writerID: writerID) { document in
+        return try store.commitMetadata(
+            expectedRevisionID: command.expectedRevisionID,
+            idempotencyKey: command.idempotencyKey, inputDigest: command.inputDigest(), writerID: writerID
+        ) { document in
             try command.apply(to: &document)
         }
     }
@@ -65,7 +67,8 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
     public func skillContent(artifactID: ArtifactID, revisionID: WorkspaceObjectID) async throws -> WorkspaceSkillContentSnapshot {
         guard let contentStore else { throw WorkspaceSkillCommandError.contentStoreUnavailable }
         guard let document = try store.revision(revisionID),
-              let artifact = document.artifacts.first(where: { $0.identity.id == artifactID }) else {
+            let artifact = document.artifacts.first(where: { $0.identity.id == artifactID })
+        else {
             throw WorkspaceRevisionStoreError.missingArtifact
         }
         try requireCentralStandaloneSkill(artifact)
@@ -86,7 +89,9 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
         if let replay = try store.preflightMetadata(
             expectedRevisionID: command.expectedRevisionID, idempotencyKey: command.idempotencyKey, inputDigest: digest,
             mutation: { try command.apply(to: &$0, declaredName: prepared.frontmatter.name) }
-        ) { return replay }
+        ) {
+            return replay
+        }
         try await publishReviewedSkill(prepared)
         return try store.commitMetadata(
             expectedRevisionID: command.expectedRevisionID, idempotencyKey: command.idempotencyKey,
@@ -110,7 +115,9 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
         if let replay = try store.preflightMetadata(
             expectedRevisionID: command.expectedRevisionID, idempotencyKey: command.idempotencyKey, inputDigest: digest,
             mutation: { try command.apply(to: &$0, declaredName: prepared.frontmatter.name) }
-        ) { return replay }
+        ) {
+            return replay
+        }
         guard let contentStore else { throw WorkspaceSkillCommandError.contentStoreUnavailable }
         // Preserve a usable prior revision for review/restore. Do not silently
         // repair a damaged old object while accepting an unrelated new version.
@@ -197,7 +204,8 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
             mutation: { document in
                 let result = try command.apply(to: &document)
                 // Only unbind the folder when the document no longer names it.
-                removedSourceID = document.sources.contains(where: { $0.id == result.sourceID })
+                removedSourceID =
+                    document.sources.contains(where: { $0.id == result.sourceID })
                     ? nil : result.sourceID
                 return result.affected
             })

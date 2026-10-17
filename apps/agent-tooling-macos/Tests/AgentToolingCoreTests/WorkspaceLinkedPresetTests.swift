@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -9,8 +10,9 @@ import Testing
 struct WorkspaceLinkedPresetTests {
     @Test func addedMembersBecomeThisPresetsOwnContributions() throws {
         let document = try Self.document(members: [Self.alpha, Self.beta], assignments: [])
-        let subscription = LinkedPresetSubscription(presetID: Self.presetID, appliedRevision: 1,
-                                                    destinations: [Self.codex])
+        let subscription = LinkedPresetSubscription(
+            presetID: Self.presetID, appliedRevision: 1,
+            destinations: [Self.codex])
 
         let update = try #require(WorkspaceLinkedPresetResolver.pendingUpdate(for: subscription, in: document))
 
@@ -31,8 +33,9 @@ struct WorkspaceLinkedPresetTests {
         let manual = Self.assignment(Self.alpha, reason: .manual, suffix: "1")
         let mine = Self.assignment(Self.alpha, reason: .preset(presetID: Self.presetID), suffix: "2")
         var document = try Self.document(members: [], assignments: [manual, mine])
-        let subscription = LinkedPresetSubscription(presetID: Self.presetID, appliedRevision: 1,
-                                                    destinations: [Self.codex])
+        let subscription = LinkedPresetSubscription(
+            presetID: Self.presetID, appliedRevision: 1,
+            destinations: [Self.codex])
 
         let update = try #require(WorkspaceLinkedPresetResolver.pendingUpdate(for: subscription, in: document))
 
@@ -47,15 +50,20 @@ struct WorkspaceLinkedPresetTests {
     }
 
     @Test func anotherPresetsRequirementAlsoSurvives() throws {
-        let otherPresetID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000d4")!)
+        let otherPresetID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000d4"))
         let mine = Self.assignment(Self.alpha, reason: .preset(presetID: Self.presetID), suffix: "1")
         let theirs = Self.assignment(Self.alpha, reason: .preset(presetID: otherPresetID), suffix: "2")
-        var document = try Self.document(members: [], assignments: [mine, theirs],
-                                         extraPresets: [.init(id: otherPresetID, name: "Other", revision: 1,
-                                                              memberArtifactIDs: [Self.alpha])])
-        let update = try #require(WorkspaceLinkedPresetResolver.pendingUpdate(
-            for: .init(presetID: Self.presetID, appliedRevision: 1, destinations: [Self.codex]),
-            in: document))
+        var document = try Self.document(
+            members: [], assignments: [mine, theirs],
+            extraPresets: [
+                .init(
+                    id: otherPresetID, name: "Other", revision: 1,
+                    memberArtifactIDs: [Self.alpha])
+            ])
+        let update = try #require(
+            WorkspaceLinkedPresetResolver.pendingUpdate(
+                for: .init(presetID: Self.presetID, appliedRevision: 1, destinations: [Self.codex]),
+                in: document))
 
         _ = WorkspaceLinkedPresetResolver.apply(update, to: &document)
 
@@ -65,9 +73,10 @@ struct WorkspaceLinkedPresetTests {
     @Test func aMemberWithNoOtherReasonIsReleasedCleanly() throws {
         let mine = Self.assignment(Self.alpha, reason: .preset(presetID: Self.presetID), suffix: "1")
         var document = try Self.document(members: [], assignments: [mine])
-        let update = try #require(WorkspaceLinkedPresetResolver.pendingUpdate(
-            for: .init(presetID: Self.presetID, appliedRevision: 1, destinations: [Self.codex]),
-            in: document))
+        let update = try #require(
+            WorkspaceLinkedPresetResolver.pendingUpdate(
+                for: .init(presetID: Self.presetID, appliedRevision: 1, destinations: [Self.codex]),
+                in: document))
 
         #expect(update.changes.map(\.kind) == [.removeContribution])
         #expect(update.hasPendingChanges)
@@ -78,9 +87,10 @@ struct WorkspaceLinkedPresetTests {
     @Test func aSubscriptionOnlyTouchesTheDestinationsItWasGiven() throws {
         let elsewhere = PortableDestination(surface: .claudeCode, scope: .user)
         let document = try Self.document(members: [Self.alpha], assignments: [])
-        let update = try #require(WorkspaceLinkedPresetResolver.pendingUpdate(
-            for: .init(presetID: Self.presetID, appliedRevision: 1, destinations: [Self.codex]),
-            in: document))
+        let update = try #require(
+            WorkspaceLinkedPresetResolver.pendingUpdate(
+                for: .init(presetID: Self.presetID, appliedRevision: 1, destinations: [Self.codex]),
+                in: document))
 
         #expect(update.changes.allSatisfy { $0.destination == Self.codex })
         #expect(!update.changes.contains { $0.destination == elsewhere })
@@ -88,21 +98,23 @@ struct WorkspaceLinkedPresetTests {
 
     @Test func aMissingPresetHasNothingToFollow() throws {
         let document = try Self.document(members: [Self.alpha], assignments: [])
-        #expect(WorkspaceLinkedPresetResolver.pendingUpdate(
-            for: .init(presetID: ArtifactID(), appliedRevision: 1, destinations: [Self.codex]),
-            in: document) == nil)
+        #expect(
+            WorkspaceLinkedPresetResolver.pendingUpdate(
+                for: .init(presetID: ArtifactID(), appliedRevision: 1, destinations: [Self.codex]),
+                in: document) == nil)
     }
 
-    private static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
-    private static let beta = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
-    private static let presetID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000c3")!)
+    private static let alpha = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
+    private static let beta = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2"))
+    private static let presetID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000c3"))
     private static let codex = PortableDestination(surface: .codexCLI, scope: .user)
 
     private static func assignment(
         _ artifactID: ArtifactID, reason: AssignmentReason, suffix: String
     ) -> AssignmentContribution {
-        .init(id: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-00000000000" + suffix)!),
-              artifactID: artifactID, destination: codex, reason: reason)
+        .init(
+            id: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-00000000000" + suffix)),
+            artifactID: artifactID, destination: codex, reason: reason)
     }
 
     private static func document(
@@ -111,19 +123,23 @@ struct WorkspaceLinkedPresetTests {
         extraPresets: [PresetRecord] = []
     ) throws -> PortableWorkspaceDocument {
         var artifacts: [ArtifactRecord] = [alpha, beta].map {
-            .init(identity: .init(id: $0, kind: .skill, displayName: $0 == alpha ? "Alpha" : "Beta"),
-                  authority: .trackedOnly)
+            .init(
+                identity: .init(id: $0, kind: .skill, displayName: $0 == alpha ? "Alpha" : "Beta"),
+                authority: .trackedOnly)
         }
-        artifacts.append(.init(identity: .init(id: presetID, kind: .preset, displayName: "Starter"),
-                               authority: .centralPersonal))
+        artifacts.append(
+            .init(
+                identity: .init(id: presetID, kind: .preset, displayName: "Starter"),
+                authority: .centralPersonal))
         artifacts += extraPresets.map {
             .init(identity: .init(id: $0.id, kind: .preset, displayName: $0.name), authority: .centralPersonal)
         }
-        return try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e5")!),
-            revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: artifacts, assignments: assignments,
-            presets: [.init(id: presetID, name: "Starter", revision: 2, memberArtifactIDs: members)]
-                + extraPresets))
+        return try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000e5")),
+                revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: artifacts, assignments: assignments,
+                presets: [.init(id: presetID, name: "Starter", revision: 2, memberArtifactIDs: members)]
+                    + extraPresets))
     }
 }

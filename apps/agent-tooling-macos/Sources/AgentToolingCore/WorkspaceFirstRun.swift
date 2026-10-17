@@ -39,8 +39,10 @@ enum WorkspaceFirstRun {
             for (parent, metadata) in observation.pluginMetadata {
                 for (child, childMetadata) in observation.skillMetadata
                 where childMetadata.providerPluginID == parent {
-                    guard let relative = relativeMemberDirectory(
-                        childMetadata.path, packageRoot: metadata.source) else { continue }
+                    guard
+                        let relative = relativeMemberDirectory(
+                            childMetadata.path, packageRoot: metadata.source)
+                    else { continue }
                     memberPaths[child] = relative
                 }
             }
@@ -50,7 +52,8 @@ enum WorkspaceFirstRun {
         for plugin in inventory.plugins.sorted(by: { $0.id < $1.id }) {
             let id = ArtifactID()
             packageIDs[plugin.id] = id
-            let routes = observations
+            let routes =
+                observations
                 .filter { $0.discoveredPlugins.contains(plugin.id) }
                 .compactMap { $0.surface.client }
                 .sorted { $0.rawValue < $1.rawValue }
@@ -60,51 +63,61 @@ enum WorkspaceFirstRun {
             // no located member file, and claiming the client owns something
             // this build cannot point at would be a claim with nothing behind
             // it. Either gap makes the package a record and nothing more.
-            let members = claimedMembers(of: plugin.id, inventory: inventory,
-                                         observations: observations)
+            let members = claimedMembers(
+                of: plugin.id, inventory: inventory,
+                observations: observations)
             let locatable = members.filter { skillIdentifiers.contains($0) }
                 .allSatisfy { memberPaths[$0] != nil }
-            artifacts.append(.init(
-                identity: .init(id: id, kind: .nativePlugin, displayName: plugin.name),
-                authority: routes.isEmpty || !locatable ? .trackedOnly : .nativeOwned,
-                declaredName: plugin.id, nativeRoutes: routes.isEmpty || !locatable ? [] : routes))
+            artifacts.append(
+                .init(
+                    identity: .init(id: id, kind: .nativePlugin, displayName: plugin.name),
+                    authority: routes.isEmpty || !locatable ? .trackedOnly : .nativeOwned,
+                    declaredName: plugin.id, nativeRoutes: routes.isEmpty || !locatable ? [] : routes))
         }
 
         // A member's authority is its parent's. The package owns it either way,
         // and a child that claimed a different authority from the thing that
         // delivers it would make two things responsible for one file.
-        let authorities = Dictionary(artifacts.map { ($0.identity.id, $0.authority) },
-                                     uniquingKeysWith: { first, _ in first })
+        let authorities = Dictionary(
+            artifacts.map { ($0.identity.id, $0.authority) },
+            uniquingKeysWith: { first, _ in first })
         let bundled = bundledIdentifiers(inventory: inventory, observations: observations)
         for skill in inventory.skills.sorted(by: { $0.id < $1.id }) {
-            let parent = parentPackage(of: skill.id, inventory: inventory,
-                                       observations: observations, packageIDs: packageIDs)
+            let parent = parentPackage(
+                of: skill.id, inventory: inventory,
+                observations: observations, packageIDs: packageIDs)
             // Bundled but with no single package claiming it: recorded as
             // nothing rather than as a standalone thing it is not.
             guard parent != nil || !bundled.contains(skill.id) else { continue }
-            artifacts.append(.init(
-                identity: .init(id: ArtifactID(), kind: .skill,
-                                displayName: skill.displayName, parentPackageID: parent),
-                authority: parent.flatMap { authorities[$0] } ?? .trackedOnly,
-                declaredName: skill.id,
-                // A native-owned member has to say where it lives inside its
-                // package; only an MCP declaration may omit one.
-                packageRelativePath: parent.flatMap { authorities[$0] } == .nativeOwned
-                    ? memberPaths[skill.id] : nil))
+            artifacts.append(
+                .init(
+                    identity: .init(
+                        id: ArtifactID(), kind: .skill,
+                        displayName: skill.displayName, parentPackageID: parent),
+                    authority: parent.flatMap { authorities[$0] } ?? .trackedOnly,
+                    declaredName: skill.id,
+                    // A native-owned member has to say where it lives inside its
+                    // package; only an MCP declaration may omit one.
+                    packageRelativePath: parent.flatMap { authorities[$0] } == .nativeOwned
+                        ? memberPaths[skill.id] : nil))
         }
         for server in inventory.mcpServers.sorted(by: { $0.id < $1.id }) {
-            let parent = parentPackage(of: server.id, inventory: inventory,
-                                       observations: observations, packageIDs: packageIDs)
+            let parent = parentPackage(
+                of: server.id, inventory: inventory,
+                observations: observations, packageIDs: packageIDs)
             guard parent != nil || !bundled.contains(server.id) else { continue }
-            artifacts.append(.init(
-                identity: .init(id: ArtifactID(), kind: .mcpServer,
-                                displayName: server.name, parentPackageID: parent),
-                authority: parent.flatMap { authorities[$0] } ?? .trackedOnly,
-                declaredName: server.id))
+            artifacts.append(
+                .init(
+                    identity: .init(
+                        id: ArtifactID(), kind: .mcpServer,
+                        displayName: server.name, parentPackageID: parent),
+                    authority: parent.flatMap { authorities[$0] } ?? .trackedOnly,
+                    declaredName: server.id))
         }
 
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: workspaceID, revision: .init(writerID: writerID), artifacts: artifacts))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: workspaceID, revision: .init(writerID: writerID), artifacts: artifacts))
         var device = DeviceWorkspaceState(workspaceID: workspaceID, deviceID: deviceID)
         device.observations = observations.sorted { $0.surface.rawValue < $1.surface.rawValue }
         // What each client that answered can be asked to carry, from the same
@@ -170,7 +183,8 @@ enum WorkspaceFirstRun {
 
     static func relativeMemberDirectory(_ path: String, packageRoot: String) -> String? {
         guard path.hasPrefix("/"), packageRoot.hasPrefix("/"),
-              !path.contains("\0"), !packageRoot.contains("\0") else { return nil }
+            !path.contains("\0"), !packageRoot.contains("\0")
+        else { return nil }
         let root = URL(fileURLWithPath: packageRoot).standardizedFileURL
         var child = URL(fileURLWithPath: path).standardizedFileURL
         if child.lastPathComponent == "SKILL.md" { child.deleteLastPathComponent() }

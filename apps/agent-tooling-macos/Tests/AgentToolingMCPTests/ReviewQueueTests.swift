@@ -231,8 +231,9 @@ struct ReviewQueueTests {
 
         #expect(repeated["collapsedIntoExistingRequest"]?.boolValue == true)
         #expect(try harness.pendingRequests().count == 1)
-        #expect(try harness.store.requestDraft(request.id, as: SkillDraftRequest.self)?
-            .proposedName == "release-summary")
+        #expect(
+            try harness.store.requestDraft(request.id, as: SkillDraftRequest.self)?
+                .proposedName == "release-summary")
     }
 
     @Test func aRequestWithAnInlineSecretIsRefused() throws {

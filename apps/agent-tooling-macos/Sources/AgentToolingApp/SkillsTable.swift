@@ -145,7 +145,8 @@ struct SkillCollectionRow: View {
                                         .foregroundStyle(
                                             selected
                                                 ? AgentTheme.onSelection.opacity(Opacity.labelOnSelection)
-                                                : copies.versions > 1 ? AgentTheme.warning : Color.secondary)
+                                                : copies.versions > 1 ? AgentTheme.warning : Color.secondary
+                                        )
                                         .help(copies.explanation)
                                         .accessibilityLabel(copies.label)
                                 }
@@ -171,9 +172,12 @@ struct SkillCollectionRow: View {
                         } else {
                             Spacer(minLength: 0)
                         }
-                        Text((presentation.pluginName ?? skill.parentPluginLabel ?? "Standalone") + (moreSources > 0 ? " +\(moreSources)" : ""))
-                            .font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
-                            .frame(width: columns.plugin, alignment: .leading)
+                        Text(
+                            (presentation.pluginName ?? skill.parentPluginLabel ?? "Standalone")
+                                + (moreSources > 0 ? " +\(moreSources)" : "")
+                        )
+                        .font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
+                        .frame(width: columns.plugin, alignment: .leading)
                         Text(presentation.marketplaceName ?? skill.sourceLabel ?? "—")
                             .font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
                             .truncationMode(.middle)
@@ -213,7 +217,6 @@ struct SkillCollectionRow: View {
         .hairlineBottom()
     }
 }
-
 
 /// The Managed column's answers. "Found in" says where a skill is;
 /// this says who put it there and who can change it.

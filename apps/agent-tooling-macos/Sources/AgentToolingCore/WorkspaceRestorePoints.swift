@@ -54,11 +54,12 @@ public enum WorkspaceRestorePoints {
         while let id = queue.first, points.count < max(1, limit) {
             queue.removeFirst()
             guard seen.insert(id).inserted, let document = try store.revision(id) else { continue }
-            points.append(.init(
-                revisionID: id, createdAt: document.revision.createdAt,
-                itemCount: document.artifacts.filter { $0.identity.parentPackageID == nil }.count,
-                assignmentCount: document.assignments.count,
-                isCurrent: id == current.document.revision.id))
+            points.append(
+                .init(
+                    revisionID: id, createdAt: document.revision.createdAt,
+                    itemCount: document.artifacts.filter { $0.identity.parentPackageID == nil }.count,
+                    assignmentCount: document.assignments.count,
+                    isCurrent: id == current.document.revision.id))
             queue += document.revision.parentIDs
         }
         return points
@@ -70,10 +71,12 @@ public enum WorkspaceRestorePoints {
         in store: WorkspaceRevisionStore
     ) throws -> WorkspaceRestorePreview? {
         guard let current = try store.snapshot(), let past = try store.revision(revisionID) else { return nil }
-        let now = Dictionary(current.document.artifacts.map { ($0.identity.id, $0) },
-                             uniquingKeysWith: { first, _ in first })
-        let then = Dictionary(past.artifacts.map { ($0.identity.id, $0) },
-                              uniquingKeysWith: { first, _ in first })
+        let now = Dictionary(
+            current.document.artifacts.map { ($0.identity.id, $0) },
+            uniquingKeysWith: { first, _ in first })
+        let then = Dictionary(
+            past.artifacts.map { ($0.identity.id, $0) },
+            uniquingKeysWith: { first, _ in first })
         // Anything deleted since is left deleted; a restore is not a way to
         // bring back something that was deliberately removed.
         let deleted = Set(current.document.tombstones.map(\.artifactID))
@@ -86,16 +89,20 @@ public enum WorkspaceRestorePoints {
                 deletedSince.append(artifact.identity.displayName)
                 continue
             }
-            guard let existing = now[id] else { restored.append(artifact.identity.displayName); continue }
+            guard let existing = now[id] else {
+                restored.append(artifact.identity.displayName)
+                continue
+            }
             if existing != artifact { changed.append(artifact.identity.displayName) }
         }
         for (id, artifact) in now.sorted(by: { $0.key.rawValue.uuidString < $1.key.rawValue.uuidString })
         where then[id] == nil {
             removed.append(artifact.identity.displayName)
         }
-        return .init(restoredItems: restored, removedItems: removed, changedItems: changed,
-                     deletedSinceItems: deletedSince,
-                     assignmentDifference: past.assignments.count - current.document.assignments.count)
+        return .init(
+            restoredItems: restored, removedItems: removed, changedItems: changed,
+            deletedSinceItems: deletedSince,
+            assignmentDifference: past.assignments.count - current.document.assignments.count)
     }
 
     /// Commits the historical content as a new revision on top of the current
@@ -148,9 +155,12 @@ public enum WorkspaceRestorePoints {
     static func inputDigest(
         _ restored: WorkspaceObjectID, _ head: WorkspaceObjectID, _ idempotencyKey: WorkspaceObjectID
     ) -> String {
-        let payload = Data(["workspace-restore.v1", restored.rawValue.uuidString.lowercased(),
-                            head.rawValue.uuidString.lowercased(),
-                            idempotencyKey.rawValue.uuidString.lowercased()]
+        let payload = Data(
+            [
+                "workspace-restore.v1", restored.rawValue.uuidString.lowercased(),
+                head.rawValue.uuidString.lowercased(),
+                idempotencyKey.rawValue.uuidString.lowercased(),
+            ]
             .joined(separator: "\u{0}").utf8)
         return SHA256.hash(data: payload).lowercaseHex
     }

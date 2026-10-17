@@ -238,7 +238,8 @@ public struct SetupAuditor: Sendable {
                     SetupFinding(
                         kind: .neverChecked, severity: .low, client: client, subject: client.rawValue,
                         title: "\(client.rawValue) has not been checked",
-                        detail: "This Mac manages \(client.rawValue) but has never read what it holds, so nothing about it can be confirmed.",
+                        detail:
+                            "This Mac manages \(client.rawValue) but has never read what it holds, so nothing about it can be confirmed.",
                         evidence: [], actions: [.checkClient(client: client)]))
                 continue
             }
@@ -250,7 +251,8 @@ public struct SetupAuditor: Sendable {
                     SetupFinding(
                         kind: .toolUnavailable, severity: .medium, client: client, subject: client.rawValue,
                         title: "\(client.rawValue)'s command could not be run",
-                        detail: "Its configuration was read from disk, but without the tool the app cannot confirm its version or ask it what it has installed.",
+                        detail:
+                            "Its configuration was read from disk, but without the tool the app cannot confirm its version or ask it what it has installed.",
                         evidence: observation.notes.filter { $0.contains("not available") }.map(redact),
                         actions: [.locateTool(client: client), .checkClient(client: client)]))
             }
@@ -270,8 +272,10 @@ public struct SetupAuditor: Sendable {
                 SetupFinding(
                     kind: .mcpServerRepeatedAcrossClients, severity: .info, client: nil, subject: server,
                     title: "\(server) is configured separately in \(owners.count) apps",
-                    detail: "Each app has its own copy of this server's configuration. Managed from the library it would be one definition placed in each.",
-                    evidence: owners.map(\.rawValue), actions: [.manageMCPServer(name: server, clients: owners.sorted { $0.rawValue < $1.rawValue })]))
+                    detail:
+                        "Each app has its own copy of this server's configuration. Managed from the library it would be one definition placed in each.",
+                    evidence: owners.map(\.rawValue),
+                    actions: [.manageMCPServer(name: server, clients: owners.sorted { $0.rawValue < $1.rawValue })]))
         }
         return SetupAuditReport(clients: clients, findings: findings, counts: counts)
     }
@@ -283,10 +287,14 @@ public struct SetupAuditor: Sendable {
         // Where a client keeps standalone skills; the check names each folder it
         // saw, and this pass looks at the entries it could not turn into skills.
         for root in Self.standaloneSkillRoots(client: client, homeURL: homeURL) {
-            guard let entries = try? fileManager.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isSymbolicLinkKey, .isDirectoryKey]) else { continue }
+            guard
+                let entries = try? fileManager.contentsOfDirectory(
+                    at: root, includingPropertiesForKeys: [.isSymbolicLinkKey, .isDirectoryKey])
+            else { continue }
             for entry in entries.prefix(BoundedFileAccess.maximumDirectoryEntries)
             where !entry.lastPathComponent.hasPrefix(".")
-                && !(client == .claude && ClaudeAccountSync.isReservedSkillFolderName(entry.lastPathComponent)) {
+                && !(client == .claude && ClaudeAccountSync.isReservedSkillFolderName(entry.lastPathComponent))
+            {
                 let values = try? entry.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
                 if values?.isSymbolicLink == true {
                     let target = (try? fileManager.destinationOfSymbolicLink(atPath: entry.path(percentEncoded: false))) ?? ""
@@ -296,7 +304,8 @@ public struct SetupAuditor: Sendable {
                             SetupFinding(
                                 kind: .brokenSkillLink, severity: .medium, client: client, subject: entry.lastPathComponent,
                                 title: "\(entry.lastPathComponent) points at nothing",
-                                detail: "The entry in \(client.rawValue)'s skills folder is a link to a folder that is no longer there. \(client.rawValue) skips it.",
+                                detail:
+                                    "The entry in \(client.rawValue)'s skills folder is a link to a folder that is no longer there. \(client.rawValue) skips it.",
                                 evidence: [redact(entry.path(percentEncoded: false)), "→ \(redact(target))"],
                                 actions: [.removeBrokenLink(path: normalized(entry.path(percentEncoded: false)), client: client)]))
                         continue
@@ -308,7 +317,8 @@ public struct SetupAuditor: Sendable {
                         SetupFinding(
                             kind: .skillWithoutDefinition, severity: .low, client: client, subject: entry.lastPathComponent,
                             title: "\(entry.lastPathComponent) has no SKILL.md",
-                            detail: "A folder in \(client.rawValue)'s skills folder with no definition in it. \(client.rawValue) does not load it.",
+                            detail:
+                                "A folder in \(client.rawValue)'s skills folder with no definition in it. \(client.rawValue) does not load it.",
                             evidence: [redact(entry.path(percentEncoded: false))],
                             actions: [.removeSkillCopy(path: normalized(entry.path(percentEncoded: false)), client: client)]))
                 }
@@ -332,22 +342,29 @@ public struct SetupAuditor: Sendable {
             let digests = copies.map(\.definitionDigest)
             let compared = !digests.contains(nil)
             let identical = compared && Set(digests).count == 1
-            let comparison = identical
+            let comparison =
+                identical
                 ? " The copies are identical apart from their packaging stamp."
                 : Set(digests.compactMap { $0 }).count > 1 ? " The copies differ, so what the skill does depends on which one loads." : ""
             let detail: String
             if distinct.count == 1 {
                 detail = "Two entries point at the same files. Harmless, but one is enough."
             } else if copies.allSatisfy({ $0.providerPluginID != nil }) {
-                detail = "Each of \(plugins.joined(separator: ", ")) brings its own copy, and \(client.rawValue) lists every one." + comparison
+                detail =
+                    "Each of \(plugins.joined(separator: ", ")) brings its own copy, and \(client.rawValue) lists every one." + comparison
             } else {
-                detail = "Two different copies answer to the same name" + (plugins.isEmpty ? "." : ", one of them inside \(plugins.joined(separator: ", ")).")
+                detail =
+                    "Two different copies answer to the same name"
+                    + (plugins.isEmpty ? "." : ", one of them inside \(plugins.joined(separator: ", ")).")
                     + " Which one \(client.rawValue) uses depends on its load order." + comparison
-                    + (placed.isEmpty ? "" : " The loose copy was placed by \(placed.joined(separator: ", ")), which keeps it in step, so it is left alone.")
+                    + (placed.isEmpty
+                        ? ""
+                        : " The loose copy was placed by \(placed.joined(separator: ", ")), which keeps it in step, so it is left alone.")
             }
             findings.append(
                 SetupFinding(
-                    kind: .duplicateSkillInClient, severity: distinct.count > 1 && !identical ? .medium : .low, client: client, subject: name,
+                    kind: .duplicateSkillInClient, severity: distinct.count > 1 && !identical ? .medium : .low, client: client,
+                    subject: name,
                     title: "\(client.rawValue) can reach \(name) \(paths.count) ways",
                     detail: detail,
                     evidence: paths.sorted().map(redact),
@@ -362,9 +379,13 @@ public struct SetupAuditor: Sendable {
                 SetupFinding(
                     kind: .unmanagedSkill, severity: .info, client: client, subject: id,
                     title: "\(id) is not managed by this app",
-                    detail: "\(client.rawValue) has this skill, but the library holds no copy, so it cannot be placed in another app, edited here, or checked for updates.",
+                    detail:
+                        "\(client.rawValue) has this skill, but the library holds no copy, so it cannot be placed in another app, edited here, or checked for updates.",
                     evidence: [redact(metadata.path)],
-                    actions: [.adoptSkill(path: normalized(metadata.path), client: client), .removeSkillCopy(path: normalized(metadata.path), client: client)]))
+                    actions: [
+                        .adoptSkill(path: normalized(metadata.path), client: client),
+                        .removeSkillCopy(path: normalized(metadata.path), client: client),
+                    ]))
         }
         return findings
     }
@@ -372,7 +393,11 @@ public struct SetupAuditor: Sendable {
     static func standaloneSkillRoots(client: ClientKind, homeURL: URL) -> [URL] {
         switch client {
         case .claude: [homeURL.appending(path: ".claude/skills", directoryHint: .isDirectory)]
-        case .codex: [homeURL.appending(path: ".codex/skills", directoryHint: .isDirectory), homeURL.appending(path: ".agents/skills", directoryHint: .isDirectory)]
+        case .codex:
+            [
+                homeURL.appending(path: ".codex/skills", directoryHint: .isDirectory),
+                homeURL.appending(path: ".agents/skills", directoryHint: .isDirectory),
+            ]
         case .gemini: [homeURL.appending(path: ".gemini/skills", directoryHint: .isDirectory)]
         case .kiro: [homeURL.appending(path: ".kiro/skills", directoryHint: .isDirectory)]
         }
@@ -393,7 +418,8 @@ public struct SetupAuditor: Sendable {
                 let name = id.split(separator: "@").first.map(String.init) ?? id
                 let marketplace = id.split(separator: "@").dropFirst().first.map(String.init)
                 if let marketplace, let directory = marketplaceDirectories[marketplace],
-                    fileManager.fileExists(atPath: directory.appending(path: name).appending(path: ".claude-plugin/plugin.json").path(percentEncoded: false))
+                    fileManager.fileExists(
+                        atPath: directory.appending(path: name).appending(path: ".claude-plugin/plugin.json").path(percentEncoded: false))
                 {
                     continue
                 }
@@ -401,7 +427,8 @@ public struct SetupAuditor: Sendable {
                     SetupFinding(
                         kind: .missingPluginInstall, severity: .high, client: client, subject: id,
                         title: "\(plugin.name) is listed but its files are gone",
-                        detail: "\(client.rawValue) records this plugin as installed at a folder that does not exist, so its skills and servers do not load.",
+                        detail:
+                            "\(client.rawValue) records this plugin as installed at a folder that does not exist, so its skills and servers do not load.",
                         evidence: [redact(plugin.source)], actions: [.reinstallPlugin(pluginID: id, client: client)]))
             }
             // Sibling version folders beside the one in use. Only where the
@@ -410,9 +437,12 @@ public struct SetupAuditor: Sendable {
             // by name, as AIM keeps Codex's, has siblings that are other
             // plugins, not old versions.
             let versionsRoot = install.deletingLastPathComponent()
-            let isVersionedCache = versionsRoot.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent == "cache"
+            let isVersionedCache =
+                versionsRoot.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent == "cache"
                 && Self.looksLikeVersion(install.lastPathComponent)
-            if isVersionedCache, let siblings = try? fileManager.contentsOfDirectory(at: versionsRoot, includingPropertiesForKeys: [.isDirectoryKey]) {
+            if isVersionedCache,
+                let siblings = try? fileManager.contentsOfDirectory(at: versionsRoot, includingPropertiesForKeys: [.isDirectoryKey])
+            {
                 let stale = siblings.filter {
                     $0.lastPathComponent != install.lastPathComponent && !$0.lastPathComponent.hasPrefix(".")
                         && ((try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false)
@@ -422,9 +452,13 @@ public struct SetupAuditor: Sendable {
                         SetupFinding(
                             kind: .stalePluginCache, severity: .low, client: client, subject: id,
                             title: "\(plugin.name) keeps \(stale.count) old version\(stale.count == 1 ? "" : "s") on disk",
-                            detail: "Only \(install.lastPathComponent) is in use. The others take space and can confuse a search for a skill's file.",
+                            detail:
+                                "Only \(install.lastPathComponent) is in use. The others take space and can confuse a search for a skill's file.",
                             evidence: stale.map { redact($0.path(percentEncoded: false)) }.sorted(),
-                            actions: [.pruneStalePluginCache(paths: stale.map { normalized($0.path(percentEncoded: false)) }.sorted(), client: client)]))
+                            actions: [
+                                .pruneStalePluginCache(
+                                    paths: stale.map { normalized($0.path(percentEncoded: false)) }.sorted(), client: client)
+                            ]))
                 }
             }
         }
@@ -461,7 +495,8 @@ public struct SetupAuditor: Sendable {
                         title: contained
                             ? "Every skill in \(smallName) also comes with \(largeName)"
                             : "\(smallName) and \(largeName) share \(shared.count) skills",
-                        detail: "\(client.rawValue) lists each plugin's copy, so these \(shared.count) skills appear twice. Removing a plugin is a decision about all of it: its other skills and servers go with it.",
+                        detail:
+                            "\(client.rawValue) lists each plugin's copy, so these \(shared.count) skills appear twice. Removing a plugin is a decision about all of it: its other skills and servers go with it.",
                         evidence: shared.sorted(), actions: []))
             }
         }
@@ -493,7 +528,8 @@ public struct SetupAuditor: Sendable {
                 SetupFinding(
                     kind: .mcpServerDefinedSeveralTimes, severity: .low, client: client, subject: server,
                     title: "\(client.rawValue) gets \(server) from \(sources.count) places",
-                    detail: "\(server) is defined by \(from.joined(separator: ", ")). \(client.rawValue) treats each one as its own server unless two are configured identically, so each can start its own process and list its own tools."
+                    detail:
+                        "\(server) is defined by \(from.joined(separator: ", ")). \(client.rawValue) treats each one as its own server unless two are configured identically, so each can start its own process and list its own tools."
                         + (configured.isEmpty
                             ? " Each copy comes with a plugin, so there is nothing here to remove."
                             : " If a plugin's copy does what you need, the one in \(client.rawValue)'s configuration can go."),
@@ -508,7 +544,8 @@ public struct SetupAuditor: Sendable {
                     SetupFinding(
                         kind: .unreachableMCPCommand, severity: .medium, client: client, subject: server,
                         title: "\(server)'s command was not found",
-                        detail: "\(client.rawValue) is set to start this server with `\(redact(command))`, which is not on this Mac in any place the app knows to look. The server fails to start.",
+                        detail:
+                            "\(client.rawValue) is set to start this server with `\(redact(command))`, which is not on this Mac in any place the app knows to look. The server fails to start.",
                         evidence: [redact(command)],
                         actions: metadata.enabled
                             ? [.disableMCPServer(name: server, client: client), .inspectMCPServer(name: server, client: client)]
@@ -529,12 +566,15 @@ public struct SetupAuditor: Sendable {
             guard let text = try? BoundedFileAccess.readUTF8(at: url, maximumBytes: BoundedFileAccess.maximumConfigurationBytes),
                 let data = text.data(using: .utf8), let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else { continue }
-            let entries = (root["extraKnownMarketplaces"] as? [String: Any]) ?? (url.lastPathComponent == "known_marketplaces.json" ? root : [:])
+            let entries =
+                (root["extraKnownMarketplaces"] as? [String: Any]) ?? (url.lastPathComponent == "known_marketplaces.json" ? root : [:])
             for (name, value) in entries {
                 guard let source = (value as? [String: Any])?["source"] as? [String: Any],
                     source["source"] as? String == "directory", let path = source["path"] as? String
                 else { continue }
-                found[name] = URL(filePath: path.hasPrefix("~/") ? homeURL.appending(path: String(path.dropFirst(2))).path(percentEncoded: false) : path, directoryHint: .isDirectory)
+                found[name] = URL(
+                    filePath: path.hasPrefix("~/") ? homeURL.appending(path: String(path.dropFirst(2))).path(percentEncoded: false) : path,
+                    directoryHint: .isDirectory)
             }
         }
         return found
@@ -546,17 +586,22 @@ public struct SetupAuditor: Sendable {
     func configuredCommands(configurationPaths: [String]) -> [String: String] {
         var commands: [String: String] = [:]
         for path in configurationPaths {
-            guard let text = try? BoundedFileAccess.readUTF8(at: URL(filePath: path), maximumBytes: BoundedFileAccess.maximumConfigurationBytes) else { continue }
+            guard
+                let text = try? BoundedFileAccess.readUTF8(
+                    at: URL(filePath: path), maximumBytes: BoundedFileAccess.maximumConfigurationBytes)
+            else { continue }
             if path.hasSuffix(".toml") {
                 var current: String?
                 for line in text.split(separator: "\n") {
                     let trimmed = line.trimmingCharacters(in: .whitespaces)
                     if trimmed.hasPrefix("[mcp_servers."), trimmed.hasSuffix("]") {
-                        current = String(trimmed.dropFirst("[mcp_servers.".count).dropLast()).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                        current = String(trimmed.dropFirst("[mcp_servers.".count).dropLast()).trimmingCharacters(
+                            in: CharacterSet(charactersIn: "\""))
                     } else if trimmed.hasPrefix("["), trimmed.hasSuffix("]") {
                         current = nil
                     } else if let current, trimmed.hasPrefix("command"), let equals = trimmed.firstIndex(of: "=") {
-                        commands[current] = trimmed[trimmed.index(after: equals)...].trimmingCharacters(in: CharacterSet(charactersIn: " \""))
+                        commands[current] = trimmed[trimmed.index(after: equals)...].trimmingCharacters(
+                            in: CharacterSet(charactersIn: " \""))
                     }
                 }
             } else if let data = text.data(using: .utf8), let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {

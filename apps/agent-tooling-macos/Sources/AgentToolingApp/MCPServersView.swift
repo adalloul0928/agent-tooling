@@ -96,7 +96,7 @@ struct MCPServersView: View {
         .onAppear(perform: consumeRequestedScreenRequest)
         .onChange(of: navigation.requestedScreenRequest) { _, _ in consumeRequestedScreenRequest() }
         .onChange(of: entries.map(\.id)) { _, _ in pruneSelection() }
-        
+
         .environment(capabilities)
     }
 

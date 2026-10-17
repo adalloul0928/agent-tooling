@@ -28,11 +28,13 @@ struct GalleryUnrenderableTests {
             source: "Sources/AgentToolingApp/InsightsView.swift:99")
         index.addUnrenderable(
             control: "Confirmation dialog",
-            text: "Go back to this version? · Your current version is kept in this list, so you can come back to it. Nothing in your apps changes until you install. · [Restore] [Cancel]",
+            text:
+                "Go back to this version? · Your current version is kept in this list, so you can come back to it. Nothing in your apps changes until you install. · [Restore] [Cancel]",
             source: "Sources/AgentToolingApp/Sections/HistorySection.swift:44")
         index.addUnrenderable(
             control: "Confirmation dialog",
-            text: "Replace this skill's files with the repository's? · Your version is replaced by what this repository publishes, and stays in this workspace's history. The skill remains your own until you follow the repository. · [Use the repository's version] [Cancel]",
+            text:
+                "Replace this skill's files with the repository's? · Your version is replaced by what this repository publishes, and stays in this workspace's history. The skill remains your own until you follow the repository. · [Use the repository's version] [Cancel]",
             source: "Sources/AgentToolingApp/SkillUpstreamLinkSheet.swift:356")
         index.addUnrenderable(
             control: "Alert",
@@ -49,7 +51,8 @@ struct GalleryUnrenderableTests {
 
         index.addUnrenderable(
             control: "Menu",
-            text: "The sidebar's device switcher and each row's context and assignment menus are AppKit menus drawn by the system; their items are the same actions the panels and sheets above present.",
+            text:
+                "The sidebar's device switcher and each row's context and assignment menus are AppKit menus drawn by the system; their items are the same actions the panels and sheets above present.",
             source: "Sources/AgentToolingApp/AssignmentDeviceScopeMenu.swift")
 
         // The menu bar extra is a system menu-style scene, so its items are

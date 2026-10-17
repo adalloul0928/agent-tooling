@@ -9,8 +9,10 @@ public struct PackageTreeLimits: Hashable, Sendable {
     public let maxDepth: Int
     public let maxPathBytes: Int
 
-    public init(maxEntries: Int = 10_000, maxFileBytes: Int = 32 * 1_024 * 1_024,
-                maxTotalBytes: Int = 128 * 1_024 * 1_024, maxDepth: Int = 64, maxPathBytes: Int = 4_096) {
+    public init(
+        maxEntries: Int = 10_000, maxFileBytes: Int = 32 * 1_024 * 1_024,
+        maxTotalBytes: Int = 128 * 1_024 * 1_024, maxDepth: Int = 64, maxPathBytes: Int = 4_096
+    ) {
         self.maxEntries = maxEntries
         self.maxFileBytes = maxFileBytes
         self.maxTotalBytes = maxTotalBytes
@@ -20,7 +22,8 @@ public struct PackageTreeLimits: Hashable, Sendable {
 
     func validate() throws {
         guard maxEntries >= 0, maxFileBytes >= 0, maxTotalBytes >= 0,
-              maxDepth > 0, maxDepth <= 256, maxPathBytes > 0, maxPathBytes <= 16_384 else {
+            maxDepth > 0, maxDepth <= 256, maxPathBytes > 0, maxPathBytes <= 16_384
+        else {
             throw PackageTreeError.limitExceeded
         }
     }
@@ -57,8 +60,10 @@ public struct CapturedPackageTree: Hashable, Sendable {
     /// Local administrative metadata omitted during capture; never part of portable content.
     public let excludedRootGitMetadata: Bool
 
-    public init(entries: [PackageTreeEntry], limits: PackageTreeLimits = .default,
-                excludedRootGitMetadata: Bool = false) throws {
+    public init(
+        entries: [PackageTreeEntry], limits: PackageTreeLimits = .default,
+        excludedRootGitMetadata: Bool = false
+    ) throws {
         try limits.validate()
         guard entries.count <= limits.maxEntries else { throw PackageTreeError.limitExceeded }
         var canonical: [PackageTreeEntry] = []
@@ -84,9 +89,10 @@ public struct CapturedPackageTree: Hashable, Sendable {
             case .symbolicLink(let target):
                 let target = target.precomposedStringWithCanonicalMapping
                 guard !target.isEmpty, !target.hasPrefix("/"), !target.contains("\\"),
-                      !target.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
-                      target.utf8.count <= limits.maxPathBytes,
-                      !target.split(separator: "/").contains(where: { $0.lowercased() == ".git" }) else {
+                    !target.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
+                    target.utf8.count <= limits.maxPathBytes,
+                    !target.split(separator: "/").contains(where: { $0.lowercased() == ".git" })
+                else {
                     throw PackageTreeError.unsafeSymbolicLink
                 }
                 kind = .symbolicLink(target: target)
@@ -114,7 +120,8 @@ public struct CapturedPackageTree: Hashable, Sendable {
 
     private static func validatePath(_ path: String, limits: PackageTreeLimits) throws {
         guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("\\"),
-              !path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+            !path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        else {
             throw PackageTreeError.invalidPath
         }
         let parts = path.split(separator: "/", omittingEmptySubsequences: false)

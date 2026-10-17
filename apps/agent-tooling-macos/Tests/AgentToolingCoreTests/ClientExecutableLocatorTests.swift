@@ -130,8 +130,9 @@ struct ClientExecutableLocatorTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let plain = fixture.root.appending(path: "elsewhere/codex")
-        try FileManager.default.createDirectory(at: plain.deletingLastPathComponent(),
-                                                withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: plain.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
         try Data("not a program\n".utf8).write(to: plain)
         try fixture.link(named: "codex", to: plain)
 
@@ -149,8 +150,9 @@ struct ClientExecutableLocatorTests {
     @Test func aDirectoryWithTheRightNameIsNotATool() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        try FileManager.default.createDirectory(at: fixture.binary(named: "codex"),
-                                                withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: fixture.binary(named: "codex"),
+            withIntermediateDirectories: true)
 
         #expect(fixture.locate(.codex) == nil)
     }
@@ -187,7 +189,8 @@ struct ClientExecutableLocatorTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
                 .appending(path: "client-locator-\(UUID())")
             home = root.appending(path: "home")
-            try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(
+                at: home, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
         }
 
@@ -211,17 +214,20 @@ struct ClientExecutableLocatorTests {
 
         func installTool(named name: String, executable: Bool) throws {
             let url = binary(named: name)
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                    withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true)
             try Data("#!/bin/sh\n".utf8).write(to: url)
-            try FileManager.default.setAttributes([.posixPermissions: executable ? 0o755 : 0o644],
-                                                  ofItemAtPath: url.path)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: executable ? 0o755 : 0o644],
+                ofItemAtPath: url.path)
         }
 
         /// A runnable file at any path, for a link to lead to.
         func installRunnableFile(at url: URL) throws {
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                    withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true)
             try Data("#!/bin/sh\n".utf8).write(to: url)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
         }
@@ -229,8 +235,9 @@ struct ClientExecutableLocatorTests {
         /// The candidate by the tool's own name, as a link to `destination`.
         func link(named name: String, to destination: URL) throws {
             let url = binary(named: name)
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                    withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true)
             try FileManager.default.createSymbolicLink(at: url, withDestinationURL: destination)
         }
 

@@ -152,7 +152,7 @@ public struct RenamePresetCommand: Sendable {
     }
 
     func inputDigest() -> String {
-        return framedDigest(fields: [
+        framedDigest(fields: [
             "preset.rename.v1",
             expectedRevisionID.rawValue.uuidString.lowercased(),
             idempotencyKey.rawValue.uuidString.lowercased(),

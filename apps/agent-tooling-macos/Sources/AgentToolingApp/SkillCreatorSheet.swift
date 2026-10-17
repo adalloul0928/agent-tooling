@@ -89,11 +89,15 @@ struct SkillCreatorSheet: View {
                         turnIsRunning: turnTask != nil, validationMessage: validationMessage, canSend: canSend,
                         composerText: $composerText, showsOptions: $showsOptions, optionsState: $options,
                         composerFocused: $composerFocused, sendComposer: sendComposer, startOver: startOver,
-                        chooseProjectFolder: chooseProjectFolder)
-                    .frame(minWidth: Size.creatorChatMin, idealWidth: Size.creatorChatIdeal, maxWidth: Size.creatorChatMax, maxHeight: .infinity)
+                        chooseProjectFolder: chooseProjectFolder
+                    )
+                    .frame(
+                        minWidth: Size.creatorChatMin, idealWidth: Size.creatorChatIdeal, maxWidth: Size.creatorChatMax,
+                        maxHeight: .infinity)
                     SkillCreatorDraftPane(
                         result: session.result, draftIssue: session.draftIssue,
-                        hasConversation: session.hasConversation, client: client, selection: $reviewSelection)
+                        hasConversation: session.hasConversation, client: client, selection: $reviewSelection
+                    )
                     .frame(minWidth: Size.creatorDraftMin, maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
@@ -245,7 +249,9 @@ struct SkillCreatorSheet: View {
                         || !session.canWrite
                         || !reviewSelection.allReviewed(in: result)
                 )
-                .help(reviewSelection.allReviewed(in: result) ? "Admits the reviewed package to your library" : reviewSelection.progress(for: result))
+                .help(
+                    reviewSelection.allReviewed(in: result)
+                        ? "Admits the reviewed package to your library" : reviewSelection.progress(for: result))
             }
         }
         .padding(.horizontal, Space.xxxl)

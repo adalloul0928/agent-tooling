@@ -1,5 +1,5 @@
-import Foundation
 import AgentToolingTestSupport
+import Foundation
 import Testing
 
 @testable import AgentToolingCore
@@ -69,9 +69,11 @@ struct AccountSurfaceParsingTests {
     /// An API key sign-in does not let a key's own email stand in for the
     /// subscription's.
     @Test func anAPIKeySignInKeepsNoAccountIdentity() throws {
-        let signIn = try #require(ClaudeAccountParsing.signIn(fromAuthStatus: """
-            {"loggedIn":true,"authMethod":"api_key","apiKeySource":"ANTHROPIC_API_KEY","email":"other@example.com"}
-            """))
+        let signIn = try #require(
+            ClaudeAccountParsing.signIn(
+                fromAuthStatus: """
+                    {"loggedIn":true,"authMethod":"api_key","apiKeySource":"ANTHROPIC_API_KEY","email":"other@example.com"}
+                    """))
         #expect(signIn.method == .apiKey)
         #expect(signIn.provider == "ANTHROPIC_API_KEY")
         #expect(signIn.email == nil)
@@ -186,14 +188,16 @@ struct AccountSurfaceParsingTests {
     /// `claude.ai <display name>: <url> - <status>`, and that whole name is
     /// what a deniedMcpServers serverName entry matches.
     @Test func aClaudeAIConnectorKeepsItsWholeNameAndShowsItsOwn() {
-        let entries = ConnectionHealthReport.parse(client: .claude, text: """
-            Checking MCP server health…
+        let entries = ConnectionHealthReport.parse(
+            client: .claude,
+            text: """
+                Checking MCP server health…
 
-            claude.ai Gmail: https://gmail.mcp.example.com/mcp - ✔ Connected
-            claude.ai Google Calendar: https://gcal.mcp.example.com/mcp - ! Needs authentication
-            claude.ai Linear (2): https://mcp.linear.app/mcp - - Not configured
-            local: npx foo - ✘ Connection error
-            """)
+                claude.ai Gmail: https://gmail.mcp.example.com/mcp - ✔ Connected
+                claude.ai Google Calendar: https://gcal.mcp.example.com/mcp - ! Needs authentication
+                claude.ai Linear (2): https://mcp.linear.app/mcp - - Not configured
+                local: npx foo - ✘ Connection error
+                """)
         #expect(entries.map(\.name) == ["claude.ai Gmail", "claude.ai Google Calendar", "claude.ai Linear (2)", "local"])
         #expect(entries.map(\.displayName) == ["Gmail", "Google Calendar", "Linear (2)", "local"])
         #expect(entries.prefix(3).allSatisfy { $0.isClaudeAIConnector })
@@ -208,10 +212,12 @@ struct AccountSurfaceParsingTests {
     /// The exception for spaces is the documented prefix and nothing else; a
     /// sentence before a colon is still not a server.
     @Test func onlyTheConnectorPrefixAllowsSpacesInAName() {
-        let entries = ConnectionHealthReport.parse(client: .claude, text: """
-            Some note about servers: see /mcp - for details
-            claude.ai : nothing - ✔ Connected
-            """)
+        let entries = ConnectionHealthReport.parse(
+            client: .claude,
+            text: """
+                Some note about servers: see /mcp - for details
+                claude.ai : nothing - ✔ Connected
+                """)
         // The sentence is skipped. A server literally named "claude.ai" is a
         // plain server, not a connector: the prefix needs a name after it.
         #expect(entries.map(\.name) == ["claude.ai"])
@@ -287,9 +293,12 @@ struct AccountSurfaceParsingTests {
     }
 
     @Test func aChatGPTAccountReadingKeepsItsPlan() throws {
-        let signIn = try #require(CodexAccountParsing.signIn(fromAccountRead: try Self.json("""
-            {"account":{"type":"chatgpt","email":"me@example.com","planType":"pro"},"requiresOpenaiAuth":true}
-            """)))
+        let signIn = try #require(
+            CodexAccountParsing.signIn(
+                fromAccountRead: try Self.json(
+                    """
+                    {"account":{"type":"chatgpt","email":"me@example.com","planType":"pro"},"requiresOpenaiAuth":true}
+                    """)))
         #expect(signIn.method == .subscription)
         #expect(signIn.email == "me@example.com")
         #expect(signIn.plan == "pro")
@@ -298,24 +307,34 @@ struct AccountSurfaceParsingTests {
 
     /// The answer Codex 0.162.1 gave on a Mac that runs it on Bedrock.
     @Test func everyOtherCodexSignInIsNotTheAccount() throws {
-        let bedrock = try Self.json(#"{"account":{"type":"amazonBedrock","usesCodexManagedCredentials":false},"requiresOpenaiAuth":false,"workspaceRouting":null}"#)
+        let bedrock = try Self.json(
+            #"{"account":{"type":"amazonBedrock","usesCodexManagedCredentials":false},"requiresOpenaiAuth":false,"workspaceRouting":null}"#)
         #expect(CodexAccountParsing.signIn(fromAccountRead: bedrock)?.method == .thirdParty)
         #expect(CodexAccountParsing.signIn(fromAccountRead: bedrock)?.summary(for: .chatGPT) == "Amazon Bedrock")
-        #expect(CodexAccountParsing.signIn(fromAccountRead: try Self.json(#"{"account":{"type":"apiKey"},"requiresOpenaiAuth":true}"#))?.method == .apiKey)
-        #expect(CodexAccountParsing.signIn(fromAccountRead: try Self.json(#"{"account":null,"requiresOpenaiAuth":true}"#))?.method == .signedOut)
-        #expect(CodexAccountParsing.signIn(fromAccountRead: try Self.json(#"{"account":null,"requiresOpenaiAuth":false}"#))?.method == .thirdParty)
+        #expect(
+            CodexAccountParsing.signIn(fromAccountRead: try Self.json(#"{"account":{"type":"apiKey"},"requiresOpenaiAuth":true}"#))?.method
+                == .apiKey)
+        #expect(
+            CodexAccountParsing.signIn(fromAccountRead: try Self.json(#"{"account":null,"requiresOpenaiAuth":true}"#))?.method == .signedOut
+        )
+        #expect(
+            CodexAccountParsing.signIn(fromAccountRead: try Self.json(#"{"account":null,"requiresOpenaiAuth":false}"#))?.method
+                == .thirdParty)
         #expect(CodexAccountParsing.signIn(fromAccountRead: .string("nonsense")) == nil)
     }
 
     @Test func theAppListKeepsAccessAndLocalStateApart() throws {
-        let page = try #require(CodexAccountParsing.appList(try Self.json("""
-            {"data":[
-              {"id":"github","name":"GitHub","description":"Repositories and pull requests.",
-               "installUrl":"https://chatgpt.com/apps/github/github","isAccessible":true,"isEnabled":false},
-              {"id":"demo-app","name":"Demo App","installUrl":"http://insecure.example.com","isAccessible":false,"isEnabled":true},
-              {"name":"No id"}
-            ],"nextCursor":"page-2"}
-            """)))
+        let page = try #require(
+            CodexAccountParsing.appList(
+                try Self.json(
+                    """
+                    {"data":[
+                      {"id":"github","name":"GitHub","description":"Repositories and pull requests.",
+                       "installUrl":"https://chatgpt.com/apps/github/github","isAccessible":true,"isEnabled":false},
+                      {"id":"demo-app","name":"Demo App","installUrl":"http://insecure.example.com","isAccessible":false,"isEnabled":true},
+                      {"name":"No id"}
+                    ],"nextCursor":"page-2"}
+                    """)))
         #expect(page.apps.map(\.id) == ["github", "demo-app"])
         #expect(page.apps[0].isAccessible && !page.apps[0].isEnabled)
         #expect(page.apps[0].installURL?.absoluteString == "https://chatgpt.com/apps/github/github")
@@ -325,28 +344,32 @@ struct AccountSurfaceParsingTests {
     }
 
     @Test func theInstalledSnapshotSaysWhatIsCallable() throws {
-        let installed = CodexAccountParsing.installedApps(try Self.json("""
-            {"apps":[{"id":"demo-app","runtimeName":"Demo App","enabled":true,"callable":true},
-                     {"id":"github","runtimeName":null,"enabled":false,"callable":false}]}
-            """))
+        let installed = CodexAccountParsing.installedApps(
+            try Self.json(
+                """
+                {"apps":[{"id":"demo-app","runtimeName":"Demo App","enabled":true,"callable":true},
+                         {"id":"github","runtimeName":null,"enabled":false,"callable":false}]}
+                """))
         #expect(installed["demo-app"]?.callable == true)
         #expect(installed["github"]?.enabled == false)
     }
 
     /// The example from the Codex app-server documentation.
     @Test func theAppSwitchesInAConfigurationAreRead() throws {
-        let switches = CodexAccountParsing.switches(fromConfig: try Self.json("""
-            {"features":{"apps":true},
-             "apps":{
-               "_default":{"enabled":true,"destructive_enabled":true,"open_world_enabled":true,
-                           "approvals_reviewer":"user","default_tools_approval_mode":"auto"},
-               "google_drive":{"enabled":true,"destructive_enabled":false,"approvals_reviewer":"auto_review",
-                               "default_tools_approval_mode":"prompt",
-                               "tools":{"files/delete":{"enabled":false,"approval_mode":"approve"}}},
-               "bad id":{"enabled":false},
-               "github":{"default_tools_approval_mode":"never-heard-of-it"}
-             }}
-            """))
+        let switches = CodexAccountParsing.switches(
+            fromConfig: try Self.json(
+                """
+                {"features":{"apps":true},
+                 "apps":{
+                   "_default":{"enabled":true,"destructive_enabled":true,"open_world_enabled":true,
+                               "approvals_reviewer":"user","default_tools_approval_mode":"auto"},
+                   "google_drive":{"enabled":true,"destructive_enabled":false,"approvals_reviewer":"auto_review",
+                                   "default_tools_approval_mode":"prompt",
+                                   "tools":{"files/delete":{"enabled":false,"approval_mode":"approve"}}},
+                   "bad id":{"enabled":false},
+                   "github":{"default_tools_approval_mode":"never-heard-of-it"}
+                 }}
+                """))
         #expect(switches[.init(.apps)] == .on)
         #expect(switches[.init(.destructiveTools)] == .on)
         #expect(switches[.init(.openWorldTools)] == .on)
@@ -361,13 +384,15 @@ struct AccountSurfaceParsingTests {
     }
 
     @Test func theUserLayerIsTheOneThisAppEdits() throws {
-        let reading = CodexAccountParsing.configReading(try Self.json("""
-            {"config":{"features":{"apps":false}},
-             "layers":[{"name":{"type":"sessionFlags"},"config":{}},
-                       {"name":{"type":"user","file":"/Users/me/.codex/config.toml","profile":null},
-                        "config":{"apps":{"github":{"enabled":false}}}},
-                       {"name":{"type":"system","file":"/etc/codex/config.toml"},"config":{}}]}
-            """))
+        let reading = CodexAccountParsing.configReading(
+            try Self.json(
+                """
+                {"config":{"features":{"apps":false}},
+                 "layers":[{"name":{"type":"sessionFlags"},"config":{}},
+                           {"name":{"type":"user","file":"/Users/me/.codex/config.toml","profile":null},
+                            "config":{"apps":{"github":{"enabled":false}}}},
+                           {"name":{"type":"system","file":"/etc/codex/config.toml"},"config":{}}]}
+                """))
         #expect(reading.userFile == "/Users/me/.codex/config.toml")
         #expect(CodexAccountParsing.switches(fromConfig: reading.user) == [.init(.app, subject: "github"): .off])
         #expect(CodexAccountParsing.switches(fromConfig: reading.effective) == [.init(.apps): .off])

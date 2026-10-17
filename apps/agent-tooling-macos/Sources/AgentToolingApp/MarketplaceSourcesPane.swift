@@ -357,49 +357,49 @@ struct MarketplaceGalleryCard: View {
     }
 
     private var cardContent: some View {
-            HStack(alignment: .top, spacing: compact ? Space.lg : Space.xl) {
-                ToolIdentityIcon(packageID: package.id, fallback: marketplaceKind(for: package), size: iconSize)
-                VStack(alignment: .leading, spacing: Space.sm) {
-                    HStack(alignment: .firstTextBaseline, spacing: Space.md) {
-                        Text(package.presentationName).font(compact ? AgentFont.title : AgentFont.titleLarge).lineLimit(1)
-                            .help(package.presentationName)
-                        Spacer(minLength: 0)
-                        if let installs = package.installCount {
-                            Label(CompactCountFormatter.string(for: installs), systemImage: "arrow.down.circle")
-                                .font(AgentFont.captionMedium.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .labelStyle(.titleAndIcon)
-                                .help("\(CompactCountFormatter.installs(installs)) — reported by \(package.sourceName)")
-                        }
+        HStack(alignment: .top, spacing: compact ? Space.lg : Space.xl) {
+            ToolIdentityIcon(packageID: package.id, fallback: marketplaceKind(for: package), size: iconSize)
+            VStack(alignment: .leading, spacing: Space.sm) {
+                HStack(alignment: .firstTextBaseline, spacing: Space.md) {
+                    Text(package.presentationName).font(compact ? AgentFont.title : AgentFont.titleLarge).lineLimit(1)
+                        .help(package.presentationName)
+                    Spacer(minLength: 0)
+                    if let installs = package.installCount {
+                        Label(CompactCountFormatter.string(for: installs), systemImage: "arrow.down.circle")
+                            .font(AgentFont.captionMedium.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .labelStyle(.titleAndIcon)
+                            .help("\(CompactCountFormatter.installs(installs)) — reported by \(package.sourceName)")
                     }
-                    Text(package.summary).font(compact ? AgentFont.body : AgentFont.titleRegular).foregroundStyle(.secondary)
-                        .lineLimit(2).frame(maxWidth: .infinity, minHeight: Size.cardSummaryMinHeight, alignment: .topLeading)
-                    HStack(spacing: Space.md) {
-                        ForEach(cardComponents, id: \.self) { component in
-                            Text(component.displayName)
-                                .font(AgentFont.microSemibold)
-                                .padding(.horizontal, Space.sm).padding(.vertical, Space.xxs)
-                                .background(AgentTheme.fillHover, in: Capsule())
-                                .foregroundStyle(.secondary)
-                        }
-                        if let category = package.category, !compact {
-                            Text(category.capitalized)
-                                .font(AgentFont.microMedium)
-                                .padding(.horizontal, Space.sm).padding(.vertical, Space.xxs)
-                                .background(AgentTheme.selection.opacity(Opacity.tagWash), in: Capsule())
-                                .foregroundStyle(.secondary)
-                                .help("Filed under \(category) by \(package.sourceName)")
-                        }
-                        Text(detail ?? "From \(package.originName)")
-                            .font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
-                        Spacer(minLength: 0)
-                        ForEach(package.supportedClients.sorted { $0.rawValue < $1.rawValue }) { client in
-                            ClientBrandIcon(client: client, size: Size.brandMark).help("Available for \(client.rawValue)")
-                        }
+                }
+                Text(package.summary).font(compact ? AgentFont.body : AgentFont.titleRegular).foregroundStyle(.secondary)
+                    .lineLimit(2).frame(maxWidth: .infinity, minHeight: Size.cardSummaryMinHeight, alignment: .topLeading)
+                HStack(spacing: Space.md) {
+                    ForEach(cardComponents, id: \.self) { component in
+                        Text(component.displayName)
+                            .font(AgentFont.microSemibold)
+                            .padding(.horizontal, Space.sm).padding(.vertical, Space.xxs)
+                            .background(AgentTheme.fillHover, in: Capsule())
+                            .foregroundStyle(.secondary)
+                    }
+                    if let category = package.category, !compact {
+                        Text(category.capitalized)
+                            .font(AgentFont.microMedium)
+                            .padding(.horizontal, Space.sm).padding(.vertical, Space.xxs)
+                            .background(AgentTheme.selection.opacity(Opacity.tagWash), in: Capsule())
+                            .foregroundStyle(.secondary)
+                            .help("Filed under \(category) by \(package.sourceName)")
+                    }
+                    Text(detail ?? "From \(package.originName)")
+                        .font(AgentFont.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Spacer(minLength: 0)
+                    ForEach(package.supportedClients.sorted { $0.rawValue < $1.rawValue }) { client in
+                        ClientBrandIcon(client: client, size: Size.brandMark).help("Available for \(client.rawValue)")
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     /// The least height a card keeps, so a row of cards lines up; the compact

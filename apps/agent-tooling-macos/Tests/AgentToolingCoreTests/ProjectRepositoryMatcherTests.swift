@@ -10,8 +10,9 @@ struct ProjectRepositoryMatcherTests {
     private let web = ArtifactID()
 
     private func folder(_ path: String, remote: String?) -> DiscoveredProject {
-        DiscoveredProject(path: path, name: String(path.split(separator: "/").last ?? ""),
-                          repositoryHint: remote.flatMap(RepositoryIdentity.hint(fromRemote:)))
+        DiscoveredProject(
+            path: path, name: String(path.split(separator: "/").last ?? ""),
+            repositoryHint: remote.flatMap(RepositoryIdentity.hint(fromRemote:)))
     }
 
     private var projects: [ProjectRepositoryMatcher.Project] {

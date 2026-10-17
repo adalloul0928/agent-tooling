@@ -38,7 +38,7 @@ struct WorkspaceAccountsSessionBoundedReadTests {
     @Test func anOversizeConfigFileIsNotReadWholeWhenPlanning() async throws {
         let fixture = try await ShellRenderFixture(
             deviceObserver: StubDeviceObserver(observations: [
-                ShellRenderFixture.observation(.codexCLI, installed: true, commandAvailable: true, version: "0.162.1"),
+                ShellRenderFixture.observation(.codexCLI, installed: true, commandAvailable: true, version: "0.162.1")
             ]),
             accountReader: FixedChatGPTReader())
         defer { fixture.remove() }

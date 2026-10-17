@@ -25,7 +25,10 @@ extension PublishedDeviceStatus {
                 mcpServerCount: observation?.discoveredMCPServers.count ?? 0)
         }
         let pending = (deployment.plan?.items ?? [])
-            .filter { if case .removeContent = $0.action { return false }; return true }
+            .filter {
+                if case .removeContent = $0.action { return false }
+                return true
+            }
             .map(\.displayName)
         return PublishedDeviceStatus(
             deviceID: library.deviceID, name: name, lastScan: device.lastCheckedAt,

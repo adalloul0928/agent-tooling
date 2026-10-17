@@ -72,11 +72,12 @@ public enum WorkspaceManagedMCPCommandPlanning {
         }
 
         guard requirement.component == .mcpServer,
-              requirement.physicalDestinationID == target.physicalDestinationID,
-              resolvedTargets.filter({ $0 == target }).count == 1,
-              requirement.contributions.contains(where: {
-                  ResolvedAssignmentSelector(destination: $0.destination) == target.selector
-              }) else {
+            requirement.physicalDestinationID == target.physicalDestinationID,
+            resolvedTargets.filter({ $0 == target }).count == 1,
+            requirement.contributions.contains(where: {
+                ResolvedAssignmentSelector(destination: $0.destination) == target.selector
+            })
+        else {
             throw WorkspaceManagedMCPCommandPlanningError.invalidRequirement
         }
         let artifactContributions = document.assignments.filter {
@@ -86,7 +87,8 @@ public enum WorkspaceManagedMCPCommandPlanning {
             $0.destination.deviceIDs?.contains(device.deviceID) ?? true
         }
         guard requirement.desiredEnabled == nil,
-              applicableContributions.allSatisfy({ $0.desiredEnabled == nil }) else {
+            applicableContributions.allSatisfy({ $0.desiredEnabled == nil })
+        else {
             throw WorkspaceManagedMCPCommandPlanningError.unsupportedEnablement
         }
         let assignmentResolution = WorkspaceAssignmentResolver.resolve(
@@ -117,7 +119,8 @@ public enum WorkspaceManagedMCPCommandPlanning {
             throw WorkspaceManagedMCPCommandPlanningError.invalidCapability
         }
         guard issues.isEmpty,
-              assignmentResolution.requirements.filter({ $0 == requirement }).count == 1 else {
+            assignmentResolution.requirements.filter({ $0 == requirement }).count == 1
+        else {
             throw WorkspaceManagedMCPCommandPlanningError.invalidRequirement
         }
 
@@ -126,7 +129,8 @@ public enum WorkspaceManagedMCPCommandPlanning {
         }
         let expectedExecutable = MCPClientCommand.executable(for: client)
         guard NativeSkillDestination.isValidRoot(executableURL),
-              executableURL.lastPathComponent == expectedExecutable else {
+            executableURL.lastPathComponent == expectedExecutable
+        else {
             throw WorkspaceManagedMCPCommandPlanningError.invalidCLIURL
         }
         guard OperationCommandPolicy.isSafeMCPIdentifier(nativeServerIdentifier) else {
@@ -137,24 +141,26 @@ public enum WorkspaceManagedMCPCommandPlanning {
         }
 
         guard case .managedMCP(let definition, let strategyBinding) = requirement.strategy,
-              definition.artifactID == requirement.artifactID,
-              requirement.transport == definition.connection.transport.rawValue,
-              document.mcpDefinitions?.filter({ $0.artifactID == requirement.artifactID }) == [definition]
+            definition.artifactID == requirement.artifactID,
+            requirement.transport == definition.connection.transport.rawValue,
+            document.mcpDefinitions?.filter({ $0.artifactID == requirement.artifactID }) == [definition]
         else {
             throw WorkspaceManagedMCPCommandPlanningError.invalidRequirement
         }
         let deviceBindings = device.mcpBindings?.filter { $0.artifactID == requirement.artifactID } ?? []
         guard deviceBindings.count <= 1,
-              (deviceBindings.first == strategyBinding || (deviceBindings.isEmpty && strategyBinding == nil)) else {
+            deviceBindings.first == strategyBinding || (deviceBindings.isEmpty && strategyBinding == nil)
+        else {
             throw WorkspaceManagedMCPCommandPlanningError.invalidRequirement
         }
 
         let transport = definition.connection.transport
         guard target.installedClientVersion?.isEmpty == false,
-              target.adapterContractVersion > 0,
-              target.componentContexts.filter({
-                  $0.component == .mcpServer && $0.transport == transport.rawValue
-              }).count == 1 else {
+            target.adapterContractVersion > 0,
+            target.componentContexts.filter({
+                $0.component == .mcpServer && $0.transport == transport.rawValue
+            }).count == 1
+        else {
             throw WorkspaceManagedMCPCommandPlanningError.invalidCapability
         }
         let matchingCapabilities = device.capabilityEvidence.filter {
@@ -184,7 +190,8 @@ public enum WorkspaceManagedMCPCommandPlanning {
                 destination = try MCPDefinitionValidator.validate(url, transport: .http)
             case .deviceBound(let expectedTransport):
                 guard let bindingDestination = strategyBinding?.destination,
-                      bindingDestination.transport == expectedTransport else {
+                    bindingDestination.transport == expectedTransport
+                else {
                     throw WorkspaceManagedMCPCommandPlanningError.invalidDestination
                 }
                 switch bindingDestination {

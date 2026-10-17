@@ -444,4 +444,3 @@ private struct MCPPendingToolRun: Identifiable {
     let tool: MCPLiveTool
     let arguments: [String: JSONValue]
 }
-

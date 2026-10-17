@@ -23,8 +23,9 @@ public struct WorkspaceLinkedPresetStore: Sendable {
 
     public init(containerRoot: URL) throws {
         guard containerRoot.isFileURL, containerRoot.path.hasPrefix("/"),
-              !containerRoot.path.contains("\0"),
-              containerRoot.standardizedFileURL.path == containerRoot.path else {
+            !containerRoot.path.contains("\0"),
+            containerRoot.standardizedFileURL.path == containerRoot.path
+        else {
             throw WorkspaceLinkedPresetStoreError.invalidRoot
         }
         file = containerRoot.appending(path: "linked-presets.json")
@@ -36,12 +37,12 @@ public struct WorkspaceLinkedPresetStore: Sendable {
     public func read() throws -> [LinkedPresetSubscription] {
         guard FileManager.default.fileExists(atPath: file.path) else { return [] }
         let bytes: Data
-        do { bytes = try Data(contentsOf: file, options: [.mappedIfSafe]) }
-        catch { throw WorkspaceLinkedPresetStoreError.unreadable }
+        do { bytes = try Data(contentsOf: file, options: [.mappedIfSafe]) } catch { throw WorkspaceLinkedPresetStoreError.unreadable }
         guard bytes.count <= 1_024_000 else { throw WorkspaceLinkedPresetStoreError.unsupportedFormat }
         let record: Record
-        do { record = try AgentToolingCoding.decoder().decode(Record.self, from: bytes) }
-        catch { throw WorkspaceLinkedPresetStoreError.unsupportedFormat }
+        do { record = try AgentToolingCoding.decoder().decode(Record.self, from: bytes) } catch {
+            throw WorkspaceLinkedPresetStoreError.unsupportedFormat
+        }
         guard record.formatVersion == Self.formatVersion else {
             throw WorkspaceLinkedPresetStoreError.unsupportedFormat
         }
@@ -65,8 +66,7 @@ public struct WorkspaceLinkedPresetStore: Sendable {
         }
         let record = Record(formatVersion: Self.formatVersion, subscriptions: subscriptions)
         let bytes = try AgentToolingCoding.encoder().encode(record)
-        do { try bytes.write(to: file, options: .atomic) }
-        catch { throw WorkspaceLinkedPresetStoreError.unreadable }
+        do { try bytes.write(to: file, options: .atomic) } catch { throw WorkspaceLinkedPresetStoreError.unreadable }
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
     }
 

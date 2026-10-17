@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -26,7 +27,9 @@ struct WorkspaceLibraryReadModelTests {
         let tracked = try #require(model.rows.first { $0.artifactID == fixture.trackedID })
         #expect(!tracked.isAssignable)
         #expect(tracked.assignableReasons.isEmpty)
-        #expect(tracked.assignmentExplanation == "Not managed by this app. It was found where it is and this library holds no copy, so it cannot be placed from here.")
+        #expect(
+            tracked.assignmentExplanation
+                == "Not managed by this app. It was found where it is and this library holds no copy, so it cannot be placed from here.")
     }
 
     @Test func theLibrarySizeCountsToolsCarriedInsidePluginsNotJustTheRowsAListCanShow() throws {
@@ -83,7 +86,6 @@ struct WorkspaceLibraryReadModelTests {
         #expect(second.rows.map(\.artifactID).contains(fixture.personalID))
     }
 
-
     /// `declaredName` is the only key that joins a row to a device
     /// observation, on both shapes the model hands out: a root row and a
     /// child folded into one. An artifact that never declared a name joins
@@ -137,11 +139,12 @@ struct WorkspaceLibraryReadModelTests {
                 authority: .centralPersonal
             )
         }
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: workspaceID,
-            revision: .init(writerID: writerID),
-            artifacts: artifacts
-        ))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: workspaceID,
+                revision: .init(writerID: writerID),
+                artifacts: artifacts
+            ))
         let device = DeviceWorkspaceState(workspaceID: workspaceID)
         let model = try WorkspaceLibraryReadModel(snapshot: .init(document: document, device: device))
 
@@ -153,21 +156,22 @@ struct WorkspaceLibraryReadModelTests {
     /// insights scan has the key it needs to read a library skill's real
     /// SKILL.md. An artifact with no digest leaves the row's digest nil.
     @Test func theContentDigestTravelsFromTheArtifactOntoTheRow() throws {
-        let withDigest = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f1")!)
-        let withoutDigest = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f2")!)
+        let withDigest = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000f1"))
+        let withoutDigest = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000f2"))
         let digest = ContentDigest(value: String(repeating: "a", count: 64))
-        let workspaceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f9")!)
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: workspaceID,
-            revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: [
-                .init(
-                    identity: .init(id: withDigest, kind: .skill, displayName: "With Digest"),
-                    authority: .centralPersonal, declaredName: "with-digest", contentDigest: digest),
-                .init(
-                    identity: .init(id: withoutDigest, kind: .skill, displayName: "Without Digest"),
-                    authority: .centralPersonal, declaredName: "without-digest"),
-            ]))
+        let workspaceID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000f9"))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: workspaceID,
+                revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: [
+                    .init(
+                        identity: .init(id: withDigest, kind: .skill, displayName: "With Digest"),
+                        authority: .centralPersonal, declaredName: "with-digest", contentDigest: digest),
+                    .init(
+                        identity: .init(id: withoutDigest, kind: .skill, displayName: "Without Digest"),
+                        authority: .centralPersonal, declaredName: "without-digest"),
+                ]))
         let device = DeviceWorkspaceState(workspaceID: workspaceID)
         let model = try WorkspaceLibraryReadModel(snapshot: .init(document: document, device: device))
 
@@ -176,19 +180,19 @@ struct WorkspaceLibraryReadModelTests {
     }
 
     private struct Fixture {
-        let workspaceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000001")!)
-        let deviceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000002")!)
-        let otherDeviceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000003")!)
-        let writerID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000004")!)
-        let sourceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000005")!)
-        let subscriptionID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000006")!)
-        let nativeRootID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000010")!)
-        let nativeChildID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000011")!)
-        let personalID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000012")!)
-        let upstreamID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000013")!)
-        let trackedID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000014")!)
-        let presetID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000015")!)
-        let projectID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000016")!)
+        let workspaceID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000001"))
+        let deviceID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000002"))
+        let otherDeviceID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000003"))
+        let writerID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000004"))
+        let sourceID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000005"))
+        let subscriptionID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000006"))
+        let nativeRootID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000010"))
+        let nativeChildID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000011"))
+        let personalID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000012"))
+        let upstreamID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000013"))
+        let trackedID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000014"))
+        let presetID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000015"))
+        let projectID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000016"))
         let document: PortableWorkspaceDocument
         let device: DeviceWorkspaceState
 
@@ -196,34 +200,51 @@ struct WorkspaceLibraryReadModelTests {
 
         init() throws {
             let digest = ContentDigest(value: String(repeating: "a", count: 64))
-            document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: workspaceID,
-                revision: .init(writerID: writerID),
-                artifacts: [
-                    .init(identity: .init(id: nativeRootID, kind: .nativePlugin, displayName: "Native Plugin"), authority: .nativeOwned,
-                          nativeRoutes: [.init(client: .claude, externalPluginID: "marketplace@vendor")]),
-                    .init(identity: .init(id: nativeChildID, kind: .skill, displayName: "Native Child", parentPackageID: nativeRootID),
-                          authority: .nativeOwned, packageRelativePath: "skills/child"),
-                    .init(identity: .init(id: personalID, kind: .skill, displayName: "Personal Skill"), authority: .centralPersonal),
-                    .init(identity: .init(id: upstreamID, kind: .skill, displayName: "Upstream Skill"), authority: .centralUpstream(subscriptionID: subscriptionID)),
-                    .init(identity: .init(id: trackedID, kind: .mcpServer, displayName: "Tracked Server"), authority: .trackedOnly),
-                    .init(identity: .init(id: presetID, kind: .preset, displayName: "Starter"), authority: .centralPersonal),
-                    .init(identity: .init(id: projectID, kind: .logicalProject, displayName: "Project A"), authority: .centralPersonal)
-                ],
-                sources: [.init(id: sourceID, role: .publisherRepository, repositoryURL: "https://github.com/acme/tooling.git", requestedRef: "main", packageRelativePaths: ["."])],
-                subscriptions: [.init(id: subscriptionID, artifactID: upstreamID, sourceID: sourceID,
-                    lock: .init(publisherID: "acme", sourceRootID: sourceID, requestedRef: "main",
-                                approvedRevision: .init(kind: .semanticVersion, value: "1.0.0"), approvedContent: digest, packageRelativePath: "."))],
-                logicalProjects: [.init(id: projectID, name: "Project A", repositoryHints: ["https://github.com/acme/project"])],
-                assignments: [
-                    .init(id: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000020")!), artifactID: personalID,
-                          destination: .init(surface: .claudeCode, scope: .user), reason: .manual),
-                    .init(id: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000021")!), artifactID: personalID,
-                          destination: .init(surface: .codexCLI, scope: .project, logicalProjectID: projectID, deviceIDs: [otherDeviceID]),
-                          reason: .projectDeclaration(projectID: projectID), desiredEnabled: false)
-                ],
-                presets: [.init(id: presetID, name: "Starter", revision: 2, memberArtifactIDs: [personalID])]
-            ))
+            document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: workspaceID,
+                    revision: .init(writerID: writerID),
+                    artifacts: [
+                        .init(
+                            identity: .init(id: nativeRootID, kind: .nativePlugin, displayName: "Native Plugin"), authority: .nativeOwned,
+                            nativeRoutes: [.init(client: .claude, externalPluginID: "marketplace@vendor")]),
+                        .init(
+                            identity: .init(id: nativeChildID, kind: .skill, displayName: "Native Child", parentPackageID: nativeRootID),
+                            authority: .nativeOwned, packageRelativePath: "skills/child"),
+                        .init(identity: .init(id: personalID, kind: .skill, displayName: "Personal Skill"), authority: .centralPersonal),
+                        .init(
+                            identity: .init(id: upstreamID, kind: .skill, displayName: "Upstream Skill"),
+                            authority: .centralUpstream(subscriptionID: subscriptionID)),
+                        .init(identity: .init(id: trackedID, kind: .mcpServer, displayName: "Tracked Server"), authority: .trackedOnly),
+                        .init(identity: .init(id: presetID, kind: .preset, displayName: "Starter"), authority: .centralPersonal),
+                        .init(identity: .init(id: projectID, kind: .logicalProject, displayName: "Project A"), authority: .centralPersonal),
+                    ],
+                    sources: [
+                        .init(
+                            id: sourceID, role: .publisherRepository, repositoryURL: "https://github.com/acme/tooling.git",
+                            requestedRef: "main", packageRelativePaths: ["."])
+                    ],
+                    subscriptions: [
+                        .init(
+                            id: subscriptionID, artifactID: upstreamID, sourceID: sourceID,
+                            lock: .init(
+                                publisherID: "acme", sourceRootID: sourceID, requestedRef: "main",
+                                approvedRevision: .init(kind: .semanticVersion, value: "1.0.0"), approvedContent: digest,
+                                packageRelativePath: "."))
+                    ],
+                    logicalProjects: [.init(id: projectID, name: "Project A", repositoryHints: ["https://github.com/acme/project"])],
+                    assignments: [
+                        .init(
+                            id: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000020")), artifactID: personalID,
+                            destination: .init(surface: .claudeCode, scope: .user), reason: .manual),
+                        .init(
+                            id: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000021")), artifactID: personalID,
+                            destination: .init(
+                                surface: .codexCLI, scope: .project, logicalProjectID: projectID, deviceIDs: [otherDeviceID]),
+                            reason: .projectDeclaration(projectID: projectID), desiredEnabled: false),
+                    ],
+                    presets: [.init(id: presetID, name: "Starter", revision: 2, memberArtifactIDs: [personalID])]
+                ))
             device = DeviceWorkspaceState(workspaceID: workspaceID, deviceID: deviceID)
         }
     }

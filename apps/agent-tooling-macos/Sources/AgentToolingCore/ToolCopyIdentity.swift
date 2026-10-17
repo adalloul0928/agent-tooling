@@ -24,7 +24,8 @@ public enum ToolCopyIdentity {
     /// guessing from one would merge two different skills.
     public static func callableName(_ declaredName: String?) -> String? {
         guard let bare = bareName(declaredName) else { return nil }
-        let folded = bare
+        let folded =
+            bare
             .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
         return folded.isEmpty ? nil : folded
     }
@@ -148,7 +149,10 @@ public enum ToolCopyIdentity {
             for skill in named {
                 let description = skill.summary.trimmingCharacters(in: .whitespacesAndNewlines)
                     .folding(options: [.caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
-                guard !description.isEmpty else { undescribed.append(skill); continue }
+                guard !description.isEmpty else {
+                    undescribed.append(skill)
+                    continue
+                }
                 if clusters[description] == nil { clusterOrder.append(description) }
                 clusters[description, default: []].append(skill)
             }

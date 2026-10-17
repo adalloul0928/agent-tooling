@@ -156,7 +156,8 @@ struct HealthView: View {
         EmptyStateView(
             symbol: "checkmark.circle",
             title: "Everything is connected",
-            message: "No connection needs attention. Switch to All to see every listed connection.")
+            message: "No connection needs attention. Switch to All to see every listed connection."
+        )
         .frame(height: Size.emptyStatePaneHeight)
     }
 
@@ -286,9 +287,10 @@ private struct HealthRow: View {
                     authorizationURL == nil
                         ? "Signing in… waiting for the tool to print its sign-in page."
                         : "Signing in… finish in the browser, then this row updates itself.",
-                    systemImage: "arrow.triangle.2.circlepath")
-                    .font(AgentFont.caption)
-                    .foregroundStyle(.secondary)
+                    systemImage: "arrow.triangle.2.circlepath"
+                )
+                .font(AgentFont.caption)
+                .foregroundStyle(.secondary)
                 if let host = authorizationURL?.host() {
                     Button("Open the sign-in page at \(host) again", action: onOpenAuthorizationPage)
                         .inlineActionStyle()
@@ -327,8 +329,9 @@ private struct HealthRow: View {
                 .secondaryActionStyle()
                 .controlSize(.small)
                 .disabled(actionState == .running)
-                .help(commandText.map { "Runs \($0), then opens the sign-in page it prints in your browser. Nothing else is read or stored." }
-                    ?? "Signs in to this connection again.")
+                .help(
+                    commandText.map { "Runs \($0), then opens the sign-in page it prints in your browser. Nothing else is read or stored." }
+                        ?? "Signs in to this connection again.")
         case .openClaudeAIConnectors:
             Button("Open claude.ai…", action: onOpenConnectors)
                 .secondaryActionStyle()

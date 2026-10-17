@@ -62,7 +62,9 @@ extension WorkspaceApplicationService {
         if let replay = try store.preflightMetadata(
             expectedRevisionID: command.expectedRevisionID, idempotencyKey: command.idempotencyKey, inputDigest: digest,
             mutation: { try command.apply(to: &$0, declaredName: prepared.frontmatter.name) }
-        ) { return replay }
+        ) {
+            return replay
+        }
         try await publishReviewedSkill(prepared)
         return try store.commitMetadata(
             expectedRevisionID: command.expectedRevisionID, idempotencyKey: command.idempotencyKey,

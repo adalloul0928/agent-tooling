@@ -29,21 +29,21 @@ struct WorkspaceSkillPreparationTests {
 
     @Test func personalPreparationRequiresRegularUTF8RootSkillDefinition() throws {
         let missing = try CapturedPackageTree(entries: [
-            .init(relativePath: "notes.md", kind: .file(bytes: Data(), executable: false)),
+            .init(relativePath: "notes.md", kind: .file(bytes: Data(), executable: false))
         ])
         #expect(throws: WorkspaceSkillPreparationError.missingSkillDefinition) {
             try WorkspaceSkillPreparation.personal(tree: missing)
         }
 
         let invalidUTF8 = try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .file(bytes: Data([0xff]), executable: false)),
+            .init(relativePath: "SKILL.md", kind: .file(bytes: Data([0xff]), executable: false))
         ])
         #expect(throws: WorkspaceSkillPreparationError.invalidSkillDefinition) {
             try WorkspaceSkillPreparation.personal(tree: invalidUTF8)
         }
 
         let directory = try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .directory),
+            .init(relativePath: "SKILL.md", kind: .directory)
         ])
         #expect(throws: WorkspaceSkillPreparationError.missingSkillDefinition) {
             try WorkspaceSkillPreparation.personal(tree: directory)
@@ -79,10 +79,12 @@ struct WorkspaceSkillPreparationTests {
         let cache = temporaryDirectory("upstream")
         defer { try? FileManager.default.removeItem(at: cache) }
         let revision = String(repeating: "a", count: 40)
-        let runner = PreparationRepositoryRunner(revision: revision, files: [
-            "SKILL.md": Data(markdown.utf8),
-            "references/guide.md": Data("guide\n".utf8),
-        ])
+        let runner = PreparationRepositoryRunner(
+            revision: revision,
+            files: [
+                "SKILL.md": Data(markdown.utf8),
+                "references/guide.md": Data("guide\n".utf8),
+            ])
         var binding = try SkillRepositoryBinding(
             repositoryURL: "https://github.com/Example/Skills.git",
             ref: "release/v1",
@@ -142,7 +144,7 @@ struct WorkspaceSkillPreparationTests {
     @Test func invalidFrontmatterAndLinkedRootDefinitionRemainUnmodified() throws {
         let invalid = Data("---\nname: incomplete\n---\nKeep these bytes.\n".utf8)
         let tree = try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .file(bytes: invalid, executable: false)),
+            .init(relativePath: "SKILL.md", kind: .file(bytes: invalid, executable: false))
         ])
         #expect(throws: WorkspaceSkillPreparationError.invalidSkillDefinition) {
             try WorkspaceSkillPreparation.personal(tree: tree)

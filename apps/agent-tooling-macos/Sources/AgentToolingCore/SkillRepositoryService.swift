@@ -107,9 +107,9 @@ struct SkillRepositoryService: Sendable {
         for folder in folders.sorted(by: Self.shallowerFirst).prefix(Self.frontmatterProbeLimit) {
             let path = folder.isEmpty ? "SKILL.md" : folder + "/SKILL.md"
             guard let content = try? await git(["--git-dir=\(gitRoot.path)", "show", "\(revision):\(path)"], root: taskRoot),
-                  content.utf8.count <= BoundedFileAccess.maximumConfigurationBytes,
-                  let frontmatter = try? SkillFrontmatter.parse(content),
-                  Self.comparableName(frontmatter.name) == wanted
+                content.utf8.count <= BoundedFileAccess.maximumConfigurationBytes,
+                let frontmatter = try? SkillFrontmatter.parse(content),
+                Self.comparableName(frontmatter.name) == wanted
             else { continue }
             declared.append(folder)
         }

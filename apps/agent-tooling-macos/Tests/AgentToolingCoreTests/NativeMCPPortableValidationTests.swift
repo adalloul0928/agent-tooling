@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -37,10 +38,14 @@ struct NativeMCPPortableValidationTests {
 
     @Test func onlyTheWholeNativePluginCanReceiveAnAssignment() throws {
         var document = Self.document()
-        let destination = PortableDestination(surface: .codexCLI, scope: .user,
+        let destination = PortableDestination(
+            surface: .codexCLI, scope: .user,
             deviceIDs: [document.revision.writerID])
-        document.assignments = [.init(artifactID: document.artifacts[1].identity.id,
-            destination: destination, reason: .manual)]
+        document.assignments = [
+            .init(
+                artifactID: document.artifacts[1].identity.id,
+                destination: destination, reason: .manual)
+        ]
         #expect(throws: WorkspaceDomainValidationError.self) { try document.validateStructure() }
         document.assignments[0].artifactID = document.artifacts[0].identity.id
         _ = try WorkspaceDocumentCoding.seal(document)
@@ -79,9 +84,9 @@ struct NativeMCPPortableValidationTests {
     }
 
     private static func document() -> PortableWorkspaceDocument {
-        let parentID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000901")!)
-        let childID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000902")!)
-        let writerID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000903")!)
+        let parentID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000901"))
+        let childID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000902"))
+        let writerID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000903"))
         let parent = ArtifactRecord(
             identity: .init(id: parentID, kind: .nativePlugin, displayName: "Browser"),
             authority: .nativeOwned,

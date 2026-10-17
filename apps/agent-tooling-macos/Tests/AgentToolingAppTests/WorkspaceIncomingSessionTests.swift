@@ -12,7 +12,9 @@ struct WorkspaceIncomingSessionTests {
     /// arrival has after a sync pass brought it in.
     private func arrival(in fixture: ShellRenderFixture, name: String = "arrived-skill") async throws -> ArtifactID {
         let tree = try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .file(bytes: Data("---\nname: \(name)\ndescription: d\n---\n# \(name)\n".utf8), executable: false)),
+            .init(
+                relativePath: "SKILL.md",
+                kind: .file(bytes: Data("---\nname: \(name)\ndescription: d\n---\n# \(name)\n".utf8), executable: false))
         ])
         let prepared = try WorkspaceSkillPreparation.personal(tree: tree)
         await fixture.workspace.library.refresh()
@@ -75,7 +77,9 @@ struct WorkspaceIncomingSessionTests {
         defer { fixture.remove() }
         await fixture.workspace.device.refresh()
         let tree = try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .file(bytes: Data("---\nname: mine\ndescription: d\n---\n# mine\n".utf8), executable: false)),
+            .init(
+                relativePath: "SKILL.md", kind: .file(bytes: Data("---\nname: mine\ndescription: d\n---\n# mine\n".utf8), executable: false)
+            )
         ])
         let prepared = try WorkspaceSkillPreparation.personal(tree: tree)
         await fixture.workspace.library.refresh()
@@ -99,8 +103,9 @@ struct WorkspaceIncomingSessionTests {
         await fixture.workspace.device.refresh()
         await fixture.workspace.library.refresh()
         let head = try #require(fixture.workspace.library.state?.snapshot.document.revision.id)
-        _ = try await fixture.workspace.service.registerDevice(.init(
-            expectedRevisionID: head, deviceID: fixture.workspace.library.deviceID, name: "Limited", receivesSharedAssignments: false))
+        _ = try await fixture.workspace.service.registerDevice(
+            .init(
+                expectedRevisionID: head, deviceID: fixture.workspace.library.deviceID, name: "Limited", receivesSharedAssignments: false))
         _ = try await arrival(in: fixture, name: "not-for-me")
 
         await fixture.workspace.incoming.review()
@@ -115,7 +120,9 @@ struct WorkspaceIncomingSessionTests {
 struct MultiMacSurfaceRenderTests {
     @Test func theFirstLaunchChooserDraws() throws {
         try expectDrawn(FirstLaunchChooser(start: {}, join: { _, _ in }, isBusy: false, error: nil).frame(width: 900, height: 600))
-        try expectDrawn(FirstLaunchChooser(start: {}, join: { _, _ in }, isBusy: true, error: "That repository holds no workspace yet.").frame(width: 900, height: 600))
+        try expectDrawn(
+            FirstLaunchChooser(start: {}, join: { _, _ in }, isBusy: true, error: "That repository holds no workspace yet.").frame(
+                width: 900, height: 600))
     }
 
     @Test func thePickerOffersEveryMacWhenOtherMacsAreRegistered() async throws {
@@ -123,9 +130,11 @@ struct MultiMacSurfaceRenderTests {
         defer { fixture.remove() }
         await fixture.workspace.library.refresh()
         let head = try #require(fixture.workspace.library.state?.snapshot.document.revision.id)
-        _ = try await fixture.workspace.service.registerDevice(.init(expectedRevisionID: head, deviceID: fixture.workspace.library.deviceID, name: "Studio"))
+        _ = try await fixture.workspace.service.registerDevice(
+            .init(expectedRevisionID: head, deviceID: fixture.workspace.library.deviceID, name: "Studio"))
         let head2 = try #require(try fixture.workspace.store.snapshot()?.document.revision.id)
-        _ = try await fixture.workspace.service.registerDevice(.init(expectedRevisionID: head2, deviceID: WorkspaceObjectID(), name: "MacBook", receivesSharedAssignments: false))
+        _ = try await fixture.workspace.service.registerDevice(
+            .init(expectedRevisionID: head2, deviceID: WorkspaceObjectID(), name: "MacBook", receivesSharedAssignments: false))
         await fixture.workspace.library.refresh()
         let pipeline = InstallPipeline(
             deployment: fixture.workspace.deployment, device: fixture.workspace.device,
@@ -138,10 +147,11 @@ struct MultiMacSurfaceRenderTests {
         try expectDrawn(
             WorkspaceAssignmentSheet(
                 session: fixture.workspace.library, artifactIDs: [ShellRenderFixture.skill], initialClients: [.claude],
-                initialDevices: [fixture.workspace.library.deviceID])
-                .environment(\.installPipeline, pipeline)
-                .environment(\.availableClients, [.claude, .codex])
-                .environment(AppNavigationState()))
+                initialDevices: [fixture.workspace.library.deviceID]
+            )
+            .environment(\.installPipeline, pipeline)
+            .environment(\.availableClients, [.claude, .codex])
+            .environment(AppNavigationState()))
     }
 
     @Test func theOtherMacSheetDrawsWithoutAReport() async throws {

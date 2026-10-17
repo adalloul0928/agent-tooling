@@ -97,13 +97,16 @@ enum WorkspaceMergeEngine {
         settingAsideDeletionsOf keptItems: Set<ArtifactID> = []
     ) -> WorkspaceMergeResult {
         var conflicts: [WorkspaceMergeConflict] = []
-        func conflict(_ kind: WorkspaceMergeConflictKind, _ artifact: ArtifactID?,
-                      _ object: WorkspaceObjectID?, _ detail: String) {
+        func conflict(
+            _ kind: WorkspaceMergeConflictKind, _ artifact: ArtifactID?,
+            _ object: WorkspaceObjectID?, _ detail: String
+        ) {
             conflicts.append(.init(kind: kind, artifactID: artifact, objectID: object, detail: detail))
         }
 
         guard local.workspaceID == remote.workspaceID,
-              base.map({ $0.workspaceID == local.workspaceID }) ?? true else {
+            base.map({ $0.workspaceID == local.workspaceID }) ?? true
+        else {
             conflict(.unsupportedVersion, nil, nil, "These revisions belong to different workspaces.")
             return .init(document: nil, conflicts: conflicts)
         }
@@ -205,16 +208,19 @@ enum WorkspaceMergeEngine {
         reportSubscriptionContentMismatches(
             artifacts: &artifacts, subscriptions: liveSubscriptions, report: conflict)
 
-        let definitions: [PortableMCPDefinitionRecord]? = schemaVersion >= 3
+        let definitions: [PortableMCPDefinitionRecord]? =
+            schemaVersion >= 3
             ? mergeCollection(
                 base: base?.mcpDefinitions, local: local.mcpDefinitions ?? [],
                 remote: remote.mcpDefinitions ?? [], key: { $0.artifactID },
                 combine: { ancestor, mine, theirs in
                     pick(ancestor: ancestor, mine: mine, theirs: theirs) {
-                        conflict(.artifactField, $0.artifactID, nil,
-                                 "Both Macs changed this connection's shared definition.")
+                        conflict(
+                            .artifactField, $0.artifactID, nil,
+                            "Both Macs changed this connection's shared definition.")
                     }
-                }).filter { liveArtifacts.contains($0.artifactID) }
+                }
+            ).filter { liveArtifacts.contains($0.artifactID) }
             : nil
 
         var document = PortableWorkspaceDocument(
@@ -223,9 +229,10 @@ enum WorkspaceMergeEngine {
             minimumWriterVersion: schemaVersion,
             workspaceID: local.workspaceID,
             // One shared parent when both sides are the same revision.
-            revision: .init(parentIDs: Array(Set([local.revision.id, remote.revision.id]))
-                                .sorted { $0.rawValue.uuidString < $1.rawValue.uuidString },
-                            writerID: writerID),
+            revision: .init(
+                parentIDs: Array(Set([local.revision.id, remote.revision.id]))
+                    .sorted { $0.rawValue.uuidString < $1.rawValue.uuidString },
+                writerID: writerID),
             artifacts: artifacts,
             sources: sources,
             subscriptions: liveSubscriptions,
@@ -247,8 +254,7 @@ enum WorkspaceMergeEngine {
                 : nil
         )
         document = document.canonicalized()
-        do { try document.validateStructure() }
-        catch {
+        do { try document.validateStructure() } catch {
             conflict(.invalidResult, nil, nil, "The combined workspace does not satisfy the workspace contract.")
             return .init(document: nil, conflicts: sorted(conflicts))
         }
@@ -276,19 +282,25 @@ extension WorkspaceMergeEngine {
         var merged = mine
         let id = mine.identity.id
 
-        merged.identity.displayName = resolve(ancestor?.identity.displayName,
-            mine.identity.displayName, theirs.identity.displayName) {
+        merged.identity.displayName = resolve(
+            ancestor?.identity.displayName,
+            mine.identity.displayName, theirs.identity.displayName
+        ) {
             report(.artifactField, id, nil, "Both Macs renamed this item differently.")
         }
-        merged.identity.derivedFrom = resolve(ancestor?.identity.derivedFrom,
-            mine.identity.derivedFrom, theirs.identity.derivedFrom) {
+        merged.identity.derivedFrom = resolve(
+            ancestor?.identity.derivedFrom,
+            mine.identity.derivedFrom, theirs.identity.derivedFrom
+        ) {
             report(.artifactField, id, nil, "Both Macs recorded a different original for this item.")
         }
         merged.declaredName = resolve(ancestor?.declaredName, mine.declaredName, theirs.declaredName) {
             report(.artifactField, id, nil, "Both Macs changed this item's declared name differently.")
         }
-        merged.packageRelativePath = resolve(ancestor?.packageRelativePath,
-            mine.packageRelativePath, theirs.packageRelativePath) {
+        merged.packageRelativePath = resolve(
+            ancestor?.packageRelativePath,
+            mine.packageRelativePath, theirs.packageRelativePath
+        ) {
             report(.artifactField, id, nil, "Both Macs moved this item inside its package differently.")
         }
         merged.authority = resolve(ancestor?.authority, mine.authority, theirs.authority) {
@@ -298,7 +310,8 @@ extension WorkspaceMergeEngine {
             report(.artifactContent, id, nil, "Both Macs changed this item's contents.")
         }
         // Aliases and routes are membership records, not one value each.
-        merged.identity.aliases = mergeSet(ancestor?.identity.aliases,
+        merged.identity.aliases = mergeSet(
+            ancestor?.identity.aliases,
             mine.identity.aliases, theirs.identity.aliases)
         merged.nativeRoutes = mergeSet(ancestor?.nativeRoutes, mine.nativeRoutes, theirs.nativeRoutes)
         if mine.identity.kind != theirs.identity.kind {
@@ -329,7 +342,8 @@ extension WorkspaceMergeEngine {
         merged.role = resolve(ancestor?.role, mine.role, theirs.role) {
             report(.sourcePolicy, nil, mine.id, "Both Macs changed what this source is used for.")
         }
-        merged.packageRelativePaths = mergeSet(ancestor?.packageRelativePaths,
+        merged.packageRelativePaths = mergeSet(
+            ancestor?.packageRelativePaths,
             mine.packageRelativePaths, theirs.packageRelativePaths)
         return merged
     }
@@ -348,8 +362,9 @@ extension WorkspaceMergeEngine {
             report(.sourcePolicy, mine.artifactID, mine.id, "Both Macs attached this item to a different source.")
         }
         merged.lock = resolve(ancestor?.lock, mine.lock, theirs.lock) {
-            report(.subscriptionLock, mine.artifactID, mine.id,
-                   "Both Macs approved a different upstream version for this item.")
+            report(
+                .subscriptionLock, mine.artifactID, mine.id,
+                "Both Macs approved a different upstream version for this item.")
         }
         return merged
     }
@@ -410,9 +425,12 @@ extension WorkspaceMergeEngine {
         guard let theirs else { return mine }
         if mine == theirs { return mine }
         var merged = mine
-        merged.name = mine.name == theirs.name ? mine.name
+        merged.name =
+            mine.name == theirs.name
+            ? mine.name
             : (ancestor?.name == mine.name ? theirs.name : mine.name)
-        merged.memberArtifactIDs = mergeSet(ancestor?.memberArtifactIDs,
+        merged.memberArtifactIDs = mergeSet(
+            ancestor?.memberArtifactIDs,
             mine.memberArtifactIDs, theirs.memberArtifactIDs)
         merged.revision = max(mine.revision, theirs.revision)
         return merged
@@ -431,18 +449,24 @@ extension WorkspaceMergeEngine {
         // nil, true and false are three distinct requests; a nil enablement is
         // never treated as agreement with an explicit choice.
         merged.desiredEnabled = resolve(ancestor?.desiredEnabled, mine.desiredEnabled, theirs.desiredEnabled) {
-            report(.assignmentEnablement, mine.artifactID, mine.id,
-                   "Both Macs asked for a different on or off state here.")
+            report(
+                .assignmentEnablement, mine.artifactID, mine.id,
+                "Both Macs asked for a different on or off state here.")
         }
         merged.desiredPresence = resolve(ancestor?.desiredPresence, mine.desiredPresence, theirs.desiredPresence) {
-            report(.assignmentEnablement, mine.artifactID, mine.id,
-                   "One Mac asked for this item here while the other asked to remove it.")
+            report(
+                .assignmentEnablement, mine.artifactID, mine.id,
+                "One Mac asked for this item here while the other asked to remove it.")
         }
         // Which Macs a shared destination leaves out combines as a set; the
         // rest of the destination (app, scope, project, explicit list) is one
         // choice that resolves like any other field.
-        var mineBare = mine.destination, theirsBare = theirs.destination, ancestorBare = ancestor?.destination
-        mineBare.excludedDeviceIDs = nil; theirsBare.excludedDeviceIDs = nil; ancestorBare?.excludedDeviceIDs = nil
+        var mineBare = mine.destination
+        var theirsBare = theirs.destination
+        var ancestorBare = ancestor?.destination
+        mineBare.excludedDeviceIDs = nil
+        theirsBare.excludedDeviceIDs = nil
+        ancestorBare?.excludedDeviceIDs = nil
         merged.destination = resolve(ancestorBare, mineBare, theirsBare) {
             report(.assignmentField, mine.artifactID, mine.id, "Both Macs changed where this item should go.")
         }
@@ -468,25 +492,35 @@ extension WorkspaceMergeEngine {
         assignments: [AssignmentContribution],
         report: Report
     ) {
-        let names = Dictionary(uniqueKeysWithValues: artifacts.map {
-            ($0.identity.id, ($0.declaredName ?? $0.identity.displayName)
-                .precomposedStringWithCanonicalMapping.lowercased())
-        })
+        let names = Dictionary(
+            uniqueKeysWithValues: artifacts.map {
+                (
+                    $0.identity.id,
+                    ($0.declaredName ?? $0.identity.displayName)
+                        .precomposedStringWithCanonicalMapping.lowercased()
+                )
+            })
         var seen: [String: ArtifactID] = [:]
         var reported = Set<String>()
         for assignment in assignments.sorted(by: { $0.id.rawValue.uuidString < $1.id.rawValue.uuidString }) {
             guard let name = names[assignment.artifactID], !name.isEmpty else { continue }
             let key = destinationKey(assignment.destination) + "\u{0}" + name
-            guard let existing = seen[key] else { seen[key] = assignment.artifactID; continue }
+            guard let existing = seen[key] else {
+                seen[key] = assignment.artifactID
+                continue
+            }
             guard existing != assignment.artifactID, reported.insert(key).inserted else { continue }
-            report(.destinationCollision, assignment.artifactID, assignment.id,
-                   "Two items would be installed under the same name at one destination.")
+            report(
+                .destinationCollision, assignment.artifactID, assignment.id,
+                "Two items would be installed under the same name at one destination.")
         }
     }
 
     static func destinationKey(_ destination: PortableDestination) -> String {
-        [destination.surface.rawValue, destination.scope.rawValue,
-         destination.logicalProjectID?.rawValue.uuidString.lowercased() ?? "-"].joined(separator: "|")
+        [
+            destination.surface.rawValue, destination.scope.rawValue,
+            destination.logicalProjectID?.rawValue.uuidString.lowercased() ?? "-",
+        ].joined(separator: "|")
     }
 
     static func mergedTombstones(
@@ -550,7 +584,10 @@ extension WorkspaceMergeEngine {
         _ ancestor: Value?, _ mine: Value, _ theirs: Value, onConflict: () -> Void
     ) -> Value {
         if mine == theirs { return mine }
-        guard let ancestor else { onConflict(); return mine }
+        guard let ancestor else {
+            onConflict()
+            return mine
+        }
         if mine == ancestor { return theirs }
         if theirs == ancestor { return mine }
         onConflict()
@@ -563,7 +600,10 @@ extension WorkspaceMergeEngine {
         guard let mine else { return theirs }
         guard let theirs else { return mine }
         if mine == theirs { return mine }
-        guard let ancestor else { onConflict(mine); return mine }
+        guard let ancestor else {
+            onConflict(mine)
+            return mine
+        }
         if mine == ancestor { return theirs }
         if theirs == ancestor { return mine }
         onConflict(mine)

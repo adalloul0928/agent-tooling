@@ -323,7 +323,7 @@ enum LocalTargetScan {
             let name = surface.client.map(ClientExecutableLocator.executableName(for:)) ?? executable
             notes.append(
                 "The \(name) CLI is present but did not answer --version (exit \(status)), "
-                + "so its version is unknown and Agent Tooling cannot confirm what it accepts.")
+                    + "so its version is unknown and Agent Tooling cannot confirm what it accepts.")
         }
         notes.append(contentsOf: native.notes)
         if surface.isCloud { notes.append("Cloud state is not inferred from local configuration.") }

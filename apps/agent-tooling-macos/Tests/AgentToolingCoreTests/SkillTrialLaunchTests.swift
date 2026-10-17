@@ -41,12 +41,16 @@ struct SkillTrialLaunchTests {
         }
         // A flag where the invocation goes, a second word, the wrong sigil for
         // the client, a path: each is one token off and each is refused.
-        #expect(throws: OperationEngineError.self) { try policy.validate(executable: "claude", arguments: ["--dangerously-skip-permissions"]) }
+        #expect(throws: OperationEngineError.self) {
+            try policy.validate(executable: "claude", arguments: ["--dangerously-skip-permissions"])
+        }
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "claude", arguments: ["/release-review", "extra"]) }
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "claude", arguments: ["$release-review"]) }
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "codex", arguments: ["/release-review"]) }
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "kiro-cli", arguments: ["/release-review"]) }
-        #expect(throws: OperationEngineError.self) { try policy.validate(executable: "kiro-cli", arguments: ["chat", "-a", "/release-review"]) }
+        #expect(throws: OperationEngineError.self) {
+            try policy.validate(executable: "kiro-cli", arguments: ["chat", "-a", "/release-review"])
+        }
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "claude", arguments: ["/../etc/passwd"]) }
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "gemini", arguments: ["/release-review"]) }
     }
@@ -108,7 +112,8 @@ struct SkillTrialLaunchTests {
         #expect(launch.arguments == ["$release-review"])
         #expect(launch.commandLine == "codex $release-review")
         #expect(launch.scriptURL.lastPathComponent == "try-codex-release-review.command")
-        let permissions = try FileManager.default.attributesOfItem(atPath: launch.scriptURL.path(percentEncoded: false))[.posixPermissions] as? Int
+        let permissions =
+            try FileManager.default.attributesOfItem(atPath: launch.scriptURL.path(percentEncoded: false))[.posixPermissions] as? Int
         #expect(permissions == 0o700)
         let body = try String(contentsOf: launch.scriptURL, encoding: .utf8)
         #expect(body.contains("'\\''\(tool.path(percentEncoded: false))'\\''"))

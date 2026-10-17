@@ -66,8 +66,9 @@ struct AssignmentDeviceScopeMenu: View {
         errorMessage = nil
         do {
             guard let head = try await workspace.service.snapshot()?.document.revision.id else { return }
-            _ = try await workspace.service.setAssignmentExclusions(.init(
-                expectedRevisionID: head, contributionID: assignment.id, excludedDeviceIDs: set.sorted()))
+            _ = try await workspace.service.setAssignmentExclusions(
+                .init(
+                    expectedRevisionID: head, contributionID: assignment.id, excludedDeviceIDs: set.sorted()))
         } catch {
             // Most often the library moved under us; the menu shows the saved
             // scope again once the refresh lands, and the person can retry.
@@ -85,8 +86,10 @@ private struct ExceptToggle: View {
     let set: @MainActor @Sendable (Bool) async -> Void
 
     var body: some View {
-        Toggle(title, isOn: Binding(
-            get: { isExcluded },
-            set: { excluded in Task { await set(excluded) } }))
+        Toggle(
+            title,
+            isOn: Binding(
+                get: { isExcluded },
+                set: { excluded in Task { await set(excluded) } }))
     }
 }

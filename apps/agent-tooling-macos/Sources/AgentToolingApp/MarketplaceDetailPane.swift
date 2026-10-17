@@ -257,10 +257,12 @@ extension MarketplaceView {
         VStack(alignment: .leading, spacing: Space.md) {
             Text("Install route")
                 .font(AgentFont.captionSemibold).foregroundStyle(.secondary)
-            Text("Fetched from github.com/\(listing.repository) at its default branch and kept in your library as a skill that follows that repository, so Updates can check it. Then you choose the apps.")
-                .font(AgentFont.caption)
-                .foregroundStyle(.secondary)
-                .wrapsLines()
+            Text(
+                "Fetched from github.com/\(listing.repository) at its default branch and kept in your library as a skill that follows that repository, so Updates can check it. Then you choose the apps."
+            )
+            .font(AgentFont.caption)
+            .foregroundStyle(.secondary)
+            .wrapsLines()
             installButton(for: package, client: nil)
             adoptionMessage(for: package)
         }
@@ -312,9 +314,9 @@ extension MarketplaceView {
                         + (skillsShInstallCommand(for: package) != nil
                             ? WorkspaceMarketplaceSession.mcpManualSetupCommandClause : "")
                 )
-                    .font(AgentFont.caption)
-                    .foregroundStyle(.secondary)
-                    .wrapsLines()
+                .font(AgentFont.caption)
+                .foregroundStyle(.secondary)
+                .wrapsLines()
             }
             adoptionMessage(for: package)
         }
@@ -345,8 +347,9 @@ extension MarketplaceView {
             }
             FlowLayout(spacing: Space.md) {
                 ForEach(routes) { route in
-                    installButton(for: package, client: route.client,
-                                  refusal: session.adoptionRefusal(for: package, client: route.client))
+                    installButton(
+                        for: package, client: route.client,
+                        refusal: session.adoptionRefusal(for: package, client: route.client))
                 }
             }
             // A client that refused says so in a readable line, so a disabled

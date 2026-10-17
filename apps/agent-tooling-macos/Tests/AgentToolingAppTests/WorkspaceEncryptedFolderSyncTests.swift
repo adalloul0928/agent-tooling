@@ -1,9 +1,10 @@
+import AgentToolingTestSupport
 import CryptoKit
 import Foundation
 import Testing
 
-@testable import AgentToolingCore
 @testable import AgentToolingApp
+@testable import AgentToolingCore
 
 /// Connecting a folder a file-sync service keeps in step. The first Mac makes a
 /// key and shows it once; a second Mac opens the same folder with that phrase,
@@ -13,7 +14,7 @@ struct WorkspaceEncryptedFolderSyncTests {
     @Test func theFirstMacMakesAKeyAndShowsThePhraseOnce() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let session = fixture.session(fixture.macA)
+        let session = try fixture.session(fixture.macA)
 
         await session.connectFolder(fixture.shared, phrase: "")
 
@@ -25,7 +26,7 @@ struct WorkspaceEncryptedFolderSyncTests {
         // Shown once, and this app has no way to show it again.
         session.dismissRecoveryPhrase()
         #expect(session.recoveryPhrase == nil)
-        let reopened = fixture.session(fixture.macA)
+        let reopened = try fixture.session(fixture.macA)
         reopened.load()
         #expect(reopened.recoveryPhrase == nil)
         #expect(reopened.isConnected, "\(reopened.errorMessage ?? "")")
@@ -34,13 +35,13 @@ struct WorkspaceEncryptedFolderSyncTests {
     @Test func aSecondMacOpensTheSameFolderWithThatPhrase() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let a = fixture.session(fixture.macA)
+        let a = try fixture.session(fixture.macA)
         await a.connectFolder(fixture.shared, phrase: "")
         let phrase = try #require(a.recoveryPhrase)
         await a.sync()
         #expect(a.errorMessage == nil, "\(a.errorMessage ?? "")")
 
-        let b = fixture.session(fixture.macB)
+        let b = try fixture.session(fixture.macB)
         await b.connectFolder(fixture.shared, phrase: phrase)
         await b.sync()
 
@@ -53,39 +54,43 @@ struct WorkspaceEncryptedFolderSyncTests {
     @Test func aWrongPhraseIsRefusedRatherThanSealingTheFolderAgainstItself() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let a = fixture.session(fixture.macA)
+        let a = try fixture.session(fixture.macA)
         await a.connectFolder(fixture.shared, phrase: "")
         await a.sync()
-        let sealed = try Data(contentsOf: fixture.shared
-            .appending(path: EncryptedFolderWorkspaceTransport.documentFileName))
+        let sealed = try Data(
+            contentsOf: fixture.shared
+                .appending(path: EncryptedFolderWorkspaceTransport.documentFileName))
 
-        let b = fixture.session(fixture.macB)
+        let b = try fixture.session(fixture.macB)
         let stranger = WorkspaceFolderKeyStore.recoveryPhrase(for: WorkspaceFolderKeyStore.generate())
         await b.connectFolder(fixture.shared, phrase: stranger)
 
         #expect(!b.isConnected)
         #expect(b.errorMessage?.contains("does not open") == true, "\(b.errorMessage ?? "")")
         // What the first Mac published is exactly as it was.
-        #expect(try Data(contentsOf: fixture.shared
-            .appending(path: EncryptedFolderWorkspaceTransport.documentFileName)) == sealed)
+        #expect(
+            try Data(
+                contentsOf: fixture.shared
+                    .appending(path: EncryptedFolderWorkspaceTransport.documentFileName)) == sealed)
     }
 
     @Test func somethingThatIsNotAPhraseIsSaidToNotBeOne() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let session = fixture.session(fixture.macA)
+        let session = try fixture.session(fixture.macA)
 
         await session.connectFolder(fixture.shared, phrase: "not a phrase")
 
         #expect(!session.isConnected)
-        #expect(session.errorMessage?.contains("not a phrase from another Mac") == true,
-                "\(session.errorMessage ?? "")")
+        #expect(
+            session.errorMessage?.contains("not a phrase from another Mac") == true,
+            "\(session.errorMessage ?? "")")
     }
 
     @Test func disconnectingForgetsTheKeyAndLeavesTheFolderSealed() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let a = fixture.session(fixture.macA)
+        let a = try fixture.session(fixture.macA)
         await a.connectFolder(fixture.shared, phrase: "")
         let phrase = try #require(a.recoveryPhrase)
         await a.sync()
@@ -103,21 +108,22 @@ struct WorkspaceEncryptedFolderSyncTests {
     @Test func nothingInThatFolderNamesAnythingInTheLibrary() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let session = fixture.session(fixture.macA)
+        let session = try fixture.session(fixture.macA)
         await session.connectFolder(fixture.shared, phrase: "")
 
         await session.sync()
 
         #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
         for name in try FileManager.default.contentsOfDirectory(atPath: fixture.shared.path) {
-            let text = String(decoding: try Data(contentsOf: fixture.shared.appending(path: name)),
-                              as: UTF8.self)
+            let text = String(
+                decoding: try Data(contentsOf: fixture.shared.appending(path: name)),
+                as: UTF8.self)
             #expect(!text.contains("Alpha"), "\(name) leaks a name from the library")
         }
     }
 
     @MainActor private struct Fixture {
-        static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
+        static let alpha = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
         let root: URL
         let shared: URL
         let macA: URL
@@ -133,34 +139,44 @@ struct WorkspaceEncryptedFolderSyncTests {
             macA = root.appending(path: "mac-a")
             macB = root.appending(path: "mac-b")
             for url in [shared, macA, macB] {
-                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true,
+                try FileManager.default.createDirectory(
+                    at: url, withIntermediateDirectories: true,
                     attributes: [.posixPermissions: 0o700])
             }
-            workspaceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e5")!)
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: workspaceID,
-                revision: .init(id: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f6")!),
-                                writerID: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f7")!),
-                                createdAt: Date(timeIntervalSince1970: 1_700_000_000)),
-                artifacts: [.init(identity: .init(id: Self.alpha, kind: .skill, displayName: "Alpha"),
-                                  authority: .trackedOnly)]))
-            storeA = try WorkspaceRevisionStore(containerRoot: macA.appending(path: "store"),
+            workspaceID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000e5"))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: workspaceID,
+                    revision: .init(
+                        id: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000f6")),
+                        writerID: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000f7")),
+                        createdAt: Date(timeIntervalSince1970: 1_700_000_000)),
+                    artifacts: [
+                        .init(
+                            identity: .init(id: Self.alpha, kind: .skill, displayName: "Alpha"),
+                            authority: .trackedOnly)
+                    ]))
+            storeA = try WorkspaceRevisionStore(
+                containerRoot: macA.appending(path: "store"),
                 workspaceID: workspaceID, deviceID: WorkspaceObjectID())
-            try storeA.initialize(document: document,
-                                  device: .init(workspaceID: workspaceID, deviceID: storeA.deviceID))
-            storeB = try WorkspaceRevisionStore(containerRoot: macB.appending(path: "store"),
+            try storeA.initialize(
+                document: document,
+                device: .init(workspaceID: workspaceID, deviceID: storeA.deviceID))
+            storeB = try WorkspaceRevisionStore(
+                containerRoot: macB.appending(path: "store"),
                 workspaceID: workspaceID, deviceID: WorkspaceObjectID())
-            try storeB.initialize(document: document,
-                                  device: .init(workspaceID: workspaceID, deviceID: storeB.deviceID))
+            try storeB.initialize(
+                document: document,
+                device: .init(workspaceID: workspaceID, deviceID: storeB.deviceID))
         }
 
-        func session(_ container: URL) -> WorkspaceSyncSession {
+        func session(_ container: URL) throws -> WorkspaceSyncSession {
             let store = container == macA ? storeA : storeB
             return WorkspaceSyncSession(
                 store: store,
-                enrollmentStore: try! WorkspaceSyncEnrollmentStore(containerRoot: container),
+                enrollmentStore: try WorkspaceSyncEnrollmentStore(containerRoot: container),
                 workspaceID: workspaceID, writerID: WorkspaceObjectID(),
-                keyStore: try! WorkspaceFolderKeyStore(containerRoot: container))
+                keyStore: try WorkspaceFolderKeyStore(containerRoot: container))
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }

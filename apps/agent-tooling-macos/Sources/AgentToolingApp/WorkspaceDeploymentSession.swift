@@ -80,10 +80,13 @@ final class WorkspaceDeploymentSession {
     /// Nothing moves: this records where a later install would write. What is
     /// already in that folder stays exactly as it is, and an install refuses
     /// rather than replacing it.
-    func linkDestination(surface: TargetSurface, scope: ToolingScope,
-                         projectID: ArtifactID?, to folder: URL) async {
+    func linkDestination(
+        surface: TargetSurface, scope: ToolingScope,
+        projectID: ArtifactID?, to folder: URL
+    ) async {
         guard !isBusy, library.access == .writable,
-              let head = library.state?.snapshot.document.revision.id else { return }
+            let head = library.state?.snapshot.document.revision.id
+        else { return }
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
@@ -113,7 +116,8 @@ final class WorkspaceDeploymentSession {
     /// Goes back to the app's own folder. Nothing at the old path is touched.
     func unlinkDestination(_ id: WorkspaceObjectID) async {
         guard !isBusy, library.access == .writable,
-              let head = library.state?.snapshot.document.revision.id else { return }
+            let head = library.state?.snapshot.document.revision.id
+        else { return }
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
@@ -199,18 +203,22 @@ final class WorkspaceDeploymentSession {
     private func captureTargets(
         snapshot: WorkspaceApplicationSnapshot
     ) async throws -> WorkspaceSkillTargetCaptureResult {
-        var selectors = Set(snapshot.document.assignments.map {
-            ResolvedAssignmentSelector(destination: $0.destination)
-        })
+        var selectors = Set(
+            snapshot.document.assignments.map {
+                ResolvedAssignmentSelector(destination: $0.destination)
+            })
         // Only surfaces the skill capture can actually place into are worth a
         // removal selector; an unsupported surface would only ever be skipped.
         for observation in snapshot.device.observations
         where observation.installed
-            && TargetSurfaceCapability.skillClient(for: observation.surface) != nil {
+            && TargetSurfaceCapability.skillClient(for: observation.surface) != nil
+        {
             selectors.insert(.init(surface: observation.surface, scope: .user, logicalProjectID: nil))
             for root in snapshot.device.projectRoots ?? [] {
-                selectors.insert(.init(surface: observation.surface, scope: .project,
-                                       logicalProjectID: root.projectID))
+                selectors.insert(
+                    .init(
+                        surface: observation.surface, scope: .project,
+                        logicalProjectID: root.projectID))
             }
         }
         let ordered = selectors.sorted {
@@ -263,7 +271,6 @@ final class WorkspaceDeploymentSession {
         }
     }
 
-
     /// Turns each skipped selector into a reason in a person's words, naming
     /// the project or the app so the plan says what to do rather than showing a
     /// code word. A project's name comes from the document's own logical
@@ -287,8 +294,8 @@ final class WorkspaceDeploymentSession {
             case .unsupportedSurface(let surface):
                 detail = "Agent Tooling cannot install into \(surface.displayName) yet."
             case .invalidSelectors, .invalidProjectBindings, .missingObservation,
-                 .ambiguousObservation, .invalidRoot, .unreadableDirectory,
-                 .changedDuringCapture:
+                .ambiguousObservation, .invalidRoot, .unreadableDirectory,
+                .changedDuringCapture:
                 // These are structural and are thrown, not skipped; if one ever
                 // arrives here, a neutral sentence is safer than a code word.
                 detail = "This destination could not be checked on this Mac."
@@ -302,12 +309,14 @@ final class WorkspaceDeploymentSession {
     private nonisolated static func linkedDestinations(
         snapshot: WorkspaceApplicationSnapshot
     ) -> [LinkedDestination] {
-        let projects = Dictionary(snapshot.document.logicalProjects.map { ($0.id, $0.name) },
-                                  uniquingKeysWith: { first, _ in first })
+        let projects = Dictionary(
+            snapshot.document.logicalProjects.map { ($0.id, $0.name) },
+            uniquingKeysWith: { first, _ in first })
         return snapshot.device.destinations.map {
-            .init(id: $0.id, surface: $0.selector.surface, scope: $0.selector.scope,
-                  projectName: $0.selector.logicalProjectID.flatMap { projects[$0] },
-                  path: $0.resolvedPath)
+            .init(
+                id: $0.id, surface: $0.selector.surface, scope: $0.selector.scope,
+                projectName: $0.selector.logicalProjectID.flatMap { projects[$0] },
+                path: $0.resolvedPath)
         }.sorted { $0.path < $1.path }
     }
 
@@ -352,18 +361,22 @@ final class WorkspaceDeploymentSession {
         targets: [CapturedSkillAssignmentTarget],
         alsoMeasuring proven: Set<WorkspaceDeploymentInstallKey>
     ) async -> [WorkspaceDeploymentObservation] {
-        let artifacts = Dictionary(snapshot.document.artifacts.map { ($0.identity.id, $0) },
-                                   uniquingKeysWith: { first, _ in first })
-        let byDestination = Dictionary(targets.map { ($0.target.physicalDestinationID, $0) },
-                                       uniquingKeysWith: { first, _ in first })
+        let artifacts = Dictionary(
+            snapshot.document.artifacts.map { ($0.identity.id, $0) },
+            uniquingKeysWith: { first, _ in first })
+        let byDestination = Dictionary(
+            targets.map { ($0.target.physicalDestinationID, $0) },
+            uniquingKeysWith: { first, _ in first })
         // Where things are asked for, plus where this app already put them, so
         // a withdrawn item is still measured and can be offered for removal.
-        var pairs = Set(snapshot.document.assignments.compactMap { assignment -> WorkspaceDeploymentInstallKey? in
-            let selector = ResolvedAssignmentSelector(destination: assignment.destination)
-            guard let captured = targets.first(where: { $0.target.selector == selector }) else { return nil }
-            return .init(artifactID: assignment.artifactID,
-                         physicalDestinationID: captured.target.physicalDestinationID)
-        })
+        var pairs = Set(
+            snapshot.document.assignments.compactMap { assignment -> WorkspaceDeploymentInstallKey? in
+                let selector = ResolvedAssignmentSelector(destination: assignment.destination)
+                guard let captured = targets.first(where: { $0.target.selector == selector }) else { return nil }
+                return .init(
+                    artifactID: assignment.artifactID,
+                    physicalDestinationID: captured.target.physicalDestinationID)
+            })
         pairs.formUnion(proven)
         var results: [WorkspaceDeploymentObservation] = []
         for pair in pairs.sorted(by: { $0.artifactID.rawValue.uuidString < $1.artifactID.rawValue.uuidString }) {
@@ -377,16 +390,21 @@ final class WorkspaceDeploymentSession {
             let folder = captured.plannedDirectory.appending(path: name, directoryHint: .isDirectory)
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory),
-                  isDirectory.boolValue else {
-                results.append(.init(artifactID: pair.artifactID,
-                                     physicalDestinationID: pair.physicalDestinationID,
-                                     isPresent: false))
+                isDirectory.boolValue
+            else {
+                results.append(
+                    .init(
+                        artifactID: pair.artifactID,
+                        physicalDestinationID: pair.physicalDestinationID,
+                        isPresent: false))
                 continue
             }
             let digest = try? await PackageTreeCapture().capture(directory: folder).digest
-            results.append(.init(artifactID: pair.artifactID,
-                                 physicalDestinationID: pair.physicalDestinationID,
-                                 isPresent: true, contentDigest: digest))
+            results.append(
+                .init(
+                    artifactID: pair.artifactID,
+                    physicalDestinationID: pair.physicalDestinationID,
+                    isPresent: true, contentDigest: digest))
         }
         return results
     }
@@ -461,7 +479,8 @@ final class WorkspaceDeploymentSession {
         var edited = Set<WorkspaceDeploymentInstallKey>()
         for artifact in snapshot.document.artifacts {
             guard artifact.identity.parentPackageID == nil,
-                  let name = artifact.declaredName, !name.isEmpty else { continue }
+                let name = artifact.declaredName, !name.isEmpty
+            else { continue }
             for captured in targets {
                 let folder = captured.plannedDirectory.appending(path: name, directoryHint: .isDirectory)
                 guard let proof = authority.proof(forDestination: folder.path) else { continue }
@@ -490,10 +509,11 @@ final class WorkspaceDeploymentSession {
         let routes = snapshot.document.artifacts
             .filter { $0.identity.parentPackageID == nil }
             .flatMap(\.nativeRoutes)
-        return Set(routes.filter {
-            NativePluginInstallRegister.command(
-                for: $0.client, externalPluginID: $0.externalPluginID) != nil
-        })
+        return Set(
+            routes.filter {
+                NativePluginInstallRegister.command(
+                    for: $0.client, externalPluginID: $0.externalPluginID) != nil
+            })
     }
 
     /// What `commandPlans` found: the commands it could build, and the steps
@@ -667,10 +687,12 @@ final class WorkspaceDeploymentSession {
         var paths = Set<String>()
         for item in plan.items {
             guard let name = names[item.artifactID],
-                  let binding = WorkspaceLinkedDestinations.binding(
-                      for: .init(surface: item.surface, scope: item.scope,
-                                 logicalProjectID: item.logicalProjectID),
-                      in: snapshot.device) else { continue }
+                let binding = WorkspaceLinkedDestinations.binding(
+                    for: .init(
+                        surface: item.surface, scope: item.scope,
+                        logicalProjectID: item.logicalProjectID),
+                    in: snapshot.device)
+            else { continue }
             let folder = URL(fileURLWithPath: binding.resolvedPath)
                 .appending(path: name, directoryHint: .isDirectory).standardizedFileURL
             guard authority.proof(forDestination: folder.path) != nil else { continue }
@@ -725,9 +747,12 @@ final class WorkspaceDeploymentSession {
         excluding heldBack: Set<WorkspaceDeploymentInstallKey> = [],
         onlyRemovalKeys: Set<WorkspaceDeploymentInstallKey>? = nil
     ) async {
-        guard let scoped = plan(for: artifactIDs, includingRemovals: includingRemovals,
-                                excluding: heldBack, onlyRemovalKeys: onlyRemovalKeys),
-              !scoped.items.isEmpty else { return }
+        guard
+            let scoped = plan(
+                for: artifactIDs, includingRemovals: includingRemovals,
+                excluding: heldBack, onlyRemovalKeys: onlyRemovalKeys),
+            !scoped.items.isEmpty
+        else { return }
         await apply(plan: scoped)
     }
 
@@ -796,18 +821,20 @@ final class WorkspaceDeploymentSession {
             var content: [ContentDigest: CapturedPackageTree] = [:]
             for artifact in snapshot.document.artifacts {
                 guard let digest = artifact.contentDigest, content[digest] == nil,
-                      plan.items.contains(where: {
-                          if case .removeContent = $0.action { return false }
-                          return $0.artifactID == artifact.identity.id
-                      }) else { continue }
+                    plan.items.contains(where: {
+                        if case .removeContent = $0.action { return false }
+                        return $0.artifactID == artifact.identity.id
+                    })
+                else { continue }
                 content[digest] = try await contentStore.read(digest)
             }
             // Staging lives inside the app's managed library; the executor
             // refuses to copy from anywhere else.
             try store.prepareManagedDirectories()
             let staging = store.libraryURL.appending(path: "staged-deployments")
-            try? FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true,
-                                                     attributes: [.posixPermissions: 0o700])
+            try? FileManager.default.createDirectory(
+                at: staging, withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
             let projectRoots = Dictionary(
                 (snapshot.device.projectRoots ?? []).map { ($0.projectID, URL(fileURLWithPath: $0.rootPath)) },
                 uniquingKeysWith: { first, _ in first })
@@ -816,8 +843,9 @@ final class WorkspaceDeploymentSession {
                 plan, artifacts: snapshot.document.artifacts, content: content,
                 stagingRoot: staging, homeURL: homeRoot, projectRoots: projectRoots,
                 device: snapshot.device,
-                provenInstalls: Self.provenLinkedPaths(plan: plan, snapshot: snapshot,
-                                                       store: store))
+                provenInstalls: Self.provenLinkedPaths(
+                    plan: plan, snapshot: snapshot,
+                    store: store))
             // Only the folders this device registered, and only those. The
             // executor still applies every other rule inside them.
             let executor = OperationExecutor(
@@ -826,17 +854,19 @@ final class WorkspaceDeploymentSession {
                     URL(fileURLWithPath: $0.resolvedPath)
                 })
             var collected: [Result] = []
-            let operations = WorkspaceDeploymentOperations.operations(for: staged)
+            let operations =
+                WorkspaceDeploymentOperations.operations(for: staged)
                 + WorkspaceDeploymentOperations.operations(
                     nativePlugins: commandPlans.plugins, managedConnections: commandPlans.connections)
             for operation in operations {
                 let receipt = await executor.execute(operation)
-                collected.append(.init(
-                    title: operation.title,
-                    surfaces: operation.targetSurfaces,
-                    succeeded: receipt.results.filter { $0.status == .succeeded }.count,
-                    failed: receipt.results.filter { $0.status == .failed }.count,
-                    outputs: receipt.results.filter { $0.status == .failed }.map(\.output)))
+                collected.append(
+                    .init(
+                        title: operation.title,
+                        surfaces: operation.targetSurfaces,
+                        succeeded: receipt.results.filter { $0.status == .succeeded }.count,
+                        failed: receipt.results.filter { $0.status == .failed }.count,
+                        outputs: receipt.results.filter { $0.status == .failed }.map(\.output)))
             }
             results = collected
             // Re-read, so what is shown next reflects what actually happened.
@@ -844,7 +874,8 @@ final class WorkspaceDeploymentSession {
         } catch WorkspaceDeploymentOperationError.missingProjectRoot {
             errorMessage = "One of these needs its project folder on this Mac. Nothing was changed."
         } catch WorkspaceDeploymentOperationError.destinationOccupied {
-            errorMessage = "A folder you pointed a destination at already holds something Agent Tooling did not put there. It was left exactly as it is, and nothing was changed."
+            errorMessage =
+                "A folder you pointed a destination at already holds something Agent Tooling did not put there. It was left exactly as it is, and nothing was changed."
         } catch WorkspaceDeploymentOperationError.missingContent {
             errorMessage = "The library has no verified copy of one of these tools, so nothing was changed."
         } catch WorkspaceDeploymentOperationError.stagingFailed, WorkspaceDeploymentOperationError.invalidStagingRoot {

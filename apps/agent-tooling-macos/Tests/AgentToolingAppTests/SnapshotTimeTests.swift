@@ -23,18 +23,18 @@ struct SnapshotTimeTests {
         #expect(SnapshotTime.compact(noon.addingTimeInterval(-23 * 3_600), now: noon, calendar: calendar) == "23h ago")
     }
 
-    @Test func olderMomentsAreNamedNotCounted() {
-        let yesterday = calendar.date(byAdding: .day, value: -1, to: noon)!
+    @Test func olderMomentsAreNamedNotCounted() throws {
+        let yesterday = try #require(calendar.date(byAdding: .day, value: -1, to: noon))
         #expect(SnapshotTime.compact(yesterday.addingTimeInterval(-3_600), now: noon, calendar: calendar) == "yesterday")
-        let lastWeek = calendar.date(byAdding: .day, value: -4, to: noon)!
+        let lastWeek = try #require(calendar.date(byAdding: .day, value: -4, to: noon))
         #expect(
             SnapshotTime.compact(lastWeek, now: noon, calendar: calendar)
                 == lastWeek.formatted(.dateTime.weekday(.abbreviated)))
-        let lastMonth = calendar.date(byAdding: .month, value: -1, to: noon)!
+        let lastMonth = try #require(calendar.date(byAdding: .month, value: -1, to: noon))
         #expect(
             SnapshotTime.compact(lastMonth, now: noon, calendar: calendar)
                 == lastMonth.formatted(.dateTime.month(.abbreviated).day()))
-        let lastYear = calendar.date(byAdding: .year, value: -1, to: noon)!
+        let lastYear = try #require(calendar.date(byAdding: .year, value: -1, to: noon))
         #expect(
             SnapshotTime.compact(lastYear, now: noon, calendar: calendar)
                 == lastYear.formatted(.dateTime.month(.abbreviated).day().year()))
@@ -44,8 +44,8 @@ struct SnapshotTimeTests {
         #expect(SnapshotTime.compact(noon.addingTimeInterval(120), now: noon, calendar: calendar) == "just now")
     }
 
-    @Test func standaloneFormStartsWithACapital() {
-        let yesterday = calendar.date(byAdding: .day, value: -1, to: noon)!
+    @Test func standaloneFormStartsWithACapital() throws {
+        let yesterday = try #require(calendar.date(byAdding: .day, value: -1, to: noon))
         #expect(SnapshotTime.standalone(yesterday, now: noon, calendar: calendar) == "Yesterday")
         #expect(SnapshotTime.standalone(noon.addingTimeInterval(-60 * 7), now: noon, calendar: calendar) == "7m ago")
     }

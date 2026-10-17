@@ -194,7 +194,9 @@ final class StubInsightsServices: InsightsServicing, @unchecked Sendable {
         lock.withLock { deepDives }
     }
 
-    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (report: InsightsReport, digests: [ConversationDigest]) {
+    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (
+        report: InsightsReport, digests: [ConversationDigest]
+    ) {
         (await scan(options: options, skills: skills, homeURL: homeURL), digests)
     }
 

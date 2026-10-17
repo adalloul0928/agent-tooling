@@ -33,10 +33,12 @@ enum SetupWizardStep: Hashable, Identifiable {
         switch self {
         case .apps: "Only what is checked here is looked after. Nothing already installed changes."
         case .audit: "A deterministic look at every app's folders. Every line is a fact with its evidence."
-        case .review: "Your own signed-in assistant reads the audit and the apps' configuration, and proposes what to do. It can read; it cannot change anything."
+        case .review:
+            "Your own signed-in assistant reads the audit and the apps' configuration, and proposes what to do. It can read; it cannot change anything."
         case .category(.cleanup): "Broken links, empty folders, and old plugin versions. Removals go to Agent Tooling's trash first."
         case .category(.duplicates): "Skills one app can reach two ways. Keep one; the other is a copy."
-        case .category(.unmanaged): "Skills found in an app that this library does not hold. Adopting one copies it in as yours; the app's folder is not changed."
+        case .category(.unmanaged):
+            "Skills found in an app that this library does not hold. Adopting one copies it in as yours; the app's folder is not changed."
         case .category(.connections): "MCP servers that cannot start, and connections configured separately in several apps."
         case .category(.settings): "Settings your assistant recommends. These are changed on the Settings tab, where the file is shown."
         case .category(.additions): "Plugins and skills worth adding."
@@ -75,7 +77,7 @@ extension SetupFinding.Kind {
         // How each app signs in to its account, and the switches every Mac
         // shares, are settings of the app rather than tools it holds.
         case .accountSignIn, .accountShellOverride, .accountChoicesNotFollowed, .accountDiffersFromOtherMacs,
-             .accountConnectorNeedsSignIn:
+            .accountConnectorNeedsSignIn:
             .settings
         }
     }
@@ -98,7 +100,10 @@ struct SetupWizardSheet: View {
 
     /// `initialStep` lets a test or a deep link open on one stop; the app
     /// always starts at the apps.
-    init(workspace: WorkspaceLaunch.Workspace, session: WorkspaceSetupSession, onClose: @escaping () -> Void, initialStep: SetupWizardStep = .apps) {
+    init(
+        workspace: WorkspaceLaunch.Workspace, session: WorkspaceSetupSession, onClose: @escaping () -> Void,
+        initialStep: SetupWizardStep = .apps
+    ) {
         self.workspace = workspace
         self._session = Bindable(session)
         self.onClose = onClose
@@ -198,11 +203,17 @@ struct SetupWizardSheet: View {
                 Button("Back") { step = previous }
             }
             if step == .done {
-                Button("Open Checkup") { navigate(.checkup); onClose() }.primaryActionStyle()
+                Button("Open Checkup") {
+                    navigate(.checkup)
+                    onClose()
+                }.primaryActionStyle()
             } else {
                 Button(nextTitle) { if let next = nextStep { step = next } }
                     .primaryActionStyle()
-                    .disabled(nextStep == nil || (step == .audit && session.isAuditing) || (step == .apps && workspace.device.managedClients.isEmpty))
+                    .disabled(
+                        nextStep == nil || (step == .audit && session.isAuditing)
+                            || (step == .apps && workspace.device.managedClients.isEmpty)
+                    )
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -234,7 +245,10 @@ struct SetupWizardSheet: View {
         VStack(spacing: 0) {
             ForEach(Array(workspace.device.availableClients.enumerated()), id: \.element) { index, client in
                 if index > 0 { Hairline(indent: Hairline.afterLeading(Size.tileLarge, gap: Space.xl)) }
-                Toggle(isOn: Binding(get: { workspace.device.isEnabled(client) }, set: { on in Task { await workspace.device.setEnabled(client, on) } })) {
+                Toggle(
+                    isOn: Binding(
+                        get: { workspace.device.isEnabled(client) }, set: { on in Task { await workspace.device.setEnabled(client, on) } })
+                ) {
                     HStack(spacing: Space.xl) {
                         ClientBrandIcon(client: client, size: Size.tile).frame(width: Size.tileLarge, height: Size.tileLarge)
                         VStack(alignment: .leading, spacing: Space.xs) {
@@ -302,13 +316,17 @@ struct SetupWizardSheet: View {
 
     @ViewBuilder private var reviewStep: some View {
         if session.reviewClient == nil {
-            Text("A review needs Claude Code or Codex; this Mac is not managing either. The audit's findings are still walked through on the next steps.")
-                .font(AgentFont.body).foregroundStyle(.secondary)
+            Text(
+                "A review needs Claude Code or Codex; this Mac is not managing either. The audit's findings are still walked through on the next steps."
+            )
+            .font(AgentFont.body).foregroundStyle(.secondary)
         } else if session.isReviewing {
             HStack(spacing: Space.lg) {
                 ProgressView().controlSize(.small)
-                Text("\(session.reviewClient?.rawValue ?? "") is reading the audit and the apps' configuration folders. This takes a few minutes. You can walk through the findings meanwhile; its recommendations join each step when they land.")
-                    .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
+                Text(
+                    "\(session.reviewClient?.rawValue ?? "") is reading the audit and the apps' configuration folders. This takes a few minutes. You can walk through the findings meanwhile; its recommendations join each step when they land."
+                )
+                .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
             }
             .padding(Space.xl)
         } else if let message = session.reviewMessage {
@@ -358,7 +376,9 @@ struct SetupWizardSheet: View {
                             .font(AgentFont.body).foregroundStyle(.secondary)
                         Spacer()
                         Button("Fix all \(fixable.total)") {
-                            Task { await session.applyAll(fixable.actions, settings: fixable.settings.map { ($0.client, $0.key, $0.value) }) }
+                            Task {
+                                await session.applyAll(fixable.actions, settings: fixable.settings.map { ($0.client, $0.key, $0.value) })
+                            }
                         }
                         .primaryActionStyle().disabled(session.isBusy)
                     }
@@ -379,15 +399,32 @@ struct SetupWizardSheet: View {
                                 ForEach(Array(mine.enumerated()), id: \.element.id) { index, item in
                                     CheckupRow(
                                         item: item, isExpanded: expandedRows.contains(item.id), isBusy: session.isApplying,
-                                        onToggle: { if expandedRows.contains(item.id) { expandedRows.remove(item.id) } else { expandedRows.insert(item.id) } },
+                                        onToggle: {
+                                            if expandedRows.contains(item.id) {
+                                                expandedRows.remove(item.id)
+                                            } else {
+                                                expandedRows.insert(item.id)
+                                            }
+                                        },
                                         onRun: {
                                             if item.canRun {
-                                                Task { await session.applyAll(item.actions, settings: item.settings.map { ($0.client, $0.key, $0.value) }) }
-                                            } else if let section = item.opens { navigate(section); onClose() } else { dismiss(item) }
+                                                Task {
+                                                    await session.applyAll(
+                                                        item.actions, settings: item.settings.map { ($0.client, $0.key, $0.value) })
+                                                }
+                                            } else if let section = item.opens {
+                                                navigate(section)
+                                                onClose()
+                                            } else {
+                                                dismiss(item)
+                                            }
                                         },
                                         onRunOne: { action in Task { await session.apply(action) } },
                                         onDismiss: { dismiss(item) },
-                                        onOpen: { section in navigate(section); onClose() })
+                                        onOpen: { section in
+                                            navigate(section)
+                                            onClose()
+                                        })
                                     if index < mine.count - 1 { Hairline(indent: CheckupRow.textIndent) }
                                 }
                             }
@@ -415,8 +452,10 @@ struct SetupWizardSheet: View {
                 }
                 .padding(Space.xl).standardPanel()
             }
-            Text("The checkup runs again on its own once a week when Agent Tooling opens, and each app's page has a Review button for what has changed upstream.")
-                .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
+            Text(
+                "The checkup runs again on its own once a week when Agent Tooling opens, and each app's page has a Review button for what has changed upstream."
+            )
+            .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
         }
     }
 }

@@ -63,7 +63,11 @@ struct WorkspaceProjectDiscoverySessionTests {
 
         #expect(discovery.errorMessage == nil)
         let roots = fixture.workspace.library.state?.snapshot.device.projectRoots ?? []
-        #expect(roots.contains { $0.projectID == ShellRenderFixture.projectID && ProjectPath.matches($0.rootPath, project: folder.path(percentEncoded: false)) })
+        #expect(
+            roots.contains {
+                $0.projectID == ShellRenderFixture.projectID
+                    && ProjectPath.matches($0.rootPath, project: folder.path(percentEncoded: false))
+            })
         // Now tracked: out of the found list, and the detail can read the folder.
         #expect(discovery.untrackedFolders.allSatisfy { $0.project.name != "project" })
         #expect(discovery.folder(for: ShellRenderFixture.projectID)?.name == "project")
@@ -102,7 +106,8 @@ struct WorkspaceProjectDiscoverySessionTests {
         #expect(project?.name == "order-history")
         #expect(project?.repositoryHints == ["https://github.com/acme/order-history"])
         let roots = fixture.workspace.library.state?.snapshot.device.projectRoots ?? []
-        #expect(roots.contains { $0.projectID == projectID && ProjectPath.matches($0.rootPath, project: folder.path(percentEncoded: false)) })
+        #expect(
+            roots.contains { $0.projectID == projectID && ProjectPath.matches($0.rootPath, project: folder.path(percentEncoded: false)) })
         #expect(discovery.folder(for: projectID)?.name == "order-history")
         #expect(discovery.untrackedFolders.allSatisfy { $0.project.name != "order-history" })
     }
@@ -129,7 +134,9 @@ struct WorkspaceProjectDiscoverySessionTests {
 
         await discovery.addScanRoot(root)
         #expect(discovery.scanRoots == [ProjectPath.canonical(root)])
-        #expect(fixture.workspace.library.state?.snapshot.device.applicationState?.preferences.projectScanRoots == [ProjectPath.canonical(root)])
+        #expect(
+            fixture.workspace.library.state?.snapshot.device.applicationState?.preferences.projectScanRoots == [ProjectPath.canonical(root)]
+        )
 
         await discovery.addScanRoot(root)
         #expect(discovery.scanRoots.count == 1)

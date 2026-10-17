@@ -181,7 +181,9 @@ struct WorkspaceDeviceSessionTests {
         ]
         claude.skillMetadata = [
             "core:brazil": .init(path: "\(packageRoot)/skills/brazil/", source: "core@aim", providerPluginID: "core@aim"),
-            "docx": .init(path: fixture.home.appending(path: ".claude/skills/docx/").path(percentEncoded: false), source: "Standalone Claude Code skill"),
+            "docx": .init(
+                path: fixture.home.appending(path: ".claude/skills/docx/").path(percentEncoded: false),
+                source: "Standalone Claude Code skill"),
         ]
         let session = await fixture.session(observer: ScriptedObserver(results: [.success([claude])]))
         let before = try #require(fixture.library.state).library.rows
@@ -215,13 +217,15 @@ struct WorkspaceDeviceSessionTests {
         func plan(skills: Int, packages: Int, connections: Int) -> WorkspaceObservationReconciliation.Plan {
             var additions: [ArtifactRecord] = []
             for index in 0..<packages {
-                additions.append(.init(identity: .init(id: ArtifactID(), kind: .nativePlugin, displayName: "P\(index)"), authority: .trackedOnly))
+                additions.append(
+                    .init(identity: .init(id: ArtifactID(), kind: .nativePlugin, displayName: "P\(index)"), authority: .trackedOnly))
             }
             for index in 0..<skills {
                 additions.append(.init(identity: .init(id: ArtifactID(), kind: .skill, displayName: "S\(index)"), authority: .trackedOnly))
             }
             for index in 0..<connections {
-                additions.append(.init(identity: .init(id: ArtifactID(), kind: .mcpServer, displayName: "C\(index)"), authority: .trackedOnly))
+                additions.append(
+                    .init(identity: .init(id: ArtifactID(), kind: .mcpServer, displayName: "C\(index)"), authority: .trackedOnly))
             }
             return .init(additions: additions)
         }

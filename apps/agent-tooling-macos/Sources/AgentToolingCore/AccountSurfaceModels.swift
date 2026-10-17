@@ -45,19 +45,24 @@ public enum AccountProvider: String, Codable, CaseIterable, Identifiable, Sendab
 
     /// Where the account's contents are added, connected and removed.
     public var manageURL: URL {
-        switch self {
-        case .claude: URL(string: "https://claude.ai/customize")!
-        case .chatGPT: URL(string: "https://chatgpt.com/apps")!
+        let address =
+            switch self {
+            case .claude: "https://claude.ai/customize"
+            case .chatGPT: "https://chatgpt.com/apps"
+            }
+        guard let url = URL(string: address) else {
+            preconditionFailure("The built-in account management URL must be valid.")
         }
+        return url
     }
 
     /// The page that manages one kind of item, falling back to the account's
     /// customization page.
     public func manageURL(for kind: AccountItemKind?) -> URL {
         switch (self, kind) {
-        case (.claude, .connector?): URL(string: "https://claude.ai/customize/connectors")!
-        case (.claude, .skill?): URL(string: "https://claude.ai/customize/skills")!
-        case (.claude, .plugin?): URL(string: "https://claude.ai/customize/plugins")!
+        case (.claude, .connector?): manageURL.appending(path: "connectors")
+        case (.claude, .skill?): manageURL.appending(path: "skills")
+        case (.claude, .plugin?): manageURL.appending(path: "plugins")
         default: manageURL
         }
     }
@@ -259,7 +264,7 @@ public struct AccountItem: Identifiable, Hashable, Sendable {
     /// key), so no row offers a choice that would fail to save.
     public var preferenceKey: AccountPreferenceKey? {
         guard let setting, setting.provider == provider, setting.requiresSubject,
-              AccountPreferences.isValidSubject(key, for: setting)
+            AccountPreferences.isValidSubject(key, for: setting)
         else { return nil }
         return AccountPreferenceKey(provider: provider, setting: setting, subject: key)
     }
@@ -495,8 +500,10 @@ public struct AccountPreferenceKey: Codable, Hashable, Sendable, Comparable {
         case .connector: return "the \(item) connector in Claude Code"
         case .apps: return "ChatGPT apps in Codex"
         case .app: return "the \(item) app in Codex"
-        case .destructiveTools: return subject == nil ? "tools that delete or change things, for every app" : "tools that delete or change things in \(item)"
-        case .openWorldTools: return subject == nil ? "tools that reach the open web, for every app" : "tools that reach the open web in \(item)"
+        case .destructiveTools:
+            return subject == nil ? "tools that delete or change things, for every app" : "tools that delete or change things in \(item)"
+        case .openWorldTools:
+            return subject == nil ? "tools that reach the open web, for every app" : "tools that reach the open web in \(item)"
         case .approvalMode: return subject == nil ? "when Codex asks before an app tool runs" : "when Codex asks before a \(item) tool runs"
         }
     }
@@ -654,11 +661,13 @@ public struct PublishedAccountSummary: Codable, Hashable, Sendable {
     }
 
     public init(observation: AccountObservation, workspaceID: WorkspaceObjectID, switchesOutOfStep: Int?) {
-        let counts = observation.contentsRead
-            ? Dictionary(uniqueKeysWithValues: AccountItemKind.allCases.compactMap { kind -> (String, Int)? in
-                let count = observation.items(kind).count
-                return count == 0 ? nil : (kind.rawValue, count)
-            })
+        let counts =
+            observation.contentsRead
+            ? Dictionary(
+                uniqueKeysWithValues: AccountItemKind.allCases.compactMap { kind -> (String, Int)? in
+                    let count = observation.items(kind).count
+                    return count == 0 ? nil : (kind.rawValue, count)
+                })
             : nil
         let overrides = observation.shellOverrides.map(\.variable)
         self.init(
@@ -683,7 +692,7 @@ public struct PublishedAccountSummary: Codable, Hashable, Sendable {
         provider: AccountProvider, signIn: AccountSignIn?, workspaceID: WorkspaceObjectID
     ) -> String? {
         guard let signIn, signIn.method == .subscription,
-              let email = signIn.email?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !email.isEmpty
+            let email = signIn.email?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !email.isEmpty
         else { return nil }
         var bytes = Data("agent-tooling.account-fingerprint.v1\n".utf8)
         for field in [workspaceID.rawValue.uuidString.lowercased(), provider.rawValue, email, signIn.organizationID ?? ""] {

@@ -52,7 +52,8 @@ public enum ProjectRepositoryMatcher {
         projects: [Project],
         bindings: [DeviceProjectRootBinding]
     ) -> [Match] {
-        let boundByPath = Dictionary(bindings.map { (ProjectPath.canonical($0.rootPath), $0.projectID) }, uniquingKeysWith: { first, _ in first })
+        let boundByPath = Dictionary(
+            bindings.map { (ProjectPath.canonical($0.rootPath), $0.projectID) }, uniquingKeysWith: { first, _ in first })
         let boundProjects = Set(bindings.map(\.projectID))
         return discovered.map { folder in
             if let projectID = boundByPath[ProjectPath.canonical(folder.path)] {

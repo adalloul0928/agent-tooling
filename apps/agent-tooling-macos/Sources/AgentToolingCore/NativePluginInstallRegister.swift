@@ -99,9 +99,10 @@ public enum NativePluginInstallRegister {
         for client: ClientKind, externalPluginID: String
     ) -> NativeInstall? {
         guard let command = command(for: client, externalPluginID: externalPluginID) else { return nil }
-        return .init(client: command.client, executable: command.executable,
-                     arguments: command.installArguments,
-                     removalArguments: command.removeArguments, scope: .user,
-                     detail: "Recorded for \(command.client.rawValue) \(command.verifiedAgainstVersion).")
+        return .init(
+            client: command.client, executable: command.executable,
+            arguments: command.installArguments,
+            removalArguments: command.removeArguments, scope: .user,
+            detail: "Recorded for \(command.client.rawValue) \(command.verifiedAgainstVersion).")
     }
 }

@@ -14,7 +14,8 @@ struct MCPDefinitionSources: Equatable, Identifiable {
     /// Every source in observations for the server this app knows by `name`.
     static func found(named name: String?, in observations: [TargetObservation]) -> [Self] {
         guard let name, !name.isEmpty else { return [] }
-        return observations
+        return
+            observations
             .compactMap { observation -> Self? in
                 guard let client = observation.surface.client, let metadata = observation.mcpMetadata[name] else { return nil }
                 return Self(client: client, sources: metadata.allSources)

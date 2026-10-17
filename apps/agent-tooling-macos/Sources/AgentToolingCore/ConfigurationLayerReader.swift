@@ -51,23 +51,30 @@ public struct ConfigurationLayerReader: Sendable {
     ) throws -> [ConfigurationLayer] {
         var layers: [ConfigurationLayer] = []
         if let managedPolicyPath,
-           let layer = try jsonLayer(at: managedPolicyPath, kind: .managedPolicy, isWritable: false) {
+            let layer = try jsonLayer(at: managedPolicyPath, kind: .managedPolicy, isWritable: false)
+        {
             layers.append(layer)
         }
         if let projectRoot {
             try requireDirectoryRoot(projectRoot)
-            if let layer = try jsonLayer(at: projectRoot.appending(path: ".claude/settings.local.json"),
-                                         kind: .localProject, isWritable: true) {
+            if let layer = try jsonLayer(
+                at: projectRoot.appending(path: ".claude/settings.local.json"),
+                kind: .localProject, isWritable: true)
+            {
                 layers.append(layer)
             }
-            if let layer = try jsonLayer(at: projectRoot.appending(path: ".claude/settings.json"),
-                                         kind: .project, isWritable: true) {
+            if let layer = try jsonLayer(
+                at: projectRoot.appending(path: ".claude/settings.json"),
+                kind: .project, isWritable: true)
+            {
                 layers.append(layer)
             }
         }
         try requireDirectoryRoot(homeRoot)
-        if let layer = try jsonLayer(at: homeRoot.appending(path: ".claude/settings.json"),
-                                     kind: .user, isWritable: true) {
+        if let layer = try jsonLayer(
+            at: homeRoot.appending(path: ".claude/settings.json"),
+            kind: .user, isWritable: true)
+        {
             layers.append(layer)
         }
         return layers
@@ -83,14 +90,18 @@ public struct ConfigurationLayerReader: Sendable {
         try requireDirectoryRoot(homeRoot)
         var layers: [ConfigurationLayer] = []
         if adapter.usesSeparateProfileFiles, let profileName, Self.isSafeComponent(profileName),
-           let layer = try tomlLayer(at: homeRoot.appending(path: ".codex/\(profileName).config.toml"),
-                                     kind: .project, isWritable: true) {
+            let layer = try tomlLayer(
+                at: homeRoot.appending(path: ".codex/\(profileName).config.toml"),
+                kind: .project, isWritable: true)
+        {
             // A named profile takes precedence over the base configuration; it
             // is not a project file, but it occupies that layer for this vendor.
             layers.append(layer)
         }
-        if let layer = try tomlLayer(at: homeRoot.appending(path: ".codex/config.toml"),
-                                     kind: .user, isWritable: true) {
+        if let layer = try tomlLayer(
+            at: homeRoot.appending(path: ".codex/config.toml"),
+            kind: .user, isWritable: true)
+        {
             layers.append(layer)
         }
         return layers
@@ -100,7 +111,8 @@ public struct ConfigurationLayerReader: Sendable {
 extension ConfigurationLayerReader {
     func requireDirectoryRoot(_ url: URL) throws {
         guard url.isFileURL, url.path.hasPrefix("/"), !url.path.contains("\0"),
-              url.standardizedFileURL.path == url.path else {
+            url.standardizedFileURL.path == url.path
+        else {
             throw ConfigurationLayerReadError.invalidRoot
         }
     }
@@ -130,8 +142,9 @@ extension ConfigurationLayerReader {
             }
             values[key] = Self.value(raw)
         }
-        return .init(kind: kind, sourcePath: url.path, isWritable: isWritable,
-                     values: values, unrecognizedKeys: unrecognized.sorted())
+        return .init(
+            kind: kind, sourcePath: url.path, isWritable: isWritable,
+            values: values, unrecognizedKeys: unrecognized.sorted())
     }
 
     /// Codex's configuration is TOML. Only top-level scalar assignments are
@@ -156,8 +169,9 @@ extension ConfigurationLayerReader {
             }
             guard !insideTable, let separator = line.firstIndex(of: "=") else {
                 if insideTable, let separator = line.firstIndex(of: "=") {
-                    unrecognized.append(String(line[line.startIndex..<separator])
-                        .trimmingCharacters(in: .whitespaces))
+                    unrecognized.append(
+                        String(line[line.startIndex..<separator])
+                            .trimmingCharacters(in: .whitespaces))
                 }
                 continue
             }
@@ -166,8 +180,9 @@ extension ConfigurationLayerReader {
             guard !key.isEmpty else { continue }
             values[key] = Self.tomlValue(raw)
         }
-        return .init(kind: kind, sourcePath: url.path, isWritable: isWritable,
-                     values: values, unrecognizedKeys: unrecognized.sorted())
+        return .init(
+            kind: kind, sourcePath: url.path, isWritable: isWritable,
+            values: values, unrecognizedKeys: unrecognized.sorted())
     }
 
     /// The file's bytes, or nil when it is not there. Over the shared limit

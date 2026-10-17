@@ -1,6 +1,6 @@
+import Darwin
 import Foundation
 import SQLite3
-import Darwin
 
 public enum WorkspaceStoreFormatUpgrade: Sendable {
     case none, version1To2
@@ -22,7 +22,7 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
     /// How many receipts this device keeps. A record of what happened is worth
     /// keeping; every record this device ever made is a log, not a memory.
     public static let maximumReceipts = 500
-    public static let databaseApplicationID: Int32 = 0x41545731 // ATW1
+    public static let databaseApplicationID: Int32 = 0x41545731  // ATW1
     /// Bounds ancestry walks so a long or damaged history cannot stall a read.
     static let ancestryLimit = 4_096
 
@@ -38,17 +38,20 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
 
     /// Opening does not import legacy state or initialize a workspace. The
     /// caller explicitly supplies a container and enrolled workspace/device.
-    public init(containerRoot: URL, workspaceID: WorkspaceObjectID, deviceID: WorkspaceObjectID,
-                formatUpgrade: WorkspaceStoreFormatUpgrade = .none,
-                access: WorkspaceRevisionStoreAccess = .readWrite) throws {
+    public init(
+        containerRoot: URL, workspaceID: WorkspaceObjectID, deviceID: WorkspaceObjectID,
+        formatUpgrade: WorkspaceStoreFormatUpgrade = .none,
+        access: WorkspaceRevisionStoreAccess = .readWrite
+    ) throws {
         self.workspaceID = workspaceID
         self.deviceID = deviceID
         self.access = access
         guard access == .readWrite || formatUpgrade == .none else {
             throw WorkspaceRevisionStoreError.readOnly
         }
-        let directory = try Self.prepareDirectory(containerRoot: containerRoot, workspaceID: workspaceID,
-                                                  create: access == .readWrite)
+        let directory = try Self.prepareDirectory(
+            containerRoot: containerRoot, workspaceID: workspaceID,
+            create: access == .readWrite)
         databaseURL = directory.appending(path: "revisions.sqlite")
         // Foundation deliberately abbreviates /private/var as /var on macOS,
         // even after resolvingSymlinksInPath. SQLite's NOFOLLOW also rejects
@@ -61,12 +64,14 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
             try Self.checkRegularFileIfPresent(URL(fileURLWithPath: databaseURL.path + suffix))
         }
         var handle: OpaquePointer?
-        let flags: Int32 = switch access {
-        case .readWrite: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
-        case .existingReadWrite: SQLITE_OPEN_READWRITE
-        case .existingReadOnly: SQLITE_OPEN_READONLY
-        }
-        let status = sqlite3_open_v2(databasePath, &handle,
+        let flags: Int32 =
+            switch access {
+            case .readWrite: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+            case .existingReadWrite: SQLITE_OPEN_READWRITE
+            case .existingReadOnly: SQLITE_OPEN_READONLY
+            }
+        let status = sqlite3_open_v2(
+            databasePath, &handle,
             flags | SQLITE_OPEN_FULLMUTEX | SQLITE_OPEN_NOFOLLOW, nil)
         guard status == SQLITE_OK, let handle else {
             if let handle { sqlite3_close(handle) }
@@ -178,8 +183,10 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
                     throw WorkspaceRevisionStoreError.corruptState
                 }
                 let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(row, 0)))
-                guard let receipt = try? AgentToolingCoding.decoder()
-                    .decode(OperationReceipt.self, from: data) else {
+                guard
+                    let receipt = try? AgentToolingCoding.decoder()
+                        .decode(OperationReceipt.self, from: data)
+                else {
                     throw WorkspaceRevisionStoreError.corruptState
                 }
                 results.append(receipt)
@@ -190,10 +197,15 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
 
     public func operationReceipt(_ id: UUID) throws -> OperationReceipt? {
         try transaction(write: false) { database in
-            guard let data = try blob("SELECT payload FROM operation_receipts WHERE id = ?",
-                                      [.text(id.uuidString.lowercased())], database) else { return nil }
-            guard let receipt = try? AgentToolingCoding.decoder()
-                .decode(OperationReceipt.self, from: data) else {
+            guard
+                let data = try blob(
+                    "SELECT payload FROM operation_receipts WHERE id = ?",
+                    [.text(id.uuidString.lowercased())], database)
+            else { return nil }
+            guard
+                let receipt = try? AgentToolingCoding.decoder()
+                    .decode(OperationReceipt.self, from: data)
+            else {
                 throw WorkspaceRevisionStoreError.corruptState
             }
             return receipt
@@ -207,16 +219,22 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
     /// would each be a record that cannot be trusted.
     public func recordOperationReceipt(_ receipt: OperationReceipt) throws {
         try transaction(write: true) { database in
-            guard try scalar("SELECT COUNT(*) FROM operation_receipts WHERE id = ?",
-                             [.text(receipt.id.uuidString.lowercased())], database) == 0 else {
+            guard
+                try scalar(
+                    "SELECT COUNT(*) FROM operation_receipts WHERE id = ?",
+                    [.text(receipt.id.uuidString.lowercased())], database) == 0
+            else {
                 // Receipts are immutable, so a repeat is a no-op rather than an
                 // error: replaying a completed operation must not fail here.
                 return
             }
             let payload = try AgentToolingCoding.encoder().encode(receipt)
-            try run("INSERT INTO operation_receipts(id, created_at, payload) VALUES(?, ?, ?)",
-                [.text(receipt.id.uuidString.lowercased()),
-                 .double(receipt.createdAt.timeIntervalSince1970), .data(payload)], database)
+            try run(
+                "INSERT INTO operation_receipts(id, created_at, payload) VALUES(?, ?, ?)",
+                [
+                    .text(receipt.id.uuidString.lowercased()),
+                    .double(receipt.createdAt.timeIntervalSince1970), .data(payload),
+                ], database)
             guard var device = try readSnapshot(database)?.device else {
                 throw WorkspaceRevisionStoreError.notInitialized
             }
@@ -228,7 +246,8 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
                 if device.receiptIDs.count > Self.maximumReceipts {
                     device.receiptIDs.removeFirst(device.receiptIDs.count - Self.maximumReceipts)
                 }
-                try run("UPDATE device_state SET payload = ? WHERE id = 1",
+                try run(
+                    "UPDATE device_state SET payload = ? WHERE id = 1",
                     [.data(try WorkspaceDocumentCoding.encodeDeviceState(device))], database)
                 guard sqlite3_changes(database) == 1 else {
                     throw WorkspaceRevisionStoreError.corruptState
@@ -236,7 +255,8 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
             }
             // Oldest first, so the cap keeps what a person is most likely to
             // still be asking about.
-            try run("""
+            try run(
+                """
                 DELETE FROM operation_receipts WHERE id IN (
                     SELECT id FROM operation_receipts ORDER BY created_at DESC, id DESC LIMIT -1 OFFSET ?)
                 """, [.integer(Int64(Self.maximumReceipts))], database)
@@ -260,8 +280,9 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
             var queue = try readQueue(database)
             let result = try update(&queue)
             let payload = try AgentToolingCoding.encoder().encode(queue)
-            try run("INSERT INTO pending_requests(id, payload) VALUES(1, ?) "
-                + "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload", [.data(payload)], database)
+            try run(
+                "INSERT INTO pending_requests(id, payload) VALUES(1, ?) "
+                    + "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload", [.data(payload)], database)
             return result
         }
     }
@@ -283,8 +304,9 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
     public func saveActivityJournal(_ journal: some Encodable) throws {
         try transaction(write: true) { database in
             let payload = try AgentToolingCoding.encoder().encode(journal)
-            try run("INSERT INTO activity_journal(id, payload) VALUES(1, ?) "
-                + "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload", [.data(payload)], database)
+            try run(
+                "INSERT INTO activity_journal(id, payload) VALUES(1, ?) "
+                    + "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload", [.data(payload)], database)
         }
     }
 
@@ -315,8 +337,9 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
     /// directories on someone's disk.
     public func prepareManagedDirectories() throws {
         for url in [libraryURL, receiptsURL] {
-            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true,
-                                                    attributes: [.posixPermissions: 0o700])
+            try FileManager.default.createDirectory(
+                at: url, withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
         }
     }
 
@@ -326,8 +349,10 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
             guard let data = try blob("SELECT payload FROM managed_installs WHERE id = 1", [], database) else {
                 return ManagedInstallLedger()
             }
-            guard let ledger = try? AgentToolingCoding.decoder()
-                .decode(ManagedInstallLedger.self, from: data) else {
+            guard
+                let ledger = try? AgentToolingCoding.decoder()
+                    .decode(ManagedInstallLedger.self, from: data)
+            else {
                 throw WorkspaceRevisionStoreError.corruptState
             }
             return ledger
@@ -337,8 +362,9 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
     public func saveManagedInstallLedger(_ ledger: ManagedInstallLedger) throws {
         try transaction(write: true) { database in
             let payload = try AgentToolingCoding.encoder().encode(ledger)
-            try run("INSERT INTO managed_installs(id, payload) VALUES(1, ?) "
-                + "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload", [.data(payload)], database)
+            try run(
+                "INSERT INTO managed_installs(id, payload) VALUES(1, ?) "
+                    + "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload", [.data(payload)], database)
         }
     }
 
@@ -350,8 +376,11 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
     /// by the queue service.
     public func requestDraft<Value: Decodable>(_ id: UUID, as type: Value.Type) throws -> Value? {
         try transaction(write: false) { database in
-            guard let data = try blob("SELECT payload FROM request_drafts WHERE id = ?",
-                                      [.text(id.uuidString.lowercased())], database) else { return nil }
+            guard
+                let data = try blob(
+                    "SELECT payload FROM request_drafts WHERE id = ?",
+                    [.text(id.uuidString.lowercased())], database)
+            else { return nil }
             guard let value = try? AgentToolingCoding.decoder().decode(Value.self, from: data) else {
                 throw WorkspaceRevisionStoreError.corruptState
             }
@@ -362,16 +391,18 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
     public func saveRequestDraft(_ id: UUID, _ draft: some Encodable) throws {
         try transaction(write: true) { database in
             let payload = try AgentToolingCoding.encoder().encode(draft)
-            try run("INSERT INTO request_drafts(id, payload) VALUES(?, ?) "
-                + "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+            try run(
+                "INSERT INTO request_drafts(id, payload) VALUES(?, ?) "
+                    + "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
                 [.text(id.uuidString.lowercased()), .data(payload)], database)
         }
     }
 
     public func deleteRequestDraft(_ id: UUID) throws {
         try transaction(write: true) { database in
-            try run("DELETE FROM request_drafts WHERE id = ?",
-                    [.text(id.uuidString.lowercased())], database)
+            try run(
+                "DELETE FROM request_drafts WHERE id = ?",
+                [.text(id.uuidString.lowercased())], database)
         }
     }
 
@@ -379,13 +410,14 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         guard let data = try blob("SELECT payload FROM pending_requests WHERE id = 1", [], database) else {
             return .init()
         }
-        guard let queue = try? AgentToolingCoding.decoder()
-            .decode(PendingAgentRequestQueue.self, from: data) else {
+        guard
+            let queue = try? AgentToolingCoding.decoder()
+                .decode(PendingAgentRequestQueue.self, from: data)
+        else {
             throw WorkspaceRevisionStoreError.corruptState
         }
         return queue
     }
-
 
     /// Records a revision received from another device so its ancestry can be
     /// resolved here later. It never becomes the head and never changes device
@@ -397,8 +429,11 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         let bytes = try WorkspaceDocumentCoding.encode(document)
         try transaction(write: true) { database in
             guard try readSnapshot(database) != nil else { throw WorkspaceRevisionStoreError.notInitialized }
-            guard try blob("SELECT payload FROM revisions WHERE id = ?",
-                           [.text(document.revision.id.storageKey)], database) == nil else {
+            guard
+                try blob(
+                    "SELECT payload FROM revisions WHERE id = ?",
+                    [.text(document.revision.id.storageKey)], database) == nil
+            else {
                 // History is immutable; an already-known revision is complete.
                 return
             }
@@ -428,12 +463,16 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
                 var next: [WorkspaceObjectID] = []
                 for id in queue where visited.insert(id).inserted {
                     if local.contains(id),
-                       let payload = try blob("SELECT payload FROM revisions WHERE id = ?",
-                                              [.text(id.storageKey)], database) {
+                        let payload = try blob(
+                            "SELECT payload FROM revisions WHERE id = ?",
+                            [.text(id.storageKey)], database)
+                    {
                         return try decodeDocument(payload)
                     }
-                    if let payload = try blob("SELECT payload FROM revisions WHERE id = ?",
-                                              [.text(id.storageKey)], database) {
+                    if let payload = try blob(
+                        "SELECT payload FROM revisions WHERE id = ?",
+                        [.text(id.storageKey)], database)
+                    {
                         next += try decodeDocument(payload).revision.parentIDs
                     }
                 }
@@ -462,8 +501,11 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
             guard current.document.revision.id == expectedLocalHead else {
                 throw WorkspaceRevisionStoreError.staleRevision(current: current.document.revision.id)
             }
-            guard let payload = try blob("SELECT payload FROM revisions WHERE id = ?",
-                                         [.text(revisionID.storageKey)], database) else {
+            guard
+                let payload = try blob(
+                    "SELECT payload FROM revisions WHERE id = ?",
+                    [.text(revisionID.storageKey)], database)
+            else {
                 throw WorkspaceRevisionStoreError.missingAncestry
             }
             let target = try decodeDocument(payload)
@@ -477,12 +519,16 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
                 idempotencyKey: idempotencyKey, inputDigest: inputDigest,
                 previousRevisionID: expectedLocalHead, committedRevisionID: target.revision.id,
                 affectedArtifactIDs: target.artifacts.map(\.identity.id).sorted())
-            try run("UPDATE workspace_head SET revision_id = ? WHERE id = 1 AND revision_id = ?",
+            try run(
+                "UPDATE workspace_head SET revision_id = ? WHERE id = 1 AND revision_id = ?",
                 [.text(target.revision.id.storageKey), .text(expectedLocalHead.storageKey)], database)
             guard sqlite3_changes(database) == 1 else { throw WorkspaceRevisionStoreError.corruptState }
-            try run("INSERT INTO command_receipts(idempotency_key, revision_id, payload) VALUES(?, ?, ?)",
-                [.text(idempotencyKey.storageKey), .text(target.revision.id.storageKey),
-                 .data(try JSONEncoder().encode(receipt))], database)
+            try run(
+                "INSERT INTO command_receipts(idempotency_key, revision_id, payload) VALUES(?, ?, ?)",
+                [
+                    .text(idempotencyKey.storageKey), .text(target.revision.id.storageKey),
+                    .data(try JSONEncoder().encode(receipt)),
+                ], database)
             return receipt
         }
     }
@@ -500,8 +546,9 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         try WorkspaceDomainValidation.requireDigest(inputDigest, field: "command input digest")
         let expectedParents = Set([expectedLocalHead, remoteRevisionID])
         guard Set(document.revision.parentIDs) == expectedParents,
-              document.revision.parentIDs.count == expectedParents.count,
-              document.workspaceID == workspaceID else {
+            document.revision.parentIDs.count == expectedParents.count,
+            document.workspaceID == workspaceID
+        else {
             throw WorkspaceRevisionStoreError.missingAncestry
         }
         return try transaction(write: true) { database in
@@ -514,8 +561,10 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
             }
             // The remote side must already be recorded here, so the merged
             // revision's ancestry is resolvable from this store alone.
-            let remoteKnown = try blob("SELECT payload FROM revisions WHERE id = ?",
-                                       [.text(remoteRevisionID.storageKey)], database) != nil
+            let remoteKnown =
+                try blob(
+                    "SELECT payload FROM revisions WHERE id = ?",
+                    [.text(remoteRevisionID.storageKey)], database) != nil
             guard expectedLocalHead == remoteRevisionID || remoteKnown else {
                 throw WorkspaceRevisionStoreError.missingAncestry
             }
@@ -527,12 +576,16 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
                 previousRevisionID: expectedLocalHead, committedRevisionID: sealed.revision.id,
                 affectedArtifactIDs: sealed.artifacts.map(\.identity.id).sorted())
             try insertRevision(sealed, bytes: bytes, database)
-            try run("UPDATE workspace_head SET revision_id = ? WHERE id = 1 AND revision_id = ?",
+            try run(
+                "UPDATE workspace_head SET revision_id = ? WHERE id = 1 AND revision_id = ?",
                 [.text(sealed.revision.id.storageKey), .text(expectedLocalHead.storageKey)], database)
             guard sqlite3_changes(database) == 1 else { throw WorkspaceRevisionStoreError.corruptState }
-            try run("INSERT INTO command_receipts(idempotency_key, revision_id, payload) VALUES(?, ?, ?)",
-                [.text(idempotencyKey.storageKey), .text(sealed.revision.id.storageKey),
-                 .data(try JSONEncoder().encode(receipt))], database)
+            try run(
+                "INSERT INTO command_receipts(idempotency_key, revision_id, payload) VALUES(?, ?, ?)",
+                [
+                    .text(idempotencyKey.storageKey), .text(sealed.revision.id.storageKey),
+                    .data(try JSONEncoder().encode(receipt)),
+                ], database)
             return receipt
         }
     }
@@ -548,8 +601,11 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
             depth += 1
             var next: [WorkspaceObjectID] = []
             for id in queue where seen.insert(id).inserted {
-                guard let payload = try blob("SELECT payload FROM revisions WHERE id = ?",
-                                             [.text(id.storageKey)], database) else { continue }
+                guard
+                    let payload = try blob(
+                        "SELECT payload FROM revisions WHERE id = ?",
+                        [.text(id.storageKey)], database)
+                else { continue }
                 next += try decodeDocument(payload).revision.parentIDs
             }
             queue = next
@@ -599,16 +655,21 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
                 affectedArtifactIDs: affected.sorted())
             try insertRevision(updated, bytes: bytes, database)
             if deviceMutation != nil {
-                try run("UPDATE device_state SET payload = ? WHERE id = 1",
+                try run(
+                    "UPDATE device_state SET payload = ? WHERE id = 1",
                     [.data(try WorkspaceDocumentCoding.encodeDeviceState(device))], database)
                 guard sqlite3_changes(database) == 1 else { throw WorkspaceRevisionStoreError.corruptState }
             }
-            try run("UPDATE workspace_head SET revision_id = ? WHERE id = 1 AND revision_id = ?",
+            try run(
+                "UPDATE workspace_head SET revision_id = ? WHERE id = 1 AND revision_id = ?",
                 [.text(updated.revision.id.storageKey), .text(expectedRevisionID.storageKey)], database)
             guard sqlite3_changes(database) == 1 else { throw WorkspaceRevisionStoreError.corruptState }
-            try run("INSERT INTO command_receipts(idempotency_key, revision_id, payload) VALUES(?, ?, ?)",
-                [.text(idempotencyKey.storageKey), .text(updated.revision.id.storageKey),
-                 .data(try JSONEncoder().encode(receipt))], database)
+            try run(
+                "INSERT INTO command_receipts(idempotency_key, revision_id, payload) VALUES(?, ?, ?)",
+                [
+                    .text(idempotencyKey.storageKey), .text(updated.revision.id.storageKey),
+                    .data(try JSONEncoder().encode(receipt)),
+                ], database)
             return receipt
         }
     }
@@ -640,24 +701,31 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
     private func readReceipt(
         idempotencyKey: WorkspaceObjectID, inputDigest: String, _ database: OpaquePointer
     ) throws -> WorkspaceCommandReceipt? {
-        if let bytes = try blob("SELECT payload FROM command_receipts WHERE idempotency_key = ?",
-            [.text(idempotencyKey.storageKey)], database) {
+        if let bytes = try blob(
+            "SELECT payload FROM command_receipts WHERE idempotency_key = ?",
+            [.text(idempotencyKey.storageKey)], database)
+        {
             let receipt: WorkspaceCommandReceipt
-            do { receipt = try JSONDecoder().decode(WorkspaceCommandReceipt.self, from: bytes) }
-            catch { throw WorkspaceRevisionStoreError.corruptState }
+            do { receipt = try JSONDecoder().decode(WorkspaceCommandReceipt.self, from: bytes) } catch {
+                throw WorkspaceRevisionStoreError.corruptState
+            }
             guard receipt.idempotencyKey == idempotencyKey else { throw WorkspaceRevisionStoreError.corruptState }
             guard receipt.inputDigest == inputDigest else {
                 throw WorkspaceRevisionStoreError.idempotencyKeyReused
             }
-            let row = try prepare("SELECT revision_id FROM command_receipts WHERE idempotency_key = ?",
+            let row = try prepare(
+                "SELECT revision_id FROM command_receipts WHERE idempotency_key = ?",
                 [.text(idempotencyKey.storageKey)], database)
             defer { sqlite3_finalize(row) }
             guard sqlite3_step(row) == SQLITE_ROW, let rowRevision = sqlite3_column_text(row, 0),
                 String(cString: rowRevision) == receipt.committedRevisionID.storageKey,
-                let revisionBytes = try blob("SELECT payload FROM revisions WHERE id = ?",
+                let revisionBytes = try blob(
+                    "SELECT payload FROM revisions WHERE id = ?",
                     [.text(receipt.committedRevisionID.storageKey)], database),
-                let previousBytes = try blob("SELECT payload FROM revisions WHERE id = ?",
-                    [.text(receipt.previousRevisionID.storageKey)], database) else {
+                let previousBytes = try blob(
+                    "SELECT payload FROM revisions WHERE id = ?",
+                    [.text(receipt.previousRevisionID.storageKey)], database)
+            else {
                 throw WorkspaceRevisionStoreError.corruptState
             }
             let committed = try decodeDocument(revisionBytes)
@@ -667,7 +735,8 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
                 previous.revision.id == receipt.previousRevisionID,
                 committed.revision.parentIDs == [receipt.previousRevisionID],
                 Set(receipt.affectedArtifactIDs).count == receipt.affectedArtifactIDs.count,
-                Set(receipt.affectedArtifactIDs).isSubset(of: Set(committed.artifacts.map(\.identity.id))) else {
+                Set(receipt.affectedArtifactIDs).isSubset(of: Set(committed.artifacts.map(\.identity.id)))
+            else {
                 throw WorkspaceRevisionStoreError.corruptState
             }
             return receipt
@@ -676,14 +745,17 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
     }
 
     private func readSnapshot(_ database: OpaquePointer) throws -> WorkspaceApplicationSnapshot? {
-        guard let documentBytes = try blob(
-            "SELECT revisions.payload FROM workspace_head JOIN revisions ON revisions.id = workspace_head.revision_id WHERE workspace_head.id = 1",
-            [], database) else {
+        guard
+            let documentBytes = try blob(
+                "SELECT revisions.payload FROM workspace_head JOIN revisions ON revisions.id = workspace_head.revision_id WHERE workspace_head.id = 1",
+                [], database)
+        else {
             // A dangling head or partial bootstrap is corruption, not an empty
             // library that may be overwritten by initialization.
             guard try scalar("SELECT COUNT(*) FROM workspace_head", database) == 0,
                 try scalar("SELECT COUNT(*) FROM revisions", database) == 0,
-                try scalar("SELECT COUNT(*) FROM device_state", database) == 0 else {
+                try scalar("SELECT COUNT(*) FROM device_state", database) == 0
+            else {
                 throw WorkspaceRevisionStoreError.corruptState
             }
             return nil
@@ -693,30 +765,32 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         }
         let document = try decodeDocument(documentBytes)
         let device: DeviceWorkspaceState
-        do { device = try WorkspaceDocumentCoding.decodeDeviceState(deviceBytes, against: document) }
-        catch WorkspaceDomainValidationError.unsupportedVersion { throw WorkspaceRevisionStoreError.unsupportedStoreFormat }
-        catch { throw WorkspaceRevisionStoreError.corruptState }
+        do { device = try WorkspaceDocumentCoding.decodeDeviceState(deviceBytes, against: document) } catch WorkspaceDomainValidationError
+            .unsupportedVersion
+        { throw WorkspaceRevisionStoreError.unsupportedStoreFormat } catch { throw WorkspaceRevisionStoreError.corruptState }
         guard document.workspaceID == workspaceID, device.deviceID == deviceID else {
             throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice
         }
         let head = try prepare("SELECT revision_id FROM workspace_head WHERE id = 1", [], database)
         defer { sqlite3_finalize(head) }
         guard sqlite3_step(head) == SQLITE_ROW, let revisionID = sqlite3_column_text(head, 0),
-            String(cString: revisionID) == document.revision.id.storageKey else {
+            String(cString: revisionID) == document.revision.id.storageKey
+        else {
             throw WorkspaceRevisionStoreError.corruptState
         }
         return WorkspaceApplicationSnapshot(document: document, device: device)
     }
 
     private func insertRevision(_ document: PortableWorkspaceDocument, bytes: Data, _ database: OpaquePointer) throws {
-        try run("INSERT INTO revisions(id, payload) VALUES(?, ?)",
+        try run(
+            "INSERT INTO revisions(id, payload) VALUES(?, ?)",
             [.text(document.revision.id.storageKey), .data(bytes)], database)
     }
 
     private func decodeDocument(_ data: Data) throws -> PortableWorkspaceDocument {
-        do { return try WorkspaceDocumentCoding.decode(data) }
-        catch WorkspaceDomainValidationError.unsupportedVersion { throw WorkspaceRevisionStoreError.unsupportedStoreFormat }
-        catch { throw WorkspaceRevisionStoreError.corruptState }
+        do { return try WorkspaceDocumentCoding.decode(data) } catch WorkspaceDomainValidationError.unsupportedVersion {
+            throw WorkspaceRevisionStoreError.unsupportedStoreFormat
+        } catch { throw WorkspaceRevisionStoreError.corruptState }
     }
 
     /// One store, so a write needs no lease held against a second one.
@@ -752,7 +826,8 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
                 guard try scalar("SELECT COUNT(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'", database) == 0 else {
                     throw WorkspaceRevisionStoreError.unsupportedStoreFormat
                 }
-                try execute("""
+                try execute(
+                    """
                     CREATE TABLE store_identity(id INTEGER PRIMARY KEY CHECK(id = 1), workspace_id TEXT NOT NULL, device_id TEXT NOT NULL);
                     CREATE TABLE revisions(id TEXT PRIMARY KEY NOT NULL, payload BLOB NOT NULL);
                     CREATE TABLE workspace_head(id INTEGER PRIMARY KEY CHECK(id = 1), revision_id TEXT NOT NULL REFERENCES revisions(id));
@@ -762,11 +837,13 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
                     CREATE TRIGGER revisions_immutable_delete BEFORE DELETE ON revisions BEGIN SELECT RAISE(ABORT, 'Revision history is immutable'); END;
                     PRAGMA application_id = \(Self.databaseApplicationID);
                     """, database)
-                try run("INSERT INTO store_identity(id, workspace_id, device_id) VALUES(1, ?, ?)",
+                try run(
+                    "INSERT INTO store_identity(id, workspace_id, device_id) VALUES(1, ?, ?)",
                     [.text(workspaceID.storageKey), .text(deviceID.storageKey)], database)
                 try createOperationalSchema(database)
             } else if version == 1 && application == Self.databaseApplicationID,
-                      case .version1To2 = upgrade {
+                case .version1To2 = upgrade
+            {
                 // Deliberate additive upgrade; opening a v1 store normally does
                 // not modify it. Old v1 connections refuse writes after this.
                 try validateIdentity(database)
@@ -783,7 +860,8 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
 
     private func validateFormat(_ database: OpaquePointer) throws {
         guard try scalar("PRAGMA user_version", database) == Self.storeFormatVersion,
-            try scalar("PRAGMA application_id", database) == Self.databaseApplicationID else {
+            try scalar("PRAGMA application_id", database) == Self.databaseApplicationID
+        else {
             throw WorkspaceRevisionStoreError.unsupportedStoreFormat
         }
         try validateIdentity(database)
@@ -803,7 +881,8 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
     /// afterwards. The queue and the journal are mutable — a request is
     /// answered and a journal is trimmed.
     private func createOperationalSchema(_ database: OpaquePointer) throws {
-        try execute("""
+        try execute(
+            """
             CREATE TABLE operation_receipts(id TEXT PRIMARY KEY NOT NULL, created_at REAL NOT NULL, payload BLOB NOT NULL);
             CREATE INDEX operation_receipts_recent ON operation_receipts(created_at DESC);
             CREATE TRIGGER operation_receipts_immutable_update BEFORE UPDATE ON operation_receipts
@@ -821,12 +900,18 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         defer { sqlite3_finalize(statement) }
         guard sqlite3_step(statement) == SQLITE_ROW,
             let workspace = sqlite3_column_text(statement, 0), let device = sqlite3_column_text(statement, 1),
-            String(cString: workspace) == workspaceID.storageKey, String(cString: device) == deviceID.storageKey else {
+            String(cString: workspace) == workspaceID.storageKey, String(cString: device) == deviceID.storageKey
+        else {
             throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice
         }
     }
 
-    private enum SQLValue { case text(String), data(Data), integer(Int64), double(Double) }
+    private enum SQLValue {
+        case text(String)
+        case data(Data)
+        case integer(Int64)
+        case double(Double)
+    }
 
     private func prepare(_ sql: String, _ values: [SQLValue], _ database: OpaquePointer) throws -> OpaquePointer {
         var statement: OpaquePointer?
@@ -838,8 +923,12 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
                 case .text(let text):
                     status = sqlite3_bind_text(statement, Int32(index + 1), text, -1, Self.transient)
                 case .data(let bytes):
-                    guard bytes.count <= WorkspaceDocumentCoding.maximumDocumentBytes else { throw WorkspaceRevisionStoreError.recordTooLarge }
-                    status = bytes.withUnsafeBytes { sqlite3_bind_blob(statement, Int32(index + 1), $0.baseAddress, Int32(bytes.count), Self.transient) }
+                    guard bytes.count <= WorkspaceDocumentCoding.maximumDocumentBytes else {
+                        throw WorkspaceRevisionStoreError.recordTooLarge
+                    }
+                    status = bytes.withUnsafeBytes {
+                        sqlite3_bind_blob(statement, Int32(index + 1), $0.baseAddress, Int32(bytes.count), Self.transient)
+                    }
                 case .integer(let value):
                     status = sqlite3_bind_int64(statement, Int32(index + 1), value)
                 case .double(let value):
@@ -866,7 +955,8 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         let status = sqlite3_step(statement)
         if status == SQLITE_DONE { return nil }
         guard status == SQLITE_ROW, sqlite3_column_type(statement, 0) == SQLITE_BLOB,
-            let bytes = sqlite3_column_blob(statement, 0) else { throw WorkspaceRevisionStoreError.corruptState }
+            let bytes = sqlite3_column_blob(statement, 0)
+        else { throw WorkspaceRevisionStoreError.corruptState }
         let count = Int(sqlite3_column_bytes(statement, 0))
         guard count > 0, count <= WorkspaceDocumentCoding.maximumDocumentBytes else { throw WorkspaceRevisionStoreError.recordTooLarge }
         return Data(bytes: bytes, count: count)
@@ -923,8 +1013,11 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         do {
             let attributes = try manager.attributesOfItem(atPath: url.path)
             guard attributes[.type] as? FileAttributeType == .typeRegular,
-                (attributes[.referenceCount] as? NSNumber)?.intValue == 1 else { throw WorkspaceRevisionStoreError.unsafeStorePath }
-        } catch let error as NSError where error.domain == NSCocoaErrorDomain && (error.code == NSFileReadNoSuchFileError || error.code == NSFileNoSuchFileError) {
+                (attributes[.referenceCount] as? NSNumber)?.intValue == 1
+            else { throw WorkspaceRevisionStoreError.unsafeStorePath }
+        } catch let error as NSError
+            where error.domain == NSCocoaErrorDomain && (error.code == NSFileReadNoSuchFileError || error.code == NSFileNoSuchFileError)
+        {
             return
         }
     }

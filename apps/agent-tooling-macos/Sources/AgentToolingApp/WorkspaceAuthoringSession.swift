@@ -76,10 +76,11 @@ final class WorkspaceAuthoringSession {
                 errorMessage = "This workspace could not be read. Nothing was attached."
                 return
             }
-            _ = try await service.attachAuthoringRoot(.init(
-                expectedRevisionID: head,
-                displayName: name.isEmpty ? candidate.displayName : name,
-                prepared: prepared, directory: candidate.directory))
+            _ = try await service.attachAuthoringRoot(
+                .init(
+                    expectedRevisionID: head,
+                    displayName: name.isEmpty ? candidate.displayName : name,
+                    prepared: prepared, directory: candidate.directory))
             lastAttachedName = name.isEmpty ? candidate.displayName : name
             lastDetachedName = nil
             self.candidate = nil
@@ -101,8 +102,9 @@ final class WorkspaceAuthoringSession {
                 errorMessage = "This workspace could not be read. Nothing was changed."
                 return
             }
-            _ = try await service.detachAuthoringRoot(.init(
-                expectedRevisionID: head, artifactID: artifactID))
+            _ = try await service.detachAuthoringRoot(
+                .init(
+                    expectedRevisionID: head, artifactID: artifactID))
             lastDetachedName = name
             lastAttachedName = nil
         } catch {
@@ -118,12 +120,12 @@ final class WorkspaceAuthoringSession {
         case WorkspaceAttachedAuthoringError.notAStandaloneSkill:
             "That folder tracks a publisher's version, so it is not yours to edit here. Attach a folder you author yourself."
         case WorkspaceAttachedAuthoringError.alreadyAttached,
-             WorkspaceAttachedAuthoringError.sourceIdentityConflict:
+            WorkspaceAttachedAuthoringError.sourceIdentityConflict:
             "That folder is already the editable copy for something in your library."
         case WorkspaceAttachedAuthoringError.identityCollision:
             "Your library already has something with that name. Rename one of them first."
         case WorkspaceAttachedAuthoringError.detachedItemMissing,
-             WorkspaceAttachedAuthoringError.notAttached:
+            WorkspaceAttachedAuthoringError.notAttached:
             "That item is not an attached folder, so there is nothing to let go of."
         case WorkspaceSkillPreparationError.missingSkillDefinition:
             "That folder has no SKILL.md, so there is no skill in it to attach."

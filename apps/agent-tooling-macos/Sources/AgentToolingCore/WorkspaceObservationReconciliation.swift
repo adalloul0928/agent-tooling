@@ -63,8 +63,10 @@ public enum WorkspaceObservationReconciliation {
             for (parent, metadata) in observation.pluginMetadata {
                 for (child, childMetadata) in observation.skillMetadata
                 where childMetadata.providerPluginID == parent {
-                    guard let relative = WorkspaceFirstRun.relativeMemberDirectory(
-                        childMetadata.path, packageRoot: metadata.source) else { continue }
+                    guard
+                        let relative = WorkspaceFirstRun.relativeMemberDirectory(
+                            childMetadata.path, packageRoot: metadata.source)
+                    else { continue }
                     memberPaths[child] = relative
                 }
             }
@@ -84,7 +86,8 @@ public enum WorkspaceObservationReconciliation {
                 continue
             }
             let id = identifiers()
-            let routes = observations
+            let routes =
+                observations
                 .filter { $0.discoveredPlugins.contains(plugin.id) }
                 .compactMap { $0.surface.client }
                 .sorted { $0.rawValue < $1.rawValue }
@@ -94,10 +97,11 @@ public enum WorkspaceObservationReconciliation {
             let owned = !routes.isEmpty && locatable
             packageIDs[plugin.id] = id
             authorities[id] = owned ? .nativeOwned : .trackedOnly
-            plan.additions.append(.init(
-                identity: .init(id: id, kind: .nativePlugin, displayName: plugin.name),
-                authority: owned ? .nativeOwned : .trackedOnly,
-                declaredName: plugin.id, nativeRoutes: owned ? routes : []))
+            plan.additions.append(
+                .init(
+                    identity: .init(id: id, kind: .nativePlugin, displayName: plugin.name),
+                    authority: owned ? .nativeOwned : .trackedOnly,
+                    declaredName: plugin.id, nativeRoutes: owned ? routes : []))
         }
 
         let bundled = WorkspaceFirstRun.bundledIdentifiers(inventory: inventory, observations: observations)
@@ -122,9 +126,10 @@ public enum WorkspaceObservationReconciliation {
                 }
                 path = located
             }
-            plan.additions.append(.init(
-                identity: .init(id: identifiers(), kind: .skill, displayName: skill.displayName, parentPackageID: parent),
-                authority: authority, declaredName: skill.id, packageRelativePath: path))
+            plan.additions.append(
+                .init(
+                    identity: .init(id: identifiers(), kind: .skill, displayName: skill.displayName, parentPackageID: parent),
+                    authority: authority, declaredName: skill.id, packageRelativePath: path))
         }
 
         for server in inventory.mcpServers.sorted(by: { $0.id < $1.id }) where existing(.mcpServer, named: server.id) == nil {
@@ -134,9 +139,10 @@ public enum WorkspaceObservationReconciliation {
                 plan.skipped.append("\(server.id): more than one package claims it, so it belongs to neither.")
                 continue
             }
-            plan.additions.append(.init(
-                identity: .init(id: identifiers(), kind: .mcpServer, displayName: server.name, parentPackageID: parent),
-                authority: parent.flatMap { authorities[$0] } ?? .trackedOnly, declaredName: server.id))
+            plan.additions.append(
+                .init(
+                    identity: .init(id: identifiers(), kind: .mcpServer, displayName: server.name, parentPackageID: parent),
+                    authority: parent.flatMap { authorities[$0] } ?? .trackedOnly, declaredName: server.id))
         }
         return plan
     }
@@ -187,7 +193,8 @@ public struct WorkspaceObservationReconciliationCommand: Codable, Sendable, Equa
             let duplicateName = document.artifacts.contains {
                 $0.identity.kind == addition.identity.kind && $0.declaredName == addition.declaredName
             }
-            let duplicateID = document.artifacts.contains { $0.identity.id == addition.identity.id }
+            let duplicateID =
+                document.artifacts.contains { $0.identity.id == addition.identity.id }
                 || document.tombstones.contains { $0.artifactID == addition.identity.id }
             guard !duplicateName, !duplicateID else { continue }
             if let parent = addition.identity.parentPackageID {

@@ -97,7 +97,9 @@ struct AccountOwnedContentSafetyTests {
             gitBackupRoot: home.appending(path: "backup", directoryHint: .isDirectory), homeURL: home)
         try policy.validate(executable: "claude", arguments: ["auth", "status", "--json"])
         try policy.validate(executable: "claude", arguments: ["plugin", "list", "--json"])
-        for refused in [["auth", "login"], ["auth", "logout"], ["auth", "status", "--text", "--json"], ["plugin", "disable", "x@synced"]] {
+        for refused in [
+            ["auth", "login"], ["auth", "logout"], ["auth", "status", "--text", "--json"], ["plugin", "disable", "x@synced"],
+        ] {
             #expect(throws: OperationEngineError.self, "\(refused)") { try policy.validate(executable: "claude", arguments: refused) }
         }
     }
@@ -121,10 +123,12 @@ struct AccountOwnedContentSafetyTests {
             switch arguments {
             case ["--version"]: return CommandOutput(status: 0, standardOutput: "2.1.300", standardError: "")
             case ["plugin", "list", "--json"]:
-                return CommandOutput(status: 0, standardOutput: """
-                    [{"id":"design@synced","installPath":"/p/design","enabled":true,"scope":"synced"},
-                     {"id":"tool@vendor","installPath":"/p/tool","enabled":true,"scope":"user"}]
-                    """, standardError: "")
+                return CommandOutput(
+                    status: 0,
+                    standardOutput: """
+                        [{"id":"design@synced","installPath":"/p/design","enabled":true,"scope":"synced"},
+                         {"id":"tool@vendor","installPath":"/p/tool","enabled":true,"scope":"user"}]
+                        """, standardError: "")
             default: return CommandOutput(status: 1, standardOutput: "", standardError: "")
             }
         }
@@ -159,7 +163,9 @@ struct AccountOwnedContentSafetyTests {
         let report = SetupAuditor(homeURL: home, searchPath: []).audit(
             observations: [observation], managed: [.claude], library: .init(managedSkillNames: []))
         #expect(!report.findings.contains { $0.subject.lowercased() == "synced" })
-        #expect(report.findings.contains { $0.kind == .skillWithoutDefinition && $0.subject == "empty" }, "a real empty folder is still reported")
+        #expect(
+            report.findings.contains { $0.kind == .skillWithoutDefinition && $0.subject == "empty" },
+            "a real empty folder is still reported")
     }
 
     // MARK: The engine
@@ -171,10 +177,15 @@ struct AccountOwnedContentSafetyTests {
         let loose = fixture.home.appending(path: ".claude/skills/loose", directoryHint: .isDirectory)
         try Self.skill(synced.appending(path: "pdf"), name: "pdf")
         try Self.skill(loose, name: "loose")
-        let plan = OperationPlan(kind: .installSkill, title: "Remove", summary: "", steps: [
-            .init(kind: .removeUnmanagedSkillCopy, title: "Remove synced", detail: "", destinationPath: synced.path(percentEncoded: false)),
-            .init(kind: .removeUnmanagedSkillCopy, title: "Remove loose", detail: "", destinationPath: loose.path(percentEncoded: false)),
-        ])
+        let plan = OperationPlan(
+            kind: .installSkill, title: "Remove", summary: "",
+            steps: [
+                .init(
+                    kind: .removeUnmanagedSkillCopy, title: "Remove synced", detail: "", destinationPath: synced.path(percentEncoded: false)
+                ),
+                .init(
+                    kind: .removeUnmanagedSkillCopy, title: "Remove loose", detail: "", destinationPath: loose.path(percentEncoded: false)),
+            ])
         let receipt = await OperationExecutor(store: fixture.store, homeURL: fixture.home).execute(plan)
         #expect(receipt.results.map(\.status) == [.failed, .succeeded])
         #expect(FileManager.default.fileExists(atPath: synced.appending(path: "pdf/SKILL.md").path(percentEncoded: false)))
@@ -199,10 +210,14 @@ struct AccountAuditTests {
 
     static func peer(_ name: String, email: String, method: AccountSignIn.Method = .subscription) -> AccountPeerReport {
         let signIn = AccountSignIn(method: method, email: email)
-        return .init(deviceName: name, summaries: [.init(
-            provider: .claude, signInMethod: method, plan: nil,
-            accountFingerprint: PublishedAccountSummary.fingerprint(provider: .claude, signIn: signIn, workspaceID: workspace),
-            itemCounts: nil, switchesOutOfStep: nil, observedAt: .now)])
+        return .init(
+            deviceName: name,
+            summaries: [
+                .init(
+                    provider: .claude, signInMethod: method, plan: nil,
+                    accountFingerprint: PublishedAccountSummary.fingerprint(provider: .claude, signIn: signIn, workspaceID: workspace),
+                    itemCounts: nil, switchesOutOfStep: nil, observedAt: .now)
+            ])
     }
 
     @Test func aSubscriptionWithNothingOutstandingSaysNothing() {
@@ -257,16 +272,20 @@ struct AccountAuditTests {
         #expect(findings.map(\.kind) == [.accountConnectorNeedsSignIn])
         #expect(findings.first?.actions == [.openAccountSite(provider: .claude, kind: .connector)])
         // A light read never claims a connector is fine or broken.
-        #expect(AccountAuditor.findings(
-            observations: [Self.observation(items: [item], contents: false)], plans: [:], peers: [], workspaceID: Self.workspace).isEmpty)
+        #expect(
+            AccountAuditor.findings(
+                observations: [Self.observation(items: [item], contents: false)], plans: [:], peers: [], workspaceID: Self.workspace
+            ).isEmpty)
     }
 
     @Test func aDifferentAccountFromAnotherMacIsTheLoudestFinding() throws {
         let findings = AccountAuditor.findings(
             observations: [Self.observation()],
             plans: [:],
-            peers: [Self.peer("Studio", email: "me@example.com"), Self.peer("Laptop", email: "work@example.com"),
-                    Self.peer("Old Mac", email: "x@example.com", method: .apiKey)],
+            peers: [
+                Self.peer("Studio", email: "me@example.com"), Self.peer("Laptop", email: "work@example.com"),
+                Self.peer("Old Mac", email: "x@example.com", method: .apiKey),
+            ],
             workspaceID: Self.workspace)
         let finding = try #require(findings.first)
         #expect(findings.count == 1)
@@ -277,9 +296,11 @@ struct AccountAuditTests {
     }
 
     @Test func anUnreadableAccountSaysNothingItCannotProve() {
-        #expect(AccountAuditor.findings(
-            observations: [Self.observation(method: .thirdParty, unavailable: "Codex was not found.")],
-            plans: [:], peers: [], workspaceID: Self.workspace).isEmpty)
+        #expect(
+            AccountAuditor.findings(
+                observations: [Self.observation(method: .thirdParty, unavailable: "Codex was not found.")],
+                plans: [:], peers: [], workspaceID: Self.workspace
+            ).isEmpty)
     }
 
     @Test func accountActionsAreNamedAndOnlyApplyingChangesFiles() {

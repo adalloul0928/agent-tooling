@@ -61,8 +61,9 @@ public enum ReviewedMarketplaceMCPServer {
         guard !routes.isEmpty else { return nil }
         // Prefer the reviewed HTTPS endpoint when both shapes exist: it is the
         // same address on every Mac, so recording it needs nothing device-local.
-        guard let recovered = recover(from: routes, transport: .http)
-            ?? recover(from: routes, transport: .stdio)
+        guard
+            let recovered = recover(from: routes, transport: .http)
+                ?? recover(from: routes, transport: .stdio)
         else { return nil }
         guard (try? MCPDefinitionValidator.validate(recovered.endpoint, transport: recovered.transport)) != nil
         else { return nil }

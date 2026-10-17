@@ -72,8 +72,10 @@ public enum AgentInstructionInventory {
 
         func add(_ surface: TargetSurface, _ kind: Kind, _ scope: Scope, _ url: URL) {
             guard let size = regularFileSize(url) else { return }
-            entries.append(.init(surface: surface, kind: kind, scope: scope,
-                                 path: url.standardizedFileURL.path, byteCount: size))
+            entries.append(
+                .init(
+                    surface: surface, kind: kind, scope: scope,
+                    path: url.standardizedFileURL.path, byteCount: size))
         }
         func addDirectory(_ surface: TargetSurface, _ kind: Kind, _ scope: Scope, _ directory: URL) {
             for url in markdownFiles(in: directory, fileManager) {
@@ -83,7 +85,8 @@ public enum AgentInstructionInventory {
 
         // Claude Code. Every one of these is loaded and concatenated; none of
         // them replaces another.
-        add(.claudeCode, .instructions, .managedPolicy,
+        add(
+            .claudeCode, .instructions, .managedPolicy,
             URL(fileURLWithPath: "/Library/Application Support/ClaudeCode/CLAUDE.md"))
         add(.claudeCode, .instructions, .user, homeRoot.appending(path: ".claude/CLAUDE.md"))
         addDirectory(.claudeCode, .rule, .user, homeRoot.appending(path: ".claude/rules"))
@@ -103,8 +106,12 @@ public enum AgentInstructionInventory {
                     && $0.scope != .managedPolicy
             }
             if !hasClaude, regularFileSize(projectRoot.appending(path: "AGENTS.md")) != nil {
-                notes.append(.init(surface: .claudeCode,
-                    detail: "This project has an AGENTS.md but no CLAUDE.md. Claude Code reads CLAUDE.md and will not read AGENTS.md, so none of it reaches Claude Code."))
+                notes.append(
+                    .init(
+                        surface: .claudeCode,
+                        detail:
+                            "This project has an AGENTS.md but no CLAUDE.md. Claude Code reads CLAUDE.md and will not read AGENTS.md, so none of it reaches Claude Code."
+                    ))
             }
         }
 
@@ -113,16 +120,20 @@ public enum AgentInstructionInventory {
         for name in ["AGENTS.override.md", "AGENTS.md"] {
             let url = homeRoot.appending(path: ".codex").appending(path: name)
             guard let size = regularFileSize(url), size > 0 else { continue }
-            entries.append(.init(surface: .codexCLI, kind: .instructions, scope: .user,
-                                 path: url.standardizedFileURL.path, byteCount: size))
+            entries.append(
+                .init(
+                    surface: .codexCLI, kind: .instructions, scope: .user,
+                    path: url.standardizedFileURL.path, byteCount: size))
             break
         }
         if let projectRoot {
             for name in ["AGENTS.override.md", "AGENTS.md", "TEAM_GUIDE.md", ".agents.md"] {
                 let url = projectRoot.appending(path: name)
                 guard let size = regularFileSize(url), size > 0 else { continue }
-                entries.append(.init(surface: .codexCLI, kind: .instructions, scope: .project,
-                                     path: url.standardizedFileURL.path, byteCount: size))
+                entries.append(
+                    .init(
+                        surface: .codexCLI, kind: .instructions, scope: .project,
+                        path: url.standardizedFileURL.path, byteCount: size))
                 break
             }
         }
@@ -135,17 +146,20 @@ public enum AgentInstructionInventory {
     private static func regularFileSize(_ url: URL) -> Int? {
         let resolved = url.resolvingSymlinksInPath().standardizedFileURL
         guard let values = try? resolved.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
-              values.isRegularFile == true else { return nil }
+            values.isRegularFile == true
+        else { return nil }
         return min(values.fileSize ?? 0, maximumReportedBytes)
     }
 
     private static func markdownFiles(in directory: URL, _ fileManager: FileManager) -> [URL] {
         // Recursive, because both clients allow organising these into
         // subfolders, and a rule in one still loads.
-        guard let walker = fileManager.enumerator(
-            at: directory.resolvingSymlinksInPath(),
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]) else { return [] }
+        guard
+            let walker = fileManager.enumerator(
+                at: directory.resolvingSymlinksInPath(),
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles])
+        else { return [] }
         var found: [URL] = []
         for case let url as URL in walker where url.pathExtension.lowercased() == "md" {
             found.append(url)

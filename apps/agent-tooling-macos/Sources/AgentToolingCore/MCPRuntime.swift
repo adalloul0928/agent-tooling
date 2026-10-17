@@ -101,13 +101,15 @@ public struct ToolHiveMCPRuntimeProvider: MCPRuntimeProvider {
         do {
             switch try await ToolHiveRuntimeInspection(runner: runner).version() {
             case .available(let version, let diagnostic):
-                return MCPRuntimeStatus(id: id, displayName: "ToolHive", isAvailable: true,
+                return MCPRuntimeStatus(
+                    id: id, displayName: "ToolHive", isAvailable: true,
                     version: version.version, capabilities: [.health, .logs],
                     detail: diagnostic ?? "Read-only workload status and log inspection available.")
             case .unavailable(let diagnostic):
                 return unavailableStatus(detail: diagnostic)
             case .unsupportedResponse(let diagnostic), .commandFailed(let diagnostic):
-                return MCPRuntimeStatus(id: id, displayName: "ToolHive", isAvailable: true,
+                return MCPRuntimeStatus(
+                    id: id, displayName: "ToolHive", isAvailable: true,
                     capabilities: [], detail: diagnostic.isEmpty ? "ToolHive could not be inspected." : diagnostic)
             }
         } catch {

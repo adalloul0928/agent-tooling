@@ -133,8 +133,9 @@ struct OtherMacSheet: View {
                     } else {
                         ContentUnavailableView(
                             "Nothing reported yet", systemImage: "laptopcomputer.slash",
-                            description: Text("\(device.name) has not published its state. It will on its next sync."))
-                            .frame(maxWidth: .infinity, minHeight: Size.emptyStateMinHeight)
+                            description: Text("\(device.name) has not published its state. It will on its next sync.")
+                        )
+                        .frame(maxWidth: .infinity, minHeight: Size.emptyStateMinHeight)
                     }
                     TitledCard("Assigned to \(device.name)", count: "\(assigned.count)") {
                         if assigned.isEmpty {
@@ -158,8 +159,10 @@ struct OtherMacSheet: View {
                             }
                         }
                     }
-                    Text("Nothing runs on \(device.name) from here. Assigning saves what it should have; it installs when it next syncs, by its own policy.")
-                        .font(AgentFont.caption).foregroundStyle(.tertiary).wrapsLines()
+                    Text(
+                        "Nothing runs on \(device.name) from here. Assigning saves what it should have; it installs when it next syncs, by its own policy."
+                    )
+                    .font(AgentFont.caption).foregroundStyle(.tertiary).wrapsLines()
                 }
                 .padding(Space.xxxl)
             }

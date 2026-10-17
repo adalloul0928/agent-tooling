@@ -76,10 +76,11 @@ struct ClientReleaseNotesTests {
 
     @Test func kiroNotesComeFromOnePagePerMinorAndKeepTheArticleText() async throws {
         let sources = ClientReleaseNotesService.sources(for: .kiro, installedVersion: "2.26.0")
-        #expect(sources.map(\.absoluteString) == [
-            "https://kiro.dev/changelog/cli/2-26/", "https://kiro.dev/changelog/cli/2-27/",
-            "https://kiro.dev/changelog/cli/2-28/", "https://kiro.dev/changelog/cli/2-29/",
-        ])
+        #expect(
+            sources.map(\.absoluteString) == [
+                "https://kiro.dev/changelog/cli/2-26/", "https://kiro.dev/changelog/cli/2-27/",
+                "https://kiro.dev/changelog/cli/2-28/", "https://kiro.dev/changelog/cli/2-29/",
+            ])
         let page = """
             <html><head><script>ignored()</script><style>.x{}</style></head><body><nav>Menu</nav>
             <main><h1>Kiro CLI 2.27</h1><p>Highlights &amp; notes</p><ul><li>Faster <b>startup</b></li><li>New skills folder</li></ul></main>
@@ -102,12 +103,16 @@ struct ClientReleaseNotesTests {
     @Test func notesAreBoundedAndAnUnreachableSourceIsReportedInItsOwnWords() async throws {
         let big = (0..<20).map { "## 9.\($0)\n" + String(repeating: "x", count: 10_000) }.reversed().joined(separator: "\n")
         let source = ClientReleaseNotesService.sources(for: .claude, installedVersion: nil)[0].absoluteString
-        let notes = try await ClientReleaseNotesService(fetcher: ScriptedFetcher(answers: [source: .success(big)])).notes(for: .claude, installedVersion: "1.0")
+        let notes = try await ClientReleaseNotesService(fetcher: ScriptedFetcher(answers: [source: .success(big)])).notes(
+            for: .claude, installedVersion: "1.0")
         #expect(notes.count <= ClientReleaseNotesService.maximumNotes)
         #expect(notes.allSatisfy { $0.body.count <= ClientReleaseNotesService.maximumBodyCharacters + 2 })
         #expect(notes.reduce(0) { $0 + $1.body.count } <= ClientReleaseNotesService.maximumTotalCharacters + 40)
 
-        let down = ClientReleaseNotesService(fetcher: ScriptedFetcher(answers: [source: .failure(ClientReleaseNotesError.unreachable("raw.githubusercontent.com answered 503."))]))
+        let down = ClientReleaseNotesService(
+            fetcher: ScriptedFetcher(answers: [
+                source: .failure(ClientReleaseNotesError.unreachable("raw.githubusercontent.com answered 503."))
+            ]))
         await #expect(throws: ClientReleaseNotesError.self) { try await down.notes(for: .claude, installedVersion: nil) }
         await #expect(throws: ClientReleaseNotesError.self) { try await down.notes(for: .gemini, installedVersion: nil) }
     }

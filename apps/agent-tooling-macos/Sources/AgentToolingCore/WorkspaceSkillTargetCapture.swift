@@ -71,7 +71,8 @@ public enum WorkspaceSkillTargetCapture {
         capabilityEvidence: [TargetCapabilityEvidence] = []
     ) async throws -> WorkspaceSkillTargetCaptureResult {
         let task = Task.detached(priority: .utility) {
-            try captureSynchronously(homeURL: homeURL, deviceID: deviceID, selectors: selectors,
+            try captureSynchronously(
+                homeURL: homeURL, deviceID: deviceID, selectors: selectors,
                 projectRoots: projectRoots, observations: observations,
                 capabilityEvidence: capabilityEvidence)
         }
@@ -79,7 +80,9 @@ public enum WorkspaceSkillTargetCapture {
             let result = try await task.value
             try Task.checkCancellation()
             return result
-        } onCancel: { task.cancel() }
+        } onCancel: {
+            task.cancel()
+        }
     }
 
     /// What this target can carry, from what this Mac actually observed.
@@ -100,9 +103,11 @@ public enum WorkspaceSkillTargetCapture {
             && entry.component != .skill
             && entry.scopes.contains(scope)
             && entry.installedClientVersion == version
-            && entry.support == .supported {
-            let context = ResolvedTargetComponentContext(component: entry.component,
-                                                         transport: entry.transport)
+            && entry.support == .supported
+        {
+            let context = ResolvedTargetComponentContext(
+                component: entry.component,
+                transport: entry.transport)
             if !contexts.contains(context) { contexts.append(context) }
         }
         return contexts
@@ -115,9 +120,11 @@ public enum WorkspaceSkillTargetCapture {
     ) throws -> WorkspaceSkillTargetCaptureResult {
         try Task.checkCancellation()
         guard selectors.count <= 1_024, Set(selectors).count == selectors.count,
-              observations.count <= 1_024 else { throw WorkspaceSkillTargetCaptureError.invalidSelectors }
+            observations.count <= 1_024
+        else { throw WorkspaceSkillTargetCaptureError.invalidSelectors }
         guard projectRoots.count <= 10_000,
-              Set(projectRoots.map(\.projectID)).count == projectRoots.count else {
+            Set(projectRoots.map(\.projectID)).count == projectRoots.count
+        else {
             throw WorkspaceSkillTargetCaptureError.invalidProjectBindings
         }
         let homeBinding = try existingRoot(homeURL, rejectLeafSymlink: false)
@@ -131,8 +138,10 @@ public enum WorkspaceSkillTargetCapture {
             // A surface with no native skill folder on this Mac is skipped, not
             // fatal: the caller reports it and every other client still resolves.
             guard let client = TargetSurfaceCapability.skillClient(for: selector.surface) else {
-                skipped.append(.init(selector: selector,
-                    reason: .unsupportedSurface(selector.surface)))
+                skipped.append(
+                    .init(
+                        selector: selector,
+                        reason: .unsupportedSurface(selector.surface)))
                 continue
             }
             let projectRoot: URL?
@@ -164,21 +173,26 @@ public enum WorkspaceSkillTargetCapture {
             // A client that is not installed cannot carry anything. That is an
             // ordinary state, so it is skipped and reported, not thrown.
             guard observation.installed else {
-                skipped.append(.init(selector: selector,
-                    reason: .unavailableClient(selector.surface)))
+                skipped.append(
+                    .init(
+                        selector: selector,
+                        reason: .unavailableClient(selector.surface)))
                 continue
             }
             let directory = try NativeSkillDestination.directory(
                 client: client, homeURL: homeURL, scope: selector.scope, projectRoot: projectRoot)
             let binding = try directoryBinding(directory)
             directoryBindings.append((directory, binding))
-            results.append(.init(target: .init(selector: selector,
-                physicalDestinationID: identity(deviceID: deviceID, directory: binding.canonicalDirectory),
-                installedClientVersion: observation.version, adapterContractVersion: adapterContractVersion,
-                componentContexts: componentContexts(
-                    surface: selector.surface, scope: selector.scope,
-                    version: observation.version, evidence: capabilityEvidence)),
-                plannedDirectory: directory, canonicalDirectory: binding.canonicalDirectory))
+            results.append(
+                .init(
+                    target: .init(
+                        selector: selector,
+                        physicalDestinationID: identity(deviceID: deviceID, directory: binding.canonicalDirectory),
+                        installedClientVersion: observation.version, adapterContractVersion: adapterContractVersion,
+                        componentContexts: componentContexts(
+                            surface: selector.surface, scope: selector.scope,
+                            version: observation.version, evidence: capabilityEvidence)),
+                    plannedDirectory: directory, canonicalDirectory: binding.canonicalDirectory))
         }
         // Detect ordinary replacement and newly-created missing suffixes across
         // the capture. This is observation consistency, not snapshot isolation.
@@ -229,7 +243,8 @@ public enum WorkspaceSkillTargetCapture {
                 }
                 var canonical = URL(fileURLWithPath: name, isDirectory: true)
                 for part in missing.reversed() { canonical.append(path: part, directoryHint: .isDirectory) }
-                return .init(canonicalDirectory: canonical, anchorDevice: metadata.st_dev,
+                return .init(
+                    canonicalDirectory: canonical, anchorDevice: metadata.st_dev,
                     anchorInode: metadata.st_ino, missingComponents: missing)
             }
             guard errno == ENOENT, anchor.path != "/" else {

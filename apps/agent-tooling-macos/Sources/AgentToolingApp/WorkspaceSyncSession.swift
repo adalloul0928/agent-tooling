@@ -182,7 +182,8 @@ final class WorkspaceSyncSession {
         } catch EncryptedFolderTransportError.cannotDecrypt {
             errorMessage = "That folder already holds a workspace this phrase does not open. Nothing was changed."
         } catch EncryptedFolderTransportError.invalidFolder,
-                WorkspaceSyncEnrollmentError.invalidCheckout {
+            WorkspaceSyncEnrollmentError.invalidCheckout
+        {
             errorMessage = "Choose a folder on this Mac that your file sync already keeps in step."
         } catch {
             errorMessage = "That folder could not be used. Nothing was changed."
@@ -233,10 +234,11 @@ final class WorkspaceSyncSession {
     /// question again.
     @discardableResult
     func runScheduledPass(now: Date = .now) async -> WorkspaceSyncScheduleDecision {
-        let decision = WorkspaceSyncScheduler().decide(.init(
-            isEnabled: isAutomatic, isConnected: isConnected, isRunning: isBusy,
-            hasUnresolvedConflicts: !conflicts.isEmpty, lastAttempt: lastAttempt,
-            consecutiveFailures: consecutiveFailures), now: now)
+        let decision = WorkspaceSyncScheduler().decide(
+            .init(
+                isEnabled: isAutomatic, isConnected: isConnected, isRunning: isBusy,
+                hasUnresolvedConflicts: !conflicts.isEmpty, lastAttempt: lastAttempt,
+                consecutiveFailures: consecutiveFailures), now: now)
         lastScheduleDecision = decision
         guard decision == .run else { return decision }
         await sync(now: now)
@@ -269,8 +271,9 @@ final class WorkspaceSyncSession {
         defer { isBusy = false }
         let resolutions = conflicts.enumerated().compactMap { index, conflict in
             choices[index].map {
-                WorkspaceConflictResolution(kind: conflict.kind, artifactID: conflict.artifactID,
-                                            objectID: conflict.objectID, choice: $0)
+                WorkspaceConflictResolution(
+                    kind: conflict.kind, artifactID: conflict.artifactID,
+                    objectID: conflict.objectID, choice: $0)
             }
         }
         do {
@@ -299,7 +302,7 @@ final class WorkspaceSyncSession {
         lastAttempt = now
         defer {
             isBusy = false
-            refreshDevices()   // the pass may have brought other Macs' registry edits
+            refreshDevices()  // the pass may have brought other Macs' registry edits
         }
         do {
             let transport = try transport ?? makeTransport(for: enrollment)

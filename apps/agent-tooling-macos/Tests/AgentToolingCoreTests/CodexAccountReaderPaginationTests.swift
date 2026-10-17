@@ -41,10 +41,12 @@ struct CodexAccountReaderPaginationTests {
             case "config/read":
                 result = .object([
                     "config": .object([:]),
-                    "layers": .array([.object([
-                        "name": .object(["type": .string("user"), "file": .string("/Users/example/.codex/config.toml")]),
-                        "config": .object([:]),
-                    ])]),
+                    "layers": .array([
+                        .object([
+                            "name": .object(["type": .string("user"), "file": .string("/Users/example/.codex/config.toml")]),
+                            "config": .object([:]),
+                        ])
+                    ]),
                 ])
             case "app/list":
                 let cursorString = message["params"]?["cursor"]?.stringValue
@@ -67,9 +69,11 @@ struct CodexAccountReaderPaginationTests {
             default:
                 result = .object([:])
             }
-            queue.append(try AgentToolingCoding.encoder().encode(JSONValue.object([
-                "id": .number(id), "result": result,
-            ])))
+            queue.append(
+                try AgentToolingCoding.encoder().encode(
+                    JSONValue.object([
+                        "id": .number(id), "result": result,
+                    ])))
         }
 
         func receive() async throws -> Data? {

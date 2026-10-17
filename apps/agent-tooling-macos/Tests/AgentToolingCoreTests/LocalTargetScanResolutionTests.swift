@@ -96,8 +96,9 @@ struct LocalTargetScanResolutionTests {
         // Present, but the version is unknown — not missing, not unsupported.
         #expect(observation.commandAvailable)
         #expect(observation.version == nil)
-        #expect(observation.notes.contains {
-            $0.contains("did not answer --version (exit 3)") && $0.contains("version is unknown")
-        }, "\(observation.notes)")
+        #expect(
+            observation.notes.contains {
+                $0.contains("did not answer --version (exit 3)") && $0.contains("version is unknown")
+            }, "\(observation.notes)")
     }
 }

@@ -98,7 +98,8 @@ final class WorkspaceActivitySession {
     /// first, the order the screen groups by day.
     var mergedActivities: [ActivityReceipt] {
         let referenced = Set(activities.compactMap(\.operationReceiptID))
-        let synthesized = receipts
+        let synthesized =
+            receipts
             .filter { !referenced.contains($0.id) }
             .map(Self.activityReceipt(from:))
         return (activities + synthesized).sorted { lhs, rhs in

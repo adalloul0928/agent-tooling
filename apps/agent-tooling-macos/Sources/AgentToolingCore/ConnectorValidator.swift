@@ -4,12 +4,6 @@ struct ValidatedConnectorDraft: Sendable, Equatable {
     var name: String
     var provider: String
     var secretReferenceNames: [String]
-
-    init(name: String, provider: String, secretReferenceNames: [String]) {
-        self.name = name
-        self.provider = provider
-        self.secretReferenceNames = secretReferenceNames
-    }
 }
 
 enum ConnectorValidator {

@@ -227,7 +227,8 @@ enum WorkspaceSnapshotValidator {
             if let bindings = profile.targetBindings {
                 try requireUnique(bindings.map(\.id), field: "configuration target bindings")
                 for binding in bindings {
-                    try validateText(binding.item.identifier, field: "target binding identifier", maximum: Limit.identifierCharacters, required: true)
+                    try validateText(
+                        binding.item.identifier, field: "target binding identifier", maximum: Limit.identifierCharacters, required: true)
                 }
             }
             for check in profile.checks {

@@ -9,11 +9,13 @@ import Testing
 struct InsightsDeepDiveTests {
     // MARK: - Digests
 
-    @Test func aDigestKeepsTheFirstAsksTheToolsAndTheProjectNameAndNothingSecret() {
+    @Test func aDigestKeepsTheFirstAsksTheToolsAndTheProjectNameAndNothingSecret() throws {
         var builder = ConversationDigestBuilder(conversationID: "c1", client: .claude)
         builder.workingDirectory = "/Users/example/ws/WootOrderHistory"
         let start = Date(timeIntervalSince1970: 1_700_000_000)
-        builder.noteUserMessage("Fix the failing brazil build in /Users/example/ws/WootOrderHistory, token=sk-live-abcdef123456789", at: start)
+        let syntheticToken = ["sk-live", "abcdef123456789"].joined(separator: "-")
+        builder.noteUserMessage(
+            "Fix the failing brazil build in /Users/example/ws/WootOrderHistory, token=\(syntheticToken)", at: start)
         builder.noteTool("Bash", at: start.addingTimeInterval(10))
         builder.noteTool("Bash", at: start.addingTimeInterval(20))
         builder.noteTool("Skill", at: start.addingTimeInterval(30))
@@ -22,7 +24,7 @@ struct InsightsDeepDiveTests {
             builder.noteUserMessage("follow-up \(index)", at: start.addingTimeInterval(Double(100 + index)))
         }
 
-        let digest = builder.digest!
+        let digest = try #require(builder.digest)
 
         #expect(digest.client == .claude)
         #expect(digest.workingDirectory == "WootOrderHistory", "the project is named, not located")
@@ -31,7 +33,7 @@ struct InsightsDeepDiveTests {
         #expect(digest.userMessages.count == ConversationDigestBuilder.maximumUserMessages)
         #expect(digest.userMessages.first?.hasPrefix("Fix the failing brazil build in [local-path]") == true)
         #expect(digest.userMessages.last == "follow-up 5")
-        #expect(!digest.userMessages.joined().contains("sk-live-abcdef123456789"), "a secret survived redaction")
+        #expect(!digest.userMessages.joined().contains(syntheticToken), "a secret survived redaction")
         #expect(digest.toolsUsed == ["Bash", "Skill"], "tools are listed once each")
         #expect(digest.skillsUsed == ["brazil"])
         #expect(digest.startedAt == start)
@@ -62,7 +64,8 @@ struct InsightsDeepDiveTests {
         let now = Date.now
         let stamp = Int(now.timeIntervalSince1970) - 3_600
         let id = "0a0b0c0d-1111-2222-3333-444444444444"
-        try #"{"session_id":"\#(id)","cwd":"/Users/example/ws/WootFeatureFlags","title":"Ship the flags","created_at":"2026-09-30T17:37:07Z"}"#
+        try
+            #"{"session_id":"\#(id)","cwd":"/Users/example/ws/WootFeatureFlags","title":"Ship the flags","created_at":"2026-09-30T17:37:07Z"}"#
             .write(to: sessions.appending(path: "\(id).json"), atomically: true, encoding: .utf8)
         let lines = [
             #"{"version":"v1","kind":"Prompt","data":{"message_id":"m1","content":[{"kind":"text","data":"/woot-wbr run the Tech WBR for last week"}],"meta":{"timestamp":\#(stamp)}}}"#,
@@ -98,7 +101,7 @@ struct InsightsDeepDiveTests {
 
     // MARK: - The prompt
 
-    @Test func thePromptListsTheSkillsAndTheDigestsNewestFirstWithinItsBudget() {
+    @Test func thePromptListsTheSkillsAndTheDigestsNewestFirstWithinItsBudget() throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         var digests: [ConversationDigest] = []
         for index in 0..<3 {
@@ -118,8 +121,8 @@ struct InsightsDeepDiveTests {
 
         #expect(rendered.used == 3)
         #expect(rendered.prompt.contains("- docx — Word documents"))
-        let first = rendered.prompt.range(of: "ask 0")!.lowerBound
-        let last = rendered.prompt.range(of: "ask 2")!.lowerBound
+        let first = try #require(rendered.prompt.range(of: "ask 0")).lowerBound
+        let last = try #require(rendered.prompt.range(of: "ask 2")).lowerBound
         #expect(first < last, "newest conversation comes first")
         #expect(rendered.prompt.contains("project: Project1"))
         #expect(rendered.prompt.contains("Answer only with the JSON"))
@@ -162,12 +165,13 @@ struct InsightsDeepDiveTests {
         withTools.removeLast(11)
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "claude", arguments: withTools) }
         var writable = InsightsDeepDiveCommandShapes.codex(requestDirectory: request)
-        writable[writable.firstIndex(of: "read-only")!] = "workspace-write"
+        writable[try #require(writable.firstIndex(of: "read-only"))] = "workspace-write"
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "codex", arguments: writable) }
         #expect(throws: OperationEngineError.self) {
             try policy.validate(
                 executable: "codex",
-                arguments: InsightsDeepDiveCommandShapes.codex(requestDirectory: URL(filePath: "/tmp/request-\(UUID().uuidString.lowercased())")))
+                arguments: InsightsDeepDiveCommandShapes.codex(
+                    requestDirectory: URL(filePath: "/tmp/request-\(UUID().uuidString.lowercased())")))
         }
         #expect(!InsightsDeepDiveCommandShapes.claude().contains("--resume"), "the deep dive keeps no session")
     }
@@ -199,7 +203,8 @@ struct InsightsDeepDiveTests {
         """
 
     @Test func aClaudeAnswerIsReadFromItsStructuredOutput() throws {
-        let document = #"{"type":"result","subtype":"success","is_error":false,"session_id":"s","result":"","structured_output":\#(Self.answer)}"#
+        let document =
+            #"{"type":"result","subtype":"success","is_error":false,"session_id":"s","result":"","structured_output":\#(Self.answer)}"#
         let parsed = try InsightsDeepDiveService.parseClaude(.init(status: 0, standardOutput: document, standardError: ""), client: .claude)
         let dive = try InsightsDeepDiveService.deepDive(from: parsed, client: .claude, considered: 40, windowStart: .distantPast, now: .now)
 
@@ -228,7 +233,8 @@ struct InsightsDeepDiveTests {
     }
 
     @Test func aFailedTurnIsReportedWithItsOwnWordsAndNoSecret() {
-        let claude = #"{"type":"result","subtype":"error","is_error":true,"result":"Failed to authenticate. Bearer sk-live-abcdef1234567890"}"#
+        let claude =
+            #"{"type":"result","subtype":"error","is_error":true,"result":"Failed to authenticate. Bearer sk-live-abcdef1234567890"}"#
         #expect(throws: InsightsDeepDiveError.self) {
             try InsightsDeepDiveService.parseClaude(.init(status: 1, standardOutput: claude, standardError: ""), client: .claude)
         }
@@ -253,7 +259,9 @@ struct InsightsDeepDiveTests {
     @Test func anAnswerThatIgnoredTheSchemaIsBoundedAllTheSame() throws {
         let answer: [String: Any] = [
             "summary": String(repeating: "a", count: 5_000),
-            "themes": (0..<20).map { ["title": "t\($0)", "detail": String(repeating: "d", count: 2_000), "conversation_count": 3, "clients": ["claude"]] },
+            "themes": (0..<20).map {
+                ["title": "t\($0)", "detail": String(repeating: "d", count: 2_000), "conversation_count": 3, "clients": ["claude"]]
+            },
             "recommendations": [],
         ]
         let dive = try InsightsDeepDiveService.deepDive(from: answer, client: .codex, considered: 1, windowStart: .distantPast, now: .now)
@@ -294,14 +302,20 @@ struct InsightsDeepDiveTests {
     }
 
     private actor RecordingRunner: StandardInputCommandRunning {
-        struct Call { let executable: String; let arguments: [String]; let standardInput: Data; let currentDirectory: URL? }
+        struct Call {
+            let executable: String
+            let arguments: [String]
+            let standardInput: Data
+            let currentDirectory: URL?
+        }
         private let output: CommandOutput
         private(set) var calls: [Call] = []
 
         init(output: CommandOutput) { self.output = output }
 
         func run(executable: String, arguments: [String], standardInput: Data, currentDirectory: URL?) async throws -> CommandOutput {
-            calls.append(Call(executable: executable, arguments: arguments, standardInput: standardInput, currentDirectory: currentDirectory))
+            calls.append(
+                Call(executable: executable, arguments: arguments, standardInput: standardInput, currentDirectory: currentDirectory))
             return output
         }
     }

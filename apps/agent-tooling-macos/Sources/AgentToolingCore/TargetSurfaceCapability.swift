@@ -28,7 +28,7 @@ public enum TargetSurfaceCapability {
         case .geminiCLI: .gemini
         case .kiroCLI: .kiro
         case .claudeDesktop, .claudeCloud, .codexDesktop, .codexCloud,
-             .geminiIDE, .geminiCloud:
+            .geminiIDE, .geminiCloud:
             nil
         }
     }
@@ -61,7 +61,8 @@ public enum TargetSurfaceCapability {
     /// refused here even though they can carry skills.
     public static func nativePluginClient(for surface: TargetSurface) -> ClientKind? {
         guard let client = cliClient(for: surface),
-              NativePluginInstallRegister.supportsClient(client) else { return nil }
+            NativePluginInstallRegister.supportsClient(client)
+        else { return nil }
         return client
     }
 }

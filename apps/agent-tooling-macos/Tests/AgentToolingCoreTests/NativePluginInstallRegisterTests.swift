@@ -48,16 +48,18 @@ struct NativePluginInstallRegisterTests {
         // The identifier becomes an argument, so anything that could be read as
         // a flag or a path never reaches one.
         for identifier in ["--force", "../escape", "with space", "", "a;b"] {
-            #expect(NativePluginInstallRegister.command(
-                for: .codex, externalPluginID: identifier) == nil, "'\(identifier)' produced a command")
+            #expect(
+                NativePluginInstallRegister.command(
+                    for: .codex, externalPluginID: identifier) == nil, "'\(identifier)' produced a command")
         }
     }
 
     @Test func theCommandPolicyAcceptsEveryCommandTheRegisterProduces() throws {
         // The register and the executor's policy must agree, or a recorded
         // command would be offered and then refused at the moment of running.
-        let policy = OperationCommandPolicy(libraryURL: URL(fileURLWithPath: "/"),
-                                            gitBackupRoot: URL(fileURLWithPath: "/"))
+        let policy = OperationCommandPolicy(
+            libraryURL: URL(fileURLWithPath: "/"),
+            gitBackupRoot: URL(fileURLWithPath: "/"))
         for client in [ClientKind.claude, .codex] {
             let command = try #require(
                 NativePluginInstallRegister.command(for: client, externalPluginID: "browser"))

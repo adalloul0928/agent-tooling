@@ -2,8 +2,8 @@ import AgentToolingTestSupport
 import Foundation
 import Testing
 
-@testable import AgentToolingCore
 @testable import AgentToolingApp
+@testable import AgentToolingCore
 
 /// The automatic check asks the scheduler and does what it says. A quiet
 /// scheduler always has a reason a person can read.
@@ -110,7 +110,7 @@ struct WorkspaceSyncScheduledPassTests {
     }
 
     @MainActor private struct Fixture {
-        static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
+        static let alpha = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
         let root: URL
         let remote: URL
         let store: WorkspaceRevisionStore
@@ -123,23 +123,32 @@ struct WorkspaceSyncScheduledPassTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
                 .appending(path: "scheduled-pass-\(UUID())")
             remote = root.appending(path: "remote.git")
-            try FileManager.default.createDirectory(at: remote, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(
+                at: remote, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
             try GitTestFixture.git(["init", "--bare", "--initial-branch", "main", remote.path], in: root)
 
-            workspaceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e5")!)
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: workspaceID, revision: .init(writerID: WorkspaceObjectID()),
-                artifacts: [.init(identity: .init(id: Self.alpha, kind: .skill, displayName: "Shared"),
-                                  authority: .trackedOnly)]))
-            store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "store"),
+            workspaceID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000e5"))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: workspaceID, revision: .init(writerID: WorkspaceObjectID()),
+                    artifacts: [
+                        .init(
+                            identity: .init(id: Self.alpha, kind: .skill, displayName: "Shared"),
+                            authority: .trackedOnly)
+                    ]))
+            store = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "store"),
                 workspaceID: workspaceID, deviceID: WorkspaceObjectID())
-            try store.initialize(document: document,
-                                 device: .init(workspaceID: workspaceID, deviceID: store.deviceID))
-            otherStore = try WorkspaceRevisionStore(containerRoot: root.appending(path: "store-other"),
+            try store.initialize(
+                document: document,
+                device: .init(workspaceID: workspaceID, deviceID: store.deviceID))
+            otherStore = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "store-other"),
                 workspaceID: workspaceID, deviceID: WorkspaceObjectID())
-            try otherStore.initialize(document: document,
-                                      device: .init(workspaceID: workspaceID, deviceID: otherStore.deviceID))
+            try otherStore.initialize(
+                document: document,
+                device: .init(workspaceID: workspaceID, deviceID: otherStore.deviceID))
             other = WorkspaceSyncCoordinator(
                 store: otherStore,
                 transport: try await GitTestFixture.enroll(remote: remote, checkout: root.appending(path: "checkout-other")),
@@ -151,16 +160,20 @@ struct WorkspaceSyncScheduledPassTests {
         func connect() async throws {
             let checkout = root.appending(path: "checkout")
             _ = try await GitTestFixture.enroll(remote: remote, checkout: checkout)
-            try enrollmentStore.write(.init(workspaceID: workspaceID, remote: remote.path,
-                                            checkoutPath: checkout.standardizedFileURL.path))
+            try enrollmentStore.write(
+                .init(
+                    workspaceID: workspaceID, remote: remote.path,
+                    checkoutPath: checkout.standardizedFileURL.path))
         }
 
         /// A connection to a folder that holds no repository.
         func recordConnectionWithoutACheckout() throws {
             let checkout = root.appending(path: "empty-checkout")
             try FileManager.default.createDirectory(at: checkout, withIntermediateDirectories: true)
-            try enrollmentStore.write(.init(workspaceID: workspaceID, remote: remote.path,
-                                            checkoutPath: checkout.standardizedFileURL.path))
+            try enrollmentStore.write(
+                .init(
+                    workspaceID: workspaceID, remote: remote.path,
+                    checkoutPath: checkout.standardizedFileURL.path))
         }
 
         func rename(store: WorkspaceRevisionStore, to name: String) throws {
@@ -177,8 +190,9 @@ struct WorkspaceSyncScheduledPassTests {
         }
 
         func session() -> WorkspaceSyncSession {
-            WorkspaceSyncSession(store: store, enrollmentStore: enrollmentStore,
-                                 workspaceID: workspaceID, writerID: WorkspaceObjectID())
+            WorkspaceSyncSession(
+                store: store, enrollmentStore: enrollmentStore,
+                workspaceID: workspaceID, writerID: WorkspaceObjectID())
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }

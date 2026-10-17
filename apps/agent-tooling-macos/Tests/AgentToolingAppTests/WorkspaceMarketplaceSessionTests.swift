@@ -250,8 +250,10 @@ struct WorkspaceMarketplaceSessionTests {
         let session = fixture.session(providers: [StubMarketplaceProvider(packages: [listing])])
         await session.refresh()
         // The reviewed listing is ready to add without a person entering anything.
-        #expect(session.mcpAvailability(for: listing) == .reviewed(
-            ReviewedMarketplaceMCPServer.reviewedDraft(for: listing) ?? MCPDraft()))
+        #expect(
+            session.mcpAvailability(for: listing)
+                == .reviewed(
+                    ReviewedMarketplaceMCPServer.reviewedDraft(for: listing) ?? MCPDraft()))
 
         await session.adoptMCPServer(listing)
 

@@ -58,8 +58,9 @@ struct OperationPlanRiskClassifierTests {
     @Test func changingAConnectionAnAppAlreadyHasNeedsReview() {
         let plan = plan([item(.configureManagedConnection(transport: .http))])
         let context = OperationPlanRiskClassifier.Context(configuredConnections: [key()])
-        #expect(OperationPlanRiskClassifier.classify(plan, context: context)
-            == .needsReview([.reconfiguresConnection(count: 1)]))
+        #expect(
+            OperationPlanRiskClassifier.classify(plan, context: context)
+                == .needsReview([.reconfiguresConnection(count: 1)]))
     }
 
     @Test func aConnectionThePlannerSawAlreadyThereNeedsReviewWithoutAnyContext() {
@@ -95,8 +96,11 @@ struct OperationPlanRiskClassifierTests {
     @Test func exclusionsNeedReviewSoThePersonLearnsWhatWillNotHappen() {
         let plan = WorkspaceDeploymentPlan(
             items: [item(.installContent(digest: digest("a")))],
-            exclusions: [.init(artifactID: skill, physicalDestinationID: other, reason: .noDestination,
-                               detail: "Codex is not installed on this Mac.")])
+            exclusions: [
+                .init(
+                    artifactID: skill, physicalDestinationID: other, reason: .noDestination,
+                    detail: "Codex is not installed on this Mac.")
+            ])
         #expect(OperationPlanRiskClassifier.classify(plan) == .needsReview([.exclusions(count: 1)]))
     }
 
@@ -111,10 +115,11 @@ struct OperationPlanRiskClassifierTests {
             .bulk(count: 9), .exclusions(count: 1), .removesContent(count: 1),
             .contentFlagged(count: 1), .replacesUnprovenContent(count: 2),
         ]
-        #expect(reasons.sorted() == [
-            .contentFlagged(count: 1), .replacesUnprovenContent(count: 2),
-            .removesContent(count: 1), .exclusions(count: 1), .bulk(count: 9),
-        ])
+        #expect(
+            reasons.sorted() == [
+                .contentFlagged(count: 1), .replacesUnprovenContent(count: 2),
+                .removesContent(count: 1), .exclusions(count: 1), .bulk(count: 9),
+            ])
     }
 
     @Test func anEmptyPlanIsDirectAndTheCallerDecidesItHasNothingToDo() {
@@ -128,9 +133,10 @@ struct OperationPlanRiskClassifierTests {
     }
 
     private func item(_ action: WorkspaceDeploymentAction, artifact: ArtifactID? = nil) -> WorkspaceDeploymentItem {
-        .init(artifactID: artifact ?? skill, displayName: "Example", physicalDestinationID: destination,
-              surface: .claudeCode, scope: .user, logicalProjectID: nil, action: action,
-              desiredEnabled: nil, reasons: [.manual])
+        .init(
+            artifactID: artifact ?? skill, displayName: "Example", physicalDestinationID: destination,
+            surface: .claudeCode, scope: .user, logicalProjectID: nil, action: action,
+            desiredEnabled: nil, reasons: [.manual])
     }
 
     private func key() -> WorkspaceDeploymentInstallKey {

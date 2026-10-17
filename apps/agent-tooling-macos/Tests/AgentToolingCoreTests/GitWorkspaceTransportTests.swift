@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -78,8 +79,9 @@ struct GitWorkspaceTransportTests {
 
         let remote = try await first.remoteState()
         let remoteDocument = try #require(remote.document)
-        let merged = WorkspaceMergeEngine.merge(base: base, local: mine, remote: remoteDocument,
-                                                writerID: base.revision.writerID)
+        let merged = WorkspaceMergeEngine.merge(
+            base: base, local: mine, remote: remoteDocument,
+            writerID: base.revision.writerID)
         #expect(merged.isResolved, "\(merged.conflicts)")
         let sealed = try WorkspaceDocumentCoding.seal(try #require(merged.document))
         let mergeCommit = try await first.publish(document: sealed, expectedRemoteHead: remote.head)
@@ -98,8 +100,9 @@ struct GitWorkspaceTransportTests {
         try Data("not ours\n".utf8).write(to: fixture.checkout("a").appending(path: "notes.txt"))
 
         await #expect(throws: GitWorkspaceTransportError.unrelatedWorkingTreeChanges) {
-            try await transport.publish(document: try Fixture.document(name: "Alpha"),
-                                        expectedRemoteHead: nil)
+            try await transport.publish(
+                document: try Fixture.document(name: "Alpha"),
+                expectedRemoteHead: nil)
         }
         // Nothing was committed on the person's behalf.
         let state = try await transport.remoteState()
@@ -109,10 +112,12 @@ struct GitWorkspaceTransportTests {
     @Test func onlyAnExplicitCredentialFreeRemoteIsAccepted() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        for remote in ["https://token:secret@github.com/owner/workspace.git",
-                       "--upload-pack=/bin/sh",
-                       "ftp://example.com/workspace.git",
-                       "https://exam\u{0}ple.com/x.git"] {
+        for remote in [
+            "https://token:secret@github.com/owner/workspace.git",
+            "--upload-pack=/bin/sh",
+            "ftp://example.com/workspace.git",
+            "https://exam\u{0}ple.com/x.git",
+        ] {
             await #expect(throws: GitWorkspaceTransportError.invalidRemote) {
                 _ = try await GitWorkspaceTransport.enroll(
                     remote: remote, checkout: fixture.checkout("rejected"))
@@ -133,7 +138,8 @@ struct GitWorkspaceTransportTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
                 .appending(path: "git-workspace-transport-\(UUID())")
             remote = root.appending(path: "remote.git")
-            try FileManager.default.createDirectory(at: remote, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(
+                at: remote, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
             try Self.run(["init", "--bare", "--initial-branch", "main", remote.path], in: root)
         }
@@ -151,17 +157,22 @@ struct GitWorkspaceTransportTests {
 
         static func document(name: String) throws -> PortableWorkspaceDocument {
             let writerID = WorkspaceObjectID()
-            return try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e5")!),
-                revision: .init(writerID: writerID),
-                artifacts: [
-                    .init(identity: .init(id: ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!),
-                                          kind: .skill, displayName: name),
-                          authority: .trackedOnly),
-                    .init(identity: .init(id: ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!),
-                                          kind: .skill, displayName: "Second"),
-                          authority: .trackedOnly),
-                ]))
+            return try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000e5")),
+                    revision: .init(writerID: writerID),
+                    artifacts: [
+                        .init(
+                            identity: .init(
+                                id: ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1")),
+                                kind: .skill, displayName: name),
+                            authority: .trackedOnly),
+                        .init(
+                            identity: .init(
+                                id: ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2")),
+                                kind: .skill, displayName: "Second"),
+                            authority: .trackedOnly),
+                    ]))
         }
 
         @discardableResult

@@ -93,7 +93,7 @@ enum AgentPluginManifestLoader {
         var stringValue: String
         var intValue: Int?
 
-        init?(stringValue: String) { self.stringValue = stringValue }
+        init(stringValue: String) { self.stringValue = stringValue }
         init?(intValue: Int) {
             self.stringValue = String(intValue)
             self.intValue = intValue
@@ -132,7 +132,7 @@ enum AgentPluginManifestLoader {
             author = try Self.optionalAuthor(container)
             keywords = try Self.optionalKeywords(container)
 
-            let extensionsKey = DynamicKey(stringValue: "extensions")!
+            let extensionsKey = DynamicKey(stringValue: "extensions")
             if container.contains(extensionsKey) {
                 do {
                     let namespaces = try container.nestedContainer(keyedBy: DynamicKey.self, forKey: extensionsKey)
@@ -154,7 +154,7 @@ enum AgentPluginManifestLoader {
         private static func requiredString(
             _ container: KeyedDecodingContainer<DynamicKey>, field: String
         ) throws -> String {
-            let key = DynamicKey(stringValue: field)!
+            let key = DynamicKey(stringValue: field)
             guard container.contains(key) else { throw AgentPluginValidationError.invalidField(field) }
             do {
                 return try container.decode(String.self, forKey: key)
@@ -166,7 +166,7 @@ enum AgentPluginManifestLoader {
         private static func optionalString(
             _ container: KeyedDecodingContainer<DynamicKey>, field: String
         ) throws -> String? {
-            let key = DynamicKey(stringValue: field)!
+            let key = DynamicKey(stringValue: field)
             guard container.contains(key) else { return nil }
             do {
                 return try container.decode(String.self, forKey: key)
@@ -178,7 +178,7 @@ enum AgentPluginManifestLoader {
         private static func optionalAuthor(
             _ container: KeyedDecodingContainer<DynamicKey>
         ) throws -> AgentPluginAuthor? {
-            let key = DynamicKey(stringValue: "author")!
+            let key = DynamicKey(stringValue: "author")
             guard container.contains(key) else { return nil }
             let author: KeyedDecodingContainer<DynamicKey>
             do {
@@ -200,7 +200,7 @@ enum AgentPluginManifestLoader {
         private static func optionalAuthorString(
             _ author: KeyedDecodingContainer<DynamicKey>, field: String
         ) throws -> String? {
-            let key = DynamicKey(stringValue: field)!
+            let key = DynamicKey(stringValue: field)
             guard author.contains(key) else { return nil }
             do {
                 return try author.decode(String.self, forKey: key)
@@ -212,7 +212,7 @@ enum AgentPluginManifestLoader {
         private static func optionalKeywords(
             _ container: KeyedDecodingContainer<DynamicKey>
         ) throws -> [String]? {
-            let key = DynamicKey(stringValue: "keywords")!
+            let key = DynamicKey(stringValue: "keywords")
             guard container.contains(key) else { return nil }
             do {
                 return try container.decode([String].self, forKey: key)

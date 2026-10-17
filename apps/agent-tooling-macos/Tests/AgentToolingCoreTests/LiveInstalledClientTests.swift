@@ -18,8 +18,9 @@ private let home = FileManager.default.homeDirectoryForCurrentUser
 
 @Suite("Live installed clients")
 struct LiveInstalledClientTests {
-    @Test("The locator finds the real tools where they are actually installed",
-          .enabled(if: runsLiveClientChecks))
+    @Test(
+        "The locator finds the real tools where they are actually installed",
+        .enabled(if: runsLiveClientChecks))
     func locatorFindsRealTools() throws {
         // At least one has to be here, or this suite is checking nothing.
         let found = ClientKind.allCases.compactMap { client -> (ClientKind, URL)? in
@@ -32,12 +33,14 @@ struct LiveInstalledClientTests {
         }
     }
 
-    @Test("Claude Code's own settings file parses into the layers this build claims",
-          .enabled(if: runsLiveClientChecks))
+    @Test(
+        "Claude Code's own settings file parses into the layers this build claims",
+        .enabled(if: runsLiveClientChecks))
     func claudeSettingsParse() throws {
         let path = home.appending(path: ".claude/settings.json")
-        try #require(FileManager.default.fileExists(atPath: path.path),
-                     "No Claude Code settings file on this Mac to check against.")
+        try #require(
+            FileManager.default.fileExists(atPath: path.path),
+            "No Claude Code settings file on this Mac to check against.")
         let layers = try ConfigurationLayerReader().claudeCodeLayers(
             homeRoot: home,
             managedPolicyPath: ConfigurationLayerReader.managedPolicyPath(for: .claudeCode))
@@ -47,13 +50,15 @@ struct LiveInstalledClientTests {
         // Every key the real file carries is either understood and recorded, or
         // reported as one this build does not interpret. Silently dropping one
         // is the failure this exists to catch.
-        let raw = try #require(try JSONSerialization.jsonObject(
-            with: Data(contentsOf: path)) as? [String: Any])
+        let raw = try #require(
+            try JSONSerialization.jsonObject(
+                with: Data(contentsOf: path)) as? [String: Any])
         let understood = Set(configuration.rows.map(\.key))
         let reported = Set(configuration.unrecognized.map(\.key))
         func check(_ key: String) {
-            #expect(understood.contains(key) || reported.contains(key),
-                    "'\(key)' is in the real settings file and this build neither reads nor reports it.")
+            #expect(
+                understood.contains(key) || reported.contains(key),
+                "'\(key)' is in the real settings file and this build neither reads nor reports it.")
         }
         for (key, value) in raw {
             // The reader goes one level into the nested objects it documents, so
@@ -61,20 +66,23 @@ struct LiveInstalledClientTests {
             // parent that "covers" its children would hide exactly the setting
             // this build silently dropped.
             if let nested = value as? [String: Any],
-               understood.contains(where: { $0.hasPrefix(key + ".") })
-                || reported.contains(where: { $0.hasPrefix(key + ".") }) {
+                understood.contains(where: { $0.hasPrefix(key + ".") })
+                    || reported.contains(where: { $0.hasPrefix(key + ".") })
+            {
                 for child in nested.keys { check("\(key).\(child)") }
             } else {
                 check(key)
             }
         }
         // This person's own file is the proof that the nested path is exercised.
-        #expect(!configuration.unrecognized.isEmpty
+        #expect(
+            !configuration.unrecognized.isEmpty
                 || raw.keys.allSatisfy { understood.contains($0) })
     }
 
-    @Test("Every setting this build claims for a real file is recorded in the register",
-          .enabled(if: runsLiveClientChecks))
+    @Test(
+        "Every setting this build claims for a real file is recorded in the register",
+        .enabled(if: runsLiveClientChecks))
     func claimedSettingsAreRegistered() throws {
         let layers = try ConfigurationLayerReader().claudeCodeLayers(homeRoot: home)
         let configuration = EffectiveConfigurationResolver.resolve(
@@ -85,32 +93,37 @@ struct LiveInstalledClientTests {
         }
     }
 
-    @Test("The recorded instruction locations match what is really on this Mac",
-          .enabled(if: runsLiveClientChecks))
+    @Test(
+        "The recorded instruction locations match what is really on this Mac",
+        .enabled(if: runsLiveClientChecks))
     func instructionInventoryMatchesReality() throws {
         let result = AgentInstructionInventory.scan(homeRoot: home)
 
         // Every path reported has to be a file that is genuinely there. A
         // recorded location that does not exist would be a stale vendor fact.
         for entry in result.entries {
-            #expect(FileManager.default.fileExists(atPath: entry.path),
-                    "\(entry.path) was reported but is not there.")
+            #expect(
+                FileManager.default.fileExists(atPath: entry.path),
+                "\(entry.path) was reported but is not there.")
         }
         // And anything actually sitting in a recorded location has to be found,
         // which is the direction that catches a location this build forgot.
         let userInstructions = home.appending(path: ".claude/CLAUDE.md")
         if FileManager.default.fileExists(atPath: userInstructions.path) {
-            #expect(result.entries.contains { $0.path == userInstructions.standardizedFileURL.path },
-                    "This Mac has ~/.claude/CLAUDE.md and the inventory missed it.")
+            #expect(
+                result.entries.contains { $0.path == userInstructions.standardizedFileURL.path },
+                "This Mac has ~/.claude/CLAUDE.md and the inventory missed it.")
         }
     }
 
-    @Test("Codex's real config parses without claiming anything it does not read",
-          .enabled(if: runsLiveClientChecks))
+    @Test(
+        "Codex's real config parses without claiming anything it does not read",
+        .enabled(if: runsLiveClientChecks))
     func codexConfigParses() throws {
         let path = home.appending(path: ".codex/config.toml")
-        try #require(FileManager.default.fileExists(atPath: path.path),
-                     "No Codex config on this Mac to check against.")
+        try #require(
+            FileManager.default.fileExists(atPath: path.path),
+            "No Codex config on this Mac to check against.")
         let adapter = CodexConfigurationAdapter(installedClientVersion: nil)
         let layers = try ConfigurationLayerReader().codexLayers(homeRoot: home, adapter: adapter)
         let configuration = EffectiveConfigurationResolver.resolve(
@@ -119,8 +132,9 @@ struct LiveInstalledClientTests {
         // Codex is read-only in the register, and a real file must not change
         // that: nothing resolved from it may be offered as writable.
         for row in configuration.rows {
-            #expect(!ConfigurationCompatibilityRegister.isWritable(surface: .codexCLI, key: row.key),
-                    "'\(row.key)' resolved from a real Codex file is offered as writable.")
+            #expect(
+                !ConfigurationCompatibilityRegister.isWritable(surface: .codexCLI, key: row.key),
+                "'\(row.key)' resolved from a real Codex file is offered as writable.")
         }
     }
 }
@@ -130,8 +144,9 @@ struct LiveInstalledClientTests {
 /// loses anything: if a scan reproduces the same items, it does not.
 @Suite("Live first run")
 struct LiveFirstRunTests {
-    @Test("A first run reproduces this Mac's library from a live scan",
-          .enabled(if: runsLiveClientChecks))
+    @Test(
+        "A first run reproduces this Mac's library from a live scan",
+        .enabled(if: runsLiveClientChecks))
     func firstRunReproducesTheLibrary() async throws {
         let observations = await ClientAdapterRegistry().scanAll(
             homeURL: home, runner: ProcessCommandRunner(homeURL: home))
@@ -139,20 +154,23 @@ struct LiveFirstRunTests {
         let result = try WorkspaceFirstRun.prepare(observations: observations, inventory: inventory)
 
         // A scan that finds nothing would make this suite prove nothing.
-        #expect(!result.document.artifacts.isEmpty,
-                "A live scan of this Mac found nothing to record.")
+        #expect(
+            !result.document.artifacts.isEmpty,
+            "A live scan of this Mac found nothing to record.")
         // Nothing a scan produces may claim this app owns somebody's files.
-        #expect(result.document.artifacts.allSatisfy {
-            $0.authority == .trackedOnly || $0.authority == .nativeOwned
-        })
+        #expect(
+            result.document.artifacts.allSatisfy {
+                $0.authority == .trackedOnly || $0.authority == .nativeOwned
+            })
         #expect(result.document.artifacts.allSatisfy { $0.contentDigest == nil })
         // The result has to be a workspace the store would actually accept.
         #expect(throws: Never.self) {
             try result.document.validateStructure()
             try result.device.validateStructure(against: result.document)
         }
-        print("FIRST RUN on this Mac: skills=\(result.skillCount) "
-            + "packages=\(result.packageCount) connections=\(result.connectionCount) "
-            + "observations=\(result.device.observations.count)")
+        print(
+            "FIRST RUN on this Mac: skills=\(result.skillCount) "
+                + "packages=\(result.packageCount) connections=\(result.connectionCount) "
+                + "observations=\(result.device.observations.count)")
     }
 }

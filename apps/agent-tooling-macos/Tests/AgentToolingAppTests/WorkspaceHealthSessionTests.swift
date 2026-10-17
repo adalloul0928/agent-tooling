@@ -99,7 +99,7 @@ struct WorkspaceHealthSessionTests {
             "claude mcp list": CommandOutput(
                 status: 0,
                 standardOutput: "linear: https://mcp.linear.app/sse - ! Needs authentication",
-                standardError: ""),
+                standardError: "")
         ])
         let login = ScriptedLogin(outcomes: [:])
         final class Sink: @unchecked Sendable {
@@ -116,8 +116,9 @@ struct WorkspaceHealthSessionTests {
 
         // The login is exactly the reviewed shape, on the terminal path, and the
         // URL the tool printed was opened; a re-check follows the sign-in.
-        #expect(login.calls.map { "\($0.executable) \($0.arguments.joined(separator: " "))" }
-            == ["/opt/homebrew/bin/claude mcp login linear --no-browser"])
+        #expect(
+            login.calls.map { "\($0.executable) \($0.arguments.joined(separator: " "))" }
+                == ["/opt/homebrew/bin/claude mcp login linear --no-browser"])
         #expect(sink.urls.map(\.absoluteString) == ["https://linear.example/oauth/authorize"])
         #expect(runner.calls.filter { $0.arguments == ["mcp", "list"] }.count == 2)
         #expect(session.actionState[entry.id] == .finished(message: "Authentication successful."))
@@ -135,7 +136,7 @@ struct WorkspaceHealthSessionTests {
                     "one: https://one.example/sse - ! Needs authentication\n"
                     + "two: https://two.example/sse - ✘ Failed to connect — token expired\n"
                     + "local: npx local - ✔ Connected",
-                standardError: ""),
+                standardError: "")
         ])
         let login = ScriptedLogin(outcomes: [:])
         let session = await makeSession(fixture: fixture, runner: runner, login: login)
@@ -179,7 +180,7 @@ struct WorkspaceHealthSessionTests {
             "claude mcp list": CommandOutput(
                 status: 0,
                 standardOutput: "linear: https://mcp.linear.app/sse - ! Needs authentication",
-                standardError: ""),
+                standardError: "")
         ])
         // The transcript arrives already redacted from Core's terminal reader;
         // the session must keep it that way and show it on the row.

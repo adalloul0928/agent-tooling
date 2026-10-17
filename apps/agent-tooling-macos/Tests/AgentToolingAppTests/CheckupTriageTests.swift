@@ -10,8 +10,12 @@ import Testing
 struct CheckupTriageTests {
     private let home = URL(filePath: "/Users/example", directoryHint: .isDirectory)
 
-    private func finding(_ kind: SetupFinding.Kind, _ subject: String, client: ClientKind? = .claude, actions: [SetupAction]) -> SetupFinding {
-        SetupFinding(kind: kind, severity: kind == .missingPluginInstall ? .high : .low, client: client, subject: subject, title: subject, detail: "d", evidence: ["~/x/\(subject)"], actions: actions)
+    private func finding(_ kind: SetupFinding.Kind, _ subject: String, client: ClientKind? = .claude, actions: [SetupAction])
+        -> SetupFinding
+    {
+        SetupFinding(
+            kind: kind, severity: kind == .missingPluginInstall ? .high : .low, client: client, subject: subject, title: subject,
+            detail: "d", evidence: ["~/x/\(subject)"], actions: actions)
     }
 
     private func path(_ name: String) -> String { home.appending(path: ".claude/skills/\(name)").path(percentEncoded: false) }
@@ -21,14 +25,21 @@ struct CheckupTriageTests {
             finding(.skillWithoutDefinition, "a", actions: [.removeSkillCopy(path: path("a"), client: .claude)]),
             finding(.skillWithoutDefinition, "b", actions: [.removeSkillCopy(path: path("b"), client: .claude)]),
             finding(.brokenSkillLink, "gone", actions: [.removeBrokenLink(path: path("gone"), client: .claude)]),
-            finding(.unmanagedSkill, "docx", actions: [.adoptSkill(path: path("docx"), client: .claude), .removeSkillCopy(path: path("docx"), client: .claude)]),
-            finding(.unmanagedSkill, "pdf", client: .codex, actions: [.adoptSkill(path: "/Users/example/.agents/skills/pdf", client: .codex)]),
+            finding(
+                .unmanagedSkill, "docx",
+                actions: [.adoptSkill(path: path("docx"), client: .claude), .removeSkillCopy(path: path("docx"), client: .claude)]),
+            finding(
+                .unmanagedSkill, "pdf", client: .codex, actions: [.adoptSkill(path: "/Users/example/.agents/skills/pdf", client: .codex)]),
             // Two plugins both carry it: nothing to remove.
             finding(.duplicateSkillInClient, "brazil", actions: []),
             // A loose copy beside a plugin's: the loose one can go.
             finding(.duplicateSkillInClient, "cr-review", actions: [.removeSkillCopy(path: path("cr-review"), client: .claude)]),
-            finding(.unreachableMCPCommand, "memory", client: .kiro, actions: [.disableMCPServer(name: "memory", client: .kiro), .inspectMCPServer(name: "memory", client: .kiro)]),
-            finding(.mcpServerRepeatedAcrossClients, "slack", client: nil, actions: [.manageMCPServer(name: "slack", clients: [.claude, .codex])]),
+            finding(
+                .unreachableMCPCommand, "memory", client: .kiro,
+                actions: [.disableMCPServer(name: "memory", client: .kiro), .inspectMCPServer(name: "memory", client: .kiro)]),
+            finding(
+                .mcpServerRepeatedAcrossClients, "slack", client: nil,
+                actions: [.manageMCPServer(name: "slack", clients: [.claude, .codex])]),
         ]
         let checkup = SetupCheckup(audit: SetupAuditReport(clients: [.claude, .codex, .kiro], findings: findings, counts: [:]))
 
@@ -46,7 +57,9 @@ struct CheckupTriageTests {
         let unmanagedClaude = item("group:unmanagedSkill:Claude Code")
         #expect(unmanagedClaude?.bucket == .decide, "adopting is a judgment, not a fix")
         #expect(unmanagedClaude?.primaryTitle == "Add to library")
-        #expect(unmanagedClaude?.actions == [.adoptSkill(path: path("docx"), client: .claude)], "the group's button adopts; removing is on the row")
+        #expect(
+            unmanagedClaude?.actions == [.adoptSkill(path: path("docx"), client: .claude)],
+            "the group's button adopts; removing is on the row")
         #expect(item("group:unmanagedSkill:Codex")?.count == 1, "grouped per app")
 
         let loose = item("group:duplicateSkillInClient:Claude Code")
@@ -74,17 +87,25 @@ struct CheckupTriageTests {
     }
 
     @Test func aRecommendationSpeaksForTheFindingsItNamedAndSetsTheirBucket() {
-        let loose = (1...3).map { finding(.duplicateSkillInClient, "s\($0)", actions: [.removeSkillCopy(path: path("s\($0)"), client: .claude)]) }
-        let stale = (1...2).map { finding(.stalePluginCache, "p\($0)", client: .codex, actions: [.pruneStalePluginCache(paths: ["/Users/example/.aim/plugins/codex/other\($0)"], client: .codex)]) }
+        let loose = (1...3).map {
+            finding(.duplicateSkillInClient, "s\($0)", actions: [.removeSkillCopy(path: path("s\($0)"), client: .claude)])
+        }
+        let stale = (1...2).map {
+            finding(
+                .stalePluginCache, "p\($0)", client: .codex,
+                actions: [.pruneStalePluginCache(paths: ["/Users/example/.aim/plugins/codex/other\($0)"], client: .codex)])
+        }
         let audit = SetupAuditReport(clients: [.claude, .codex], findings: loose + stale, counts: [:])
         let review = SetupReview(
             client: .claude, auditGeneratedAt: audit.generatedAt, summary: "s",
             recommendations: [
                 SetupRecommendation(
-                    id: "r1", category: .duplicates, title: "Remove the loose copies", summary: "3 loose copies", rationale: "r", client: .claude, priority: 1,
+                    id: "r1", category: .duplicates, title: "Remove the loose copies", summary: "3 loose copies", rationale: "r",
+                    client: .claude, priority: 1,
                     provenance: .investigated(source: "~/.claude/skills"), action: .take(loose[0].actions[0]), findingIDs: loose.map(\.id)),
                 SetupRecommendation(
-                    id: "r2", category: .cleanup, title: "Do not run the Codex cleanups", summary: "Those are other plugins", rationale: "r", client: .codex, priority: 5,
+                    id: "r2", category: .cleanup, title: "Do not run the Codex cleanups", summary: "Those are other plugins",
+                    rationale: "r", client: .codex, priority: 5,
                     provenance: .investigated(source: "~/.aim/plugins/codex"), action: .readOnly, findingIDs: stale.map(\.id)),
                 SetupRecommendation(
                     id: "r3", category: .settings, title: "Turn on tool search", summary: "s", rationale: "r", client: .claude, priority: 9,
@@ -110,7 +131,10 @@ struct CheckupTriageTests {
 
         let plan = CheckupTriage.fixAll(items)
         #expect(plan.total == 4, "three removals and one setting; the \"leave these\" row is not in it")
-        #expect(plan.lines == ["Move a skill folder to Agent Tooling's trash × 3", "Change a setting in an app's configuration file (backed up first)"])
+        #expect(
+            plan.lines == [
+                "Move a skill folder to Agent Tooling's trash × 3", "Change a setting in an app's configuration file (backed up first)",
+            ])
     }
 
     @Test func aDismissedFindingLeavesItsGroupAndAnEmptyGroupDisappears() {

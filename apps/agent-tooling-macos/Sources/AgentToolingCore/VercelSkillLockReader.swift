@@ -11,7 +11,8 @@ enum VercelSkillLockReader {
         try requireAbsoluteNormalized(homeDirectory)
         let root = explicitXDG ?? append(".agents", to: homeDirectory)
         try requireAbsoluteNormalized(root)
-        let path = explicitXDG == nil
+        let path =
+            explicitXDG == nil
             ? append(".skill-lock.json", to: root)
             : append(".skill-lock.json", to: append("skills", to: root))
         return .global(lockFilePath: path)

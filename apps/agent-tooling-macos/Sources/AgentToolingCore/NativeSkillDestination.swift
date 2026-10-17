@@ -68,7 +68,8 @@ public enum NativeSkillDestination {
     /// the filesystem or reject an otherwise identical existing directory.
     static func isValidRoot(_ value: URL) -> Bool {
         guard value.isFileURL, value.host == nil || value.host == "" || value.host == "localhost",
-              value.query == nil, value.fragment == nil, value.user == nil, value.password == nil else { return false }
+            value.query == nil, value.fragment == nil, value.user == nil, value.password == nil
+        else { return false }
         let path = value.path(percentEncoded: false)
         let parts = path.split(separator: "/")
         return path.hasPrefix("/") && !path.contains("//") && !parts.contains(".") && !parts.contains("..")
@@ -77,9 +78,9 @@ public enum NativeSkillDestination {
 
     private static func validateSkillID(_ value: String) throws {
         guard !value.isEmpty,
-              value != ".", value != "..",
-              !value.contains("/"), !value.contains("\\"),
-              !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+            value != ".", value != "..",
+            !value.contains("/"), !value.contains("\\"),
+            !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
         else { throw NativeSkillDestinationError.invalidSkillID }
     }
 }

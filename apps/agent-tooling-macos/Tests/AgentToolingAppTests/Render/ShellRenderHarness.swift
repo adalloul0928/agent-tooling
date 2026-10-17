@@ -160,12 +160,17 @@ struct StubAccountReader: AccountSurfaceReading {
     }
 
     func read(_ providers: [AccountProvider], depth: AccountSurfaceProbe.Depth, now: Date) async -> [AccountObservation] {
-        return providers.map { provider in
-            var observation = answers[provider] ?? AccountObservation(
-                provider: provider, observedAt: now,
-                unavailableReason: "Not read in tests.")
+        providers.map { provider in
+            var observation =
+                answers[provider]
+                ?? AccountObservation(
+                    provider: provider, observedAt: now,
+                    unavailableReason: "Not read in tests.")
             observation.observedAt = now
-            if depth == .signInOnly { observation.contentsRead = false; observation.items = [] }
+            if depth == .signInOnly {
+                observation.contentsRead = false
+                observation.items = []
+            }
             return observation
         }
     }

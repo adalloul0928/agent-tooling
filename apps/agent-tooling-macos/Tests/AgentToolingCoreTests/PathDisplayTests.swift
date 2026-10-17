@@ -35,6 +35,7 @@ struct PathDisplayTests {
     @Test func thePrivatePrefixIsFoldedOnBothSides() {
         let temporaryHome = URL(filePath: "/private/var/folders/x/home", directoryHint: .isDirectory)
         #expect(PathDisplay.abbreviatingHome("/var/folders/x/home/.claude/skills", home: temporaryHome) == "~/.claude/skills")
-        #expect(PathDisplay.abbreviatingHome("/private/var/folders/x/home/.claude", home: URL(filePath: "/var/folders/x/home")) == "~/.claude")
+        #expect(
+            PathDisplay.abbreviatingHome("/private/var/folders/x/home/.claude", home: URL(filePath: "/var/folders/x/home")) == "~/.claude")
     }
 }

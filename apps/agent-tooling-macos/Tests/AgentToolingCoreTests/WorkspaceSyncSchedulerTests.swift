@@ -15,16 +15,18 @@ struct WorkspaceSyncSchedulerTests {
         #expect(scheduler.decide(state, now: now) == .run)
 
         state.lastAttempt = now
-        #expect(scheduler.decide(state, now: now.addingTimeInterval(60))
-            == .tooSoon(nextEligible: now.addingTimeInterval(WorkspaceSyncScheduler.interval)))
+        #expect(
+            scheduler.decide(state, now: now.addingTimeInterval(60))
+                == .tooSoon(nextEligible: now.addingTimeInterval(WorkspaceSyncScheduler.interval)))
         #expect(scheduler.decide(state, now: now.addingTimeInterval(WorkspaceSyncScheduler.interval)) == .run)
     }
 
     @Test func anUnresolvedConflictStopsAutomaticPasses() {
         let scheduler = WorkspaceSyncScheduler()
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let state = WorkspaceSyncScheduler.State(isConnected: true, hasUnresolvedConflicts: true,
-                                                 lastAttempt: now.addingTimeInterval(-86_400))
+        let state = WorkspaceSyncScheduler.State(
+            isConnected: true, hasUnresolvedConflicts: true,
+            lastAttempt: now.addingTimeInterval(-86_400))
 
         // Repeating the pass would only produce the same question.
         #expect(scheduler.decide(state, now: now) == .waitingForDecisions)

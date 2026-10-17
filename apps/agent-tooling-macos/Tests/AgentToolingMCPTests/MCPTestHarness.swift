@@ -27,9 +27,10 @@ final class MCPTestHarness {
     ) throws {
         rootURL = FileManager.default.temporaryDirectory
             .appending(path: "AgentToolingMCPTests-\(UUID().uuidString)", directoryHint: .isDirectory)
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: artifacts, assignments: assignments))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: artifacts, assignments: assignments))
         var device = DeviceWorkspaceState(workspaceID: document.workspaceID)
         device.observations = observations
         store = try WorkspaceRevisionStore(

@@ -41,8 +41,10 @@ final class WorkspacePresetsSession {
     private let library: WorkspaceLibrarySession
     private let store: WorkspaceLinkedPresetStore
 
-    init(service: WorkspaceApplicationService, library: WorkspaceLibrarySession,
-         store: WorkspaceLinkedPresetStore) {
+    init(
+        service: WorkspaceApplicationService, library: WorkspaceLibrarySession,
+        store: WorkspaceLinkedPresetStore
+    ) {
         self.service = service
         self.library = library
         self.store = store
@@ -131,9 +133,10 @@ final class WorkspacePresetsSession {
     /// Applies exactly the changes shown for one preset.
     func catchUp(_ presetID: ArtifactID) async {
         guard canWrite, !isBusy,
-              let row = rows.first(where: { $0.id == presetID }),
-              let update = row.update, let subscription = row.subscription,
-              let head = library.state?.snapshot.document.revision.id else { return }
+            let row = rows.first(where: { $0.id == presetID }),
+            let update = row.update, let subscription = row.subscription,
+            let head = library.state?.snapshot.document.revision.id
+        else { return }
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
@@ -144,8 +147,10 @@ final class WorkspacePresetsSession {
             // Recorded only after the change landed, so an interrupted catch-up
             // is offered again rather than being marked done.
             var subscriptions = try store.read().filter { $0.presetID != presetID }
-            subscriptions.append(.init(presetID: presetID, appliedRevision: update.toRevision,
-                                       destinations: subscription.destinations))
+            subscriptions.append(
+                .init(
+                    presetID: presetID, appliedRevision: update.toRevision,
+                    destinations: subscription.destinations))
             try store.write(subscriptions)
             lastAppliedName = row.name
         } catch WorkspaceRevisionStoreError.staleRevision {

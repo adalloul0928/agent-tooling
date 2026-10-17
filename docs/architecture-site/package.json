@@ -9,11 +9,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "python3 -m http.server 3000 -d out",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {
-    "next": "16.3.3",
+    "next": "16.4.2",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -23,9 +23,15 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.3.3",
+    "eslint-config-next": "16.4.2",
     "tailwindcss": "4.2.1",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "@agent-tooling/next-root-dir-glob": "file:tools/next-root-dir-glob"
   },
-  "type": "module"
+  "type": "module",
+  "overrides": {
+    "@next/eslint-plugin-next": {
+      "fast-glob": "$@agent-tooling/next-root-dir-glob"
+    }
+  }
 }

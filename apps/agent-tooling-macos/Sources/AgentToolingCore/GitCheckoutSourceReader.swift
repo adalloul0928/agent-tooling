@@ -82,7 +82,8 @@ struct GitCheckoutSourceReader: Sendable {
         if checkout.upstream == nil { issues.append(.noUpstream) }
         if checkout.headCommit == nil { issues.append(.noCommit) }
         if checkout.diagnostics.contains(.includedConfigurationOmitted)
-            || checkout.diagnostics.contains(.malformedConfiguration) {
+            || checkout.diagnostics.contains(.malformedConfiguration)
+        {
             issues.append(.incompleteConfiguration)
         }
         let packagePath = Self.relativePath(originalPath, inside: checkout.checkoutPath)
@@ -94,15 +95,19 @@ struct GitCheckoutSourceReader: Sendable {
         }
         let repositoryID = String(upstream.repositoryURL.dropFirst("https://github.com/".count))
         let evidence = SourceLockEvidence(
-            skillNameHint: "", // A folder basename is not identity evidence.
-            locator: .remote(repositoryID: repositoryID, sourceType: "gitCheckout",
-                             repositoryURL: upstream.repositoryURL, baseURL: nil),
+            skillNameHint: "",  // A folder basename is not identity evidence.
+            locator: .remote(
+                repositoryID: repositoryID, sourceType: "gitCheckout",
+                repositoryURL: upstream.repositoryURL, baseURL: nil),
             revision: .requestedRef(upstream.requestedRef), skillPath: packagePath
         )
-        return .init(checkout: checkout, observations: [
-            .init(artifactID: artifactID, context: .exactRelativePath, evidence: evidence,
-                  observedCommit: checkout.headCommit),
-        ], issues: [])
+        return .init(
+            checkout: checkout,
+            observations: [
+                .init(
+                    artifactID: artifactID, context: .exactRelativePath, evidence: evidence,
+                    observedCommit: checkout.headCommit)
+            ], issues: [])
     }
 
     private func capture(canonicalDirectory: String) async throws -> GitCheckoutObservation {
@@ -138,13 +143,14 @@ struct GitCheckoutSourceReader: Sendable {
     }
 
     private func readSnapshot(directory: String) async throws -> Snapshot {
-        let rootOutput = try await git([
-            "rev-parse", "--path-format=absolute", "--show-toplevel", "--absolute-git-dir", "--git-common-dir",
-        ], directory: directory)
+        let rootOutput = try await git(
+            [
+                "rev-parse", "--path-format=absolute", "--show-toplevel", "--absolute-git-dir", "--git-common-dir",
+            ], directory: directory)
         guard rootOutput.status == 0 else { throw GitCheckoutSourceReadError.notWorkingTree }
         let paths = rootOutput.standardOutput.split(separator: "\n", omittingEmptySubsequences: false)
         guard paths.count == 4, paths[3].isEmpty,
-              paths.prefix(3).allSatisfy({ $0.hasPrefix("/") && !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) })
+            paths.prefix(3).allSatisfy({ $0.hasPrefix("/") && !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) })
         else { throw GitCheckoutSourceReadError.invalidOutput }
         let locations = try Locations(
             checkout: Self.existingDirectory(URL(fileURLWithPath: String(paths[0]))),
@@ -153,8 +159,10 @@ struct GitCheckoutSourceReader: Sendable {
         )
         async let commitOutput = git(["rev-parse", "--verify", "--quiet", "--end-of-options", "HEAD^{commit}"], directory: directory)
         async let branchOutput = git(["symbolic-ref", "--quiet", "HEAD"], directory: directory)
-        async let localOutput = git(["config", "--local", "--null", "--no-includes", "--get-regexp", Self.configPattern], directory: directory)
-        async let extensionOutput = git(["config", "--local", "--no-includes", "--type=bool", "--get", "extensions.worktreeConfig"], directory: directory)
+        async let localOutput = git(
+            ["config", "--local", "--null", "--no-includes", "--get-regexp", Self.configPattern], directory: directory)
+        async let extensionOutput = git(
+            ["config", "--local", "--no-includes", "--type=bool", "--get", "extensions.worktreeConfig"], directory: directory)
         let (commitResult, branchResult, localResult, extensionResult) = try await (
             commitOutput, branchOutput, localOutput, extensionOutput
         )
@@ -165,7 +173,8 @@ struct GitCheckoutSourceReader: Sendable {
         // this extension is enabled. An inactive config.worktree is not evidence.
         let worktreeConfig: [ConfigEntry]
         if worktreeEnabled {
-            let output = try await git(["config", "--worktree", "--null", "--no-includes", "--get-regexp", Self.configPattern], directory: directory)
+            let output = try await git(
+                ["config", "--worktree", "--null", "--no-includes", "--get-regexp", Self.configPattern], directory: directory)
             worktreeConfig = try Self.configEntries(output)
         } else {
             worktreeConfig = []
@@ -182,8 +191,9 @@ struct GitCheckoutSourceReader: Sendable {
         try Task.checkCancellation()
         let output: CommandOutput
         do {
-            output = try await runner.run(executable: "/usr/bin/git", arguments: Self.prefix + arguments,
-                                          currentDirectory: URL(fileURLWithPath: directory, isDirectory: true))
+            output = try await runner.run(
+                executable: "/usr/bin/git", arguments: Self.prefix + arguments,
+                currentDirectory: URL(fileURLWithPath: directory, isDirectory: true))
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -193,7 +203,8 @@ struct GitCheckoutSourceReader: Sendable {
         }
         try Task.checkCancellation()
         guard output.standardOutput.utf8.count <= Self.outputLimit,
-              output.standardError.utf8.count <= Self.outputLimit else {
+            output.standardError.utf8.count <= Self.outputLimit
+        else {
             throw GitCheckoutSourceReadError.outputLimitExceeded
         }
         return output
@@ -222,7 +233,8 @@ struct GitCheckoutSourceReader: Sendable {
     private static func readWorktreeExtension(_ output: CommandOutput) throws -> Bool {
         if output.status == 1 && output.standardOutput.isEmpty { return false }
         guard output.status == 0, let value = singleLine(output.standardOutput),
-              value == "true" || value == "false" else { throw GitCheckoutSourceReadError.invalidOutput }
+            value == "true" || value == "false"
+        else { throw GitCheckoutSourceReadError.invalidOutput }
         return value == "true"
     }
 
@@ -260,7 +272,10 @@ struct GitCheckoutSourceReader: Sendable {
             }
             guard entry.key.hasPrefix("remote."), entry.key.hasSuffix(".url") else { continue }
             let name = String(entry.key.dropFirst("remote.".count).dropLast(".url".count))
-            guard safeRemoteName(name) else { diagnostics.insert(.malformedConfiguration); continue }
+            guard safeRemoteName(name) else {
+                diagnostics.insert(.malformedConfiguration)
+                continue
+            }
             let url = canonicalRemoteURL(entry.value)
             if url == nil { diagnostics.insert(.unsupportedRemote) }
             remotes.insert(.init(name: name, repositoryURL: url))
@@ -277,12 +292,14 @@ struct GitCheckoutSourceReader: Sendable {
             } else if remoteValues.count != 1 || mergeValues.count != 1 {
                 diagnostics.insert(.ambiguousUpstream)
             } else if let remote = remoteValues.first, let merge = mergeValues.first,
-                      safeRemoteName(remote), merge.hasPrefix("refs/heads/"),
-                      SourceEvidenceResolver.safeRef(String(merge.dropFirst("refs/heads/".count))) {
+                safeRemoteName(remote), merge.hasPrefix("refs/heads/"),
+                SourceEvidenceResolver.safeRef(String(merge.dropFirst("refs/heads/".count)))
+            {
                 let matching = orderedRemotes.filter { $0.name == remote }
                 if matching.count == 1, let url = matching[0].repositoryURL {
-                    upstream = .init(remoteName: remote, repositoryURL: url,
-                                     requestedRef: String(merge.dropFirst("refs/heads/".count)))
+                    upstream = .init(
+                        remoteName: remote, repositoryURL: url,
+                        requestedRef: String(merge.dropFirst("refs/heads/".count)))
                 } else {
                     diagnostics.insert(matching.count > 1 ? .ambiguousUpstream : .unsupportedUpstream)
                 }
@@ -293,24 +310,27 @@ struct GitCheckoutSourceReader: Sendable {
         } else {
             diagnostics.insert(.detachedHEAD)
         }
-        return .init(checkoutPath: snapshot.locations.checkout, gitDirectory: snapshot.locations.git,
-                     commonGitDirectory: snapshot.locations.common, branch: snapshot.branch,
-                     headCommit: snapshot.commit, remotes: orderedRemotes, upstream: upstream,
-                     diagnostics: diagnostics.sorted { $0.rawValue < $1.rawValue })
+        return .init(
+            checkoutPath: snapshot.locations.checkout, gitDirectory: snapshot.locations.git,
+            commonGitDirectory: snapshot.locations.common, branch: snapshot.branch,
+            headCommit: snapshot.commit, remotes: orderedRemotes, upstream: upstream,
+            diagnostics: diagnostics.sorted { $0.rawValue < $1.rawValue })
     }
 
     /// Normalize the GitHub SSH transport forms only after requiring GitHub's literal `git` user.
     /// Tokens/userinfo, aliases, ports, URL rewriting, and other hosts remain unsupported evidence.
     static func canonicalRemoteURL(_ value: String) -> String? {
         guard value.utf8.count <= 4_096,
-              !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else { return nil }
+            !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        else { return nil }
         if value.hasPrefix("git@github.com:") {
             return SourceEvidenceResolver.canonicalGitHubURL("https://github.com/" + value.dropFirst("git@github.com:".count))
         }
         if let components = URLComponents(string: value), components.scheme?.lowercased() == "ssh",
-           components.host?.lowercased() == "github.com", components.user == "git",
-           components.password == nil, components.port == nil, components.query == nil, components.fragment == nil,
-           components.percentEncodedPath == components.path {
+            components.host?.lowercased() == "github.com", components.user == "git",
+            components.password == nil, components.port == nil, components.query == nil, components.fragment == nil,
+            components.percentEncodedPath == components.path
+        {
             return SourceEvidenceResolver.canonicalGitHubURL("https://github.com" + components.path)
         }
         return SourceEvidenceResolver.canonicalGitHubURL(value)
@@ -325,9 +345,10 @@ struct GitCheckoutSourceReader: Sendable {
 
     private static func existingDirectory(_ url: URL) throws -> String {
         guard url.isFileURL, url.host == nil || url.host == "localhost", url.path.hasPrefix("/"),
-              url.path.utf8.count <= 4_096,
-              !url.path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
-              let resolved = url.path.withCString({ realpath($0, nil) }) else {
+            url.path.utf8.count <= 4_096,
+            !url.path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
+            let resolved = url.path.withCString({ realpath($0, nil) })
+        else {
             throw GitCheckoutSourceReadError.invalidDirectory
         }
         defer { free(resolved) }

@@ -230,11 +230,13 @@ struct SyncSettingsView: View {
         let retired = session.devices.filter(\.isRetired)
         return TitledCard("Macs", count: "\(devices.count)") {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(devices.sorted { lhs, rhs in
-                    if lhs.id == session.deviceID { return true }
-                    if rhs.id == session.deviceID { return false }
-                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-                }) { device in
+                ForEach(
+                    devices.sorted { lhs, rhs in
+                        if lhs.id == session.deviceID { return true }
+                        if rhs.id == session.deviceID { return false }
+                        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                    }
+                ) { device in
                     macRow(device)
                     Hairline(indent: Hairline.afterLeading(Size.glyphSlot))
                 }
@@ -244,9 +246,11 @@ struct SyncSettingsView: View {
                         .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
                     Hairline()
                 }
-                Text("Every Mac keeps its own apps. Turning off shared assignments makes a Mac opt-in: it gets only what names it, and nothing on it is marked missing.")
-                    .font(AgentFont.caption).foregroundStyle(.tertiary).wrapsLines()
-                    .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
+                Text(
+                    "Every Mac keeps its own apps. Turning off shared assignments makes a Mac opt-in: it gets only what names it, and nothing on it is marked missing."
+                )
+                .font(AgentFont.caption).foregroundStyle(.tertiary).wrapsLines()
+                .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
             }
         }
         .sheet(item: $renaming) { device in
@@ -264,13 +268,19 @@ struct SyncSettingsView: View {
             Image(systemName: isThis ? "desktopcomputer" : "laptopcomputer").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
         } trailing: {
             HStack(spacing: Space.md) {
-                Toggle("Takes shared assignments", isOn: Binding(
-                    get: { device.receivesSharedAssignments },
-                    set: { value in Task { await session.setReceivesSharedAssignments(value, for: device.id) } }))
-                    .labelsHidden().toggleStyle(.switch).disabled(session.isBusy)
-                    .help("Off: this Mac gets only items assigned to it by name.")
+                Toggle(
+                    "Takes shared assignments",
+                    isOn: Binding(
+                        get: { device.receivesSharedAssignments },
+                        set: { value in Task { await session.setReceivesSharedAssignments(value, for: device.id) } })
+                )
+                .labelsHidden().toggleStyle(.switch).disabled(session.isBusy)
+                .help("Off: this Mac gets only items assigned to it by name.")
                 Menu {
-                    Button("Rename…") { renameText = device.name; renaming = device }
+                    Button("Rename…") {
+                        renameText = device.name
+                        renaming = device
+                    }
                     if !isThis {
                         Button("Retire this Mac", role: .destructive) { Task { await session.retireDevice(device.id) } }
                     }

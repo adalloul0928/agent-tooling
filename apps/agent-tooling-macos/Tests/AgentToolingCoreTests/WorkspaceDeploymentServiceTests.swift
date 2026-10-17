@@ -53,36 +53,46 @@ struct WorkspaceDeploymentServiceTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
                 .appending(path: "workspace-deployment-service-\(UUID())")
             let contentURL = root.appending(path: "content")
-            try FileManager.default.createDirectory(at: contentURL, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(
+                at: contentURL, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
             tree = try CapturedPackageTree(entries: [
-                .init(relativePath: "SKILL.md", kind: .file(
-                    bytes: Data("---\nname: personal\ndescription: Fixture\n---\n\n# Personal\n".utf8),
-                    executable: false)),
+                .init(
+                    relativePath: "SKILL.md",
+                    kind: .file(
+                        bytes: Data("---\nname: personal\ndescription: Fixture\n---\n\n# Personal\n".utf8),
+                        executable: false))
             ])
             let writerID = WorkspaceObjectID()
             let destination = WorkspaceObjectID()
-            target = .init(selector: .init(surface: .codexCLI, scope: .user, logicalProjectID: nil),
-                           physicalDestinationID: destination, installedClientVersion: "1.0.0",
-                           adapterContractVersion: 1,
-                           componentContexts: [.init(component: .skill, transport: nil)])
+            target = .init(
+                selector: .init(surface: .codexCLI, scope: .user, logicalProjectID: nil),
+                physicalDestinationID: destination, installedClientVersion: "1.0.0",
+                adapterContractVersion: 1,
+                componentContexts: [.init(component: .skill, transport: nil)])
             let artifact = ArtifactRecord(
                 identity: .init(id: artifactID, kind: .skill, displayName: "Personal"),
                 authority: .centralPersonal, declaredName: "personal", contentDigest: tree.digest)
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID),
-                artifacts: [artifact],
-                assignments: [.init(artifactID: artifactID,
-                                    destination: .init(surface: .codexCLI, scope: .user),
-                                    reason: .manual)]))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID),
+                    artifacts: [artifact],
+                    assignments: [
+                        .init(
+                            artifactID: artifactID,
+                            destination: .init(surface: .codexCLI, scope: .user),
+                            reason: .manual)
+                    ]))
             var device = DeviceWorkspaceState(workspaceID: document.workspaceID)
             device.capabilityEvidence = [
-                .init(surface: .codexCLI, installedClientVersion: "1.0.0", adapterContractVersion: 1,
-                      component: .skill, scopes: [.user], support: .supported,
-                      observedAt: Date(timeIntervalSince1970: 1_700_000_000)),
+                .init(
+                    surface: .codexCLI, installedClientVersion: "1.0.0", adapterContractVersion: 1,
+                    component: .skill, scopes: [.user], support: .supported,
+                    observedAt: Date(timeIntervalSince1970: 1_700_000_000))
             ]
-            store = try WorkspaceRevisionStore(containerRoot: root, workspaceID: document.workspaceID,
-                                               deviceID: device.deviceID)
+            store = try WorkspaceRevisionStore(
+                containerRoot: root, workspaceID: document.workspaceID,
+                deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
             contentStore = try CentralPackageContentStore(directory: contentURL)
             service = WorkspaceApplicationService(store: store, writerID: writerID, contentStore: contentStore)

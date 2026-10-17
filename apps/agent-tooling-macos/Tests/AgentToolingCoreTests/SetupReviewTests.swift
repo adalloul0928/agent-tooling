@@ -16,17 +16,21 @@ struct SetupReviewTests {
                 SetupFinding(
                     kind: .unmanagedSkill, severity: .info, client: .claude, subject: "docx", title: "docx is not managed",
                     detail: "d", evidence: ["~/.claude/skills/docx"],
-                    actions: [.adoptSkill(path: "/Users/example/.claude/skills/docx", client: .claude), .removeSkillCopy(path: "/Users/example/.claude/skills/docx", client: .claude)]),
+                    actions: [
+                        .adoptSkill(path: "/Users/example/.claude/skills/docx", client: .claude),
+                        .removeSkillCopy(path: "/Users/example/.claude/skills/docx", client: .claude),
+                    ]),
                 SetupFinding(
                     kind: .brokenSkillLink, severity: .medium, client: .claude, subject: "gone", title: "gone points at nothing",
-                    detail: "d", evidence: ["~/.claude/skills/gone"], actions: [.removeBrokenLink(path: "/Users/example/.claude/skills/gone", client: .claude)]),
+                    detail: "d", evidence: ["~/.claude/skills/gone"],
+                    actions: [.removeBrokenLink(path: "/Users/example/.claude/skills/gone", client: .claude)]),
             ],
             counts: [.claude: .init(skills: 2, plugins: 0, mcpServers: 0)])
     }
 
     // MARK: Shapes and policy
 
-    @Test func theClaudeShapesReadOnlyTheToolingFoldersAndReachTheWebOnlyForAReview() {
+    @Test func theClaudeShapesReadOnlyTheToolingFoldersAndReachTheWebOnlyForAReview() throws {
         let local = SetupReviewCommandShapes.claude(homeURL: home, web: false)
         let web = SetupReviewCommandShapes.claude(homeURL: home, web: true)
         #expect(local.contains("Read(/Users/example/.claude/**)"))
@@ -34,14 +38,19 @@ struct SetupReviewTests {
         #expect(!local.contains { $0.hasPrefix("Read(") && !$0.contains("/Users/example/.") }, "a Read outside the tooling folders")
         // Bash and the writers are disallowed in both; the web only in the review.
         for shape in [local, web] {
-            let disallowedStart = shape.firstIndex(of: "--disallowedTools")!
+            let disallowedStart = try #require(shape.firstIndex(of: "--disallowedTools"))
             let disallowed = Array(shape[(disallowedStart + 1)...])
-            #expect(disallowed.contains("Bash") && disallowed.contains("Edit") && disallowed.contains("Write") && disallowed.contains("Task"))
+            #expect(
+                disallowed.contains("Bash") && disallowed.contains("Edit") && disallowed.contains("Write") && disallowed.contains("Task"))
             #expect(shape.contains("--permission-mode") && shape.contains("plan"))
         }
-        let localAllowed = local[(local.firstIndex(of: "--allowedTools")! + 1)..<local.firstIndex(of: "--disallowedTools")!]
+        let localAllowedStart = try #require(local.firstIndex(of: "--allowedTools"))
+        let localDisallowedStart = try #require(local.firstIndex(of: "--disallowedTools"))
+        let localAllowed = local[(localAllowedStart + 1)..<localDisallowedStart]
         #expect(!localAllowed.contains("WebSearch") && local.contains("WebSearch"), "the web is disallowed locally")
-        let webAllowed = web[(web.firstIndex(of: "--allowedTools")! + 1)..<web.firstIndex(of: "--disallowedTools")!]
+        let webAllowedStart = try #require(web.firstIndex(of: "--allowedTools"))
+        let webDisallowedStart = try #require(web.firstIndex(of: "--disallowedTools"))
+        let webAllowed = web[(webAllowedStart + 1)..<webDisallowedStart]
         #expect(webAllowed.contains("WebSearch") && webAllowed.contains("WebFetch"))
     }
 
@@ -54,32 +63,36 @@ struct SetupReviewTests {
         #expect(throws: Never.self) {
             try policy.validate(executable: "claude", arguments: SetupReviewCommandShapes.claude(homeURL: home, web: false))
             try policy.validate(executable: "claude", arguments: SetupReviewCommandShapes.claude(homeURL: home, web: true))
-            try policy.validate(executable: "codex", arguments: SetupReviewCommandShapes.codex(homeURL: home, requestDirectory: request, web: false))
-            try policy.validate(executable: "codex", arguments: SetupReviewCommandShapes.codex(homeURL: home, requestDirectory: request, web: true))
+            try policy.validate(
+                executable: "codex", arguments: SetupReviewCommandShapes.codex(homeURL: home, requestDirectory: request, web: false))
+            try policy.validate(
+                executable: "codex", arguments: SetupReviewCommandShapes.codex(homeURL: home, requestDirectory: request, web: true))
         }
         // Widen the read to the whole home: refused.
         var wide = SetupReviewCommandShapes.claude(homeURL: home, web: false)
-        wide[wide.firstIndex(of: "Read(/Users/example/.claude/**)")!] = "Read(/Users/example/**)"
+        wide[try #require(wide.firstIndex(of: "Read(/Users/example/.claude/**)"))] = "Read(/Users/example/**)"
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "claude", arguments: wide) }
         // Allow Bash: refused.
         var shell = SetupReviewCommandShapes.claude(homeURL: home, web: false)
-        shell.insert("Bash", at: shell.firstIndex(of: "Glob")!)
+        shell.insert("Bash", at: try #require(shell.firstIndex(of: "Glob")))
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "claude", arguments: shell) }
         // Another person's home: refused.
         #expect(throws: OperationEngineError.self) {
-            try policy.validate(executable: "claude", arguments: SetupReviewCommandShapes.claude(homeURL: URL(filePath: "/Users/other"), web: false))
+            try policy.validate(
+                executable: "claude", arguments: SetupReviewCommandShapes.claude(homeURL: URL(filePath: "/Users/other"), web: false))
         }
         // Codex allowed to write, or rooted somewhere else: refused.
         var writable = SetupReviewCommandShapes.codex(homeURL: home, requestDirectory: request, web: false)
-        writable[writable.firstIndex(of: "read-only")!] = "workspace-write"
+        writable[try #require(writable.firstIndex(of: "read-only"))] = "workspace-write"
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "codex", arguments: writable) }
         var elsewhere = SetupReviewCommandShapes.codex(homeURL: home, requestDirectory: request, web: false)
-        elsewhere[elsewhere.firstIndex(of: "--cd")! + 1] = "/"
+        elsewhere[try #require(elsewhere.firstIndex(of: "--cd")) + 1] = "/"
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "codex", arguments: elsewhere) }
         #expect(throws: OperationEngineError.self) {
             try policy.validate(
                 executable: "codex",
-                arguments: SetupReviewCommandShapes.codex(homeURL: home, requestDirectory: URL(filePath: "/tmp/request-\(UUID().uuidString.lowercased())"), web: false))
+                arguments: SetupReviewCommandShapes.codex(
+                    homeURL: home, requestDirectory: URL(filePath: "/tmp/request-\(UUID().uuidString.lowercased())"), web: false))
         }
     }
 
@@ -119,13 +132,14 @@ struct SetupReviewTests {
     // MARK: The answer
 
     @Test func anAnswerBecomesTypedRecommendationsAndOnlyRealActionsSurvive() throws {
-        let broken = audit.findings.first { $0.kind == .brokenSkillLink }!
-        let unmanaged = audit.findings.first { $0.kind == .unmanagedSkill }!
+        let broken = try #require(audit.findings.first { $0.kind == .brokenSkillLink })
+        let unmanaged = try #require(audit.findings.first { $0.kind == .unmanagedSkill })
         let answer: [String: Any] = [
             "summary": "Two things need attention.",
             "recommendations": [
                 [
-                    "category": "cleanup", "title": "Remove the dead link", "summary": "s", "rationale": "r", "client": "claude", "priority": 1,
+                    "category": "cleanup", "title": "Remove the dead link", "summary": "s", "rationale": "r", "client": "claude",
+                    "priority": 1,
                     "finding_ids": [broken.id, "not-a-finding"],
                     "provenance": ["kind": "audit", "finding_id": broken.id],
                     "action": ["kind": "take_finding_action", "finding_id": broken.id, "action_index": 0],
@@ -154,7 +168,8 @@ struct SetupReviewTests {
                 // A plugin id with shell characters: dropped.
                 [
                     "category": "additions", "title": "Install evil", "summary": "s", "rationale": "r", "priority": 4,
-                    "provenance": ["kind": "opinion"], "action": ["kind": "install_plugin", "client": "claude", "plugin_id": "x; rm -rf /"],
+                    "provenance": ["kind": "opinion"],
+                    "action": ["kind": "install_plugin", "client": "claude", "plugin_id": "x; rm -rf /"],
                 ],
             ],
         ]
@@ -176,8 +191,10 @@ struct SetupReviewTests {
         let answer: [String: Any] = [
             "summary": String(repeating: "a", count: 5_000),
             "recommendations": (0..<80).map { i in
-                ["category": "cleanup", "title": String(repeating: "t", count: 500), "summary": "s", "rationale": "r", "priority": i,
-                 "provenance": ["kind": "opinion"], "action": ["kind": "read_only"]] as [String: Any]
+                [
+                    "category": "cleanup", "title": String(repeating: "t", count: 500), "summary": "s", "rationale": "r", "priority": i,
+                    "provenance": ["kind": "opinion"], "action": ["kind": "read_only"],
+                ] as [String: Any]
             },
         ]
         let review = SetupReviewService.review(from: answer, client: .codex, audit: audit)
@@ -213,11 +230,17 @@ struct SetupReviewTests {
         #expect(call.arguments.contains("--sandbox") && call.arguments.contains("read-only"))
         #expect(!call.arguments.contains("--search"), "a checkup does not reach the web")
         #expect(String(decoding: call.standardInput, as: UTF8.self).contains("routine check"))
-        #expect(try FileManager.default.contentsOfDirectory(atPath: staging.path(percentEncoded: false)).isEmpty, "the request folder is put away")
+        #expect(
+            try FileManager.default.contentsOfDirectory(atPath: staging.path(percentEncoded: false)).isEmpty,
+            "the request folder is put away")
     }
 
     private actor RecordingRunner: StandardInputCommandRunning {
-        struct Call { let executable: String; let arguments: [String]; let standardInput: Data }
+        struct Call {
+            let executable: String
+            let arguments: [String]
+            let standardInput: Data
+        }
         private let output: CommandOutput
         private(set) var calls: [Call] = []
         init(output: CommandOutput) { self.output = output }

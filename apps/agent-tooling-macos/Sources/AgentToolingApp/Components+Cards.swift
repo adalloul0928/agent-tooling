@@ -320,4 +320,3 @@ struct ReviewSheetLayout<Header: View, Content: View, Footer: View>: View {
         .sheetSize(size)
     }
 }
-

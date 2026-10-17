@@ -22,7 +22,8 @@ struct WorkspaceApplicationServiceTests {
 
         let reopened = try fixture.anotherStore()
         let service = WorkspaceApplicationService(store: reopened, writerID: fixture.writerID)
-        let second = RenameArtifactCommand(expectedRevisionID: result.committedRevisionID,
+        let second = RenameArtifactCommand(
+            expectedRevisionID: result.committedRevisionID,
             artifactID: fixture.artifactID, displayName: "A later edit")
         let later = try await service.renameArtifact(second)
         let replay = try await service.renameArtifact(command)
@@ -38,12 +39,15 @@ struct WorkspaceApplicationServiceTests {
         let artifactID = ArtifactID()
         let definition = PortableMCPDefinitionRecord(
             artifactID: artifactID, connection: .deviceBound(transport: .stdio))
-        let document = try WorkspaceDocumentCoding.seal(PortableWorkspaceDocument(
-            revision: .init(writerID: writerID),
-            artifacts: [.init(
-                identity: .init(id: artifactID, kind: .mcpServer, displayName: "Managed runner"),
-                authority: .centralPersonal)],
-            mcpDefinitions: [definition]))
+        let document = try WorkspaceDocumentCoding.seal(
+            PortableWorkspaceDocument(
+                revision: .init(writerID: writerID),
+                artifacts: [
+                    .init(
+                        identity: .init(id: artifactID, kind: .mcpServer, displayName: "Managed runner"),
+                        authority: .centralPersonal)
+                ],
+                mcpDefinitions: [definition]))
         let binding = DeviceMCPDefinitionBinding(
             artifactID: artifactID,
             destination: .stdio(executable: "mcp-runner", arguments: ["--label", "two words"]),
@@ -58,8 +62,9 @@ struct WorkspaceApplicationServiceTests {
             containerRoot: root, workspaceID: document.workspaceID, deviceID: device.deviceID)
         try store.initialize(document: document, device: device)
         let service = WorkspaceApplicationService(store: store, writerID: writerID)
-        _ = try await service.renameArtifact(.init(
-            expectedRevisionID: document.revision.id, artifactID: artifactID, displayName: "Renamed runner"))
+        _ = try await service.renameArtifact(
+            .init(
+                expectedRevisionID: document.revision.id, artifactID: artifactID, displayName: "Renamed runner"))
 
         let reopened = try WorkspaceRevisionStore(
             containerRoot: root, workspaceID: document.workspaceID, deviceID: device.deviceID)
@@ -80,9 +85,11 @@ struct WorkspaceApplicationServiceTests {
         let (one, two) = try await (first, replay)
         #expect(one == two)
 
-        let left = RenameArtifactCommand(expectedRevisionID: one.committedRevisionID,
+        let left = RenameArtifactCommand(
+            expectedRevisionID: one.committedRevisionID,
             artifactID: fixture.artifactID, displayName: "Left")
-        let right = RenameArtifactCommand(expectedRevisionID: one.committedRevisionID,
+        let right = RenameArtifactCommand(
+            expectedRevisionID: one.committedRevisionID,
             artifactID: fixture.artifactID, displayName: "Right")
         async let leftResult = attempt(fixture.service, left)
         async let rightResult = attempt(other, right)
@@ -99,7 +106,8 @@ struct WorkspaceApplicationServiceTests {
         defer { fixture.remove() }
         let command = fixture.rename("First")
         let first = try await fixture.service.renameArtifact(command)
-        let collision = RenameArtifactCommand(expectedRevisionID: fixture.document.revision.id,
+        let collision = RenameArtifactCommand(
+            expectedRevisionID: fixture.document.revision.id,
             idempotencyKey: command.idempotencyKey, artifactID: fixture.artifactID, displayName: "Different payload")
         #expect(await attempt(fixture.service, collision) == .failure(.idempotencyKeyReused))
         #expect(await attempt(fixture.service, fixture.rename("Stale")) == .failure(.staleRevision(current: first.committedRevisionID)))
@@ -109,7 +117,8 @@ struct WorkspaceApplicationServiceTests {
     @Test func failureAfterHeadUpdateRollsBackRevisionAndAllowsRetry() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        try fixture.sql("""
+        try fixture.sql(
+            """
             CREATE TRIGGER reject_receipt BEFORE INSERT ON command_receipts
             BEGIN SELECT RAISE(ABORT, 'Injected interruption before receipt'); END;
             """)
@@ -144,7 +153,8 @@ struct WorkspaceApplicationServiceTests {
             try fixture.store.initialize(document: fixture.document, device: fixture.device)
         }
         #expect(throws: WorkspaceRevisionStoreError.wrongWorkspaceOrDevice) {
-            _ = try WorkspaceRevisionStore(containerRoot: fixture.root, workspaceID: fixture.document.workspaceID,
+            _ = try WorkspaceRevisionStore(
+                containerRoot: fixture.root, workspaceID: fixture.document.workspaceID,
                 deviceID: WorkspaceObjectID())
         }
         var missingAncestor = fixture.document
@@ -182,10 +192,14 @@ struct WorkspaceApplicationServiceTests {
     }
 
     private func attempt(_ service: WorkspaceApplicationService, _ command: RenameArtifactCommand) async
-        -> Result<WorkspaceCommandReceipt, WorkspaceRevisionStoreError> {
-        do { return .success(try await service.renameArtifact(command)) }
-        catch let error as WorkspaceRevisionStoreError { return .failure(error) }
-        catch { Issue.record("Unexpected error: \(error)"); return .failure(.corruptState) }
+        -> Result<WorkspaceCommandReceipt, WorkspaceRevisionStoreError>
+    {
+        do { return .success(try await service.renameArtifact(command)) } catch let error as WorkspaceRevisionStoreError {
+            return .failure(error)
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+            return .failure(.corruptState)
+        }
     }
 
     private struct Fixture {
@@ -199,11 +213,16 @@ struct WorkspaceApplicationServiceTests {
 
         init() throws {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appending(path: "revision-store-\(UUID())")
-            document = try WorkspaceDocumentCoding.seal(PortableWorkspaceDocument(
-                revision: WorkspaceRevision(writerID: writerID), artifacts: [ArtifactRecord(
-                    identity: ArtifactIdentity(id: artifactID, kind: .skill, displayName: "Original",
-                        aliases: [ExternalAlias(namespace: "legacy.skill", value: "shared-instructions")]),
-                    authority: .centralPersonal, declaredName: "shared-instructions")]))
+            document = try WorkspaceDocumentCoding.seal(
+                PortableWorkspaceDocument(
+                    revision: WorkspaceRevision(writerID: writerID),
+                    artifacts: [
+                        ArtifactRecord(
+                            identity: ArtifactIdentity(
+                                id: artifactID, kind: .skill, displayName: "Original",
+                                aliases: [ExternalAlias(namespace: "legacy.skill", value: "shared-instructions")]),
+                            authority: .centralPersonal, declaredName: "shared-instructions")
+                    ]))
             device = DeviceWorkspaceState(workspaceID: document.workspaceID)
             store = try WorkspaceRevisionStore(containerRoot: root, workspaceID: document.workspaceID, deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
@@ -227,7 +246,8 @@ struct WorkspaceApplicationServiceTests {
                 var statement: OpaquePointer?
                 defer { sqlite3_finalize(statement) }
                 guard sqlite3_prepare_v2(database, command, -1, &statement, nil) == SQLITE_OK,
-                    sqlite3_step(statement) == SQLITE_ROW else { throw TestDatabaseError.failed }
+                    sqlite3_step(statement) == SQLITE_ROW
+                else { throw TestDatabaseError.failed }
                 return sqlite3_column_int(statement, 0)
             }
         }

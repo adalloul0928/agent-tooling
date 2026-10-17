@@ -47,14 +47,17 @@ final class WorkspaceProjectDiscoverySession {
 
     /// Folders the workspace does not track here, checkouts of a project first.
     var untrackedFolders: [Match] {
-        matches.filter { if case .tracked = $0.standing { return false }; return true }
-            .sorted { left, right in
-                switch (left.standing, right.standing) {
-                case (.matches, .untracked): return true
-                case (.untracked, .matches): return false
-                default: return left.project.name.localizedCaseInsensitiveCompare(right.project.name) == .orderedAscending
-                }
+        matches.filter {
+            if case .tracked = $0.standing { return false }
+            return true
+        }
+        .sorted { left, right in
+            switch (left.standing, right.standing) {
+            case (.matches, .untracked): return true
+            case (.untracked, .matches): return false
+            default: return left.project.name.localizedCaseInsensitiveCompare(right.project.name) == .orderedAscending
             }
+        }
     }
 
     /// What the scan found in a project's bound folder, or `nil` before a scan
@@ -127,7 +130,8 @@ final class WorkspaceProjectDiscoverySession {
             add(root, .sessionIndex)
         }
         for root in scanRoots {
-            for found in ProjectDiscovery.scannedRoots(under: URL(fileURLWithPath: root, isDirectory: true), fileManager: fileManager, options: options)
+            for found in ProjectDiscovery.scannedRoots(
+                under: URL(fileURLWithPath: root, isDirectory: true), fileManager: fileManager, options: options)
             where ProjectDiscovery.isEligibleProjectRoot(found, homeURL: homeURL) {
                 add(found, .scannedRoot)
             }
@@ -149,10 +153,11 @@ final class WorkspaceProjectDiscoverySession {
     func track(_ folder: DiscoveredProject, named name: String? = nil) async -> ArtifactID? {
         await write {
             let head = try await self.head()
-            let receipt = try await self.service.createProject(.init(
-                expectedRevisionID: head,
-                name: (name ?? folder.name).trimmingCharacters(in: .whitespacesAndNewlines),
-                repositoryHints: [folder.repositoryHint].compactMap { $0 }))
+            let receipt = try await self.service.createProject(
+                .init(
+                    expectedRevisionID: head,
+                    name: (name ?? folder.name).trimmingCharacters(in: .whitespacesAndNewlines),
+                    repositoryHints: [folder.repositoryHint].compactMap { $0 }))
             guard let projectID = receipt.affectedArtifactIDs.first else { throw WorkspaceRevisionStoreError.notInitialized }
             try await self.service.bindProjectRoot(
                 projectID: projectID, rootPath: folder.path, expectedRevisionID: receipt.committedRevisionID)
@@ -168,10 +173,12 @@ final class WorkspaceProjectDiscoverySession {
         let result: Bool? = await write {
             var head = try await self.head()
             if let hint = folder.repositoryHint,
-               let project = self.projects.first(where: { $0.id == projectID }),
-               !project.repositoryHints.contains(where: { RepositoryIdentity.matches($0, hint) }) {
-                let receipt = try await self.service.addProjectRepositoryHint(.init(
-                    expectedRevisionID: head, projectID: projectID, repository: hint))
+                let project = self.projects.first(where: { $0.id == projectID }),
+                !project.repositoryHints.contains(where: { RepositoryIdentity.matches($0, hint) })
+            {
+                let receipt = try await self.service.addProjectRepositoryHint(
+                    .init(
+                        expectedRevisionID: head, projectID: projectID, repository: hint))
                 head = receipt.committedRevisionID
             }
             try await self.service.bindProjectRoot(projectID: projectID, rootPath: folder.path, expectedRevisionID: head)

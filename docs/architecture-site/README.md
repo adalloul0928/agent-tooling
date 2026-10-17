@@ -8,15 +8,21 @@ boundary between local configuration and hosted account state.
 ## Local development
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
 ## Validation
 
 ```bash
+npm ci
+npm audit --audit-level=high
 npm test
+npm run lint
 ```
+
+The [Next ESLint compatibility package](tools/next-root-dir-glob/README.md)
+replaces one vulnerable glob dependency while preserving Next's lint rules.
 
 The guide is intentionally self-contained. It uses no persistent storage,
 authentication, external data, runtime server, or runtime secrets. It is a

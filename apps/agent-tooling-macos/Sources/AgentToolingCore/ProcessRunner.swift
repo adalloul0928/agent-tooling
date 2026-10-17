@@ -36,6 +36,7 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
     private static let maximumCapturedBytes = 1_048_576
     private static let maximumStandardInputBytes = 1_048_576
     private static let readChunkBytes = 65_536
+    private static let pipeIOQueue = DispatchQueue(label: "AgentTooling.ProcessCommandRunner.pipeIO", qos: .userInitiated)
     private let timeout: Duration
     private let homeURL: URL
 
@@ -129,7 +130,7 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         }
     }
 
-    private static func dispatchInterval(for duration: Duration) -> DispatchTimeInterval {
+    static func dispatchInterval(for duration: Duration) -> DispatchTimeInterval {
         let components = duration.components
         let seconds = max(
             0,
@@ -189,21 +190,19 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         process.terminationHandler = { _ in exitWaiter.signal() }
         try process.run()
         controller.install(process)
+        defer { controller.finish(process) }
         // Start draining before writing input so a process that emits output
         // before consuming stdin cannot fill a pipe and deadlock the caller.
         async let output = drain(standardOutput.fileHandleForReading)
         async let error = drain(standardError.fileHandleForReading)
         if let standardInput, let inputPipe {
             do {
-                try inputPipe.fileHandleForWriting.write(contentsOf: standardInput)
-                try inputPipe.fileHandleForWriting.close()
+                try await write(standardInput, to: inputPipe.fileHandleForWriting)
             } catch {
-                try? inputPipe.fileHandleForWriting.close()
                 controller.terminate()
                 throw error
             }
         }
-        defer { controller.finish(process) }
         // Native catalog commands can emit hundreds of kilobytes. Drain both
         // pipes while the child runs; waiting first can fill a pipe buffer and
         // deadlock setup checks indefinitely.
@@ -369,21 +368,75 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
     }
 
     private static func drain(_ handle: FileHandle) async throws -> CapturedStream {
-        var captured = Data()
-        var wasTruncated = false
-        while let chunk = try handle.read(upToCount: readChunkBytes), !chunk.isEmpty {
-            let remaining = maximumCapturedBytes - captured.count
-            if remaining > 0 { captured.append(chunk.prefix(remaining)) }
-            if chunk.count > remaining { wasTruncated = true }
+        try await withCheckedThrowingContinuation { continuation in
+            let captured = ProcessStreamCapture(limit: maximumCapturedBytes)
+            let channel = DispatchIO(type: .stream, fileDescriptor: handle.fileDescriptor, queue: pipeIOQueue) { _ in
+                try? handle.close()
+            }
+            channel.setLimit(highWater: readChunkBytes)
+            channel.read(offset: 0, length: Int.max, queue: pipeIOQueue) { done, chunk, error in
+                if let chunk { captured.append(chunk) }
+                guard done else { return }
+                channel.close()
+                if error == 0 {
+                    continuation.resume(returning: captured.result())
+                } else {
+                    continuation.resume(throwing: POSIXError(POSIXErrorCode(rawValue: error) ?? .EIO))
+                }
+            }
         }
-        var text = String(decoding: captured, as: UTF8.self)
-        if wasTruncated { text += "\n[output truncated after \(maximumCapturedBytes) bytes]" }
-        return CapturedStream(text: text)
+    }
+
+    private static func write(_ data: Data, to handle: FileHandle) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            let channel = DispatchIO(type: .stream, fileDescriptor: handle.fileDescriptor, queue: pipeIOQueue) { _ in
+                // EOF must reach the child even if the caller is cancelled or a write fails.
+                try? handle.close()
+            }
+            let bytes = data.withUnsafeBytes { DispatchData(bytes: $0) }
+            channel.write(offset: 0, data: bytes, queue: pipeIOQueue) { done, _, error in
+                guard done else { return }
+                channel.close()
+                if error == 0 {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: POSIXError(POSIXErrorCode(rawValue: error) ?? .EIO))
+                }
+            }
+        }
     }
 }
 
 private struct CapturedStream: Sendable {
     var text: String
+}
+
+/// DispatchIO drains ready pipe data without parking a Swift concurrency worker.
+private final class ProcessStreamCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private let limit: Int
+    private var captured = Data()
+    private var wasTruncated = false
+
+    init(limit: Int) {
+        self.limit = limit
+    }
+
+    func append(_ chunk: DispatchData) {
+        lock.withLock {
+            let remaining = limit - captured.count
+            if remaining > 0 { captured.append(contentsOf: chunk.prefix(remaining)) }
+            if chunk.count > remaining { wasTruncated = true }
+        }
+    }
+
+    func result() -> CapturedStream {
+        lock.withLock {
+            var text = String(decoding: captured, as: UTF8.self)
+            if wasTruncated { text += "\n[output truncated after \(limit) bytes]" }
+            return CapturedStream(text: text)
+        }
+    }
 }
 
 private final class ProcessExitWaiter: @unchecked Sendable {

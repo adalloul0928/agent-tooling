@@ -15,10 +15,11 @@ struct AgentPluginManifestConformanceTests {
         ])
 
         #expect(result.manifest.name == "valid-plugin")
-        #expect(result.diagnostics == [
-            .init(kind: .ignoredUnknownRootField("futureFlag")),
-            .init(kind: .ignoredUnknownRootField("publisherData")),
-        ])
+        #expect(
+            result.diagnostics == [
+                .init(kind: .ignoredUnknownRootField("futureFlag")),
+                .init(kind: .ignoredUnknownRootField("publisherData")),
+            ])
     }
 
     @Test(arguments: invalidDefinedFieldCases)
@@ -52,7 +53,7 @@ struct AgentPluginManifestConformanceTests {
 
     @Test func loaderPreservesOpaqueExtensionValuesWithoutValidatingThem() throws {
         let opaque: [String: JSONValue] = [
-            "not a valid namespace": .array([.null, .string("opaque"), .object(["unknown": .bool(true)])]),
+            "not a valid namespace": .array([.null, .string("opaque"), .object(["unknown": .bool(true)])])
         ]
         let result = try load([
             "$schema": .string(Self.schema),
@@ -126,11 +127,15 @@ struct AgentPluginManifestConformanceTests {
     private static let invalidDefinedFieldCases: [InvalidFieldCase] = [
         .init("missing schema", ["name": .string("valid-plugin")]),
         .init("missing name", ["$schema": .string(schema)]),
-        .init("unsupported schema", ["$schema": .string("https://agent-plugins.org/schemas/2.0.0/plugin.schema.json"), "name": .string("valid-plugin")]),
+        .init(
+            "unsupported schema",
+            ["$schema": .string("https://agent-plugins.org/schemas/2.0.0/plugin.schema.json"), "name": .string("valid-plugin")]),
         .init("null optional", ["$schema": .string(schema), "name": .string("valid-plugin"), "version": .null]),
         .init("wrong metadata type", ["$schema": .string(schema), "name": .string("valid-plugin"), "homepage": .number(3)]),
         .init("nonobject author", ["$schema": .string(schema), "name": .string("valid-plugin"), "author": .string("author")]),
-        .init("unknown author field", ["$schema": .string(schema), "name": .string("valid-plugin"), "author": .object(["handle": .string("a")])]),
+        .init(
+            "unknown author field",
+            ["$schema": .string(schema), "name": .string("valid-plugin"), "author": .object(["handle": .string("a")])]),
         .init("null author field", ["$schema": .string(schema), "name": .string("valid-plugin"), "author": .object(["name": .null])]),
         .init("nonstring keyword", ["$schema": .string(schema), "name": .string("valid-plugin"), "keywords": .array([.number(1)])]),
     ]

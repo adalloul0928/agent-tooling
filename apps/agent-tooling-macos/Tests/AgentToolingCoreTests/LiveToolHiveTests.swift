@@ -18,8 +18,9 @@ private let runsLiveToolHive =
 
 @Suite("Live ToolHive")
 struct LiveToolHiveTests {
-    @Test("The real version response decodes into the fields this build reads",
-          .enabled(if: runsLiveToolHive))
+    @Test(
+        "The real version response decodes into the fields this build reads",
+        .enabled(if: runsLiveToolHive))
     func versionDecodes() async throws {
         let result = try await ToolHiveRuntimeInspection().version()
         guard case .available(let version, _) = result else {
@@ -35,8 +36,9 @@ struct LiveToolHiveTests {
         #expect(version.platform.contains("/"))
     }
 
-    @Test("An installed ToolHive reports as available with the capabilities this build claims",
-          .enabled(if: runsLiveToolHive))
+    @Test(
+        "An installed ToolHive reports as available with the capabilities this build claims",
+        .enabled(if: runsLiveToolHive))
     func providerReportsAvailable() async {
         let status = await ToolHiveMCPRuntimeProvider().status()
 
@@ -46,8 +48,9 @@ struct LiveToolHiveTests {
         #expect(status.version?.isEmpty == false)
     }
 
-    @Test("The real workload list decodes, whatever this Mac happens to be running",
-          .enabled(if: runsLiveToolHive))
+    @Test(
+        "The real workload list decodes, whatever this Mac happens to be running",
+        .enabled(if: runsLiveToolHive))
     func workloadListDecodes() async throws {
         // An empty list is a valid answer and still proves the command,
         // the exit code and the JSON shape are the ones this build expects.
@@ -60,8 +63,9 @@ struct LiveToolHiveTests {
         }
     }
 
-    @Test("A workload that does not exist is a failed command, not a missing ToolHive",
-          .enabled(if: runsLiveToolHive))
+    @Test(
+        "A workload that does not exist is a failed command, not a missing ToolHive",
+        .enabled(if: runsLiveToolHive))
     func absentWorkloadIsNotAnAbsentToolHive() async throws {
         // The two are handled differently everywhere upstream: an absent
         // ToolHive offers installation, a failed command reports a

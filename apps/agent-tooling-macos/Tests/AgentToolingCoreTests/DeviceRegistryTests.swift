@@ -75,11 +75,8 @@ struct DeviceRegistryTests {
         let writer = WorkspaceObjectID()
         let document = try WorkspaceDocumentCoding.seal(.init(revision: .init(writerID: writer), devices: registry))
         let decoded = try WorkspaceDocumentCoding.decode(try WorkspaceDocumentCoding.encode(document))
-        #expect(decoded.deviceRegistry.map(\.name) == ["Mac Studio", "MacBook Pro", "Work laptop"].sorted(by: { lhs, rhs in
-            let ids = [studio, laptop, work]
-            let names = ["Mac Studio", "MacBook Pro", "Work laptop"]
-            return ids[names.firstIndex(of: lhs)!] < ids[names.firstIndex(of: rhs)!]
-        }))
+        let expectedNames = registry.sorted { $0.id < $1.id }.map(\.name)
+        #expect(decoded.deviceRegistry.map(\.name) == expectedNames)
         #expect(decoded.deviceRegistry.first { $0.id == work }?.receivesSharedAssignments == false)
     }
 
@@ -89,17 +86,30 @@ struct DeviceRegistryTests {
         try WorkspaceDocumentCoding.seal(.init(revision: .init(writerID: WorkspaceObjectID()), devices: registry))
     }
 
-    private func edit(_ document: PortableWorkspaceDocument, _ change: (inout PortableWorkspaceDocument) -> Void) throws -> PortableWorkspaceDocument {
+    private func edit(_ document: PortableWorkspaceDocument, _ change: (inout PortableWorkspaceDocument) throws -> Void) throws
+        -> PortableWorkspaceDocument
+    {
         var next = document
-        change(&next)
+        try change(&next)
         next.revision = .init(parentIDs: [document.revision.id], writerID: WorkspaceObjectID())
         return try WorkspaceDocumentCoding.seal(next)
     }
 
+    private func editLaptop(_ document: PortableWorkspaceDocument, _ change: (inout DeviceRecord) -> Void) throws
+        -> PortableWorkspaceDocument
+    {
+        try edit(document) { next in
+            var devices = try #require(next.devices)
+            let index = try #require(devices.firstIndex { $0.id == laptop })
+            change(&devices[index])
+            next.devices = devices
+        }
+    }
+
     @Test func retiringOnOneMacAndRenamingOnTheOtherBothLand() throws {
         let ancestor = try base()
-        let mine = try edit(ancestor) { $0.devices![$0.devices!.firstIndex { $0.id == laptop }!].retiredAt = Date(timeIntervalSince1970: 1_000) }
-        let theirs = try edit(ancestor) { $0.devices![$0.devices!.firstIndex { $0.id == laptop }!].name = "Travel Mac" }
+        let mine = try editLaptop(ancestor) { $0.retiredAt = Date(timeIntervalSince1970: 1_000) }
+        let theirs = try editLaptop(ancestor) { $0.name = "Travel Mac" }
         let merge = WorkspaceMergeEngine.merge(base: ancestor, local: mine, remote: theirs, writerID: WorkspaceObjectID())
         #expect(merge.isResolved)
         let merged = try #require(merge.document?.deviceRegistry.first { $0.id == laptop })
@@ -109,8 +119,8 @@ struct DeviceRegistryTests {
 
     @Test func renamingOneMacDifferentlyOnBothSidesIsAConflictAPersonDecides() throws {
         let ancestor = try base()
-        let mine = try edit(ancestor) { $0.devices![$0.devices!.firstIndex { $0.id == laptop }!].name = "Home laptop" }
-        let theirs = try edit(ancestor) { $0.devices![$0.devices!.firstIndex { $0.id == laptop }!].name = "Travel Mac" }
+        let mine = try editLaptop(ancestor) { $0.name = "Home laptop" }
+        let theirs = try editLaptop(ancestor) { $0.name = "Travel Mac" }
         let merge = WorkspaceMergeEngine.merge(base: ancestor, local: mine, remote: theirs, writerID: WorkspaceObjectID())
         #expect(!merge.isResolved)
         let conflict = try #require(merge.conflicts.first)
@@ -128,11 +138,14 @@ struct DeviceRegistryTests {
 
     @Test func exclusionsOnASharedAssignmentCombineAsASet() throws {
         let skill = ArtifactID()
-        let ancestor = try WorkspaceDocumentCoding.seal(.init(
-            revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: [.init(identity: .init(id: skill, kind: .skill, displayName: "S"), authority: .centralPersonal, declaredName: "s")],
-            assignments: [.init(artifactID: skill, destination: .init(surface: .claudeCode, scope: .user), reason: .manual)],
-            devices: registry))
+        let ancestor = try WorkspaceDocumentCoding.seal(
+            .init(
+                revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: [
+                    .init(identity: .init(id: skill, kind: .skill, displayName: "S"), authority: .centralPersonal, declaredName: "s")
+                ],
+                assignments: [.init(artifactID: skill, destination: .init(surface: .claudeCode, scope: .user), reason: .manual)],
+                devices: registry))
         let mine = try edit(ancestor) { $0.assignments[0].destination.excludedDeviceIDs = [laptop] }
         let theirs = try edit(ancestor) { $0.assignments[0].destination.excludedDeviceIDs = [studio] }
         let merge = WorkspaceMergeEngine.merge(base: ancestor, local: mine, remote: theirs, writerID: WorkspaceObjectID())
@@ -169,15 +182,18 @@ struct DeviceRegistryCommandTests {
     @Test func registeringTwiceIsOneRowAndNamesAreUniqueAmongLivingMacs() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        _ = try await fixture.service.registerDevice(.init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, name: "Mac Studio"))
-        _ = try await fixture.service.registerDevice(.init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, name: "Mac Studio"))
+        _ = try await fixture.service.registerDevice(
+            .init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, name: "Mac Studio"))
+        _ = try await fixture.service.registerDevice(
+            .init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, name: "Mac Studio"))
         #expect(fixture.registry.count == 1)
 
         let other = WorkspaceObjectID()
         await #expect(throws: DeviceRegistryError.nameInUse(by: "Mac Studio")) {
             try await fixture.service.registerDevice(.init(expectedRevisionID: try fixture.head, deviceID: other, name: "mac studio"))
         }
-        _ = try await fixture.service.registerDevice(.init(expectedRevisionID: try fixture.head, deviceID: other, name: "MacBook Pro", receivesSharedAssignments: false))
+        _ = try await fixture.service.registerDevice(
+            .init(expectedRevisionID: try fixture.head, deviceID: other, name: "MacBook Pro", receivesSharedAssignments: false))
         #expect(fixture.registry.count == 2)
         #expect(fixture.registry.first { $0.id == other }?.receivesSharedAssignments == false)
     }
@@ -186,7 +202,8 @@ struct DeviceRegistryCommandTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let other = WorkspaceObjectID()
-        _ = try await fixture.service.registerDevice(.init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, name: "Mac Studio"))
+        _ = try await fixture.service.registerDevice(
+            .init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, name: "Mac Studio"))
         _ = try await fixture.service.registerDevice(.init(expectedRevisionID: try fixture.head, deviceID: other, name: "MacBook Pro"))
 
         await #expect(throws: DeviceRegistryError.cannotRetireSelf) {
@@ -198,18 +215,22 @@ struct DeviceRegistryCommandTests {
         await #expect(throws: DeviceRegistryError.retired) {
             try await fixture.service.updateDevice(.init(expectedRevisionID: try fixture.head, deviceID: other, change: .rename("Back")))
         }
-        _ = try await fixture.service.updateDevice(.init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, change: .rename("MacBook Pro")))
+        _ = try await fixture.service.updateDevice(
+            .init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, change: .rename("MacBook Pro")))
         #expect(fixture.registry.first { $0.id == fixture.deviceID }?.name == "MacBook Pro")
     }
 
     @Test func turningOffSharedAssignmentsIsRecordedAndUnknownMacsAreRefused() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        _ = try await fixture.service.registerDevice(.init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, name: "Mac Studio"))
-        _ = try await fixture.service.updateDevice(.init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, change: .receivesSharedAssignments(false)))
+        _ = try await fixture.service.registerDevice(
+            .init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, name: "Mac Studio"))
+        _ = try await fixture.service.updateDevice(
+            .init(expectedRevisionID: try fixture.head, deviceID: fixture.deviceID, change: .receivesSharedAssignments(false)))
         #expect(fixture.registry.first?.receivesSharedAssignments == false)
         await #expect(throws: DeviceRegistryError.unknownDevice) {
-            try await fixture.service.updateDevice(.init(expectedRevisionID: try fixture.head, deviceID: WorkspaceObjectID(), change: .seen(.now)))
+            try await fixture.service.updateDevice(
+                .init(expectedRevisionID: try fixture.head, deviceID: WorkspaceObjectID(), change: .seen(.now)))
         }
     }
 }

@@ -221,13 +221,15 @@ struct SettingsGeneralView: View {
         InfoRow(title, detail: detail) {
             Image(systemName: symbol).foregroundStyle(.secondary).frame(width: Size.glyphSlot)
         } trailing: {
-            Picker(title, selection: Binding(
-                get: { workspace.device.updatePolicy.policy(for: kind) },
-                set: { value in
-                    var policy = workspace.device.updatePolicy
-                    policy.setPolicy(value, for: kind)
-                    Task { await workspace.device.setUpdatePolicy(policy) }
-                })
+            Picker(
+                title,
+                selection: Binding(
+                    get: { workspace.device.updatePolicy.policy(for: kind) },
+                    set: { value in
+                        var policy = workspace.device.updatePolicy
+                        policy.setPolicy(value, for: kind)
+                        Task { await workspace.device.setUpdatePolicy(policy) }
+                    })
             ) {
                 ForEach(UpdateInstallPolicy.allCases, id: \.self) { Text($0.title).tag($0) }
             }

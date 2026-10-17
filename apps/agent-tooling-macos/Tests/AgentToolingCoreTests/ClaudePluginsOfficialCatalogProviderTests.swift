@@ -100,7 +100,8 @@ struct ClaudePluginsOfficialCatalogProviderTests {
         #expect(
             install.arguments
                 == ["plugin", "install", "42crunch-api-security-testing@claude-plugins-official", "--scope", "user"])
-        #expect(install.removalArguments == ["plugin", "uninstall", "42crunch-api-security-testing@claude-plugins-official", "--scope", "user"])
+        #expect(
+            install.removalArguments == ["plugin", "uninstall", "42crunch-api-security-testing@claude-plugins-official", "--scope", "user"])
 
         // A bare-string author is read into the one name shown; a git-subdir
         // object yields the source URL as the location when no homepage exists.
@@ -152,7 +153,7 @@ struct ClaudePluginsOfficialCatalogProviderTests {
     /// body, or malformed JSON are all refusals rather than empty pages.
     @Test func onlyHTTPSAndWellFormedAnswersAreAccepted() async throws {
         #expect(throws: MarketplaceProviderError.self) {
-            _ = try ClaudePluginsOfficialCatalogProvider(url: URL(string: "http://raw.example/marketplace.json")!)
+            _ = try ClaudePluginsOfficialCatalogProvider(url: try #require(URL(string: "http://raw.example/marketplace.json")))
         }
 
         let failing = OfficialCatalogHTTPStub(payload: Data("{}".utf8), statusCode: 503)

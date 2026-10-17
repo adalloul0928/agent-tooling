@@ -10,12 +10,16 @@ struct ConfigurationLayerReaderTests {
     @Test func claudeLayersAreReadInPrecedenceOrderAndExplainOneValue() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        try fixture.write(".claude/settings.json", in: fixture.home, """
-        {"model":"user-model","permissions":{"allow":["Read"],"other":true},"experimental":{"x":1}}
-        """)
-        try fixture.write(".claude/settings.json", in: fixture.project, """
-        {"model":"project-model","permissions":{"allow":["Bash(git:*)"]}}
-        """)
+        try fixture.write(
+            ".claude/settings.json", in: fixture.home,
+            """
+            {"model":"user-model","permissions":{"allow":["Read"],"other":true},"experimental":{"x":1}}
+            """)
+        try fixture.write(
+            ".claude/settings.json", in: fixture.project,
+            """
+            {"model":"project-model","permissions":{"allow":["Bash(git:*)"]}}
+            """)
         let before = try fixture.contents(".claude/settings.json", in: fixture.home)
 
         let layers = try ConfigurationLayerReader()
@@ -65,16 +69,20 @@ struct ConfigurationLayerReaderTests {
     @Test func codexReadsItsLocalConfigurationAndOnlyUsesProfileFilesWhenTheReleaseDoes() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        try fixture.write(".codex/config.toml", in: fixture.home, """
-        # base
-        model = "gpt-5-codex"
-        approval_policy = "on-request"
-        [mcp_servers.files]
-        command = "npx"
-        """)
-        try fixture.write(".codex/work.config.toml", in: fixture.home, """
-        model = "gpt-5"
-        """)
+        try fixture.write(
+            ".codex/config.toml", in: fixture.home,
+            """
+            # base
+            model = "gpt-5-codex"
+            approval_policy = "on-request"
+            [mcp_servers.files]
+            command = "npx"
+            """)
+        try fixture.write(
+            ".codex/work.config.toml", in: fixture.home,
+            """
+            model = "gpt-5"
+            """)
 
         let modern = try ConfigurationLayerReader().codexLayers(
             homeRoot: fixture.home,
@@ -135,14 +143,16 @@ struct ConfigurationLayerReaderTests {
             home = root.appending(path: "home")
             project = root.appending(path: "project")
             for url in [home, project] {
-                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true,
+                try FileManager.default.createDirectory(
+                    at: url, withIntermediateDirectories: true,
                     attributes: [.posixPermissions: 0o700])
             }
         }
 
         func write(_ relativePath: String, in directory: URL, _ contents: String) throws {
             let url = directory.appending(path: relativePath)
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             try Data(contents.utf8).write(to: url)
         }

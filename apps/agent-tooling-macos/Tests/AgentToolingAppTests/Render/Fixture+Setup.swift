@@ -85,7 +85,9 @@ extension ShellRenderFixture {
                 SetupFinding(
                     kind: .brokenSkillLink, severity: .medium, client: .claude, subject: "gone", title: "gone points at nothing",
                     detail: "The entry is a link to a folder that is no longer there.", evidence: ["~/.claude/skills/gone"],
-                    actions: [.removeBrokenLink(path: home.appending(path: ".claude/skills/gone").path(percentEncoded: false), client: .claude)]),
+                    actions: [
+                        .removeBrokenLink(path: home.appending(path: ".claude/skills/gone").path(percentEncoded: false), client: .claude)
+                    ]),
                 SetupFinding(
                     kind: .unmanagedSkill, severity: .info, client: .claude, subject: "docx", title: "docx is not managed by this app",
                     detail: "Claude Code has this skill, but the library holds no copy.", evidence: ["~/.claude/skills/docx"],
@@ -94,7 +96,8 @@ extension ShellRenderFixture {
                         .removeSkillCopy(path: home.appending(path: ".claude/skills/docx").path(percentEncoded: false), client: .claude),
                     ]),
                 SetupFinding(
-                    kind: .missingPluginInstall, severity: .high, client: .codex, subject: "gone@aim", title: "Gone is listed but its files are gone",
+                    kind: .missingPluginInstall, severity: .high, client: .codex, subject: "gone@aim",
+                    title: "Gone is listed but its files are gone",
                     detail: "Codex records this plugin at a folder that does not exist.", evidence: ["~/.codex/plugins/cache/aim/gone/1.0"],
                     actions: [.reinstallPlugin(pluginID: "gone@aim", client: .codex)]),
             ],

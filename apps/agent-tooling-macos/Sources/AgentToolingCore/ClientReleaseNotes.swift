@@ -44,7 +44,8 @@ public struct URLSessionReleaseNotesFetcher: ReleaseNotesFetching {
         request.setValue("agent-tooling-macos", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw ClientReleaseNotesError.unreachable("\(url.host() ?? "the server") answered \((response as? HTTPURLResponse)?.statusCode ?? 0).")
+            throw ClientReleaseNotesError.unreachable(
+                "\(url.host() ?? "the server") answered \((response as? HTTPURLResponse)?.statusCode ?? 0).")
         }
         return data
     }
@@ -66,9 +67,15 @@ public struct ClientReleaseNotesService: Sendable {
     public static func sources(for client: ClientKind, installedVersion: String?) -> [URL] {
         switch client {
         case .claude:
-            return [URL(string: "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md")!]
+            guard let url = URL(string: "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md") else {
+                preconditionFailure("The built-in Claude changelog URL must be valid.")
+            }
+            return [url]
         case .codex:
-            return [URL(string: "https://api.github.com/repos/openai/codex/releases?per_page=30")!]
+            guard let url = URL(string: "https://api.github.com/repos/openai/codex/releases?per_page=30") else {
+                preconditionFailure("The built-in Codex release URL must be valid.")
+            }
+            return [url]
         case .kiro:
             // Kiro publishes one page per minor: the installed minor and the
             // ones after it, up to a few ahead.
@@ -118,14 +125,22 @@ public struct ClientReleaseNotesService: Sendable {
         var version: String?
         var body: [String] = []
         func flush() {
-            if let version { notes.append(.init(client: client, version: version, source: source, body: body.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))) }
+            if let version {
+                notes.append(
+                    .init(
+                        client: client, version: version, source: source,
+                        body: body.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)))
+            }
             body = []
         }
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
             if line.hasPrefix("## ") {
                 flush()
                 version = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-                if notes.count >= 60 { version = nil; break }
+                if notes.count >= 60 {
+                    version = nil
+                    break
+                }
             } else if version != nil {
                 body.append(String(line))
             }
@@ -136,7 +151,9 @@ public struct ClientReleaseNotesService: Sendable {
 
     /// GitHub's releases JSON: stable releases only, by tag, newest first.
     static func parseGitHubReleases(_ text: String, client: ClientKind) -> [ClientReleaseNote] {
-        guard let data = text.data(using: .utf8), let releases = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        guard let data = text.data(using: .utf8), let releases = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return []
+        }
         return releases.compactMap { release in
             guard (release["prerelease"] as? Bool) != true, (release["draft"] as? Bool) != true,
                 let tag = release["tag_name"] as? String, let body = release["body"] as? String, !body.isEmpty
@@ -151,7 +168,8 @@ public struct ClientReleaseNotesService: Sendable {
     /// version taken from the address.
     static func parseKiroPage(_ html: String, client: ClientKind, source: String) -> [ClientReleaseNote] {
         guard let range = source.range(of: "/cli/") else { return [] }
-        let version = source[range.upperBound...].trimmingCharacters(in: CharacterSet(charactersIn: "/")).replacingOccurrences(of: "-", with: ".")
+        let version = source[range.upperBound...].trimmingCharacters(in: CharacterSet(charactersIn: "/")).replacingOccurrences(
+            of: "-", with: ".")
         // Keep the article's text: strip tags, decode the few entities that
         // matter, collapse whitespace. Good enough for a model to read.
         var text = html

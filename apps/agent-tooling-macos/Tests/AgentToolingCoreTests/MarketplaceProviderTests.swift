@@ -72,7 +72,7 @@ struct MarketplaceProviderTests {
 
     @Test func officialRegistryRejectsInsecureSourcesAndBadResponses() async throws {
         #expect(throws: MarketplaceProviderError.self) {
-            _ = try OfficialMCPRegistryProvider(baseURL: URL(string: "http://registry.example")!)
+            _ = try OfficialMCPRegistryProvider(baseURL: try #require(URL(string: "http://registry.example")))
         }
 
         let stub = MarketplaceHTTPStub(payload: Data("{}".utf8), statusCode: 503)

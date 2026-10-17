@@ -1,5 +1,5 @@
-import Foundation
 import AgentToolingTestSupport
+import Foundation
 import Testing
 
 @testable import AgentToolingCore
@@ -38,9 +38,10 @@ struct ProjectRepositoryHintCommandTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
 
-        _ = try await fixture.service.createProject(.init(
-            expectedRevisionID: try fixture.head, name: "Order",
-            repositoryHints: ["git@github.com:acme/order-history.git", "https://github.com/acme/order-history"]))
+        _ = try await fixture.service.createProject(
+            .init(
+                expectedRevisionID: try fixture.head, name: "Order",
+                repositoryHints: ["git@github.com:acme/order-history.git", "https://github.com/acme/order-history"]))
 
         #expect(try fixture.project(named: "Order").repositoryHints == ["https://github.com/acme/order-history"])
     }
@@ -49,8 +50,9 @@ struct ProjectRepositoryHintCommandTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         await #expect(throws: WorkspaceDomainValidationError.self) {
-            try await fixture.service.createProject(.init(
-                expectedRevisionID: try fixture.head, name: "Scratch", repositoryHints: ["/Users/me/src/scratch"]))
+            try await fixture.service.createProject(
+                .init(
+                    expectedRevisionID: try fixture.head, name: "Scratch", repositoryHints: ["/Users/me/src/scratch"]))
         }
         #expect(try fixture.store.snapshot()?.document.logicalProjects.isEmpty == true)
     }
@@ -62,18 +64,21 @@ struct ProjectRepositoryHintCommandTests {
         let web = try fixture.project(named: "Web")
         #expect(web.repositoryHints.isEmpty)
 
-        _ = try await fixture.service.addProjectRepositoryHint(.init(
-            expectedRevisionID: try fixture.head, projectID: web.id, repository: "ssh://git@github.com/acme/web.git"))
+        _ = try await fixture.service.addProjectRepositoryHint(
+            .init(
+                expectedRevisionID: try fixture.head, projectID: web.id, repository: "ssh://git@github.com/acme/web.git"))
         #expect(try fixture.project(named: "Web").repositoryHints == ["https://github.com/acme/web"])
 
         // The same repository, spelled another way, changes nothing.
-        _ = try await fixture.service.addProjectRepositoryHint(.init(
-            expectedRevisionID: try fixture.head, projectID: web.id, repository: "https://github.com/acme/web"))
+        _ = try await fixture.service.addProjectRepositoryHint(
+            .init(
+                expectedRevisionID: try fixture.head, projectID: web.id, repository: "https://github.com/acme/web"))
         #expect(try fixture.project(named: "Web").repositoryHints == ["https://github.com/acme/web"])
 
         // A second repository is a second hint: a monorepo split, a mirror.
-        _ = try await fixture.service.addProjectRepositoryHint(.init(
-            expectedRevisionID: try fixture.head, projectID: web.id, repository: "git@gitlab.com:acme/web.git"))
+        _ = try await fixture.service.addProjectRepositoryHint(
+            .init(
+                expectedRevisionID: try fixture.head, projectID: web.id, repository: "git@gitlab.com:acme/web.git"))
         #expect(try fixture.project(named: "Web").repositoryHints.count == 2)
     }
 
@@ -81,8 +86,9 @@ struct ProjectRepositoryHintCommandTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         await #expect(throws: WorkspaceRevisionStoreError.missingArtifact) {
-            try await fixture.service.addProjectRepositoryHint(.init(
-                expectedRevisionID: try fixture.head, projectID: ArtifactID(), repository: "https://github.com/acme/web"))
+            try await fixture.service.addProjectRepositoryHint(
+                .init(
+                    expectedRevisionID: try fixture.head, projectID: ArtifactID(), repository: "https://github.com/acme/web"))
         }
     }
 

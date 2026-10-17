@@ -22,14 +22,15 @@ struct SetupWizardRenderTests {
         }
     }
 
-    @Test func theStopsAreTheCategoriesTheCheckupHasSomethingIn() {
+    @Test func theStopsAreTheCategoriesTheCheckupHasSomethingIn() throws {
         let checkup = ShellRenderFixture.setupCheckup(home: URL(filePath: "/Users/example"))
         // The fixture: a broken link and a missing plugin (cleanup), an
         // unmanaged skill (unmanaged), and a settings recommendation.
         #expect(SetupWizardStep.categories(in: checkup) == [.cleanup, .unmanaged, .settings])
         var dismissedAll = checkup
         dismissedAll.dismissedFindingIDs = Set(checkup.audit.findings.map(\.id))
-        dismissedAll.dismissedRecommendationIDs = Set(checkup.review!.recommendations.map(\.id))
+        let review = try #require(checkup.review)
+        dismissedAll.dismissedRecommendationIDs = Set(review.recommendations.map(\.id))
         #expect(SetupWizardStep.categories(in: dismissedAll).isEmpty, "a dismissed item is not a stop")
     }
 

@@ -194,10 +194,12 @@ enum ToolCatalog {
                 """,
             inputSchema: ToolSchema.object(
                 properties: [
-                    "client": ToolSchema.string("Which agent to report: 'claude-code' or 'codex'.",
-                                                maximumLength: 32),
-                    "project_path": ToolSchema.string("Optional absolute path to a project whose files also apply.",
-                                                      maximumLength: 4_096),
+                    "client": ToolSchema.string(
+                        "Which agent to report: 'claude-code' or 'codex'.",
+                        maximumLength: 32),
+                    "project_path": ToolSchema.string(
+                        "Optional absolute path to a project whose files also apply.",
+                        maximumLength: 4_096),
                 ],
                 required: ["client"]
             )

@@ -32,13 +32,17 @@ extension WorkspaceMergeEngine {
                     continue
                 }
                 if entry == ancestor { continue }  // the removal is the only move
-                report(.accountPreference, nil, key.objectID,
-                       "One Mac stopped sharing this account choice while the other changed it.")
+                report(
+                    .accountPreference, nil, key.objectID,
+                    "One Mac stopped sharing this account choice while the other changed it.")
                 if mine[key] != nil { entries.append(entry) }
             case (let mineEntry?, let theirsEntry?):
-                if let chosen = pick(ancestor: ancestor, mine: mineEntry, theirs: theirsEntry, onConflict: { _ in
-                    report(.accountPreference, nil, key.objectID, "Both Macs changed this account choice differently.")
-                }) {
+                if let chosen = pick(
+                    ancestor: ancestor, mine: mineEntry, theirs: theirsEntry,
+                    onConflict: { _ in
+                        report(.accountPreference, nil, key.objectID, "Both Macs changed this account choice differently.")
+                    })
+                {
                     entries.append(chosen)
                 }
             }

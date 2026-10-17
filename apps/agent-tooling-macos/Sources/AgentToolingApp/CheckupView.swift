@@ -40,7 +40,9 @@ struct CheckupView: View {
                         await session.review(purpose: .checkup)
                     }
                 } label: {
-                    Label(session.isReviewing ? "Reviewing…" : "Ask \(session.reviewClient?.rawValue ?? "assistant")", systemImage: "sparkles")
+                    Label(
+                        session.isReviewing ? "Reviewing…" : "Ask \(session.reviewClient?.rawValue ?? "assistant")", systemImage: "sparkles"
+                    )
                 }
                 .buttonStyle(.glass)
                 .disabled(session.isBusy || session.reviewClient == nil)
@@ -82,7 +84,8 @@ struct CheckupView: View {
                         EmptyStateView(
                             symbol: "stethoscope", title: "No checkup yet",
                             message: "Find what is broken, duplicated, or not yet managed, then have your assistant say what to do.",
-                            actionTitle: "Audit this Mac", action: { Task { await session.audit() } })
+                            actionTitle: "Audit this Mac", action: { Task { await session.audit() } }
+                        )
                         .frame(height: Size.emptyStatePaneHeight)
                     }
                 }
@@ -116,7 +119,8 @@ struct CheckupView: View {
 
     private var reviewHelp: String {
         guard let client = session.reviewClient else { return "A review needs Claude Code or Codex; this Mac is not managing either." }
-        return "\(client.rawValue) reads the audit and the apps' configuration folders, then says what to change. It can read; it cannot change anything."
+        return
+            "\(client.rawValue) reads the audit and the apps' configuration folders, then says what to change. It can read; it cannot change anything."
     }
 
     /// The whole picture in one line: how much is left in each bucket.
@@ -125,7 +129,9 @@ struct CheckupView: View {
         let decide = items.filter { $0.bucket == .decide }
         let fine = items.filter { $0.bucket == .fine }
         return HStack(spacing: 0) {
-            bucketCount(fix.count, unit: "to fix", state: fix.isEmpty ? .healthy : ((fix.map(\.severity).max() ?? .info) >= .medium ? .attention : .pending))
+            bucketCount(
+                fix.count, unit: "to fix",
+                state: fix.isEmpty ? .healthy : ((fix.map(\.severity).max() ?? .info) >= .medium ? .attention : .pending))
             Hairline(.vertical).frame(height: Size.compactRowHeight)
             bucketCount(decide.count, unit: "to decide", state: decide.isEmpty ? .healthy : .pending)
             Hairline(.vertical).frame(height: Size.compactRowHeight)
@@ -173,8 +179,10 @@ struct CheckupView: View {
         if session.isReviewing {
             HStack(spacing: Space.lg) {
                 ProgressView().controlSize(.small)
-                Text("\(session.reviewClient?.rawValue ?? "Your assistant") is reading the audit and the apps' configuration folders. The list below is ready now; its advice joins it in a few minutes.")
-                    .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
+                Text(
+                    "\(session.reviewClient?.rawValue ?? "Your assistant") is reading the audit and the apps' configuration folders. The list below is ready now; its advice joins it in a few minutes."
+                )
+                .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
                 Spacer()
             }
             .padding(.horizontal, Space.xl).padding(.vertical, Space.lg).standardPanel()
@@ -237,7 +245,11 @@ struct CheckupView: View {
         if !fix.isEmpty { bucketCard(.fix, fix) }
         if !decide.isEmpty { bucketCard(.decide, decide) }
         if !fine.isEmpty {
-            Button(showingFine ? "Hide what is fine" : "Show \(fine.count) that \(fine.count == 1 ? "is" : "are") fine as \(fine.count == 1 ? "it is" : "they are")") {
+            Button(
+                showingFine
+                    ? "Hide what is fine"
+                    : "Show \(fine.count) that \(fine.count == 1 ? "is" : "are") fine as \(fine.count == 1 ? "it is" : "they are")"
+            ) {
                 withAnimation(AgentMotion.quick) { showingFine.toggle() }
             }
             .inlineActionStyle().font(AgentFont.caption).foregroundStyle(.secondary)
@@ -339,8 +351,12 @@ struct CheckupRow: View {
                             .font(AgentFont.microBold).foregroundStyle(.tertiary)
                             .rotationEffect(isExpanded ? .disclosureOpen : .zero)
                             .frame(width: Size.glyphSmall)
-                        if let client = item.client { ClientBrandIcon(client: client, size: Size.brandMark).frame(width: Size.glyphSlot) }
-                        else { Image(systemName: "desktopcomputer").font(AgentFont.caption).foregroundStyle(.secondary).frame(width: Size.glyphSlot) }
+                        if let client = item.client {
+                            ClientBrandIcon(client: client, size: Size.brandMark).frame(width: Size.glyphSlot)
+                        } else {
+                            Image(systemName: "desktopcomputer").font(AgentFont.caption).foregroundStyle(.secondary).frame(
+                                width: Size.glyphSlot)
+                        }
                         Text(item.title).font(AgentFont.bodyMedium).lineLimit(1)
                         if item.severity >= .medium, item.bucket != .fine { SeverityBadge(severity: item.severity) }
                         if item.recommendation != nil {
@@ -360,7 +376,10 @@ struct CheckupRow: View {
                         Button(title, action: onRun)
                             .primaryActionStyle().controlSize(.small)
                             .disabled(isBusy)
-                            .help(item.changesFiles ? "Changes files on this Mac. Removals go to Agent Tooling's trash; configuration files are backed up first." : "Reads only.")
+                            .help(
+                                item.changesFiles
+                                    ? "Changes files on this Mac. Removals go to Agent Tooling's trash; configuration files are backed up first."
+                                    : "Reads only.")
                     } else if let section = item.opens {
                         Button(item.primaryTitle ?? "Open") { onOpen(section) }.secondaryActionStyle().controlSize(.small)
                     }
@@ -374,7 +393,8 @@ struct CheckupRow: View {
             if isExpanded {
                 VStack(alignment: .leading, spacing: Space.md) {
                     Text(item.detail).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
-                    if let recommendation = item.recommendation, !recommendation.rationale.isEmpty, recommendation.rationale != item.detail {
+                    if let recommendation = item.recommendation, !recommendation.rationale.isEmpty, recommendation.rationale != item.detail
+                    {
                         Text(recommendation.rationale).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                     }
                     if let provenance = item.provenance { ProvenanceLabel(provenance: provenance) }
@@ -413,7 +433,8 @@ struct CheckupRow: View {
                 if index < min(item.findings.count, 40) - 1 { Hairline() }
             }
             if item.findings.count > 40 {
-                Text("\(item.findings.count - 40) more of the same.").font(AgentFont.micro).foregroundStyle(.tertiary).padding(.top, Space.xs)
+                Text("\(item.findings.count - 40) more of the same.").font(AgentFont.micro).foregroundStyle(.tertiary).padding(
+                    .top, Space.xs)
             }
         }
         .padding(Space.lg)
@@ -436,8 +457,10 @@ struct FixAllSheet: View {
                 Image(systemName: "checkmark.circle").font(.system(size: Size.heroSymbol)).foregroundStyle(AgentTheme.selection)
                 VStack(alignment: .leading, spacing: Space.xxs) {
                     Text("Fix \(CountNoun("thing").phrase(plan.total))").font(AgentFont.title)
-                    Text("Each runs through Agent Tooling's own reviewed path. Nothing is deleted: folders move to the workspace trash and configuration files are copied there first.")
-                        .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
+                    Text(
+                        "Each runs through Agent Tooling's own reviewed path. Nothing is deleted: folders move to the workspace trash and configuration files are copied there first."
+                    )
+                    .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
                 }
             }
             VStack(alignment: .leading, spacing: Space.sm) {

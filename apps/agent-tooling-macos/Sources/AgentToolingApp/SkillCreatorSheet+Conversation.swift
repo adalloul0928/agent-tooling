@@ -42,10 +42,12 @@ struct SkillCreatorConversationPane: View {
             VStack(alignment: .leading, spacing: Space.xl) {
                 Text("Describe the skill")
                     .font(AgentFont.heading)
-                Text("Say what it should accomplish, when \(client.rawValue) should reach for it, and any constraints it must follow. \(client.rawValue) may ask a few questions before it writes anything, and you can ask for changes after each draft.")
-                    .font(AgentFont.body)
-                    .foregroundStyle(.secondary)
-                    .wrapsLines()
+                Text(
+                    "Say what it should accomplish, when \(client.rawValue) should reach for it, and any constraints it must follow. \(client.rawValue) may ask a few questions before it writes anything, and you can ask for changes after each draft."
+                )
+                .font(AgentFont.body)
+                .foregroundStyle(.secondary)
+                .wrapsLines()
 
                 SkillCreatorOptionsSummary(options: options, client: client)
             }

@@ -309,14 +309,15 @@ final class DigestedLibraryHarness {
                 at: directory, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
         }
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: WorkspaceObjectID(),
-            revision: .init(writerID: WorkspaceObjectID()),
-            artifacts: [
-                .init(
-                    identity: .init(id: skillID, kind: .skill, displayName: "Review Notes"),
-                    authority: .centralPersonal, declaredName: "review-notes", contentDigest: digest)
-            ]))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: WorkspaceObjectID(),
+                revision: .init(writerID: WorkspaceObjectID()),
+                artifacts: [
+                    .init(
+                        identity: .init(id: skillID, kind: .skill, displayName: "Review Notes"),
+                        authority: .centralPersonal, declaredName: "review-notes", contentDigest: digest)
+                ]))
         let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
         store = try WorkspaceRevisionStore(
             containerRoot: container, workspaceID: document.workspaceID, deviceID: device.deviceID)

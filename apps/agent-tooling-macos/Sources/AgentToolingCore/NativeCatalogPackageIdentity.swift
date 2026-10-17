@@ -6,11 +6,6 @@ public struct NativeCatalogPackageIdentity: Hashable, Sendable {
     public let client: ClientKind
     public let externalPluginID: String
 
-    init(client: ClientKind, externalPluginID: String) {
-        self.client = client
-        self.externalPluginID = externalPluginID
-    }
-
     public static func recognize(_ package: MarketplacePackage) -> Self? {
         let client: ClientKind
         let prefix: String
@@ -29,13 +24,15 @@ public struct NativeCatalogPackageIdentity: Hashable, Sendable {
 
         let externalPluginID = String(package.id.dropFirst(prefix.count))
         guard isParserIdentifier(externalPluginID),
-              package.components == [.plugin],
-              package.supportedClients.contains(client),
-              package.ownership == nil || package.ownership == .nativeClient else {
+            package.components == [.plugin],
+            package.supportedClients.contains(client),
+            package.ownership == nil || package.ownership == .nativeClient
+        else {
             return nil
         }
         if let provenance = package.provenance,
-           provenance.source.kind != expectedCatalog {
+            provenance.source.kind != expectedCatalog
+        {
             return nil
         }
         return Self(client: client, externalPluginID: externalPluginID)
@@ -45,9 +42,10 @@ public struct NativeCatalogPackageIdentity: Hashable, Sendable {
     /// encoded package ID must already be canonical; recognition never trims it.
     private static func isParserIdentifier(_ value: String) -> Bool {
         guard !value.isEmpty,
-              value.count <= 128,
-              value == value.trimmingCharacters(in: .whitespacesAndNewlines),
-              !value.hasPrefix("-") else {
+            value.count <= 128,
+            value == value.trimmingCharacters(in: .whitespacesAndNewlines),
+            !value.hasPrefix("-")
+        else {
             return false
         }
         let punctuation = "._-@".unicodeScalars

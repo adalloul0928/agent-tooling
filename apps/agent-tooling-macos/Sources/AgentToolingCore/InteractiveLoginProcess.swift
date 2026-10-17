@@ -41,6 +41,7 @@ struct InteractiveLoginProcess: Sendable {
     /// Bounds on what is kept from the terminal, so a chatty tool cannot grow
     /// memory without limit while a person is away.
     private static let maximumTranscriptBytes = 262_144
+    private static let processEventQueue = DispatchQueue(label: "AgentTooling.InteractiveLoginProcess.events", qos: .userInitiated)
 
     private let homeURL: URL
     private let timeout: Duration
@@ -121,14 +122,12 @@ struct InteractiveLoginProcess: Sendable {
         let reader = TranscriptReader(descriptor: primary, limit: Self.maximumTranscriptBytes)
         let readTask = Task.detached(priority: .utility) { () -> String in
             await reader.readUntilClosed(onAuthorizationURL: onAuthorizationURL)
-            return await reader.transcript()
+            return reader.transcript()
         }
 
         let childPID = pid
         let waitTask = Task.detached(priority: .utility) { () -> Int32 in
-            var status: Int32 = 0
-            while waitpid(childPID, &status, 0) == -1 && errno == EINTR {}
-            return status
+            await Self.waitForExit(childPID)
         }
 
         let outcome: InteractiveLoginOutcome
@@ -140,23 +139,25 @@ struct InteractiveLoginProcess: Sendable {
             let status = try await Self.race(exit: waitTask, deadline: timeout)
             if let status {
                 close(replica)
-                let transcript = await Self.transcript(after: readTask, closing: primary)
+                let transcript = await Self.transcript(after: readTask, reader: reader, closing: primary)
                 let exitCode = Self.exitCode(status)
-                outcome = exitCode == 0
+                outcome =
+                    exitCode == 0
                     ? .completed(transcript: transcript)
                     : .failed(status: exitCode, transcript: transcript)
             } else {
                 await Self.stop(childPID, waitTask: waitTask)
                 close(replica)
-                outcome = .timedOut(transcript: await Self.transcript(after: readTask, closing: primary))
+                outcome = .timedOut(transcript: await Self.transcript(after: readTask, reader: reader, closing: primary))
             }
         } catch {
             // Cancellation from the caller: stop the tool so its callback
             // listener does not outlive the request.
             await Self.stop(childPID, waitTask: waitTask)
             close(replica)
+            reader.stop()
+            _ = await readTask.value
             close(primary)
-            readTask.cancel()
             outcome = .cancelled
         }
         return outcome
@@ -165,43 +166,61 @@ struct InteractiveLoginProcess: Sendable {
     /// The child's exit status if it exits before the deadline, nil otherwise.
     /// Throws only when the caller cancels.
     private static func race(exit waitTask: Task<Int32, Never>, deadline: Duration) async throws -> Int32? {
-        let timer = Task { try await Task.sleep(for: deadline) }
-        let winner = Task<Int32?, Error> {
-            await withTaskCancellationHandler {
-                await withCheckedContinuation { (continuation: CheckedContinuation<Int32?, Never>) in
-                    let box = ContinuationBox<Int32?>(continuation)
-                    Task { let status = await waitTask.value; box.resume(with: status) }
-                    Task { try? await timer.value; box.resume(with: nil) }
-                }
-            } onCancel: { timer.cancel() }
+        let box = ContinuationBox<Int32?>()
+        let result = await withTaskCancellationHandler {
+            await exitBeforeDeadline(waitTask, deadline: deadline, result: box)
+        } onCancel: {
+            box.resume(with: nil)
         }
-        defer { timer.cancel() }
-        let result = try await winner.value
         try Task.checkCancellation()
         return result
+    }
+
+    private static func waitForExit(_ pid: pid_t) async -> Int32 {
+        await withCheckedContinuation { continuation in
+            let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: processEventQueue)
+            source.setEventHandler {
+                // An exit event is already present, so reaping cannot park a concurrency worker.
+                var status: Int32 = 0
+                while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
+                source.cancel()
+                continuation.resume(returning: status)
+            }
+            source.activate()
+        }
+    }
+
+    private static func exitBeforeDeadline(
+        _ waitTask: Task<Int32, Never>, deadline: Duration, result: ContinuationBox<Int32?>
+    ) async -> Int32? {
+        let timer = DispatchSource.makeTimerSource(queue: processEventQueue)
+        timer.setEventHandler { result.resume(with: nil) }
+        timer.schedule(deadline: .now() + ProcessCommandRunner.dispatchInterval(for: deadline))
+        timer.activate()
+        defer { timer.cancel() }
+        return await withCheckedContinuation { continuation in
+            result.install(continuation)
+            Task {
+                result.resume(with: await waitTask.value)
+            }
+        }
     }
 
     /// Asks the child to stop and, if it has not gone within a few seconds,
     /// makes it. The wait is bounded so a stuck tool cannot hold the caller.
     private static func stop(_ pid: pid_t, waitTask: Task<Int32, Never>) async {
-        kill(pid, SIGTERM)
-        let exited = await withTaskGroup(of: Bool.self) { group in
-            group.addTask { _ = await waitTask.value; return true }
-            group.addTask {
-                try? await Task.sleep(for: .seconds(3))
-                return false
-            }
-            let first = await group.next() ?? false
-            group.cancelAll()
-            return first
-        }
-        if !exited {
-            kill(pid, SIGKILL)
+        // POSIX_SPAWN_SETSID gives the login and its helpers their own process group.
+        kill(-pid, SIGTERM)
+        let status = await exitBeforeDeadline(waitTask, deadline: .seconds(3), result: ContinuationBox<Int32?>())
+        if status == nil {
+            kill(-pid, SIGKILL)
             _ = await waitTask.value
         }
     }
 
-    private static func transcript(after readTask: Task<String, Never>, closing descriptor: Int32) async -> String {
+    private static func transcript(
+        after readTask: Task<String, Never>, reader: TranscriptReader, closing descriptor: Int32
+    ) async -> String {
         // The child has exited, so once its side of the terminal closes the
         // reader sees end of file and finishes on its own; that is the normal
         // path and it is awaited outright. Closing our end first would make
@@ -209,20 +228,25 @@ struct InteractiveLoginProcess: Sendable {
         // guards against a descendant that kept the terminal open (a tool that
         // left a helper behind), in which case the transcript so far is taken.
         let drained = await race(reader: readTask, deadline: .seconds(5))
-        close(descriptor)
+        if drained == nil { reader.stop() }
         let transcript: String
         if let drained { transcript = drained } else { transcript = await readTask.value }
+        close(descriptor)
         return SensitiveValueRedactor.redact(transcript)
     }
 
     /// The reader's transcript if it finishes before the deadline, else nil.
     private static func race(reader: Task<String, Never>, deadline: Duration) async -> String? {
-        await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+        let timer = DispatchSource.makeTimerSource(queue: processEventQueue)
+        defer { timer.cancel() }
+        return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
             let box = ContinuationBox<String?>(continuation)
-            Task { let value = await reader.value; box.resume(with: value) }
+            timer.setEventHandler { box.resume(with: nil) }
+            timer.schedule(deadline: .now() + ProcessCommandRunner.dispatchInterval(for: deadline))
+            timer.activate()
             Task {
-                try? await Task.sleep(for: deadline)
-                box.resume(with: nil)
+                let value = await reader.value
+                box.resume(with: value)
             }
         }
     }
@@ -241,14 +265,16 @@ struct InteractiveLoginProcess: Sendable {
         // Every control character becomes a separator, so the escape's bytes,
         // line endings and the bell all end a URL rather than gluing it to the
         // text that follows.
-        let cleaned = String(text.map { character -> Character in
-            (character.asciiValue.map { $0 < 0x20 || $0 == 0x7f } ?? false) ? " " : character
-        })
+        let cleaned = String(
+            text.map { character -> Character in
+                (character.asciiValue.map { $0 < 0x20 || $0 == 0x7f } ?? false) ? " " : character
+            })
         guard let range = cleaned.range(of: "https://") else { return nil }
         let tail = cleaned[range.lowerBound...]
-        let end = tail.firstIndex { character in
-            character == " " || character == "\"" || character == "'" || character == "<" || character == ">"
-        } ?? tail.endIndex
+        let end =
+            tail.firstIndex { character in
+                character == " " || character == "\"" || character == "'" || character == "<" || character == ">"
+            } ?? tail.endIndex
         var candidate = String(tail[..<end])
         // The escape's parameter bytes ("]8;;") come right before the URL and
         // are already separated; a doubled URL from the hyperlink's visible
@@ -265,10 +291,15 @@ struct InteractiveLoginProcess: Sendable {
 }
 
 /// Reads a terminal descriptor to end of file, keeping a bounded transcript.
-private actor TranscriptReader {
+private final class TranscriptReader: @unchecked Sendable {
+    private static let ioQueue = DispatchQueue(label: "AgentTooling.InteractiveLoginProcess.transcript", qos: .userInitiated)
+    private let lock = NSLock()
     private let descriptor: Int32
     private let limit: Int
     private var bytes = Data()
+    private var announced = false
+    private var channel: DispatchIO?
+    private var isStopped = false
 
     init(descriptor: Int32, limit: Int) {
         self.descriptor = descriptor
@@ -279,48 +310,89 @@ private actor TranscriptReader {
     /// once, from the first chunk that contains one; a URL split across two
     /// reads is caught by scanning the accumulated transcript rather than the
     /// chunk alone.
-    func readUntilClosed(onAuthorizationURL: @Sendable (URL) -> Void) async {
-        var buffer = [UInt8](repeating: 0, count: 4_096)
-        var announced = false
-        while true {
-            let count = read(descriptor, &buffer, buffer.count)
-            if count > 0 {
-                let chunk = Data(buffer[0..<count])
-                if bytes.count < limit { bytes.append(chunk.prefix(limit - bytes.count)) }
-                if !announced,
-                    let url = InteractiveLoginProcess.firstHTTPSURL(in: String(decoding: bytes, as: UTF8.self))
-                {
-                    announced = true
-                    onAuthorizationURL(url)
-                }
-                continue
+    func readUntilClosed(onAuthorizationURL: @escaping @Sendable (URL) -> Void) async {
+        await withCheckedContinuation { continuation in
+            let channel = DispatchIO(type: .stream, fileDescriptor: descriptor, queue: Self.ioQueue) { _ in
+                self.lock.withLock { self.channel = nil }
+                continuation.resume()
             }
-            // EIO is how a pseudo-terminal reports that the other side closed.
-            if count == -1 && errno == EINTR { continue }
-            return
+            let stopped = lock.withLock {
+                self.channel = channel
+                return isStopped
+            }
+            channel.setLimit(lowWater: 1)
+            channel.setLimit(highWater: 4_096)
+            if stopped {
+                channel.close(flags: .stop)
+                return
+            }
+            channel.read(offset: 0, length: Int.max, queue: Self.ioQueue) { done, chunk, _ in
+                if let chunk { self.append(chunk, onAuthorizationURL: onAuthorizationURL) }
+                // EIO is how a pseudo-terminal reports that the other side closed.
+                if done { channel.close() }
+            }
         }
     }
 
+    private func append(_ chunk: DispatchData, onAuthorizationURL: @Sendable (URL) -> Void) {
+        let url: URL? = lock.withLock {
+            if bytes.count < limit { bytes.append(contentsOf: chunk.prefix(limit - bytes.count)) }
+            guard !announced,
+                let url = InteractiveLoginProcess.firstHTTPSURL(in: String(decoding: bytes, as: UTF8.self))
+            else { return nil }
+            announced = true
+            return url
+        }
+        if let url { onAuthorizationURL(url) }
+    }
+
+    func stop() {
+        let activeChannel = lock.withLock {
+            isStopped = true
+            return channel
+        }
+        activeChannel?.close(flags: .stop)
+    }
+
     func transcript() -> String {
-        String(decoding: bytes, as: UTF8.self)
+        lock.withLock { String(decoding: bytes, as: UTF8.self) }
     }
 }
 
 /// Resumes a continuation exactly once, whichever of two racing tasks gets
 /// there first.
 private final class ContinuationBox<Value: Sendable>: @unchecked Sendable {
+    private enum State {
+        case waiting(CheckedContinuation<Value, Never>?)
+        case completed(Value)
+    }
     private let lock = NSLock()
-    private var continuation: CheckedContinuation<Value, Never>?
+    private var state: State
 
-    init(_ continuation: CheckedContinuation<Value, Never>) {
-        self.continuation = continuation
+    init(_ continuation: CheckedContinuation<Value, Never>? = nil) {
+        state = .waiting(continuation)
+    }
+
+    func install(_ continuation: CheckedContinuation<Value, Never>) {
+        lock.lock()
+        switch state {
+        case .waiting:
+            state = .waiting(continuation)
+            lock.unlock()
+        case .completed(let value):
+            lock.unlock()
+            continuation.resume(returning: value)
+        }
     }
 
     func resume(with value: Value) {
-        let pending = lock.withLock {
-            defer { continuation = nil }
-            return continuation
+        lock.lock()
+        guard case .waiting(let pending) = state else {
+            lock.unlock()
+            return
         }
+        state = .completed(value)
+        lock.unlock()
         pending?.resume(returning: value)
     }
 }

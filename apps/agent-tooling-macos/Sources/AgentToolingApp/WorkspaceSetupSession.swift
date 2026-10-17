@@ -48,7 +48,10 @@ struct SetupCheckup: Codable, Equatable, Sendable {
     /// When the last full checkup (audit and review) finished.
     var completedAt: Date
 
-    init(audit: SetupAuditReport, review: SetupReview? = nil, dismissedFindingIDs: Set<String> = [], dismissedRecommendationIDs: Set<String> = [], completedAt: Date = .now) {
+    init(
+        audit: SetupAuditReport, review: SetupReview? = nil, dismissedFindingIDs: Set<String> = [],
+        dismissedRecommendationIDs: Set<String> = [], completedAt: Date = .now
+    ) {
         self.audit = audit
         self.review = review
         self.dismissedFindingIDs = dismissedFindingIDs
@@ -115,14 +118,17 @@ struct LiveSetupServices: SetupServicing {
         guard let data = try? Data(contentsOf: clientReviewsFile) else { return [:] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([ClientReview].self, from: data)).map { Dictionary($0.map { ($0.client, $0) }, uniquingKeysWith: { first, _ in first }) } ?? [:]
+        return (try? decoder.decode([ClientReview].self, from: data)).map {
+            Dictionary($0.map { ($0.client, $0) }, uniquingKeysWith: { first, _ in first })
+        } ?? [:]
     }
 
     func keep(clientReviews: [ClientKind: ClientReview]) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
-        try encoder.encode(clientReviews.values.sorted { $0.client.rawValue < $1.client.rawValue }).write(to: clientReviewsFile, options: .atomic)
+        try encoder.encode(clientReviews.values.sorted { $0.client.rawValue < $1.client.rawValue }).write(
+            to: clientReviewsFile, options: .atomic)
     }
 }
 
@@ -399,7 +405,8 @@ final class WorkspaceSetupSession {
     /// now. One that fails does not stop the rest; the message says how many
     /// went through and quotes the first failure.
     func applyAll(_ actions: [SetupAction], settings: [(ClientKind, String, String)] = []) async {
-        let work: [() async throws -> String] = actions.map { action in { try await self.perform(action) } }
+        let work: [() async throws -> String] =
+            actions.map { action in { try await self.perform(action) } }
             + settings.map { setting in { try await self.setSetting(client: setting.0, key: setting.1, value: setting.2) } }
         guard !isApplying, !work.isEmpty else { return }
         isApplying = true
@@ -496,9 +503,13 @@ final class WorkspaceSetupSession {
                 try Self.claudeProjects(homeURL: home)
             }.value
             guard !projects.isEmpty else {
-                throw SetupApplyError.unsupported("Claude Code turns servers off per project, and it has no projects recorded yet. Open a project in Claude Code and use /mcp there.")
+                throw SetupApplyError.unsupported(
+                    "Claude Code turns servers off per project, and it has no projects recorded yet. Open a project in Claude Code and use /mcp there."
+                )
             }
-            edits = projects.map { .init(file: .claudeGlobal, keyPath: ["projects", $0, "disabledMcpServers"], value: .appendToList(name)) }
+            edits = projects.map {
+                .init(file: .claudeGlobal, keyPath: ["projects", $0, "disabledMcpServers"], value: .appendToList(name))
+            }
         case .gemini:
             throw SetupApplyError.unsupported("Gemini CLI has no switch for one server that this app knows how to write.")
         }
@@ -526,12 +537,14 @@ final class WorkspaceSetupSession {
     private func runEdits(_ edits: [ClientConfigurationEdit], title: String, client: ClientKind) async throws -> String {
         let plan = OperationPlan(
             kind: .configureMCP, title: title,
-            summary: "Changes one key in \(client.rawValue)'s own configuration file. The file is copied into this workspace's trash first.",
+            summary:
+                "Changes one key in \(client.rawValue)'s own configuration file. The file is copied into this workspace's trash first.",
             targetSurfaces: [client.userSurface].compactMap { $0 },
             steps: try edits.map { edit in
                 OperationStep(
                     kind: .editClientConfiguration, title: edit.summary, detail: edit.file.relativePath,
-                    destinationPath: edit.file.url(homeURL: homeRoot).path(percentEncoded: false), contents: try edit.encoded(), isReversible: true)
+                    destinationPath: edit.file.url(homeURL: homeRoot).path(percentEncoded: false), contents: try edit.encoded(),
+                    isReversible: true)
             })
         let receipt = await OperationExecutor(store: store, homeURL: homeRoot).execute(plan)
         if let failed = receipt.results.first(where: { $0.status == .failed }) { throw SetupApplyError.stepFailed(failed.output) }
@@ -547,7 +560,8 @@ final class WorkspaceSetupSession {
             })
         else { throw SetupApplyError.notTracked(prepared.frontmatter.name) }
         _ = try await service.adoptTrackedSkill(
-            .init(expectedRevisionID: snapshot.document.revision.id, artifactID: artifact.identity.id, prepared: prepared), prepared: prepared)
+            .init(expectedRevisionID: snapshot.document.revision.id, artifactID: artifact.identity.id, prepared: prepared),
+            prepared: prepared)
         return "\(prepared.frontmatter.name) is in the library now. Install it from its details."
     }
 
@@ -556,7 +570,9 @@ final class WorkspaceSetupSession {
             kind: .installSkill, title: "Remove \(URL(filePath: path).lastPathComponent) from \(client.rawValue)",
             summary: "Moves the folder into this workspace's trash, or removes the link. The library's copy, if any, is untouched.",
             targetSurfaces: [client.userSurface].compactMap { $0 },
-            steps: [.init(kind: .removeUnmanagedSkillCopy, title: "Remove the copy", detail: path, destinationPath: path, isReversible: true)])
+            steps: [
+                .init(kind: .removeUnmanagedSkillCopy, title: "Remove the copy", detail: path, destinationPath: path, isReversible: true)
+            ])
         let receipt = await OperationExecutor(store: store, homeURL: homeRoot).execute(plan)
         guard let result = receipt.results.first else { throw SetupApplyError.nothingRan }
         guard result.status != .failed else { throw SetupApplyError.stepFailed(result.output) }
@@ -570,7 +586,11 @@ final class WorkspaceSetupSession {
         let plan = OperationPlan(
             kind: .installPlugin, title: "Remove an old plugin version from \(client.rawValue)",
             summary: "Moves the unused version folder into this workspace's trash.",
-            steps: [.init(kind: .removeUnmanagedPluginCache, title: "Remove the old version", detail: path, destinationPath: path, isReversible: true)])
+            steps: [
+                .init(
+                    kind: .removeUnmanagedPluginCache, title: "Remove the old version", detail: path, destinationPath: path,
+                    isReversible: true)
+            ])
         let receipt = await OperationExecutor(store: store, homeURL: homeRoot).execute(plan)
         guard let result = receipt.results.first else { throw SetupApplyError.nothingRan }
         guard result.status != .failed else { throw SetupApplyError.stepFailed(result.output) }
@@ -584,13 +604,18 @@ final class WorkspaceSetupSession {
         case .codex: arguments = ["plugin", "add", pluginID]
         default: throw SetupApplyError.unsupported("\(client.rawValue) does not install plugins by command.")
         }
-        let executable = ClientExecutableLocator.locate(client, homeURL: homeRoot)?.path(percentEncoded: false)
+        let executable =
+            ClientExecutableLocator.locate(client, homeURL: homeRoot)?.path(percentEncoded: false)
             ?? ClientExecutableLocator.executableName(for: client)
         let plan = OperationPlan(
             kind: .installPlugin, title: "Install \(pluginID) in \(client.rawValue)",
             summary: "Asks \(client.rawValue) to install the plugin with its own command.",
             targetSurfaces: [client.userSurface].compactMap { $0 },
-            steps: [.init(kind: .command, title: "Install", detail: ([executable] + arguments).joined(separator: " "), executable: executable, arguments: arguments, stopsOnFailure: true)])
+            steps: [
+                .init(
+                    kind: .command, title: "Install", detail: ([executable] + arguments).joined(separator: " "), executable: executable,
+                    arguments: arguments, stopsOnFailure: true)
+            ])
         let receipt = await OperationExecutor(store: store, homeURL: homeRoot).execute(plan)
         guard let result = receipt.results.first else { throw SetupApplyError.nothingRan }
         guard result.status != .failed else { throw SetupApplyError.stepFailed(result.output) }

@@ -39,7 +39,7 @@ public enum AccountShellOverride: String, Codable, CaseIterable, Hashable, Senda
     public var replacesSubscription: Bool {
         switch self {
         case .anthropicAPIKey, .anthropicAuthToken, .claudeOAuthToken, .anthropicProfile,
-             .claudeBedrock, .claudeVertex, .claudeFoundry:
+            .claudeBedrock, .claudeVertex, .claudeFoundry:
             true
         case .claudeNoNonessentialTraffic, .claudeConnectorsOff, .claudeConfigDirectory, .codexHome, .codexAccessToken:
             false
@@ -92,7 +92,7 @@ enum AccountShellEnvironmentProbe {
 
     static func read(runner: any CommandRunning) async -> [AccountShellOverride]? {
         guard let output = try? await runner.run(executable: "/bin/zsh", arguments: arguments, currentDirectory: nil),
-              output.status == 0
+            output.status == 0
         else { return nil }
         return parse(output.standardOutput)
     }

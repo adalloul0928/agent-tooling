@@ -235,10 +235,12 @@ struct ProjectDetailView: View {
         HStack(alignment: .firstTextBaseline, spacing: Space.lg) {
             StatusGlyph(state: .pending, size: Size.glyph)
             VStack(alignment: .leading, spacing: Space.xs) {
-                Text(candidates.count == 1
-                     ? "A checkout of this project's repository is on this Mac."
-                     : "\(candidates.count) checkouts of this project's repository are on this Mac.")
-                    .font(AgentFont.bodyMedium)
+                Text(
+                    candidates.count == 1
+                        ? "A checkout of this project's repository is on this Mac."
+                        : "\(candidates.count) checkouts of this project's repository are on this Mac."
+                )
+                .font(AgentFont.bodyMedium)
                 ForEach(candidates) { candidate in
                     HStack(spacing: Space.md) {
                         Text(abbreviated(candidate.path)).font(AgentFont.mono).foregroundStyle(.secondary)
@@ -310,11 +312,12 @@ struct ProjectDetailView: View {
     /// each app reads from a checkout, whoever put them there. This is the
     /// repo's own configuration, distinct from what the library assigned.
     private func inFolderCard(_ folder: DiscoveredProject, tab: ProjectDetailTab) -> some View {
-        let records: [ProjectComponentRecord] = switch tab {
-        case .skills: folder.skills
-        case .mcpServers: folder.mcpServers
-        case .plugins: folder.plugins
-        }
+        let records: [ProjectComponentRecord] =
+            switch tab {
+            case .skills: folder.skills
+            case .mcpServers: folder.mcpServers
+            case .plugins: folder.plugins
+            }
         let files = folder.files.filter { file in
             switch tab {
             case .skills: file.descriptor.role == .skills || file.descriptor.role == .instructions
@@ -346,7 +349,8 @@ struct ProjectDetailView: View {
                         .padding(.horizontal, Space.xl).frame(minHeight: Size.rowHeight)
                         if index < records.count - 1 || !files.isEmpty { Hairline(indent: Hairline.afterLeading(Size.tile)) }
                     }
-                    ForEach(Array(files.filter { $0.descriptor.role != .skills || records.isEmpty }.enumerated()), id: \.element.id) { index, file in
+                    ForEach(Array(files.filter { $0.descriptor.role != .skills || records.isEmpty }.enumerated()), id: \.element.id) {
+                        index, file in
                         HStack(spacing: Space.lg) {
                             Image(systemName: file.descriptor.isDirectory ? "folder" : "doc.text")
                                 .foregroundStyle(.secondary).frame(width: Size.tile)
@@ -355,15 +359,19 @@ struct ProjectDetailView: View {
                                 Text(file.descriptor.relativePath).font(AgentFont.mono).foregroundStyle(.secondary).lineLimit(1)
                             }
                             Spacer()
-                            StatusBadge(state: file.descriptor.sharing == .committed ? .healthy : .pending, text: file.descriptor.sharing.displayName)
+                            StatusBadge(
+                                state: file.descriptor.sharing == .committed ? .healthy : .pending,
+                                text: file.descriptor.sharing.displayName)
                         }
                         .padding(.horizontal, Space.xl).frame(minHeight: Size.rowHeight)
                         if index < files.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
                     }
                     Hairline()
-                    Text("Read from the folder. These are what the apps use in this project whether or not the library placed them; adopting them into the library is a separate step.")
-                        .font(AgentFont.caption).foregroundStyle(.tertiary).wrapsLines()
-                        .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
+                    Text(
+                        "Read from the folder. These are what the apps use in this project whether or not the library placed them; adopting them into the library is a separate step."
+                    )
+                    .font(AgentFont.caption).foregroundStyle(.tertiary).wrapsLines()
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
                 }
             }
         }

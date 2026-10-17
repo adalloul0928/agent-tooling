@@ -94,8 +94,9 @@ struct AgentToolingCLI {
     /// store is laid out. Nothing is created: a CLI that made a workspace by
     /// being run would make one nobody chose to have.
     private static func openWorkspace(root: URL?) throws -> WorkspaceRevisionStore {
-        let locator = try WorkspaceLocator(root: root?.standardizedFileURL
-            ?? (try WorkspaceLocator.defaultRoot()))
+        let locator = try WorkspaceLocator(
+            root: root?.standardizedFileURL
+                ?? (try WorkspaceLocator.defaultRoot()))
         guard let store = try locator.open() else { throw CLIError.noWorkspace }
         return store
     }
@@ -336,7 +337,8 @@ private enum CLIError: LocalizedError {
         case .missingPositional(let label): "Provide exactly one \(label)."
         case .unexpectedArguments: "This command does not accept positional arguments."
         case .invalidValue(let option): "The value for '\(option)' is invalid."
-        case .invalidProvider: "Skill creation runs in your signed-in local Claude Code or Codex: pass --provider claude or --provider codex."
+        case .invalidProvider:
+            "Skill creation runs in your signed-in local Claude Code or Codex: pass --provider claude or --provider codex."
         case .invalidInstruction: "Provide a non-empty UTF-8 instruction no larger than 64 KB."
         case .unknownRequest(let request): "Unknown request type '\(request)'."
         case .noWorkspace:

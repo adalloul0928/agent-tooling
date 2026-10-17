@@ -113,7 +113,8 @@ enum CheckupTriage {
         case .take(let action):
             // The assistant chose one finding's action; the same kind of action
             // on every finding it named is what "do this" means for the group.
-            let actions = findings.isEmpty ? [action] : findings.compactMap { finding in finding.actions.first { sameKind($0, action) } ?? nil }
+            let actions =
+                findings.isEmpty ? [action] : findings.compactMap { finding in finding.actions.first { sameKind($0, action) } ?? nil }
             let distinct = actions.isEmpty ? [action] : actions
             return CheckupItem(
                 id: recommendation.id, bucket: distinct.allSatisfy(\.changesFiles) || distinct.contains(where: isCheck) ? .fix : .decide,
@@ -123,7 +124,8 @@ enum CheckupTriage {
         case .installPlugin(let client, let pluginID):
             return CheckupItem(
                 id: recommendation.id, bucket: .fix, client: client, title: recommendation.title, detail: recommendation.summary,
-                findings: findings, recommendation: recommendation, actions: [.reinstallPlugin(pluginID: pluginID, client: client)], settings: [],
+                findings: findings, recommendation: recommendation, actions: [.reinstallPlugin(pluginID: pluginID, client: client)],
+                settings: [],
                 primaryTitle: "Install", provenance: recommendation.provenance, opens: nil)
         case .disableMCPServer(let client, let name):
             return CheckupItem(
@@ -138,7 +140,8 @@ enum CheckupTriage {
         case .readOnly:
             // "Leave these alone" or plain information: fine, dismiss together.
             return CheckupItem(
-                id: recommendation.id, bucket: .fine, client: recommendation.client, title: recommendation.title, detail: recommendation.summary,
+                id: recommendation.id, bucket: .fine, client: recommendation.client, title: recommendation.title,
+                detail: recommendation.summary,
                 findings: findings, recommendation: recommendation, actions: [], settings: [],
                 primaryTitle: nil, provenance: recommendation.provenance, opens: nil)
         }
@@ -154,7 +157,8 @@ enum CheckupTriage {
         switch key.kind {
         case .brokenSkillLink, .skillWithoutDefinition, .stalePluginCache, .missingPluginInstall, .toolUnavailable, .neverChecked:
             return CheckupItem(
-                id: id, bucket: .fix, client: client, title: groupTitle(key.kind, count: count), detail: groupDetail(key.kind, client: client),
+                id: id, bucket: .fix, client: client, title: groupTitle(key.kind, count: count),
+                detail: groupDetail(key.kind, client: client),
                 findings: group, recommendation: nil, actions: actions, settings: [], primaryTitle: bulkTitle(actions),
                 provenance: .audit(findingID: group[0].id), opens: nil)
         case .duplicateSkillInClient:
@@ -164,8 +168,10 @@ enum CheckupTriage {
                 return CheckupItem(
                     id: id, bucket: .fine, client: client,
                     title: count == 1 ? "A skill more than one plugin carries" : "\(count) skills more than one plugin carries",
-                    detail: "Each copy comes with a plugin, or was placed by a tool that keeps it in step, so there is nothing here to remove. \(client?.rawValue ?? "The app") lists every copy.",
-                    findings: group, recommendation: nil, actions: [], settings: [], primaryTitle: nil, provenance: .audit(findingID: group[0].id), opens: nil)
+                    detail:
+                        "Each copy comes with a plugin, or was placed by a tool that keeps it in step, so there is nothing here to remove. \(client?.rawValue ?? "The app") lists every copy.",
+                    findings: group, recommendation: nil, actions: [], settings: [], primaryTitle: nil,
+                    provenance: .audit(findingID: group[0].id), opens: nil)
             }
             return CheckupItem(
                 id: id, bucket: .fix, client: client, title: count == 1 ? "A loose copy of a skill" : "\(count) loose copies of skills",
@@ -174,13 +180,21 @@ enum CheckupTriage {
                 provenance: .audit(findingID: group[0].id), opens: nil)
         case .unmanagedSkill:
             return CheckupItem(
-                id: id, bucket: .decide, client: client, title: groupTitle(key.kind, count: count), detail: groupDetail(key.kind, client: client),
+                id: id, bucket: .decide, client: client, title: groupTitle(key.kind, count: count),
+                detail: groupDetail(key.kind, client: client),
                 findings: group, recommendation: nil, actions: actions, settings: [],
-                primaryTitle: count == 1 ? "Add to library" : "Add all \(count) to library", provenance: .audit(findingID: group[0].id), opens: nil)
+                primaryTitle: count == 1 ? "Add to library" : "Add all \(count) to library", provenance: .audit(findingID: group[0].id),
+                opens: nil)
         case .unreachableMCPCommand:
-            let offs = group.compactMap { finding in finding.actions.first { if case .disableMCPServer = $0 { return true }; return false } }
+            let offs = group.compactMap { finding in
+                finding.actions.first {
+                    if case .disableMCPServer = $0 { return true }
+                    return false
+                }
+            }
             return CheckupItem(
-                id: id, bucket: .decide, client: client, title: groupTitle(key.kind, count: count), detail: groupDetail(key.kind, client: client),
+                id: id, bucket: .decide, client: client, title: groupTitle(key.kind, count: count),
+                detail: groupDetail(key.kind, client: client),
                 findings: group, recommendation: nil, actions: offs, settings: [],
                 primaryTitle: offs.isEmpty ? nil : (offs.count == 1 ? "Turn it off" : "Turn off all \(offs.count)"),
                 provenance: .audit(findingID: group[0].id), opens: .mcpServers)
@@ -201,14 +215,18 @@ enum CheckupTriage {
                 provenance: .audit(findingID: group[0].id), opens: key.removable ? .mcpServers : nil)
         case .pluginSkillsOverlap:
             return CheckupItem(
-                id: id, bucket: .decide, client: client, title: groupTitle(key.kind, count: count), detail: groupDetail(key.kind, client: client),
+                id: id, bucket: .decide, client: client, title: groupTitle(key.kind, count: count),
+                detail: groupDetail(key.kind, client: client),
                 findings: group, recommendation: nil, actions: [], settings: [], primaryTitle: nil,
                 provenance: .audit(findingID: group[0].id), opens: .plugins)
         case .accountChoicesNotFollowed:
             // Applying is a reviewed edit of the app's own settings file. A
             // choice this Mac cannot follow by editing one is the person's to
             // look at on the Accounts tab.
-            let applies = actions.filter { if case .applyAccountChoices = $0 { return true }; return false }
+            let applies = actions.filter {
+                if case .applyAccountChoices = $0 { return true }
+                return false
+            }
             return CheckupItem(
                 id: id, bucket: applies.isEmpty ? .decide : .fix, client: client,
                 title: group.count == 1 ? group[0].title : groupTitle(key.kind, count: count),
@@ -263,25 +281,43 @@ enum CheckupTriage {
             one ? "A connection the app gets from several places" : "\(count) connections the app gets from several places"
         case .pluginSkillsOverlap: one ? "Two plugins that carry the same skills" : "\(count) pairs of plugins that carry the same skills"
         case .accountSignIn: one ? "An app not signed in with its account" : "\(count) apps not signed in with their accounts"
-        case .accountShellOverride: one ? "A shell variable that changes an app's sign-in" : "\(count) shell variables that change an app's sign-in"
-        case .accountChoicesNotFollowed: one ? "Shared account choices not applied here" : "Shared account choices not applied in \(count) apps"
-        case .accountDiffersFromOtherMacs: one ? "A different account from your other Macs" : "\(count) accounts that differ from your other Macs"
-        case .accountConnectorNeedsSignIn: one ? "Account connectors that need attention" : "Account connectors in \(count) accounts that need attention"
+        case .accountShellOverride:
+            one ? "A shell variable that changes an app's sign-in" : "\(count) shell variables that change an app's sign-in"
+        case .accountChoicesNotFollowed:
+            one ? "Shared account choices not applied here" : "Shared account choices not applied in \(count) apps"
+        case .accountDiffersFromOtherMacs:
+            one ? "A different account from your other Macs" : "\(count) accounts that differ from your other Macs"
+        case .accountConnectorNeedsSignIn:
+            one ? "Account connectors that need attention" : "Account connectors in \(count) accounts that need attention"
         }
     }
 
     static func groupDetail(_ kind: SetupFinding.Kind, client: ClientKind?) -> String {
         let app = client?.rawValue ?? "The app"
         switch kind {
-        case .brokenSkillLink: return "Links in \(app)'s skills folder to folders that are no longer there. \(app) skips them. Removing a link touches nothing else."
-        case .missingPluginInstall: return "\(app) records these plugins at folders that do not exist. Reinstalling runs its own install command."
-        case .duplicateSkillInClient: return "\(app) can reach each of these by two paths, and which one it uses depends on load order. Removing the loose copy moves it to Agent Tooling's trash; the plugin's copy stays."
-        case .unmanagedSkill: return "\(app) has these skills but the library holds no copy, so they cannot be placed in another app, edited here, or checked for updates. Adding copies the files in; \(app)'s folder is not changed."
-        case .unreachableMCPCommand: return "Their start commands are not on this Mac in any place the app knows to look, so they fail to start. Turning one off keeps its configuration."
-        case .stalePluginCache: return "Only one version of each is in use; the others take space. Removing moves them to Agent Tooling's trash."
-        case .toolUnavailable: return "Its configuration was read from disk, but without the command the app cannot confirm its version or ask it what is installed."
+        case .brokenSkillLink:
+            return
+                "Links in \(app)'s skills folder to folders that are no longer there. \(app) skips them. Removing a link touches nothing else."
+        case .missingPluginInstall:
+            return "\(app) records these plugins at folders that do not exist. Reinstalling runs its own install command."
+        case .duplicateSkillInClient:
+            return
+                "\(app) can reach each of these by two paths, and which one it uses depends on load order. Removing the loose copy moves it to Agent Tooling's trash; the plugin's copy stays."
+        case .unmanagedSkill:
+            return
+                "\(app) has these skills but the library holds no copy, so they cannot be placed in another app, edited here, or checked for updates. Adding copies the files in; \(app)'s folder is not changed."
+        case .unreachableMCPCommand:
+            return
+                "Their start commands are not on this Mac in any place the app knows to look, so they fail to start. Turning one off keeps its configuration."
+        case .stalePluginCache:
+            return "Only one version of each is in use; the others take space. Removing moves them to Agent Tooling's trash."
+        case .toolUnavailable:
+            return
+                "Its configuration was read from disk, but without the command the app cannot confirm its version or ask it what is installed."
         case .neverChecked: return "This Mac manages \(app) but has never read what it holds."
-        case .skillWithoutDefinition: return "Folders in \(app)'s skills folder with no SKILL.md. \(app) does not load them. Removing moves them to Agent Tooling's trash."
+        case .skillWithoutDefinition:
+            return
+                "Folders in \(app)'s skills folder with no SKILL.md. \(app) does not load them. Removing moves them to Agent Tooling's trash."
         case .mcpServerRepeatedAcrossClients:
             return "Each app has its own copy of these connections. "
                 + "Managed from the library, each would be one definition placed in every app."
@@ -292,10 +328,16 @@ enum CheckupTriage {
         case .pluginSkillsOverlap:
             return "\(app) lists each plugin's copy of a shared skill, so these appear twice. "
                 + "Removing a plugin takes its other skills and connections with it, so that is yours to decide on the Plugins screen."
-        case .accountSignIn: return "Only a subscription sign-in brings an account's connectors, skills, plugins and apps to the app. Sign in again from a terminal."
-        case .accountShellOverride: return "Your login shell exports variables that change how the app signs in when it runs in a terminal. Agent Tooling reads only their names."
-        case .accountChoicesNotFollowed: return "Every Mac shares these choices. Applying them changes each app's own settings file after backing it up."
-        case .accountDiffersFromOtherMacs: return "Each Mac gets the contents of the account it signs in with, so these Macs do not have the same ones."
+        case .accountSignIn:
+            return
+                "Only a subscription sign-in brings an account's connectors, skills, plugins and apps to the app. Sign in again from a terminal."
+        case .accountShellOverride:
+            return
+                "Your login shell exports variables that change how the app signs in when it runs in a terminal. Agent Tooling reads only their names."
+        case .accountChoicesNotFollowed:
+            return "Every Mac shares these choices. Applying them changes each app's own settings file after backing it up."
+        case .accountDiffersFromOtherMacs:
+            return "Each Mac gets the contents of the account it signs in with, so these Macs do not have the same ones."
         case .accountConnectorNeedsSignIn: return "Account connectors are connected and signed in on the vendor's site, not from this Mac."
         }
     }
@@ -324,7 +366,8 @@ enum CheckupTriage {
         switch (lhs, rhs) {
         case (.adoptSkill, .adoptSkill), (.removeSkillCopy, .removeSkillCopy), (.removeBrokenLink, .removeBrokenLink),
             (.reinstallPlugin, .reinstallPlugin), (.pruneStalePluginCache, .pruneStalePluginCache), (.inspectMCPServer, .inspectMCPServer),
-            (.disableMCPServer, .disableMCPServer), (.locateTool, .locateTool), (.checkClient, .checkClient), (.manageMCPServer, .manageMCPServer),
+            (.disableMCPServer, .disableMCPServer), (.locateTool, .locateTool), (.checkClient, .checkClient),
+            (.manageMCPServer, .manageMCPServer),
             (.applyAccountChoices, .applyAccountChoices), (.openAccountSite, .openAccountSite), (.openAccounts, .openAccounts):
             true
         default: false

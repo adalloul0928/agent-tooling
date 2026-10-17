@@ -338,12 +338,17 @@ struct OnboardingWizard: View {
         switch step {
         case .found, .apps: "Continue"
         case .assign:
-            if isDone { "Go to Home" }
+            if isDone {
+                "Go to Home"
+            }
             // A first run that found nothing a client already owns has nothing
             // to assign. Rather than trapping a person behind a disabled
             // button, the step offers a plain finish.
-            else if canAssign { "Choose tools to assign…" }
-            else { "Done" }
+            else if canAssign {
+                "Choose tools to assign…"
+            } else {
+                "Done"
+            }
         }
     }
 
@@ -381,7 +386,6 @@ struct OnboardingWizard: View {
         onFinish()
         workspaceNavigate(.checkup)
     }
-
 
     private func clientScope(_ client: ClientKind) -> String {
         switch client {

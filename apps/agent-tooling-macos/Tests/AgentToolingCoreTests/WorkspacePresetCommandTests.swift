@@ -106,8 +106,9 @@ struct WorkspacePresetCommandTests {
         _ = try await fixture.service.createPreset(create)
         // A preset contribution for alpha, and a manual one the person also made.
         try fixture.addAssignments([
-            .init(artifactID: fixture.alpha, destination: fixture.destination,
-                  reason: .preset(presetID: create.presetID)),
+            .init(
+                artifactID: fixture.alpha, destination: fixture.destination,
+                reason: .preset(presetID: create.presetID)),
             .init(artifactID: fixture.beta, destination: fixture.destination, reason: .manual),
         ])
 

@@ -167,7 +167,7 @@ struct UpdateAvailabilityTests {
         wrongClient.supportedClients = [.codex]
         #expect(UpdateAvailabilityEvaluator.catalogPackage(for: plugin(), in: [wrongClient]) == nil)
         let summary = UpdateAvailabilityEvaluator.summary([
-            .unknown(reason: "No revision"), .notChecked(reason: "Not refreshed")
+            .unknown(reason: "No revision"), .notChecked(reason: "Not refreshed"),
         ])
         #expect(summary.checkFailed == 0)
         #expect(summary.sourceMissing == 0)

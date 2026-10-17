@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -14,7 +15,8 @@ struct WorkspaceConfigurationRecordsTests {
             WorkspaceConfigurationRecord(
                 id: objectID(child), name: "Child", inheritedFrom: parent, targetBindings: []),
             WorkspaceConfigurationRecord(
-                id: objectID(explicit), name: "Explicit", targetBindings: [
+                id: objectID(explicit), name: "Explicit",
+                targetBindings: [
                     .init(item: skill, client: .claude, enabled: true),
                     .init(item: skill, client: .codex, enabled: false),
                     .init(item: skill, client: .gemini, enabled: nil),
@@ -64,8 +66,10 @@ struct WorkspaceConfigurationRecordsTests {
         let child = objectReference(
             .configuration, "child", uuid: "00000000-0000-0000-0000-000000001021")
         var state = WorkspaceConfigurationState(
-            configurations: [WorkspaceConfigurationRecord(
-                id: objectID(child), name: "Child", inheritedFrom: missingParent)],
+            configurations: [
+                WorkspaceConfigurationRecord(
+                    id: objectID(child), name: "Child", inheritedFrom: missingParent)
+            ],
             identityMap: allocations([missingParent, child]))
         #expect(throws: WorkspaceDomainValidationError.self) {
             try state.validate(artifacts: [], logicalProjects: [])
@@ -93,8 +97,10 @@ struct WorkspaceConfigurationRecordsTests {
                 .init(id: objectID(personal), name: "Review", origin: .personal),
                 .init(id: objectID(managed), name: "Review", origin: .managedPolicy(policyID: objectID(policy))),
             ],
-            managedPolicies: [.init(
-                id: objectID(policy), name: "Company", configurations: [managed])],
+            managedPolicies: [
+                .init(
+                    id: objectID(policy), name: "Company", configurations: [managed])
+            ],
             identityMap: allocations([policy, personal, managed]),
             defaultConfigurationID: objectID(personal))
 
@@ -103,9 +109,10 @@ struct WorkspaceConfigurationRecordsTests {
         #expect(state.configurations.map(\.id).allSatisfy { $0 != objectID(policy) })
 
         var wrongNamespace = state
-        let managedIndex = try #require(wrongNamespace.identityMap.firstIndex(where: {
-            $0.objectID == objectID(managed)
-        }))
+        let managedIndex = try #require(
+            wrongNamespace.identityMap.firstIndex(where: {
+                $0.objectID == objectID(managed)
+            }))
         wrongNamespace.identityMap[managedIndex].legacy.ownerPolicyID = "another-policy"
         #expect(throws: WorkspaceDomainValidationError.self) {
             try wrongNamespace.validate(artifacts: [], logicalProjects: [])
@@ -119,7 +126,7 @@ struct WorkspaceConfigurationRecordsTests {
     }
 
     @Test func artifactResolutionUsesReservedUUIDAndEnforcesKind() throws {
-        let uuid = UUID(uuidString: "00000000-0000-0000-0000-000000001040")!
+        let uuid = fixtureUUID("00000000-0000-0000-0000-000000001040")
         let pluginReference = WorkspaceReference(
             legacy: .init(domain: .plugin, identifier: "bundle"),
             resolution: .artifact(ArtifactID(uuid)))
@@ -127,7 +134,7 @@ struct WorkspaceConfigurationRecordsTests {
             identity: ArtifactIdentity(id: ArtifactID(uuid), kind: .skill, displayName: "Wrong kind"),
             authority: .trackedOnly)
         let state = WorkspaceConfigurationState(identityMap: [
-            .init(legacy: pluginReference.legacy, objectID: WorkspaceObjectID(uuid)),
+            .init(legacy: pluginReference.legacy, objectID: WorkspaceObjectID(uuid))
         ])
 
         #expect(throws: WorkspaceDomainValidationError.self) {
@@ -166,12 +173,16 @@ struct WorkspaceConfigurationRecordsTests {
         let collection = objectReference(
             .collection, "shelf", uuid: "00000000-0000-0000-0000-000000001063")
         let state = WorkspaceConfigurationState(
-            configurations: [.init(
-                id: objectID(configuration), name: "Config", requiredSkills: [skillB, skillA],
-                targetBindings: [])],
-            collections: [.init(
-                id: objectID(collection), name: "Shelf", items: [skillB, skillA],
-                createdAt: Date(timeIntervalSince1970: 1_788_890_400.1236))],
+            configurations: [
+                .init(
+                    id: objectID(configuration), name: "Config", requiredSkills: [skillB, skillA],
+                    targetBindings: [])
+            ],
+            collections: [
+                .init(
+                    id: objectID(collection), name: "Shelf", items: [skillB, skillA],
+                    createdAt: Date(timeIntervalSince1970: 1_788_890_400.1236))
+            ],
             tagAssignments: [.init(item: skillA, tags: ["Zeta", "Alpha"])],
             identityMap: allocations([skillB, collection, configuration, skillA]))
         let canonical = state.canonicalized()
@@ -190,9 +201,11 @@ struct WorkspaceConfigurationRecordsTests {
         let catalog = objectReference(
             .catalogSource, "directory", uuid: "00000000-0000-0000-0000-000000001070")
         var state = WorkspaceConfigurationState(
-            catalogSources: [.init(
-                id: objectID(catalog), name: "Directory", kind: .agentPlugins,
-                remoteLocation: "https://example.com/plugins")],
+            catalogSources: [
+                .init(
+                    id: objectID(catalog), name: "Directory", kind: .agentPlugins,
+                    remoteLocation: "https://example.com/plugins")
+            ],
             identityMap: allocations([catalog]))
         try state.validate(artifacts: [], logicalProjects: [])
         #expect(state.catalogSources[0].kind == .agentPlugins)
@@ -208,7 +221,7 @@ struct WorkspaceConfigurationRecordsTests {
     ) -> WorkspaceReference {
         WorkspaceReference(
             legacy: .init(domain: domain, identifier: identifier),
-            resolution: .artifact(ArtifactID(UUID(uuidString: uuid)!)))
+            resolution: .artifact(ArtifactID(fixtureUUID(uuid))))
     }
 
     private func objectReference(
@@ -217,7 +230,7 @@ struct WorkspaceConfigurationRecordsTests {
     ) -> WorkspaceReference {
         WorkspaceReference(
             legacy: .init(domain: domain, identifier: identifier, ownerPolicyID: ownerPolicyID),
-            resolution: .object(WorkspaceObjectID(UUID(uuidString: uuid)!)))
+            resolution: .object(WorkspaceObjectID(fixtureUUID(uuid))))
     }
 
     private func objectID(_ reference: WorkspaceReference) -> WorkspaceObjectID {
@@ -247,6 +260,6 @@ struct WorkspaceConfigurationRecordsTests {
     }
 
     private func object(_ value: String) -> WorkspaceObjectID {
-        WorkspaceObjectID(UUID(uuidString: value)!)
+        WorkspaceObjectID(fixtureUUID(value))
     }
 }

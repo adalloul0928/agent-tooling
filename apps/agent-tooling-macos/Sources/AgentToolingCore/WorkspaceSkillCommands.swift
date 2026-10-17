@@ -47,9 +47,10 @@ public struct StandaloneSkillIntakeCommand: Codable, Equatable, Sendable {
 
     func apply(to document: inout PortableWorkspaceDocument, declaredName: String) throws -> [ArtifactID] {
         guard !document.artifacts.contains(where: { $0.identity.id == artifactID }),
-              !document.tombstones.contains(where: { $0.artifactID == artifactID }),
-              !document.sources.contains(where: { $0.id.rawValue == artifactID.rawValue }),
-              !document.subscriptions.contains(where: { $0.id.rawValue == artifactID.rawValue }) else {
+            !document.tombstones.contains(where: { $0.artifactID == artifactID }),
+            !document.sources.contains(where: { $0.id.rawValue == artifactID.rawValue }),
+            !document.subscriptions.contains(where: { $0.id.rawValue == artifactID.rawValue })
+        else {
             throw WorkspaceSkillCommandError.identityCollision
         }
         let authority: ContentAuthority
@@ -58,47 +59,63 @@ public struct StandaloneSkillIntakeCommand: Codable, Equatable, Sendable {
             authority = .centralPersonal
         case (.some(let upstream), .some(let ids)):
             guard ids.sourceID != ids.subscriptionID,
-                  ids.sourceID.rawValue != artifactID.rawValue, ids.subscriptionID.rawValue != artifactID.rawValue,
-                  !document.artifacts.contains(where: { [ids.sourceID.rawValue, ids.subscriptionID.rawValue].contains($0.identity.id.rawValue) }),
-                  !document.tombstones.contains(where: { [ids.sourceID.rawValue, ids.subscriptionID.rawValue].contains($0.artifactID.rawValue) }),
-                  !document.subscriptions.contains(where: { $0.id == ids.subscriptionID || $0.id == ids.sourceID }),
-                  !document.sources.contains(where: { $0.id == ids.subscriptionID }) else {
+                ids.sourceID.rawValue != artifactID.rawValue, ids.subscriptionID.rawValue != artifactID.rawValue,
+                !document.artifacts.contains(where: {
+                    [ids.sourceID.rawValue, ids.subscriptionID.rawValue].contains($0.identity.id.rawValue)
+                }),
+                !document.tombstones.contains(where: {
+                    [ids.sourceID.rawValue, ids.subscriptionID.rawValue].contains($0.artifactID.rawValue)
+                }),
+                !document.subscriptions.contains(where: { $0.id == ids.subscriptionID || $0.id == ids.sourceID }),
+                !document.sources.contains(where: { $0.id == ids.subscriptionID })
+            else {
                 throw WorkspaceSkillCommandError.identityCollision
             }
             // Recognized source roots are shared explicitly. Do not manufacture
             // a second source identity for the same repository/ref on intake.
-            guard !document.sources.contains(where: {
-                $0.role == .publisherRepository && $0.repositoryURL == upstream.repositoryURL
-                    && $0.requestedRef == upstream.requestedRef && $0.id != ids.sourceID
-            }) else { throw WorkspaceSkillCommandError.sourceIdentityConflict }
-            guard !document.subscriptions.contains(where: {
-                $0.sourceID == ids.sourceID && $0.lock.packageRelativePath == upstream.packageRelativePath
-            }) else { throw WorkspaceSkillCommandError.upstreamAlreadyManaged }
+            guard
+                !document.sources.contains(where: {
+                    $0.role == .publisherRepository && $0.repositoryURL == upstream.repositoryURL
+                        && $0.requestedRef == upstream.requestedRef && $0.id != ids.sourceID
+                })
+            else { throw WorkspaceSkillCommandError.sourceIdentityConflict }
+            guard
+                !document.subscriptions.contains(where: {
+                    $0.sourceID == ids.sourceID && $0.lock.packageRelativePath == upstream.packageRelativePath
+                })
+            else { throw WorkspaceSkillCommandError.upstreamAlreadyManaged }
             if let index = document.sources.firstIndex(where: { $0.id == ids.sourceID }) {
                 let source = document.sources[index]
                 guard source.role == .publisherRepository, source.repositoryURL == upstream.repositoryURL,
-                      source.requestedRef == upstream.requestedRef else {
+                    source.requestedRef == upstream.requestedRef
+                else {
                     throw WorkspaceSkillCommandError.sourceIdentityConflict
                 }
                 if !source.packageRelativePaths.contains(upstream.packageRelativePath) {
                     document.sources[index].packageRelativePaths.append(upstream.packageRelativePath)
                 }
             } else {
-                document.sources.append(.init(id: ids.sourceID, role: .publisherRepository,
-                    repositoryURL: upstream.repositoryURL, requestedRef: upstream.requestedRef,
-                    packageRelativePaths: [upstream.packageRelativePath]))
+                document.sources.append(
+                    .init(
+                        id: ids.sourceID, role: .publisherRepository,
+                        repositoryURL: upstream.repositoryURL, requestedRef: upstream.requestedRef,
+                        packageRelativePaths: [upstream.packageRelativePath]))
             }
-            document.subscriptions.append(.init(id: ids.subscriptionID, artifactID: artifactID, sourceID: ids.sourceID,
-                lock: .init(publisherID: upstream.publisherID, sourceRootID: ids.sourceID,
-                    requestedRef: upstream.requestedRef, approvedRevision: upstream.revision,
-                    approvedContent: content.contentDigest, packageRelativePath: upstream.packageRelativePath)))
+            document.subscriptions.append(
+                .init(
+                    id: ids.subscriptionID, artifactID: artifactID, sourceID: ids.sourceID,
+                    lock: .init(
+                        publisherID: upstream.publisherID, sourceRootID: ids.sourceID,
+                        requestedRef: upstream.requestedRef, approvedRevision: upstream.revision,
+                        approvedContent: content.contentDigest, packageRelativePath: upstream.packageRelativePath)))
             authority = .centralUpstream(subscriptionID: ids.subscriptionID)
         default:
             throw WorkspaceSkillCommandError.reviewMismatch
         }
-        document.artifacts.append(.init(
-            identity: .init(id: artifactID, kind: .skill, displayName: displayName, aliases: aliases),
-            authority: authority, declaredName: declaredName, contentDigest: content.contentDigest))
+        document.artifacts.append(
+            .init(
+                identity: .init(id: artifactID, kind: .skill, displayName: displayName, aliases: aliases),
+                authority: authority, declaredName: declaredName, contentDigest: content.contentDigest))
         return [artifactID]
     }
 }
@@ -140,13 +157,14 @@ public struct StandaloneSkillUpdateCommand: Codable, Equatable, Sendable {
             }
             let subscription = document.subscriptions[subscriptionIndex]
             guard let source = document.sources.first(where: { $0.id == subscription.sourceID }),
-                  subscription.artifactID == artifactID, source.role == .publisherRepository,
-                  source.repositoryURL == upstream.repositoryURL, source.requestedRef == upstream.requestedRef,
-                  subscription.lock.sourceRootID == source.id,
-                  subscription.lock.requestedRef == upstream.requestedRef,
-                  subscription.lock.packageRelativePath == upstream.packageRelativePath,
-                  subscription.lock.publisherID == upstream.publisherID,
-                  subscription.lock.approvedContent == expectedContentDigest else {
+                subscription.artifactID == artifactID, source.role == .publisherRepository,
+                source.repositoryURL == upstream.repositoryURL, source.requestedRef == upstream.requestedRef,
+                subscription.lock.sourceRootID == source.id,
+                subscription.lock.requestedRef == upstream.requestedRef,
+                subscription.lock.packageRelativePath == upstream.packageRelativePath,
+                subscription.lock.publisherID == upstream.publisherID,
+                subscription.lock.approvedContent == expectedContentDigest
+            else {
                 throw WorkspaceSkillCommandError.upstreamBindingChanged
             }
             document.subscriptions[subscriptionIndex].lock.approvedRevision = upstream.revision

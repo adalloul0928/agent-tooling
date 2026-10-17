@@ -51,11 +51,6 @@ enum SourceLockIntegrityAlgorithm: String, Codable, Hashable, Sendable {
 struct SourceLockIntegrityEvidence: Codable, Hashable, Sendable {
     var algorithm: SourceLockIntegrityAlgorithm
     var value: String
-
-    init(algorithm: SourceLockIntegrityAlgorithm, value: String) {
-        self.algorithm = algorithm
-        self.value = value
-    }
 }
 
 enum SourceEvidenceGap: String, Codable, Hashable, Sendable {

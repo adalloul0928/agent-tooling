@@ -1,5 +1,5 @@
-import Foundation
 import AgentToolingTestSupport
+import Foundation
 import Testing
 
 @testable import AgentToolingCore
@@ -35,7 +35,7 @@ actor ScriptedAppServer: CodexAppServerTransport {
         let message = try AgentToolingCoding.decoder().decode(JSONValue.self, from: line)
         sent.append(message)
         guard case .number(let id)? = message["id"], let method = message["method"]?.stringValue,
-              !silent.contains(method)
+            !silent.contains(method)
         else { return }
         if chatter {
             queue.append(Data(#"{"method":"remoteControl/status/changed","params":{"status":"disabled"}}"#.utf8))
@@ -46,13 +46,17 @@ actor ScriptedAppServer: CodexAppServerTransport {
         if let line = raw[method] {
             queue.append(Data(line.replacingOccurrences(of: "{ID}", with: String(Int(id))).utf8))
         } else if let message = errors[method] {
-            queue.append(try AgentToolingCoding.encoder().encode(JSONValue.object([
-                "id": .number(id), "error": .object(["code": .number(-32_600), "message": .string(message)]),
-            ])))
+            queue.append(
+                try AgentToolingCoding.encoder().encode(
+                    JSONValue.object([
+                        "id": .number(id), "error": .object(["code": .number(-32_600), "message": .string(message)]),
+                    ])))
         } else {
-            queue.append(try AgentToolingCoding.encoder().encode(JSONValue.object([
-                "id": .number(id), "result": answers[method] ?? .object([:]),
-            ])))
+            queue.append(
+                try AgentToolingCoding.encoder().encode(
+                    JSONValue.object([
+                        "id": .number(id), "result": answers[method] ?? .object([:]),
+                    ])))
         }
     }
 
@@ -129,7 +133,10 @@ struct CodexAppServerSessionTests {
             _ = try await session.request("app/list")
             Issue.record("expected an error")
         } catch let error as CodexAppServerError {
-            guard case .serverError(let method, let message) = error else { Issue.record("wrong error \(error)"); return }
+            guard case .serverError(let method, let message) = error else {
+                Issue.record("wrong error \(error)")
+                return
+            }
             #expect(method == "app/list")
             #expect(!message.contains("sk-abcdefghij"))
         }
@@ -146,7 +153,10 @@ struct CodexAppServerSessionTests {
     @Test func aServerThatStopsIsReported() async throws {
         let server = ScriptedAppServer(silent: ["account/read"])
         let session = CodexAppServerSession(transport: server, requestTimeout: .seconds(5))
-        Task { try await Task.sleep(for: .milliseconds(20)); await server.stop() }
+        Task {
+            try await Task.sleep(for: .milliseconds(20))
+            await server.stop()
+        }
         await #expect(throws: CodexAppServerError.stopped("scripted")) {
             _ = try await session.request("account/read")
         }
@@ -177,13 +187,15 @@ struct CodexAccountReaderTests {
             makeSession: { _, _ in CodexAppServerSession(transport: server) })
     }
 
-    static func answers(account: String, config: String? = nil, apps: String? = nil, installed: String? = nil) throws -> [String: JSONValue] {
+    static func answers(account: String, config: String? = nil, apps: String? = nil, installed: String? = nil) throws -> [String: JSONValue]
+    {
         var answers: [String: JSONValue] = [
             "initialize": try AccountSurfaceParsingTests.json(#"{"userAgent":"agent_tooling/0.162.1 (Mac OS 26.7.1; arm64)"}"#),
             "account/read": try AccountSurfaceParsingTests.json(account),
-            "config/read": try AccountSurfaceParsingTests.json(config ?? """
-                {"config":{},"layers":[{"name":{"type":"user","file":"/Users/example/.codex/config.toml"},"config":{}}]}
-                """),
+            "config/read": try AccountSurfaceParsingTests.json(
+                config ?? """
+                    {"config":{},"layers":[{"name":{"type":"user","file":"/Users/example/.codex/config.toml"},"config":{}}]}
+                    """),
         ]
         if let apps { answers["app/list"] = try AccountSurfaceParsingTests.json(apps) }
         if let installed { answers["app/installed"] = try AccountSurfaceParsingTests.json(installed) }
@@ -191,30 +203,31 @@ struct CodexAccountReaderTests {
     }
 
     @Test func aChatGPTAccountsAppsAreListedWithTheirState() async throws {
-        let server = ScriptedAppServer(answers: try Self.answers(
-            account: #"{"account":{"type":"chatgpt","email":"me@example.com","planType":"plus"},"requiresOpenaiAuth":true}"#,
-            config: """
-                {"config":{"apps":{"slack":{"enabled":false}}},
-                 "layers":[{"name":{"type":"user","file":"/Users/example/.codex/config.toml"},
-                            "config":{"apps":{"slack":{"enabled":false}}}}]}
-                """,
-            apps: """
-                {"data":[
-                  {"id":"github","name":"GitHub","description":"Code.","isAccessible":true,"isEnabled":true,
-                   "installUrl":"https://chatgpt.com/apps/github/github"},
-                  {"id":"slack","name":"Slack","isAccessible":true,"isEnabled":false},
-                  {"id":"drive","name":"Google Drive","isAccessible":true,"isEnabled":true},
-                  {"id":"linear","name":"Linear","isAccessible":true,"isEnabled":true},
-                  {"id":"figma","name":"Figma","isAccessible":false,"isEnabled":true},
-                  {"id":"notion","name":"Notion","isAccessible":false,"isEnabled":true}
-                ],"nextCursor":null}
-                """,
-            installed: """
-                {"apps":[{"id":"github","enabled":true,"callable":true},
-                         {"id":"slack","enabled":false,"callable":false},
-                         {"id":"drive","enabled":false,"callable":false},
-                         {"id":"linear","enabled":true,"callable":false}]}
-                """))
+        let server = ScriptedAppServer(
+            answers: try Self.answers(
+                account: #"{"account":{"type":"chatgpt","email":"me@example.com","planType":"plus"},"requiresOpenaiAuth":true}"#,
+                config: """
+                    {"config":{"apps":{"slack":{"enabled":false}}},
+                     "layers":[{"name":{"type":"user","file":"/Users/example/.codex/config.toml"},
+                                "config":{"apps":{"slack":{"enabled":false}}}}]}
+                    """,
+                apps: """
+                    {"data":[
+                      {"id":"github","name":"GitHub","description":"Code.","isAccessible":true,"isEnabled":true,
+                       "installUrl":"https://chatgpt.com/apps/github/github"},
+                      {"id":"slack","name":"Slack","isAccessible":true,"isEnabled":false},
+                      {"id":"drive","name":"Google Drive","isAccessible":true,"isEnabled":true},
+                      {"id":"linear","name":"Linear","isAccessible":true,"isEnabled":true},
+                      {"id":"figma","name":"Figma","isAccessible":false,"isEnabled":true},
+                      {"id":"notion","name":"Notion","isAccessible":false,"isEnabled":true}
+                    ],"nextCursor":null}
+                    """,
+                installed: """
+                    {"apps":[{"id":"github","enabled":true,"callable":true},
+                             {"id":"slack","enabled":false,"callable":false},
+                             {"id":"drive","enabled":false,"callable":false},
+                             {"id":"linear","enabled":true,"callable":false}]}
+                    """))
         let observation = await Self.reader(server).read(contents: true, now: Date(timeIntervalSince1970: 1_000))
         #expect(observation.unavailableReason == nil)
         #expect(observation.clientVersion == "0.162.1")
@@ -239,8 +252,9 @@ struct CodexAccountReaderTests {
     /// Codex on a third-party provider lists no ChatGPT apps, so the reader
     /// does not ask it to.
     @Test func noAppsAreAskedForWithoutAChatGPTSignIn() async throws {
-        let server = ScriptedAppServer(answers: try Self.answers(
-            account: #"{"account":{"type":"amazonBedrock"},"requiresOpenaiAuth":false}"#))
+        let server = ScriptedAppServer(
+            answers: try Self.answers(
+                account: #"{"account":{"type":"amazonBedrock"},"requiresOpenaiAuth":false}"#))
         let observation = await Self.reader(server).read(contents: true)
         #expect(observation.signIn?.method == .thirdParty)
         #expect(observation.items.isEmpty)
@@ -249,8 +263,9 @@ struct CodexAccountReaderTests {
     }
 
     @Test func aLightReadAsksOnlyHowCodexSignsIn() async throws {
-        let server = ScriptedAppServer(answers: try Self.answers(
-            account: #"{"account":{"type":"chatgpt","email":"me@example.com"},"requiresOpenaiAuth":true}"#))
+        let server = ScriptedAppServer(
+            answers: try Self.answers(
+                account: #"{"account":{"type":"chatgpt","email":"me@example.com"},"requiresOpenaiAuth":true}"#))
         let observation = await Self.reader(server).read(contents: false)
         #expect(!observation.contentsRead)
         #expect(observation.signIn?.method == .subscription)
@@ -258,9 +273,10 @@ struct CodexAccountReaderTests {
     }
 
     @Test func aConfigurationFolderThisAppDoesNotEditBlocksWrites() async throws {
-        let server = ScriptedAppServer(answers: try Self.answers(
-            account: #"{"account":{"type":"chatgpt"},"requiresOpenaiAuth":true}"#,
-            config: #"{"config":{},"layers":[{"name":{"type":"user","file":"/Volumes/other/codex/config.toml"},"config":{}}]}"#))
+        let server = ScriptedAppServer(
+            answers: try Self.answers(
+                account: #"{"account":{"type":"chatgpt"},"requiresOpenaiAuth":true}"#,
+                config: #"{"config":{},"layers":[{"name":{"type":"user","file":"/Volumes/other/codex/config.toml"},"config":{}}]}"#))
         let observation = await Self.reader(server).read(contents: false)
         #expect(observation.writeBlocker?.contains("/Volumes/other/codex/config.toml") == true)
     }
@@ -339,7 +355,9 @@ struct ClaudeAccountReaderTests {
     @Test func theAccountsConnectorsPluginsAndSkillsAreRead() async throws {
         let home = try Home()
         defer { home.remove() }
-        try home.write(".claude/settings.json", """
+        try home.write(
+            ".claude/settings.json",
+            """
             {"deniedMcpServers":[{"serverName":"claude.ai Gmail"}],"enabledPlugins":{"notes@synced":false}}
             """)
         try home.write(".claude/skills/synced/pdf/SKILL.md", "---\nname: pdf\ndescription: Fill PDF forms.\n---\n")
@@ -369,9 +387,10 @@ struct ClaudeAccountReaderTests {
         #expect(observation.items(.plugin).first { $0.key == "design" }?.facts.contains { $0.contains("figma") } == true)
         #expect(observation.items(.skill).map(\.key) == ["pdf"], "only ~/.claude/skills/synced is the account's")
 
-        #expect(observation.fileValues == [
-            .init(.connector, subject: "Gmail"): .off, .init(.plugin, subject: "notes"): .off,
-        ])
+        #expect(
+            observation.fileValues == [
+                .init(.connector, subject: "Gmail"): .off, .init(.plugin, subject: "notes"): .off,
+            ])
         #expect(observation.switches[.init(.connector, subject: "Slack")] == .off)
         #expect(observation.switches[.init(.plugin, subject: "design")] == .on)
         #expect(observation.constrained[.init(.connector, subject: "Slack")] != nil)
@@ -411,7 +430,9 @@ struct ClaudeAccountReaderTests {
     @Test func aConfigurationFolderElsewhereBlocksWrites() async throws {
         let home = try Home()
         defer { home.remove() }
-        let runner = ScriptedCommandRunner(standardOutput: [ClaudeAccountCommands.authStatus: home.authStatus(configDirectory: "/Volumes/work/.claude")])
+        let runner = ScriptedCommandRunner(standardOutput: [
+            ClaudeAccountCommands.authStatus: home.authStatus(configDirectory: "/Volumes/work/.claude")
+        ])
         let observation = await reader(home, runner: runner).read(contents: false)
         #expect(observation.writeBlocker?.contains("/Volumes/work/.claude") == true)
     }

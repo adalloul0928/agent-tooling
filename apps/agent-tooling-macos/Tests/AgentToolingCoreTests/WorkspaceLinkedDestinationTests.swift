@@ -20,8 +20,9 @@ struct WorkspaceLinkedDestinationTests {
         #expect(found.resolvedPath == "/Volumes/Work/agents")
         #expect(found.writePolicy == .noClobberApplyOnce)
         // A different app's destination is untouched.
-        #expect(WorkspaceLinkedDestinations.binding(
-            for: .init(surface: .claudeCode, scope: .user), in: device) == nil)
+        #expect(
+            WorkspaceLinkedDestinations.binding(
+                for: .init(surface: .claudeCode, scope: .user), in: device) == nil)
     }
 
     @Test func whichDevicesWantAToolIsNotWhereThisMacPutsIt() throws {
@@ -31,15 +32,19 @@ struct WorkspaceLinkedDestinationTests {
             in: &device, managedLibraryRoot: Self.library)
 
         // The same destination, targeted at particular Macs.
-        let targeted = PortableDestination(surface: .codexCLI, scope: .user,
-                                           deviceIDs: [WorkspaceObjectID()])
+        let targeted = PortableDestination(
+            surface: .codexCLI, scope: .user,
+            deviceIDs: [WorkspaceObjectID()])
         #expect(WorkspaceLinkedDestinations.binding(for: targeted, in: device) != nil)
     }
 
     @Test func aFolderThatBytesComeFromCannotAlsoBeWhereTheyGo() throws {
         var device = DeviceWorkspaceState(workspaceID: Self.workspaceID)
-        device.sourceLocations = [.init(sourceRootID: WorkspaceObjectID(),
-                                        checkoutPath: "/Users/me/my-repo")]
+        device.sourceLocations = [
+            .init(
+                sourceRootID: WorkspaceObjectID(),
+                checkoutPath: "/Users/me/my-repo")
+        ]
 
         // One folder being both roles is how a deployment quietly becomes an
         // edit to someone's repository.
@@ -100,18 +105,22 @@ struct WorkspaceLinkedDestinationTests {
         let occupied = fixture.root.appending(path: "occupied")
         try FileManager.default.createDirectory(at: occupied, withIntermediateDirectories: true)
 
-        #expect(WorkspaceLinkedDestinations.mayWrite(
-            into: fixture.root.appending(path: "empty"),
-            policy: .noClobberApplyOnce, provenInstall: false))
-        #expect(!WorkspaceLinkedDestinations.mayWrite(
-            into: occupied, policy: .noClobberApplyOnce, provenInstall: false))
+        #expect(
+            WorkspaceLinkedDestinations.mayWrite(
+                into: fixture.root.appending(path: "empty"),
+                policy: .noClobberApplyOnce, provenInstall: false))
+        #expect(
+            !WorkspaceLinkedDestinations.mayWrite(
+                into: occupied, policy: .noClobberApplyOnce, provenInstall: false))
         // Except where this app's own ledger proves it put that folder there,
         // which is what makes updating a linked destination possible at all.
-        #expect(WorkspaceLinkedDestinations.mayWrite(
-            into: occupied, policy: .noClobberApplyOnce, provenInstall: true))
+        #expect(
+            WorkspaceLinkedDestinations.mayWrite(
+                into: occupied, policy: .noClobberApplyOnce, provenInstall: true))
         // A destination the person marked replaceable is a different promise.
-        #expect(WorkspaceLinkedDestinations.mayWrite(
-            into: occupied, policy: .reviewedReplacement, provenInstall: false))
+        #expect(
+            WorkspaceLinkedDestinations.mayWrite(
+                into: occupied, policy: .reviewedReplacement, provenInstall: false))
     }
 
     @Test func forgettingABindingLeavesEverythingAtThatPathAlone() throws {
@@ -138,8 +147,9 @@ struct WorkspaceLinkedDestinationTests {
         try WorkspaceLinkedDestinations.register(
             selector: Self.codexUser, path: "/Volumes/Work/agents",
             in: &device, managedLibraryRoot: Self.library)
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: Self.workspaceID, revision: .init(writerID: WorkspaceObjectID())))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: Self.workspaceID, revision: .init(writerID: WorkspaceObjectID())))
 
         // The portable side still says "Codex, user scope" everywhere.
         try device.validateStructure(against: document)
@@ -147,7 +157,7 @@ struct WorkspaceLinkedDestinationTests {
         #expect(!String(decoding: portable, as: UTF8.self).contains("/Volumes/Work/agents"))
     }
 
-    private static let workspaceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e5")!)
+    private static let workspaceID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000e5"))
     private static let codexUser = PortableDestination(surface: .codexCLI, scope: .user)
     private static let library = URL(fileURLWithPath: "/Users/me/Library/Application Support/Agent Tooling/library")
 
@@ -172,14 +182,16 @@ struct LinkedDestinationWriteBoundsTests {
 
         let allowed = await fixture.install(into: fixture.linked, registering: [fixture.linked])
         #expect(allowed.failed == 0, "\(allowed.outputs)")
-        #expect(try Data(contentsOf: fixture.linked.appending(path: "personal/SKILL.md"))
-            == fixture.skillBytes)
+        #expect(
+            try Data(contentsOf: fixture.linked.appending(path: "personal/SKILL.md"))
+                == fixture.skillBytes)
 
         // The same folder, with nothing registered.
         let refused = await fixture.install(into: fixture.other, registering: [])
         #expect(refused.failed == 1)
-        #expect(refused.outputs.first?.contains("refused to write outside") == true,
-                "\(refused.outputs)")
+        #expect(
+            refused.outputs.first?.contains("refused to write outside") == true,
+            "\(refused.outputs)")
         #expect(!FileManager.default.fileExists(atPath: fixture.other.appending(path: "personal").path))
     }
 
@@ -223,8 +235,9 @@ struct LinkedDestinationWriteBoundsTests {
 
         // The item's own folder name is checked exactly as it is everywhere
         // else, so a name that climbs is refused rather than resolved.
-        let result = await fixture.install(named: "../escaped", into: fixture.linked,
-                                           registering: [fixture.linked])
+        let result = await fixture.install(
+            named: "../escaped", into: fixture.linked,
+            registering: [fixture.linked])
 
         #expect(result.failed == 1)
         #expect(!FileManager.default.fileExists(atPath: fixture.root.appending(path: "escaped").path))
@@ -246,20 +259,24 @@ struct LinkedDestinationWriteBoundsTests {
             linked = root.appending(path: "linked")
             other = root.appending(path: "other")
             for url in [home, linked, other] {
-                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true,
+                try FileManager.default.createDirectory(
+                    at: url, withIntermediateDirectories: true,
                     attributes: [.posixPermissions: 0o700])
             }
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
-            store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "workspace", directoryHint: .isDirectory),
+            store = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "workspace", directoryHint: .isDirectory),
                 workspaceID: document.workspaceID, deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
             try store.prepareManagedDirectories()
             // Staging inside the managed library, which is where the executor
             // insists reviewed content comes from.
             source = store.libraryURL.appending(path: "staged/personal")
-            try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(
+                at: source, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
             try skillBytes.write(to: source.appending(path: "SKILL.md"))
         }
@@ -271,13 +288,18 @@ struct LinkedDestinationWriteBoundsTests {
             let plan = OperationPlan(
                 id: UUID(), kind: .installSkill, title: "Install", summary: "Fixture",
                 targetSurfaces: [.codexCLI], scope: .user,
-                steps: [.init(id: UUID(), kind: .copyDirectory, title: "Install \(name)",
-                              detail: "Fixture", sourcePath: source.path,
-                              sourceFingerprint: (try? DirectoryFingerprint.sha256(of: source)) ?? "",
-                              destinationPath: folder.appending(path: name).path)])
+                steps: [
+                    .init(
+                        id: UUID(), kind: .copyDirectory, title: "Install \(name)",
+                        detail: "Fixture", sourcePath: source.path,
+                        sourceFingerprint: (try? DirectoryFingerprint.sha256(of: source)) ?? "",
+                        destinationPath: folder.appending(path: name).path)
+                ])
             let receipt = await executor.execute(plan)
-            return (receipt.results.filter { $0.status == .failed }.count,
-                    receipt.results.map(\.output))
+            return (
+                receipt.results.filter { $0.status == .failed }.count,
+                receipt.results.map(\.output)
+            )
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }

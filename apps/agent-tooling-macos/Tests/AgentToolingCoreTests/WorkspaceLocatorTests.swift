@@ -18,8 +18,9 @@ struct WorkspaceLocatorTests {
     @Test func aRecordedWorkspaceIsFoundAgainAfterReopening() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let record = WorkspaceLocator.Record(workspaceID: WorkspaceObjectID(),
-                                             deviceID: WorkspaceObjectID())
+        let record = WorkspaceLocator.Record(
+            workspaceID: WorkspaceObjectID(),
+            deviceID: WorkspaceObjectID())
 
         try fixture.locator.write(record)
 
@@ -60,8 +61,9 @@ struct WorkspaceLocatorTests {
 
         #expect(try created.snapshot() != nil)
         let reopened = try #require(try WorkspaceLocator(root: fixture.root).open())
-        #expect(try reopened.snapshot()?.document.workspaceID
-            == (try created.snapshot()?.document.workspaceID))
+        #expect(
+            try reopened.snapshot()?.document.workspaceID
+                == (try created.snapshot()?.document.workspaceID))
     }
 
     @Test func openingTwiceReturnsTheSameWorkspaceRatherThanASecond() async throws {
@@ -83,7 +85,7 @@ struct WorkspaceLocatorTests {
             _ = try WorkspaceLocator(root: URL(fileURLWithPath: "/tmp/somewhere/../elsewhere"))
         }
         #expect(throws: WorkspaceLocatorError.invalidRoot) {
-            _ = try WorkspaceLocator(root: URL(string: "https://example.com/workspace")!)
+            _ = try WorkspaceLocator(root: try #require(URL(string: "https://example.com/workspace")))
         }
     }
 
@@ -92,8 +94,10 @@ struct WorkspaceLocatorTests {
             .init(status: 127, standardOutput: "", standardError: "")
         }
 
-        func run(executable: String, arguments: [String], standardInput: Data,
-                 currentDirectory: URL?) async throws -> CommandOutput {
+        func run(
+            executable: String, arguments: [String], standardInput: Data,
+            currentDirectory: URL?
+        ) async throws -> CommandOutput {
             .init(status: 127, standardOutput: "", standardError: "")
         }
     }
@@ -108,7 +112,8 @@ struct WorkspaceLocatorTests {
                 .appending(path: "workspace-locator-\(UUID())")
             root = base.appending(path: "support")
             home = base.appending(path: "home")
-            try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(
+                at: home, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
             locator = try WorkspaceLocator(root: root)
         }

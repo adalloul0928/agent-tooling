@@ -212,12 +212,15 @@ final class WorkspaceInstallSession {
         installedKeys = Set(
             running.filter { !failedSurfaces.contains($0.surface) }
                 .map(WorkspaceDeploymentSession.installKey))
-        let skipped = plan.exclusions.map(\.detail) + heldBack.map {
-            "\($0.surface.displayName) already has \($0.displayName) from somewhere else; it was left alone."
-        }
-        phase = .finished(.init(
-            installed: Array(installed), failed: failed, skipped: skipped,
-            canUndo: !installed.isEmpty && !addedContributionIDs.isEmpty))
+        let skipped =
+            plan.exclusions.map(\.detail)
+            + heldBack.map {
+                "\($0.surface.displayName) already has \($0.displayName) from somewhere else; it was left alone."
+            }
+        phase = .finished(
+            .init(
+                installed: Array(installed), failed: failed, skipped: skipped,
+                canUndo: !installed.isEmpty && !addedContributionIDs.isEmpty))
     }
 
     /// Withdraws what this install added and removes the copies it placed.

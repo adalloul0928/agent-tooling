@@ -104,8 +104,9 @@ struct DirectoryFingerprintTests {
     @Test func reviewedCopyRejectsAnExecutableModeChange() async throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
         let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
         let workspace = try WorkspaceRevisionStore(
             containerRoot: root.appending(path: "workspace", directoryHint: .isDirectory),

@@ -155,12 +155,14 @@ struct ProjectsView: View {
                             projectName: match.projectID.flatMap { id in projects.first { $0.id == id }?.name },
                             isBusy: workspace.projectDiscovery.isBusy || workspace.library.access != .writable,
                             track: { Task { await track(match) } },
-                            attach: { id in Task { await attach(match, to: id) } })
+                            attach: { id in Task { await attach(match, to: id) } }
+                        )
                         .collectionRowChrome(selected: false)
                     }
                 } header: {
-                    listHeader("Found on this Mac", count: found.count,
-                               detail: workspace.projectDiscovery.lastScan == nil ? "Looking…" : nil)
+                    listHeader(
+                        "Found on this Mac", count: found.count,
+                        detail: workspace.projectDiscovery.lastScan == nil ? "Looking…" : nil)
                 }
             }
             if let message = workspace.projectDiscovery.errorMessage {

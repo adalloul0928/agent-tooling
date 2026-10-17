@@ -99,7 +99,9 @@ struct SkillCreatorDraftPane: View {
                     EmptyStateView(
                         symbol: "doc.text",
                         title: "The draft appears here",
-                        message: "Every file \(client.rawValue) writes into the draft folder is listed here after each turn, so you can read exactly what would be saved.")
+                        message:
+                            "Every file \(client.rawValue) writes into the draft folder is listed here after each turn, so you can read exactly what would be saved."
+                    )
                 }
             }
         }

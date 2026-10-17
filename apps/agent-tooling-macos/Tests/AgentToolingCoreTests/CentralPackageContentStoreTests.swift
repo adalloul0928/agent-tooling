@@ -6,8 +6,10 @@ import Testing
 
 struct CentralPackageContentStoreTests {
     @Test func roundTripsCompleteTreeAndRetainsOlderVersionAfterReopen() async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
-        let first = try tree("one"); let second = try tree("two")
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let first = try tree("one")
+        let second = try tree("two")
         let store = try CentralPackageContentStore(directory: fixture.root)
         let receipt = try await store.store(first)
         #expect(receipt.digest == first.digest && receipt.entryCount == first.entries.count)
@@ -24,7 +26,8 @@ struct CentralPackageContentStoreTests {
     }
 
     @Test func concurrentSameDigestPublishersVerifyOneObject() async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let content = try tree("same")
         let left = try CentralPackageContentStore(directory: fixture.root)
         let right = try CentralPackageContentStore(directory: fixture.root)
@@ -37,7 +40,8 @@ struct CentralPackageContentStoreTests {
     }
 
     @Test func largeFlatTreeDoesNotAccumulateFileDescriptors() async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let entries = (0..<1_000).map {
             PackageTreeEntry(relativePath: "f\($0)", kind: .file(bytes: Data("x".utf8), executable: false))
         }
@@ -48,10 +52,13 @@ struct CentralPackageContentStoreTests {
     }
 
     @Test func existingCorruptionIsReportedWithoutOverwritingItOrAnOlderVersion() async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
-        let first = try tree("old"); let second = try tree("new")
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let first = try tree("old")
+        let second = try tree("new")
         let store = try CentralPackageContentStore(directory: fixture.root)
-        _ = try await store.store(first); _ = try await store.store(second)
+        _ = try await store.store(first)
+        _ = try await store.store(second)
         let altered = fixture.payload(second).appending(path: "run")
         #expect(chmod(altered.path, 0o600) == 0)
         try Data("changed externally".utf8).write(to: altered)
@@ -62,7 +69,8 @@ struct CentralPackageContentStoreTests {
     }
 
     @Test func injectedRootGitMetadataCannotHideFromObjectVerification() async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let content = try tree("safe")
         let store = try CentralPackageContentStore(directory: fixture.root)
         _ = try await store.store(content)
@@ -74,7 +82,8 @@ struct CentralPackageContentStoreTests {
     }
 
     @Test func unknownNonemptyRootIsNotInitializedOrModified() throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let sentinel = fixture.root.appending(path: "sentinel")
         try Data("keep".utf8).write(to: sentinel)
         #expect(throws: CentralPackageStoreError.invalidRoot) { _ = try CentralPackageContentStore(directory: fixture.root) }
@@ -84,7 +93,8 @@ struct CentralPackageContentStoreTests {
 
     @Test(arguments: ["agent-tooling-content-store.v99\n", "broken", ""])
     func unsupportedOrMalformedMarkerIsNotOverwritten(_ value: String) async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let store = try CentralPackageContentStore(directory: fixture.root)
         let marker = fixture.root.appending(path: "format")
         #expect(chmod(marker.path, 0o600) == 0)
@@ -97,7 +107,8 @@ struct CentralPackageContentStoreTests {
 
     @Test(arguments: ["", "objects", "staging", "format"])
     func changedPrivatePermissionsInvalidateAnOpenStore(_ name: String) async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let store = try CentralPackageContentStore(directory: fixture.root)
         let content = try tree("private")
         _ = try await store.store(content)
@@ -110,7 +121,8 @@ struct CentralPackageContentStoreTests {
 
     @Test(arguments: ["objects", "staging"])
     func replacingStorageDirectoryCannotRedirectReadsOrWrites(_ name: String) async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let store = try CentralPackageContentStore(directory: fixture.root)
         let content = try tree("before")
         _ = try await store.store(content)
@@ -127,7 +139,8 @@ struct CentralPackageContentStoreTests {
     }
 
     @Test func replacingRootCannotRedirectWritesAndSymlinkRootsAreRejected() async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let store = try CentralPackageContentStore(directory: fixture.root)
         let outside = try fixture.sentinelDirectory()
         try FileManager.default.moveItem(at: fixture.root, to: fixture.container.appending(path: "detached"))
@@ -139,7 +152,8 @@ struct CentralPackageContentStoreTests {
     }
 
     @Test func objectPayloadSymlinkIsNotFollowed() async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let store = try CentralPackageContentStore(directory: fixture.root)
         let content = try tree("original")
         _ = try await store.store(content)
@@ -154,7 +168,8 @@ struct CentralPackageContentStoreTests {
     }
 
     @Test func initializationContentionHasAnExplicitRetryableOutcome() async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let descriptor = open(fixture.root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
         #expect(descriptor >= 0)
         defer { close(descriptor) }
@@ -168,7 +183,8 @@ struct CentralPackageContentStoreTests {
     }
 
     @Test func cancelledAndOverLimitIntakePublishNothing() async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let store = try CentralPackageContentStore(directory: fixture.root)
         let content = try tree("cancel")
         let task = Task {
@@ -183,16 +199,21 @@ struct CentralPackageContentStoreTests {
     }
 
     @Test func malformedDigestIsRejectedBeforeLookingUpContent() async throws {
-        let fixture = try Fixture(); defer { fixture.remove() }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
         let store = try CentralPackageContentStore(directory: fixture.root)
         await #expect(throws: CentralPackageStoreError.invalidDigest) { _ = try await store.read(.init(value: "../outside")) }
-        await #expect(throws: CentralPackageStoreError.missingContent) { _ = try await store.read(.init(value: String(repeating: "a", count: 64))) }
+        await #expect(throws: CentralPackageStoreError.missingContent) {
+            _ = try await store.read(.init(value: String(repeating: "a", count: 64)))
+        }
     }
 
     private func tree(_ value: String) throws -> CapturedPackageTree {
         try .init(entries: [
             .init(relativePath: "empty", kind: .directory),
-            .init(relativePath: "plugin.json", kind: .file(bytes: Data("{\"name\":\"native\",\"futureExtension\":[1,true]}\n".utf8), executable: false)),
+            .init(
+                relativePath: "plugin.json",
+                kind: .file(bytes: Data("{\"name\":\"native\",\"futureExtension\":[1,true]}\n".utf8), executable: false)),
             .init(relativePath: "run", kind: .file(bytes: Data(value.utf8), executable: true)),
             .init(relativePath: "current", kind: .symbolicLink(target: "run")),
         ])

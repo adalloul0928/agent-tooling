@@ -66,19 +66,21 @@ struct AgentPluginMCPModelsTests {
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root.appending(path: "bin"), withIntermediateDirectories: true)
         try Data().write(to: root.appending(path: "bin/server"))
-        try FileManager.default.createSymbolicLink(at: root.appending(path: "bin/inside-link"), withDestinationURL: root.appending(path: "bin/server"))
+        try FileManager.default.createSymbolicLink(
+            at: root.appending(path: "bin/inside-link"), withDestinationURL: root.appending(path: "bin/server"))
         let outside = root.deletingLastPathComponent().appending(path: "mcp-outside-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: outside) }
         try Data().write(to: outside)
         try FileManager.default.createSymbolicLink(at: root.appending(path: "bin/escape"), withDestinationURL: outside)
-        let data = Data("""
-        {"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{
-        "bare":{"type":"stdio","command":"node"},
-        "inside":{"type":"stdio","command":"./bin/server","cwd":"${PLUGIN_ROOT}"},
-        "insideLink":{"type":"stdio","command":"./bin/inside-link"},
-        "escape":{"type":"stdio","command":"./bin/escape"},
-        "cwdEscape":{"type":"stdio","command":"node","cwd":"./bin/escape"}}}
-        """.utf8)
+        let data = Data(
+            """
+            {"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{
+            "bare":{"type":"stdio","command":"node"},
+            "inside":{"type":"stdio","command":"./bin/server","cwd":"${PLUGIN_ROOT}"},
+            "insideLink":{"type":"stdio","command":"./bin/inside-link"},
+            "escape":{"type":"stdio","command":"./bin/escape"},
+            "cwdEscape":{"type":"stdio","command":"node","cwd":"./bin/escape"}}}
+            """.utf8)
 
         let result = try AgentPluginMCPConfigurationLoader.load(data, packageRoot: root)
 

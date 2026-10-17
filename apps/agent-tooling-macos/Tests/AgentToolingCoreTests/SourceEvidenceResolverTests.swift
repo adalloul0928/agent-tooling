@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -62,9 +63,10 @@ struct SourceEvidenceResolverTests {
         #expect(output.unresolved == [.init(artifactID: id, reason: .competingObservations)])
         let conflict = try #require(output.conflicts.first)
         #expect(conflict.kind == .competingObservations)
-        #expect(conflict.alternatives.map(\.repositoryURL) == [
-            "https://github.com/owner/one", "https://github.com/owner/two",
-        ])
+        #expect(
+            conflict.alternatives.map(\.repositoryURL) == [
+                "https://github.com/owner/one", "https://github.com/owner/two",
+            ])
     }
 
     @Test func nativeAttachedAndChildArtifactsNeverBecomeStandaloneCandidates() {
@@ -96,20 +98,25 @@ struct SourceEvidenceResolverTests {
         let commit = fixedID("00000000-0000-0000-0000-000000000004")
         let integrity = fixedID("00000000-0000-0000-0000-000000000005")
         let records = [locator, path, ref, commit, integrity].map { record($0) }
-        let output = SourceEvidenceResolver.resolve(artifacts: records, confirmed: [], observations: [
-            observation(locator, url: "https://github.com/Owner/Repo?token=secret", path: "skills/one"),
-            observation(path, url: "https://github.com/Owner/Repo", path: "skills/.git/secret"),
-            observation(ref, url: "https://github.com/Owner/Repo", path: "skills/one", ref: "--upload-pack=secret"),
-            observation(commit, url: "https://github.com/Owner/Repo", path: "skills/one",
-                        commit: .init(kind: .semanticVersion, value: "1.0.0")),
-            observation(integrity, url: "https://github.com/Owner/Repo", path: "skills/one",
-                        integrity: [.init(algorithm: .vercelProjectSkillFolderSHA256V1, value: "abcd")]),
-        ])
+        let output = SourceEvidenceResolver.resolve(
+            artifacts: records, confirmed: [],
+            observations: [
+                observation(locator, url: "https://github.com/Owner/Repo?token=secret", path: "skills/one"),
+                observation(path, url: "https://github.com/Owner/Repo", path: "skills/.git/secret"),
+                observation(ref, url: "https://github.com/Owner/Repo", path: "skills/one", ref: "--upload-pack=secret"),
+                observation(
+                    commit, url: "https://github.com/Owner/Repo", path: "skills/one",
+                    commit: .init(kind: .semanticVersion, value: "1.0.0")),
+                observation(
+                    integrity, url: "https://github.com/Owner/Repo", path: "skills/one",
+                    integrity: [.init(algorithm: .vercelProjectSkillFolderSHA256V1, value: "abcd")]),
+            ])
 
         #expect(output.candidates.isEmpty)
-        #expect(Set(output.unresolved.map(\.reason)) == [
-            .invalidLocator, .invalidPackagePath, .invalidRequestedRef, .invalidObservedCommit, .invalidIntegrity,
-        ])
+        #expect(
+            Set(output.unresolved.map(\.reason)) == [
+                .invalidLocator, .invalidPackagePath, .invalidRequestedRef, .invalidObservedCommit, .invalidIntegrity,
+            ])
         #expect(output.diagnostics == [.invalidObservation])
     }
 
@@ -118,12 +125,16 @@ struct SourceEvidenceResolverTests {
         let provider = fixedID("00000000-0000-0000-0000-000000000002")
         let tree = String(repeating: "a", count: 40)
         let opaque = String(repeating: "b", count: 40)
-        let output = SourceEvidenceResolver.resolve(artifacts: [record(github), record(provider)], confirmed: [], observations: [
-            observation(github, url: "https://github.com/Owner/Repo", path: "skills/one",
-                        integrity: [.init(algorithm: .githubSkillFolderTreeObjectID, value: tree)]),
-            observation(provider, url: "https://github.com/Owner/Repo", path: "skills/two",
-                        integrity: [.init(algorithm: .vercelGlobalSkillFolderHashOpaque, value: opaque)]),
-        ])
+        let output = SourceEvidenceResolver.resolve(
+            artifacts: [record(github), record(provider)], confirmed: [],
+            observations: [
+                observation(
+                    github, url: "https://github.com/Owner/Repo", path: "skills/one",
+                    integrity: [.init(algorithm: .githubSkillFolderTreeObjectID, value: tree)]),
+                observation(
+                    provider, url: "https://github.com/Owner/Repo", path: "skills/two",
+                    integrity: [.init(algorithm: .vercelGlobalSkillFolderHashOpaque, value: opaque)]),
+            ])
 
         let values = Dictionary(uniqueKeysWithValues: output.candidates.map { ($0.artifactID, $0.integrity[0].algorithm) })
         #expect(values[github] == .githubSkillFolderTreeObjectID)
@@ -132,25 +143,33 @@ struct SourceEvidenceResolverTests {
 
     @Test func unsafeLocatorsPathsAndGitRefsCannotEnterFetchProposals() {
         let id = fixedID("00000000-0000-0000-0000-000000000001")
-        for url in ["http://github.com/a/b", "https://user:password@github.com/a/b", "https://github.com/a/b/tree/main",
-                    "https://github.com/a/%2e%2e", "https://example.test/Owner/Repo"] {
-            let output = SourceEvidenceResolver.resolve(artifacts: [record(id)], confirmed: [], observations: [
-                observation(id, url: url, path: "skills/x"),
-            ])
+        for url in [
+            "http://github.com/a/b", "https://user:password@github.com/a/b", "https://github.com/a/b/tree/main",
+            "https://github.com/a/%2e%2e", "https://example.test/Owner/Repo",
+        ] {
+            let output = SourceEvidenceResolver.resolve(
+                artifacts: [record(id)], confirmed: [],
+                observations: [
+                    observation(id, url: url, path: "skills/x")
+                ])
             #expect(output.proposedFetchGroups.isEmpty)
             #expect(output.unresolved.contains(.init(artifactID: id, reason: .invalidLocator)))
         }
         for path in ["/private/skill", "skills//x", "skills/./x", "skills/../x", "skills\\x", ".GIT/x", "skills/\nx"] {
-            let output = SourceEvidenceResolver.resolve(artifacts: [record(id)], confirmed: [], observations: [
-                observation(id, url: "https://github.com/a/b", path: path),
-            ])
+            let output = SourceEvidenceResolver.resolve(
+                artifacts: [record(id)], confirmed: [],
+                observations: [
+                    observation(id, url: "https://github.com/a/b", path: path)
+                ])
             #expect(output.proposedFetchGroups.isEmpty)
             #expect(output.unresolved.contains(.init(artifactID: id, reason: .invalidPackagePath)))
         }
         for ref in [".", "main.", "feature/.hidden", "refs/foo.lock/main", "-foo", "main\n"] {
-            let output = SourceEvidenceResolver.resolve(artifacts: [record(id)], confirmed: [], observations: [
-                observation(id, url: "https://github.com/a/b", path: "skills/x", ref: ref),
-            ])
+            let output = SourceEvidenceResolver.resolve(
+                artifacts: [record(id)], confirmed: [],
+                observations: [
+                    observation(id, url: "https://github.com/a/b", path: "skills/x", ref: ref)
+                ])
             #expect(output.proposedFetchGroups.isEmpty)
             #expect(output.unresolved.contains(.init(artifactID: id, reason: .invalidRequestedRef)))
         }
@@ -213,10 +232,12 @@ struct SourceEvidenceResolverTests {
         let id = fixedID("00000000-0000-0000-0000-000000000001")
         let firstCommit = SourceRevision(kind: .gitCommitSHA1, value: String(repeating: "a", count: 40))
         let secondCommit = SourceRevision(kind: .gitCommitSHA1, value: String(repeating: "b", count: 40))
-        let output = SourceEvidenceResolver.resolve(artifacts: [record(id)], confirmed: [], observations: [
-            observation(id, url: "https://github.com/Owner/Repo", path: "skills/one", commit: firstCommit),
-            observation(id, url: "https://github.com/Owner/Repo", path: "skills/one", commit: secondCommit),
-        ])
+        let output = SourceEvidenceResolver.resolve(
+            artifacts: [record(id)], confirmed: [],
+            observations: [
+                observation(id, url: "https://github.com/Owner/Repo", path: "skills/one", commit: firstCommit),
+                observation(id, url: "https://github.com/Owner/Repo", path: "skills/one", commit: secondCommit),
+            ])
         #expect(output.candidates.isEmpty)
         #expect(output.proposedFetchGroups.isEmpty)
         #expect(output.unresolved == [.init(artifactID: id, reason: .competingEvidenceFacts)])
@@ -241,7 +262,7 @@ struct SourceEvidenceResolverTests {
     @Test func opaqueIntegrityDelimitersCannotMakeReviewOrderingAmbiguous() throws {
         let id = fixedID("00000000-0000-0000-0000-000000000001")
         let one: [SourceLockIntegrityEvidence] = [
-            .init(algorithm: .vercelGlobalSkillFolderHashOpaque, value: "x|vercelWellKnownOpaque:y"),
+            .init(algorithm: .vercelGlobalSkillFolderHashOpaque, value: "x|vercelWellKnownOpaque:y")
         ]
         let two: [SourceLockIntegrityEvidence] = [
             .init(algorithm: .vercelGlobalSkillFolderHashOpaque, value: "x"),
@@ -262,11 +283,14 @@ struct SourceEvidenceResolverTests {
         let gap = fixedID("00000000-0000-0000-0000-000000000002")
         var gapEvidence = evidence(url: "https://github.com/Owner/Repo", path: "skills/two")
         gapEvidence.gaps = [.missingRequestedRef]
-        let output = SourceEvidenceResolver.resolve(artifacts: [record(nameOnly), record(gap)], confirmed: [], observations: [
-            .init(artifactID: nameOnly, context: .nameOnly,
-                  evidence: evidence(url: "https://github.com/Owner/Repo", path: "skills/one")),
-            .init(artifactID: gap, context: .exactRelativePath, evidence: gapEvidence),
-        ])
+        let output = SourceEvidenceResolver.resolve(
+            artifacts: [record(nameOnly), record(gap)], confirmed: [],
+            observations: [
+                .init(
+                    artifactID: nameOnly, context: .nameOnly,
+                    evidence: evidence(url: "https://github.com/Owner/Repo", path: "skills/one")),
+                .init(artifactID: gap, context: .exactRelativePath, evidence: gapEvidence),
+            ])
         #expect(Set(output.unresolved.map(\.reason)) == [.insufficientMatchContext, .evidenceGap])
     }
 
@@ -299,6 +323,6 @@ struct SourceEvidenceResolverTests {
     }
 
     private func fixedID(_ value: String) -> ArtifactID {
-        ArtifactID(UUID(uuidString: value)!)
+        ArtifactID(fixtureUUID(value))
     }
 }

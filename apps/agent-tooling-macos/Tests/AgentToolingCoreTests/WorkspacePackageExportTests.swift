@@ -17,14 +17,18 @@ struct WorkspacePackageExportTests {
 
         let manager = FileManager.default
         #expect(manager.fileExists(atPath: destination.appending(path: "SKILL.md").path))
-        #expect(try Data(contentsOf: destination.appending(path: "references/notes.md"))
-            == Data("reference\n".utf8))
+        #expect(
+            try Data(contentsOf: destination.appending(path: "references/notes.md"))
+                == Data("reference\n".utf8))
         var isDirectory: ObjCBool = false
-        #expect(manager.fileExists(atPath: destination.appending(path: "assets").path,
-                                   isDirectory: &isDirectory))
+        #expect(
+            manager.fileExists(
+                atPath: destination.appending(path: "assets").path,
+                isDirectory: &isDirectory))
         #expect(isDirectory.boolValue, "An empty directory must survive the export.")
-        #expect(try manager.destinationOfSymbolicLink(atPath: destination.appending(path: "README").path)
-            == "SKILL.md")
+        #expect(
+            try manager.destinationOfSymbolicLink(atPath: destination.appending(path: "README").path)
+                == "SKILL.md")
         let permissions = try manager.attributesOfItem(atPath: destination.appending(path: "scripts/run").path)
         #expect((permissions[.posixPermissions] as? NSNumber)?.intValue == 0o700)
         // An unknown vendor file is carried, not interpreted.
@@ -102,9 +106,10 @@ struct WorkspacePackageExportTests {
         // contract refuses it, so nothing here has to detect it later.
         for target in ["../elsewhere", "/etc/hosts"] {
             #expect(throws: PackageTreeError.unsafeSymbolicLink) {
-                _ = try CapturedPackageTree(entries: Self.tree.entries + [
-                    .init(relativePath: "outside", kind: .symbolicLink(target: target)),
-                ])
+                _ = try CapturedPackageTree(
+                    entries: Self.tree.entries + [
+                        .init(relativePath: "outside", kind: .symbolicLink(target: target))
+                    ])
             }
         }
     }
@@ -122,26 +127,39 @@ struct WorkspacePackageExportTests {
     }
 
     private static var skill: ArtifactRecord {
-        .init(identity: .init(id: ArtifactID(), kind: .skill, displayName: "Personal"),
-              authority: .centralPersonal, declaredName: "personal", contentDigest: tree.digest)
+        .init(
+            identity: .init(id: ArtifactID(), kind: .skill, displayName: "Personal"),
+            authority: .centralPersonal, declaredName: "personal", contentDigest: tree.digest)
     }
 
     private static let tree: CapturedPackageTree = {
-        try! CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .file(
-                bytes: Data("---\nname: personal\ndescription: Fixture\n---\n\n# Personal\n".utf8),
-                executable: false)),
-            .init(relativePath: "references", kind: .directory),
-            .init(relativePath: "references/notes.md", kind: .file(
-                bytes: Data("reference\n".utf8), executable: false)),
-            .init(relativePath: "scripts", kind: .directory),
-            .init(relativePath: "scripts/run", kind: .file(
-                bytes: Data("#!/bin/sh\necho personal\n".utf8), executable: true)),
-            .init(relativePath: "assets", kind: .directory),
-            .init(relativePath: "vendor.unknown", kind: .file(
-                bytes: Data("{\"vendor\":true}\n".utf8), executable: false)),
-            .init(relativePath: "README", kind: .symbolicLink(target: "SKILL.md")),
-        ])
+        do {
+            return try CapturedPackageTree(entries: [
+                .init(
+                    relativePath: "SKILL.md",
+                    kind: .file(
+                        bytes: Data("---\nname: personal\ndescription: Fixture\n---\n\n# Personal\n".utf8),
+                        executable: false)),
+                .init(relativePath: "references", kind: .directory),
+                .init(
+                    relativePath: "references/notes.md",
+                    kind: .file(
+                        bytes: Data("reference\n".utf8), executable: false)),
+                .init(relativePath: "scripts", kind: .directory),
+                .init(
+                    relativePath: "scripts/run",
+                    kind: .file(
+                        bytes: Data("#!/bin/sh\necho personal\n".utf8), executable: true)),
+                .init(relativePath: "assets", kind: .directory),
+                .init(
+                    relativePath: "vendor.unknown",
+                    kind: .file(
+                        bytes: Data("{\"vendor\":true}\n".utf8), executable: false)),
+                .init(relativePath: "README", kind: .symbolicLink(target: "SKILL.md")),
+            ])
+        } catch {
+            preconditionFailure("Invalid package tree test fixture: \(error)")
+        }
     }()
 
     private static func evidence(
@@ -150,10 +168,11 @@ struct WorkspacePackageExportTests {
         transports: [String]
     ) -> [TargetCapabilityEvidence] {
         components.map {
-            .init(surface: surface, installedClientVersion: "1.0.0", adapterContractVersion: 1,
-                  component: $0, transport: $0 == .mcpServer ? transports.first : nil,
-                  scopes: [.user], support: .supported,
-                  observedAt: Date(timeIntervalSince1970: 1_700_000_000))
+            .init(
+                surface: surface, installedClientVersion: "1.0.0", adapterContractVersion: 1,
+                component: $0, transport: $0 == .mcpServer ? transports.first : nil,
+                scopes: [.user], support: .supported,
+                observedAt: Date(timeIntervalSince1970: 1_700_000_000))
         }
     }
 }

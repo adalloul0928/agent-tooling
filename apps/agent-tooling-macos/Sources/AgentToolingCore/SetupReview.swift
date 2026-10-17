@@ -101,7 +101,9 @@ public struct SetupReview: Codable, Hashable, Sendable {
     public var summary: String
     public var recommendations: [SetupRecommendation]
 
-    public init(generatedAt: Date = .now, client: ClientKind, auditGeneratedAt: Date, summary: String, recommendations: [SetupRecommendation]) {
+    public init(
+        generatedAt: Date = .now, client: ClientKind, auditGeneratedAt: Date, summary: String, recommendations: [SetupRecommendation]
+    ) {
         self.generatedAt = generatedAt
         self.client = client
         self.auditGeneratedAt = auditGeneratedAt
@@ -166,7 +168,9 @@ enum SetupReviewCommandShapes {
         let schemaPath = arguments[index + 1]
         guard schemaPath.hasSuffix("/" + codexSchemaFileName) else { return false }
         let requestDirectory = URL(filePath: schemaPath).deletingLastPathComponent()
-        guard SkillCreatorCommandShapes.isRequestDirectoryPath(requestDirectory.path(percentEncoded: false), homeURL: homeURL) else { return false }
+        guard SkillCreatorCommandShapes.isRequestDirectoryPath(requestDirectory.path(percentEncoded: false), homeURL: homeURL) else {
+            return false
+        }
         return arguments == codex(homeURL: homeURL, requestDirectory: requestDirectory, web: false)
             || arguments == codex(homeURL: homeURL, requestDirectory: requestDirectory, web: true)
     }
@@ -225,7 +229,9 @@ enum SetupReviewCommandShapes {
     }
 
     static var responseSchemaJSON: String {
-        let data = try! JSONSerialization.data(withJSONObject: responseSchema, options: [.sortedKeys])
+        guard let data = try? JSONSerialization.data(withJSONObject: responseSchema, options: [.sortedKeys]) else {
+            preconditionFailure("The built-in setup review response schema must be JSON encodable.")
+        }
         return String(decoding: data, as: UTF8.self)
     }
 }
@@ -258,12 +264,15 @@ public enum SetupReviewPrompt {
             """
         switch purpose {
         case .setup:
-            text += "This is first-time setup. Explain what is here in plain words, then recommend what to clean up, what to bring under management, and what to leave alone. Prefer bringing a skill into the library over deleting it. Never recommend deleting the only copy of anything.\n"
+            text +=
+                "This is first-time setup. Explain what is here in plain words, then recommend what to clean up, what to bring under management, and what to leave alone. Prefer bringing a skill into the library over deleting it. Never recommend deleting the only copy of anything.\n"
         case .checkup:
-            text += "This is a routine check. Report drift: what is broken, duplicated, or unmanaged now, and the smallest set of changes that fixes it. If nothing needs doing, say so in one sentence and return no recommendations.\n"
+            text +=
+                "This is a routine check. Report drift: what is broken, duplicated, or unmanaged now, and the smallest set of changes that fixes it. If nothing needs doing, say so in one sentence and return no recommendations.\n"
         case .clientReview:
             let name = client?.rawValue ?? "the client"
-            text += "This is a review of \(name) alone. Its installed version is \(client.flatMap { clientVersions[$0] } ?? "unknown"). Using the release notes below and, if they are not enough, the client's official documentation on the web, say what has changed since that version that matters to this person, which settings, hooks, skills, plugins, or MCP servers the documentation now recommends that differ from what is configured, and what is deprecated. Every claim about the client must name the page or release it came from as its provenance source. Do not invent features.\n"
+            text +=
+                "This is a review of \(name) alone. Its installed version is \(client.flatMap { clientVersions[$0] } ?? "unknown"). Using the release notes below and, if they are not enough, the client's official documentation on the web, say what has changed since that version that matters to this person, which settings, hooks, skills, plugins, or MCP servers the documentation now recommends that differ from what is configured, and what is deprecated. Every claim about the client must name the page or release it came from as its provenance source. Do not invent features.\n"
         }
         text += """
 
@@ -294,7 +303,9 @@ public enum SetupReviewPrompt {
             text += entry
             used += 1
         }
-        if used < relevant.count { text += "(\(relevant.count - used) more findings omitted for length; they are all of the same kinds.)\n\n" }
+        if used < relevant.count {
+            text += "(\(relevant.count - used) more findings omitted for length; they are all of the same kinds.)\n\n"
+        }
         if !releaseNotes.isEmpty {
             text += "## Release notes and documentation fetched for you\n\n"
             for note in releaseNotes {
@@ -376,7 +387,8 @@ public struct SetupReviewService: Sendable {
         try fileManager.createDirectory(at: requestURL, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         defer { try? fileManager.removeItem(at: requestURL) }
 
-        let executable = ClientExecutableLocator.locate(client, homeURL: homeURL)?.path(percentEncoded: false)
+        let executable =
+            ClientExecutableLocator.locate(client, homeURL: homeURL)?.path(percentEncoded: false)
             ?? ClientExecutableLocator.executableName(for: client)
         let arguments: [String]
         switch client {
@@ -393,7 +405,8 @@ public struct SetupReviewService: Sendable {
             executable: executable, arguments: arguments, standardInput: Data(prompt.utf8), currentDirectory: homeURL)
         let answer: [String: Any]
         do {
-            answer = client == .claude
+            answer =
+                client == .claude
                 ? try InsightsDeepDiveService.parseClaude(output, client: client)
                 : try InsightsDeepDiveService.parseCodex(output, client: client)
         } catch let error as InsightsDeepDiveError {
@@ -466,7 +479,8 @@ public struct SetupReviewService: Sendable {
             default:
                 action = .readOnly
             }
-            let slug = title.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " }.split(separator: " ").prefix(6).joined(separator: "-")
+            let slug = title.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " }.split(separator: " ").prefix(6).joined(
+                separator: "-")
             recommendations.append(
                 SetupRecommendation(
                     id: "review:\(client.rawValue.lowercased().filter(\.isLetter)):\(index):\(slug)", category: category, title: title,

@@ -311,7 +311,8 @@ public actor SkillDraftService {
             // A turn the client itself marks failed did not do the work, even
             // when it comes with a sentence: that sentence is the diagnostic
             // ("Failed to authenticate…"), not a reply to carry on from.
-            let rawDiagnostic = [parsed.reply, parsed.notes.joined(separator: " "), output.standardError, output.standardOutput]
+            let rawDiagnostic =
+                [parsed.reply, parsed.notes.joined(separator: " "), output.standardError, output.standardOutput]
                 .first { !$0.isEmpty } ?? ""
             throw SkillDraftError.clientFailed(adapter.client, output.status, boundedDiagnostic(rawDiagnostic))
         }

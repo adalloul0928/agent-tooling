@@ -77,7 +77,9 @@ struct WorkspaceObservationReconciliationTests {
         #expect(standalone.identity.parentPackageID == nil)
         #expect(server.authority == .trackedOnly)
         // Packages come before their members, so the write can land in order.
-        #expect(plan.additions.firstIndex(of: package)! < plan.additions.firstIndex(of: member)!)
+        let packageIndex = try #require(plan.additions.firstIndex(of: package))
+        let memberIndex = try #require(plan.additions.firstIndex(of: member))
+        #expect(packageIndex < memberIndex)
     }
 
     @Test func aStandaloneSkillObservedAgainIsPlannedOnce() throws {

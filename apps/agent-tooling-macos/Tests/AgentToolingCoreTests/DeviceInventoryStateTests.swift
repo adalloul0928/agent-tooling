@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -34,7 +35,8 @@ struct DeviceInventoryStateTests {
         let state = try DeviceInventoryState(snapshot: fixture.snapshot, artifactBindings: fixture.bindings)
         let canonical = state.canonicalized()
         guard case .skill(let before)? = state.records.first(where: { $0.legacy.domain == .skill })?.captured,
-              case .skill(let after)? = canonical.records.first(where: { $0.legacy.domain == .skill })?.captured else {
+            case .skill(let after)? = canonical.records.first(where: { $0.legacy.domain == .skill })?.captured
+        else {
             Issue.record("Expected captured skill metadata")
             return
         }
@@ -47,8 +49,9 @@ struct DeviceInventoryStateTests {
         #expect(after.repositoryBinding?.lastCheckedRevision == before.repositoryBinding?.lastCheckedRevision)
         #expect(after.repositoryBinding?.lastCheckedFingerprint == before.repositoryBinding?.lastCheckedFingerprint)
         #expect(after.repositoryBinding?.lastCheckError == before.repositoryBinding?.lastCheckError)
-        #expect(after.repositoryBinding?.lastCheckedAt
-            == before.repositoryBinding?.lastCheckedAt.map(WorkspaceDomainValidation.canonicalDate))
+        #expect(
+            after.repositoryBinding?.lastCheckedAt
+                == before.repositoryBinding?.lastCheckedAt.map(WorkspaceDomainValidation.canonicalDate))
     }
 
     @Test func validatesAndRoundTripsAgainstLivePortableIdentities() throws {
@@ -145,8 +148,10 @@ struct DeviceInventoryStateTests {
         let reversed = DeviceInventoryState(records: Array(original.records.reversed()))
 
         #expect(original.canonicalized() == reversed.canonicalized())
-        guard case .skill(let skill)? = reversed.canonicalized().records
-            .first(where: { $0.legacy.domain == .skill })?.captured else {
+        guard
+            case .skill(let skill)? = reversed.canonicalized().records
+                .first(where: { $0.legacy.domain == .skill })?.captured
+        else {
             Issue.record("Expected captured skill metadata")
             return
         }
@@ -191,11 +196,14 @@ struct DeviceInventoryStateTests {
             clients: clients, installed: true)
         let snapshot = WorkspaceSnapshot(
             skills: [skill], mcpServers: [server], plugins: [plugin], activeProfileID: "")
-        return (snapshot, [
-            key(.skill, "source"): artifact("00000000-0000-0000-0000-000000000101"),
-            key(.mcpServer, "server"): artifact("00000000-0000-0000-0000-000000000102"),
-            key(.plugin, "plugin"): artifact("00000000-0000-0000-0000-000000000103"),
-        ])
+        return (
+            snapshot,
+            [
+                key(.skill, "source"): artifact("00000000-0000-0000-0000-000000000101"),
+                key(.mcpServer, "server"): artifact("00000000-0000-0000-0000-000000000102"),
+                key(.plugin, "plugin"): artifact("00000000-0000-0000-0000-000000000103"),
+            ]
+        )
     }
 
     private func portableDocument(
@@ -209,11 +217,12 @@ struct DeviceInventoryStateTests {
         let identities = bindings.map { legacy, id in
             WorkspaceMigrationIdentityEntry(legacy: legacy, objectID: WorkspaceObjectID(id.rawValue))
         }
-        return try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000001")!),
-            revision: .init(writerID: WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000002")!)),
-            artifacts: artifacts,
-            configurationState: .init(identityMap: identities)))
+        return try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000001")),
+                revision: .init(writerID: WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000002"))),
+                artifacts: artifacts,
+                configurationState: .init(identityMap: identities)))
     }
 
     private func kind(_ domain: LegacyReferenceDomain) -> ArtifactKind {
@@ -230,6 +239,6 @@ struct DeviceInventoryStateTests {
     }
 
     private func artifact(_ value: String) -> ArtifactID {
-        ArtifactID(UUID(uuidString: value)!)
+        ArtifactID(fixtureUUID(value))
     }
 }

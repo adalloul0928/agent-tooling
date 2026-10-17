@@ -271,7 +271,8 @@ struct ClaudeSkillCreatorAdapter: SkillCreatorClientAdapter {
         if !denials.isEmpty {
             let names = Set(denials.compactMap { $0["tool_name"] as? String }).sorted()
             notes.append(
-                "Claude Code asked to use \(names.joined(separator: ", ")) and was refused: only files inside the draft folder may be written here.")
+                "Claude Code asked to use \(names.joined(separator: ", ")) and was refused: only files inside the draft folder may be written here."
+            )
         }
         let isError = (document["is_error"] as? Bool) ?? (output.status != 0)
         let reply = (document["result"] as? String) ?? ""
@@ -423,7 +424,8 @@ enum SkillCreatorLocator {
             values.isRegularFile == true, values.isSymbolicLink != true
         else {
             return .missing(
-                reason: "Codex's built-in skill creator was not found at \(skillCreatorURL.path(percentEncoded: false)). Update Codex to a version that includes it.",
+                reason:
+                    "Codex's built-in skill creator was not found at \(skillCreatorURL.path(percentEncoded: false)). Update Codex to a version that includes it.",
                 install: [])
         }
         return .available

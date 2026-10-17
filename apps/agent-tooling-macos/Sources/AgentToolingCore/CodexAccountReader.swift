@@ -115,8 +115,9 @@ enum CodexAccountParsing {
                 switches[.init(.openWorldTools, subject: subject)] = flag ? .on : .off
             }
             if let mode = table["default_tools_approval_mode"]?.stringValue,
-               let value = AccountPreferenceValue(rawValue: mode),
-               AccountSetting.approvalMode.acceptedValues.contains(value) {
+                let value = AccountPreferenceValue(rawValue: mode),
+                AccountSetting.approvalMode.acceptedValues.contains(value)
+            {
                 switches[.init(.approvalMode, subject: subject)] = value
             }
         }
@@ -197,7 +198,8 @@ public struct CodexAccountReader: Sendable {
                     try await readApps(session: session, into: &observation)
                 } else {
                     observation.notes.append(
-                        "ChatGPT apps reach Codex only when it signs in with ChatGPT. On this Mac it uses \(observation.signIn?.summary(for: provider) ?? "an unknown sign-in").")
+                        "ChatGPT apps reach Codex only when it signs in with ChatGPT. On this Mac it uses \(observation.signIn?.summary(for: provider) ?? "an unknown sign-in")."
+                    )
                 }
             }
         } catch {
@@ -213,7 +215,8 @@ public struct CodexAccountReader: Sendable {
         if observation.switches[.init(.apps)] == .off {
             observation.notes.append("Apps are turned off in Codex on this Mac ([features] apps = false).")
         }
-        observation.notes.append("Remote plugins from the ChatGPT plugin directory are not listed: Codex does not yet offer a stable way to read them.")
+        observation.notes.append(
+            "Remote plugins from the ChatGPT plugin directory are not listed: Codex does not yet offer a stable way to read them.")
         return observation
     }
 
@@ -229,10 +232,12 @@ public struct CodexAccountReader: Sendable {
         }
         let expected = ClientConfigurationFile.codexConfig.url(homeURL: homeURL).standardizedFileURL.path(percentEncoded: false)
         if let file = reading.userFile,
-           URL(filePath: file).standardizedFileURL.path(percentEncoded: false) != expected,
-           URL(filePath: file).resolvingSymlinksInPath().path(percentEncoded: false)
-               != URL(filePath: expected).resolvingSymlinksInPath().path(percentEncoded: false) {
-            observation.writeBlocker = "Codex on this Mac reads its configuration from \(file), and this app only edits ~/.codex/config.toml."
+            URL(filePath: file).standardizedFileURL.path(percentEncoded: false) != expected,
+            URL(filePath: file).resolvingSymlinksInPath().path(percentEncoded: false)
+                != URL(filePath: expected).resolvingSymlinksInPath().path(percentEncoded: false)
+        {
+            observation.writeBlocker =
+                "Codex on this Mac reads its configuration from \(file), and this app only edits ~/.codex/config.toml."
         }
     }
 
@@ -259,7 +264,8 @@ public struct CodexAccountReader: Sendable {
             guard let next = parsed.nextCursor, !next.isEmpty else { break }
             cursor = .string(next)
         }
-        let installed = (try? await session.request("app/installed", params: .object(["forceRefresh": .bool(false)])))
+        let installed =
+            (try? await session.request("app/installed", params: .object(["forceRefresh": .bool(false)])))
             .map(CodexAccountParsing.installedApps) ?? [:]
 
         var seen = Set<String>()
@@ -278,12 +284,14 @@ public struct CodexAccountReader: Sendable {
                     detail = "Codex sees the app, but none of its tools passes the app and tool policies."
                 } else {
                     state = .init(tone: .off, label: "Off in Codex")
-                    detail = observation.fileValues[key] == .off
+                    detail =
+                        observation.fileValues[key] == .off
                         ? "Codex's config.toml turns it off on this Mac."
                         : "A policy or configuration layer turns it off."
                 }
             } else {
-                state = app.isEnabled
+                state =
+                    app.isEnabled
                     ? .init(tone: .neutral, label: "Not loaded yet")
                     : .init(tone: .off, label: "Off in Codex")
                 detail = app.summary

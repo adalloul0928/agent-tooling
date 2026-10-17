@@ -140,10 +140,14 @@ struct MarketplaceCatalogsTests {
     @Test func theClaudeRowKeepsBothCountsApartWhenTheCLIAnswers() async throws {
         let summary = ClaudeMarketplaceCatalog.completeSummary(
             cliCount: 19, httpsCount: 314, httpsAnswered: true, httpsFailure: nil, cliNote: nil)
-        #expect(summary == "19 plugins listed by Claude Code from its added marketplaces. 314 plugins read from the official catalog on GitHub.")
+        #expect(
+            summary == "19 plugins listed by Claude Code from its added marketplaces. 314 plugins read from the official catalog on GitHub."
+        )
         let failed = ClaudeMarketplaceCatalog.completeSummary(
             cliCount: 1, httpsCount: 0, httpsAnswered: false, httpsFailure: "HTTP 503", cliNote: nil)
-        #expect(failed == "1 plugin listed by Claude Code from its added marketplaces. The official catalog on GitHub could not be read: HTTP 503")
+        #expect(
+            failed
+                == "1 plugin listed by Claude Code from its added marketplaces. The official catalog on GitHub could not be read: HTTP 503")
     }
 
     /// When Claude Code cannot be asked but the official catalog on GitHub
@@ -158,7 +162,10 @@ struct MarketplaceCatalogsTests {
         let page = try await catalog.search(MarketplaceQuery(limit: 100))
 
         // Both official listings are browsable even though the CLI answered nothing.
-        #expect(page.packages.map(\.id).sorted() == ["claude:review-buddy@claude-plugins-official", "claude:test-helper@claude-plugins-official"])
+        #expect(
+            page.packages.map(\.id).sorted() == [
+                "claude:review-buddy@claude-plugins-official", "claude:test-helper@claude-plugins-official",
+            ])
         let report = await catalog.lastReport()
         let summary = try #require(report.summaries[.claudeMarketplace])
         #expect(summary.contains("official catalog on GitHub"))

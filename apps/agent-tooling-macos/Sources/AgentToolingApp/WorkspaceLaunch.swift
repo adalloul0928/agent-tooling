@@ -205,8 +205,9 @@ struct WorkspaceLaunch {
             contentStore = nil
             contentStoreUnavailableReason = error.localizedDescription
         }
-        let service = WorkspaceApplicationService(store: store, writerID: writerID,
-                                                  contentStore: contentStore)
+        let service = WorkspaceApplicationService(
+            store: store, writerID: writerID,
+            contentStore: contentStore)
         let library = WorkspaceLibrarySession(
             service: service, workspaceID: store.workspaceID, deviceID: store.deviceID,
             access: .writable)
@@ -260,8 +261,9 @@ struct WorkspaceLaunch {
             deployment: deployment,
             device: device,
             health: health,
-            history: WorkspaceHistorySession(store: store, library: library,
-                                             writerID: writerID, access: .writable),
+            history: WorkspaceHistorySession(
+                store: store, library: library,
+                writerID: writerID, access: .writable),
             authoring: WorkspaceAuthoringSession(service: service, library: library),
             export: WorkspacePackageExportSession(library: library, contentStore: contentStore),
             marketplace: marketplace,

@@ -14,7 +14,9 @@ protocol InsightsServicing: Sendable {
     func scan(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> InsightsReport
     /// The same pass, also handing back one redacted digest per conversation
     /// for the deep dive. The digests are not kept anywhere.
-    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (report: InsightsReport, digests: [ConversationDigest])
+    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (
+        report: InsightsReport, digests: [ConversationDigest]
+    )
     /// Asks the person's own assistant to read the digests. Throws with the
     /// client's own words when it cannot.
     func deepDive(client: ClientKind, digests: [ConversationDigest], skills: [Skill], windowStart: Date) async throws -> InsightsDeepDive
@@ -52,7 +54,9 @@ extension InsightsServicing {
 
     /// A service with no digests to give runs the plain scan and hands back
     /// none, so a deep dive over it has nothing to read and says so.
-    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (report: InsightsReport, digests: [ConversationDigest]) {
+    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (
+        report: InsightsReport, digests: [ConversationDigest]
+    ) {
         (await scan(options: options, skills: skills, homeURL: homeURL), [])
     }
 
@@ -121,7 +125,9 @@ struct LiveInsightsServices: InsightsServicing {
             marketplaceProviders: providers)
     }
 
-    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (report: InsightsReport, digests: [ConversationDigest]) {
+    func scanWithDigests(options: InsightScanOptions, skills: [Skill], homeURL: URL) async -> (
+        report: InsightsReport, digests: [ConversationDigest]
+    ) {
         await service.scanWithDigests(
             options: options, skills: skills, marketplacePackages: cachedPackages, homeURL: homeURL,
             marketplaceProviders: providers)
@@ -274,16 +280,17 @@ final class WorkspaceInsightsSession {
         let facts = requests.isEmpty ? [:] : await services.libraryContent(for: requests)
         // Collapsed here as well as in the scan, so the deep dive is handed
         // the same one-per-skill list the fast pass judged.
-        let skills = ToolCopyIdentity.collapsingCopies(projected.map { skill -> Skill in
-            guard let fact = facts[skill.id] else { return skill }
-            var enriched = skill
-            if let description = fact.description { enriched.summary = description }
-            enriched.files = fact.files
-            // The facts came from reading this skill's own captured tree, so the
-            // file list is now known — even when the tree genuinely holds none.
-            enriched.filesKnown = true
-            return enriched
-        })
+        let skills = ToolCopyIdentity.collapsingCopies(
+            projected.map { skill -> Skill in
+                guard let fact = facts[skill.id] else { return skill }
+                var enriched = skill
+                if let description = fact.description { enriched.summary = description }
+                enriched.files = fact.files
+                // The facts came from reading this skill's own captured tree, so the
+                // file list is now known — even when the tree genuinely holds none.
+                enriched.filesKnown = true
+                return enriched
+            })
         generation &+= 1
         let token = generation
         isScanning = true

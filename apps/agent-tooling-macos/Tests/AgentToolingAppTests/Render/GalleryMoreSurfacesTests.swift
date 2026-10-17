@@ -235,11 +235,12 @@ struct GalleryMoreSurfacesTests {
             try gallerySnapshot(
                 SkillsView(
                     workspace: failing.workspace,
-                    content: failing.contentSession(content: FailingSkillContentService()))
-                    .environment(failingNavigation)
-                    .environment(\.skillContentService, FailingSkillContentService())
-                    .environment(\.availableClients, ClientKind.allCases)
-                    .defaultAppStorage(failingPreferences.defaults),
+                    content: failing.contentSession(content: FailingSkillContentService())
+                )
+                .environment(failingNavigation)
+                .environment(\.skillContentService, FailingSkillContentService())
+                .environment(\.availableClients, ClientKind.allCases)
+                .defaultAppStorage(failingPreferences.defaults),
                 area: "Library · Skills", screen: "Skill detail pane", state: "failing-read",
                 size: SheetGallerySize.wide, appearance: appearance,
                 source: "Sources/AgentToolingApp/SkillsView.swift:404")
@@ -310,6 +311,7 @@ struct GalleryMoreSurfacesTests {
     /// The consent an MCP live test asks for before anything is run or
     /// contacted: a process launch, and a remote session.
     @Test func mcpTestConsentSheet() async throws {
+        let linearURL = try #require(URL(string: "https://mcp.linear.app/sse"))
         for appearance in Self.both {
             try gallerySnapshot(
                 MCPTestConsentSheet(
@@ -322,7 +324,7 @@ struct GalleryMoreSurfacesTests {
             try gallerySnapshot(
                 MCPTestConsentSheet(
                     serverName: "Linear",
-                    target: .http(url: URL(string: "https://mcp.linear.app/sse")!),
+                    target: .http(url: linearURL),
                     onConfirm: {}),
                 area: "Library · Connections", screen: "MCP test consent sheet", state: "remote-session",
                 size: SheetGallerySize.medium, appearance: appearance,
@@ -362,10 +364,11 @@ struct GalleryMoreSurfacesTests {
             try gallerySnapshot(
                 MCPDetailView(
                     entry: healthy, workspaceRoot: FileManager.default.temporaryDirectory, isBusy: false,
-                    onAssign: {}, onRemove: { _ in })
-                    .environment(MCPCapabilityModel())
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .background(AgentTheme.contentBackground),
+                    onAssign: {}, onRemove: { _ in }
+                )
+                .environment(MCPCapabilityModel())
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(AgentTheme.contentBackground),
                 area: "Library · Connections", screen: "Connection detail pane", state: "healthy",
                 size: SheetGallerySize.large, appearance: appearance,
                 source: "Sources/AgentToolingApp/MCPServersView.swift")
@@ -377,10 +380,11 @@ struct GalleryMoreSurfacesTests {
             try gallerySnapshot(
                 MCPDetailView(
                     entry: failing, workspaceRoot: FileManager.default.temporaryDirectory, isBusy: false,
-                    onAssign: {}, onRemove: { _ in })
-                    .environment(MCPCapabilityModel())
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .background(AgentTheme.contentBackground),
+                    onAssign: {}, onRemove: { _ in }
+                )
+                .environment(MCPCapabilityModel())
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(AgentTheme.contentBackground),
                 area: "Library · Connections", screen: "Connection detail pane", state: "failing",
                 size: SheetGallerySize.large, appearance: appearance,
                 source: "Sources/AgentToolingApp/MCPServersView.swift")
@@ -433,15 +437,38 @@ struct GalleryMoreSurfacesTests {
     /// removal, and a plan whose only steps are held back.
     @Test func planReviewSheetStates() async throws {
         let cases: [(state: String, plan: WorkspaceDeploymentPlan)] = [
-            ("update-with-version", Self.plan(items: [Self.item(.updateContent(from: Self.digest("b"), to: Self.digest("a")), name: "Standalone Skill")])),
-            ("update-without-version", Self.plan(items: [Self.item(.updateContent(from: nil, to: Self.digest("a")), name: "Standalone Skill")])),
-            ("native-package", Self.plan(items: [Self.item(.installNativePackage(route: .init(client: .claude, externalPluginID: "example@vendor")), name: "Example Plugin")])),
-            ("connection", Self.plan(items: [Self.item(.configureManagedConnection(transport: .stdio, replacesExisting: false), name: "Example Server")])),
+            (
+                "update-with-version",
+                Self.plan(items: [Self.item(.updateContent(from: Self.digest("b"), to: Self.digest("a")), name: "Standalone Skill")])
+            ),
+            (
+                "update-without-version",
+                Self.plan(items: [Self.item(.updateContent(from: nil, to: Self.digest("a")), name: "Standalone Skill")])
+            ),
+            (
+                "native-package",
+                Self.plan(items: [
+                    Self.item(
+                        .installNativePackage(route: .init(client: .claude, externalPluginID: "example@vendor")), name: "Example Plugin")
+                ])
+            ),
+            (
+                "connection",
+                Self.plan(items: [
+                    Self.item(.configureManagedConnection(transport: .stdio, replacesExisting: false), name: "Example Server")
+                ])
+            ),
             ("removal", Self.plan(items: [Self.item(.removeContent(installed: Self.digest("a")), name: "Standalone Skill")])),
-            ("held-back", Self.plan(items: [], exclusions: [
-                .init(artifactID: ShellRenderFixture.skill, physicalDestinationID: nil,
-                      reason: .alreadyPresent, detail: "This destination already holds exactly this."),
-            ])),
+            (
+                "held-back",
+                Self.plan(
+                    items: [],
+                    exclusions: [
+                        .init(
+                            artifactID: ShellRenderFixture.skill, physicalDestinationID: nil,
+                            reason: .alreadyPresent, detail: "This destination already holds exactly this.")
+                    ])
+            ),
         ]
         for appearance in Self.both {
             let fixture = try await ShellRenderFixture()
@@ -469,8 +496,9 @@ struct GalleryMoreSurfacesTests {
             try gallerySnapshot(
                 PendingRequestReviewSheet(
                     request: ShellRenderFixture.pendingRequest(),
-                    refusal: nil, onDefer: {}, onReject: {}, onContinue: {})
-                    .environment(AppNavigationState()),
+                    refusal: nil, onDefer: {}, onReject: {}, onContinue: {}
+                )
+                .environment(AppNavigationState()),
                 area: "Apps · Clients", screen: "Request review sheet", state: "approvable",
                 size: SheetGallerySize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/Sections/ClientsSection.swift:55")

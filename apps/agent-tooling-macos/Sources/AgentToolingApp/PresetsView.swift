@@ -68,7 +68,8 @@ struct PresetsView: View {
             if let presetID = renaming, let preset = presets.first(where: { $0.id == presetID }) {
                 PresetEditorSheet(
                     session: session, library: library,
-                    mode: .rename(presetID: presetID, currentName: preset.name)) { _ in }
+                    mode: .rename(presetID: presetID, currentName: preset.name)
+                ) { _ in }
             }
         }
     }
@@ -81,7 +82,8 @@ struct PresetsView: View {
             EmptyStateView(
                 symbol: "square.stack",
                 title: "No presets yet",
-                message: "A preset is a named set of tools you can put in place together. Create one with “New preset…” from items already in your library, or receive one with a workspace — restored from a backup, synced from another Mac, or shared with you.",
+                message:
+                    "A preset is a named set of tools you can put in place together. Create one with “New preset…” from items already in your library, or receive one with a workspace — restored from a backup, synced from another Mac, or shared with you.",
                 actionTitle: session.canWrite ? "New preset…" : nil,
                 isActionEnabled: session.canWrite && !session.isBusy
             ) {
@@ -260,9 +262,11 @@ struct PresetsView: View {
     private func itemsCard(_ preset: WorkspaceLibraryPresetReadModel) -> some View {
         TitledCard("Items", count: "\(preset.memberArtifactIDs.count)") {
             VStack(alignment: .leading, spacing: 0) {
-                Text("A preset's items are set when you create it. To change which tools are in it, add or remove the tools themselves in the Library.")
-                    .font(AgentFont.caption).foregroundStyle(.secondary)
-                    .padding(Space.xl)
+                Text(
+                    "A preset's items are set when you create it. To change which tools are in it, add or remove the tools themselves in the Library."
+                )
+                .font(AgentFont.caption).foregroundStyle(.secondary)
+                .padding(Space.xl)
                 if preset.memberArtifactIDs.isEmpty {
                     Hairline()
                     Text("This preset has no items.").font(AgentFont.body).foregroundStyle(.secondary).padding(Space.xl)
@@ -421,7 +425,6 @@ struct PresetsView: View {
         }
         return .init(name: "Item no longer in this library", detail: "", kind: .skill, present: false)
     }
-
 
     private func destinationText(_ destinations: [PortableDestination]) -> String {
         let names = destinations.map { "\($0.surface.displayName) · \($0.scope.displayName)" }.sorted()

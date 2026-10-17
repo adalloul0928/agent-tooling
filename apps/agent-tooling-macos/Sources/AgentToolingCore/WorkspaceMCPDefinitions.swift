@@ -7,7 +7,10 @@ public enum PortableMCPConnection: Hashable, Sendable {
     case deviceBound(transport: MCPTransport)
 
     public var transport: MCPTransport {
-        switch self { case .remoteHTTPS: .http; case .deviceBound(let transport): transport }
+        switch self {
+        case .remoteHTTPS: .http
+        case .deviceBound(let transport): transport
+        }
     }
 }
 
@@ -25,9 +28,11 @@ extension PortableMCPConnection: Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .remoteHTTPS(let url):
-            try c.encode(Kind.remoteHTTPS, forKey: .kind); try c.encode(url, forKey: .url)
+            try c.encode(Kind.remoteHTTPS, forKey: .kind)
+            try c.encode(url, forKey: .url)
         case .deviceBound(let transport):
-            try c.encode(Kind.deviceBound, forKey: .kind); try c.encode(transport, forKey: .transport)
+            try c.encode(Kind.deviceBound, forKey: .kind)
+            try c.encode(transport, forKey: .transport)
         }
     }
 }
@@ -36,7 +41,8 @@ public struct PortableMCPDefinitionRecord: Codable, Hashable, Sendable {
     public var artifactID: ArtifactID
     public var connection: PortableMCPConnection
     public init(artifactID: ArtifactID, connection: PortableMCPConnection) {
-        self.artifactID = artifactID; self.connection = connection
+        self.artifactID = artifactID
+        self.connection = connection
     }
     public func validate() throws {
         if case .remoteHTTPS(let url) = connection {
@@ -49,7 +55,10 @@ public enum DeviceMCPDestination: Hashable, Sendable {
     case httpURL(String)
     case stdio(executable: String, arguments: [String])
     public var transport: MCPTransport {
-        switch self { case .httpURL: .http; case .stdio: .stdio }
+        switch self {
+        case .httpURL: .http
+        case .stdio: .stdio
+        }
     }
 }
 
@@ -61,18 +70,21 @@ extension DeviceMCPDestination: Codable {
         switch try c.decode(Kind.self, forKey: .kind) {
         case .httpURL: self = .httpURL(try c.decode(String.self, forKey: .url))
         case .stdio:
-            self = .stdio(executable: try c.decode(String.self, forKey: .executable),
-                          arguments: try c.decode([String].self, forKey: .arguments))
+            self = .stdio(
+                executable: try c.decode(String.self, forKey: .executable),
+                arguments: try c.decode([String].self, forKey: .arguments))
         }
     }
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .httpURL(let url):
-            try c.encode(Kind.httpURL, forKey: .kind); try c.encode(url, forKey: .url)
+            try c.encode(Kind.httpURL, forKey: .kind)
+            try c.encode(url, forKey: .url)
         case .stdio(let executable, let arguments):
             try c.encode(Kind.stdio, forKey: .kind)
-            try c.encode(executable, forKey: .executable); try c.encode(arguments, forKey: .arguments)
+            try c.encode(executable, forKey: .executable)
+            try c.encode(arguments, forKey: .arguments)
         }
     }
 }
@@ -89,11 +101,14 @@ public struct DeviceMCPDefinitionBinding: Codable, Hashable, Sendable {
     public var credentialRequirementNames: [String]
     public var authenticationRequirement: MCPAuthenticationRequirement
     public var workspaceRootPath: String?
-    public init(artifactID: ArtifactID, destination: DeviceMCPDestination? = nil,
-                credentialRequirementNames: [String] = [],
-                authenticationRequirement: MCPAuthenticationRequirement = .none,
-                workspaceRootPath: String? = nil) {
-        self.artifactID = artifactID; self.destination = destination
+    public init(
+        artifactID: ArtifactID, destination: DeviceMCPDestination? = nil,
+        credentialRequirementNames: [String] = [],
+        authenticationRequirement: MCPAuthenticationRequirement = .none,
+        workspaceRootPath: String? = nil
+    ) {
+        self.artifactID = artifactID
+        self.destination = destination
         self.credentialRequirementNames = credentialRequirementNames
         self.authenticationRequirement = authenticationRequirement
         self.workspaceRootPath = workspaceRootPath
@@ -102,22 +117,25 @@ public struct DeviceMCPDefinitionBinding: Codable, Hashable, Sendable {
         switch destination {
         case .httpURL(let url): try WorkspaceMCPDefinitionValidation.validateURL(url, portable: false)
         case .stdio(let executable, let arguments):
-            do { try MCPDefinitionValidator.validateCommandArguments([executable] + arguments) }
-            catch { throw WorkspaceDomainValidationError.invalidField("device MCP command") }
+            do { try MCPDefinitionValidator.validateCommandArguments([executable] + arguments) } catch {
+                throw WorkspaceDomainValidationError.invalidField("device MCP command")
+            }
         case nil: break
         }
         if let workspaceRootPath {
             try WorkspaceDomainValidation.requireAbsolutePath(workspaceRootPath, field: "MCP workspace root")
         }
         guard credentialRequirementNames.count <= 256,
-              Set(credentialRequirementNames).count == credentialRequirementNames.count else {
+            Set(credentialRequirementNames).count == credentialRequirementNames.count
+        else {
             throw WorkspaceDomainValidationError.invalidField("MCP credential requirement names")
         }
         for name in credentialRequirementNames {
             // Names only, never assignments, values or credential-store contents.
             guard name.utf8.count <= 256,
-                  name.range(of: "^[A-Za-z_][A-Za-z0-9_.-]*$", options: .regularExpression) != nil,
-                  !SensitiveValueRedactor.containsCredentialValue(in: name) else {
+                name.range(of: "^[A-Za-z_][A-Za-z0-9_.-]*$", options: .regularExpression) != nil,
+                !SensitiveValueRedactor.containsCredentialValue(in: name)
+            else {
                 throw WorkspaceDomainValidationError.invalidField("MCP credential requirement name")
             }
         }
@@ -128,8 +146,9 @@ enum WorkspaceMCPDefinitionValidation {
     static func validateURL(_ url: String, portable: Bool) throws {
         do {
             guard url == url.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !url.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
-                  !SensitiveValueRedactor.containsCredentialValue(in: url) else {
+                !url.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
+                !SensitiveValueRedactor.containsCredentialValue(in: url)
+            else {
                 throw WorkspaceDomainValidationError.invalidField("MCP URL")
             }
             _ = try MCPDefinitionValidator.validate(url, transport: .http)
@@ -142,8 +161,9 @@ enum WorkspaceMCPDefinitionValidation {
                 // network-reachability or public-host assertion.
                 let labels = host.split(separator: ".", omittingEmptySubsequences: false)
                 guard labels.count >= 2, !host.hasSuffix(".localhost"), !host.hasSuffix(".local"),
-                      !host.contains(":"), labels.allSatisfy({ !$0.isEmpty }),
-                      labels.last?.range(of: "[a-z]", options: .regularExpression) != nil else {
+                    !host.contains(":"), labels.allSatisfy({ !$0.isEmpty }),
+                    labels.last?.range(of: "[a-z]", options: .regularExpression) != nil
+                else {
                     throw WorkspaceDomainValidationError.invalidField("portable MCP local endpoint")
                 }
             }
@@ -158,23 +178,28 @@ enum WorkspaceMCPDefinitionValidation {
         for definition in definitions {
             try definition.validate()
             guard let matches = artifactsByID[definition.artifactID], matches.count == 1,
-                  let artifact = matches.first, artifact.identity.kind == .mcpServer,
-                  artifact.identity.parentPackageID == nil, artifact.authority == .centralPersonal,
-                  artifact.contentDigest == nil else {
+                let artifact = matches.first, artifact.identity.kind == .mcpServer,
+                artifact.identity.parentPackageID == nil, artifact.authority == .centralPersonal,
+                artifact.contentDigest == nil
+            else {
                 throw WorkspaceDomainValidationError.missingReference("managed MCP definition artifact")
             }
         }
         let defined = Set(definitions.map(\.artifactID))
-        for artifact in artifacts where artifact.identity.kind == .mcpServer
-            && artifact.authority == .centralPersonal && artifact.identity.parentPackageID == nil {
+        for artifact in artifacts
+        where artifact.identity.kind == .mcpServer
+            && artifact.authority == .centralPersonal && artifact.identity.parentPackageID == nil
+        {
             guard defined.contains(artifact.identity.id) else {
                 throw WorkspaceDomainValidationError.missingReference("managed MCP definition")
             }
         }
     }
 
-    static func validateDevice(_ bindings: [DeviceMCPDefinitionBinding],
-                               definitions: [PortableMCPDefinitionRecord]?) throws {
+    static func validateDevice(
+        _ bindings: [DeviceMCPDefinitionBinding],
+        definitions: [PortableMCPDefinitionRecord]?
+    ) throws {
         guard Set(bindings.map(\.artifactID)).count == bindings.count else {
             throw WorkspaceDomainValidationError.duplicate("device MCP binding")
         }

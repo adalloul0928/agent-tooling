@@ -98,7 +98,8 @@ struct AccountPreferencePlannerTests {
         let entries = try #require(try Self.object(denied)["deniedMcpServers"] as? [[String: String]])
         #expect(entries == [["serverName": "filesystem"], ["serverName": "claude.ai Google Calendar"]])
 
-        let text = #"{"deniedMcpServers":[{"serverName":"claude.ai Google Calendar"},{"serverName":"filesystem"},{"serverName":"claude.ai Google Calendar","note":"kept"}]}"#
+        let text =
+            #"{"deniedMcpServers":[{"serverName":"claude.ai Google Calendar"},{"serverName":"filesystem"},{"serverName":"claude.ai Google Calendar","note":"kept"}]}"#
         let on = AccountPreferencePlanner.plan(
             preferences: Self.preferences((.init(.connector, subject: "Google Calendar"), .on)),
             observation: Self.claude(file: [.init(.connector, subject: "Google Calendar"): .off]), configurationText: text)
@@ -289,10 +290,12 @@ struct ClientConfigurationObjectListTests {
     }
 
     @Test func removingTakesOnlyTheExactSingleFieldEntry() throws {
-        let text = #"{"deniedMcpServers":[{"serverName":"claude.ai Gmail"},{"serverName":"claude.ai Gmail","why":"x"},{"serverName":"filesystem"},"claude.ai Gmail"]}"#
+        let text =
+            #"{"deniedMcpServers":[{"serverName":"claude.ai Gmail"},{"serverName":"claude.ai Gmail","why":"x"},{"serverName":"filesystem"},"claude.ai Gmail"]}"#
         let result = try ClientConfigurationEditor.apply(
             Self.edit(.removeObjectFromList(field: "serverName", value: "claude.ai Gmail")), to: text)
-        let list = try #require((try JSONSerialization.jsonObject(with: Data(result.utf8)) as? [String: Any])?["deniedMcpServers"] as? [Any])
+        let list = try #require(
+            (try JSONSerialization.jsonObject(with: Data(result.utf8)) as? [String: Any])?["deniedMcpServers"] as? [Any])
         #expect(list.count == 3)
         #expect((list.first as? [String: String]) == ["serverName": "claude.ai Gmail", "why": "x"])
     }
@@ -332,8 +335,9 @@ struct AccountPreferenceApplyTests {
                 .appending(path: "account-apply-\(UUID())", directoryHint: .isDirectory)
             home = root.appending(path: "home", directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
             store = try WorkspaceRevisionStore(
                 containerRoot: root.appending(path: "workspace", directoryHint: .isDirectory),
@@ -362,7 +366,8 @@ struct AccountPreferenceApplyTests {
                 (.init(.skillSync), .off), (.init(.plugin, subject: "notes"), .off), (.init(.connector, subject: "Gmail"), .off)),
             observation: AccountPreferencePlannerTests.claude(), configurationText: original)
 
-        let receipt = await OperationExecutor(store: fixture.store, homeURL: fixture.home).execute(try plan.operationPlan(homeURL: fixture.home))
+        let receipt = await OperationExecutor(store: fixture.store, homeURL: fixture.home).execute(
+            try plan.operationPlan(homeURL: fixture.home))
         #expect(receipt.results.count == 3)
         #expect(receipt.results.allSatisfy { $0.status == .succeeded }, "\(receipt.results.map(\.output))")
 
@@ -394,7 +399,8 @@ struct AccountPreferenceApplyTests {
             preferences: AccountPreferencePlannerTests.preferences((.init(.apps), .off), (.init(.app, subject: "github"), .off)),
             observation: AccountPreferencePlannerTests.codex(), configurationText: original)
 
-        let receipt = await OperationExecutor(store: fixture.store, homeURL: fixture.home).execute(try plan.operationPlan(homeURL: fixture.home))
+        let receipt = await OperationExecutor(store: fixture.store, homeURL: fixture.home).execute(
+            try plan.operationPlan(homeURL: fixture.home))
         #expect(receipt.results.allSatisfy { $0.status == .succeeded }, "\(receipt.results.map(\.output))")
         let result = AccountPreferencePlannerTests.flat(try String(contentsOf: config, encoding: .utf8))
         #expect(result.hasPrefix("# Mine\nmodel = \"gpt-6\"\n"))

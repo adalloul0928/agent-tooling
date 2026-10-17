@@ -46,8 +46,10 @@ struct WorkspaceLibrarySessionTests {
         defer { fixture.remove() }
         let session = fixture.session(access: .writable)
         await session.reviewAssignments(artifactIDs: [fixture.artifactID], destinations: [fixture.destination])
-        _ = try await fixture.service.renameArtifact(.init(expectedRevisionID: fixture.document.revision.id,
-            artifactID: fixture.artifactID, displayName: "Renamed elsewhere"))
+        _ = try await fixture.service.renameArtifact(
+            .init(
+                expectedRevisionID: fixture.document.revision.id,
+                artifactID: fixture.artifactID, displayName: "Renamed elsewhere"))
 
         await session.applyReviewedAssignments()
 
@@ -63,10 +65,12 @@ struct WorkspaceLibrarySessionTests {
         let packageID = ArtifactID()
         let childID = ArtifactID()
         let fixture = try Fixture(artifacts: [
-            .init(identity: .init(id: packageID, kind: .nativePlugin, displayName: "Plugin"), authority: .nativeOwned,
+            .init(
+                identity: .init(id: packageID, kind: .nativePlugin, displayName: "Plugin"), authority: .nativeOwned,
                 declaredName: "plugin", nativeRoutes: [.init(client: .claude, externalPluginID: "plugin")]),
-            .init(identity: .init(id: childID, kind: .skill, displayName: "Child", parentPackageID: packageID),
-                authority: .nativeOwned, packageRelativePath: "skills/child")
+            .init(
+                identity: .init(id: childID, kind: .skill, displayName: "Child", parentPackageID: packageID),
+                authority: .nativeOwned, packageRelativePath: "skills/child"),
         ])
         defer { fixture.remove() }
         let session = fixture.session(access: .writable)
@@ -103,7 +107,8 @@ struct WorkspaceLibrarySessionTests {
         defer { fixture.remove() }
         let state = try await fixture.service.libraryState()
         let stub = SessionServingStub(state: state, holdLoads: true)
-        let session = WorkspaceLibrarySession(service: stub, workspaceID: fixture.document.workspaceID,
+        let session = WorkspaceLibrarySession(
+            service: stub, workspaceID: fixture.document.workspaceID,
             deviceID: fixture.device.deviceID)
         let first = Task { @MainActor in await session.refresh() }
         await stub.waitForLoadStart()
@@ -125,7 +130,8 @@ struct WorkspaceLibrarySessionTests {
         defer { fixture.remove() }
         let state = try await fixture.service.libraryState()
         let stub = SessionServingStub(state: state, holdLoads: true)
-        let session = WorkspaceLibrarySession(service: stub, workspaceID: fixture.document.workspaceID,
+        let session = WorkspaceLibrarySession(
+            service: stub, workspaceID: fixture.document.workspaceID,
             deviceID: fixture.device.deviceID)
         let refresh = Task { @MainActor in await session.refresh() }
         await stub.waitForLoadStart()
@@ -156,7 +162,8 @@ struct WorkspaceLibrarySessionTests {
         defer { fixture.remove() }
         let state = try await fixture.service.libraryState()
         let stub = SessionServingStub(state: state, failLoadsAfter: 1, receiptArtifactID: fixture.artifactID)
-        let session = WorkspaceLibrarySession(service: stub, workspaceID: fixture.document.workspaceID,
+        let session = WorkspaceLibrarySession(
+            service: stub, workspaceID: fixture.document.workspaceID,
             deviceID: fixture.device.deviceID, access: .writable)
         await session.reviewAssignments(artifactIDs: [fixture.artifactID], destinations: [fixture.destination])
         #expect(session.review != nil)
@@ -183,7 +190,8 @@ struct WorkspaceLibrarySessionTests {
             root = FileManager.default.temporaryDirectory.appending(path: "library-session-\(UUID())")
             let defaultID = ArtifactID()
             artifactID = artifacts?.first?.identity.id ?? defaultID
-            let records = artifacts ?? [.init(identity: .init(id: defaultID, kind: .skill, displayName: "Skill"), authority: .centralPersonal)]
+            let records =
+                artifacts ?? [.init(identity: .init(id: defaultID, kind: .skill, displayName: "Skill"), authority: .centralPersonal)]
             document = try WorkspaceDocumentCoding.seal(.init(revision: .init(writerID: writerID), artifacts: records))
             device = DeviceWorkspaceState(workspaceID: document.workspaceID)
             store = try WorkspaceRevisionStore(containerRoot: root, workspaceID: document.workspaceID, deviceID: device.deviceID)
@@ -234,13 +242,15 @@ private actor SessionServingStub: WorkspaceLibraryServing {
     }
 
     func previewAssignmentBatch(_ command: WorkspaceAssignmentBatchCommand) async throws -> WorkspaceAssignmentBatchPreview {
-        .init(expectedRevisionID: command.expectedRevisionID, additions: command.additions, removals: [],
+        .init(
+            expectedRevisionID: command.expectedRevisionID, additions: command.additions, removals: [],
             remainingContributions: command.additions)
     }
 
     func applyAssignmentBatch(_ command: WorkspaceAssignmentBatchCommand) async throws -> WorkspaceCommandReceipt {
         applyCount += 1
-        return .init(idempotencyKey: command.idempotencyKey, inputDigest: try command.inputDigest(),
+        return .init(
+            idempotencyKey: command.idempotencyKey, inputDigest: try command.inputDigest(),
             previousRevisionID: command.expectedRevisionID, committedRevisionID: WorkspaceObjectID(),
             affectedArtifactIDs: receiptArtifactID.map { [$0] } ?? [])
     }

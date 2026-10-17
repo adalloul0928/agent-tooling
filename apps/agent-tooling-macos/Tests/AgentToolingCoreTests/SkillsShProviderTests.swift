@@ -93,7 +93,7 @@ struct SkillsShProviderTests {
 
     @Test func theRegistryIsOnlyReachedOverHTTPSAndBadAnswersAreRefusals() async throws {
         #expect(throws: MarketplaceProviderError.self) {
-            _ = try SkillsShRegistryProvider(baseURL: URL(string: "http://skills.example")!)
+            _ = try SkillsShRegistryProvider(baseURL: try #require(URL(string: "http://skills.example")))
         }
 
         let failing = SkillsShHTTPStub(payload: Data("{}".utf8), statusCode: 503)

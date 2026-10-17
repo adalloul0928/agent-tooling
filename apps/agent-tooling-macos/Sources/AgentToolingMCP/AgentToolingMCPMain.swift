@@ -44,7 +44,8 @@ struct AgentToolingMCPMain {
             // This server never creates one: a workspace appearing because an
             // agent connected would be a workspace nobody chose to have.
             guard let store = try WorkspaceLocator(root: try WorkspaceLocator.defaultRoot()).open() else {
-                writeError("""
+                writeError(
+                    """
                     agent-tooling-mcp: this Mac has no Agent Tooling workspace yet.
 
                     Open Agent Tooling once to set one up, then start this server again.

@@ -251,9 +251,9 @@ struct MCPTestConnectionPolicyTests {
         #expect(MCPTestConnectionPolicy.consentSummary(for: http, serverName: "Fixture").contains("mcp.example.com"))
     }
 
-    @Test func anHTTP307RedirectIsRefusedInsteadOfFollowingItsLocation() async {
+    @Test func anHTTP307RedirectIsRefusedInsteadOfFollowingItsLocation() async throws {
         let channel = MCPHTTPTestChannel(
-            testingURL: URL(string: "https://approved.example/mcp")!,
+            testingURL: try #require(URL(string: "https://approved.example/mcp")),
             protocolClasses: [RedirectingMCPURLProtocol.self]
         )
         do {
@@ -267,9 +267,9 @@ struct MCPTestConnectionPolicyTests {
         await channel.shutdown()
     }
 
-    @Test func aResponseAttributedToAnotherOriginIsRefused() async {
+    @Test func aResponseAttributedToAnotherOriginIsRefused() async throws {
         let channel = MCPHTTPTestChannel(
-            testingURL: URL(string: "https://approved.example/mcp")!,
+            testingURL: try #require(URL(string: "https://approved.example/mcp")),
             protocolClasses: [MismatchedOriginMCPURLProtocol.self]
         )
         do {

@@ -14,11 +14,13 @@ struct SkillRepositoryLocateTests {
     }
 
     @Test func theFolderNamedForTheSkillOnTheDefaultBranchIsChosen() async throws {
-        let runner = LocateRunner(revision: revision, defaultBranch: "trunk", files: [
-            "README.md": "",
-            "skills/ab-testing/SKILL.md": "---\nname: ab-testing\ndescription: d\n---\n",
-            "skills/seo-audit/SKILL.md": "---\nname: seo-audit\ndescription: d\n---\n",
-        ])
+        let runner = LocateRunner(
+            revision: revision, defaultBranch: "trunk",
+            files: [
+                "README.md": "",
+                "skills/ab-testing/SKILL.md": "---\nname: ab-testing\ndescription: d\n---\n",
+                "skills/seo-audit/SKILL.md": "---\nname: seo-audit\ndescription: d\n---\n",
+            ])
         let binding = try await service(runner).locate(skillID: "ab-testing", repositoryURL: "https://github.com/acme/marketing")
         #expect(binding.ref == "trunk")
         #expect(binding.subdirectory == "skills/ab-testing")
@@ -29,27 +31,33 @@ struct SkillRepositoryLocateTests {
     }
 
     @Test func aSkillNamedOnlyInItsFrontmatterIsStillFound() async throws {
-        let runner = LocateRunner(revision: revision, defaultBranch: "main", files: [
-            "one/SKILL.md": "---\nname: release-readiness\ndescription: d\n---\n",
-            "two/SKILL.md": "---\nname: weekly-changelog\ndescription: d\n---\n",
-        ])
+        let runner = LocateRunner(
+            revision: revision, defaultBranch: "main",
+            files: [
+                "one/SKILL.md": "---\nname: release-readiness\ndescription: d\n---\n",
+                "two/SKILL.md": "---\nname: weekly-changelog\ndescription: d\n---\n",
+            ])
         let binding = try await service(runner).locate(skillID: "Weekly_Changelog", repositoryURL: "https://github.com/acme/tools")
         #expect(binding.subdirectory == "two")
     }
 
     @Test func theShallowestOfSeveralSameNamedFoldersWins() async throws {
-        let runner = LocateRunner(revision: revision, defaultBranch: "main", files: [
-            "vendor/deep/ab-testing/SKILL.md": "---\nname: x\ndescription: d\n---\n",
-            "ab-testing/SKILL.md": "---\nname: y\ndescription: d\n---\n",
-        ])
+        let runner = LocateRunner(
+            revision: revision, defaultBranch: "main",
+            files: [
+                "vendor/deep/ab-testing/SKILL.md": "---\nname: x\ndescription: d\n---\n",
+                "ab-testing/SKILL.md": "---\nname: y\ndescription: d\n---\n",
+            ])
         let binding = try await service(runner).locate(skillID: "ab-testing", repositoryURL: "https://github.com/acme/tools")
         #expect(binding.subdirectory == "ab-testing")
     }
 
     @Test func aSkillTheRepositoryDoesNotHoldIsRefusedAndNoRemoteSilenceIsGuessed() async throws {
-        let runner = LocateRunner(revision: revision, defaultBranch: nil, files: [
-            "skills/other/SKILL.md": "---\nname: other\ndescription: d\n---\n",
-        ])
+        let runner = LocateRunner(
+            revision: revision, defaultBranch: nil,
+            files: [
+                "skills/other/SKILL.md": "---\nname: other\ndescription: d\n---\n"
+            ])
         await #expect(throws: SkillRepositoryError.sourceMissing) {
             try await service(runner).locate(skillID: "ab-testing", repositoryURL: "https://github.com/acme/tools")
         }

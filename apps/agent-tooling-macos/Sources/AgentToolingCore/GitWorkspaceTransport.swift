@@ -85,9 +85,10 @@ public actor GitWorkspaceTransport {
         runner: any CommandRunning = ProcessCommandRunner(timeout: .seconds(30))
     ) throws {
         guard checkout.isFileURL, checkout.path.hasPrefix("/"),
-              !checkout.path.contains("\0"),
-              checkout.standardizedFileURL.path == checkout.path,
-              Self.isValidBranch(branch) else {
+            !checkout.path.contains("\0"),
+            checkout.standardizedFileURL.path == checkout.path,
+            Self.isValidBranch(branch)
+        else {
             throw GitWorkspaceTransportError.invalidCheckout
         }
         self.checkout = checkout
@@ -133,8 +134,9 @@ public actor GitWorkspaceTransport {
         for line in listing.standardOutput.split(separator: "\n") {
             let parts = line.split(separator: "/").map(String.init)
             guard parts.count == 3, parts[0] == Self.contentDirectoryName,
-                  let algorithm = ContentDigestAlgorithm(rawValue: parts[1]),
-                  Self.isDigestPathComponent(parts[2]) else { continue }
+                let algorithm = ContentDigestAlgorithm(rawValue: parts[1]),
+                Self.isDigestPathComponent(parts[2])
+            else { continue }
             digests.insert(.init(algorithm: algorithm, value: parts[2]))
         }
         return digests
@@ -149,9 +151,10 @@ public actor GitWorkspaceTransport {
         for path in paths.prefix(Self.maximumDeviceStatuses) {
             let blob = try await git(["show", "\(head):\(path)"], allowing: [0, 128])
             guard blob.status == 0, blob.standardOutput.utf8.count <= Self.statusLimit,
-                  let status = try? AgentToolingCoding.decoder().decode(PublishedDeviceStatus.self, from: Data(blob.standardOutput.utf8)),
-                  status.formatVersion == PublishedDeviceStatus.formatVersion,
-                  path == Self.statusPath(for: status.deviceID) else { continue }
+                let status = try? AgentToolingCoding.decoder().decode(PublishedDeviceStatus.self, from: Data(blob.standardOutput.utf8)),
+                status.formatVersion == PublishedDeviceStatus.formatVersion,
+                path == Self.statusPath(for: status.deviceID)
+            else { continue }
             statuses.append(status)
         }
         return statuses.sorted { $0.deviceID < $1.deviceID }
@@ -257,8 +260,9 @@ public actor GitWorkspaceTransport {
 
 extension GitWorkspaceTransport {
     func clone(remote: String) async throws {
-        try FileManager.default.createDirectory(at: checkout, withIntermediateDirectories: true,
-                                                attributes: [.posixPermissions: 0o700])
+        try FileManager.default.createDirectory(
+            at: checkout, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
         try await git(["init", "--quiet", "--initial-branch", branch])
         let existing = try await git(["remote", "get-url", "origin"], allowing: [0, 2, 128])
         if existing.status == 0 {
@@ -299,7 +303,7 @@ extension GitWorkspaceTransport {
             while index < records.count {
                 let record = records[index]
                 paths.append(String(record.dropFirst(3)))
-                if record.hasPrefix("R") || record.hasPrefix("C") { index += 1 }   // skip the source path
+                if record.hasPrefix("R") || record.hasPrefix("C") { index += 1 }  // skip the source path
                 index += 1
             }
             output = paths.joined(separator: "\n")
@@ -333,8 +337,9 @@ extension GitWorkspaceTransport {
     func revision(_ reference: String) async throws -> String? {
         let output = try await git(["rev-parse", "--verify", "--quiet", reference], allowing: [0, 1, 128])
         guard output.status == 0, let value = Self.singleLine(output.standardOutput),
-              value.count == 40 || value.count == 64,
-              value.allSatisfy({ $0.isHexDigit && ($0.isNumber || $0.isLowercase) }) else { return nil }
+            value.count == 40 || value.count == 64,
+            value.allSatisfy({ $0.isHexDigit && ($0.isNumber || $0.isLowercase) })
+        else { return nil }
         return value
     }
 
@@ -343,8 +348,9 @@ extension GitWorkspaceTransport {
         try Task.checkCancellation()
         let output: CommandOutput
         do {
-            output = try await runner.run(executable: "/usr/bin/git", arguments: Self.prefix + arguments,
-                                          currentDirectory: checkout)
+            output = try await runner.run(
+                executable: "/usr/bin/git", arguments: Self.prefix + arguments,
+                currentDirectory: checkout)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -354,7 +360,8 @@ extension GitWorkspaceTransport {
         }
         try Task.checkCancellation()
         guard output.standardOutput.utf8.count <= Self.outputLimit,
-              output.standardError.utf8.count <= Self.outputLimit else {
+            output.standardError.utf8.count <= Self.outputLimit
+        else {
             throw GitWorkspaceTransportError.outputLimitExceeded
         }
         guard statuses.contains(output.status) else { throw GitWorkspaceTransportError.commandFailed }
@@ -363,16 +370,14 @@ extension GitWorkspaceTransport {
 
     static func encode(_ document: PortableWorkspaceDocument) throws -> Data {
         let bytes: Data
-        do { bytes = try WorkspaceDocumentCoding.encode(document) }
-        catch { throw GitWorkspaceTransportError.invalidDocument }
+        do { bytes = try WorkspaceDocumentCoding.encode(document) } catch { throw GitWorkspaceTransportError.invalidDocument }
         guard bytes.count <= documentLimit else { throw GitWorkspaceTransportError.documentTooLarge }
         return bytes
     }
 
     static func decode(_ text: String) throws -> PortableWorkspaceDocument {
         guard text.utf8.count <= documentLimit else { throw GitWorkspaceTransportError.documentTooLarge }
-        do { return try WorkspaceDocumentCoding.decode(Data(text.utf8)) }
-        catch { throw GitWorkspaceTransportError.invalidDocument }
+        do { return try WorkspaceDocumentCoding.decode(Data(text.utf8)) } catch { throw GitWorkspaceTransportError.invalidDocument }
     }
 
     static func singleLine(_ text: String) -> String? {
@@ -396,8 +401,8 @@ extension GitWorkspaceTransport {
     /// URL. Portable state never carries a token.
     nonisolated static func isValidRemote(_ remote: String) -> Bool {
         guard !remote.isEmpty, remote.count <= 2_048, !remote.hasPrefix("-"),
-              !remote.contains("\0"),
-              remote.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) })
+            !remote.contains("\0"),
+            remote.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) })
         else { return false }
         if remote.hasPrefix("/") { return !remote.contains("..") }
         guard let components = URLComponents(string: remote), let scheme = components.scheme?.lowercased()

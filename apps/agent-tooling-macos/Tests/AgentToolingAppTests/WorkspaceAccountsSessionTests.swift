@@ -22,9 +22,12 @@ final class SettingsFileAccountReader: AccountSurfaceReading, @unchecked Sendabl
     var readCount: Int { lock.withLock { count } }
 
     static let items: [AccountItem] = [
-        .init(provider: .claude, kind: .connector, key: "Gmail", name: "Gmail", state: .init(tone: .ready, label: "Connected"), setting: .connector),
-        .init(provider: .claude, kind: .connector, key: "Google Calendar", name: "Google Calendar",
-              state: .init(tone: .attention, label: "Needs sign-in on claude.ai"), setting: .connector),
+        .init(
+            provider: .claude, kind: .connector, key: "Gmail", name: "Gmail", state: .init(tone: .ready, label: "Connected"),
+            setting: .connector),
+        .init(
+            provider: .claude, kind: .connector, key: "Google Calendar", name: "Google Calendar",
+            state: .init(tone: .attention, label: "Needs sign-in on claude.ai"), setting: .connector),
         .init(provider: .claude, kind: .plugin, key: "design", name: "design", state: .init(tone: .ready, label: "On"), setting: .plugin),
         .init(provider: .claude, kind: .skill, key: "pdf", name: "pdf", state: .init(tone: .ready, label: "Synced")),
     ]
@@ -77,7 +80,8 @@ struct WorkspaceAccountsSessionTests {
             shell = try await ShellRenderFixture(
                 deviceObserver: StubDeviceObserver(observations: [
                     ShellRenderFixture.observation(.claudeCode, installed: true, commandAvailable: true, version: "2.1.300"),
-                    ShellRenderFixture.observation(.codexCLI, installed: codexInstalled, commandAvailable: codexInstalled, version: "0.162.1"),
+                    ShellRenderFixture.observation(
+                        .codexCLI, installed: codexInstalled, commandAvailable: codexInstalled, version: "0.162.1"),
                 ]),
                 accountReader: probe)
             reader = SettingsFileAccountReader(home: shell.home, chatGPT: chatGPT)
@@ -135,7 +139,10 @@ struct WorkspaceAccountsSessionTests {
         #expect(!FileManager.default.fileExists(atPath: fixture.settingsURL.path(percentEncoded: false)))
         let plan = try #require(fixture.session.plan(.claude))
         #expect(plan.changes.map(\.key) == [.init(.connector, subject: "Gmail")])
-        #expect(fixture.session.findings.contains { $0.kind == .accountChoicesNotFollowed && $0.actions == [.applyAccountChoices(provider: .claude)] })
+        #expect(
+            fixture.session.findings.contains {
+                $0.kind == .accountChoicesNotFollowed && $0.actions == [.applyAccountChoices(provider: .claude)]
+            })
         #expect(fixture.session.attentionFindings.contains { $0.kind == .accountChoicesNotFollowed })
 
         #expect(await fixture.session.setChoice(.init(.connector, subject: "Gmail"), to: nil))
@@ -234,18 +241,21 @@ struct WorkspaceAccountsSessionTests {
     @Test func thisMacsOwnSettingsCanBeShared() async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
-        try Self.write(fixture.settingsURL, """
+        try Self.write(
+            fixture.settingsURL,
+            """
             {"syncClaudeAiPlugins": false,
              "enabledPlugins": {"notes@synced": false, "tool@vendor": false},
              "deniedMcpServers": [{"serverName": "claude.ai Gmail"}, {"serverName": "filesystem"}]}
             """)
         await fixture.session.read()
         let shareable = fixture.session.shareableSettings(.claude)
-        #expect(shareable == [
-            .init(.init(.pluginSync), value: .off),
-            .init(.init(.plugin, subject: "notes"), value: .off),
-            .init(.init(.connector, subject: "Gmail"), value: .off),
-        ])
+        #expect(
+            shareable == [
+                .init(.init(.pluginSync), value: .off),
+                .init(.init(.plugin, subject: "notes"), value: .off),
+                .init(.init(.connector, subject: "Gmail"), value: .off),
+            ])
         #expect(await fixture.session.shareThisMacsSettings(.claude))
         #expect(fixture.session.preferences.entries.count == 3)
         #expect(fixture.session.shareableSettings(.claude).isEmpty)
@@ -272,9 +282,10 @@ struct WorkspaceAccountsSessionTests {
         fixture.session.openSite(.claude, kind: .connector)
         let item = try #require(fixture.session.observation(.claude)?.items.first)
         fixture.session.open(item)
-        #expect(fixture.opened.urls.map(\.absoluteString) == [
-            "https://claude.ai/customize/connectors", "https://claude.ai/customize/connectors",
-        ])
+        #expect(
+            fixture.opened.urls.map(\.absoluteString) == [
+                "https://claude.ai/customize/connectors", "https://claude.ai/customize/connectors",
+            ])
     }
 
     func checkup(_ fixture: Fixture) async throws -> [SetupFinding] {
@@ -315,14 +326,21 @@ struct WorkspaceAccountsSessionTests {
 
 @Suite("Accounts · Checkup rows")
 struct AccountCheckupTriageTests {
-    static func finding(_ kind: SetupFinding.Kind, _ client: ClientKind, actions: [SetupAction], severity: SetupFinding.Severity = .low) -> SetupFinding {
-        SetupFinding(kind: kind, severity: severity, client: client, subject: client.rawValue, title: "t", detail: "d", evidence: [], actions: actions)
+    static func finding(_ kind: SetupFinding.Kind, _ client: ClientKind, actions: [SetupAction], severity: SetupFinding.Severity = .low)
+        -> SetupFinding
+    {
+        SetupFinding(
+            kind: kind, severity: severity, client: client, subject: client.rawValue, title: "t", detail: "d", evidence: [],
+            actions: actions)
     }
 
     @Test func choicesThatCanBeAppliedAreAFixWithAnApplyButton() throws {
-        let checkup = SetupCheckup(audit: .init(clients: [.claude, .codex], findings: [
-            Self.finding(.accountChoicesNotFollowed, .claude, actions: [.applyAccountChoices(provider: .claude)]),
-        ], counts: [:]))
+        let checkup = SetupCheckup(
+            audit: .init(
+                clients: [.claude, .codex],
+                findings: [
+                    Self.finding(.accountChoicesNotFollowed, .claude, actions: [.applyAccountChoices(provider: .claude)])
+                ], counts: [:]))
         let item = try #require(CheckupTriage.items(from: checkup).first)
         #expect(item.bucket == .fix)
         #expect(item.primaryTitle == "Apply")
@@ -331,9 +349,12 @@ struct AccountCheckupTriageTests {
     }
 
     @Test func choicesThatCannotBeAppliedOpenTheTab() throws {
-        let checkup = SetupCheckup(audit: .init(clients: [.claude], findings: [
-            Self.finding(.accountChoicesNotFollowed, .claude, actions: [.openAccounts(provider: .claude)]),
-        ], counts: [:]))
+        let checkup = SetupCheckup(
+            audit: .init(
+                clients: [.claude],
+                findings: [
+                    Self.finding(.accountChoicesNotFollowed, .claude, actions: [.openAccounts(provider: .claude)])
+                ], counts: [:]))
         let item = try #require(CheckupTriage.items(from: checkup).first)
         #expect(item.bucket == .decide)
         #expect(item.primaryTitle == "Open Accounts")
@@ -342,10 +363,13 @@ struct AccountCheckupTriageTests {
 
     @Test(arguments: [SetupFinding.Kind.accountSignIn, .accountShellOverride, .accountDiffersFromOtherMacs, .accountConnectorNeedsSignIn])
     func whatIsChangedOutsideTheAppIsTheirsToDecide(kind: SetupFinding.Kind) throws {
-        let checkup = SetupCheckup(audit: .init(clients: [.claude, .codex], findings: [
-            Self.finding(kind, .claude, actions: [.openAccounts(provider: .claude)], severity: .medium),
-            Self.finding(kind, .codex, actions: [.openAccounts(provider: .chatGPT)], severity: .medium),
-        ], counts: [:]))
+        let checkup = SetupCheckup(
+            audit: .init(
+                clients: [.claude, .codex],
+                findings: [
+                    Self.finding(kind, .claude, actions: [.openAccounts(provider: .claude)], severity: .medium),
+                    Self.finding(kind, .codex, actions: [.openAccounts(provider: .chatGPT)], severity: .medium),
+                ], counts: [:]))
         let items = CheckupTriage.items(from: checkup)
         #expect(items.count == 2, "grouped per app")
         #expect(items.allSatisfy { $0.bucket == .decide && $0.opens == .accounts && !$0.changesFiles })
@@ -378,7 +402,11 @@ struct AccountsSectionRenderTests {
             .claude: Self.claude(items: SettingsFileAccountReader.items),
             .chatGPT: AccountObservation(
                 provider: .chatGPT, clientVersion: "0.162.1", signIn: .init(method: .subscription, plan: "plus"),
-                items: [.init(provider: .chatGPT, kind: .app, key: "github", name: "GitHub", state: .init(tone: .ready, label: "On"), setting: .app)],
+                items: [
+                    .init(
+                        provider: .chatGPT, kind: .app, key: "github", name: "GitHub", state: .init(tone: .ready, label: "On"),
+                        setting: .app)
+                ],
                 directoryCount: 12, contentsRead: true),
         ])
         let fixture = try await ShellRenderFixture(accountReader: reader)
@@ -393,7 +421,7 @@ struct AccountsSectionRenderTests {
         let reader = StubAccountReader(answers: [
             .claude: AccountObservation(
                 provider: .claude, signIn: .init(method: .thirdParty, provider: "bedrock"),
-                shellOverrides: [.claudeBedrock]),
+                shellOverrides: [.claudeBedrock])
         ])
         let fixture = try await ShellRenderFixture(accountReader: reader)
         defer { fixture.remove() }

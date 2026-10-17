@@ -86,7 +86,8 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         self.configurationState = configurationState
         self.mcpDefinitions = mcpDefinitions ?? (schemaVersion >= 3 ? [] : nil)
         self.devices = (devices?.isEmpty ?? true) ? nil : devices
-        self.accountPreferences = accountPreferences
+        self.accountPreferences =
+            accountPreferences
             ?? (schemaVersion >= Self.accountPreferencesSchemaVersion ? AccountPreferences() : nil)
     }
 
@@ -118,9 +119,9 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
         else { throw WorkspaceDomainValidationError.unsupportedVersion(schemaVersion) }
 
         guard minimumReaderVersion == schemaVersion, minimumWriterVersion == schemaVersion,
-            ((schemaVersion == 1 && configurationState == nil && mcpDefinitions == nil)
-            || (schemaVersion == 2 && configurationState != nil && mcpDefinitions == nil)
-            || (schemaVersion >= 3 && configurationState != nil && mcpDefinitions != nil)),
+            (schemaVersion == 1 && configurationState == nil && mcpDefinitions == nil)
+                || (schemaVersion == 2 && configurationState != nil && mcpDefinitions == nil)
+                || (schemaVersion >= 3 && configurationState != nil && mcpDefinitions != nil),
             (schemaVersion >= Self.accountPreferencesSchemaVersion) == (accountPreferences != nil)
         else { throw WorkspaceDomainValidationError.invalidField("workspace schema feature version") }
         try accountPreferences?.validate()
@@ -352,18 +353,21 @@ public struct PortableWorkspaceDocument: Codable, Hashable, Sendable {
                 // A native MCP declaration has no file of its own, and a package
                 // recorded without usable client evidence has no located member
                 // files at all. Both keep membership without claiming a path.
-                let nativeMCPDeclaration = schemaVersion >= 4
+                let nativeMCPDeclaration =
+                    schemaVersion >= 4
                     && artifact.identity.kind == .mcpServer
                     && artifact.authority == .nativeOwned
                     && parent.authority == .nativeOwned
-                let recordedPackageMember = schemaVersion >= 5
+                let recordedPackageMember =
+                    schemaVersion >= 5
                     && artifact.authority == .trackedOnly
                     && parent.authority == .trackedOnly
                 guard nativeMCPDeclaration || recordedPackageMember,
-                      artifact.declaredName != nil,
-                      artifact.contentDigest == nil,
-                      artifact.nativeRoutes.isEmpty,
-                      parent.identity.kind == .nativePlugin else {
+                    artifact.declaredName != nil,
+                    artifact.contentDigest == nil,
+                    artifact.nativeRoutes.isEmpty,
+                    parent.identity.kind == .nativePlugin
+                else {
                     throw WorkspaceDomainValidationError.missingReference("artifact parent package path")
                 }
             }

@@ -69,7 +69,9 @@ struct AccountPreferencesDocumentTests {
 
     // MARK: The portable document
 
-    static func document(schema: UInt = PortableWorkspaceDocument.currentSchemaVersion, preferences: AccountPreferences? = nil) -> PortableWorkspaceDocument {
+    static func document(schema: UInt = PortableWorkspaceDocument.currentSchemaVersion, preferences: AccountPreferences? = nil)
+        -> PortableWorkspaceDocument
+    {
         PortableWorkspaceDocument(
             schemaVersion: schema, minimumReaderVersion: schema, minimumWriterVersion: schema,
             workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
@@ -86,9 +88,10 @@ struct AccountPreferencesDocumentTests {
         #expect(sealed.schemaVersion == 6)
         let decoded = try WorkspaceDocumentCoding.decode(WorkspaceDocumentCoding.encode(sealed))
         #expect(decoded == sealed)
-        #expect(decoded.accountPreferences?.entries.map(\.key) == [
-            .init(.skillSync), .init(.plugin, subject: "zeta"), .init(.app, subject: "github"),
-        ], "sorted by provider, then setting, then item")
+        #expect(
+            decoded.accountPreferences?.entries.map(\.key) == [
+                .init(.skillSync), .init(.plugin, subject: "zeta"), .init(.app, subject: "github"),
+            ], "sorted by provider, then setting, then item")
     }
 
     @Test func aSchemaSixDocumentAlwaysCarriesTheRecord() throws {
@@ -159,8 +162,9 @@ struct AccountPreferencesDocumentTests {
         let before = try await fixture.head()
         #expect(before.schemaVersion == 5)
         let key = AccountPreferenceKey(.connector, subject: "Gmail")
-        _ = try await fixture.service.setAccountPreferences(.init(
-            expectedRevisionID: before.revision.id, changes: [.init(key: key, value: .off)]))
+        _ = try await fixture.service.setAccountPreferences(
+            .init(
+                expectedRevisionID: before.revision.id, changes: [.init(key: key, value: .off)]))
         let after = try await fixture.head()
         #expect(after.schemaVersion == 6)
         #expect(after.accountPreferences?.value(for: key) == .off)
@@ -172,12 +176,14 @@ struct AccountPreferencesDocumentTests {
         defer { fixture.remove() }
         let skills = AccountPreferenceKey(.skillSync)
         let apps = AccountPreferenceKey(.apps)
-        _ = try await fixture.service.setAccountPreferences(.init(
-            expectedRevisionID: try await fixture.head().revision.id,
-            changes: [.init(key: skills, value: .off), .init(key: apps, value: .on)]))
-        _ = try await fixture.service.setAccountPreferences(.init(
-            expectedRevisionID: try await fixture.head().revision.id,
-            changes: [.init(key: skills, value: .on), .init(key: apps, value: nil)]))
+        _ = try await fixture.service.setAccountPreferences(
+            .init(
+                expectedRevisionID: try await fixture.head().revision.id,
+                changes: [.init(key: skills, value: .off), .init(key: apps, value: .on)]))
+        _ = try await fixture.service.setAccountPreferences(
+            .init(
+                expectedRevisionID: try await fixture.head().revision.id,
+                changes: [.init(key: skills, value: .on), .init(key: apps, value: nil)]))
         let preferences = try #require(try await fixture.head().accountPreferences)
         #expect(preferences.entries == [.init(skills, value: .on)])
     }
@@ -332,11 +338,21 @@ struct AccountPreferencesDocumentTests {
             provider: .claude, signIn: Self.observation(email: "  me@example.com ").signIn, workspaceID: workspace)
         #expect(here != nil)
         #expect(here == there, "an address differs only in case and spacing")
-        #expect(here != PublishedAccountSummary.fingerprint(provider: .claude, signIn: Self.observation(organization: "org-2").signIn, workspaceID: workspace))
-        #expect(here != PublishedAccountSummary.fingerprint(provider: .claude, signIn: Self.observation().signIn, workspaceID: WorkspaceObjectID()))
+        #expect(
+            here
+                != PublishedAccountSummary.fingerprint(
+                    provider: .claude, signIn: Self.observation(organization: "org-2").signIn, workspaceID: workspace))
+        #expect(
+            here
+                != PublishedAccountSummary.fingerprint(
+                    provider: .claude, signIn: Self.observation().signIn, workspaceID: WorkspaceObjectID()))
         #expect(here != PublishedAccountSummary.fingerprint(provider: .chatGPT, signIn: Self.observation().signIn, workspaceID: workspace))
-        #expect(PublishedAccountSummary.fingerprint(provider: .claude, signIn: Self.observation(method: .apiKey).signIn, workspaceID: workspace) == nil)
-        #expect(PublishedAccountSummary.fingerprint(provider: .claude, signIn: Self.observation(email: nil).signIn, workspaceID: workspace) == nil)
+        #expect(
+            PublishedAccountSummary.fingerprint(provider: .claude, signIn: Self.observation(method: .apiKey).signIn, workspaceID: workspace)
+                == nil)
+        #expect(
+            PublishedAccountSummary.fingerprint(provider: .claude, signIn: Self.observation(email: nil).signIn, workspaceID: workspace)
+                == nil)
     }
 
     /// What travels to other Macs is the method, the plan, a digest and
@@ -359,7 +375,8 @@ struct AccountPreferencesDocumentTests {
     }
 
     @Test func aLightReadPublishesNoCounts() {
-        let summary = PublishedAccountSummary(observation: Self.observation(contents: false), workspaceID: WorkspaceObjectID(), switchesOutOfStep: nil)
+        let summary = PublishedAccountSummary(
+            observation: Self.observation(contents: false), workspaceID: WorkspaceObjectID(), switchesOutOfStep: nil)
         #expect(summary.itemCounts == nil)
         #expect(summary.count(of: .connector) == nil)
     }
@@ -372,8 +389,10 @@ struct AccountPreferencesDocumentTests {
         let text = String(decoding: try AgentToolingCoding.encoder().encode(bare), as: UTF8.self)
         #expect(!text.contains("accounts"))
         #expect(try AgentToolingCoding.decoder().decode(PublishedDeviceStatus.self, from: Data(text.utf8)).accounts == nil)
-        #expect(PublishedDeviceStatus(
-            deviceID: WorkspaceObjectID(), name: "x", lastScan: nil, apps: [], pending: [],
-            revisionID: WorkspaceObjectID(), accounts: []).accounts == nil, "an empty list is not published")
+        #expect(
+            PublishedDeviceStatus(
+                deviceID: WorkspaceObjectID(), name: "x", lastScan: nil, apps: [], pending: [],
+                revisionID: WorkspaceObjectID(), accounts: []
+            ).accounts == nil, "an empty list is not published")
     }
 }

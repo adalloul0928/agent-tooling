@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import CryptoKit
 import Foundation
 import Testing
@@ -13,10 +14,10 @@ import Testing
 @Suite("Digest stability")
 struct DigestStabilityTests {
     // Fixed identities so the digest inputs never vary between runs.
-    private static let revision = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000001")!)
-    private static let idempotency = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-000000000002")!)
-    private static let preset = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000003")!)
-    private static let member = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-000000000004")!)
+    private static let revision = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000001"))
+    private static let idempotency = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-000000000002"))
+    private static let preset = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000003"))
+    private static let member = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000004"))
 
     // MARK: - D3 one SHA-256 hex helper
 
@@ -70,9 +71,11 @@ struct DigestStabilityTests {
         var stamped = digest
         stamped[6] = (stamped[6] & 0x0F) | 0x80
         stamped[8] = (stamped[8] & 0x3F) | 0x80
-        let uuid = UUID(uuid: (
-            stamped[0], stamped[1], stamped[2], stamped[3], stamped[4], stamped[5], stamped[6], stamped[7],
-            stamped[8], stamped[9], stamped[10], stamped[11], stamped[12], stamped[13], stamped[14], stamped[15]))
+        let uuid = UUID(
+            uuid: (
+                stamped[0], stamped[1], stamped[2], stamped[3], stamped[4], stamped[5], stamped[6], stamped[7],
+                stamped[8], stamped[9], stamped[10], stamped[11], stamped[12], stamped[13], stamped[14], stamped[15]
+            ))
         #expect(uuid.uuidString.lowercased() == "84fa26ec-c9b1-8bff-9cc7-7d06c06d1f02")
     }
 }

@@ -1,8 +1,8 @@
 import Foundation
 import Testing
 
-@testable import AgentToolingCore
 @testable import AgentToolingApp
+@testable import AgentToolingCore
 
 /// Attaching reads a folder and records that it exists. It never copies the
 /// folder in, never writes into it, and letting go removes a registration
@@ -55,8 +55,9 @@ struct WorkspaceAuthoringSessionTests {
         await session.attach(displayName: "   ")
 
         #expect(session.lastAttachedName == "personal")
-        #expect(try #require(try fixture.store.snapshot()).document
-            .artifacts.first?.identity.displayName == "personal")
+        #expect(
+            try #require(try fixture.store.snapshot()).document
+                .artifacts.first?.identity.displayName == "personal")
     }
 
     @Test func aFolderThatIsNotASkillIsRefusedInTermsAPersonCanActOn() async throws {
@@ -82,8 +83,9 @@ struct WorkspaceAuthoringSessionTests {
 
         await session.attach(displayName: "Second")
 
-        #expect(session.errorMessage?.contains("already the editable copy") == true,
-                "\(session.errorMessage ?? "")")
+        #expect(
+            session.errorMessage?.contains("already the editable copy") == true,
+            "\(session.errorMessage ?? "")")
         #expect(try #require(try fixture.store.snapshot()).document.artifacts.count == 1)
     }
 
@@ -129,28 +131,34 @@ struct WorkspaceAuthoringSessionTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
                 .appending(path: "authoring-session-\(UUID())")
             folder = root.appending(path: "my-repo/skills/personal")
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(
+                at: folder, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
             try Data("---\nname: personal\ndescription: An authored skill\n---\n\n# Personal\n".utf8)
                 .write(to: folder.appending(path: "SKILL.md"))
             try Data("reference\n".utf8).write(to: folder.appending(path: "NOTES.md"))
             let writerID = WorkspaceObjectID()
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID)))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID)))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
-            store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "store"),
+            store = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "store"),
                 workspaceID: document.workspaceID, deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
             service = WorkspaceApplicationService(store: store, writerID: writerID)
-            library = WorkspaceLibrarySession(service: service, workspaceID: document.workspaceID,
-                                              deviceID: device.deviceID, access: .writable)
+            library = WorkspaceLibrarySession(
+                service: service, workspaceID: document.workspaceID,
+                deviceID: device.deviceID, access: .writable)
         }
 
         func session(access: WorkspaceLibraryAccess = .writable) -> WorkspaceAuthoringSession {
-            let library = access == .writable
+            let library =
+                access == .writable
                 ? self.library
-                : WorkspaceLibrarySession(service: service, workspaceID: store.workspaceID,
-                                          deviceID: store.deviceID, access: .readOnly)
+                : WorkspaceLibrarySession(
+                    service: service, workspaceID: store.workspaceID,
+                    deviceID: store.deviceID, access: .readOnly)
             return WorkspaceAuthoringSession(service: service, library: library)
         }
 

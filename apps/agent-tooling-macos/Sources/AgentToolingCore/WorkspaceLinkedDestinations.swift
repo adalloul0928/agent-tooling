@@ -43,7 +43,8 @@ public enum WorkspaceLinkedDestinations {
     ) throws {
         let url = URL(fileURLWithPath: path)
         guard url.isFileURL, path.hasPrefix("/"), !path.contains("\0"),
-              url.standardizedFileURL.path == path else {
+            url.standardizedFileURL.path == path
+        else {
             throw WorkspaceLinkedDestinationError.invalidPath
         }
         // The path refusals below are deny checks, so a differently cased
@@ -62,8 +63,10 @@ public enum WorkspaceLinkedDestinations {
         guard !device.destinations.contains(where: { PathContainment.mightBeSamePath($0.resolvedPath, path) }) else {
             throw WorkspaceLinkedDestinationError.duplicatePath
         }
-        device.destinations.append(.init(id: identifier, selector: selector,
-                                         resolvedPath: path, writePolicy: policy))
+        device.destinations.append(
+            .init(
+                id: identifier, selector: selector,
+                resolvedPath: path, writePolicy: policy))
     }
 
     /// Forgets a binding. Nothing at that path is touched: removing what this

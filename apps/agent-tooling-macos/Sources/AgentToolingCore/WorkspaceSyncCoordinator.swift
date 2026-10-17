@@ -52,9 +52,11 @@ public actor WorkspaceSyncCoordinator {
     /// Every other Mac's published summary, as of the most recent read.
     public private(set) var deviceStatuses: [PublishedDeviceStatus] = []
 
-    public init(store: WorkspaceRevisionStore, transport: any WorkspaceRevisionTransport,
-                writerID: WorkspaceObjectID, contentStore: CentralPackageContentStore? = nil,
-                status: (@Sendable () async -> PublishedDeviceStatus?)? = nil) {
+    public init(
+        store: WorkspaceRevisionStore, transport: any WorkspaceRevisionTransport,
+        writerID: WorkspaceObjectID, contentStore: CentralPackageContentStore? = nil,
+        status: (@Sendable () async -> PublishedDeviceStatus?)? = nil
+    ) {
         self.store = store
         self.transport = transport
         self.writerID = writerID
@@ -68,10 +70,11 @@ public actor WorkspaceSyncCoordinator {
     /// the content that travels. Followed skills are re-fetched from their
     /// repository on each Mac; native plugins are installed by their app.
     static func travellingDigests(in document: PortableWorkspaceDocument) -> Set<ContentDigest> {
-        Set(document.artifacts.compactMap { artifact in
-            guard case .centralPersonal = artifact.authority else { return nil }
-            return artifact.contentDigest
-        })
+        Set(
+            document.artifacts.compactMap { artifact in
+                guard case .centralPersonal = artifact.authority else { return nil }
+                return artifact.contentDigest
+            })
     }
 
     /// Copies into this Mac's content store every travelling tree the document
@@ -157,8 +160,10 @@ public actor WorkspaceSyncCoordinator {
         if remoteDocument.revision.id == local.document.revision.id { return .upToDate(head: remoteHead) }
         try store.importRemoteRevision(remoteDocument)
         let ancestor = try store.commonAncestor(withRemote: remoteDocument)
-        let conflicts = WorkspaceMergeEngine.merge(base: ancestor, local: local.document,
-                                                   remote: remoteDocument, writerID: writerID).conflicts
+        let conflicts = WorkspaceMergeEngine.merge(
+            base: ancestor, local: local.document,
+            remote: remoteDocument, writerID: writerID
+        ).conflicts
         let resolved = WorkspaceConflictResolver.resolve(
             base: ancestor, local: local.document, remote: remoteDocument,
             conflicts: conflicts, resolutions: resolutions, writerID: writerID)
@@ -222,8 +227,9 @@ public actor WorkspaceSyncCoordinator {
             return .adopted(receipt)
         }
 
-        let merge = WorkspaceMergeEngine.merge(base: ancestor, local: local.document,
-                                               remote: remoteDocument, writerID: writerID)
+        let merge = WorkspaceMergeEngine.merge(
+            base: ancestor, local: local.document,
+            remote: remoteDocument, writerID: writerID)
         guard merge.isResolved, let document = merge.document else {
             return .needsResolution(merge.conflicts)
         }
@@ -253,8 +259,9 @@ private extension WorkspaceSyncCoordinator {
     /// a replay of the same pass returns its original result and a different
     /// pair cannot reuse the key.
     static func inputDigest(_ remoteHead: String, _ localHead: WorkspaceObjectID) throws -> String {
-        let payload = Data(("workspace-sync.v1\u{0}" + remoteHead + "\u{0}"
-            + localHead.rawValue.uuidString.lowercased()).utf8)
+        let payload = Data(
+            ("workspace-sync.v1\u{0}" + remoteHead + "\u{0}"
+                + localHead.rawValue.uuidString.lowercased()).utf8)
         return SHA256.hash(data: payload).lowercaseHex
     }
 }

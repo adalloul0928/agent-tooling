@@ -1,5 +1,5 @@
-import Foundation
 import AgentToolingTestSupport
+import Foundation
 import Testing
 
 @testable import AgentToolingCore
@@ -48,7 +48,8 @@ struct MultiMacSyncTests {
             let home = try home(name)
             let container = root.appending(path: "\(name)/support", directoryHint: .isDirectory)
             let contentRoot = container.appending(path: "content", directoryHint: .isDirectory)
-            try FileManager.default.createDirectory(at: contentRoot, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try FileManager.default.createDirectory(
+                at: contentRoot, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             let writer = WorkspaceObjectID()
             let document = try WorkspaceDocumentCoding.seal(.init(revision: .init(writerID: writer)))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
@@ -61,8 +62,9 @@ struct MultiMacSyncTests {
             let transport = try await GitWorkspaceTransport.enroll(
                 remote: remote.path, checkout: root.appending(path: "\(name)/checkout"), runner: runner)
             let coordinator = WorkspaceSyncCoordinator(store: store, transport: transport, writerID: writer, contentStore: contentStore)
-            return .init(name: name, home: home, container: container, store: store, service: service,
-                         contentStore: contentStore, coordinator: coordinator, transport: transport)
+            return .init(
+                name: name, home: home, container: container, store: store, service: service,
+                contentStore: contentStore, coordinator: coordinator, transport: transport)
         }
 
         /// A second Mac joining what the first published.
@@ -70,7 +72,8 @@ struct MultiMacSyncTests {
             let home = try home(name)
             let container = root.appending(path: "\(name)/support", directoryHint: .isDirectory)
             let contentRoot = container.appending(path: "content", directoryHint: .isDirectory)
-            try FileManager.default.createDirectory(at: contentRoot, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try FileManager.default.createDirectory(
+                at: contentRoot, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             let contentStore = try CentralPackageContentStore(directory: contentRoot)
             let runner = ProcessCommandRunner(timeout: .seconds(60), homeURL: home)
             let locator = try WorkspaceLocator(root: container)
@@ -81,10 +84,12 @@ struct MultiMacSyncTests {
             let writer = WorkspaceObjectID()
             let service = WorkspaceApplicationService(store: joined.store, writerID: writer, contentStore: contentStore)
             let transport = try GitWorkspaceTransport(checkout: URL(fileURLWithPath: joined.enrollment.checkoutPath), runner: runner)
-            let coordinator = WorkspaceSyncCoordinator(store: joined.store, transport: transport, writerID: writer, contentStore: contentStore)
+            let coordinator = WorkspaceSyncCoordinator(
+                store: joined.store, transport: transport, writerID: writer, contentStore: contentStore)
             #expect(try locator.read()?.workspaceID == joined.store.workspaceID)
-            return .init(name: name, home: home, container: container, store: joined.store, service: service,
-                         contentStore: contentStore, coordinator: coordinator, transport: transport)
+            return .init(
+                name: name, home: home, container: container, store: joined.store, service: service,
+                contentStore: contentStore, coordinator: coordinator, transport: transport)
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }
@@ -93,7 +98,9 @@ struct MultiMacSyncTests {
     /// A skill with bytes, authored on one Mac through the service.
     private func author(_ mac: Mac, name: String, body: String) async throws -> ArtifactID {
         let tree = try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .file(bytes: Data("---\nname: \(name)\ndescription: d\n---\n\(body)\n".utf8), executable: false)),
+            .init(
+                relativePath: "SKILL.md",
+                kind: .file(bytes: Data("---\nname: \(name)\ndescription: d\n---\n\(body)\n".utf8), executable: false))
         ])
         let prepared = try WorkspaceSkillPreparation.personal(tree: tree)
         let id = ArtifactID()
@@ -115,7 +122,10 @@ struct MultiMacSyncTests {
         let skill = try await author(a, name: "release-check", body: "Version one")
         try await assign(a, skill, destination: .init(surface: .claudeCode, scope: .user))  // every Mac
         let first = try await a.coordinator.sync()
-        guard case .published = first else { Issue.record("expected publish, got \(first)"); return }
+        guard case .published = first else {
+            Issue.record("expected publish, got \(first)")
+            return
+        }
         #expect(await a.coordinator.lastContentReport.published.count == 1)
 
         let b = try await fixture.joiningMac("MacBook")
@@ -135,7 +145,10 @@ struct MultiMacSyncTests {
 
         // A learns of B on its next pass, and sees B's published status.
         let second = try await a.coordinator.sync()
-        guard case .adopted = second else { Issue.record("expected adopt, got \(second)"); return }
+        guard case .adopted = second else {
+            Issue.record("expected adopt, got \(second)")
+            return
+        }
         #expect(Set(try a.document.deviceRegistry.map(\.name)) == ["Studio", "MacBook"])
     }
 
@@ -147,7 +160,8 @@ struct MultiMacSyncTests {
         let b = try await fixture.joiningMac("Work")
         // B opts out of shared assignments, from A.
         _ = try await a.coordinator.sync()
-        _ = try await a.service.updateDevice(.init(expectedRevisionID: try a.head, deviceID: b.store.deviceID, change: .receivesSharedAssignments(false)))
+        _ = try await a.service.updateDevice(
+            .init(expectedRevisionID: try a.head, deviceID: b.store.deviceID, change: .receivesSharedAssignments(false)))
         let shared = try await author(a, name: "shared-skill", body: "for everyone")
         let named = try await author(a, name: "named-skill", body: "for work only")
         let excepted = try await author(a, name: "excepted-skill", body: "everyone but the studio")
@@ -159,15 +173,16 @@ struct MultiMacSyncTests {
 
         let document = try b.document
         let registry = document.deviceRegistry
-        func applies(_ id: ArtifactID, on mac: Mac) -> Bool {
-            document.assignments.first { $0.artifactID == id }!.destination.applies(to: mac.store.deviceID, registry: registry)
+        func applies(_ id: ArtifactID, on mac: Mac) throws -> Bool {
+            let assignment = try #require(document.assignments.first { $0.artifactID == id })
+            return assignment.destination.applies(to: mac.store.deviceID, registry: registry)
         }
-        #expect(!applies(shared, on: b))      // limited Mac ignores every-Mac
-        #expect(applies(named, on: b))        // but takes what names it
-        #expect(!applies(excepted, on: b))    // limited: excluded by not taking shared
-        #expect(applies(shared, on: a))
-        #expect(!applies(named, on: a))
-        #expect(!applies(excepted, on: a))    // excluded by name
+        #expect(try !applies(shared, on: b))  // limited Mac ignores every-Mac
+        #expect(try applies(named, on: b))  // but takes what names it
+        #expect(try !applies(excepted, on: b))  // limited: excluded by not taking shared
+        #expect(try applies(shared, on: a))
+        #expect(try !applies(named, on: a))
+        #expect(try !applies(excepted, on: a))  // excluded by name
         #expect(registry.first { $0.id == b.store.deviceID }?.receivesSharedAssignments == false)
     }
 
@@ -180,11 +195,15 @@ struct MultiMacSyncTests {
         _ = try await a.coordinator.sync()
 
         // Apart: A renames B's device, B authors a skill.
-        _ = try await a.service.updateDevice(.init(expectedRevisionID: try a.head, deviceID: b.store.deviceID, change: .rename("Travel Mac")))
+        _ = try await a.service.updateDevice(
+            .init(expectedRevisionID: try a.head, deviceID: b.store.deviceID, change: .rename("Travel Mac")))
         let skill = try await author(b, name: "from-b", body: "written on the laptop")
         _ = try await a.coordinator.sync()
         let bPass = try await b.coordinator.sync()
-        guard case .merged = bPass else { Issue.record("expected merge, got \(bPass)"); return }
+        guard case .merged = bPass else {
+            Issue.record("expected merge, got \(bPass)")
+            return
+        }
         _ = try await a.coordinator.sync()
         #expect(try a.document.deviceRegistry.first { $0.id == b.store.deviceID }?.name == "Travel Mac")
         #expect(try a.document.artifacts.contains { $0.identity.id == skill })
@@ -193,14 +212,24 @@ struct MultiMacSyncTests {
         #expect((try? await a.contentStore.read(digest)) != nil)
 
         // The same device renamed differently on both: one conflict, decided on A, adopted by B.
-        _ = try await a.service.updateDevice(.init(expectedRevisionID: try a.head, deviceID: b.store.deviceID, change: .rename("Home laptop")))
-        _ = try await b.service.updateDevice(.init(expectedRevisionID: try b.head, deviceID: b.store.deviceID, change: .rename("Road laptop")))
+        _ = try await a.service.updateDevice(
+            .init(expectedRevisionID: try a.head, deviceID: b.store.deviceID, change: .rename("Home laptop")))
+        _ = try await b.service.updateDevice(
+            .init(expectedRevisionID: try b.head, deviceID: b.store.deviceID, change: .rename("Road laptop")))
         _ = try await a.coordinator.sync()
         let conflicted = try await b.coordinator.sync()
-        guard case .needsResolution(let conflicts) = conflicted else { Issue.record("expected a conflict, got \(conflicted)"); return }
+        guard case .needsResolution(let conflicts) = conflicted else {
+            Issue.record("expected a conflict, got \(conflicted)")
+            return
+        }
         #expect(conflicts.map(\.kind) == [.deviceField])
-        let resolved = try await b.coordinator.resolve([.init(kind: .deviceField, artifactID: nil, objectID: b.store.deviceID, choice: .keepLocal)])
-        guard case .merged = resolved else { Issue.record("expected merged after resolution, got \(resolved)"); return }
+        let resolved = try await b.coordinator.resolve([
+            .init(kind: .deviceField, artifactID: nil, objectID: b.store.deviceID, choice: .keepLocal)
+        ])
+        guard case .merged = resolved else {
+            Issue.record("expected merged after resolution, got \(resolved)")
+            return
+        }
         _ = try await a.coordinator.sync()
         #expect(try a.document.deviceRegistry.first { $0.id == b.store.deviceID }?.name == "Road laptop")
         #expect(try b.document.deviceRegistry.first { $0.id == b.store.deviceID }?.name == "Road laptop")
@@ -218,7 +247,8 @@ struct MultiMacSyncTests {
         _ = try await b.coordinator.sync()
         let record = try #require(try b.document.deviceRegistry.first { $0.id == b.store.deviceID })
         #expect(record.isRetired)
-        #expect(!PortableDestination(surface: .claudeCode, scope: .user).applies(to: b.store.deviceID, registry: try b.document.deviceRegistry))
+        #expect(
+            !PortableDestination(surface: .claudeCode, scope: .user).applies(to: b.store.deviceID, registry: try b.document.deviceRegistry))
         // B cannot un-retire itself by renaming.
         await #expect(throws: DeviceRegistryError.retired) {
             try await b.service.updateDevice(.init(expectedRevisionID: try b.head, deviceID: b.store.deviceID, change: .rename("Back")))
@@ -239,7 +269,10 @@ struct MultiMacSyncTests {
 
         // A pass with nothing to send claims nothing.
         let again = try await a.coordinator.sync()
-        guard case .upToDate = again else { Issue.record("expected up to date, got \(again)"); return }
+        guard case .upToDate = again else {
+            Issue.record("expected up to date, got \(again)")
+            return
+        }
         #expect(await a.coordinator.lastContentReport.published.isEmpty)
         #expect(await a.coordinator.lastContentReport.unpublished.isEmpty)
     }

@@ -13,16 +13,20 @@ struct WorkspaceInstallSessionTests {
     /// A skill the library holds the bytes of, assigned nowhere yet.
     private func heldSkill(in fixture: ShellRenderFixture, name: String = "release-readiness") async throws -> ArtifactID {
         let tree = try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .file(bytes: Data("""
-                ---
-                name: \(name)
-                description: Check whether a release is ready to ship.
-                ---
+            .init(
+                relativePath: "SKILL.md",
+                kind: .file(
+                    bytes: Data(
+                        """
+                        ---
+                        name: \(name)
+                        description: Check whether a release is ready to ship.
+                        ---
 
-                # \(name)
+                        # \(name)
 
-                Body.
-                """.utf8), executable: false)),
+                        Body.
+                        """.utf8), executable: false))
         ])
         let prepared = try WorkspaceSkillPreparation.personal(tree: tree)
         await fixture.workspace.library.refresh()
@@ -53,7 +57,9 @@ struct WorkspaceInstallSessionTests {
         await install.install(artifactIDs: [skill], destinations: [.init(surface: .claudeCode, scope: .user)])
 
         guard case .finished(let outcome) = install.phase else {
-            Issue.record("expected the install to finish directly, got \(install.phase); error=\(install.errorMessage ?? "nil") libraryError=\(fixture.workspace.library.errorMessage ?? "nil") refusal=\(String(describing: fixture.workspace.library.lastRefusal))")
+            Issue.record(
+                "expected the install to finish directly, got \(install.phase); error=\(install.errorMessage ?? "nil") libraryError=\(fixture.workspace.library.errorMessage ?? "nil") refusal=\(String(describing: fixture.workspace.library.lastRefusal))"
+            )
             return
         }
         #expect(outcome.installed == [.claude])
@@ -83,7 +89,11 @@ struct WorkspaceInstallSessionTests {
             Issue.record("expected a review, got \(install.phase)")
             return
         }
-        #expect(reasons.contains { if case .replacesUnprovenContent = $0 { return true }; return false })
+        #expect(
+            reasons.contains {
+                if case .replacesUnprovenContent = $0 { return true }
+                return false
+            })
         // Nothing was written while the plan waits to be read.
         let bytes = try Data(contentsOf: folder.appending(path: "SKILL.md"))
         #expect(String(decoding: bytes, as: UTF8.self) == "# Theirs\n")
@@ -115,37 +125,49 @@ struct WorkspaceInstallSessionTests {
         let skill = try await heldSkill(in: fixture)
         let first = session(fixture)
         await first.install(artifactIDs: [skill], destinations: [.init(surface: .claudeCode, scope: .user)])
-        guard case .finished = first.phase else { Issue.record("first install: \(first.phase)"); return }
+        guard case .finished = first.phase else {
+            Issue.record("first install: \(first.phase)")
+            return
+        }
 
         let file = claudeSkillFolder(fixture, "release-readiness").appending(path: "SKILL.md")
         try Data("# Mine now\n".utf8).write(to: file)
 
         let tree = try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .file(bytes: Data("""
-                ---
-                name: release-readiness
-                description: Check whether a release is ready to ship.
-                ---
+            .init(
+                relativePath: "SKILL.md",
+                kind: .file(
+                    bytes: Data(
+                        """
+                        ---
+                        name: release-readiness
+                        description: Check whether a release is ready to ship.
+                        ---
 
-                # release-readiness
+                        # release-readiness
 
-                Version two.
-                """.utf8), executable: false)),
+                        Version two.
+                        """.utf8), executable: false))
         ])
         let prepared = try WorkspaceSkillPreparation.personal(tree: tree)
         await fixture.workspace.library.refresh()
         let state = try #require(fixture.workspace.library.state)
         let row = try #require(state.library.rows.first { $0.artifactID == skill })
         _ = try await fixture.workspace.service.updateStandaloneSkill(
-            .init(expectedRevisionID: state.snapshot.document.revision.id, artifactID: skill,
-                  expectedContentDigest: try #require(row.contentDigest), prepared: prepared),
+            .init(
+                expectedRevisionID: state.snapshot.document.revision.id, artifactID: skill,
+                expectedContentDigest: try #require(row.contentDigest), prepared: prepared),
             prepared: prepared)
         await fixture.workspace.library.refresh()
         await fixture.workspace.deployment.prepare()
 
         let deployment = fixture.workspace.deployment
         let plan = try #require(deployment.plan(for: [skill]))
-        #expect(plan.items.contains { if case .updateContent = $0.action { return true }; return false })
+        #expect(
+            plan.items.contains {
+                if case .updateContent = $0.action { return true }
+                return false
+            })
         #expect(deployment.heldBack(in: plan).map(\.artifactID) == [skill])
 
         let leftAlone = await deployment.applyDirect([skill])
@@ -221,10 +243,11 @@ extension WorkspaceInstallSessionTests {
         let install = session(fixture)
         func sheet() -> some View {
             WorkspaceAssignmentSheet(
-                session: fixture.workspace.library, artifactIDs: [skill], initialClients: [.claude], installSession: install)
-                .environment(\.installPipeline, pipeline)
-                .environment(\.availableClients, [.claude, .codex, .gemini, .kiro])
-                .environment(AppNavigationState())
+                session: fixture.workspace.library, artifactIDs: [skill], initialClients: [.claude], installSession: install
+            )
+            .environment(\.installPipeline, pipeline)
+            .environment(\.availableClients, [.claude, .codex, .gemini, .kiro])
+            .environment(AppNavigationState())
         }
         try expectDrawn(sheet())
         await install.install(artifactIDs: [skill], destinations: [.init(surface: .claudeCode, scope: .user)])

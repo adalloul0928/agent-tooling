@@ -115,7 +115,10 @@ final class WorkspaceIncomingSession {
         switch deployment.risk(for: [artifactID]) ?? .direct {
         case .direct:
             await deployment.applyDirect([artifactID])
-            if let message = deployment.errorMessage { errorMessage = message; return }
+            if let message = deployment.errorMessage {
+                errorMessage = message
+                return
+            }
             waiting.removeAll { $0.artifactID == artifactID }
         case .needsReview:
             if let arrival = waiting.first(where: { $0.artifactID == artifactID }) {

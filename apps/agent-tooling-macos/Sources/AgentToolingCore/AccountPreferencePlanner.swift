@@ -63,7 +63,8 @@ public struct AccountPreferencePlan: Hashable, Sendable {
         return OperationPlan(
             kind: .configureMCP,
             title: "Apply \(count) shared \(provider.accountName) choice\(count == 1 ? "" : "s") to \(provider.client.rawValue)",
-            summary: "Changes \(file.relativePath) so \(provider.client.rawValue) on this Mac follows the account choices every Mac shares. The file is copied into this workspace's trash first. Sessions already open keep their old settings until they restart.",
+            summary:
+                "Changes \(file.relativePath) so \(provider.client.rawValue) on this Mac follows the account choices every Mac shares. The file is copied into this workspace's trash first. Sessions already open keep their old settings until they restart.",
             targetSurfaces: [provider.surface], scope: .user, steps: steps)
     }
 }
@@ -129,7 +130,9 @@ public enum AccountPreferencePlanner {
                 plan.held.append(.init(key: key, desired: entry.value, reason: unreadable))
                 continue
             }
-            if provider == .chatGPT, let obstacle = edits.lazy.compactMap({ CodexConfigurationShape.obstacle(in: text, keyPath: $0.keyPath) }).first {
+            if provider == .chatGPT,
+                let obstacle = edits.lazy.compactMap({ CodexConfigurationShape.obstacle(in: text, keyPath: $0.keyPath) }).first
+            {
                 plan.held.append(.init(key: key, desired: entry.value, reason: obstacle))
                 continue
             }
@@ -139,16 +142,20 @@ public enum AccountPreferencePlanner {
                 var rehearsed = text
                 for edit in edits { rehearsed = try ClientConfigurationEditor.apply(edit, to: rehearsed) }
                 guard rehearsed != text else {
-                    plan.held.append(.init(
-                        key: key, desired: entry.value,
-                        reason: "\(observation.provider.client.rawValue)'s \(plan.file.relativePath) already says this, so another settings layer decides it."))
+                    plan.held.append(
+                        .init(
+                            key: key, desired: entry.value,
+                            reason:
+                                "\(observation.provider.client.rawValue)'s \(plan.file.relativePath) already says this, so another settings layer decides it."
+                        ))
                     continue
                 }
                 text = rehearsed
             } catch {
-                plan.held.append(.init(
-                    key: key, desired: entry.value,
-                    reason: (error as? any LocalizedError)?.errorDescription ?? "The file could not be changed safely."))
+                plan.held.append(
+                    .init(
+                        key: key, desired: entry.value,
+                        reason: (error as? any LocalizedError)?.errorDescription ?? "The file could not be changed safely."))
                 continue
             }
             plan.changes.append(.init(key: key, desired: entry.value, current: current, edits: edits))
@@ -164,34 +171,54 @@ public enum AccountPreferencePlanner {
     static func makeEdits(for entry: AccountPreference, observation: AccountObservation) -> Result<[ClientConfigurationEdit], Refusal> {
         let key = entry.key
         let fileSays = observation.fileValues[key]
-        let notThisFile = Refusal(message: "Another settings file turns this off on this Mac, not \(ClientConfigurationFile.settings(for: entry.provider.client).relativePath).")
+        let notThisFile = Refusal(
+            message:
+                "Another settings file turns this off on this Mac, not \(ClientConfigurationFile.settings(for: entry.provider.client).relativePath)."
+        )
         switch entry.setting {
         case .skillSync:
             // `syncClaudeAiSkills`: only false means anything; true is unset.
             if entry.value == .off { return .success([.init(file: .claudeSettings, keyPath: ["syncClaudeAiSkills"], value: .bool(false))]) }
-            return fileSays == .off ? .success([.init(file: .claudeSettings, keyPath: ["syncClaudeAiSkills"], value: .remove)]) : .failure(notThisFile)
+            return fileSays == .off
+                ? .success([.init(file: .claudeSettings, keyPath: ["syncClaudeAiSkills"], value: .remove)]) : .failure(notThisFile)
         case .pluginSync:
-            if entry.value == .off { return .success([.init(file: .claudeSettings, keyPath: ["syncClaudeAiPlugins"], value: .bool(false))]) }
-            return fileSays == .off ? .success([.init(file: .claudeSettings, keyPath: ["syncClaudeAiPlugins"], value: .remove)]) : .failure(notThisFile)
+            if entry.value == .off {
+                return .success([.init(file: .claudeSettings, keyPath: ["syncClaudeAiPlugins"], value: .bool(false))])
+            }
+            return fileSays == .off
+                ? .success([.init(file: .claudeSettings, keyPath: ["syncClaudeAiPlugins"], value: .remove)]) : .failure(notThisFile)
         case .connectors:
             // `disableClaudeAiConnectors`: a true in any settings file applies.
-            if entry.value == .off { return .success([.init(file: .claudeSettings, keyPath: ["disableClaudeAiConnectors"], value: .bool(true))]) }
-            return fileSays == .off ? .success([.init(file: .claudeSettings, keyPath: ["disableClaudeAiConnectors"], value: .remove)]) : .failure(notThisFile)
+            if entry.value == .off {
+                return .success([.init(file: .claudeSettings, keyPath: ["disableClaudeAiConnectors"], value: .bool(true))])
+            }
+            return fileSays == .off
+                ? .success([.init(file: .claudeSettings, keyPath: ["disableClaudeAiConnectors"], value: .remove)]) : .failure(notThisFile)
         case .plugin:
             guard let name = entry.subject else { return .failure(.init(message: "This choice names no plugin.")) }
             // Explicit either way: a synced plugin whose manifest starts it
             // turned off stays off when the key is only removed.
-            return .success([.init(
-                file: .claudeSettings, keyPath: ["enabledPlugins", ClaudeAccountSync.syncedPluginID(name: name)],
-                value: .bool(entry.value == .on))])
+            return .success([
+                .init(
+                    file: .claudeSettings, keyPath: ["enabledPlugins", ClaudeAccountSync.syncedPluginID(name: name)],
+                    value: .bool(entry.value == .on))
+            ])
         case .connector:
             guard let name = entry.subject else { return .failure(.init(message: "This choice names no connector.")) }
             let serverName = ConnectionHealthReport.claudeAIConnectorPrefix + name
             if entry.value == .off {
-                return .success([.init(file: .claudeSettings, keyPath: ["deniedMcpServers"], value: .appendObjectToList(field: "serverName", value: serverName))])
+                return .success([
+                    .init(
+                        file: .claudeSettings, keyPath: ["deniedMcpServers"],
+                        value: .appendObjectToList(field: "serverName", value: serverName))
+                ])
             }
             return fileSays == .off
-                ? .success([.init(file: .claudeSettings, keyPath: ["deniedMcpServers"], value: .removeObjectFromList(field: "serverName", value: serverName))])
+                ? .success([
+                    .init(
+                        file: .claudeSettings, keyPath: ["deniedMcpServers"],
+                        value: .removeObjectFromList(field: "serverName", value: serverName))
+                ])
                 : .failure(notThisFile)
         case .apps:
             return .success([.init(file: .codexConfig, keyPath: ["features", "apps"], value: .bool(entry.value == .on))])
@@ -199,13 +226,23 @@ public enum AccountPreferencePlanner {
             guard let id = entry.subject else { return .failure(.init(message: "This choice names no app.")) }
             return .success([.init(file: .codexConfig, keyPath: ["apps", id, "enabled"], value: .bool(entry.value == .on))])
         case .destructiveTools:
-            return .success([.init(file: .codexConfig, keyPath: ["apps", entry.subject ?? "_default", "destructive_enabled"], value: .bool(entry.value == .on))])
+            return .success([
+                .init(
+                    file: .codexConfig, keyPath: ["apps", entry.subject ?? "_default", "destructive_enabled"],
+                    value: .bool(entry.value == .on))
+            ])
         case .openWorldTools:
-            return .success([.init(file: .codexConfig, keyPath: ["apps", entry.subject ?? "_default", "open_world_enabled"], value: .bool(entry.value == .on))])
+            return .success([
+                .init(
+                    file: .codexConfig, keyPath: ["apps", entry.subject ?? "_default", "open_world_enabled"],
+                    value: .bool(entry.value == .on))
+            ])
         case .approvalMode:
-            return .success([.init(
-                file: .codexConfig, keyPath: ["apps", entry.subject ?? "_default", "default_tools_approval_mode"],
-                value: .string(entry.value.rawValue))])
+            return .success([
+                .init(
+                    file: .codexConfig, keyPath: ["apps", entry.subject ?? "_default", "default_tools_approval_mode"],
+                    value: .string(entry.value.rawValue))
+            ])
         }
     }
 }
@@ -225,7 +262,8 @@ enum CodexConfigurationShape {
         guard let key = keyPath.last, keyPath.count >= 2 else { return nil }
         let table = Array(keyPath.dropLast())
         let target = keyPath
-        let message = "config.toml already sets \(keyPath.joined(separator: ".")) in a form this app does not rewrite. Change it in Codex or by hand."
+        let message =
+            "config.toml already sets \(keyPath.joined(separator: ".")) in a form this app does not rewrite. Change it in Codex or by hand."
         var current: [String] = []
         var depth = 0
         var multilineQuote: String?

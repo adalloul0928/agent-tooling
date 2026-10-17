@@ -94,16 +94,21 @@ struct PendingRequestQueueTests {
         defer { try? FileManager.default.removeItem(at: root) }
         // Sixteen separate handles on one workspace, the way sixteen processes
         // would each open it.
-        let document = try WorkspaceDocumentCoding.seal(.init(
-            workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(
+                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
         let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
-        let first = try WorkspaceRevisionStore(containerRoot: root,
+        let first = try WorkspaceRevisionStore(
+            containerRoot: root,
             workspaceID: document.workspaceID, deviceID: device.deviceID)
         try first.initialize(document: document, device: device)
-        let stores = try [first] + (1..<16).map { _ in
-            try WorkspaceRevisionStore(containerRoot: root, workspaceID: document.workspaceID,
-                                       deviceID: device.deviceID)
-        }
+        let stores =
+            try [first]
+            + (1..<16).map { _ in
+                try WorkspaceRevisionStore(
+                    containerRoot: root, workspaceID: document.workspaceID,
+                    deviceID: device.deviceID)
+            }
         try await withThrowingTaskGroup(of: Void.self) { group in
             for (index, store) in stores.enumerated() {
                 group.addTask {
@@ -126,7 +131,8 @@ struct PendingRequestQueueTests {
         }
         let rows = try WorkspaceRevisionStore(
             containerRoot: root, workspaceID: stores[0].workspaceID,
-            deviceID: stores[0].deviceID).pendingRequestQueue().requests
+            deviceID: stores[0].deviceID
+        ).pendingRequestQueue().requests
         #expect(rows.count == 16)
         #expect(Set(rows.compactMap(\.componentID)).count == 16)
     }
@@ -151,10 +157,12 @@ struct PendingRequestQueueTests {
         init() throws {
             root = FileManager.default.temporaryDirectory
                 .appending(path: "PendingQueueLifecycle-\(UUID().uuidString)", directoryHint: .isDirectory)
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
-            store = try WorkspaceRevisionStore(containerRoot: root,
+            store = try WorkspaceRevisionStore(
+                containerRoot: root,
                 workspaceID: document.workspaceID, deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
         }

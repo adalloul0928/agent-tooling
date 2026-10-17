@@ -22,7 +22,8 @@ public enum ClientExecutableLocator {
     /// Replaces the recorded custom roots. Non-absolute paths are refused here
     /// so a bad record degrades to the fixed roots instead of a bad probe.
     public static func registerAdditionalRoots(_ directories: [String]) {
-        let roots = directories
+        let roots =
+            directories
             .filter { $0.hasPrefix("/") }
             .map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL }
             .filter { NativeSkillDestination.isValidRoot($0) }
@@ -106,9 +107,10 @@ public enum ClientExecutableLocator {
             let resolved = candidate.resolvingSymlinksInPath().standardizedFileURL
             var isDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: resolved.path, isDirectory: &isDirectory),
-                  !isDirectory.boolValue,
-                  fileManager.isExecutableFile(atPath: resolved.path),
-                  NativeSkillDestination.isValidRoot(candidate) else { continue }
+                !isDirectory.boolValue,
+                fileManager.isExecutableFile(atPath: resolved.path),
+                NativeSkillDestination.isValidRoot(candidate)
+            else { continue }
             return candidate
         }
         return nil

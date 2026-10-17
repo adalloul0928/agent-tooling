@@ -1,8 +1,9 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
-@testable import AgentToolingCore
 @testable import AgentToolingApp
+@testable import AgentToolingCore
 
 /// Following a preset records a standing choice and moves nothing. Catching up
 /// applies exactly what was shown, and never removes a destination something
@@ -211,9 +212,9 @@ struct WorkspacePresetsSessionTests {
     }
 
     @MainActor private struct Fixture {
-        static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
-        static let beta = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
-        static let presetID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000c3")!)
+        static let alpha = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
+        static let beta = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2"))
+        static let presetID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000c3"))
         static let codex = PortableDestination(surface: .codexCLI, scope: .user)
         let root: URL
         let container: URL
@@ -230,29 +231,39 @@ struct WorkspacePresetsSessionTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
                 .appending(path: "presets-session-\(UUID())")
             container = root.appending(path: "store")
-            try FileManager.default.createDirectory(at: container, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(
+                at: container, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID),
-                artifacts: [
-                    .init(identity: .init(id: Self.alpha, kind: .skill, displayName: "Alpha"),
-                          authority: .trackedOnly),
-                    .init(identity: .init(id: Self.beta, kind: .skill, displayName: "Beta"),
-                          authority: .trackedOnly),
-                    .init(identity: .init(id: Self.presetID, kind: .preset, displayName: "Starter"),
-                          authority: .centralPersonal),
-                ],
-                presets: [.init(id: Self.presetID, name: "Starter", revision: 2,
-                                memberArtifactIDs: [Self.alpha, Self.beta])]))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID),
+                    artifacts: [
+                        .init(
+                            identity: .init(id: Self.alpha, kind: .skill, displayName: "Alpha"),
+                            authority: .trackedOnly),
+                        .init(
+                            identity: .init(id: Self.beta, kind: .skill, displayName: "Beta"),
+                            authority: .trackedOnly),
+                        .init(
+                            identity: .init(id: Self.presetID, kind: .preset, displayName: "Starter"),
+                            authority: .centralPersonal),
+                    ],
+                    presets: [
+                        .init(
+                            id: Self.presetID, name: "Starter", revision: 2,
+                            memberArtifactIDs: [Self.alpha, Self.beta])
+                    ]))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
-            store = try WorkspaceRevisionStore(containerRoot: container,
+            store = try WorkspaceRevisionStore(
+                containerRoot: container,
                 workspaceID: document.workspaceID, deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
             presetStore = try WorkspaceLinkedPresetStore(
                 containerRoot: store.databaseURL.deletingLastPathComponent())
             service = WorkspaceApplicationService(store: store, writerID: writerID)
-            library = WorkspaceLibrarySession(service: service, workspaceID: document.workspaceID,
-                                              deviceID: device.deviceID, access: .writable)
+            library = WorkspaceLibrarySession(
+                service: service, workspaceID: document.workspaceID,
+                deviceID: device.deviceID, access: .writable)
         }
 
         func setPresetMembers(_ members: [ArtifactID], revision: UInt64) throws {
@@ -267,8 +278,10 @@ struct WorkspacePresetsSessionTests {
 
         func addManualAssignment(_ artifactID: ArtifactID) throws {
             try commit { document in
-                document.assignments.append(.init(artifactID: artifactID, destination: Self.codex,
-                                                  reason: .manual))
+                document.assignments.append(
+                    .init(
+                        artifactID: artifactID, destination: Self.codex,
+                        reason: .manual))
                 return [artifactID]
             }
         }
@@ -282,10 +295,12 @@ struct WorkspacePresetsSessionTests {
         }
 
         func session(access: WorkspaceLibraryAccess = .writable) async -> WorkspacePresetsSession {
-            let library = access == .writable
+            let library =
+                access == .writable
                 ? self.library
-                : WorkspaceLibrarySession(service: service, workspaceID: store.workspaceID,
-                                          deviceID: store.deviceID, access: .readOnly)
+                : WorkspaceLibrarySession(
+                    service: service, workspaceID: store.workspaceID,
+                    deviceID: store.deviceID, access: .readOnly)
             await library.refresh()
             return WorkspacePresetsSession(service: service, library: library, store: presetStore)
         }

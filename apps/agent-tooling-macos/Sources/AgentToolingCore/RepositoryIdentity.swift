@@ -20,11 +20,13 @@ public enum RepositoryIdentity {
         var host: String
         var path: String
         if let components = URLComponents(string: trimmed), let scheme = components.scheme?.lowercased(),
-           ["https", "http", "ssh", "git", "git+ssh", "ssh+git"].contains(scheme), let found = components.host, !found.isEmpty {
+            ["https", "http", "ssh", "git", "git+ssh", "ssh+git"].contains(scheme), let found = components.host, !found.isEmpty
+        {
             host = found
             path = components.path
         } else if let colon = trimmed.firstIndex(of: ":"), !trimmed.contains("://"),
-                  !trimmed[..<colon].contains("/") {
+            !trimmed[..<colon].contains("/")
+        {
             // scp-like: [user@]host:path
             let authority = trimmed[..<colon]
             host = String(authority.split(separator: "@").last ?? authority)

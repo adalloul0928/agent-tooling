@@ -31,12 +31,18 @@ struct RepositoryIdentityTests {
     }
 
     @Test func nestedGroupsAndInternalHostsAreKept() {
-        #expect(RepositoryIdentity.hint(fromRemote: "ssh://git.amazon.com:2222/pkg/AgentTooling") == "https://git.amazon.com/pkg/AgentTooling")
-        #expect(RepositoryIdentity.hint(fromRemote: "git@gitlab.example.com:group/subgroup/repo.git") == "https://gitlab.example.com/group/subgroup/repo")
+        #expect(
+            RepositoryIdentity.hint(fromRemote: "ssh://git.amazon.com:2222/pkg/AgentTooling") == "https://git.amazon.com/pkg/AgentTooling")
+        #expect(
+            RepositoryIdentity.hint(fromRemote: "git@gitlab.example.com:group/subgroup/repo.git")
+                == "https://gitlab.example.com/group/subgroup/repo")
     }
 
     @Test func thingsThatAreNotRepositoriesGiveNoHint() {
-        for remote in ["", "   ", "/Users/me/src/project", "../sibling", "file:///tmp/repo", "https://", "https:///acme/project", "github.com", "git@github.com:"] {
+        for remote in [
+            "", "   ", "/Users/me/src/project", "../sibling", "file:///tmp/repo", "https://", "https:///acme/project", "github.com",
+            "git@github.com:",
+        ] {
             #expect(RepositoryIdentity.hint(fromRemote: remote) == nil, "\(remote)")
         }
     }

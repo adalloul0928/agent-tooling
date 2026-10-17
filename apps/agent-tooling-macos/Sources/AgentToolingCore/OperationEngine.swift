@@ -329,8 +329,9 @@ public actor OperationExecutor {
             guard current == expected else {
                 return (.skipped, "This folder no longer matches what was approved, so it was left alone.")
             }
-            do { try fileManager.removeItem(at: destination) }
-            catch { throw OperationEngineError.unsafeDestination(destination.path(percentEncoded: false)) }
+            do { try fileManager.removeItem(at: destination) } catch {
+                throw OperationEngineError.unsafeDestination(destination.path(percentEncoded: false))
+            }
             let note = forgetManagedInstall(destination: destination)
             return (.succeeded, "Removed \(destination.path(percentEncoded: false)).\(note)")
 
@@ -360,18 +361,23 @@ public actor OperationExecutor {
             guard let destinationPath = step.destinationPath else { throw OperationEngineError.malformedStep(step.title) }
             let destination = try unmanagedPluginCacheVersion(destinationPath)
             var isDirectory: ObjCBool = false
-            guard fileManager.fileExists(atPath: destination.path(percentEncoded: false), isDirectory: &isDirectory), isDirectory.boolValue else {
+            guard fileManager.fileExists(atPath: destination.path(percentEncoded: false), isDirectory: &isDirectory), isDirectory.boolValue
+            else {
                 return (.skipped, "Nothing to remove at \(destination.path(percentEncoded: false)).")
             }
             let trash = store.rootURL.appending(path: "trash", directoryHint: .isDirectory)
                 .appending(path: Self.trashStamp(), directoryHint: .isDirectory)
             try fileManager.createDirectory(at: trash, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            let kept = trash.appending(path: destination.deletingLastPathComponent().lastPathComponent + "-" + destination.lastPathComponent, directoryHint: .isDirectory)
+            let kept = trash.appending(
+                path: destination.deletingLastPathComponent().lastPathComponent + "-" + destination.lastPathComponent,
+                directoryHint: .isDirectory)
             try fileManager.moveItem(at: destination, to: kept)
             return (.succeeded, "Moved \(destination.path(percentEncoded: false)) to \(kept.path(percentEncoded: false)).")
 
         case .editClientConfiguration:
-            guard let destinationPath = step.destinationPath, let contents = step.contents else { throw OperationEngineError.malformedStep(step.title) }
+            guard let destinationPath = step.destinationPath, let contents = step.contents else {
+                throw OperationEngineError.malformedStep(step.title)
+            }
             guard let file = ClientConfigurationFile.matching(destinationPath, homeURL: homeURL) else {
                 throw OperationEngineError.unsafeDestination(destinationPath)
             }
@@ -472,8 +478,9 @@ public actor OperationExecutor {
         ledger.remove(destinationPath: destination.path(percentEncoded: false))
         do {
             try store.saveManagedInstallLedger(ledger)
-            installAuthority = ManagedInstallAuthority(ledger: ledger,
-                                                       receiptRecords: installAuthority.receiptRecords)
+            installAuthority = ManagedInstallAuthority(
+                ledger: ledger,
+                receiptRecords: installAuthority.receiptRecords)
             return ""
         } catch {
             return " The folder is gone, but this app's own record of it could not be updated."
@@ -678,7 +685,10 @@ public actor OperationExecutor {
         let marketplace = plugin.deletingLastPathComponent()
         let cache = marketplace.deletingLastPathComponent()
         guard caches.contains(where: { Self.samePath(cache, $0) }),
-            [destination, plugin, marketplace].allSatisfy({ OperationCommandPolicy.isSafePluginIdentifier($0.lastPathComponent) || OperationCommandPolicy.isSafeMCPIdentifier($0.lastPathComponent) }),
+            [destination, plugin, marketplace].allSatisfy({
+                OperationCommandPolicy.isSafePluginIdentifier($0.lastPathComponent)
+                    || OperationCommandPolicy.isSafeMCPIdentifier($0.lastPathComponent)
+            }),
             !PathContainment.mightContainLexically(destination, in: store.rootURL)
         else { throw OperationEngineError.unsafeDestination(rawPath) }
         return destination
@@ -833,7 +843,7 @@ public actor OperationExecutor {
         try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: staged.path(percentEncoded: false))
         try commitPreparedItem(staged, to: destination, planStepID: planStepID) {
             let path = destination.path(percentEncoded: false)
-            guard self.fileManager.fileExists(atPath: path) else { return }   // new file: nothing to check
+            guard self.fileManager.fileExists(atPath: path) else { return }  // new file: nothing to check
             let values = try destination.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
             guard values.isSymbolicLink != true, values.isRegularFile == true,
                 (try? BoundedFileAccess.readUTF8(at: destination, maximumBytes: BoundedFileAccess.maximumConfigurationBytes)) == existing
@@ -907,8 +917,9 @@ public actor OperationExecutor {
             .appending(path: destination.lastPathComponent, directoryHint: .isDirectory)
         // The receipts root must exist to be resolved against; a store that has
         // not written a receipt yet still gets its rollback copy.
-        try fileManager.createDirectory(at: store.receiptsURL, withIntermediateDirectories: true,
-                                        attributes: [.posixPermissions: 0o700])
+        try fileManager.createDirectory(
+            at: store.receiptsURL, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
         try validateContainedPath(rollback.deletingLastPathComponent(), within: store.receiptsURL)
         try fileManager.createDirectory(at: rollback.deletingLastPathComponent(), withIntermediateDirectories: true)
         try fileManager.copyItem(at: destination, to: rollback)

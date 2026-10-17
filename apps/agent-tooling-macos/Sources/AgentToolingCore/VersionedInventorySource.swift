@@ -27,7 +27,8 @@ public struct VersionedInventorySource: Sendable {
         guard let snapshot = try store.snapshot() else {
             throw WorkspaceRevisionStoreError.notInitialized
         }
-        let inventory = VersionedInventoryProjection
+        let inventory =
+            VersionedInventoryProjection
             .inventory(try WorkspaceLibraryReadModel(snapshot: snapshot))
         return .init(
             skills: inventory.skills, mcpServers: inventory.mcpServers, plugins: inventory.plugins,

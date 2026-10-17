@@ -158,7 +158,9 @@ final class WorkspaceMarketplaceSession {
         service: WorkspaceApplicationService,
         library: WorkspaceLibrarySession,
         store: WorkspaceRevisionStore,
-        locateSkill: @escaping SkillLocator = { try await WorkspaceSkillPreparation.locateUpstream(skillID: $0, repositoryURL: $1, cacheURL: $2) },
+        locateSkill: @escaping SkillLocator = {
+            try await WorkspaceSkillPreparation.locateUpstream(skillID: $0, repositoryURL: $1, cacheURL: $2)
+        },
         fetchSkill: @escaping SkillFetcher = { try await WorkspaceSkillPreparation.fetchUpstream(binding: $0, cacheURL: $1) }
     ) {
         self.providers = providers
@@ -223,7 +225,10 @@ final class WorkspaceMarketplaceSession {
         isAdopting = true
         adoptingPackageID = package.id
         adoption = nil
-        defer { isAdopting = false; adoptingPackageID = nil }
+        defer {
+            isAdopting = false
+            adoptingPackageID = nil
+        }
         do {
             guard let head = try await service.snapshot()?.document.revision.id else {
                 adoption = .init(
@@ -304,7 +309,10 @@ final class WorkspaceMarketplaceSession {
         isAdopting = true
         adoptingPackageID = package.id
         adoption = nil
-        defer { isAdopting = false; adoptingPackageID = nil }
+        defer {
+            isAdopting = false
+            adoptingPackageID = nil
+        }
         do {
             let repositoryURL = "https://github.com/\(listing.repository)"
             let binding = try await locateSkill(listing.skillID, repositoryURL, skillCacheRoot)
@@ -342,7 +350,10 @@ final class WorkspaceMarketplaceSession {
         isAdopting = true
         adoptingPackageID = package.id
         adoption = nil
-        defer { isAdopting = false; adoptingPackageID = nil }
+        defer {
+            isAdopting = false
+            adoptingPackageID = nil
+        }
         do {
             guard let head = try await service.snapshot()?.document.revision.id else {
                 adoption = .init(
@@ -450,8 +461,10 @@ final class WorkspaceMarketplaceSession {
             snapshot.document.artifacts
                 .filter { $0.identity.kind == .mcpServer && $0.identity.parentPackageID == nil }
                 .map {
-                    (Self.connectionKey($0.declaredName ?? $0.identity.displayName),
-                     LibraryMatch(artifactID: $0.identity.id, displayName: $0.identity.displayName))
+                    (
+                        Self.connectionKey($0.declaredName ?? $0.identity.displayName),
+                        LibraryMatch(artifactID: $0.identity.id, displayName: $0.identity.displayName)
+                    )
                 },
             uniquingKeysWith: { first, _ in first })
         heldSkills = Self.heldSkills(in: snapshot.document)
@@ -471,9 +484,9 @@ final class WorkspaceMarketplaceSession {
         let rows = Dictionary(document.artifacts.map { ($0.identity.id, $0) }, uniquingKeysWith: { first, _ in first })
         for subscription in document.subscriptions {
             guard let row = rows[subscription.artifactID], row.identity.kind == .skill,
-                  let source = document.sources.first(where: { $0.id == subscription.sourceID }),
-                  let repositoryURL = source.repositoryURL,
-                  let components = URLComponents(string: repositoryURL), components.host?.lowercased() == "github.com"
+                let source = document.sources.first(where: { $0.id == subscription.sourceID }),
+                let repositoryURL = source.repositoryURL,
+                let components = URLComponents(string: repositoryURL), components.host?.lowercased() == "github.com"
             else { continue }
             let parts = components.path.split(separator: "/").map(String.init)
             guard parts.count == 2 else { continue }

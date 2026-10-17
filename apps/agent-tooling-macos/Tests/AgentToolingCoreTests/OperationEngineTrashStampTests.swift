@@ -21,17 +21,21 @@ struct OperationEngineTrashStampTests {
         try FileManager.default.createDirectory(at: home.appending(path: ".kiro/settings"), withIntermediateDirectories: true)
         let file = home.appending(path: ".kiro/settings/mcp.json")
         try #"{"mcpServers":{"memory":{"command":"x"}}}"#.write(to: file, atomically: true, encoding: .utf8)
-        let document = try WorkspaceDocumentCoding.seal(.init(workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
         let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
         let store = try WorkspaceRevisionStore(
             containerRoot: root.appending(path: "workspace"), workspaceID: document.workspaceID, deviceID: device.deviceID)
         try store.initialize(document: document, device: device)
         let engine = OperationEngine(store: store, homeURL: home)
         let edit = ClientConfigurationEdit(file: .kiroMCP, keyPath: ["mcpServers", "memory", "disabled"], value: .bool(true))
-        let plan = OperationPlan(kind: .configureMCP, title: "t", summary: "s", steps: [
-            .init(kind: .editClientConfiguration, title: "e", detail: edit.summary,
-                  destinationPath: file.path(percentEncoded: false), contents: try edit.encoded()),
-        ])
+        let plan = OperationPlan(
+            kind: .configureMCP, title: "t", summary: "s",
+            steps: [
+                .init(
+                    kind: .editClientConfiguration, title: "e", detail: edit.summary,
+                    destinationPath: file.path(percentEncoded: false), contents: try edit.encoded())
+            ])
         let before = Date()
 
         let receipt = await engine.execute(plan)

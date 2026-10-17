@@ -138,7 +138,13 @@ struct WorkspaceAssignmentSheet: View {
         switch install?.phase {
         case .reviewing: "Look before installing"
         case .finished(let outcome):
-            if !outcome.installed.isEmpty { "Installed" } else if !outcome.failed.isEmpty { "Couldn’t install" } else { "Nothing to install" }
+            if !outcome.installed.isEmpty {
+                "Installed"
+            } else if !outcome.failed.isEmpty {
+                "Couldn’t install"
+            } else {
+                "Nothing to install"
+            }
         case .undoing: "Undoing…"
         default: presetID == nil ? (artifactIDs.count == 1 ? "Install" : "Install \(artifactIDs.count) items") : "Follow preset"
         }
@@ -282,9 +288,10 @@ struct WorkspaceAssignmentSheet: View {
             deviceRow(id: session.deviceID, name: thisDeviceName, detail: "This Mac", limited: false)
             ForEach(otherDevices) { device in
                 Hairline(indent: Hairline.afterLeading(Size.tile))
-                deviceRow(id: device.id, name: device.name,
-                          detail: device.lastSeenText,
-                          limited: !device.receivesSharedAssignments)
+                deviceRow(
+                    id: device.id, name: device.name,
+                    detail: device.lastSeenText,
+                    limited: !device.receivesSharedAssignments)
             }
         }
         .standardPanel()
@@ -359,22 +366,27 @@ struct WorkspaceAssignmentSheet: View {
         let verdict = pipeline?.device.verdict(for: client)
         let detected = verdict?.state == .healthy
         guard kindsSupported(by: client) else {
-            return .init(state: .unavailable, text: "Doesn’t take \(kindNoun)", help: "This app has no place for \(kindNoun).", selectable: false)
+            return .init(
+                state: .unavailable, text: "Doesn’t take \(kindNoun)", help: "This app has no place for \(kindNoun).", selectable: false)
         }
         let rows = library.rows.filter { artifactIDs.contains($0.artifactID) }
-        let alreadyAsked = !rows.isEmpty && rows.allSatisfy { row in
-            row.requestedAssignments.contains { $0.destination.surface.client == client && $0.destination.scope == scope }
-        }
+        let alreadyAsked =
+            !rows.isEmpty
+            && rows.allSatisfy { row in
+                row.requestedAssignments.contains { $0.destination.surface.client == client && $0.destination.scope == scope }
+            }
         let path = scope == .user ? skillFolder(client) : nil
         if alreadyAsked {
-            return .init(state: .healthy, text: "Already here", path: path,
-                         help: "This app is already asked to have it. Installing again puts back anything missing.", selectable: true)
+            return .init(
+                state: .healthy, text: "Already here", path: path,
+                help: "This app is already asked to have it. Installing again puts back anything missing.", selectable: true)
         }
         if detected {
             return .init(state: .healthy, text: "Found on this Mac", path: path, selectable: true)
         }
-        return .init(state: .pending, text: "Not found on this Mac",
-                     path: path, help: "It can still be set up; the files wait until the app is installed.", selectable: true)
+        return .init(
+            state: .pending, text: "Not found on this Mac",
+            path: path, help: "It can still be set up; the files wait until the app is installed.", selectable: true)
     }
 
     private var kindNoun: String {
@@ -404,7 +416,7 @@ struct WorkspaceAssignmentSheet: View {
 
     private func skillFolder(_ client: ClientKind) -> String? {
         guard let pipeline,
-              let url = try? NativeSkillDestination.directory(client: client, homeURL: pipeline.homeRoot, scope: .user, projectRoot: nil)
+            let url = try? NativeSkillDestination.directory(client: client, homeURL: pipeline.homeRoot, scope: .user, projectRoot: nil)
         else { return nil }
         return PathDisplay.abbreviatingHome(url.path(percentEncoded: false), home: pipeline.homeRoot)
     }
@@ -469,14 +481,19 @@ struct WorkspaceAssignmentSheet: View {
                                 }
                                 VStack(alignment: .leading, spacing: Space.xxs) {
                                     Text(item.displayName).font(AgentFont.bodyMedium)
-                                    Text("\(item.surface.displayName) already has a copy Agent Tooling did not put there. It won’t be overwritten.")
-                                        .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
+                                    Text(
+                                        "\(item.surface.displayName) already has a copy Agent Tooling did not put there. It won’t be overwritten."
+                                    )
+                                    .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                                 }
                                 Spacer(minLength: Space.lg)
                                 if navigation != nil {
-                                    Button("Open Checkup") { dismiss(); navigation?.open(.section(.checkup)) }
-                                        .inlineActionStyle()
-                                        .help("Adopt the existing copy into your library, or remove it, then install.")
+                                    Button("Open Checkup") {
+                                        dismiss()
+                                        navigation?.open(.section(.checkup))
+                                    }
+                                    .inlineActionStyle()
+                                    .help("Adopt the existing copy into your library, or remove it, then install.")
                                 }
                             }
                             .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
@@ -577,8 +594,10 @@ struct WorkspaceAssignmentSheet: View {
     private func fallbackReview(_ review: WorkspaceAssignmentReview) -> some View {
         VStack(alignment: .leading, spacing: Space.md) {
             Text("Review assignments").font(AgentFont.heading)
-            Text("Adds \(review.preview.additions.count), removes \(review.preview.removals.count). Saves these choices to your workspace; installing is a separate step.")
-                .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
+            Text(
+                "Adds \(review.preview.additions.count), removes \(review.preview.removals.count). Saves these choices to your workspace; installing is a separate step."
+            )
+            .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
         }
         .padding(Space.xl).frame(maxWidth: .infinity, alignment: .leading).standardPanel()
     }
@@ -617,7 +636,10 @@ struct WorkspaceAssignmentSheet: View {
             }
         default:
             if pipeline == nil, session.review != nil {
-                Button("Back") { fallbackRequest = nil; session.discardReview() }.buttonStyle(.glass).disabled(isBusy)
+                Button("Back") {
+                    fallbackRequest = nil
+                    session.discardReview()
+                }.buttonStyle(.glass).disabled(isBusy)
             } else {
                 Button(isFinished ? "Close" : "Cancel") { dismiss() }.buttonStyle(.glass).disabled(isBusy)
             }
@@ -634,8 +656,11 @@ struct WorkspaceAssignmentSheet: View {
                 .disabled(isBusy || !isWritable || runnable == 0)
         case .finished(let outcome):
             if !outcome.installed.isEmpty, navigation != nil {
-                Button("Show in Library") { dismiss(); navigation?.open(.section(.skills)) }
-                    .buttonStyle(.glass)
+                Button("Show in Library") {
+                    dismiss()
+                    navigation?.open(.section(.skills))
+                }
+                .buttonStyle(.glass)
             }
             Button("Done") { dismiss() }.primaryActionStyle().keyboardShortcut(.defaultAction).disabled(isBusy)
         case .preparing, .installing, .undoing:
@@ -683,7 +708,8 @@ struct WorkspaceAssignmentSheet: View {
         if placement == .chooseMacs, chosenDevices.isEmpty { return false }
         if scope == .project {
             guard let selectedProjectID,
-                  session.state?.library.projects.contains(where: { $0.id == selectedProjectID }) == true else { return false }
+                session.state?.library.projects.contains(where: { $0.id == selectedProjectID }) == true
+            else { return false }
         }
         return true
     }
@@ -697,16 +723,18 @@ struct WorkspaceAssignmentSheet: View {
 
     private var destinations: [PortableDestination] {
         // A project folder is one Mac's; a project install stays on this Mac.
-        let deviceIDs: [WorkspaceObjectID]? = switch placement {
-        case .everyMac: nil
-        case .thisMac, .project: [session.deviceID]
-        case .chooseMacs: chosenDevices.sorted()
-        }
+        let deviceIDs: [WorkspaceObjectID]? =
+            switch placement {
+            case .everyMac: nil
+            case .thisMac, .project: [session.deviceID]
+            case .chooseMacs: chosenDevices.sorted()
+            }
         return selectedClients.sorted { $0.rawValue < $1.rawValue }.compactMap { client in
             guard let surface = client.userSurface else { return nil }
-            return .init(surface: surface, scope: scope,
-                         logicalProjectID: scope == .project ? selectedProjectID : nil,
-                         deviceIDs: deviceIDs)
+            return .init(
+                surface: surface, scope: scope,
+                logicalProjectID: scope == .project ? selectedProjectID : nil,
+                deviceIDs: deviceIDs)
         }
     }
 
@@ -736,12 +764,12 @@ struct WorkspaceAssignmentSheet: View {
                 return .init(id: id, name: row.displayName, kind: row.kind, detail: Self.itemDetail(for: row))
             }
             if let child = children[id] {
-                return .init(id: id, name: child.displayName, kind: child.kind, detail: "Included with \(child.parentPluginLabel ?? "plugin")")
+                return .init(
+                    id: id, name: child.displayName, kind: child.kind, detail: "Included with \(child.parentPluginLabel ?? "plugin")")
             }
             return nil
         }
     }
-
 
     /// The line under a library row this sheet installs: whose it is, and what
     /// it bundles, counted the way every screen counts a plugin's tools.

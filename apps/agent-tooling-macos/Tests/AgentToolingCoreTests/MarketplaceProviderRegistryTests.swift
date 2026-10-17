@@ -88,4 +88,3 @@ struct MarketplaceProviderRegistryTests {
 
 /// A client CLI that is not installed is modeled by the shared
 /// `RefusingCommandRunner` in the test-support target.
-

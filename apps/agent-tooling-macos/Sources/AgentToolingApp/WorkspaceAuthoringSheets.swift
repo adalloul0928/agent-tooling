@@ -20,9 +20,11 @@ struct WorkspaceAttachFolderSheet: View {
             }.padding(Space.xxl)
             Hairline()
             VStack(alignment: .leading, spacing: Space.xl) {
-                Text("Your folder stays where it is and stays the only copy you edit. Agent Tooling records that it exists and where each app should find it. Nothing is copied into your library and nothing is written back into the folder.")
-                    .foregroundStyle(.secondary)
-                    .wrapsLines()
+                Text(
+                    "Your folder stays where it is and stays the only copy you edit. Agent Tooling records that it exists and where each app should find it. Nothing is copied into your library and nothing is written back into the folder."
+                )
+                .foregroundStyle(.secondary)
+                .wrapsLines()
                 if let message = session.errorMessage {
                     AttentionBanner(title: "That folder could not be used", message: message)
                 }
@@ -181,9 +183,11 @@ struct WorkspacePackageExportSheet: View {
                 Text("What your apps could do with it").font(AgentFont.title)
                 ForEach(preview.compatibility, id: \.surface) { report in
                     VStack(alignment: .leading, spacing: Space.sm) {
-                        Label(report.surface.displayName,
-                              systemImage: report.isFullySupported ? "checkmark.circle" : "exclamationmark.circle")
-                            .font(AgentFont.bodyMedium)
+                        Label(
+                            report.surface.displayName,
+                            systemImage: report.isFullySupported ? "checkmark.circle" : "exclamationmark.circle"
+                        )
+                        .font(AgentFont.bodyMedium)
                         if report.notes.isEmpty {
                             Text("Nothing in this package is a problem for this app.")
                                 .foregroundStyle(.secondary)

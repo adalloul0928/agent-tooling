@@ -422,7 +422,8 @@ struct OverviewView: View {
                 }
                 ForEach(incoming.waiting) { arrival in
                     HStack(spacing: Space.lg) {
-                        KindTile(kind: arrival.kind == .mcpServer ? .mcpServer : (arrival.kind == .plugin ? .plugin : .skill), size: Size.disc)
+                        KindTile(
+                            kind: arrival.kind == .mcpServer ? .mcpServer : (arrival.kind == .plugin ? .plugin : .skill), size: Size.disc)
                         VStack(alignment: .leading, spacing: Space.xxs) {
                             Text(arrival.displayName).font(AgentFont.bodySemibold).lineLimit(1)
                             Text("Asked for in \(arrival.clients.map(\.rawValue).formatted(.list(type: .and)))")
@@ -642,24 +643,32 @@ struct OverviewView: View {
         // from here: a count appears only once somebody ran a check, so Home
         // never reports a problem it has not seen.
         let health = workspace.health.attentionCount
-        let connections: [OverviewAttention] = health == 0 ? [] : [
-            OverviewAttention(
-                id: "health",
-                title: "\(CountNoun.connection.phrase(health)) \(health == 1 ? "needs" : "need") attention",
-                detail: "Sign in again or reconnect on the Health tab.",
-                state: .attention, destination: .health)
-        ]
+        let connections: [OverviewAttention] =
+            health == 0
+            ? []
+            : [
+                OverviewAttention(
+                    id: "health",
+                    title: "\(CountNoun.connection.phrase(health)) \(health == 1 ? "needs" : "need") attention",
+                    detail: "Sign in again or reconnect on the Health tab.",
+                    state: .attention, destination: .health)
+            ]
         // What the account check found, once one has run: a client signed in
         // some other way, a different account from the other Macs, shared
         // choices this Mac does not follow yet.
         let accountFindings = workspace.accounts.attentionFindings
-        let accounts: [OverviewAttention] = accountFindings.isEmpty ? [] : [
-            OverviewAttention(
-                id: "accounts",
-                title: accountFindings.count == 1 ? accountFindings[0].title : "\(accountFindings.count) account settings need attention",
-                detail: accountFindings.count == 1 ? accountFindings[0].detail : "Open Accounts to see what each app gets from your accounts.",
-                state: accountFindings.contains { $0.severity >= .medium } ? .attention : .pending, destination: .accounts)
-        ]
+        let accounts: [OverviewAttention] =
+            accountFindings.isEmpty
+            ? []
+            : [
+                OverviewAttention(
+                    id: "accounts",
+                    title: accountFindings.count == 1
+                        ? accountFindings[0].title : "\(accountFindings.count) account settings need attention",
+                    detail: accountFindings.count == 1
+                        ? accountFindings[0].detail : "Open Accounts to see what each app gets from your accounts.",
+                    state: accountFindings.contains { $0.severity >= .medium } ? .attention : .pending, destination: .accounts)
+            ]
         return Array((connections + accounts + clients + queued).prefix(3))
     }
 
@@ -706,7 +715,9 @@ struct OverviewView: View {
             HStack(spacing: Space.lg) {
                 if let checkup = setup.checkup {
                     let open = checkup.openFindings.count + checkup.openRecommendations.count
-                    StatusGlyph(state: open == 0 ? .healthy : ((checkup.audit.highestSeverity ?? .info) >= .medium ? .attention : .pending), size: Size.glyphLarge)
+                    StatusGlyph(
+                        state: open == 0 ? .healthy : ((checkup.audit.highestSeverity ?? .info) >= .medium ? .attention : .pending),
+                        size: Size.glyphLarge)
                     VStack(alignment: .leading, spacing: Space.xxs) {
                         Text(open == 0 ? "Nothing needs attention" : "\(CountNoun("thing").phrase(open)) to look at")
                             .font(AgentFont.bodyMedium)
@@ -714,7 +725,8 @@ struct OverviewView: View {
                             .font(AgentFont.caption).foregroundStyle(.secondary)
                     }
                 } else {
-                    Image(systemName: "wand.and.stars").font(.system(size: Size.symbol)).foregroundStyle(.secondary).frame(width: Size.glyphSlot)
+                    Image(systemName: "wand.and.stars").font(.system(size: Size.symbol)).foregroundStyle(.secondary).frame(
+                        width: Size.glyphSlot)
                     VStack(alignment: .leading, spacing: Space.xxs) {
                         Text("This Mac has not been checked yet").font(AgentFont.bodyMedium)
                         Text("Find what is broken, duplicated, or unmanaged, and have your assistant say what to do.")
@@ -849,11 +861,12 @@ struct OverviewView: View {
 
     /// The row's own screen: Plugins, Connections, or Skills by kind.
     private func open(_ row: WorkspaceLibraryReadModelRow) {
-        let section: AppSection = switch row.kind {
-        case .nativePlugin, .package: .plugins
-        case .mcpServer: .mcpServers
-        case .skill, .preset, .logicalProject: .skills
-        }
+        let section: AppSection =
+            switch row.kind {
+            case .nativePlugin, .package: .plugins
+            case .mcpServer: .mcpServers
+            case .skill, .preset, .logicalProject: .skills
+            }
         navigation.openItem(row.artifactID.rawValue.uuidString.lowercased(), in: section)
     }
 

@@ -206,7 +206,6 @@ struct SectionCaption: View {
     }
 }
 
-
 private extension ClientState {
     var detailWithRevision: String {
         guard let revision else { return detail }

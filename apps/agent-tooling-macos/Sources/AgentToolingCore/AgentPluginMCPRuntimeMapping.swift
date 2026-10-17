@@ -77,9 +77,10 @@ enum AgentPluginMCPRuntimeMapper {
             refused.append(.init(name: name, surface: surface, reason: reason, detail: detail))
         }
 
-        let supported = Set(evidence
-            .filter { $0.surface == surface && $0.component == .mcpServer && $0.support == .supported }
-            .compactMap(\.transport))
+        let supported = Set(
+            evidence
+                .filter { $0.surface == surface && $0.component == .mcpServer && $0.support == .supported }
+                .compactMap(\.transport))
         let roots: (root: URL, data: URL)?
         if let root = directory(packageRoot, fileManager), let data = directory(dataRoot, fileManager) {
             roots = (root, data)
@@ -90,8 +91,9 @@ enum AgentPluginMCPRuntimeMapper {
         for name in servers.keys.sorted() {
             guard let declaration = servers[name] else { continue }
             guard !supported.isEmpty else {
-                refuse(name, .noRecordedSupport,
-                       "This Mac has no recorded evidence that this app accepts MCP connections.")
+                refuse(
+                    name, .noRecordedSupport,
+                    "This Mac has no recorded evidence that this app accepts MCP connections.")
                 continue
             }
             guard supported.contains(declaration.transport) else {
@@ -104,19 +106,23 @@ enum AgentPluginMCPRuntimeMapper {
             }
             switch declaration {
             case .stdio(let server):
-                guard let entry = stdio(name: name, server: server, roots: roots,
-                                        surface: surface, fileManager: fileManager, refuse: refuse) else { continue }
+                guard
+                    let entry = stdio(
+                        name: name, server: server, roots: roots,
+                        surface: surface, fileManager: fileManager, refuse: refuse)
+                else { continue }
                 resolved.append(entry)
             case .streamableHTTP(let server), .sse(let server):
-                resolved.append(.init(
-                    name: name, surface: surface, transport: declaration.transport,
-                    executable: nil, arguments: [],
-                    environment: clientEnvironment(roots: roots),
-                    workingDirectory: nil, endpoint: server.url,
-                    // Bound to this endpoint's own origin. This build does not
-                    // follow a redirect on the package's behalf, so a header
-                    // never travels to a host the declaration did not name.
-                    headers: server.headers))
+                resolved.append(
+                    .init(
+                        name: name, surface: surface, transport: declaration.transport,
+                        executable: nil, arguments: [],
+                        environment: clientEnvironment(roots: roots),
+                        workingDirectory: nil, endpoint: server.url,
+                        // Bound to this endpoint's own origin. This build does not
+                        // follow a redirect on the package's behalf, so a header
+                        // never travels to a host the declaration did not name.
+                        headers: server.headers))
             }
         }
         return .init(resolved: resolved, refused: refused.sorted { $0.name < $1.name })
@@ -140,8 +146,9 @@ enum AgentPluginMCPRuntimeMapper {
                 return nil
             case .success(let url):
                 guard fileManager.isExecutableFile(atPath: url.path) else {
-                    refuse(name, .missingExecutable,
-                           "The package does not contain a runnable file at the place it names.")
+                    refuse(
+                        name, .missingExecutable,
+                        "The package does not contain a runnable file at the place it names.")
                     return nil
                 }
                 executable = url.path
@@ -187,9 +194,10 @@ enum AgentPluginMCPRuntimeMapper {
         // where the package or its data actually live.
         environment.merge(clientEnvironment(roots: roots)) { _, client in client }
 
-        return .init(name: name, surface: surface, transport: "stdio", executable: executable,
-                     arguments: arguments, environment: environment,
-                     workingDirectory: workingDirectory, endpoint: nil, headers: [:])
+        return .init(
+            name: name, surface: surface, transport: "stdio", executable: executable,
+            arguments: arguments, environment: environment,
+            workingDirectory: workingDirectory, endpoint: nil, headers: [:])
     }
 
     private static func clientEnvironment(roots: (root: URL, data: URL)) -> [String: String] {
@@ -200,7 +208,8 @@ enum AgentPluginMCPRuntimeMapper {
     private static func expandText(
         _ value: String, roots: (root: URL, data: URL)
     ) -> Result<String, AgentPluginMCPRouteRefusal> {
-        let expanded = value
+        let expanded =
+            value
             .replacingOccurrences(of: "${PLUGIN_ROOT}", with: roots.root.path)
             .replacingOccurrences(of: "${PLUGIN_DATA}", with: roots.data.path)
         guard !expanded.contains("${") else { return .failure(.unknownPlaceholder) }
@@ -256,7 +265,8 @@ enum AgentPluginMCPRuntimeMapper {
         let resolved = url.resolvingSymlinksInPath().standardizedFileURL
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: resolved.path, isDirectory: &isDirectory),
-              isDirectory.boolValue else { return nil }
+            isDirectory.boolValue
+        else { return nil }
         return resolved
     }
 }

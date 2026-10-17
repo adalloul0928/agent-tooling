@@ -39,7 +39,7 @@ struct NativeCatalogCachePreservationTests {
                     status: 0,
                     standardOutput: "{\"installed\":[],\"available\":[]}",
                     standardError: ""
-                ),
+                )
             ]),
             clients: [.codex]
         )
@@ -57,10 +57,10 @@ struct NativeCatalogCachePreservationTests {
                 "codex plugin list --available --json": .init(
                     status: 0,
                     standardOutput: """
-                    {"installed":[],"available":[{"pluginId":"reviewer@market","name":"Current name"}]}
-                    """,
+                        {"installed":[],"available":[{"pluginId":"reviewer@market","name":"Current name"}]}
+                        """,
                     standardError: ""
-                ),
+                )
             ]),
             clients: [.codex]
         )
@@ -76,7 +76,7 @@ struct NativeCatalogCachePreservationTests {
         let malformed = await MarketplaceService.discoverNativeCatalogs(
             runner: NativeCatalogFixtureRunner(responses: [
                 "codex plugin list --available --json": .init(
-                    status: 0, standardOutput: "{}", standardError: ""),
+                    status: 0, standardOutput: "{}", standardError: "")
             ]),
             clients: [.codex]
         )
@@ -103,12 +103,14 @@ struct NativeCatalogCachePreservationTests {
 
     @Test func validJSONWithUnknownClaudeShapeCannotClearCache() async {
         let old = Self.package("claude:old@market", client: .claude)
-        for body in ["[1]", "[{\"error\":\"offline\"}]", "{\"plugins\":null}", "{}",
-                     "[{\"name\":\"unparsed\"}]", "{\"plugins\":[],\"error\":\"offline\"}"] {
+        for body in [
+            "[1]", "[{\"error\":\"offline\"}]", "{\"plugins\":null}", "{}",
+            "[{\"name\":\"unparsed\"}]", "{\"plugins\":[],\"error\":\"offline\"}",
+        ] {
             let discovery = await MarketplaceService.discoverNativeCatalogs(
                 runner: NativeCatalogFixtureRunner(responses: [
                     "claude plugin list --available --json": .init(
-                        status: 0, standardOutput: body, standardError: ""),
+                        status: 0, standardOutput: body, standardError: "")
                 ]),
                 clients: [.claude]
             )
@@ -122,15 +124,16 @@ struct NativeCatalogCachePreservationTests {
         for body in ["[]", "{\"plugins\":[]}"] {
             let discovery = await MarketplaceService.discoverNativeCatalogs(
                 runner: NativeCatalogFixtureRunner(responses: [
-                    "claude plugin list --available --json": .init(status: 0, standardOutput: body, standardError: ""),
+                    "claude plugin list --available --json": .init(status: 0, standardOutput: body, standardError: "")
                 ]), clients: [.claude])
             #expect(discovery.outcomes[.claude] == .complete)
             #expect(discovery.retainedCachedPackages(from: [old]).isEmpty)
         }
         let discovery = await MarketplaceService.discoverNativeCatalogs(
             runner: NativeCatalogFixtureRunner(responses: [
-                "claude plugin list --available --json": .init(status: 0,
-                    standardOutput: "[{\"name\":\"browser\",\"installed\":true}]", standardError: ""),
+                "claude plugin list --available --json": .init(
+                    status: 0,
+                    standardOutput: "[{\"name\":\"browser\",\"installed\":true}]", standardError: "")
             ]), clients: [.claude])
         #expect(discovery.outcomes[.claude] == .complete)
         #expect(discovery.packages.map(\.id) == ["claude:browser"])
@@ -142,11 +145,14 @@ struct NativeCatalogCachePreservationTests {
         for installed in ["[]", "[{\"pluginId\":\"new@market\"}]"] {
             let discovery = await MarketplaceService.discoverNativeCatalogs(
                 runner: NativeCatalogFixtureRunner(responses: [
-                    "codex plugin list --available --json": .init(status: 0,
+                    "codex plugin list --available --json": .init(
+                        status: 0,
                         standardOutput: "[output truncated", standardError: ""),
-                    "codex plugin list --json": .init(status: 0,
+                    "codex plugin list --json": .init(
+                        status: 0,
                         standardOutput: "{\"installed\":\(installed)}", standardError: ""),
-                    "codex plugin list --marketplace market --available --json": .init(status: 0,
+                    "codex plugin list --marketplace market --available --json": .init(
+                        status: 0,
                         standardOutput: "{\"installed\":[],\"available\":[{\"pluginId\":\"new@market\"}]}", standardError: ""),
                 ]), clients: [.codex])
             #expect(discovery.outcomes[.codex] == .incomplete)
@@ -155,8 +161,9 @@ struct NativeCatalogCachePreservationTests {
         }
         let installedOnly = await MarketplaceService.discoverNativeCatalogs(
             runner: NativeCatalogFixtureRunner(responses: [
-                "codex plugin list --available --json": .init(status: 0,
-                    standardOutput: "{\"installed\":[{\"pluginId\":\"new@market\"}]}", standardError: ""),
+                "codex plugin list --available --json": .init(
+                    status: 0,
+                    standardOutput: "{\"installed\":[{\"pluginId\":\"new@market\"}]}", standardError: "")
             ]), clients: [.codex])
         #expect(installedOnly.outcomes[.codex] == .incomplete)
         #expect(installedOnly.packages.map(\.id) == ["codex:new@market"])
@@ -170,8 +177,9 @@ struct NativeCatalogCachePreservationTests {
         let bytes = try JSONSerialization.data(withJSONObject: [["name": "browser", "installed": true, "extra": nested]])
         let discovery = await MarketplaceService.discoverNativeCatalogs(
             runner: NativeCatalogFixtureRunner(responses: [
-                "claude plugin list --available --json": .init(status: 0,
-                    standardOutput: String(decoding: bytes, as: UTF8.self), standardError: ""),
+                "claude plugin list --available --json": .init(
+                    status: 0,
+                    standardOutput: String(decoding: bytes, as: UTF8.self), standardError: "")
             ]), clients: [.claude])
         #expect(discovery.outcomes[.claude] == .incomplete)
         #expect(discovery.retainedCachedPackages(from: [old]) == [old])

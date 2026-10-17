@@ -46,8 +46,10 @@ public struct WorkspaceAssignmentBatchCommand: Codable, Equatable, Sendable {
         desiredEnabled: Bool? = nil, idempotencyKey: WorkspaceObjectID = WorkspaceObjectID()
     ) throws -> Self {
         try document.validateStructure()
-        let command = Self(expectedRevisionID: document.revision.id, idempotencyKey: idempotencyKey,
-            additions: try contributions(artifactIDs: artifactIDs, destinations: destinations,
+        let command = Self(
+            expectedRevisionID: document.revision.id, idempotencyKey: idempotencyKey,
+            additions: try contributions(
+                artifactIDs: artifactIDs, destinations: destinations,
                 reason: .manual, desiredEnabled: desiredEnabled))
         _ = try command.preview(document: document)
         return command
@@ -61,11 +63,16 @@ public struct WorkspaceAssignmentBatchCommand: Codable, Equatable, Sendable {
         guard let preset = document.presets.first(where: { $0.id == presetID }) else {
             throw WorkspaceAssignmentCommandError.presetChanged
         }
-        let command = Self(expectedRevisionID: document.revision.id, idempotencyKey: idempotencyKey,
-            additions: try contributions(artifactIDs: preset.memberArtifactIDs, destinations: destinations,
+        let command = Self(
+            expectedRevisionID: document.revision.id, idempotencyKey: idempotencyKey,
+            additions: try contributions(
+                artifactIDs: preset.memberArtifactIDs, destinations: destinations,
                 reason: .preset(presetID: presetID), desiredEnabled: desiredEnabled),
-            presetApplications: [.init(presetID: presetID, revision: preset.revision,
-                memberArtifactIDs: preset.memberArtifactIDs)])
+            presetApplications: [
+                .init(
+                    presetID: presetID, revision: preset.revision,
+                    memberArtifactIDs: preset.memberArtifactIDs)
+            ])
         _ = try command.preview(document: document)
         return command
     }
@@ -80,7 +87,8 @@ public struct WorkspaceAssignmentBatchCommand: Codable, Equatable, Sendable {
         candidate = candidate.canonicalized()
         let addedIDs = Set(additions.map(\.id))
         let removed = document.assignments.filter { removalIDs.contains($0.id) }.sorted { $0.id < $1.id }
-        return .init(expectedRevisionID: expectedRevisionID,
+        return .init(
+            expectedRevisionID: expectedRevisionID,
             additions: candidate.assignments.filter { addedIDs.contains($0.id) }, removals: removed,
             remainingContributions: candidate.assignments.filter { affected.contains($0.artifactID) }.sorted { $0.id < $1.id })
     }
@@ -96,9 +104,10 @@ public struct WorkspaceAssignmentBatchCommand: Codable, Equatable, Sendable {
     func apply(to document: inout PortableWorkspaceDocument) throws -> [ArtifactID] {
         guard !additions.isEmpty || !removalIDs.isEmpty else { throw WorkspaceAssignmentCommandError.emptyBatch }
         guard additions.count <= 10_000, removalIDs.count <= 10_000,
-              Set(additions.map(\.id)).count == additions.count, Set(removalIDs).count == removalIDs.count,
-              Set(additions.map(\.id)).isDisjoint(with: removalIDs),
-              Set(presetApplications.map(\.presetID)).count == presetApplications.count else {
+            Set(additions.map(\.id)).count == additions.count, Set(removalIDs).count == removalIDs.count,
+            Set(additions.map(\.id)).isDisjoint(with: removalIDs),
+            Set(presetApplications.map(\.presetID)).count == presetApplications.count
+        else {
             throw WorkspaceAssignmentCommandError.duplicateSelection
         }
         let existing = Dictionary(uniqueKeysWithValues: document.assignments.map { ($0.id, $0) })
@@ -117,8 +126,9 @@ public struct WorkspaceAssignmentBatchCommand: Codable, Equatable, Sendable {
         var usedPresetIDs = Set<ArtifactID>()
         for contribution in additions {
             guard let artifact = artifacts[contribution.artifactID],
-                  [.skill, .mcpServer, .package, .nativePlugin].contains(artifact.identity.kind),
-                  artifact.authority != .trackedOnly else { throw WorkspaceAssignmentCommandError.unsupportedArtifact }
+                [.skill, .mcpServer, .package, .nativePlugin].contains(artifact.identity.kind),
+                artifact.authority != .trackedOnly
+            else { throw WorkspaceAssignmentCommandError.unsupportedArtifact }
             if artifact.authority == .nativeOwned, artifact.identity.parentPackageID != nil {
                 throw WorkspaceAssignmentCommandError.nativeChild
             }
@@ -126,9 +136,10 @@ public struct WorkspaceAssignmentBatchCommand: Codable, Equatable, Sendable {
             case .manual: break
             case .preset(let presetID):
                 guard let review = reviews[presetID], let preset = presets[presetID],
-                      preset.revision == review.revision,
-                      Set(review.memberArtifactIDs).count == review.memberArtifactIDs.count,
-                      Set(preset.memberArtifactIDs) == Set(review.memberArtifactIDs) else {
+                    preset.revision == review.revision,
+                    Set(review.memberArtifactIDs).count == review.memberArtifactIDs.count,
+                    Set(preset.memberArtifactIDs) == Set(review.memberArtifactIDs)
+                else {
                     throw WorkspaceAssignmentCommandError.presetChanged
                 }
                 guard review.memberArtifactIDs.contains(contribution.artifactID) else {
@@ -164,7 +175,8 @@ public struct WorkspaceAssignmentBatchCommand: Codable, Equatable, Sendable {
     ) throws -> [AssignmentContribution] {
         guard !artifactIDs.isEmpty, !destinations.isEmpty else { throw WorkspaceAssignmentCommandError.emptyBatch }
         guard Set(artifactIDs).count == artifactIDs.count, Set(destinations).count == destinations.count,
-              artifactIDs.count <= 10_000, destinations.count <= 10_000 / artifactIDs.count else {
+            artifactIDs.count <= 10_000, destinations.count <= 10_000 / artifactIDs.count
+        else {
             throw WorkspaceAssignmentCommandError.duplicateSelection
         }
         return artifactIDs.sorted().flatMap { id in

@@ -447,8 +447,8 @@ actor ClaudeMarketplaceCatalog: CatalogSourceReporting {
             // itself, so it names the one command that does.
             sentences.append(
                 "Claude Code lists no plugins yet, because no marketplace has been added to it. "
-                + "Before a plugin from the official catalog can be installed, run: "
-                + "claude plugin marketplace add anthropics/claude-plugins-official")
+                    + "Before a plugin from the official catalog can be installed, run: "
+                    + "claude plugin marketplace add anthropics/claude-plugins-official")
         } else {
             sentences.append("\(CountNoun.plugin.phrase(cliCount)) listed by Claude Code from its added marketplaces.")
         }

@@ -6,12 +6,18 @@ import Testing
 struct NativeCatalogPackageIdentityTests {
     @Test func recognizesActualCodexAndClaudeParserRows() throws {
         let service = MarketplaceService()
-        let codex = try #require(service.packagesFromCodexCatalogJSON("""
-        {"available":[{"pluginId":"reviewer@team","name":"Reviewer","marketplaceName":"Team"}]}
-        """).first)
-        let claude = try #require(service.packagesFromClaudeCatalogJSON("""
-        [{"name":"browser","marketplace":"company-market","installed":true}]
-        """).first)
+        let codex = try #require(
+            service.packagesFromCodexCatalogJSON(
+                """
+                {"available":[{"pluginId":"reviewer@team","name":"Reviewer","marketplaceName":"Team"}]}
+                """
+            ).first)
+        let claude = try #require(
+            service.packagesFromClaudeCatalogJSON(
+                """
+                [{"name":"browser","marketplace":"company-market","installed":true}]
+                """
+            ).first)
 
         #expect(NativeCatalogPackageIdentity.recognize(codex) == Self.identity(.codex, "reviewer@team"))
         #expect(NativeCatalogPackageIdentity.recognize(claude) == Self.identity(.claude, "browser@company-market"))
@@ -23,12 +29,14 @@ struct NativeCatalogPackageIdentityTests {
         package.publisher = "Unrelated publisher label"
         package.sourceName = "Changed source label"
         package.location = "/different/display/path"
-        package.nativeInstalls = [.init(
-            client: .claude,
-            executable: "not-codex",
-            arguments: ["plugin", "add", "spoof@other"],
-            detail: "Untrusted display command"
-        )]
+        package.nativeInstalls = [
+            .init(
+                client: .claude,
+                executable: "not-codex",
+                arguments: ["plugin", "add", "spoof@other"],
+                detail: "Untrusted display command"
+            )
+        ]
 
         #expect(NativeCatalogPackageIdentity.recognize(package) == Self.identity(.codex, "reviewer@team"))
 
@@ -51,10 +59,12 @@ struct NativeCatalogPackageIdentityTests {
             "claude:\(String(repeating: "a", count: 129))",
         ]
         for id in malformed {
-            #expect(NativeCatalogPackageIdentity.recognize(Self.package(
-                id: id,
-                client: id.hasPrefix("claude:") ? .claude : .codex
-            )) == nil)
+            #expect(
+                NativeCatalogPackageIdentity.recognize(
+                    Self.package(
+                        id: id,
+                        client: id.hasPrefix("claude:") ? .claude : .codex
+                    )) == nil)
         }
     }
 
@@ -70,16 +80,18 @@ struct NativeCatalogPackageIdentityTests {
 
     @Test func explicitCatalogProvenanceMustAgreeWithTheEncodedClient() {
         var package = Self.package(id: "claude:browser@company", client: .claude)
-        package.provenance = .init(source: .init(
-            kind: .openAIPluginDirectory,
-            location: "https://example.invalid/catalog"
-        ))
+        package.provenance = .init(
+            source: .init(
+                kind: .openAIPluginDirectory,
+                location: "https://example.invalid/catalog"
+            ))
         #expect(NativeCatalogPackageIdentity.recognize(package) == nil)
 
-        package.provenance = .init(source: .init(
-            kind: .claudeMarketplace,
-            location: "https://example.invalid/catalog"
-        ))
+        package.provenance = .init(
+            source: .init(
+                kind: .claudeMarketplace,
+                location: "https://example.invalid/catalog"
+            ))
         #expect(NativeCatalogPackageIdentity.recognize(package) == Self.identity(.claude, "browser@company"))
     }
 

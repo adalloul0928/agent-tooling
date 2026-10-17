@@ -33,13 +33,16 @@ struct MarketplaceSkillInstallTests {
             fetchSkill: { binding, _ in
                 let name = binding.subdirectory.split(separator: "/").last.map(String.init) ?? "skill"
                 let tree = try CapturedPackageTree(entries: [
-                    .init(relativePath: "SKILL.md",
-                          kind: .file(bytes: Data("---\nname: \(name)\ndescription: d\n---\n# \(name)\n".utf8), executable: false)),
+                    .init(
+                        relativePath: "SKILL.md",
+                        kind: .file(bytes: Data("---\nname: \(name)\ndescription: d\n---\n# \(name)\n".utf8), executable: false))
                 ])
-                return try PreparedStandaloneSkill(tree: tree, upstream: .init(
-                    repositoryURL: binding.repositoryURL, requestedRef: binding.ref,
-                    revision: .init(kind: .gitCommitSHA1, value: fakeRevision),
-                    packageRelativePath: binding.subdirectory, publisherID: "github:acme"))
+                return try PreparedStandaloneSkill(
+                    tree: tree,
+                    upstream: .init(
+                        repositoryURL: binding.repositoryURL, requestedRef: binding.ref,
+                        revision: .init(kind: .gitCommitSHA1, value: fakeRevision),
+                        packageRelativePath: binding.subdirectory, publisherID: "github:acme"))
             })
     }
 
@@ -59,7 +62,8 @@ struct MarketplaceSkillInstallTests {
         let document = try #require(try fixture.store.snapshot()).document
         let row = try #require(document.artifacts.first { $0.identity.id == match.artifactID })
         guard case .centralUpstream(let subscriptionID) = row.authority else {
-            Issue.record("expected a followed skill, got \(row.authority)"); return
+            Issue.record("expected a followed skill, got \(row.authority)")
+            return
         }
         let subscription = try #require(document.subscriptions.first { $0.id == subscriptionID })
         #expect(subscription.lock.packageRelativePath == "skills/ab-testing")

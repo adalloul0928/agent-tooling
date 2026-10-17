@@ -141,7 +141,8 @@ public struct LocalConversationScanner: Sendable {
                     skipped += 1
                     continue
                 }
-                let date = ((data["meta"] as? [String: Any])?["timestamp"] as? Double).map { Date(timeIntervalSince1970: $0) }
+                let date =
+                    ((data["meta"] as? [String: Any])?["timestamp"] as? Double).map { Date(timeIntervalSince1970: $0) }
                     ?? Date.distantPast
                 guard date >= windowStart else { continue }
                 sawItemInWindow = true
@@ -157,8 +158,9 @@ public struct LocalConversationScanner: Sendable {
                     let text = texts.joined(separator: "\n")
                     guard !text.isEmpty else { continue }
                     artifact.messages.append(
-                        .init(conversationID: conversationID, client: .kiro, date: date,
-                              tokens: insightTokens(from: sanitizeConversationText(text))))
+                        .init(
+                            conversationID: conversationID, client: .kiro, date: date,
+                            tokens: insightTokens(from: sanitizeConversationText(text))))
                     digest.noteUserMessage(text, at: date)
                     // Kiro invokes a skill as a slash command in the prompt.
                     for reference in slashSkillReferences(in: text) {
@@ -283,7 +285,9 @@ public struct LocalConversationScanner: Sendable {
                                 )
                             )
                             digest.noteUserMessage(text, at: row.date(milliseconds: true))
-                            for reference in dollarSkillReferences(in: text) { digest.noteSkill(reference, at: row.date(milliseconds: true)) }
+                            for reference in dollarSkillReferences(in: text) {
+                                digest.noteSkill(reference, at: row.date(milliseconds: true))
+                            }
                             for skillID in explicitlyReferencedSkills(in: text, lookup: skillLookup) {
                                 artifact.evidence.insert(
                                     UsageEvidence(

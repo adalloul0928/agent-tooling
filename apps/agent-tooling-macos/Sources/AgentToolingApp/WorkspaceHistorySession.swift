@@ -68,7 +68,10 @@ final class WorkspaceHistorySession {
 
     func select(_ id: WorkspaceObjectID?) {
         selectedID = id
-        guard let id else { preview = nil; return }
+        guard let id else {
+            preview = nil
+            return
+        }
         loadPreview(id)
     }
 
@@ -79,13 +82,15 @@ final class WorkspaceHistorySession {
     /// quietly overwritten.
     func restore() async {
         guard canRestore, let selectedID,
-              let head = points.first(where: \.isCurrent)?.revisionID else { return }
+            let head = points.first(where: \.isCurrent)?.revisionID
+        else { return }
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
         do {
-            _ = try WorkspaceRestorePoints.restore(selectedID, in: store,
-                                                   expectedRevisionID: head, writerID: writerID)
+            _ = try WorkspaceRestorePoints.restore(
+                selectedID, in: store,
+                expectedRevisionID: head, writerID: writerID)
             lastRestoredID = selectedID
             self.selectedID = nil
             preview = nil

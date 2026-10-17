@@ -18,7 +18,8 @@ struct WorkspaceSetupSessionTests {
         // Plant a broken link where the audit looks.
         let skills = home(fixture).appending(path: ".claude/skills", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: skills, withIntermediateDirectories: true)
-        try FileManager.default.createSymbolicLink(at: skills.appending(path: "gone"), withDestinationURL: home(fixture).appending(path: "nowhere"))
+        try FileManager.default.createSymbolicLink(
+            at: skills.appending(path: "gone"), withDestinationURL: home(fixture).appending(path: "nowhere"))
         let session = fixture.workspace.setup
 
         await session.audit()
@@ -81,7 +82,9 @@ struct WorkspaceSetupSessionTests {
         defer { freshFixture.remove() }
         await freshFixture.workspace.setup.runScheduledCheckupIfStale()
         #expect(freshServices.reviewCalls.isEmpty, "an hour-old review is not redone")
-        #expect(freshFixture.workspace.setup.checkup?.audit.generatedAt ?? .distantPast > fresh.audit.generatedAt, "the audit itself runs on every open")
+        #expect(
+            freshFixture.workspace.setup.checkup?.audit.generatedAt ?? .distantPast > fresh.audit.generatedAt,
+            "the audit itself runs on every open")
         #expect(freshFixture.workspace.setup.checkup?.review != nil, "and keeps the review it had")
 
         var stale = ShellRenderFixture.setupCheckup(home: URL(filePath: "/Users/example"))
@@ -122,7 +125,8 @@ struct WorkspaceSetupSessionTests {
         // A skill on disk that the library only tracks.
         let folder = home(fixture).appending(path: ".claude/skills/found-skill", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try "---\nname: found-skill\ndescription: Found on disk\n---\nUse it.\n".write(to: folder.appending(path: "SKILL.md"), atomically: true, encoding: .utf8)
+        try "---\nname: found-skill\ndescription: Found on disk\n---\nUse it.\n".write(
+            to: folder.appending(path: "SKILL.md"), atomically: true, encoding: .utf8)
         let session = fixture.workspace.setup
         await fixture.workspace.library.refresh()
         let head = try #require(fixture.workspace.library.state?.snapshot.document.revision.id)
@@ -131,7 +135,10 @@ struct WorkspaceSetupSessionTests {
             writerID: WorkspaceObjectID()
         ) { document in
             let id = ArtifactID()
-            document.artifacts.append(.init(identity: .init(id: id, kind: .skill, displayName: "Found Skill"), authority: .trackedOnly, declaredName: "found-skill"))
+            document.artifacts.append(
+                .init(
+                    identity: .init(id: id, kind: .skill, displayName: "Found Skill"), authority: .trackedOnly, declaredName: "found-skill")
+            )
             return [id]
         }
         await fixture.workspace.library.refresh()
@@ -141,14 +148,17 @@ struct WorkspaceSetupSessionTests {
         #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
         let artifact = fixture.workspace.library.state?.snapshot.document.artifacts.first { $0.declaredName == "found-skill" }
         #expect(artifact?.authority == .centralPersonal)
-        #expect(FileManager.default.fileExists(atPath: folder.appending(path: "SKILL.md").path(percentEncoded: false)), "the app's folder is untouched")
+        #expect(
+            FileManager.default.fileExists(atPath: folder.appending(path: "SKILL.md").path(percentEncoded: false)),
+            "the app's folder is untouched")
     }
 
     @Test func reviewingOneAppFetchesItsNotesAndHandsThemToTheAssistantWithTheWebAllowed() async throws {
         let restored = ShellRenderFixture.setupCheckup(home: URL(filePath: "/Users/example"), review: false)
         let services = StubSetupServices(restored: restored, review: .success(ShellRenderFixture.setupReview(over: restored.audit)))
         services.notes[.codex] = .success([
-            .init(client: .codex, version: "0.160.0", source: "https://github.com/openai/codex/releases/tag/rust-v0.160.0", body: "- Big one")
+            .init(
+                client: .codex, version: "0.160.0", source: "https://github.com/openai/codex/releases/tag/rust-v0.160.0", body: "- Big one")
         ])
         let fixture = try await ShellRenderFixture(setupServices: services)
         defer { fixture.remove() }
@@ -183,7 +193,8 @@ struct WorkspaceSetupSessionTests {
         let skills = home(fixture).appending(path: ".claude/skills", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: skills, withIntermediateDirectories: true)
         for name in ["a", "b"] {
-            try FileManager.default.createSymbolicLink(at: skills.appending(path: name), withDestinationURL: home(fixture).appending(path: "nowhere-\(name)"))
+            try FileManager.default.createSymbolicLink(
+                at: skills.appending(path: name), withDestinationURL: home(fixture).appending(path: "nowhere-\(name)"))
         }
         let session = fixture.workspace.setup
 
@@ -196,7 +207,9 @@ struct WorkspaceSetupSessionTests {
         #expect(session.lastApplyMessage == "2 of 3 done.")
         #expect(session.errorMessage?.hasPrefix("1 did not go through.") == true)
         #expect((try? skills.appending(path: "a").resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true)
-        #expect((try? skills.appending(path: "b").resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true, "a failure in the middle does not stop the rest")
+        #expect(
+            (try? skills.appending(path: "b").resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true,
+            "a failure in the middle does not stop the rest")
         #expect(session.applyProgress == nil, "progress is cleared when the run ends")
         #expect(session.checkup?.audit.findings.contains { $0.kind == .brokenSkillLink } == false)
     }
@@ -209,15 +222,20 @@ struct WorkspaceSetupSessionTests {
         try FileManager.default.createDirectory(at: home.appending(path: ".kiro/settings"), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: home.appending(path: ".codex"), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: home.appending(path: ".claude"), withIntermediateDirectories: true)
-        try #"{"mcpServers":{"memory":{"command":"gone.sh"}}}"#.write(to: home.appending(path: ".kiro/settings/mcp.json"), atomically: true, encoding: .utf8)
-        try "model = \"gpt-5\"\n\n[mcp_servers.slack]\n  command = \"slack\"\n".write(to: home.appending(path: ".codex/config.toml"), atomically: true, encoding: .utf8)
-        try #"{"projects":{"/Users/example/one":{"allowedTools":[]},"/Users/example/two":{}}}"#.write(to: home.appending(path: ".claude.json"), atomically: true, encoding: .utf8)
+        try #"{"mcpServers":{"memory":{"command":"gone.sh"}}}"#.write(
+            to: home.appending(path: ".kiro/settings/mcp.json"), atomically: true, encoding: .utf8)
+        try "model = \"gpt-5\"\n\n[mcp_servers.slack]\n  command = \"slack\"\n".write(
+            to: home.appending(path: ".codex/config.toml"), atomically: true, encoding: .utf8)
+        try #"{"projects":{"/Users/example/one":{"allowedTools":[]},"/Users/example/two":{}}}"#.write(
+            to: home.appending(path: ".claude.json"), atomically: true, encoding: .utf8)
         try #"{"model":"sonnet"}"#.write(to: home.appending(path: ".claude/settings.json"), atomically: true, encoding: .utf8)
         let session = fixture.workspace.setup
 
         await session.apply(.disableMCPServer(name: "memory", client: .kiro))
         #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
-        let kiro = try #require((try JSONSerialization.jsonObject(with: Data(contentsOf: home.appending(path: ".kiro/settings/mcp.json"))) as? [String: Any])?["mcpServers"] as? [String: Any])
+        let kiro = try #require(
+            (try JSONSerialization.jsonObject(with: Data(contentsOf: home.appending(path: ".kiro/settings/mcp.json"))) as? [String: Any])?[
+                "mcpServers"] as? [String: Any])
         #expect((kiro["memory"] as? [String: Any])?["disabled"] as? Bool == true)
         #expect((kiro["memory"] as? [String: Any])?["command"] as? String == "gone.sh", "the configuration is kept")
 
@@ -229,14 +247,19 @@ struct WorkspaceSetupSessionTests {
 
         await session.apply(.disableMCPServer(name: "slack", client: .claude))
         #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
-        let claude = try #require((try JSONSerialization.jsonObject(with: Data(contentsOf: home.appending(path: ".claude.json"))) as? [String: Any])?["projects"] as? [String: Any])
-        #expect((claude["/Users/example/one"] as? [String: Any])?["disabledMcpServers"] as? [String] == ["slack"], "every project Claude Code knows")
+        let claude = try #require(
+            (try JSONSerialization.jsonObject(with: Data(contentsOf: home.appending(path: ".claude.json"))) as? [String: Any])?["projects"]
+                as? [String: Any])
+        #expect(
+            (claude["/Users/example/one"] as? [String: Any])?["disabledMcpServers"] as? [String] == ["slack"],
+            "every project Claude Code knows")
         #expect((claude["/Users/example/two"] as? [String: Any])?["disabledMcpServers"] as? [String] == ["slack"])
         #expect(session.lastApplyMessage?.contains("2 projects") == true)
 
         await session.apply(SetupRecommendationAction.setSetting(client: .claude, key: "toolSearch", value: "true"))
         #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
-        let settings = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: home.appending(path: ".claude/settings.json"))) as? [String: Any])
+        let settings = try #require(
+            try JSONSerialization.jsonObject(with: Data(contentsOf: home.appending(path: ".claude/settings.json"))) as? [String: Any])
         #expect(settings["toolSearch"] as? Bool == true)
         #expect(settings["model"] as? String == "sonnet")
         // Every write left the file as it was in the workspace trash: one for

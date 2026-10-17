@@ -823,13 +823,15 @@ public enum ProjectDiscovery {
         if let common = try? BoundedFileAccess.readUTF8(at: commonPointer, maximumBytes: 8_192) {
             let raw = common.trimmingCharacters(in: .whitespacesAndNewlines)
             if !raw.isEmpty {
-                directory = raw.hasPrefix("/")
+                directory =
+                    raw.hasPrefix("/")
                     ? URL(fileURLWithPath: raw, isDirectory: true)
                     : directory.appending(path: raw, directoryHint: .isDirectory).standardizedFileURL
             }
         }
-        guard let config = try? BoundedFileAccess.readUTF8(
-            at: directory.appending(path: "config"), maximumBytes: BoundedFileAccess.maximumConfigurationBytes)
+        guard
+            let config = try? BoundedFileAccess.readUTF8(
+                at: directory.appending(path: "config"), maximumBytes: BoundedFileAccess.maximumConfigurationBytes)
         else { return nil }
         return remoteURL(named: name, inGitConfig: config)
     }
@@ -843,7 +845,8 @@ public enum ProjectDiscovery {
             if line.hasPrefix("[") {
                 let header = line.dropFirst().prefix { $0 != "]" }.trimmingCharacters(in: .whitespaces)
                 let parts = header.split(separator: " ", maxSplits: 1).map(String.init)
-                inSection = parts.count == 2 && parts[0].lowercased() == "remote"
+                inSection =
+                    parts.count == 2 && parts[0].lowercased() == "remote"
                     && parts[1].trimmingCharacters(in: CharacterSet(charactersIn: "\"")) == name
                 continue
             }

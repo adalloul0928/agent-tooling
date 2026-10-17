@@ -70,7 +70,10 @@ struct GallerySectionsTests {
     @Test func everySectionAtStandardSizeLightAndDark() async throws {
         for entry in Self.sections {
             let (fixture, preferences) = try await populated(for: entry.section)
-            defer { fixture.remove(); preferences.remove() }
+            defer {
+                fixture.remove()
+                preferences.remove()
+            }
             await prepare(fixture, for: entry.section)
             for appearance in [RenderAppearance.light, .dark] {
                 try galleryShellSnapshot(
@@ -87,7 +90,10 @@ struct GallerySectionsTests {
     @Test func everySectionAtMinimumSizeLight() async throws {
         for entry in Self.sections {
             let (fixture, preferences) = try await populated(for: entry.section)
-            defer { fixture.remove(); preferences.remove() }
+            defer {
+                fixture.remove()
+                preferences.remove()
+            }
             await prepare(fixture, for: entry.section)
             try galleryShellSnapshot(
                 renderShell(entry.section, fixture: fixture, size: GallerySize.minimum)

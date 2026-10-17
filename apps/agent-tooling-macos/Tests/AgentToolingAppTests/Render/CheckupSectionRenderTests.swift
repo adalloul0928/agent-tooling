@@ -39,8 +39,11 @@ struct CheckupSectionRenderTests {
         let item = try #require(items.first)
         for expanded in [false, true] {
             try expectDrawn(
-                CheckupRow(item: item, isExpanded: expanded, isBusy: false, onToggle: {}, onRun: {}, onRunOne: { _ in }, onDismiss: {}, onOpen: { _ in })
-                    .frame(width: 760))
+                CheckupRow(
+                    item: item, isExpanded: expanded, isBusy: false, onToggle: {}, onRun: {}, onRunOne: { _ in }, onDismiss: {},
+                    onOpen: { _ in }
+                )
+                .frame(width: 760))
         }
         let plan = CheckupTriage.fixAll(items)
         #expect(!plan.isEmpty)

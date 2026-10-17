@@ -25,16 +25,20 @@ struct UndoRemovesOnlyWhatItInstalledTests {
     /// A skill the library holds the bytes of, assigned nowhere yet.
     private func heldSkill(in fixture: ShellRenderFixture, name: String = "release-readiness") async throws -> ArtifactID {
         let tree = try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .file(bytes: Data("""
-                ---
-                name: \(name)
-                description: Check whether a release is ready to ship.
-                ---
+            .init(
+                relativePath: "SKILL.md",
+                kind: .file(
+                    bytes: Data(
+                        """
+                        ---
+                        name: \(name)
+                        description: Check whether a release is ready to ship.
+                        ---
 
-                # \(name)
+                        # \(name)
 
-                Body.
-                """.utf8), executable: false)),
+                        Body.
+                        """.utf8), executable: false))
         ])
         let prepared = try WorkspaceSkillPreparation.personal(tree: tree)
         await fixture.workspace.library.refresh()

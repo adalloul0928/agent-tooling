@@ -8,26 +8,27 @@ struct VercelSkillLockReaderTests {
         let context = try VercelSkillLockReader.globalContext(
             homeDirectory: "/Users/example", xdgStateHome: "/tmp/state")
         #expect(context.lockFilePath == "/tmp/state/skills/.skill-lock.json")
-        let bytes = Data("""
-        {
-          "version": 3,
-          "skills": {
-            "review": {
-              "source": "vercel-labs/skills",
-              "sourceType": "github",
-              "sourceUrl": "https://github.com/vercel-labs/skills",
-              "ref": "main",
-              "skillPath": "skills/review/SKILL.md",
-              "skillFolderHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "installedAt": "2026-09-01T00:00:00.000Z",
-              "updatedAt": "2026-09-02T00:00:00.000Z",
-              "pluginName": "review-tools",
-              "wellKnownDigest": "sha256:opaque-provider-value",
-              "futureField": {"retainedByVercel": true}
+        let bytes = Data(
+            """
+            {
+              "version": 3,
+              "skills": {
+                "review": {
+                  "source": "vercel-labs/skills",
+                  "sourceType": "github",
+                  "sourceUrl": "https://github.com/vercel-labs/skills",
+                  "ref": "main",
+                  "skillPath": "skills/review/SKILL.md",
+                  "skillFolderHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "installedAt": "2026-09-01T00:00:00.000Z",
+                  "updatedAt": "2026-09-02T00:00:00.000Z",
+                  "pluginName": "review-tools",
+                  "wellKnownDigest": "sha256:opaque-provider-value",
+                  "futureField": {"retainedByVercel": true}
+                }
+              }
             }
-          }
-        }
-        """.utf8)
+            """.utf8)
 
         let result = VercelSkillLockReader.read(bytes: bytes, context: context)
         #expect(result.status == .recognized)
@@ -36,9 +37,10 @@ struct VercelSkillLockReaderTests {
         #expect(result.evidence[0].skillNameHint == "review")
         #expect(result.evidence[0].revision == .requestedRef("main"))
         #expect(result.evidence[0].skillPath == "skills/review/SKILL.md")
-        #expect(result.evidence[0].integrity.map(\.algorithm) == [
-            .githubSkillFolderTreeObjectID, .vercelWellKnownOpaque,
-        ])
+        #expect(
+            result.evidence[0].integrity.map(\.algorithm) == [
+                .githubSkillFolderTreeObjectID, .vercelWellKnownOpaque,
+            ])
         #expect(result.evidence[0].gaps.isEmpty)
     }
 
@@ -58,37 +60,43 @@ struct VercelSkillLockReaderTests {
 
     @Test func projectV1KeepsComputedDigestDistinctAndResolvesLocalPathOnlyOnDevice() throws {
         let context = try VercelSkillLockReader.projectContext(projectRoot: "/tmp/project")
-        let bytes = Data("""
-        {
-          "version": 1,
-          "skills": {
-            "remote": {
-              "source": "owner/repo",
-              "sourceUrl": "https://github.com/owner/repo",
-              "ref": "v1.2.3",
-              "sourceType": "github",
-              "skillPath": "skills/remote/SKILL.md",
-              "computedHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-            },
-            "local": {
-              "source": "../shared/local-skill",
-              "sourceType": "local",
-              "computedHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        let bytes = Data(
+            """
+            {
+              "version": 1,
+              "skills": {
+                "remote": {
+                  "source": "owner/repo",
+                  "sourceUrl": "https://github.com/owner/repo",
+                  "ref": "v1.2.3",
+                  "sourceType": "github",
+                  "skillPath": "skills/remote/SKILL.md",
+                  "computedHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                },
+                "local": {
+                  "source": "../shared/local-skill",
+                  "sourceType": "local",
+                  "computedHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                }
+              }
             }
-          }
-        }
-        """.utf8)
+            """.utf8)
 
         let result = VercelSkillLockReader.read(bytes: bytes, context: context)
         #expect(result.evidence.count == 2)
         let local = try #require(result.evidence.first(where: { $0.skillNameHint == "local" }))
-        #expect(local.locator == .deviceLocal(
-            originalPath: "../shared/local-skill", resolvedPath: "/tmp/shared/local-skill"))
+        #expect(
+            local.locator
+                == .deviceLocal(
+                    originalPath: "../shared/local-skill", resolvedPath: "/tmp/shared/local-skill"))
         #expect(local.gaps.contains(.deviceLocalOnly))
         let remote = try #require(result.evidence.first(where: { $0.skillNameHint == "remote" }))
-        #expect(remote.integrity == [.init(
-            algorithm: .vercelProjectSkillFolderSHA256V1,
-            value: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")])
+        #expect(
+            remote.integrity == [
+                .init(
+                    algorithm: .vercelProjectSkillFolderSHA256V1,
+                    value: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+            ])
         #expect(remote.revision == .requestedRef("v1.2.3"))
     }
 
@@ -127,28 +135,29 @@ struct VercelSkillLockReaderTests {
 
     @Test func incompleteAndInvalidFieldsProduceBoundedEvidenceAndDiagnostics() throws {
         let project = try VercelSkillLockReader.projectContext(projectRoot: "/tmp/project")
-        let bytes = Data("""
-        {
-          "version": 1,
-          "skills": {
-            "bad": {
-              "source": "owner/repo",
-              "sourceType": "github",
-              "skillPath": "../escape/SKILL.md",
-              "computedHash": "NOT-A-DIGEST"
-            },
-            "good": {
-              "source": "owner/other",
-              "sourceUrl": "https://github.com/owner/other",
-              "ref": "main",
-              "sourceType": "github",
-              "skillPath": "skills/good/SKILL.md",
-              "computedHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-            },
-            "wrong-shape": true
-          }
-        }
-        """.utf8)
+        let bytes = Data(
+            """
+            {
+              "version": 1,
+              "skills": {
+                "bad": {
+                  "source": "owner/repo",
+                  "sourceType": "github",
+                  "skillPath": "../escape/SKILL.md",
+                  "computedHash": "NOT-A-DIGEST"
+                },
+                "good": {
+                  "source": "owner/other",
+                  "sourceUrl": "https://github.com/owner/other",
+                  "ref": "main",
+                  "sourceType": "github",
+                  "skillPath": "skills/good/SKILL.md",
+                  "computedHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+                },
+                "wrong-shape": true
+              }
+            }
+            """.utf8)
 
         let result = VercelSkillLockReader.read(bytes: bytes, context: project)
         #expect(result.status == .recognized)
@@ -164,9 +173,10 @@ struct VercelSkillLockReaderTests {
     @Test func credentialBearingLocatorIsRedactedFromEvidenceAndDiagnostics() throws {
         let global = try VercelSkillLockReader.globalContext(homeDirectory: "/Users/example")
         let secret = "never-serialize-this-secret"
-        let bytes = Data("""
-        {"version":3,"skills":{"private":{"source":"https://example.com/repo?token=\(secret)","sourceType":"github","sourceUrl":"https://user:\(secret)@example.com/repo","sourceBaseUrl":"https://example.com/base#\(secret)","ref":"main","skillPath":"skills/private/SKILL.md","skillFolderHash":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","installedAt":"2026-09-01T00:00:00.000Z","updatedAt":"2026-09-01T00:00:00.000Z"}}}
-        """.utf8)
+        let bytes = Data(
+            """
+            {"version":3,"skills":{"private":{"source":"https://example.com/repo?token=\(secret)","sourceType":"github","sourceUrl":"https://user:\(secret)@example.com/repo","sourceBaseUrl":"https://example.com/base#\(secret)","ref":"main","skillPath":"skills/private/SKILL.md","skillFolderHash":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","installedAt":"2026-09-01T00:00:00.000Z","updatedAt":"2026-09-01T00:00:00.000Z"}}}
+            """.utf8)
         let result = VercelSkillLockReader.read(bytes: bytes, context: global)
         let encodedResult = try JSONEncoder().encode(result)
 
@@ -176,9 +186,10 @@ struct VercelSkillLockReaderTests {
 
     @Test func nonGitHubGlobalHashRemainsProviderOpaque() throws {
         let context = try VercelSkillLockReader.globalContext(homeDirectory: "/Users/example")
-        let bytes = Data("""
-        {"version":3,"skills":{"docs":{"source":"mintlify/docs","sourceType":"mintlify","sourceUrl":"https://mintlify.com/docs","ref":"main","skillPath":"skills/docs/SKILL.md","skillFolderHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","installedAt":"2026-09-01T00:00:00.000Z","updatedAt":"2026-09-01T00:00:00.000Z"}}}
-        """.utf8)
+        let bytes = Data(
+            """
+            {"version":3,"skills":{"docs":{"source":"mintlify/docs","sourceType":"mintlify","sourceUrl":"https://mintlify.com/docs","ref":"main","skillPath":"skills/docs/SKILL.md","skillFolderHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","installedAt":"2026-09-01T00:00:00.000Z","updatedAt":"2026-09-01T00:00:00.000Z"}}}
+            """.utf8)
         let result = VercelSkillLockReader.read(bytes: bytes, context: context)
 
         #expect(result.evidence[0].integrity.map(\.algorithm) == [.vercelGlobalSkillFolderHashOpaque])
@@ -200,12 +211,14 @@ struct VercelSkillLockReaderTests {
     @Test func equalSkillNamesAcrossScopesStaySeparateNameOnlyEvidence() throws {
         let global = try VercelSkillLockReader.globalContext(homeDirectory: "/Users/example")
         let project = try VercelSkillLockReader.projectContext(projectRoot: "/tmp/project")
-        let globalBytes = Data("""
-        {"version":3,"skills":{"same":{"source":"one/repo","sourceType":"github","sourceUrl":"https://github.com/one/repo","ref":"main","skillPath":"skills/same/SKILL.md","skillFolderHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","installedAt":"2026-09-01T00:00:00.000Z","updatedAt":"2026-09-01T00:00:00.000Z"}}}
-        """.utf8)
-        let projectBytes = Data("""
-        {"version":1,"skills":{"same":{"source":"two/repo","sourceType":"github","sourceUrl":"https://github.com/two/repo","ref":"main","skillPath":"skills/same/SKILL.md","computedHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}
-        """.utf8)
+        let globalBytes = Data(
+            """
+            {"version":3,"skills":{"same":{"source":"one/repo","sourceType":"github","sourceUrl":"https://github.com/one/repo","ref":"main","skillPath":"skills/same/SKILL.md","skillFolderHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","installedAt":"2026-09-01T00:00:00.000Z","updatedAt":"2026-09-01T00:00:00.000Z"}}}
+            """.utf8)
+        let projectBytes = Data(
+            """
+            {"version":1,"skills":{"same":{"source":"two/repo","sourceType":"github","sourceUrl":"https://github.com/two/repo","ref":"main","skillPath":"skills/same/SKILL.md","computedHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}
+            """.utf8)
         let globalResult = VercelSkillLockReader.read(bytes: globalBytes, context: global)
         let projectResult = VercelSkillLockReader.read(bytes: projectBytes, context: project)
 

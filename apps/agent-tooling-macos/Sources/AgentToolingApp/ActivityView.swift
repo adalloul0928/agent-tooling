@@ -373,7 +373,8 @@ private struct ActivityReceiptDetail: View {
 
                 HStack(spacing: Space.md) {
                     Image(systemName: "lock.shield").foregroundStyle(.secondary)
-                    Text("Sensitive values were redacted before this receipt was stored.").font(AgentFont.caption).foregroundStyle(.secondary)
+                    Text("Sensitive values were redacted before this receipt was stored.").font(AgentFont.caption).foregroundStyle(
+                        .secondary)
                 }
                 .padding(Space.lg)
                 .standardPanel()

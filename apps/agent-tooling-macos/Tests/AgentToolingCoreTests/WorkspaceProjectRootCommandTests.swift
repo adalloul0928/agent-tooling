@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -170,8 +171,8 @@ struct WorkspaceProjectRootCommandTests {
     }
 
     private struct Fixture {
-        static let projectA = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
-        static let projectB = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
+        static let projectA = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
+        static let projectB = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2"))
         let root: URL
         let folderA: URL
         let folderB: URL
@@ -187,18 +188,21 @@ struct WorkspaceProjectRootCommandTests {
                     at: directory, withIntermediateDirectories: true,
                     attributes: [.posixPermissions: 0o700])
             }
-            document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
-                artifacts: [
-                    .init(identity: .init(id: Self.projectA, kind: .logicalProject, displayName: "Project A"),
-                          authority: .centralPersonal),
-                    .init(identity: .init(id: Self.projectB, kind: .logicalProject, displayName: "Project B"),
-                          authority: .centralPersonal),
-                ],
-                logicalProjects: [
-                    .init(id: Self.projectA, name: "Project A"),
-                    .init(id: Self.projectB, name: "Project B"),
-                ]))
+            document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID()),
+                    artifacts: [
+                        .init(
+                            identity: .init(id: Self.projectA, kind: .logicalProject, displayName: "Project A"),
+                            authority: .centralPersonal),
+                        .init(
+                            identity: .init(id: Self.projectB, kind: .logicalProject, displayName: "Project B"),
+                            authority: .centralPersonal),
+                    ],
+                    logicalProjects: [
+                        .init(id: Self.projectA, name: "Project A"),
+                        .init(id: Self.projectB, name: "Project B"),
+                    ]))
         }
 
         /// A device state for this document's workspace, with no folder bound
@@ -250,8 +254,8 @@ struct WorkspaceProjectRootServiceTests {
     }
 
     @MainActor private struct StoreFixture {
-        static let projectA = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
-        static let projectB = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
+        static let projectA = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
+        static let projectB = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000b2"))
         let root: URL
         let folderA: URL
         let store: WorkspaceRevisionStore
@@ -267,18 +271,21 @@ struct WorkspaceProjectRootServiceTests {
                     attributes: [.posixPermissions: 0o700])
             }
             let writerID = WorkspaceObjectID()
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID),
-                artifacts: [
-                    .init(identity: .init(id: Self.projectA, kind: .logicalProject, displayName: "Project A"),
-                          authority: .centralPersonal),
-                    .init(identity: .init(id: Self.projectB, kind: .logicalProject, displayName: "Project B"),
-                          authority: .centralPersonal),
-                ],
-                logicalProjects: [
-                    .init(id: Self.projectA, name: "Project A"),
-                    .init(id: Self.projectB, name: "Project B"),
-                ]))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID),
+                    artifacts: [
+                        .init(
+                            identity: .init(id: Self.projectA, kind: .logicalProject, displayName: "Project A"),
+                            authority: .centralPersonal),
+                        .init(
+                            identity: .init(id: Self.projectB, kind: .logicalProject, displayName: "Project B"),
+                            authority: .centralPersonal),
+                    ],
+                    logicalProjects: [
+                        .init(id: Self.projectA, name: "Project A"),
+                        .init(id: Self.projectB, name: "Project B"),
+                    ]))
             let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
             store = try WorkspaceRevisionStore(
                 containerRoot: root.appending(path: "store"), workspaceID: document.workspaceID,

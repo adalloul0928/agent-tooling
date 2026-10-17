@@ -324,7 +324,6 @@ struct MarketplaceView: View {
         .paneMaterial()
     }
 
-
     // MARK: - Install
 
     /// What Install does for one listing: nothing to offer (no app on this Mac
@@ -345,7 +344,8 @@ struct MarketplaceView: View {
         if session.libraryMatch(for: package) != nil { return .install(nil) }
         if WorkspaceMarketplaceSession.skillsShListing(package) != nil { return .install(nil) }
         if package.components.contains(.mcpServer),
-           case .reviewed = ReviewedMarketplaceMCPServer.availability(for: package) {
+            case .reviewed = ReviewedMarketplaceMCPServer.availability(for: package)
+        {
             return .install(nil)
         }
         let routes = package.nativeInstalls

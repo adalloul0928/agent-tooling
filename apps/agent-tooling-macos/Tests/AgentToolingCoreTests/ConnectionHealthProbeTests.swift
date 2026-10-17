@@ -114,7 +114,10 @@ struct ConnectionHealthProbeTests {
             run: { executable, arguments, onAuthorizationURL in
                 await recorder.record(executable, arguments)
                 if let url = URL(string: "https://mcp.linear.app/oauth/authorize?state=abc") { onAuthorizationURL(url) }
-                return .completed(transcript: "Visit this URL to authorize:\n  https://mcp.linear.app/oauth/authorize?state=abc\r\nWaiting for authorization…\r\nAuthentication successful. Connected to linear.")
+                return .completed(
+                    transcript:
+                        "Visit this URL to authorize:\n  https://mcp.linear.app/oauth/authorize?state=abc\r\nWaiting for authorization…\r\nAuthentication successful. Connected to linear."
+                )
             })
 
         let result = await login.logIn(client: .claude, serverID: "linear") { url in
@@ -134,13 +137,15 @@ struct ConnectionHealthProbeTests {
     /// What the tool printed reaches the row without its colour codes, cursor
     /// moves, hyperlink escapes or its paste prompt: just the sentence.
     @Test func terminalEscapesAreStrippedFromTheResult() async {
-        let raw = "\u{1B}[?25l\u{1B}[1G\u{1B}[0JOr paste the redirect URL here: \u{1B}[33G\r\n"
+        let raw =
+            "\u{1B}[?25l\u{1B}[1G\u{1B}[0JOr paste the redirect URL here: \u{1B}[33G\r\n"
             + "\u{1B}[0m\u{1B}[31mCouldn't complete authentication for \"sentry\": Authentication timeout\u{1B}[39m\u{1B}[0m\r\n"
             + "\u{1B}[?25h"
-        #expect(ConnectionHealthLoginRunner.plainLines(raw) == [
-            "Or paste the redirect URL here:",
-            "Couldn't complete authentication for \"sentry\": Authentication timeout",
-        ])
+        #expect(
+            ConnectionHealthLoginRunner.plainLines(raw) == [
+                "Or paste the redirect URL here:",
+                "Couldn't complete authentication for \"sentry\": Authentication timeout",
+            ])
         let login = ConnectionHealthLoginRunner(
             homeURL: home,
             locate: { _, _ in URL(fileURLWithPath: "/opt/homebrew/bin/claude") },
@@ -197,7 +202,8 @@ struct ConnectionHealthProbeTests {
 @Suite("Interactive login URL detection")
 struct InteractiveLoginURLDetectionTests {
     @Test func findsTheURLInsideAnOSC8Hyperlink() {
-        let raw = "Visit this URL to authorize:\n  \u{1B}]8;;https://mcp.sentry.dev/oauth/authorize?a=1&b=2\u{07}https://mcp.sentry.dev/oauth/authorize?a=1&b=2\u{1B}]8;;\u{07}\r\n\nWaiting for authorization… (^C to cancel)"
+        let raw =
+            "Visit this URL to authorize:\n  \u{1B}]8;;https://mcp.sentry.dev/oauth/authorize?a=1&b=2\u{07}https://mcp.sentry.dev/oauth/authorize?a=1&b=2\u{1B}]8;;\u{07}\r\n\nWaiting for authorization… (^C to cancel)"
         #expect(
             InteractiveLoginProcess.firstHTTPSURL(in: raw)?.absoluteString
                 == "https://mcp.sentry.dev/oauth/authorize?a=1&b=2")

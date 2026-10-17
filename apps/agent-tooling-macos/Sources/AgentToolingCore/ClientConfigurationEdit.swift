@@ -244,7 +244,9 @@ enum ClientConfigurationEditor {
         return String(decoding: data, as: UTF8.self) + "\n"
     }
 
-    private static func mutate(_ object: [String: Any], path: ArraySlice<String>, value: ClientConfigurationEdit.Value) throws -> [String: Any] {
+    private static func mutate(_ object: [String: Any], path: ArraySlice<String>, value: ClientConfigurationEdit.Value) throws -> [String:
+        Any]
+    {
         var object = object
         guard let key = path.first else { return object }
         if path.count == 1 {
@@ -254,7 +256,10 @@ enum ClientConfigurationEditor {
             case .string(let text): object[key] = text
             case .remove: object.removeValue(forKey: key)
             case .appendToList(let item):
-                if object[key] == nil { object[key] = [item]; break }
+                if object[key] == nil {
+                    object[key] = [item]
+                    break
+                }
                 guard var list = object[key] as? [Any] else { throw ClientConfigurationEditError.notAList(key) }
                 if !list.contains(where: { ($0 as? String) == item }) { list.append(item) }
                 object[key] = list
@@ -263,7 +268,10 @@ enum ClientConfigurationEditor {
                 guard let list = object[key] as? [Any] else { throw ClientConfigurationEditError.notAList(key) }
                 object[key] = list.filter { ($0 as? String) != item }
             case .appendObjectToList(let field, let item):
-                if object[key] == nil { object[key] = [[field: item]]; break }
+                if object[key] == nil {
+                    object[key] = [[field: item]]
+                    break
+                }
                 guard var list = object[key] as? [Any] else { throw ClientConfigurationEditError.notAList(key) }
                 if !list.contains(where: { Self.isSingleFieldEntry($0, field: field, value: item) }) {
                     list.append([field: item])
@@ -294,7 +302,7 @@ enum ClientConfigurationEditor {
     /// at the end of its table; a missing table is added at the end.
     static func applyTOML(_ edit: ClientConfigurationEdit, to text: String) throws -> String {
         let table = edit.keyPath.dropLast().joined(separator: ".")
-        let key = edit.keyPath.last!
+        guard let key = edit.keyPath.last else { throw ClientConfigurationEditError.unsafeEdit }
         var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         if lines.last == "" { lines.removeLast() }
 
@@ -332,15 +340,23 @@ enum ClientConfigurationEditor {
             let adding: Bool
             if case .appendToList = edit.value { adding = true } else { adding = false }
             var items: [String] = []
-            if let keyIndex, let existing = parseInlineStringArray(lines[keyIndex]) { items = existing } else if keyIndex != nil {
+            if let keyIndex, let existing = parseInlineStringArray(lines[keyIndex]) {
+                items = existing
+            } else if keyIndex != nil {
                 throw ClientConfigurationEditError.notAList(key)
             }
             if adding { if !items.contains(item) { items.append(item) } } else { items.removeAll { $0 == item } }
             let rendered = "\(key) = [" + items.map(tomlString).joined(separator: ", ") + "]"
-            if let keyIndex { lines[keyIndex] = leadingWhitespace(lines[keyIndex]) + rendered } else { lines.insert(indent + rendered, at: insertionPoint(lines, start: start, end: end)) }
+            if let keyIndex {
+                lines[keyIndex] = leadingWhitespace(lines[keyIndex]) + rendered
+            } else {
+                lines.insert(indent + rendered, at: insertionPoint(lines, start: start, end: end))
+            }
         default:
             let rendered = "\(key) = \(tomlValue(edit.value))"
-            if let keyIndex { lines[keyIndex] = leadingWhitespace(lines[keyIndex]) + rendered } else {
+            if let keyIndex {
+                lines[keyIndex] = leadingWhitespace(lines[keyIndex]) + rendered
+            } else {
                 lines.insert(indent + rendered, at: insertionPoint(lines, start: start, end: end))
             }
         }
@@ -385,6 +401,8 @@ enum ClientConfigurationEditor {
     private static func parseInlineStringArray(_ line: String) -> [String]? {
         guard let open = line.firstIndex(of: "["), let close = line.lastIndex(of: "]"), open < close else { return nil }
         let inner = line[line.index(after: open)..<close]
-        return inner.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "\"")) }.filter { !$0.isEmpty }
+        return inner.split(separator: ",").map {
+            $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+        }.filter { !$0.isEmpty }
     }
 }

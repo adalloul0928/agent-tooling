@@ -69,12 +69,13 @@ public enum WorkspaceNativePluginCommandPlanning {
         }
 
         guard requirement.component == .plugin,
-              requirement.transport == nil,
-              requirement.physicalDestinationID == target.physicalDestinationID,
-              resolvedTargets.filter({ $0 == target }).count == 1,
-              requirement.contributions.contains(where: {
-                  ResolvedAssignmentSelector(destination: $0.destination) == target.selector
-              }) else {
+            requirement.transport == nil,
+            requirement.physicalDestinationID == target.physicalDestinationID,
+            resolvedTargets.filter({ $0 == target }).count == 1,
+            requirement.contributions.contains(where: {
+                ResolvedAssignmentSelector(destination: $0.destination) == target.selector
+            })
+        else {
             throw WorkspaceNativePluginCommandPlanningError.invalidRequirement
         }
 
@@ -85,7 +86,8 @@ public enum WorkspaceNativePluginCommandPlanning {
             $0.destination.deviceIDs?.contains(device.deviceID) ?? true
         }
         guard requirement.desiredEnabled == nil,
-              applicableContributions.allSatisfy({ $0.desiredEnabled == nil }) else {
+            applicableContributions.allSatisfy({ $0.desiredEnabled == nil })
+        else {
             throw WorkspaceNativePluginCommandPlanningError.unsupportedEnablement
         }
 
@@ -118,7 +120,8 @@ public enum WorkspaceNativePluginCommandPlanning {
             throw WorkspaceNativePluginCommandPlanningError.invalidCapability
         }
         guard issues.isEmpty,
-              resolution.requirements.filter({ $0 == requirement }).count == 1 else {
+            resolution.requirements.filter({ $0 == requirement }).count == 1
+        else {
             throw WorkspaceNativePluginCommandPlanningError.invalidRequirement
         }
 
@@ -130,24 +133,26 @@ public enum WorkspaceNativePluginCommandPlanning {
         }
 
         guard case .nativePlugin(let route) = requirement.strategy,
-              route.client == client,
-              let artifact = document.artifacts.first(where: { $0.identity.id == requirement.artifactID }),
-              artifact.identity.kind == .nativePlugin,
-              artifact.identity.parentPackageID == nil,
-              artifact.authority == .nativeOwned,
-              artifact.nativeRoutes.filter({ $0.client == client }) == [route],
-              OperationCommandPolicy.isSafePluginIdentifier(route.externalPluginID),
-              // An account plugin (`@synced`) or a session-only one has no
-              // marketplace to install it from; it is never planned here.
-              !(client == .claude && ClaudeAccountSync.hasReservedOrigin(route.externalPluginID)) else {
+            route.client == client,
+            let artifact = document.artifacts.first(where: { $0.identity.id == requirement.artifactID }),
+            artifact.identity.kind == .nativePlugin,
+            artifact.identity.parentPackageID == nil,
+            artifact.authority == .nativeOwned,
+            artifact.nativeRoutes.filter({ $0.client == client }) == [route],
+            OperationCommandPolicy.isSafePluginIdentifier(route.externalPluginID),
+            // An account plugin (`@synced`) or a session-only one has no
+            // marketplace to install it from; it is never planned here.
+            !(client == .claude && ClaudeAccountSync.hasReservedOrigin(route.externalPluginID))
+        else {
             throw WorkspaceNativePluginCommandPlanningError.invalidRequirement
         }
 
         try validateManagedPolicy(document.configurationState, artifactID: requirement.artifactID)
 
         guard target.installedClientVersion?.isEmpty == false,
-              target.adapterContractVersion > 0,
-              target.componentContexts.filter({ $0.component == .plugin && $0.transport == nil }).count == 1 else {
+            target.adapterContractVersion > 0,
+            target.componentContexts.filter({ $0.component == .plugin && $0.transport == nil }).count == 1
+        else {
             throw WorkspaceNativePluginCommandPlanningError.invalidCapability
         }
         let matchingCapabilities = device.capabilityEvidence.filter {
@@ -178,13 +183,15 @@ public enum WorkspaceNativePluginCommandPlanning {
             throw WorkspaceNativePluginCommandPlanningError.unsupportedSurface(target.selector.surface)
         }
         guard reviewedInstall.client == client,
-              reviewedInstall.scope == .user,
-              reviewedInstall.executable == expectedExecutable,
-              reviewedInstall.arguments == expectedArguments else {
+            reviewedInstall.scope == .user,
+            reviewedInstall.executable == expectedExecutable,
+            reviewedInstall.arguments == expectedArguments
+        else {
             throw WorkspaceNativePluginCommandPlanningError.invalidReviewedInstall
         }
         guard NativeSkillDestination.isValidRoot(executableURL),
-              executableURL.lastPathComponent == expectedExecutable else {
+            executableURL.lastPathComponent == expectedExecutable
+        else {
             throw WorkspaceNativePluginCommandPlanningError.invalidCLIURL
         }
         do {

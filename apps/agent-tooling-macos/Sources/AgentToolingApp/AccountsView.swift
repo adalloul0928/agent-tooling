@@ -37,7 +37,9 @@ struct AccountsView: View {
                 }
                 .buttonStyle(.glass)
                 .disabled(session.isReading || session.providers.isEmpty)
-                .help("Asks Claude Code and Codex what your accounts give them on this Mac. Reads only; Claude Code checks its connections while it answers.")
+                .help(
+                    "Asks Claude Code and Codex what your accounts give them on this Mac. Reads only; Claude Code checks its connections while it answers."
+                )
             }
             content
         }
@@ -69,7 +71,8 @@ struct AccountsView: View {
             EmptyStateView(
                 symbol: "person.badge.key",
                 title: session.isReading ? "Reading your accounts…" : "Accounts have not been read yet",
-                message: "Agent Tooling asks Claude Code and Codex what your claude.ai and ChatGPT accounts give them. Nothing on this Mac changes.",
+                message:
+                    "Agent Tooling asks Claude Code and Codex what your claude.ai and ChatGPT accounts give them. Nothing on this Mac changes.",
                 actionTitle: session.isReading ? nil : "Check accounts",
                 isActionEnabled: !session.isReading,
                 action: { Task { await session.read(depth: .contents) } })
@@ -109,10 +112,12 @@ struct AccountsView: View {
     }
 
     private var explainer: some View {
-        Text("Your claude.ai and ChatGPT accounts sync themselves to every place you sign in. This tab shows what they give Claude Code and Codex on this Mac. Add, connect and remove things on the vendor's site; the switches here decide what each app loads, and apply the same way on every Mac.")
-            .font(AgentFont.caption)
-            .foregroundStyle(.secondary)
-            .wrapsLines()
+        Text(
+            "Your claude.ai and ChatGPT accounts sync themselves to every place you sign in. This tab shows what they give Claude Code and Codex on this Mac. Add, connect and remove things on the vendor's site; the switches here decide what each app loads, and apply the same way on every Mac."
+        )
+        .font(AgentFont.caption)
+        .foregroundStyle(.secondary)
+        .wrapsLines()
     }
 
     private var statusLine: String {
@@ -194,7 +199,8 @@ private struct AccountCard: View {
         guard let signIn = observation.signIn else {
             return "\(provider.client.rawValue) did not say how it signs in."
         }
-        var line = "\(provider.client.rawValue)\(observation.clientVersion.map { " \($0)" } ?? "") signs in with \(signIn.summary(for: provider))"
+        var line =
+            "\(provider.client.rawValue)\(observation.clientVersion.map { " \($0)" } ?? "") signs in with \(signIn.summary(for: provider))"
         if signIn.method == .subscription, let email = signIn.email { line += " as \(email)" }
         return line + "."
     }
@@ -204,7 +210,9 @@ private struct AccountCard: View {
         if let signIn = observation.signIn, !signIn.method.reachesAccount {
             AttentionBanner(
                 title: "\(provider.client.rawValue) is not signed in with \(provider.accountName)",
-                message: "Only a subscription sign-in brings your account's \(provider == .claude ? "connectors, skills and plugins" : "apps") to \(provider.client.rawValue). Run \(provider == .claude ? "`claude auth login`" : "`codex login`") in a terminal, then check again.")
+                message:
+                    "Only a subscription sign-in brings your account's \(provider == .claude ? "connectors, skills and plugins" : "apps") to \(provider.client.rawValue). Run \(provider == .claude ? "`claude auth login`" : "`codex login`") in a terminal, then check again."
+            )
         }
         if !observation.shellOverrides.isEmpty {
             AttentionBanner(
@@ -224,10 +232,12 @@ private struct AccountCard: View {
                         + (plan.held.isEmpty ? "" : " \(plan.held.count) more cannot be applied here; see each row.")
             ) {
                 if !plan.changes.isEmpty {
-                    Button(session.applyingProvider == provider ? "Applying…" : ActionTitles.reviewChanges(count: plan.changes.count)) { onReview(plan) }
-                        .primaryActionStyle()
-                        .controlSize(.small)
-                        .disabled(session.applyingProvider != nil || !session.canWrite)
+                    Button(session.applyingProvider == provider ? "Applying…" : ActionTitles.reviewChanges(count: plan.changes.count)) {
+                        onReview(plan)
+                    }
+                    .primaryActionStyle()
+                    .controlSize(.small)
+                    .disabled(session.applyingProvider != nil || !session.canWrite)
                 }
             }
         }
@@ -280,9 +290,12 @@ private struct SharedChoicesCard: View {
 
     static func detail(_ setting: AccountSetting) -> String {
         switch setting {
-        case .connectors: "Terminal and IDE sessions fetch your claude.ai connectors (disableClaudeAiConnectors). The desktop app's Code tab gets them from claude.ai either way."
-        case .pluginSync: "Claude Code loads the plugins on your account as <name>@synced (syncClaudeAiPlugins). Off moves the downloaded ones to Claude Code's trash."
-        case .skillSync: "Claude Code downloads your account's skills into ~/.claude/skills/synced (syncClaudeAiSkills). Off moves them to Claude Code's trash."
+        case .connectors:
+            "Terminal and IDE sessions fetch your claude.ai connectors (disableClaudeAiConnectors). The desktop app's Code tab gets them from claude.ai either way."
+        case .pluginSync:
+            "Claude Code loads the plugins on your account as <name>@synced (syncClaudeAiPlugins). Off moves the downloaded ones to Claude Code's trash."
+        case .skillSync:
+            "Claude Code downloads your account's skills into ~/.claude/skills/synced (syncClaudeAiSkills). Off moves them to Claude Code's trash."
         case .apps: "Codex lists and calls the apps connected to your ChatGPT account ([features] apps)."
         case .approvalMode: "The default for every app's tools, unless an app sets its own (apps._default.default_tools_approval_mode)."
         case .destructiveTools: "Whether tools an app marks destructive may run at all (apps._default.destructive_enabled)."
@@ -358,8 +371,11 @@ private struct ChoiceMenu: View {
                 Button {
                     Task { await session.setChoice(key, to: value) }
                 } label: {
-                    if shared == value { Label(Self.label(value, setting: key.setting), systemImage: "checkmark") }
-                    else { Text(Self.label(value, setting: key.setting)) }
+                    if shared == value {
+                        Label(Self.label(value, setting: key.setting), systemImage: "checkmark")
+                    } else {
+                        Text(Self.label(value, setting: key.setting))
+                    }
                 }
             }
             Divider()
@@ -375,7 +391,9 @@ private struct ChoiceMenu: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .disabled(session.isSaving || !session.canWrite)
-        .help("The choice every Mac follows. Choosing records it for every Mac; each Mac then applies it to its own settings after you review the change there.")
+        .help(
+            "The choice every Mac follows. Choosing records it for every Mac; each Mac then applies it to its own settings after you review the change there."
+        )
         .accessibilityLabel("Every Mac: \(key.label)")
     }
 
@@ -515,13 +533,16 @@ private struct PublishingCard: View {
 
     private var instructions: String {
         let source = status.marketplaceSource.map { "`\($0)`" } ?? "this repository"
-        return "Add \(source) once at claude.ai › Customize › Plugins › Add › Add marketplace, and turn on Sync automatically. A private GitHub repository needs the Claude GitHub App. After that, each merge to main reaches claude.ai, the Claude desktop app, and Claude Code on every Mac signed in to your account. Add only plugins meant for every project: an account plugin loads everywhere."
+        return
+            "Add \(source) once at claude.ai › Customize › Plugins › Add › Add marketplace, and turn on Sync automatically. A private GitHub repository needs the Claude GitHub App. After that, each merge to main reaches claude.ai, the Claude desktop app, and Claude Code on every Mac signed in to your account. Add only plugins meant for every project: an account plugin loads everywhere."
     }
 
     private func detail(_ plugin: WorkspaceAccountsSession.PublishingStatus.Plugin) -> String {
         switch (plugin.isOnAccount, plugin.isProjectScoped) {
-        case (true, true): "Assigned to a project here, but on the account it loads in every project. Remove it on claude.ai to keep it scoped."
-        case (true, false): "Claude Code loads it from your account as \(plugin.name)@synced, unless a local copy of the same name is enabled."
+        case (true, true):
+            "Assigned to a project here, but on the account it loads in every project. Remove it on claude.ai to keep it scoped."
+        case (true, false):
+            "Claude Code loads it from your account as \(plugin.name)@synced, unless a local copy of the same name is enabled."
         case (false, true): "Assigned to a project; leave it off your account so it stays scoped."
         case (false, false): "Add it on claude.ai to have it in chat, Cowork and every Claude Code session."
         }
@@ -575,8 +596,10 @@ struct AccountChangesReviewSheet: View {
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text("Apply shared \(plan.provider.accountName) choices to \(plan.provider.client.rawValue)")
                     .font(AgentFont.titleLarge)
-                Text("Changes \(plan.file.relativePath) on this Mac. The file is copied into Agent Tooling's trash first, and sessions already open keep their old settings until they restart.")
-                    .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
+                Text(
+                    "Changes \(plan.file.relativePath) on this Mac. The file is copied into Agent Tooling's trash first, and sessions already open keep their old settings until they restart."
+                )
+                .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Space.xxxl)
@@ -648,10 +671,12 @@ struct AccountContentsStrip: View {
                 Image(systemName: "person.badge.key")
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                Text("Your accounts also give \(parts.joined(separator: " and ")). They stay in step with the account, so they are not part of this library.")
-                    .font(AgentFont.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                Text(
+                    "Your accounts also give \(parts.joined(separator: " and ")). They stay in step with the account, so they are not part of this library."
+                )
+                .font(AgentFont.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
                 Spacer(minLength: Space.lg)
                 Button("Show in Accounts") { navigate(.accounts) }
                     .inlineActionStyle()

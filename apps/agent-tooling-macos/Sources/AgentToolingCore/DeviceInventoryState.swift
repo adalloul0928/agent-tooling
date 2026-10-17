@@ -102,7 +102,8 @@ public struct DeviceInventoryState: Codable, Hashable, Sendable {
                     throw WorkspaceDomainValidationError.invalidField("device inventory source check timestamp")
                 }
                 if let detail = binding.lastCheckError,
-                   SensitiveValueRedactor.containsCredentialValue(in: detail) {
+                    SensitiveValueRedactor.containsCredentialValue(in: detail)
+                {
                     throw WorkspaceDomainValidationError.invalidField("device inventory source check detail")
                 }
             }
@@ -114,14 +115,16 @@ public struct DeviceInventoryState: Codable, Hashable, Sendable {
         let mappings = Dictionary(grouping: portable.configurationState?.identityMap ?? [], by: \.legacy)
         for record in records {
             guard let artifactMatches = artifacts[record.artifactID], artifactMatches.count == 1,
-                  let artifact = artifactMatches.first else {
+                let artifact = artifactMatches.first
+            else {
                 throw WorkspaceDomainValidationError.missingReference("device inventory artifact")
             }
             guard record.captured.accepts(artifact.identity.kind) else {
                 throw WorkspaceDomainValidationError.invalidField("device inventory artifact kind")
             }
             guard let mappingMatches = mappings[record.legacy], mappingMatches.count == 1,
-                  mappingMatches[0].objectID.rawValue == record.artifactID.rawValue else {
+                mappingMatches[0].objectID.rawValue == record.artifactID.rawValue
+            else {
                 throw WorkspaceDomainValidationError.missingReference("device inventory live legacy mapping")
             }
         }

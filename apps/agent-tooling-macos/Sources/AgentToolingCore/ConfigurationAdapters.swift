@@ -47,16 +47,20 @@ public struct ClaudeCodeConfigurationAdapter: ConfigurationAdapter {
     public func settings(installedClientVersion: String?) -> [ConfigurationSettingDefinition] {
         [
             .init(key: "model", displayName: "Model", rule: .replace, requiresNewSession: true),
-            .init(key: "permissions.allow", displayName: "Allowed tools",
-                  rule: .combineList, requiresNewSession: true),
-            .init(key: "permissions.deny", displayName: "Denied tools",
-                  rule: .combineList, requiresNewSession: true),
+            .init(
+                key: "permissions.allow", displayName: "Allowed tools",
+                rule: .combineList, requiresNewSession: true),
+            .init(
+                key: "permissions.deny", displayName: "Denied tools",
+                rule: .combineList, requiresNewSession: true),
             .init(key: "hooks", displayName: "Hooks", rule: .combineList, requiresNewSession: true),
             .init(key: "env", displayName: "Environment", rule: .replace, requiresNewSession: true),
-            .init(key: "includeCoAuthoredBy", displayName: "Co-authored-by attribution",
-                  rule: .replace, requiresNewSession: false),
-            .init(key: "cleanupPeriodDays", displayName: "Transcript retention",
-                  rule: .replace, requiresNewSession: false),
+            .init(
+                key: "includeCoAuthoredBy", displayName: "Co-authored-by attribution",
+                rule: .replace, requiresNewSession: false),
+            .init(
+                key: "cleanupPeriodDays", displayName: "Transcript retention",
+                rule: .replace, requiresNewSession: false),
         ]
     }
 }
@@ -73,10 +77,12 @@ public struct CodexConfigurationAdapter: ConfigurationAdapter {
     public var usesSeparateProfileFiles: Bool
 
     public init(installedClientVersion: String? = nil) {
-        let installed = ClientVersion(installedClientVersion)
-        let boundary = ClientVersion(Self.separateProfileFilesFrom)!
         // An unknown version claims neither layout.
-        usesSeparateProfileFiles = installed.map { $0 >= boundary } ?? false
+        if let installed = ClientVersion(installedClientVersion), let boundary = ClientVersion(Self.separateProfileFilesFrom) {
+            usesSeparateProfileFiles = installed >= boundary
+        } else {
+            usesSeparateProfileFiles = false
+        }
     }
 
     /// Codex has no managed-policy layer and no project settings file; a
@@ -92,14 +98,17 @@ public struct CodexConfigurationAdapter: ConfigurationAdapter {
     public func settings(installedClientVersion: String?) -> [ConfigurationSettingDefinition] {
         [
             .init(key: "model", displayName: "Model", rule: .replace, requiresNewSession: true),
-            .init(key: "model_provider", displayName: "Model provider",
-                  rule: .replace, requiresNewSession: true),
-            .init(key: "approval_policy", displayName: "Approval policy",
-                  rule: .replace, requiresNewSession: true),
+            .init(
+                key: "model_provider", displayName: "Model provider",
+                rule: .replace, requiresNewSession: true),
+            .init(
+                key: "approval_policy", displayName: "Approval policy",
+                rule: .replace, requiresNewSession: true),
             .init(key: "sandbox_mode", displayName: "Sandbox", rule: .replace, requiresNewSession: true),
             .init(key: "profile", displayName: "Active profile", rule: .replace, requiresNewSession: true),
-            .init(key: "mcp_servers", displayName: "MCP servers",
-                  rule: .combineList, requiresNewSession: true),
+            .init(
+                key: "mcp_servers", displayName: "MCP servers",
+                rule: .combineList, requiresNewSession: true),
         ]
     }
 }

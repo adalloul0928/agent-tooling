@@ -312,7 +312,8 @@ final class WorkspaceSkillDraftSession {
         messages.append(SkillDraftMessage(role: .person, text: text))
         await runTurn(client: client) {
             try await self.drafting.continueConversation(requestID: requestID, reply: text)
-        } onFailure: {}
+        } onFailure: {
+        }
     }
 
     private func runTurn(

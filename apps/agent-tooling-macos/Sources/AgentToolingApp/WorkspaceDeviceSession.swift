@@ -298,7 +298,8 @@ final class WorkspaceDeviceSession {
                 return
             }
         }
-        let summary = findings
+        let summary =
+            findings
             .map { "\($0.client.rawValue) at \($0.executableURL.path)" }
             .sorted().joined(separator: " · ")
         smartFindMessage = "Found \(summary). Checking again."

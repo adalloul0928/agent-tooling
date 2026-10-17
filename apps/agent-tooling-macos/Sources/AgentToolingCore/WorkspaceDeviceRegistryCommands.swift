@@ -105,10 +105,11 @@ extension WorkspaceApplicationService {
                 devices[index].receivesSharedAssignments = command.receivesSharedAssignments
                 devices[index].lastSeenAt = .now
             } else {
-                devices.append(.init(
-                    id: command.deviceID, name: name,
-                    receivesSharedAssignments: command.receivesSharedAssignments,
-                    registeredAt: .now, lastSeenAt: .now))
+                devices.append(
+                    .init(
+                        id: command.deviceID, name: name,
+                        receivesSharedAssignments: command.receivesSharedAssignments,
+                        registeredAt: .now, lastSeenAt: .now))
             }
             document.devices = devices
             return []

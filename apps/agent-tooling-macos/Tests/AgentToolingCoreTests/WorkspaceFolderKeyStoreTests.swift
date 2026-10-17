@@ -58,7 +58,8 @@ struct WorkspaceFolderKeyStoreTests {
         let key = WorkspaceFolderKeyStore.generate()
         let phrase = WorkspaceFolderKeyStore.recoveryPhrase(for: key)
         // Someone reading it off a screen types O for zero and l for one.
-        let mistyped = phrase
+        let mistyped =
+            phrase
             .replacingOccurrences(of: "0", with: "O")
             .replacingOccurrences(of: "1", with: "l")
 

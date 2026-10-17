@@ -151,7 +151,11 @@ struct ClientsSectionRenderTests {
         try services.keep(clientReviews: [
             .claude: ClientReview(
                 client: .claude, installedVersion: "2.1.285", latestVersion: "2.1.287",
-                notes: [.init(client: .claude, version: "2.1.287", source: "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md", body: "- Added thing")],
+                notes: [
+                    .init(
+                        client: .claude, version: "2.1.287",
+                        source: "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md", body: "- Added thing")
+                ],
                 review: ShellRenderFixture.setupReview(over: audit), dismissedRecommendationIDs: [], completedAt: .now)
         ])
         let fixture = try await ShellRenderFixture(setupServices: services)

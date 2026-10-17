@@ -25,9 +25,12 @@ struct LateContentLayoutTests {
         }
     }
 
-    /// Hosts the view in a titled window, runs `change`, and returns the
-    /// hosting view's height afterwards. It must still be the window's.
-    private func heightAfterChange(_ view: some View, change: () async -> Void) async throws -> CGFloat {
+    /// AppKit may constrain the requested size to the display. The settled
+    /// content height is the bound that both the window and hosted view must
+    /// keep when `change` introduces more content.
+    private func heightAfterChange(
+        _ view: some View, change: () async -> Void
+    ) async throws -> (hostHeight: CGFloat, windowHeight: CGFloat) {
         let window = NSWindow(
             contentRect: CGRect(origin: .zero, size: Self.windowSize),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
@@ -39,11 +42,14 @@ struct LateContentLayoutTests {
         defer { window.orderOut(nil) }
         Self.spin(0.3)
         host.layoutSubtreeIfNeeded()
-        #expect(host.frame.height == Self.windowSize.height, "the screen did not fit the window before the change")
+        let windowHeight = window.contentRect(forFrameRect: window.frame).height
+        try #require(windowHeight > 0, "the window has no content area")
+        #expect(host.frame.height == windowHeight, "the screen did not fit the window before the change")
         await change()
         Self.spin(0.5)
         host.layoutSubtreeIfNeeded()
-        return host.frame.height
+        #expect(window.contentRect(forFrameRect: window.frame).height == windowHeight, "the late content resized the window")
+        return (host.frame.height, windowHeight)
     }
 
     @MainActor private static func spin(_ seconds: Double) {
@@ -57,22 +63,22 @@ struct LateContentLayoutTests {
         let session = WorkspaceActivitySession(store: fixture.store)
         await session.refresh(driftReader: StubInstallDriftReader(reports: []))
 
-        let height = try await heightAfterChange(ActivityView(session: session).environment(AppNavigationState())) {
+        let layout = try await heightAfterChange(ActivityView(session: session).environment(AppNavigationState())) {
             await session.refresh(driftReader: StubInstallDriftReader(reports: drift(3)))
         }
 
         #expect(session.drift.count == 3)
-        #expect(height == Self.windowSize.height, "the drift notice made the screen taller than the window")
+        #expect(layout.hostHeight == layout.windowHeight, "the drift notice made the screen taller than the window")
     }
 
     /// The layout behind `wrapsLines()`, on its own: a wrapping sentence
     /// inserted above a scroll view after first layout.
     @Test func wrappingTextArrivingLateKeepsTheScreenInTheWindow() async throws {
         let shown = LateBannerHost.Shown()
-        let height = try await heightAfterChange(LateBannerHost(shown: shown)) {
+        let layout = try await heightAfterChange(LateBannerHost(shown: shown)) {
             shown.value = true
         }
-        #expect(height == Self.windowSize.height)
+        #expect(layout.hostHeight == layout.windowHeight)
     }
 }
 

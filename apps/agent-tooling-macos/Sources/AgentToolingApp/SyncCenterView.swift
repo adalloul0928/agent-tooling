@@ -346,7 +346,10 @@ struct SyncCenterView: View {
         let setup = workspace.setup
         let review = setup.clientReviews[app]
         let running = setup.reviewingClient == app
-        TitledCard("What's new in \(app.rawValue)", count: review.map { r in r.openRecommendations.isEmpty ? nil : "\(r.openRecommendations.count)" } ?? nil) {
+        TitledCard(
+            "What's new in \(app.rawValue)",
+            count: review.map { r in r.openRecommendations.isEmpty ? nil : "\(r.openRecommendations.count)" } ?? nil
+        ) {
             Button {
                 Task { await setup.reviewClient(app) }
             } label: {
@@ -360,8 +363,10 @@ struct SyncCenterView: View {
                 if running {
                     HStack(spacing: Space.lg) {
                         ProgressView().controlSize(.small)
-                        Text("Fetching \(app.rawValue)'s release notes, then having \(setup.reviewClient?.rawValue ?? "your assistant") read them against your setup. A few minutes.")
-                            .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
+                        Text(
+                            "Fetching \(app.rawValue)'s release notes, then having \(setup.reviewClient?.rawValue ?? "your assistant") read them against your setup. A few minutes."
+                        )
+                        .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
                         Spacer()
                     }
                     .padding(Space.xl)
@@ -384,9 +389,12 @@ struct SyncCenterView: View {
                             ForEach(review.notes, id: \.version) { note in
                                 VStack(alignment: .leading, spacing: Space.xxs) {
                                     Text("\(note.version)").font(AgentFont.captionSemibold)
-                                    Link(note.source, destination: URL(string: note.source) ?? URL(filePath: "/")).font(AgentFont.micro).lineLimit(1)
-                                    Text(note.body.prefix(600) + (note.body.count > 600 ? "…" : "")).font(AgentFont.micro).foregroundStyle(.secondary)
-                                        .wrapsLines()
+                                    Link(note.source, destination: URL(string: note.source) ?? URL(filePath: "/")).font(AgentFont.micro)
+                                        .lineLimit(1)
+                                    Text(note.body.prefix(600) + (note.body.count > 600 ? "…" : "")).font(AgentFont.micro).foregroundStyle(
+                                        .secondary
+                                    )
+                                    .wrapsLines()
                                 }
                                 .padding(.vertical, Space.sm)
                             }
@@ -400,11 +408,23 @@ struct SyncCenterView: View {
                         let item = CheckupTriage.item(for: recommendation, audit: setup.checkup?.audit)
                         CheckupRow(
                             item: item, isExpanded: expandedReviewRows.contains(item.id), isBusy: setup.isApplying,
-                            onToggle: { if expandedReviewRows.contains(item.id) { expandedReviewRows.remove(item.id) } else { expandedReviewRows.insert(item.id) } },
+                            onToggle: {
+                                if expandedReviewRows.contains(item.id) {
+                                    expandedReviewRows.remove(item.id)
+                                } else {
+                                    expandedReviewRows.insert(item.id)
+                                }
+                            },
                             onRun: {
-                                if item.canRun { Task { await setup.applyAll(item.actions, settings: item.settings.map { ($0.client, $0.key, $0.value) }) } }
-                                else if let section = item.opens { navigate(section) }
-                                else { setup.dismiss(recommendation, in: app) }
+                                if item.canRun {
+                                    Task {
+                                        await setup.applyAll(item.actions, settings: item.settings.map { ($0.client, $0.key, $0.value) })
+                                    }
+                                } else if let section = item.opens {
+                                    navigate(section)
+                                } else {
+                                    setup.dismiss(recommendation, in: app)
+                                }
                             },
                             onRunOne: { action in Task { await setup.apply(action) } },
                             onDismiss: { setup.dismiss(recommendation, in: app) },
@@ -413,8 +433,10 @@ struct SyncCenterView: View {
                 } else if let message = setup.clientReviewMessage {
                     Text(message).font(AgentFont.body).foregroundStyle(.secondary).padding(Space.xl)
                 } else {
-                    Text("Fetches what \(app.rawValue) has published since the version on this Mac and has your assistant read it against your configuration: settings the docs now recommend, hooks, skills, plugins, and connections worth adding, and what is deprecated. Every claim names its source.")
-                        .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines().padding(Space.xl)
+                    Text(
+                        "Fetches what \(app.rawValue) has published since the version on this Mac and has your assistant read it against your configuration: settings the docs now recommend, hooks, skills, plugins, and connections worth adding, and what is deprecated. Every claim names its source."
+                    )
+                    .font(AgentFont.body).foregroundStyle(.secondary).wrapsLines().padding(Space.xl)
                 }
             }
         }
@@ -430,8 +452,11 @@ struct SyncCenterView: View {
     }
 
     private func reviewHelp(_ app: ClientKind) -> String {
-        guard let assistant = workspace.setup.reviewClient else { return "A review needs Claude Code or Codex; this Mac is not managing either." }
-        return "Fetches \(app.rawValue)'s release notes and has your signed-in \(assistant.rawValue) read them, your configuration, and \(app.rawValue)'s documentation on the web. It can read; it cannot change anything."
+        guard let assistant = workspace.setup.reviewClient else {
+            return "A review needs Claude Code or Codex; this Mac is not managing either."
+        }
+        return
+            "Fetches \(app.rawValue)'s release notes and has your signed-in \(assistant.rawValue) read them, your configuration, and \(app.rawValue)'s documentation on the web. It can read; it cannot change anything."
     }
 
     /// One count under an app's header, titled with the library's own noun and
@@ -752,7 +777,8 @@ struct AppTile: View {
         .help(
             [selected ? "Show every app again" : "Show only \(client.rawValue)", verdict.detail]
                 .filter { !$0.isEmpty }
-                .joined(separator: " · "))
+                .joined(separator: " · ")
+        )
         .accessibilityLabel("\(client.rawValue), \(clause)")
         .accessibilityValue(verdict.detail)
         .accessibilityAddTraits(selected ? .isSelected : [])

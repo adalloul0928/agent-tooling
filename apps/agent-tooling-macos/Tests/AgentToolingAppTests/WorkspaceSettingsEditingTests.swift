@@ -1,8 +1,8 @@
 import Foundation
 import Testing
 
-@testable import AgentToolingCore
 @testable import AgentToolingApp
+@testable import AgentToolingCore
 
 /// Editing is offered only where it would actually work, and a change that
 /// would not take effect is refused rather than written and called done.
@@ -41,8 +41,9 @@ struct WorkspaceSettingsEditingTests {
         let receipt = try #require(session.lastReceipt)
         #expect(receipt.effectiveValue == .string("sonnet"))
         // The person's original is beside it, byte for byte.
-        #expect(try Data(contentsOf: URL(fileURLWithPath: receipt.backupPath))
-            == Data(#"{"model":"opus"}"#.utf8))
+        #expect(
+            try Data(contentsOf: URL(fileURLWithPath: receipt.backupPath))
+                == Data(#"{"model":"opus"}"#.utf8))
         // And the screen now shows what the file actually says.
         let after = try #require(session.surfaces.first { $0.id == .claudeCode })
         #expect(after.configuration?.rows.first { $0.key == "model" }?.value == .string("sonnet"))
@@ -63,10 +64,12 @@ struct WorkspaceSettingsEditingTests {
         try fixture.writeUserSettings(#"{"model":"haiku"}"#)
         await session.applyEdit(.string("sonnet"))
 
-        #expect(session.editMessage?.contains("changed since you opened it") == true,
-                "\(session.editMessage ?? "")")
-        #expect(try Data(contentsOf: URL(fileURLWithPath: fixture.userSettingsPath))
-            == Data(#"{"model":"haiku"}"#.utf8))
+        #expect(
+            session.editMessage?.contains("changed since you opened it") == true,
+            "\(session.editMessage ?? "")")
+        #expect(
+            try Data(contentsOf: URL(fileURLWithPath: fixture.userSettingsPath))
+                == Data(#"{"model":"haiku"}"#.utf8))
         #expect(session.lastReceipt == nil)
     }
 
@@ -140,8 +143,9 @@ struct WorkspaceSettingsEditingTests {
         // policy cannot be ruled out on a Mac where it can be read.
         let recorded = try #require(ConfigurationLayerReader.managedPolicyPath(for: .claudeCode))
         #expect(recorded.path == "/Library/Application Support/ClaudeCode/managed-settings.json")
-        #expect(!WorkspaceSettingsSession(homeRoot: fixture.home, library: fixture.library)
-            .managedPolicyUnknown)
+        #expect(
+            !WorkspaceSettingsSession(homeRoot: fixture.home, library: fixture.library)
+                .managedPolicyUnknown)
         // Codex documents no equivalent this build has read, and an invented
         // one would be worse than none.
         #expect(ConfigurationLayerReader.managedPolicyPath(for: .codexCLI) == nil)
@@ -229,22 +233,27 @@ struct WorkspaceSettingsEditingTests {
                 .appending(path: "settings-editing-\(UUID())")
             home = root.appending(path: "home")
             for path in [".claude", ".codex"] {
-                try FileManager.default.createDirectory(at: home.appending(path: path),
+                try FileManager.default.createDirectory(
+                    at: home.appending(path: path),
                     withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             }
             let writerID = WorkspaceObjectID()
-            let document = try WorkspaceDocumentCoding.seal(.init(
-                workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID)))
+            let document = try WorkspaceDocumentCoding.seal(
+                .init(
+                    workspaceID: WorkspaceObjectID(), revision: .init(writerID: writerID)))
             var device = DeviceWorkspaceState(workspaceID: document.workspaceID)
             device.capabilityEvidence = [
-                .init(surface: .claudeCode, installedClientVersion: "2.0.0", adapterContractVersion: 1,
-                      component: .skill, scopes: [.user], support: .supported,
-                      observedAt: Date(timeIntervalSince1970: 1_700_000_000)),
-                .init(surface: .codexCLI, installedClientVersion: "0.140.0", adapterContractVersion: 1,
-                      component: .skill, scopes: [.user], support: .supported,
-                      observedAt: Date(timeIntervalSince1970: 1_700_000_000)),
+                .init(
+                    surface: .claudeCode, installedClientVersion: "2.0.0", adapterContractVersion: 1,
+                    component: .skill, scopes: [.user], support: .supported,
+                    observedAt: Date(timeIntervalSince1970: 1_700_000_000)),
+                .init(
+                    surface: .codexCLI, installedClientVersion: "0.140.0", adapterContractVersion: 1,
+                    component: .skill, scopes: [.user], support: .supported,
+                    observedAt: Date(timeIntervalSince1970: 1_700_000_000)),
             ]
-            store = try WorkspaceRevisionStore(containerRoot: root.appending(path: "store"),
+            store = try WorkspaceRevisionStore(
+                containerRoot: root.appending(path: "store"),
                 workspaceID: document.workspaceID, deviceID: device.deviceID)
             try store.initialize(document: document, device: device)
             library = WorkspaceLibrarySession(
@@ -267,8 +276,9 @@ struct WorkspaceSettingsEditingTests {
         }
 
         func session(withPolicy: Bool = false) -> WorkspaceSettingsSession {
-            WorkspaceSettingsSession(homeRoot: home, library: library,
-                                     managedPolicyPath: .some(withPolicy ? managedPolicyURL : nil))
+            WorkspaceSettingsSession(
+                homeRoot: home, library: library,
+                managedPolicyPath: .some(withPolicy ? managedPolicyURL : nil))
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }

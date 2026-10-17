@@ -439,7 +439,9 @@ private struct PluginDetailView: View {
                 if let accountRoute {
                     AttentionBanner(
                         title: "This plugin comes from your claude.ai account",
-                        message: "Claude Code loads it from the account as \(accountRoute). Add, remove and update it on claude.ai; turn it off on every Mac from Apps › Accounts.")
+                        message:
+                            "Claude Code loads it from the account as \(accountRoute). Add, remove and update it on claude.ai; turn it off on every Mac from Apps › Accounts."
+                    )
                 }
                 managedByCard
                 if !includedSkills.isEmpty {
@@ -473,9 +475,10 @@ private struct PluginDetailView: View {
             Button("Assign…", systemImage: "arrow.turn.up.right") { isAssigning = true }
                 .secondaryActionStyle()
                 .disabled(library.isBusy || !row.isAssignable || accountRoute != nil)
-                .help(accountRoute != nil
-                    ? "An account plugin is placed by claude.ai, not by an assignment."
-                    : row.isAssignable ? "Choose where this plugin should be used." : (row.assignmentExplanation ?? ""))
+                .help(
+                    accountRoute != nil
+                        ? "An account plugin is placed by claude.ai, not by an assignment."
+                        : row.isAssignable ? "Choose where this plugin should be used." : (row.assignmentExplanation ?? ""))
         }
     }
 

@@ -3,7 +3,10 @@ import Foundation
 public struct DeviceProjectRootBinding: Codable, Hashable, Sendable {
     public var projectID: ArtifactID
     public var rootPath: String
-    public init(projectID: ArtifactID, rootPath: String) { self.projectID = projectID; self.rootPath = rootPath }
+    public init(projectID: ArtifactID, rootPath: String) {
+        self.projectID = projectID
+        self.rootPath = rootPath
+    }
 }
 
 /// How often this Mac looks for newer versions of what the library holds.
@@ -202,28 +205,39 @@ public struct DeviceApplicationState: Codable, Hashable, Sendable {
         accountSurfaces: [AccountSurface] = [], connectors: [ConnectorRecord] = [],
         marketplacePackages: [MarketplacePackage] = [], catalogSourceIDs: [UUID] = []
     ) {
-        self.preferences = preferences; self.backupConfiguration = backupConfiguration
-        self.encryptedSyncConfiguration = encryptedSyncConfiguration; self.importedRepositoryPath = importedRepositoryPath
-        self.activities = activities; self.operationReceipts = operationReceipts
-        self.accountSurfaces = accountSurfaces; self.connectors = connectors; self.marketplacePackages = marketplacePackages
+        self.preferences = preferences
+        self.backupConfiguration = backupConfiguration
+        self.encryptedSyncConfiguration = encryptedSyncConfiguration
+        self.importedRepositoryPath = importedRepositoryPath
+        self.activities = activities
+        self.operationReceipts = operationReceipts
+        self.accountSurfaces = accountSurfaces
+        self.connectors = connectors
+        self.marketplacePackages = marketplacePackages
         self.catalogSourceIDs = catalogSourceIDs.sorted { $0.uuidString < $1.uuidString }
     }
 
     public init(snapshot: WorkspaceSnapshot) {
-        self.init(preferences: .init(snapshot.preferences), backupConfiguration: snapshot.backupConfiguration,
-                  encryptedSyncConfiguration: snapshot.encryptedSyncConfiguration,
-                  importedRepositoryPath: snapshot.importedRepositoryPath, activities: snapshot.activities,
-                  operationReceipts: snapshot.operationReceipts, accountSurfaces: snapshot.accountSurfaces,
-                  connectors: snapshot.connectors, marketplacePackages: snapshot.marketplacePackages,
-                  catalogSourceIDs: snapshot.sources.map(\.id))
+        self.init(
+            preferences: .init(snapshot.preferences), backupConfiguration: snapshot.backupConfiguration,
+            encryptedSyncConfiguration: snapshot.encryptedSyncConfiguration,
+            importedRepositoryPath: snapshot.importedRepositoryPath, activities: snapshot.activities,
+            operationReceipts: snapshot.operationReceipts, accountSurfaces: snapshot.accountSurfaces,
+            connectors: snapshot.connectors, marketplacePackages: snapshot.marketplacePackages,
+            catalogSourceIDs: snapshot.sources.map(\.id))
     }
 
     public func apply(to snapshot: inout WorkspaceSnapshot) throws {
         try validate()
-        snapshot.preferences = preferences.workspacePreferences; snapshot.backupConfiguration = backupConfiguration
-        snapshot.encryptedSyncConfiguration = encryptedSyncConfiguration; snapshot.importedRepositoryPath = importedRepositoryPath
-        snapshot.activities = activities; snapshot.operationReceipts = operationReceipts
-        snapshot.accountSurfaces = accountSurfaces; snapshot.connectors = connectors; snapshot.marketplacePackages = marketplacePackages
+        snapshot.preferences = preferences.workspacePreferences
+        snapshot.backupConfiguration = backupConfiguration
+        snapshot.encryptedSyncConfiguration = encryptedSyncConfiguration
+        snapshot.importedRepositoryPath = importedRepositoryPath
+        snapshot.activities = activities
+        snapshot.operationReceipts = operationReceipts
+        snapshot.accountSurfaces = accountSurfaces
+        snapshot.connectors = connectors
+        snapshot.marketplacePackages = marketplacePackages
     }
 
     public func validate(against configuration: WorkspaceConfigurationState? = nil) throws {
@@ -232,10 +246,11 @@ public struct DeviceApplicationState: Codable, Hashable, Sendable {
         }
         if let configuration {
             let live = Set(configuration.catalogSources.map(\.id))
-            let mapped = Set(configuration.identityMap.compactMap { entry -> UUID? in
-                guard entry.legacy.domain == .catalogSource, live.contains(entry.objectID) else { return nil }
-                return UUID(uuidString: entry.legacy.identifier)
-            })
+            let mapped = Set(
+                configuration.identityMap.compactMap { entry -> UUID? in
+                    guard entry.legacy.domain == .catalogSource, live.contains(entry.objectID) else { return nil }
+                    return UUID(uuidString: entry.legacy.identifier)
+                })
             guard Set(catalogSourceIDs).isSubset(of: mapped) else {
                 throw WorkspaceDomainValidationError.missingReference("device application catalog source")
             }
@@ -257,11 +272,19 @@ public struct DeviceApplicationState: Codable, Hashable, Sendable {
             }
         }
         var snapshot = WorkspaceSnapshot()
-        snapshot.activeProfileID = ""; snapshot.preferences = preferences.workspacePreferences
-        snapshot.backupConfiguration = backupConfiguration; snapshot.encryptedSyncConfiguration = encryptedSyncConfiguration
-        snapshot.importedRepositoryPath = importedRepositoryPath; snapshot.activities = activities; snapshot.operationReceipts = operationReceipts
-        snapshot.accountSurfaces = accountSurfaces; snapshot.connectors = connectors; snapshot.marketplacePackages = marketplacePackages
-        snapshot.sources = catalogSourceIDs.map { .init(id: $0, name: "Migration catalog", kind: .localFolder, location: "/device/catalog") }
+        snapshot.activeProfileID = ""
+        snapshot.preferences = preferences.workspacePreferences
+        snapshot.backupConfiguration = backupConfiguration
+        snapshot.encryptedSyncConfiguration = encryptedSyncConfiguration
+        snapshot.importedRepositoryPath = importedRepositoryPath
+        snapshot.activities = activities
+        snapshot.operationReceipts = operationReceipts
+        snapshot.accountSurfaces = accountSurfaces
+        snapshot.connectors = connectors
+        snapshot.marketplacePackages = marketplacePackages
+        snapshot.sources = catalogSourceIDs.map {
+            .init(id: $0, name: "Migration catalog", kind: .localFolder, location: "/device/catalog")
+        }
         try WorkspaceSnapshotValidator.validate(snapshot, mode: .localState)
     }
 

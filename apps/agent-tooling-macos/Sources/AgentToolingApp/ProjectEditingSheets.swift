@@ -218,7 +218,6 @@ struct WorkspaceProjectDeclarationSheet: View {
     }
 }
 
-
 /// Names a project and nothing else. The same footer discipline as every
 /// sheet: the primary action is pinned and never moves.
 struct NewProjectSheet: View {

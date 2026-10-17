@@ -126,7 +126,7 @@ enum ClaudeAccountParsing {
     /// row belongs to this Mac and is read by the device scan instead.
     static func syncedPlugins(fromPluginList text: String) -> [ClaudeSyncedPlugin] {
         guard let data = text.data(using: .utf8),
-              let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+            let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
         else { return [] }
         var byName: [String: ClaudeSyncedPlugin] = [:]
         for row in rows.prefix(BoundedFileAccess.maximumDirectoryEntries) {
@@ -171,7 +171,7 @@ enum ClaudeAccountParsing {
         result.connectorsOff = (object["disableClaudeAiConnectors"] as? Bool) == true
         for entry in (object["deniedMcpServers"] as? [Any] ?? []).prefix(1_024) {
             guard let fields = entry as? [String: Any], let name = fields["serverName"] as? String,
-                  ConnectionHealthReport.isClaudeAIConnectorName(name)
+                ConnectionHealthReport.isClaudeAIConnectorName(name)
             else { continue }
             result.deniedConnectors.insert(String(name.dropFirst(ConnectionHealthReport.claudeAIConnectorPrefix.count)))
         }
@@ -219,8 +219,8 @@ enum ClaudeAccountParsing {
 
     static func bounded(_ value: String?, maximum: Int = 512) -> String? {
         guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty,
-              value.count <= maximum,
-              !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+            value.count <= maximum,
+            !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
         else { return nil }
         return value
     }
@@ -273,7 +273,9 @@ public struct ClaudeAccountReader: Sendable {
         }
         async let versionOutput = try? runner.run(executable: executable, arguments: ClaudeAccountCommands.version, currentDirectory: nil)
         async let authOutput = try? runner.run(executable: executable, arguments: ClaudeAccountCommands.authStatus, currentDirectory: nil)
-        let version = (await versionOutput).flatMap { $0.status == 0 ? ClaudeAccountParsing.version(fromVersionOutput: $0.standardOutput) : nil }
+        let version = (await versionOutput).flatMap {
+            $0.status == 0 ? ClaudeAccountParsing.version(fromVersionOutput: $0.standardOutput) : nil
+        }
         let signIn = (await authOutput).flatMap { ClaudeAccountParsing.signIn(fromAuthStatus: $0.standardOutput) }
 
         let userSettings = readSettings(at: ClientConfigurationFile.claudeSettings.url(homeURL: homeURL))
@@ -290,11 +292,14 @@ public struct ClaudeAccountReader: Sendable {
         guard contents else { return observation }
         if signIn?.method.reachesAccount != true {
             observation.notes.append(
-                "claude.ai connectors, skills and plugins reach Claude Code only when it signs in with your claude.ai subscription. On this Mac it uses \(signIn?.summary(for: provider) ?? "an unknown sign-in").")
+                "claude.ai connectors, skills and plugins reach Claude Code only when it signs in with your claude.ai subscription. On this Mac it uses \(signIn?.summary(for: provider) ?? "an unknown sign-in")."
+            )
         }
         async let pluginOutput = try? runner.run(executable: executable, arguments: ClaudeAccountCommands.pluginList, currentDirectory: nil)
         async let connectorResult = ConnectionHealthProbe(runner: runner, homeURL: homeURL, locate: locate).probe(.claude)
-        let plugins = (await pluginOutput).flatMap { $0.status == 0 ? ClaudeAccountParsing.syncedPlugins(fromPluginList: $0.standardOutput) : nil }
+        let plugins = (await pluginOutput).flatMap {
+            $0.status == 0 ? ClaudeAccountParsing.syncedPlugins(fromPluginList: $0.standardOutput) : nil
+        }
         if plugins == nil {
             observation.notes.append("Claude Code did not list its plugins, so the account's plugins are not shown.")
         }
@@ -302,7 +307,8 @@ public struct ClaudeAccountReader: Sendable {
         if let reason = connectors.unavailableReason { observation.notes.append(reason) }
         let skills = ClaudeAccountParsing.syncedSkills(in: ClaudeAccountSync.syncedSkillsDirectory(homeURL: homeURL))
 
-        observation.items = connectorItems(connectors.entries, settings: userSettings, managed: managedSettings)
+        observation.items =
+            connectorItems(connectors.entries, settings: userSettings, managed: managedSettings)
             + pluginItems(plugins ?? [], settings: userSettings)
             + skillItems(skills)
         for plugin in plugins ?? [] {
@@ -315,10 +321,12 @@ public struct ClaudeAccountReader: Sendable {
             observation.notes.append("Claude Code's own settings turn off claude.ai plugins on this Mac (syncClaudeAiPlugins is false).")
         }
         if userSettings.connectorsOff || managedSettings.connectorsOff {
-            observation.notes.append("claude.ai connectors are turned off in Claude Code on this Mac (disableClaudeAiConnectors), so none are listed.")
+            observation.notes.append(
+                "claude.ai connectors are turned off in Claude Code on this Mac (disableClaudeAiConnectors), so none are listed.")
         }
         observation.notes.append(
-            "The Claude desktop app's Code tab gets connectors from claude.ai directly; the switches here reach terminal and IDE sessions only.")
+            "The Claude desktop app's Code tab gets connectors from claude.ai directly; the switches here reach terminal and IDE sessions only."
+        )
         return observation
     }
 
@@ -346,7 +354,7 @@ public struct ClaudeAccountReader: Sendable {
         let expected = homeURL.appending(path: ".claude", directoryHint: .isDirectory).standardizedFileURL
         let actual = URL(filePath: reported, directoryHint: .isDirectory).standardizedFileURL
         guard expected.path(percentEncoded: false) != actual.path(percentEncoded: false),
-              expected.resolvingSymlinksInPath().path(percentEncoded: false) != actual.resolvingSymlinksInPath().path(percentEncoded: false)
+            expected.resolvingSymlinksInPath().path(percentEncoded: false) != actual.resolvingSymlinksInPath().path(percentEncoded: false)
         else { return nil }
         return "Claude Code on this Mac reads its settings from \(reported), and this app only edits ~/.claude/settings.json."
     }
@@ -373,12 +381,13 @@ public struct ClaudeAccountReader: Sendable {
         // listing leaves it out. It is still the account's; show it as off.
         let listed = Set(items.map(\.key))
         for name in settings.deniedConnectors.union(managed.deniedConnectors).sorted() where !listed.contains(name) {
-            items.append(AccountItem(
-                provider: .claude, kind: .connector, key: name, name: name,
-                detail: managed.deniedConnectors.contains(name)
-                    ? "Your organization's managed settings keep it out of Claude Code."
-                    : "Claude Code's settings keep it out of terminal and IDE sessions on this Mac.",
-                state: .init(tone: .off, label: "Off in Claude Code"), setting: .connector, url: page))
+            items.append(
+                AccountItem(
+                    provider: .claude, kind: .connector, key: name, name: name,
+                    detail: managed.deniedConnectors.contains(name)
+                        ? "Your organization's managed settings keep it out of Claude Code."
+                        : "Claude Code's settings keep it out of terminal and IDE sessions on this Mac.",
+                    state: .init(tone: .off, label: "Off in Claude Code"), setting: .connector, url: page))
         }
         return items
     }
@@ -416,7 +425,8 @@ public struct ClaudeAccountReader: Sendable {
                 detail = plugin.notes.first ?? "A plugin of the same name from another source loads instead."
             } else if !plugin.enabled {
                 state = .init(tone: .off, label: "Off in Claude Code")
-                detail = settings.syncedPluginFlags[plugin.name] == false
+                detail =
+                    settings.syncedPluginFlags[plugin.name] == false
                     ? "Claude Code's settings turn it off on this Mac."
                     : "The plugin starts turned off until a settings file turns it on."
             } else {
@@ -426,7 +436,9 @@ public struct ClaudeAccountReader: Sendable {
             var facts: [String] = []
             if let version = plugin.version { facts.append("Version \(version)") }
             if !plugin.mcpServers.isEmpty {
-                facts.append("Brings \(plugin.mcpServers.count) server\(plugin.mcpServers.count == 1 ? "" : "s"): \(plugin.mcpServers.joined(separator: ", "))")
+                facts.append(
+                    "Brings \(plugin.mcpServers.count) server\(plugin.mcpServers.count == 1 ? "" : "s"): \(plugin.mcpServers.joined(separator: ", "))"
+                )
             }
             return AccountItem(
                 provider: .claude, kind: .plugin, key: plugin.name, name: plugin.name, detail: detail, state: state,

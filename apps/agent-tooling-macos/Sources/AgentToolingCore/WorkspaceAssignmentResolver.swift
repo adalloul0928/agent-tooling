@@ -56,11 +56,6 @@ public struct ResolvedAssignmentTarget: Hashable, Sendable {
 struct MCPAssignmentDefinitionEvidence: Hashable, Sendable {
     var artifactID: ArtifactID
     var transport: String
-
-    init(artifactID: ArtifactID, transport: String) {
-        self.artifactID = artifactID
-        self.transport = transport
-    }
 }
 
 /// Digest captured by a content-store reader. Matching it proves identity of
@@ -177,16 +172,6 @@ struct WorkspaceAssignmentResolution: Hashable, Sendable {
     var issues: [WorkspaceAssignmentIssue]
     /// Contributions deliberately selecting no device, or another device, are preserved in wire intent but ignored here.
     var ignoredContributionIDs: [WorkspaceObjectID]
-
-    init(
-        requirements: [EffectiveAssignmentRequirement],
-        issues: [WorkspaceAssignmentIssue],
-        ignoredContributionIDs: [WorkspaceObjectID]
-    ) {
-        self.requirements = requirements
-        self.issues = issues
-        self.ignoredContributionIDs = ignoredContributionIDs
-    }
 }
 
 /// Reduces portable assignment intent for one device. The caller supplies a
@@ -222,19 +207,21 @@ enum WorkspaceAssignmentResolver {
         for contribution in contributions.sorted(by: contributionOrder) {
             let contributionID = contribution.id
             if duplicateContributionIDs.contains(contributionID) {
-                issues.insert(.init(
-                    kind: .duplicateContributionID,
-                    contributionIDs: [contributionID],
-                    artifactID: contribution.artifactID
-                ))
+                issues.insert(
+                    .init(
+                        kind: .duplicateContributionID,
+                        contributionIDs: [contributionID],
+                        artifactID: contribution.artifactID
+                    ))
                 continue
             }
             guard contribution.desiredPresence else {
-                issues.insert(.init(
-                    kind: .invalidDesiredPresence,
-                    contributionIDs: [contributionID],
-                    artifactID: contribution.artifactID
-                ))
+                issues.insert(
+                    .init(
+                        kind: .invalidDesiredPresence,
+                        contributionIDs: [contributionID],
+                        artifactID: contribution.artifactID
+                    ))
                 continue
             }
             guard contribution.destination.applies(to: currentDeviceID, registry: deviceRegistry) else {
@@ -243,11 +230,12 @@ enum WorkspaceAssignmentResolver {
             }
             let artifactRecords = artifactsByID[contribution.artifactID] ?? []
             guard artifactRecords.count == 1, let artifact = artifactRecords.first else {
-                issues.insert(.init(
-                    kind: artifactRecords.isEmpty ? .unknownArtifact : .duplicateArtifactIdentity,
-                    contributionIDs: [contributionID],
-                    artifactID: contribution.artifactID
-                ))
+                issues.insert(
+                    .init(
+                        kind: artifactRecords.isEmpty ? .unknownArtifact : .duplicateArtifactIdentity,
+                        contributionIDs: [contributionID],
+                        artifactID: contribution.artifactID
+                    ))
                 continue
             }
             guard validSelector(contribution.destination) else {
@@ -270,16 +258,18 @@ enum WorkspaceAssignmentResolver {
             let selector = ResolvedAssignmentSelector(destination: contribution.destination)
             let matchingTargets = targetGroups[selector] ?? []
             guard matchingTargets.count == 1, let target = matchingTargets.first else {
-                issues.insert(issue(
-                    matchingTargets.isEmpty ? .missingResolvedTarget : .duplicateResolvedTarget,
-                    contribution
-                ))
+                issues.insert(
+                    issue(
+                        matchingTargets.isEmpty ? .missingResolvedTarget : .duplicateResolvedTarget,
+                        contribution
+                    ))
                 continue
             }
-            physicalIntents.append(.init(
-                contribution: contribution,
-                key: .init(artifactID: contribution.artifactID, physicalDestinationID: target.physicalDestinationID)
-            ))
+            physicalIntents.append(
+                .init(
+                    contribution: contribution,
+                    key: .init(artifactID: contribution.artifactID, physicalDestinationID: target.physicalDestinationID)
+                ))
             guard target.adapterContractVersion > 0, wellFormedComponentContexts(target.componentContexts) else {
                 issues.insert(issue(.invalidResolvedTarget, contribution, physical: target.physicalDestinationID))
                 continue
@@ -297,40 +287,47 @@ enum WorkspaceAssignmentResolver {
             var managedMCPStrategy: EffectiveAssignmentStrategy?
             if component == .mcpServer {
                 let typedDefinitions = portableDefinitionGroups[contribution.artifactID] ?? []
-                let isManagedStandalone = artifact.authority == .centralPersonal
+                let isManagedStandalone =
+                    artifact.authority == .centralPersonal
                     && artifact.identity.parentPackageID == nil && artifact.contentDigest == nil
                 if isManagedStandalone || !typedDefinitions.isEmpty {
                     guard typedDefinitions.count == 1, let definition = typedDefinitions.first else {
-                        issues.insert(issue(
-                            typedDefinitions.isEmpty ? .missingMCPDefinition : .ambiguousMCPDefinition,
-                            contribution,
-                            physical: target.physicalDestinationID
-                        ))
+                        issues.insert(
+                            issue(
+                                typedDefinitions.isEmpty ? .missingMCPDefinition : .ambiguousMCPDefinition,
+                                contribution,
+                                physical: target.physicalDestinationID
+                            ))
                         continue
                     }
                     do {
                         try WorkspaceMCPDefinitionValidation.validatePortable([definition], artifacts: [artifact])
                     } catch {
-                        issues.insert(issue(
-                            .invalidManagedMCPDefinition, contribution, physical: target.physicalDestinationID))
+                        issues.insert(
+                            issue(
+                                .invalidManagedMCPDefinition, contribution, physical: target.physicalDestinationID))
                         continue
                     }
                     let bindings = deviceBindingGroups[contribution.artifactID] ?? []
                     guard bindings.count <= 1 else {
-                        issues.insert(issue(
-                            .ambiguousDeviceMCPBinding, contribution, physical: target.physicalDestinationID))
+                        issues.insert(
+                            issue(
+                                .ambiguousDeviceMCPBinding, contribution, physical: target.physicalDestinationID))
                         continue
                     }
                     let binding = bindings.first
                     if case .deviceBound = definition.connection, binding == nil {
-                        issues.insert(issue(
-                            .missingDeviceMCPBinding, contribution, physical: target.physicalDestinationID))
+                        issues.insert(
+                            issue(
+                                .missingDeviceMCPBinding, contribution, physical: target.physicalDestinationID))
                         continue
                     }
                     if contribution.destination.scope == .workspace,
-                       binding?.workspaceRootPath == nil {
-                        issues.insert(issue(
-                            .missingDeviceMCPBinding, contribution, physical: target.physicalDestinationID))
+                        binding?.workspaceRootPath == nil
+                    {
+                        issues.insert(
+                            issue(
+                                .missingDeviceMCPBinding, contribution, physical: target.physicalDestinationID))
                         continue
                     }
                     if let binding {
@@ -338,19 +335,22 @@ enum WorkspaceAssignmentResolver {
                             try WorkspaceMCPDefinitionValidation.validateDevice(
                                 [binding], definitions: [definition])
                         } catch {
-                            issues.insert(issue(
-                                .invalidDeviceMCPBinding, contribution, physical: target.physicalDestinationID))
+                            issues.insert(
+                                issue(
+                                    .invalidDeviceMCPBinding, contribution, physical: target.physicalDestinationID))
                             continue
                         }
                     }
                     let legacyDefinitions = definitionGroups[contribution.artifactID] ?? []
                     if !legacyDefinitions.isEmpty {
                         guard legacyDefinitions.count == 1,
-                              let legacyDefinition = legacyDefinitions.first,
-                              let legacyTransport = validText(legacyDefinition.transport),
-                              legacyTransport == definition.connection.transport.rawValue else {
-                            issues.insert(issue(
-                                .contradictoryMCPDefinition, contribution, physical: target.physicalDestinationID))
+                            let legacyDefinition = legacyDefinitions.first,
+                            let legacyTransport = validText(legacyDefinition.transport),
+                            legacyTransport == definition.connection.transport.rawValue
+                        else {
+                            issues.insert(
+                                issue(
+                                    .contradictoryMCPDefinition, contribution, physical: target.physicalDestinationID))
                             continue
                         }
                     }
@@ -359,11 +359,12 @@ enum WorkspaceAssignmentResolver {
                 } else {
                     let definitions = definitionGroups[contribution.artifactID] ?? []
                     guard definitions.count == 1, let definition = definitions.first else {
-                        issues.insert(issue(
-                            definitions.isEmpty ? .missingMCPDefinition : .ambiguousMCPDefinition,
-                            contribution,
-                            physical: target.physicalDestinationID
-                        ))
+                        issues.insert(
+                            issue(
+                                definitions.isEmpty ? .missingMCPDefinition : .ambiguousMCPDefinition,
+                                contribution,
+                                physical: target.physicalDestinationID
+                            ))
                         continue
                     }
                     guard let value = validText(definition.transport) else {
@@ -378,11 +379,12 @@ enum WorkspaceAssignmentResolver {
 
             let contexts = target.componentContexts.filter { $0.component == component && $0.transport == transport }
             guard contexts.count == 1 else {
-                issues.insert(issue(
-                    contexts.isEmpty ? .missingTargetComponentContext : .contradictoryTargetComponentContext,
-                    contribution,
-                    physical: target.physicalDestinationID
-                ))
+                issues.insert(
+                    issue(
+                        contexts.isEmpty ? .missingTargetComponentContext : .contradictoryTargetComponentContext,
+                        contribution,
+                        physical: target.physicalDestinationID
+                    ))
                 continue
             }
             let matchingEvidence = capabilityEvidence.filter {
@@ -394,11 +396,12 @@ enum WorkspaceAssignmentResolver {
                     && $0.scopes.contains(selector.scope)
             }
             guard matchingEvidence.count == 1, let evidence = matchingEvidence.first else {
-                issues.insert(issue(
-                    matchingEvidence.isEmpty ? .missingCapabilityEvidence : .contradictoryCapabilityEvidence,
-                    contribution,
-                    physical: target.physicalDestinationID
-                ))
+                issues.insert(
+                    issue(
+                        matchingEvidence.isEmpty ? .missingCapabilityEvidence : .contradictoryCapabilityEvidence,
+                        contribution,
+                        physical: target.physicalDestinationID
+                    ))
                 continue
             }
             guard validCapabilityEvidence(evidence) else {
@@ -436,11 +439,12 @@ enum WorkspaceAssignmentResolver {
                 }
                 let routes = artifact.nativeRoutes.filter { $0.client == client }
                 guard routes.count == 1, let route = routes.first else {
-                    issues.insert(issue(
-                        routes.isEmpty ? .missingNativeRoute : .ambiguousNativeRoute,
-                        contribution,
-                        physical: target.physicalDestinationID
-                    ))
+                    issues.insert(
+                        issue(
+                            routes.isEmpty ? .missingNativeRoute : .ambiguousNativeRoute,
+                            contribution,
+                            physical: target.physicalDestinationID
+                        ))
                     continue
                 }
                 strategy = .nativePlugin(route: route)
@@ -451,19 +455,21 @@ enum WorkspaceAssignmentResolver {
                     continue
                 }
                 guard let captured = captured.first, let expected = artifact.contentDigest,
-                    validDigest(expected), validDigest(captured.digest), captured.digest == expected else {
+                    validDigest(expected), validDigest(captured.digest), captured.digest == expected
+                else {
                     issues.insert(issue(.missingMaterializedContent, contribution, physical: target.physicalDestinationID))
                     continue
                 }
                 strategy = .content
             }
-            accepted.append(.init(
-                contribution: contribution,
-                physicalDestinationID: target.physicalDestinationID,
-                component: component,
-                transport: transport,
-                strategy: strategy
-            ))
+            accepted.append(
+                .init(
+                    contribution: contribution,
+                    physicalDestinationID: target.physicalDestinationID,
+                    component: component,
+                    transport: transport,
+                    strategy: strategy
+                ))
         }
 
         let intentGroups = Dictionary(grouping: physicalIntents, by: \.key)
@@ -473,26 +479,29 @@ enum WorkspaceAssignmentResolver {
             let explicitEnabled = Set(values.compactMap { $0.contribution.desiredEnabled })
             guard explicitEnabled.count > 1 else { continue }
             conflictingEnabledKeys.insert(key)
-            issues.insert(.init(
-                kind: .conflictingEnabledIntent,
-                contributionIDs: values.map(\.contribution.id),
-                artifactID: key.artifactID,
-                physicalDestinationID: key.physicalDestinationID
-            ))
+            issues.insert(
+                .init(
+                    kind: .conflictingEnabledIntent,
+                    contributionIDs: values.map(\.contribution.id),
+                    artifactID: key.artifactID,
+                    physicalDestinationID: key.physicalDestinationID
+                ))
         }
         let grouped = Dictionary(grouping: accepted) {
             RequirementKey(artifactID: $0.contribution.artifactID, physicalDestinationID: $0.physicalDestinationID)
         }
-        let blockedPhysicalKeys = Set(issues.compactMap { issue -> RequirementKey? in
-            guard let artifactID = issue.artifactID, let destinationID = issue.physicalDestinationID else { return nil }
-            return .init(artifactID: artifactID, physicalDestinationID: destinationID)
-        })
+        let blockedPhysicalKeys = Set(
+            issues.compactMap { issue -> RequirementKey? in
+                guard let artifactID = issue.artifactID, let destinationID = issue.physicalDestinationID else { return nil }
+                return .init(artifactID: artifactID, physicalDestinationID: destinationID)
+            })
         // When invalid or duplicate input prevents physical resolution, the
         // resolver cannot prove another surface is independent. Conservatively
         // suppress this artifact while leaving other artifacts unaffected.
-        let blockedArtifacts = Set(issues.compactMap { issue -> ArtifactID? in
-            issue.physicalDestinationID == nil ? issue.artifactID : nil
-        })
+        let blockedArtifacts = Set(
+            issues.compactMap { issue -> ArtifactID? in
+                issue.physicalDestinationID == nil ? issue.artifactID : nil
+            })
         var requirements: [EffectiveAssignmentRequirement] = []
         for key in grouped.keys.sorted(by: requirementKeyOrder) {
             guard let values = grouped[key] else { continue }
@@ -507,23 +516,25 @@ enum WorkspaceAssignmentResolver {
             guard strategies.count == 1, components.count == 1, transports.count == 1,
                 let strategy = strategies.first, let component = components.first
             else {
-                issues.insert(.init(
-                    kind: .incompatiblePhysicalStrategies,
-                    contributionIDs: contributionIDs,
-                    artifactID: key.artifactID,
-                    physicalDestinationID: key.physicalDestinationID
-                ))
+                issues.insert(
+                    .init(
+                        kind: .incompatiblePhysicalStrategies,
+                        contributionIDs: contributionIDs,
+                        artifactID: key.artifactID,
+                        physicalDestinationID: key.physicalDestinationID
+                    ))
                 continue
             }
-            requirements.append(.init(
-                artifactID: key.artifactID,
-                physicalDestinationID: key.physicalDestinationID,
-                component: component,
-                transport: values[0].transport,
-                desiredEnabled: explicitEnabled.first,
-                strategy: strategy,
-                contributions: values.map(\.contribution).sorted(by: contributionOrder)
-            ))
+            requirements.append(
+                .init(
+                    artifactID: key.artifactID,
+                    physicalDestinationID: key.physicalDestinationID,
+                    component: component,
+                    transport: values[0].transport,
+                    desiredEnabled: explicitEnabled.first,
+                    strategy: strategy,
+                    contributions: values.map(\.contribution).sorted(by: contributionOrder)
+                ))
         }
 
         requirements.sort(by: requirementOrder)
@@ -588,7 +599,8 @@ enum WorkspaceAssignmentResolver {
         else { return false }
         if let transport = evidence.transport,
             transport.count > 128 || transport.isEmpty
-                || transport.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) {
+                || transport.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        {
             return false
         }
         switch evidence.support {
@@ -606,9 +618,10 @@ enum WorkspaceAssignmentResolver {
     }
 
     private static func validDigest(_ digest: ContentDigest) -> Bool {
-        digest.value.count == 64 && digest.value.utf8.allSatisfy {
-            (48...57).contains($0) || (97...102).contains($0)
-        }
+        digest.value.count == 64
+            && digest.value.utf8.allSatisfy {
+                (48...57).contains($0) || (97...102).contains($0)
+            }
     }
 
     private static func wellFormedComponentContexts(_ values: [ResolvedTargetComponentContext]) -> Bool {
@@ -637,9 +650,11 @@ enum WorkspaceAssignmentResolver {
     }
 
     private static func destinationKey(_ value: PortableDestination) -> [String] {
-        [value.surface.rawValue, value.scope.rawValue, value.logicalProjectID?.rawValue.uuidString ?? "",
-         value.deviceIDs?.map { $0.rawValue.uuidString }.sorted().joined(separator: ",") ?? "*",
-         value.excludedDeviceIDs?.map { $0.rawValue.uuidString }.sorted().joined(separator: ",") ?? ""]
+        [
+            value.surface.rawValue, value.scope.rawValue, value.logicalProjectID?.rawValue.uuidString ?? "",
+            value.deviceIDs?.map { $0.rawValue.uuidString }.sorted().joined(separator: ",") ?? "*",
+            value.excludedDeviceIDs?.map { $0.rawValue.uuidString }.sorted().joined(separator: ",") ?? "",
+        ]
     }
 
     private static func requirementKeyOrder(_ lhs: RequirementKey, _ rhs: RequirementKey) -> Bool {

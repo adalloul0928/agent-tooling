@@ -66,4 +66,30 @@ struct InteractiveLoginProcessTests {
         #expect(transcript.contains("waiting"))
         #expect(elapsed < .seconds(8))
     }
+
+    @Test func theDeadlineEscalatesWhenTheChildIgnoresTermination() async throws {
+        let started = ContinuousClock.now
+        let outcome = try await InteractiveLoginProcess(homeURL: home, timeout: .seconds(1))
+            .run(
+                executable: "/bin/sh", arguments: ["-c", "trap '' TERM; echo waiting; while :; do sleep 30; done"],
+                onAuthorizationURL: { _ in })
+        guard case .timedOut(let transcript) = outcome else {
+            Issue.record("expected a timeout, got \(outcome)")
+            return
+        }
+        #expect(transcript.contains("waiting"))
+        #expect(ContinuousClock.now - started < .seconds(8))
+    }
+
+    @Test func cancellationStopsTheLoginBeforeItsDeadline() async throws {
+        let task = Task {
+            try await InteractiveLoginProcess(homeURL: home, timeout: .seconds(30))
+                .run(executable: "/bin/sh", arguments: ["-c", "echo waiting; sleep 30"], onAuthorizationURL: { _ in })
+        }
+        try await Task.sleep(for: .milliseconds(20))
+        let cancelled = ContinuousClock.now
+        task.cancel()
+        #expect(try await task.value == .cancelled)
+        #expect(ContinuousClock.now - cancelled < .seconds(8))
+    }
 }

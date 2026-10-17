@@ -20,10 +20,12 @@ struct SkillCreationChooserSheet: View {
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text("How do you want to create this skill?")
                     .font(AgentFont.titleLarge)
-                Text("An assistant writes the draft with you in a conversation and never saves anything until you do. Writing it yourself opens the form.")
-                    .font(AgentFont.body)
-                    .foregroundStyle(.secondary)
-                    .wrapsLines()
+                Text(
+                    "An assistant writes the draft with you in a conversation and never saves anything until you do. Writing it yourself opens the form."
+                )
+                .font(AgentFont.body)
+                .foregroundStyle(.secondary)
+                .wrapsLines()
             }
             .padding(.horizontal, Space.xxxl)
             .padding(.top, Space.xxxl)

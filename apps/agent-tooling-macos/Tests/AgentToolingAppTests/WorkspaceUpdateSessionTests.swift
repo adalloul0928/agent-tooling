@@ -12,16 +12,20 @@ struct WorkspaceUpdateSessionTests {
 
     private nonisolated static func tree(body: String) throws -> CapturedPackageTree {
         try CapturedPackageTree(entries: [
-            .init(relativePath: "SKILL.md", kind: .file(bytes: Data("""
-                ---
-                name: release-readiness
-                description: Check whether a release is ready to ship.
-                ---
+            .init(
+                relativePath: "SKILL.md",
+                kind: .file(
+                    bytes: Data(
+                        """
+                        ---
+                        name: release-readiness
+                        description: Check whether a release is ready to ship.
+                        ---
 
-                # Release Readiness
+                        # Release Readiness
 
-                \(body)
-                """.utf8), executable: false)),
+                        \(body)
+                        """.utf8), executable: false))
         ])
     }
 
@@ -176,9 +180,14 @@ struct WorkspaceUpdateSessionTests {
             updates.notice?.contains(
                 SyncCenterView.reviewTitle(for: fixture.workspace.deployment.plan, scopedTo: nil)) == false)
         // The Apps screen still offers the replacement for a person to decide.
-        #expect(fixture.workspace.deployment.plan?.items.contains {
-            $0.artifactID == skill && { if case .updateContent = $0.action { return true }; return false }($0)
-        } == true)
+        #expect(
+            fixture.workspace.deployment.plan?.items.contains {
+                $0.artifactID == skill
+                    && {
+                        if case .updateContent = $0.action { return true }
+                        return false
+                    }($0)
+            } == true)
     }
 
     /// The whole plugin path through the app's own wiring: the catalog says
@@ -189,9 +198,10 @@ struct WorkspaceUpdateSessionTests {
         defer { fixture.remove() }
         let log = try fixture.installFakeClaude()
         let updates = session(fixture) { throw CancellationError() }
-        updates.record(.init(
-            id: ShellRenderFixture.plugin, displayName: "Example Plugin", kind: .plugin,
-            availability: .updateAvailable(installed: "1.0.0", available: "1.1.0")))
+        updates.record(
+            .init(
+                id: ShellRenderFixture.plugin, displayName: "Example Plugin", kind: .plugin,
+                availability: .updateAvailable(installed: "1.0.0", available: "1.1.0")))
 
         #expect(await updates.update(ShellRenderFixture.plugin))
 
@@ -214,7 +224,8 @@ struct WorkspaceUpdateSessionTests {
         #expect(entry.cannotUpdate == nil)
         // Codex records no update command, so its packages are updated in Codex.
         #expect(NativePluginInstallRegister.command(for: .codex, externalPluginID: "example")?.updateArguments == nil)
-        #expect(NativePluginInstallRegister.command(for: .claude, externalPluginID: "example@vendor")?.updateArguments
-            == ["plugin", "update", "example@vendor", "--scope", "user"])
+        #expect(
+            NativePluginInstallRegister.command(for: .claude, externalPluginID: "example@vendor")?.updateArguments
+                == ["plugin", "update", "example@vendor", "--scope", "user"])
     }
 }

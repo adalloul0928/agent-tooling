@@ -133,13 +133,15 @@ struct ExternalSkillManagerIndexTests {
         try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
         let record: [String: Any] = [
             "schemaVersion": 1, "packageName": "DalloulPersonalAI",
-            "targets": [[
-                "client": "kiro", "targetRoot": home.path(percentEncoded: false), "scope": "USER",
-                "skills": [
-                    ["skillName": "thermo", "relativeDir": ".kiro/skills/thermo", "sourcePackage": "DalloulPersonalAI"],
-                    ["skillName": "escape", "relativeDir": "../outside"],
-                ],
-            ]],
+            "targets": [
+                [
+                    "client": "kiro", "targetRoot": home.path(percentEncoded: false), "scope": "USER",
+                    "skills": [
+                        ["skillName": "thermo", "relativeDir": ".kiro/skills/thermo", "sourcePackage": "DalloulPersonalAI"],
+                        ["skillName": "escape", "relativeDir": "../outside"],
+                    ],
+                ]
+            ],
         ]
         try JSONSerialization.data(withJSONObject: record).write(to: state.appending(path: "DalloulPersonalAI-abc.json"))
 

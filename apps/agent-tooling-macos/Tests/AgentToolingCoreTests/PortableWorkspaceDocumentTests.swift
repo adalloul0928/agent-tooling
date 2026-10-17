@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -15,8 +16,8 @@ struct PortableWorkspaceDocumentTests {
         let sealed = try WorkspaceDocumentCoding.seal(document)
         let expectedDigest = "40159b8825eabaae0bd73b510f12dff22d2862089280f1e2f3248f1f6e10e5f9"
         let expected = """
-        {"artifacts":[],"assignments":[],"logicalProjects":[],"minimumReaderVersion":1,"minimumWriterVersion":1,"presets":[],"revision":{"createdAt":"1970-01-01T00:00:00.000Z","documentDigest":{"algorithm":"sha256CanonicalJSONV1","value":"40159b8825eabaae0bd73b510f12dff22d2862089280f1e2f3248f1f6e10e5f9"},"id":"00000000-0000-0000-0000-000000000002","parentIDs":[],"writerID":"00000000-0000-0000-0000-000000000003"},"schemaVersion":1,"sources":[],"subscriptions":[],"tombstones":[],"workspaceID":"00000000-0000-0000-0000-000000000001"}
-        """
+            {"artifacts":[],"assignments":[],"logicalProjects":[],"minimumReaderVersion":1,"minimumWriterVersion":1,"presets":[],"revision":{"createdAt":"1970-01-01T00:00:00.000Z","documentDigest":{"algorithm":"sha256CanonicalJSONV1","value":"40159b8825eabaae0bd73b510f12dff22d2862089280f1e2f3248f1f6e10e5f9"},"id":"00000000-0000-0000-0000-000000000002","parentIDs":[],"writerID":"00000000-0000-0000-0000-000000000003"},"schemaVersion":1,"sources":[],"subscriptions":[],"tombstones":[],"workspaceID":"00000000-0000-0000-0000-000000000001"}
+            """
 
         #expect(sealed.revision.documentDigest.value == expectedDigest)
         #expect(try WorkspaceDocumentCoding.encode(sealed) == Data(expected.utf8))
@@ -144,8 +145,10 @@ struct PortableWorkspaceDocumentTests {
     @Test func decoderRejectsNoncanonicalUUIDAndCredentialBearingLocator() throws {
         let sealed = try WorkspaceDocumentCoding.seal(try fixture())
         let encoded = try WorkspaceDocumentCoding.encode(sealed)
-        let uppercase = Data(String(decoding: encoded, as: UTF8.self).replacingOccurrences(
-            of: sealed.workspaceID.rawValue.uuidString.lowercased(), with: sealed.workspaceID.rawValue.uuidString).utf8)
+        let uppercase = Data(
+            String(decoding: encoded, as: UTF8.self).replacingOccurrences(
+                of: sealed.workspaceID.rawValue.uuidString.lowercased(), with: sealed.workspaceID.rawValue.uuidString
+            ).utf8)
         #expect(throws: DecodingError.self) { _ = try WorkspaceDocumentCoding.decode(uppercase) }
 
         var credentialed = try fixture()
@@ -159,8 +162,10 @@ struct PortableWorkspaceDocumentTests {
         // Inserted as the first key, whichever key the canonical encoding
         // happens to sort first.
         let rootUnknown = Data(("{\"addedRootField\":true," + text.dropFirst()).utf8)
-        let nestedUnknown = Data(text.replacingOccurrences(
-            of: "\"displayName\":\"Review\"", with: "\"addedNestedField\":true,\"displayName\":\"Review\"").utf8)
+        let nestedUnknown = Data(
+            text.replacingOccurrences(
+                of: "\"displayName\":\"Review\"", with: "\"addedNestedField\":true,\"displayName\":\"Review\""
+            ).utf8)
 
         #expect(throws: WorkspaceDomainValidationError.self) { _ = try WorkspaceDocumentCoding.decode(rootUnknown) }
         #expect(throws: WorkspaceDomainValidationError.self) { _ = try WorkspaceDocumentCoding.decode(nestedUnknown) }
@@ -221,6 +226,6 @@ struct PortableWorkspaceDocumentTests {
             createdAt: Date(timeIntervalSince1970: 1_788_890_400.123))
     }
 
-    private func artifact(_ value: String) -> ArtifactID { ArtifactID(UUID(uuidString: value)!) }
-    private func object(_ value: String) -> WorkspaceObjectID { WorkspaceObjectID(UUID(uuidString: value)!) }
+    private func artifact(_ value: String) -> ArtifactID { ArtifactID(fixtureUUID(value)) }
+    private func object(_ value: String) -> WorkspaceObjectID { WorkspaceObjectID(fixtureUUID(value)) }
 }
