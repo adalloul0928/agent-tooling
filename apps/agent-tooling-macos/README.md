@@ -650,14 +650,25 @@ swift test --disable-sandbox
 ```
 
 The three test targets share one plain `AgentToolingTestSupport` target
-(`Tests/AgentToolingTestSupport`), not a product. It holds test scaffolding the
-suites would otherwise copy: a self-cleaning `TemporaryFolder`, a `write(_:_:)`
-file helper, real-git fixtures (`GitTestFixture`), `ScriptedCommandRunner` /
-`RefusingCommandRunner`, `ContrastRatio` (the WCAG contrast between two
-colours), and `fittingSize(of:)` (the size a view lays itself out at on its
-own). It imports only Foundation, AppKit, SwiftUI and the public
-`AgentToolingCore` API — no `import Testing`, no `@testable import` — so it
-builds clean under CI's release gate
+(`Tests/AgentToolingTestSupport`), not a product. It holds the test scaffolding
+the suites would otherwise copy, one helper to a file:
+
+- `TemporaryFolder` — a unique `0o700` folder under the system temporary
+  folder, symlinks resolved. The caller removes it.
+- `write(_:_:)` (`WriteFile.swift`) — writes text to a file, creating its
+  folder first.
+- `GitTestFixture` — runs the real `git`, and enrolls a checkout with a fixed
+  author.
+- `ScriptedCommandRunner` and `RefusingCommandRunner` — a runner that answers
+  each argument list from a script and records the calls, and one that answers
+  every command as a missing executable does.
+- `ContrastRatio` — the WCAG contrast between two colours.
+- `fittingSize(of:)` (`FittingSize.swift`) — the size a view lays itself out
+  at on its own.
+
+It imports only Foundation, AppKit, SwiftUI and the public `AgentToolingCore`
+API — no `import Testing`, no `@testable import` — so it builds clean under
+CI's release gate
 (`swift build --configuration release -Xswiftc -warnings-as-errors`). A helper
 that has to fail a test returns an optional for the suite to `#require`.
 

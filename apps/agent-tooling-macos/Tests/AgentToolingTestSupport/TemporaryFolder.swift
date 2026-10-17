@@ -1,6 +1,6 @@
 import Foundation
 
-/// A self-cleaning temporary directory for tests.
+/// A unique temporary directory for tests, which the caller removes.
 ///
 /// Reproduces the fixture-root idiom repeated across the suites:
 /// `FileManager.default.temporaryDirectory.resolvingSymlinksInPath()`
