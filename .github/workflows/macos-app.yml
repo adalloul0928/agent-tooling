@@ -147,6 +147,7 @@ jobs:
       - name: Verify app bundle
         run: |
           codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/Agent Tooling.app"
+          "$RUNNER_TEMP/Agent Tooling.app/Contents/MacOS/AgentTooling" --verify-resources
           helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling"
           test -x "$helper"
           file "$helper"

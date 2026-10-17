@@ -630,6 +630,10 @@ The packaging script compiles the executable and wraps it in a normal macOS
 application bundle using the optimized release configuration. Its default output is ignored under
 `.build/Agent Tooling.app`.
 
+Before installing the bundle, the script runs its `--verify-resources` check to
+load every client and package icon from the packaged app. The check rejects a
+resource bundle found only in the development build directory.
+
 ```sh
 ./scripts/package-app.sh
 open '.build/Agent Tooling.app'

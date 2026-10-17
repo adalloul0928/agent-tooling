@@ -3,6 +3,19 @@ import SwiftUI
 
 @main
 struct AgentToolingApplication: App {
+    init() {
+        if ProcessInfo.processInfo.arguments.contains("--verify-resources") {
+            do {
+                try AppResources.verifyPackagedResources()
+                print("Packaged client and package artwork verified.")
+                exit(EXIT_SUCCESS)
+            } catch {
+                FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))
+                exit(EXIT_FAILURE)
+            }
+        }
+    }
+
     @State private var workspace: WorkspaceLaunch.Workspace?
     @State private var startupError: String?
     /// Held here rather than in the window so a menu-bar item, an app command
