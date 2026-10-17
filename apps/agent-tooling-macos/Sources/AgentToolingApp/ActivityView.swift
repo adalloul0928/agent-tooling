@@ -59,9 +59,14 @@ struct ActivityView: View {
         .onExitCommand { selectedID = nil }
     }
 
+    /// The list's heading. The tab over it already says "Receipts", so the
+    /// heading says what the tab does not: every receipt here was written on
+    /// this Mac. History's "Versions" under its "History" tab is the model.
+    nonisolated static let listHeading = "Recorded on this Mac"
+
     private var activityList: some View {
         VStack(spacing: 0) {
-            PanelHeader("Receipts") {
+            PanelHeader(Self.listHeading) {
                 Text(mergedActivities.count == 1 ? "1 total" : "\(mergedActivities.count) total")
             }
             HStack(spacing: Space.md) {

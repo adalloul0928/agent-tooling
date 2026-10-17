@@ -48,6 +48,14 @@ struct SkillsProjectsActivityWordingTests {
         #expect(folder(branch: "main").foundFolderSummary == "No agent files · on main")
     }
 
+    /// The Activity tab is "Receipts", and the list under it was headed
+    /// "Receipts" too: the same word twice, one over the other.
+    @Test("The receipts list is headed with what its tab does not already say")
+    func receiptsHeadingAddsToTheTab() {
+        #expect(ActivityView.listHeading == "Recorded on this Mac")
+        #expect(!ActivityView.listHeading.localizedCaseInsensitiveContains(AppSection.activity.tabTitle))
+    }
+
     @Test("Drift names installed copies, and one copy in the singular")
     func driftNamesInstalledCopies() {
         #expect(InstallDriftNotice.title(count: 1) == "1 installed copy differs from what you reviewed")
