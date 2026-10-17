@@ -522,7 +522,7 @@ struct GalleryMoreSurfacesTests {
                 AssignToDeviceSheet(workspace: fixture.workspace, device: device),
                 area: "Sync", screen: "Assign to device sheet", state: "choose",
                 size: SheetGallerySize.medium, appearance: appearance,
-                source: "Sources/AgentToolingApp/DeviceSwitcher.swift:166")
+                source: "Sources/AgentToolingApp/DeviceSwitcher.swift:179")
             try gallerySnapshot(
                 WorkspaceLinkDestinationSheet(
                     session: fixture.workspace.deployment, clients: [.claude, .codex]),
@@ -536,7 +536,7 @@ struct GalleryMoreSurfacesTests {
                 source: "Sources/AgentToolingApp/SyncCenterView.swift:61")
         }
         GalleryIndex.shared.addNote(
-            "Device switcher picker (DeviceSwitcher.swift:228) and the device rename sheet "
+            "Device switcher picker (DeviceSwitcher.swift:16) and the device rename sheet "
                 + "(SyncSettingsView.swift:252) are an AppKit menu and a small inline rename form built from a "
                 + "DeviceRecord in private view state; neither has a public entry point a test can host without "
                 + "editing Sources, so both are left to their menu/inline presentation.")
