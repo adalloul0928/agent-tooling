@@ -208,7 +208,7 @@ struct MCPDetailView: View {
                     .disabled(isBusy)
             }
             if !entry.requestedAssignments.isEmpty {
-                Menu("Stop asking…") {
+                Menu(ActionTitles.stopAsking) {
                     // Each choice opens the reviewed withdrawal, so each says so.
                     ForEach(entry.requestedAssignments) { requested in
                         Button("\(requested.destination.surface.displayName)…", role: .destructive) {

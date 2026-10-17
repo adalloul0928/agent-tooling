@@ -331,9 +331,10 @@ struct PluginCollectionRow: View {
     }
 }
 
-/// Removing several plugins from one app is one reviewed operation, or none: a
-/// stack with nothing recorded for the chosen app is refused with the reason,
-/// never partially planned.
+/// Withdrawing several plugins' requests for one app is one reviewed
+/// operation, or none: a stack with nothing recorded for the chosen app is
+/// refused with the reason, never partially planned. It is the "Stop asking…"
+/// Connections offers, and like it uninstalls nothing.
 private struct PluginStackPane: View {
     let rows: [WorkspaceLibraryReadModelRow]
     let library: WorkspaceLibrarySession
@@ -349,12 +350,12 @@ private struct PluginStackPane: View {
                     KindTile(kind: .plugin, size: Size.tileLarge)
                     VStack(alignment: .leading, spacing: Space.xs) {
                         Text("\(CountNoun.plugin.phrase(rows.count)) selected").font(AgentFont.title)
-                        Text("Remove their assignment to one app through one reviewed plan.")
+                        Text("Stop asking for them in one app, through one reviewed plan.")
                             .font(AgentFont.body)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Review removal plan…", action: review)
+                    Button(ActionTitles.stopAsking, action: review)
                         .primaryActionStyle()
                         .disabled(library.isBusy || contributionIDs.isEmpty)
                 }
@@ -367,17 +368,17 @@ private struct PluginStackPane: View {
                     }
                 } else if contributionIDs.isEmpty {
                     AttentionBanner(
-                        title: "Nothing to remove for \(client.rawValue)",
+                        title: "Nothing asked for in \(client.rawValue)",
                         message: "None of the selected plugins have a saved assignment for this app.")
                 }
 
-                GroupBox("Remove from") {
+                GroupBox("Stop asking in") {
                     WorkspaceSegmentedPicker("App", selection: $client) {
                         ForEach(availableClients) { candidate in Text(candidate.rawValue).tag(candidate) }
                     }
                     .labelsHidden()
                     .padding(Space.lg)
-                    .accessibilityLabel("App to remove from")
+                    .accessibilityLabel("App to stop asking in")
                 }
 
                 GroupBox("In this stack") {
@@ -497,10 +498,10 @@ private struct PluginDetailView: View {
                             }
                             Spacer()
                             if let ids = contributionIDs(for: route.client), !ids.isEmpty {
-                                Button("Remove…") { remove(contributionIDs: ids) }
+                                Button(ActionTitles.stopAsking) { remove(contributionIDs: ids) }
                                     .secondaryActionStyle()
                                     .controlSize(.small)
-                                    .accessibilityLabel("Remove \(row.displayName) from \(route.client.rawValue)")
+                                    .accessibilityLabel("Stop asking for \(row.displayName) in \(route.client.rawValue)")
                                     .disabled(library.isBusy || ClaudeAccountSync.hasReservedOrigin(route.externalPluginID))
                             } else {
                                 Text("Not a saved assignment")

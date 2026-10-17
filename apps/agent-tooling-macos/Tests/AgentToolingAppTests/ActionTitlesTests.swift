@@ -67,13 +67,23 @@ struct ActionTitlesTests {
         #expect(ActionTitles.createSkill(with: .codex) == "Create with Codex…")
     }
 
+    /// Plugins called withdrawing a request "Remove…" on a plugin's app row
+    /// and "Review removal plan…" on a stack, which read as uninstalling. The
+    /// sheet both open uninstalls nothing, and Connections called the same
+    /// action "Stop asking…".
+    @Test("Withdrawing a request has one name, and it is not a removal")
+    func stopAskingHasOneName() {
+        #expect(ActionTitles.stopAsking == "Stop asking…")
+        #expect(!ActionTitles.stopAsking.localizedCaseInsensitiveContains("remov"))
+    }
+
     @Test("Every title ends in the one-character ellipsis, because each opens a sheet")
     func titlesEndInEllipsis() {
         let titles =
             [nil, 0, 1, 3].map { ActionTitles.reviewChanges(count: $0) }
             + [1, 3].map { ActionTitles.reviewAllChanges(count: $0) }
             + [ActionTitles.reviewChangesCommand(.menu), ActionTitles.reviewChangesCommand(.palette)]
-            + [ActionTitles.createSkill(with: .claude)]
+            + [ActionTitles.createSkill(with: .claude), ActionTitles.stopAsking]
         for title in titles {
             #expect(title.hasSuffix("\u{2026}"), "\(title) does not end in an ellipsis")
             #expect(!title.hasSuffix("..."), "\(title) ends in three full stops")

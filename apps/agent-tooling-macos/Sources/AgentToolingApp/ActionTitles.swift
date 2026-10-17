@@ -70,4 +70,10 @@ enum ActionTitles {
     static func createSkill(with assistant: ClientKind) -> String {
         "Create with \(assistant.rawValue)…"
     }
+
+    /// Withdrawing a saved request for an item in an app, on Connections and
+    /// Plugins alike. It opens the reviewed sheet titled "Stop asking for …",
+    /// or the menu of apps that leads to it, so it ends in an ellipsis. It is
+    /// never "Remove": the sheet uninstalls nothing.
+    static let stopAsking = "Stop asking…"
 }
