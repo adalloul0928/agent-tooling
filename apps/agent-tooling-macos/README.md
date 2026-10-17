@@ -98,7 +98,7 @@ The wizard has three steps, **Found → Apps → Assign**:
 
 ### Installing
 
-**Install…** on a skill, plugin, MCP server, project, or preset opens one
+**Install…** on a skill, plugin, connection, project, or preset opens one
 dialog: the managed apps as rows (found on this Mac or not, the folder the
 files would land in, whether the app already has it), a This Mac / One project
 switch, and an Install button. Pressing it saves the assignment, plans what
@@ -177,22 +177,21 @@ configuration is not yet fully inventoried. Hook/agent editors and broader
 configuration management are documented as follow-up work in the
 [feature roadmap](../../docs/onboarding-feature-roadmap.md).
 
-## Choose clients
+## Choose apps
 
-Open **Clients → Choose Clients…** or **Settings → General → Clients you use**
-and check the clients you want Agent Tooling to manage. Unchecking a client
-immediately removes it from navigation, inventory badges, account checks,
-marketplace routes, project configuration, search, and operation destinations.
-Setup, marketplace, history, and drift scans skip unchecked clients. You can
-uncheck every client and continue using the local library.
+Open **Apps → Choose apps…** and check the apps you want Agent Tooling to
+manage. Unchecking an app immediately removes it from navigation, inventory
+badges, account checks, marketplace routes, project configuration, search, and
+operation destinations. Setup, marketplace, history, and drift scans skip
+unchecked apps. You can uncheck every app and continue using the local library.
 
-This is a preference for this Mac. Existing workspaces start with all clients
+This is a preference for this Mac. Existing workspaces start with all apps
 selected. Selection survives relaunch and is not imported from another Mac's
-backup. Unchecking does not uninstall a client, delete its configuration, or
+backup. Unchecking does not uninstall an app, delete its configuration, or
 remove saved desired state; checking it again restores its saved state. Run
-Check Clients to refresh its current installation. Historical records involving
-unchecked clients are hidden, while their original receipts remain on disk.
-Client selection is locked while an operation is running or awaiting review.
+**Check apps** to refresh its current installation. Historical records involving
+unchecked apps are hidden, while their original receipts remain on disk. App
+selection is locked while an operation is running or awaiting review.
 
 ## Apps, health, and why an install waits
 
@@ -380,7 +379,8 @@ on its own when the app opens and the last checkup is more than a week old.
 **Set up…** on Apps, and **Walk through…** on Checkup, open the same wizard:
 choose the apps this Mac manages, audit, hand off to the assistant, then one
 stop per category — cleanup, duplicates, unmanaged skills, connections,
-settings — with the findings and recommendations for it. At the end of
+settings, what is worth adding, and what changed upstream — with the findings
+and recommendations for it. At the end of
 first-run onboarding, **Check this Mac** goes to the Checkup tab. Home
 shows the last checkup in a sentence. Each app's page has **Review**, which
 fetches what the app has published since your installed version (Claude Code's
