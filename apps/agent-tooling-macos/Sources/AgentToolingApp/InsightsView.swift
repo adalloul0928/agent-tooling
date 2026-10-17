@@ -181,10 +181,13 @@ struct InsightsView: View {
                     Hairline()
 
                     configurationRow("Conversation limit", detail: "Per selected source") {
+                        // The row's title names the noun, so each segment is the
+                        // count alone: three "N conversations" do not fit the
+                        // picker, and "chats" would be a second name for them.
                         WorkspaceSegmentedPicker("Conversation limit", selection: $maximumConversations) {
-                            Text("10 chats").tag(10)
-                            Text("25 chats").tag(25)
-                            Text("50 chats").tag(50)
+                            Text("10").tag(10)
+                            Text("25").tag(25)
+                            Text("50").tag(50)
                         }
                         .labelsHidden()
                         .frame(maxWidth: Size.segmentedPickerMax)
@@ -238,17 +241,23 @@ struct InsightsView: View {
             ProgressView()
                 .controlSize(.small)
             VStack(alignment: .leading, spacing: Space.xxs) {
-                Text("Reviewing recent work")
+                Text(Self.scanningTitle)
                     .font(AgentFont.bodyMedium)
-                Text("The scan is read-only. No skill, plugin, or connection will be installed.")
+                Text(Self.scanningDetail)
                     .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, Space.xs)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Scanning recent work. No tools will be installed.")
+        .accessibilityLabel(Self.scanningAccessibilityLabel)
     }
+
+    /// What the scanning state says. VoiceOver hears the same two lines, so a
+    /// scan is not "reviewing" on screen and "scanning" out loud.
+    nonisolated static let scanningTitle = "Reviewing recent work"
+    nonisolated static let scanningDetail = "The scan is read-only. No skill, plugin, or connection will be installed."
+    nonisolated static var scanningAccessibilityLabel: String { "\(scanningTitle). \(scanningDetail)" }
 
     private var firstRunState: some View {
         EmptyStateView(

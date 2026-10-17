@@ -65,10 +65,17 @@ struct SkillsProjectsActivityWordingTests {
         #expect(summary("a\nb\nc", "x") == "1 changed · -2 lines")
     }
 
-    @Test("A scan source counts its chats and items, one in the singular")
+    @Test("A scan source counts its conversations, as the heading does, and one in the singular")
     func coverageCounts() {
-        #expect(CoverageRow.countsText(chats: 1, items: 1) == "1 chat · 1 item")
-        #expect(CoverageRow.countsText(chats: 12, items: 0) == "12 chats · 0 items")
+        #expect(CoverageRow.countsText(conversations: 1, items: 1) == "1 conversation · 1 item")
+        #expect(CoverageRow.countsText(conversations: 12, items: 0) == "12 conversations · 0 items")
+    }
+
+    @Test("VoiceOver hears the scanning state in the words on screen")
+    func scanningStateReadsAsShown() {
+        #expect(
+            InsightsView.scanningAccessibilityLabel
+                == "Reviewing recent work. The scan is read-only. No skill, plugin, or connection will be installed.")
     }
 
     private func recommendation(_ kind: ToolRecommendationKind, packageID: String? = nil) -> ToolRecommendation {

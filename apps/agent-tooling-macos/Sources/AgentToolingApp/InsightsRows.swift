@@ -30,10 +30,10 @@ enum InsightSelection: Hashable {
 }
 
 /// What an Insights report counts, each with its plural, so a scan of one
-/// conversation never reads "1 conversations".
+/// conversation never reads "1 conversations". One noun per thing: what a scan
+/// reads is a conversation on screen, in a heading and to VoiceOver alike.
 enum InsightCount {
     static let conversation = CountNoun("conversation")
-    static let chat = CountNoun("chat")
     static let item = CountNoun("item")
     static let query = CountNoun("query", plural: "queries")
     static let catalogResult = CountNoun("catalog result")
@@ -53,7 +53,7 @@ struct CoverageRow: View {
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text(Self.countsText(chats: coverage.conversationsScanned, items: coverage.itemsInspected))
+                    Text(Self.countsText(conversations: coverage.conversationsScanned, items: coverage.itemsInspected))
                         .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -77,9 +77,10 @@ struct CoverageRow: View {
         )
     }
 
-    /// "12 chats · 1 item": what one source gave the scan, one in the singular.
-    nonisolated static func countsText(chats: Int, items: Int) -> String {
-        "\(InsightCount.chat.phrase(chats)) · \(InsightCount.item.phrase(items))"
+    /// "12 conversations · 1 item": what one source gave the scan, one in the
+    /// singular, in the noun the heading and the VoiceOver label use.
+    nonisolated static func countsText(conversations: Int, items: Int) -> String {
+        "\(InsightCount.conversation.phrase(conversations)) · \(InsightCount.item.phrase(items))"
     }
 
     private var statusText: String {
