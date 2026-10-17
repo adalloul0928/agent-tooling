@@ -84,4 +84,45 @@ final class WorkspaceActivitySession {
         guard let id else { return nil }
         return receipts.first { $0.id == id } ?? (try? store.operationReceipt(id))
     }
+
+    /// One list for the screen: the agent journal, plus one row for every
+    /// operation receipt no journal entry already speaks for.
+    ///
+    /// The journal and the operation receipts are two records of the same Mac's
+    /// work — an agent's tool calls on one side, this app's own install/scan
+    /// plans on the other — and Activity has to show both or it says "no
+    /// activity" while Apps → Recent changes lists an install that just ran. A
+    /// journal entry that already links a receipt (`operationReceiptID`) is that
+    /// receipt's row already, so its receipt is not synthesized again; every
+    /// other receipt becomes one synthesized row. The result is sorted newest
+    /// first, the order the screen groups by day.
+    var mergedActivities: [ActivityReceipt] {
+        let referenced = Set(activities.compactMap(\.operationReceiptID))
+        let synthesized = receipts
+            .filter { !referenced.contains($0.id) }
+            .map(Self.activityReceipt(from:))
+        return (activities + synthesized).sorted { lhs, rhs in
+            if lhs.date == rhs.date { return lhs.id.uuidString < rhs.id.uuidString }
+            return lhs.date > rhs.date
+        }
+    }
+
+    /// One operation receipt as an Activity row.
+    ///
+    /// The title is the plan's own title (e.g. "Install 1 tool in Claude Code"),
+    /// the detail is the same succeeded/failed/skipped tally the Apps screen
+    /// shows, and the kind is `.configuration` so the "Changes" filter segment
+    /// includes it. `operationReceiptID` points back at the receipt so the
+    /// detail pane can itemise every step of the plan rather than one verdict.
+    private static func activityReceipt(from receipt: OperationReceipt) -> ActivityReceipt {
+        ActivityReceipt(
+            id: receipt.id,
+            kind: .configuration,
+            title: receipt.title,
+            detail: receipt.outcomeTally,
+            date: receipt.createdAt,
+            state: receipt.state,
+            operationReceiptID: receipt.id
+        )
+    }
 }

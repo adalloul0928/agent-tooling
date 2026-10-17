@@ -2,7 +2,6 @@ import Foundation
 
 public enum ConfigurationLayerReadError: Error, Equatable, Sendable {
     case invalidRoot
-    case fileTooLarge
     case unreadable
 }
 
@@ -15,9 +14,11 @@ public enum ConfigurationLayerReadError: Error, Equatable, Sendable {
 /// Keys the build does not interpret are collected as unrecognized so they stay
 /// visible. Values are read shallowly: nested structures become opaque text
 /// rather than being flattened into claims about their contents.
+///
+/// Each file is read the way every client configuration file is: bounded by
+/// the limit they all share, and refused before it is loaded when it is over
+/// it, with the error that names the file and the limit.
 public struct ConfigurationLayerReader: Sendable {
-    public static let maximumFileBytes = 1 << 20
-
     public init() {}
 
     /// Claude Code's documented layers for one home and optional project.
@@ -169,13 +170,18 @@ extension ConfigurationLayerReader {
                      values: values, unrecognizedKeys: unrecognized.sorted())
     }
 
+    /// The file's bytes, or nil when it is not there. Over the shared limit
+    /// throws `ConfigurationFileTooLargeError`, naming the file by its path;
+    /// a file that is there but cannot be read throws `unreadable`.
     func read(_ url: URL) throws -> Data? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        let bytes: Data
-        do { bytes = try Data(contentsOf: url, options: [.mappedIfSafe]) }
-        catch { throw ConfigurationLayerReadError.unreadable }
-        guard bytes.count <= Self.maximumFileBytes else { throw ConfigurationLayerReadError.fileTooLarge }
-        return bytes
+        do {
+            return try ClientConfigurationFile.readData(at: url, named: url.path(percentEncoded: false))
+        } catch let tooLarge as ConfigurationFileTooLargeError {
+            throw tooLarge
+        } catch {
+            throw ConfigurationLayerReadError.unreadable
+        }
     }
 
     static func value(_ raw: Any) -> ConfigurationValue {

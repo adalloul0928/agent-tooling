@@ -129,6 +129,87 @@ struct WorkspacePresetsSessionTests {
         #expect(session.errorMessage?.contains("could not be read") == true)
     }
 
+    // MARK: - Authoring presets
+
+    @Test func creatingAPresetRecordsItAndSelectsIt() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        await session.refresh()
+
+        let created = await session.createPreset(name: "  Daily  ", memberArtifactIDs: [Fixture.alpha])
+
+        #expect(created)
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        #expect(session.lastCreatedPresetID != nil)
+        // The new preset shows up as a row, trimmed and not followed yet.
+        let row = try #require(session.rows.first { $0.name == "Daily" })
+        #expect(row.memberCount == 1)
+        #expect(row.isLinked == false)
+    }
+
+    @Test func creatingAPresetWithADuplicateNameIsRefusedInReadableWords() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        await session.refresh()
+
+        // "Starter" already exists in the fixture.
+        let created = await session.createPreset(name: "starter", memberArtifactIDs: [Fixture.alpha])
+
+        #expect(created == false)
+        #expect(session.errorMessage?.contains("Starter") == true || session.errorMessage?.contains("starter") == true)
+        #expect(session.rows.count { $0.name.lowercased() == "starter" } == 1)
+    }
+
+    @Test func renamingAPresetKeepsItsMembersAndFollowing() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        await session.refresh()
+        await session.link(Fixture.presetID, destinations: [Fixture.codex])
+
+        let renamed = await session.renamePreset(Fixture.presetID, name: "Renamed")
+
+        #expect(renamed)
+        let row = try #require(session.rows.first { $0.id == Fixture.presetID })
+        #expect(row.name == "Renamed")
+        #expect(row.memberCount == 2)
+        #expect(row.isLinked)
+    }
+
+    @Test func deletingAPresetLeavesItsMembersAndStopsFollowingIt() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session()
+        await session.refresh()
+        await session.link(Fixture.presetID, destinations: [Fixture.codex])
+        await session.catchUp(Fixture.presetID)
+
+        let deleted = await session.deletePreset(Fixture.presetID)
+
+        #expect(deleted)
+        #expect(session.rows.isEmpty)
+        // The members are still artifacts in the document.
+        let document = try #require(try fixture.store.snapshot()).document
+        #expect(document.artifacts.contains { $0.identity.id == Fixture.alpha })
+        #expect(document.presets.isEmpty)
+        // This Mac is no longer following the deleted preset.
+        #expect(try fixture.presetStore.read().isEmpty)
+    }
+
+    @Test func aReadOnlyWorkspaceCannotCreateAPreset() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let session = await fixture.session(access: .readOnly)
+        await session.refresh()
+
+        let created = await session.createPreset(name: "Nope", memberArtifactIDs: [Fixture.alpha])
+
+        #expect(created == false)
+        #expect(session.rows.count { $0.name == "Nope" } == 0)
+    }
+
     @MainActor private struct Fixture {
         static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
         static let beta = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)

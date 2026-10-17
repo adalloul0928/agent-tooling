@@ -12,7 +12,7 @@ public struct InsightScanOptions: Codable, Hashable, Sendable {
     public var includeMarketplaceRecommendations: Bool
 
     public init(
-        clients: Set<ClientKind> = [.claude, .codex],
+        clients: Set<ClientKind> = [.claude, .codex, .kiro],
         lookbackDays: Int = 30,
         maximumConversationsPerClient: Int = 50,
         maximumItemsPerConversation: Int = 500,
@@ -29,7 +29,7 @@ public struct InsightScanOptions: Codable, Hashable, Sendable {
 
     var bounded: Self {
         var result = self
-        result.clients = result.clients.intersection([.claude, .codex])
+        result.clients = result.clients.intersection([.claude, .codex, .kiro])
         result.lookbackDays = min(max(result.lookbackDays, 1), 365)
         result.maximumConversationsPerClient = min(max(result.maximumConversationsPerClient, 1), 200)
         result.maximumItemsPerConversation = min(max(result.maximumItemsPerConversation, 10), 2_000)
@@ -107,6 +107,44 @@ public enum SkillUsageProvenance: String, Codable, Hashable, Sendable {
     case claudeAttribution
     case codexExplicitReference
     case skillDefinitionRead
+    case kiroSlashCommand
+}
+
+/// One conversation, boiled down for the deep dive: what the person asked
+/// (first few messages, redacted and capped), which tools and skills answered,
+/// and which project it happened in. Lives in memory and in the prompt sent
+/// to the person's own assistant; the saved report never carries one.
+public struct ConversationDigest: Codable, Hashable, Sendable {
+    public var conversationID: String
+    public var client: ClientKind
+    public var startedAt: Date
+    public var endedAt: Date
+    public var title: String?
+    /// The project folder's name only, never its path.
+    public var workingDirectory: String?
+    public var userMessages: [String]
+    /// How many things the person said in all, so a long session reads as
+    /// long even though only a few of its messages are here.
+    public var userMessageCount: Int
+    public var toolsUsed: [String]
+    public var skillsUsed: [String]
+
+    public init(
+        conversationID: String, client: ClientKind, startedAt: Date, endedAt: Date, title: String? = nil,
+        workingDirectory: String? = nil, userMessages: [String], userMessageCount: Int, toolsUsed: [String],
+        skillsUsed: [String]
+    ) {
+        self.conversationID = conversationID
+        self.client = client
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.title = title
+        self.workingDirectory = workingDirectory
+        self.userMessages = userMessages
+        self.userMessageCount = userMessageCount
+        self.toolsUsed = toolsUsed
+        self.skillsUsed = skillsUsed
+    }
 }
 
 public struct SkillUsageMetric: Identifiable, Codable, Hashable, Sendable {
@@ -258,6 +296,21 @@ public struct ToolRecommendation: Identifiable, Codable, Hashable, Sendable {
         self.sourceName = sourceName
         self.draftInstruction = draftInstruction
     }
+
+    /// Recommendations with each local skill offered once.
+    ///
+    /// A report written before copies were collapsed holds one "Use X" per
+    /// copy of X, each with its own skill id. They read the same, so the first
+    /// of each title is kept and the order is otherwise left alone.
+    public static func distinct(_ recommendations: [ToolRecommendation]) -> [ToolRecommendation] {
+        var seen = Set<String>()
+        return recommendations.filter { recommendation in
+            guard recommendation.kind == .useExistingSkill else { return seen.insert("id:" + recommendation.id).inserted }
+            let title = recommendation.title.folding(
+                options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            return seen.insert("skill:" + title).inserted
+        }
+    }
 }
 
 public struct InsightsReport: Identifiable, Codable, Hashable, Sendable {
@@ -272,6 +325,9 @@ public struct InsightsReport: Identifiable, Codable, Hashable, Sendable {
     public var conversationsScanned: Int
     public var itemsInspected: Int
     public var reportFormatVersion: Int
+    /// What the person's own assistant concluded from the digests, when a deep
+    /// dive has run. Reports written before it existed decode without one.
+    public var deepDive: InsightsDeepDive?
 
     public init(
         id: UUID = UUID(),
@@ -284,7 +340,8 @@ public struct InsightsReport: Identifiable, Codable, Hashable, Sendable {
         marketplaceDiscovery: MarketplaceDiscoverySummary? = nil,
         conversationsScanned: Int,
         itemsInspected: Int,
-        reportFormatVersion: Int = 1
+        reportFormatVersion: Int = 1,
+        deepDive: InsightsDeepDive? = nil
     ) {
         self.id = id
         self.generatedAt = generatedAt
@@ -297,6 +354,7 @@ public struct InsightsReport: Identifiable, Codable, Hashable, Sendable {
         self.conversationsScanned = conversationsScanned
         self.itemsInspected = itemsInspected
         self.reportFormatVersion = reportFormatVersion
+        self.deepDive = deepDive
     }
 
     /// Raw conversation content exists only in ephemeral scanner memory.
@@ -322,5 +380,48 @@ public struct MarketplaceDiscoverySummary: Codable, Hashable, Sendable {
         self.queriesFailed = queriesFailed
         self.packagesReturned = packagesReturned
         self.wasCancelled = wasCancelled
+    }
+}
+
+/// The real, read-from-content facts about one library-authored skill.
+///
+/// The insights projection can only say what a person *asked for*; it cannot
+/// see inside the skill's captured tree. This is what the scan learns once it
+/// reads that tree from the content store: the description declared in the
+/// skill's own SKILL.md, and the files the tree actually contains. Both are
+/// optional-shaped on purpose — a `nil` description or an empty file list means
+/// "not read", never "known missing", so a health check can tell the two apart.
+public struct SkillContentFacts: Equatable, Sendable {
+    /// The description declared in the skill's SKILL.md frontmatter, or nil when
+    /// no SKILL.md could be read or parsed. Nil is unknown, not blank.
+    public let description: String?
+    /// The relative paths of the files the captured tree holds. Empty when the
+    /// tree could not be read; a real inventory always lists at least SKILL.md.
+    public let files: [String]
+
+    public init(description: String?, files: [String]) {
+        self.description = description
+        self.files = files
+    }
+
+    /// Reads the honest facts out of a captured skill tree.
+    ///
+    /// Files are the tree's file entries by relative path, so a root SKILL.md
+    /// lists as `"SKILL.md"` — the exact name the structure check looks for.
+    /// The description is parsed from that SKILL.md's frontmatter; a tree with
+    /// no SKILL.md, or one whose header does not parse, yields a nil
+    /// description while still reporting the files it does have.
+    public static func read(from tree: CapturedPackageTree) -> SkillContentFacts {
+        var files: [String] = []
+        var skillMarkdown: String?
+        for entry in tree.entries {
+            guard case .file(let bytes, _) = entry.kind else { continue }
+            files.append(entry.relativePath)
+            if entry.relativePath.lowercased() == "skill.md" {
+                skillMarkdown = String(decoding: bytes, as: UTF8.self)
+            }
+        }
+        let description = skillMarkdown.flatMap { try? SkillFrontmatter.parse($0).description }
+        return SkillContentFacts(description: description, files: files.sorted())
     }
 }

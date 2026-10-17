@@ -1,6 +1,6 @@
 import Foundation
 
-public enum NativeSkillDestinationError: Error, Equatable, Sendable {
+enum NativeSkillDestinationError: Error, Equatable, Sendable {
     case unsupportedScope
     case invalidHomeURL
     case missingProjectRoot
@@ -35,6 +35,7 @@ public enum NativeSkillDestination {
         case .claude: relativeDirectory = ".claude/skills"
         case .codex: relativeDirectory = ".agents/skills"
         case .gemini: relativeDirectory = ".gemini/skills"
+        case .kiro: relativeDirectory = ".kiro/skills"
         }
         return root.appending(path: relativeDirectory, directoryHint: .isDirectory)
     }
@@ -47,6 +48,12 @@ public enum NativeSkillDestination {
         projectRoot: URL?
     ) throws -> URL {
         try validateSkillID(skillID)
+        // Claude Code skips an authored skill at a reserved name, and writing
+        // one into `~/.claude/skills/synced` would land inside the folder it
+        // overwrites from the account.
+        if client == .claude, ClaudeAccountSync.isReservedSkillFolderName(skillID) {
+            throw NativeSkillDestinationError.invalidSkillID
+        }
         return try directory(client: client, homeURL: homeURL, scope: scope, projectRoot: projectRoot)
             .appending(path: skillID, directoryHint: .isDirectory)
     }

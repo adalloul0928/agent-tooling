@@ -4,6 +4,22 @@ import Foundation
 /// machine-readable inventory. It recognizes TOML table headers without
 /// interpreting values, arrays, or executable configuration.
 enum TOMLTableScanner {
+    /// The table path a header line names, or nil when the line is not a
+    /// single-bracket table header.
+    static func headerPath(_ line: String) -> [String]? {
+        tableHeader(line).flatMap(keyPath)
+    }
+
+    /// Whether a line opens an array of tables (`[[name]]`).
+    static func isArrayTableHeader(_ line: String) -> Bool {
+        line.trimmingCharacters(in: .whitespaces).hasPrefix("[[")
+    }
+
+    /// A dotted key as its components, quotes removed.
+    static func dottedKey(_ raw: String) -> [String]? {
+        keyPath(raw)
+    }
+
     static func tablePaths(in document: String) -> [[String]] {
         document.split(separator: "\n").compactMap { line in
             guard let header = tableHeader(String(line)) else { return nil }

@@ -151,6 +151,52 @@ struct WorkspaceRequestSessionTests {
         #expect(snapshot.document.artifacts.count == 1)
     }
 
+    /// A request to write a skill opens the creator on the assistant its own
+    /// draft names, and the creator offers no other. The review sheet said
+    /// "Create with Codex…" whatever the draft named, so a request that asked
+    /// for Claude Code ran Claude Code from a button that promised Codex.
+    @Test func aSkillRequestNamesTheAssistantItsDraftNames() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let request = try fixture.enqueueSkillRequest(draftedWith: .claude)
+        let session = await fixture.session()
+
+        let assistant = await session.draftingClient(for: request)
+
+        #expect(assistant == .claude)
+        #expect(PendingRequestReviewSheet.creatorTitle(for: assistant) == "Create with Claude Code…")
+        #expect(PendingRequestReviewSheet.creatorBanner(for: assistant).contains("runs Claude Code"))
+        #expect(!PendingRequestReviewSheet.creatorBanner(for: assistant).contains("Codex"))
+        #expect(PendingRequestReviewSheet.creatorHelp(for: assistant).contains("the Claude Code creator"))
+        #expect(!PendingRequestReviewSheet.creatorHelp(for: assistant).contains("Codex"))
+    }
+
+    /// With no draft to read there is no assistant to name, so the sheet names
+    /// none rather than the one it used to assume.
+    @Test func aSkillRequestWithoutADraftNamesNoAssistant() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let request = try fixture.enqueueSkillRequest(draftedWith: nil)
+        let session = await fixture.session()
+
+        let assistant = await session.draftingClient(for: request)
+
+        #expect(assistant == nil)
+        #expect(PendingRequestReviewSheet.creatorTitle(for: assistant) == "Open the creator…")
+        #expect(!PendingRequestReviewSheet.creatorBanner(for: assistant).contains("Codex"))
+        #expect(!PendingRequestReviewSheet.creatorHelp(for: assistant).contains("Codex"))
+    }
+
+    /// Only a request to write a skill is drafted by an assistant.
+    @Test func onlyASkillRequestHasADraftingAssistant() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let request = try fixture.enqueueInstall(named: "Standalone Skill")
+        let session = await fixture.session()
+
+        #expect(await session.draftingClient(for: request) == nil)
+    }
+
     /// The envelope check, on its own, over the fields it is there to police.
     @Test func theEnvelopeRefusesAnUnsupportedScopeAndAStrayProjectFolder() throws {
         var request = ShellRenderFixture.pendingRequest()
@@ -241,6 +287,28 @@ struct WorkspaceRequestSessionTests {
                 reviewDetails: .init(componentKind: "skill"),
                 fingerprintInputs: ["skill", name], clientLabel: "Claude Code", store: store
             ).request
+        }
+
+        /// A request to write a skill, admitted the way an integration admits
+        /// one, with the draft it carries saved beside it when `assistant` is
+        /// given and missing when it is nil.
+        func enqueueSkillRequest(draftedWith assistant: ClientKind?) throws -> PendingAgentRequest {
+            let instruction = "Write a skill that checks a release is ready."
+            let request = try PendingRequestQueueService.enqueue(
+                kind: .createSkill, title: "Create the skill 'release-readiness'",
+                summary: "A local client is asking to create a skill.", componentID: "release-readiness",
+                scope: .user, targets: [.claude], reason: nil,
+                reviewDetails: .init(instruction: instruction),
+                fingerprintInputs: ["release-readiness", instruction, ""], clientLabel: "Raycast", store: store
+            ).request
+            if let assistant {
+                try store.saveRequestDraft(
+                    request.id,
+                    SkillDraftRequest(
+                        id: request.id, client: assistant, instruction: instruction,
+                        proposedName: "release-readiness", targets: [.claude]))
+            }
+            return request
         }
 
         func session() async -> WorkspaceRequestSession {

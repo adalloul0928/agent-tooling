@@ -26,7 +26,7 @@ struct WorkspaceLibraryReadModelTests {
         let tracked = try #require(model.rows.first { $0.artifactID == fixture.trackedID })
         #expect(!tracked.isAssignable)
         #expect(tracked.assignableReasons.isEmpty)
-        #expect(tracked.assignmentExplanation == "Tracked in this library. Choose how to manage it before assigning.")
+        #expect(tracked.assignmentExplanation == "Not managed by this app. It was found where it is and this library holds no copy, so it cannot be placed from here.")
     }
 
     @Test func theLibrarySizeCountsToolsCarriedInsidePluginsNotJustTheRowsAListCanShow() throws {
@@ -147,6 +147,32 @@ struct WorkspaceLibraryReadModelTests {
 
         #expect(model.rows.count == 5_000)
         #expect(model.rows.allSatisfy { $0.childCount == 0 })
+    }
+
+    /// The content-store digest travels from the artifact onto the row, so the
+    /// insights scan has the key it needs to read a library skill's real
+    /// SKILL.md. An artifact with no digest leaves the row's digest nil.
+    @Test func theContentDigestTravelsFromTheArtifactOntoTheRow() throws {
+        let withDigest = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f1")!)
+        let withoutDigest = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f2")!)
+        let digest = ContentDigest(value: String(repeating: "a", count: 64))
+        let workspaceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000f9")!)
+        let document = try WorkspaceDocumentCoding.seal(.init(
+            workspaceID: workspaceID,
+            revision: .init(writerID: WorkspaceObjectID()),
+            artifacts: [
+                .init(
+                    identity: .init(id: withDigest, kind: .skill, displayName: "With Digest"),
+                    authority: .centralPersonal, declaredName: "with-digest", contentDigest: digest),
+                .init(
+                    identity: .init(id: withoutDigest, kind: .skill, displayName: "Without Digest"),
+                    authority: .centralPersonal, declaredName: "without-digest"),
+            ]))
+        let device = DeviceWorkspaceState(workspaceID: workspaceID)
+        let model = try WorkspaceLibraryReadModel(snapshot: .init(document: document, device: device))
+
+        #expect(model.rows.first { $0.artifactID == withDigest }?.contentDigest == digest)
+        #expect(model.rows.first { $0.artifactID == withoutDigest }?.contentDigest == nil)
     }
 
     private struct Fixture {

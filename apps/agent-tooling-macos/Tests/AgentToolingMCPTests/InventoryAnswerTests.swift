@@ -2,7 +2,6 @@ import Foundation
 import Testing
 
 @testable import AgentToolingCore
-@testable import AgentToolingMCP
 
 /// What the server answers inventory questions from.
 ///

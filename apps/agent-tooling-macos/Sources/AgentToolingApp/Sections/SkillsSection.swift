@@ -16,7 +16,10 @@ struct SkillsSection: View {
         if showsOnboarding {
             OnboardingWizard(workspace: workspace) { onboardingSkipped = true }
         } else if let content {
-            SkillsView(workspace: workspace, content: content)
+            VStack(spacing: 0) {
+                SkillsView(workspace: workspace, content: content)
+                AccountContentsStrip(session: workspace.accounts, kinds: [.skill])
+            }
         } else {
             // One session per workspace, made once. Building it in `body` would
             // hand the screen a new one on every layout pass and lose whatever

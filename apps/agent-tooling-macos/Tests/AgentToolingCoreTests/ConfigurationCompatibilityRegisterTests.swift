@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -73,10 +74,7 @@ struct ConfigurationCompatibilityRegisterTests {
         let path: String
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "compatibility-register-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("compatibility-register").url
             path = root.appending(path: "settings.json").path
             try Data(#"{"model":"user-model"}"#.utf8).write(to: URL(fileURLWithPath: path))
         }

@@ -22,7 +22,7 @@ struct SkillRepositorySection: View {
 
     var body: some View {
         GroupBox("Updates") {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Space.lg) {
                 switch skill.ownership {
                 case .centralUpstream: upstream
                 case .attachedAuthoring: attached
@@ -33,40 +33,48 @@ struct SkillRepositorySection: View {
                     ProgressView("Checking repository…").controlSize(.small)
                 }
             }
-            .padding(6).frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Space.sm).frame(maxWidth: .infinity, alignment: .leading)
         }
         .sheet(item: $linking) { SkillUpstreamLinkSheet(skill: skill, session: $0) }
     }
 
     @ViewBuilder private var upstream: some View {
         Label("Following a repository", systemImage: "arrow.triangle.branch")
-            .font(.system(size: 14, weight: .medium))
+            .font(AgentFont.bodyMedium)
         if let binding {
             if let url = URL(string: binding.repositoryURL) {
                 Link(binding.repositoryURL, destination: url)
-                    .font(.system(size: 13)).lineLimit(2).truncationMode(.middle)
+                    .font(AgentFont.body).lineLimit(2).truncationMode(.middle)
             }
             Text("\(binding.ref) · \(binding.subdirectory.isEmpty ? "Repository root" : binding.subdirectory)")
-                .font(.system(size: 12)).foregroundStyle(.secondary).textSelection(.enabled)
+                .font(AgentFont.caption).foregroundStyle(.secondary).textSelection(.enabled)
             if let approvedRevision {
                 Text("Approved at \(approvedRevision.value.prefix(12))")
-                    .font(.system(size: 12)).foregroundStyle(.secondary).textSelection(.enabled)
+                    .font(AgentFont.caption).foregroundStyle(.secondary).textSelection(.enabled)
             }
             if let status = session.upstreamStatus {
-                Text(status.title).font(.system(size: 14, weight: .medium))
-                Text(status.detail).font(.system(size: 13)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text(status.title).font(AgentFont.bodyMedium)
+                Text(status.detail).font(AgentFont.body).foregroundStyle(.secondary)
+                    .wrapsLines()
                 Text("Checked \(status.checkedAt.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .font(AgentFont.caption).foregroundStyle(.secondary)
+            } else if let found = workspace.updates.availability(for: skill.id) {
+                // The scheduled check already asked; say what it heard.
+                Text(found.title).font(AgentFont.bodyMedium)
+                Text(found.detail).font(AgentFont.body).foregroundStyle(.secondary).wrapsLines()
+                if let last = workspace.device.lastUpdateCheck {
+                    Text("Checked \(last.formatted(date: .abbreviated, time: .shortened))")
+                        .font(AgentFont.caption).foregroundStyle(.secondary)
+                }
             } else {
                 Text("This library has not asked the repository what it publishes now.")
-                    .font(.system(size: 13)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
+                    .wrapsLines()
             }
-            if let message = session.errorMessage {
+            if let message = session.errorMessage ?? workspace.updates.errorMessage {
                 Text(message)
-                    .font(.system(size: 13)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
+                    .wrapsLines()
             }
             HStack {
                 Button("Check for updates", systemImage: "arrow.clockwise") {
@@ -74,12 +82,24 @@ struct SkillRepositorySection: View {
                 }
                 .buttonStyle(.glass)
                 if session.upstreamStatus?.isUpToDate == false {
-                    Button("Review update…", systemImage: "arrow.down.circle") {
-                        Task { await session.applyUpstream(for: skill) }
+                    // The library takes the content; the apps that have the
+                    // skill get the new copy too, through the same install path.
+                    Button("Update", systemImage: "arrow.down.circle") {
+                        Task {
+                            if await session.applyUpstream(for: skill) {
+                                await workspace.deployment.prepare()
+                                await workspace.deployment.replaceProvenCopies(of: [skill.id])
+                            }
+                        }
                     }
-                    .buttonStyle(.glassProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .disabled(!session.canWrite)
+                } else if workspace.updates.availability(for: skill.id)?.hasUpdate == true {
+                    Button(workspace.updates.updating.contains(skill.id) ? "Updating…" : "Update", systemImage: "arrow.down.circle") {
+                        Task { await workspace.updates.update(skill.id) }
+                    }
+                    .primaryActionStyle()
+                    .disabled(!session.canWrite || workspace.updates.isBusy)
                 }
                 Spacer(minLength: 0)
             }
@@ -88,17 +108,17 @@ struct SkillRepositorySection: View {
             Text(
                 "This skill follows a repository, but this workspace no longer records which one. Nothing can be checked until that is repaired."
             )
-            .font(.system(size: 13)).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .font(AgentFont.body).foregroundStyle(.secondary)
+            .wrapsLines()
         }
     }
 
     @ViewBuilder private var attached: some View {
         Label("You author this folder", systemImage: "folder.badge.gearshape")
-            .font(.system(size: 14, weight: .medium))
+            .font(AgentFont.bodyMedium)
         Text("Your own folder is the only copy. Nothing here updates it, and nothing writes into it.")
-            .font(.system(size: 13)).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .font(AgentFont.body).foregroundStyle(.secondary)
+            .wrapsLines()
         if let authoringPath {
             LocationText(path: authoringPath)
         }
@@ -111,10 +131,10 @@ struct SkillRepositorySection: View {
     /// would refuse, and its edits are never touched.
     @ViewBuilder private var personal: some View {
         Label("Maintained in this library", systemImage: "books.vertical")
-            .font(.system(size: 14, weight: .medium))
+            .font(AgentFont.bodyMedium)
         Text("You hold this skill's source. Edit it here, then review where the change should be used.")
-            .font(.system(size: 13)).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .font(AgentFont.body).foregroundStyle(.secondary)
+            .wrapsLines()
         if skill.hasCentralContent {
             HStack {
                 Button("Follow a repository…", systemImage: "arrow.triangle.branch") {
@@ -127,26 +147,26 @@ struct SkillRepositorySection: View {
             }
         } else {
             Text(LinkSkillUpstreamRefusal.missingContent.reason)
-                .font(.system(size: 13)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .font(AgentFont.body).foregroundStyle(.secondary)
+                .wrapsLines()
         }
     }
 
     @ViewBuilder private var elsewhere: some View {
         if let plugin = skill.parentPluginLabel {
             Label("Updates with its plugin", systemImage: "puzzlepiece.extension")
-                .font(.system(size: 14, weight: .medium))
+                .font(AgentFont.bodyMedium)
             Text("This skill stays with \(plugin). Manage the whole plugin in Library → Plugins.")
-                .font(.system(size: 13)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .font(AgentFont.body).foregroundStyle(.secondary)
+                .wrapsLines()
         } else {
             Label("Source unknown", systemImage: "questionmark.folder")
-                .font(.system(size: 14, weight: .medium))
+                .font(AgentFont.bodyMedium)
             Text(
                 "This skill stays in the app it was found in. This workspace has no way to record a repository for a skill it does not hold, so there is nothing to check for updates."
             )
-            .font(.system(size: 13)).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .font(AgentFont.body).foregroundStyle(.secondary)
+            .wrapsLines()
         }
     }
 }

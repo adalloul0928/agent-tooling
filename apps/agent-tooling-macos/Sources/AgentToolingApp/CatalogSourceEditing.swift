@@ -175,17 +175,20 @@ struct AddCatalogSourceSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Add a catalog").font(.title3.weight(.semibold))
+                Text("Add a catalog").font(AgentFont.title)
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
             }
-            .padding(20)
-            Divider()
-            VStack(alignment: .leading, spacing: 16) {
+            .padding(Space.xxl)
+            Hairline()
+            // The content region flexes; the footer below it does not. Switching
+            // kind must never move the primary action or truncate a sentence.
+            VStack(alignment: .leading, spacing: Space.xl) {
                 Text(
                     "Discover reads the catalog and lists what it publishes. Adding one records where to look — nothing is fetched now, nothing is installed, and each package is still added to your library one at a time."
                 )
                 .foregroundStyle(.secondary)
+                .wrapsLines()
 
                 if let message = session.errorMessage {
                     AttentionBanner(title: "That catalog was not recorded", message: message)
@@ -199,13 +202,13 @@ struct AddCatalogSourceSheet: View {
                 .labelsHidden()
                 .accessibilityLabel("Catalog kind")
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Space.lg) {
                     LabeledContent("Name") {
                         TextField("Team catalog", text: $name)
-                            .textFieldStyle(.roundedBorder).frame(maxWidth: 300)
+                            .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldCapped)
                     }
                     LabeledContent("Folder on this Mac") {
-                        HStack(spacing: 10) {
+                        HStack(spacing: Space.lg) {
                             Text(folder ?? "None chosen")
                                 .foregroundStyle(folder == nil ? .secondary : .primary)
                                 .textSelection(.enabled).lineLimit(2)
@@ -214,36 +217,39 @@ struct AddCatalogSourceSheet: View {
                     }
                     if kind == .gitRepository {
                         LabeledContent("Repository") {
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: Space.xs) {
                                 TextField("https://example.com/team/catalog", text: $repository)
-                                    .textFieldStyle(.roundedBorder).frame(maxWidth: 300)
+                                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldCapped)
                                 Text("Optional, and shared with your other Macs. Leave out any user name or token.")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                    .font(AgentFont.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
                 }
-                .padding(16)
-                .standardPanel(cornerRadius: 12)
+                .padding(Space.xl)
+                .standardPanel()
 
                 Text(
                     "The folder stays where it is and is only ever read. Its path is this Mac's own — your other Macs see the catalog and bind it to their own copy."
                 )
-                .font(.callout).foregroundStyle(.secondary)
-
-                Spacer(minLength: 0)
-
-                HStack(spacing: 12) {
-                    Spacer()
-                    Button("Add catalog") { commit() }
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(!canAdd)
-                }
+                .font(AgentFont.body).foregroundStyle(.secondary)
+                .wrapsLines()
             }
-            .padding(20)
+            .padding(Space.xxl)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            Hairline()
+            HStack(spacing: Space.lg) {
+                Spacer()
+                Button("Add catalog") { commit() }
+                    .primaryActionStyle()
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canAdd)
+            }
+            .padding(.horizontal, Space.xxl)
+            .padding(.vertical, Space.xl)
         }
-        .frame(width: 620, height: 460)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
     }
 
@@ -271,7 +277,7 @@ struct AddCatalogSourceSheet: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Use Folder"
+        panel.prompt = "Use folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         session.clearError()
         folder = url.standardizedFileURL.path
@@ -310,9 +316,9 @@ struct RemoveCatalogSourceButton: View {
             confirming = true
         } label: {
             Image(systemName: "trash")
-                .font(.system(size: 12, weight: .medium))
+                .font(AgentFont.captionMedium)
                 .foregroundStyle(.tertiary)
-                .frame(width: 18, height: 18)
+                .frame(width: Size.chipHeight, height: Size.chipHeight)
         }
         .buttonStyle(.plain)
         .disabled(!session.canWrite || session.isBusy)
@@ -342,12 +348,12 @@ struct RemoveCatalogSourceConfirmation: View {
     let close: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Remove \(source.name)?").font(.callout.weight(.semibold))
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text("Remove \(source.name)?").font(AgentFont.bodySemibold)
             Text(session.errorMessage ?? Self.consequence)
-                .font(.callout).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 10) {
+                .font(AgentFont.body).foregroundStyle(.secondary)
+                .wrapsLines()
+            HStack(spacing: Space.lg) {
                 Spacer()
                 Button("Keep") { close() }.keyboardShortcut(.cancelAction)
                 Button("Remove", role: .destructive) {
@@ -358,8 +364,8 @@ struct RemoveCatalogSourceConfirmation: View {
                 .disabled(session.isBusy)
             }
         }
-        .padding(16)
-        .frame(width: 300)
+        .padding(Space.xl)
+        .frame(width: Size.fieldCapped)
     }
 
     static let consequence =

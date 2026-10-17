@@ -8,6 +8,9 @@ struct MCPServersSection: View {
     let workspace: WorkspaceLaunch.Workspace
 
     var body: some View {
-        MCPServersView(workspace: workspace)
+        VStack(spacing: 0) {
+            MCPServersView(workspace: workspace)
+            AccountContentsStrip(session: workspace.accounts, kinds: [.connector, .app])
+        }
     }
 }

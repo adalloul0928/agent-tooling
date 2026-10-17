@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -501,10 +502,7 @@ struct WorkspaceCatalogSourceCommandTests {
             document: PortableWorkspaceDocument = Fixture.emptyDocument(),
             device configure: (inout DeviceWorkspaceState) -> Void = { _ in }
         ) throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "catalog-source-\(UUID())")
-            try FileManager.default.createDirectory(
-                at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("catalog-source").url
             let sealed = try WorkspaceDocumentCoding.seal(document)
             initialDocument = sealed
             var device = DeviceWorkspaceState(workspaceID: sealed.workspaceID)

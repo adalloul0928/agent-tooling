@@ -27,7 +27,7 @@ extension WorkspaceMergeConflictKind {
             false
         case .artifactField, .artifactContent, .deleteVersusEdit, .ownership, .sourcePolicy,
             .subscriptionLock, .subscriptionContentMismatch, .assignmentEnablement, .assignmentField,
-            .catalogSource, .projectField:
+            .catalogSource, .projectField, .deviceField, .accountPreference:
             true
         }
     }
@@ -57,11 +57,11 @@ public struct WorkspaceConflictResolution: Hashable, Sendable {
     }
 }
 
-public struct WorkspaceConflictResolutionResult: Sendable {
-    public let document: PortableWorkspaceDocument?
+struct WorkspaceConflictResolutionResult: Sendable {
+    let document: PortableWorkspaceDocument?
     /// Conflicts still waiting for a decision.
-    public let remaining: [WorkspaceMergeConflict]
-    public var isResolved: Bool { document != nil && remaining.isEmpty }
+    let remaining: [WorkspaceMergeConflict]
+    var isResolved: Bool { document != nil && remaining.isEmpty }
 }
 
 /// Applies a person's conflict decisions by re-running the merge with the
@@ -72,8 +72,8 @@ public struct WorkspaceConflictResolutionResult: Sendable {
 /// usable when every one of them has an answer. Choosing a side is expressed by
 /// rewriting the *ancestor* for that fact, so the engine's own rules still
 /// decide the outcome rather than this type editing the document directly.
-public enum WorkspaceConflictResolver {
-    public static func resolve(
+enum WorkspaceConflictResolver {
+    static func resolve(
         base: PortableWorkspaceDocument?,
         local: PortableWorkspaceDocument,
         remote: PortableWorkspaceDocument,
@@ -146,6 +146,28 @@ private extension WorkspaceConflictResolver {
             } else {
                 ancestor.artifacts.append(losing)
             }
+
+        case .deviceField:
+            guard let id = resolution.objectID,
+                  let losing = loser.deviceRegistry.first(where: { $0.id == id }) else { return }
+            var devices = ancestor.deviceRegistry
+            if let index = devices.firstIndex(where: { $0.id == id }) {
+                devices[index] = losing
+            } else {
+                devices.append(losing)
+            }
+            ancestor.devices = devices
+
+        case .accountPreference:
+            // The losing side's value for this one switch becomes the
+            // ancestor's, absent included, so the chosen side is the only one
+            // that moved it.
+            guard let id = resolution.objectID else { return }
+            var entries = (ancestor.accountPreferences?.entries ?? []).filter { $0.key.objectID != id }
+            if let losing = loser.accountPreferences?.entries.first(where: { $0.key.objectID == id }) {
+                entries.append(losing)
+            }
+            ancestor.accountPreferences = AccountPreferences(entries: entries)
 
         case .sourcePolicy, .subscriptionLock:
             guard let id = resolution.objectID else { return }

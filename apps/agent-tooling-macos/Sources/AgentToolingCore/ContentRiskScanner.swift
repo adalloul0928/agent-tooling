@@ -185,6 +185,9 @@ public enum ContentRiskScanner {
         limits: Limits = Limits()
     ) -> ContentRiskReport {
         let normalizedRoot = root.standardizedFileURL
+        // The walk names its items under the folder's real path, so the root
+        // is also matched that way: resolved once, here, for every item.
+        let resolvedRoot = normalizedRoot.resolvingSymlinksInPath().standardizedFileURL
         var enumerationNotes: [String] = []
         guard
             let enumerator = fileManager.enumerator(
@@ -192,7 +195,8 @@ public enum ContentRiskScanner {
                 includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey],
                 options: [],
                 errorHandler: { item, _ in
-                    let relative = relativePath(of: item, under: normalizedRoot) ?? item.lastPathComponent
+                    let relative =
+                        relativePath(of: item, under: normalizedRoot, resolvedRoot: resolvedRoot) ?? item.lastPathComponent
                     appendCoverageNote("\(relative) could not be enumerated completely.", to: &enumerationNotes)
                     return true
                 }
@@ -222,10 +226,11 @@ public enum ContentRiskScanner {
         while let item = enumerator.nextObject() as? URL {
             guard filesScanned < limits.maximumFiles, findings.count < limits.maximumFindings else {
                 reachedLimit = true
+                let next = relativePath(of: item, under: normalizedRoot, resolvedRoot: resolvedRoot) ?? item.lastPathComponent
                 appendCoverageNote(
                     findings.count >= limits.maximumFindings
                         ? "The finding limit was reached; remaining package entries were not inspected."
-                        : "The file limit was reached before \(relativePath(of: item, under: normalizedRoot) ?? item.lastPathComponent).",
+                        : "The file limit was reached before \(next).",
                     to: &coverageNotes
                 )
                 break
@@ -233,7 +238,7 @@ public enum ContentRiskScanner {
             guard
                 let values = try? item.resourceValues(
                     forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]),
-                let relativePath = Self.relativePath(of: item, under: normalizedRoot)
+                let relativePath = Self.relativePath(of: item, under: normalizedRoot, resolvedRoot: resolvedRoot)
             else {
                 reachedLimit = true
                 appendCoverageNote("An entry named \(item.lastPathComponent) could not be inspected.", to: &coverageNotes)
@@ -715,10 +720,9 @@ public enum ContentRiskScanner {
         return excerpt(SensitiveValueRedactor.redact(rendered), limit: limit)
     }
 
-    private static func relativePath(of child: URL, under root: URL) -> String? {
-        let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let childPath = child.standardizedFileURL.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard childPath.hasPrefix(rootPath + "/") else { return nil }
-        return String(childPath.dropFirst(rootPath.count + 1))
+    private static func relativePath(of child: URL, under root: URL, resolvedRoot: URL) -> String? {
+        // The root is standardized and resolved by `scan`; the enumerated
+        // item is standardized.
+        PathContainment.relativePath(ofEnumerated: child, under: root, resolvedRoot: resolvedRoot)
     }
 }

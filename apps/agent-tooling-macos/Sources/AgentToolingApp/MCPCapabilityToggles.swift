@@ -68,28 +68,6 @@ final class MCPCapabilityModel {
     }
 }
 
-/// The "3/4 enabled" mark on a collection row. Absent until a live test has
-/// told the app what the server actually exposes.
-struct MCPCapabilityBadge: View {
-    @Environment(MCPCapabilityModel.self) private var capabilities
-    let serverID: String
-    var selected = false
-
-    var body: some View {
-        if let summary = capabilities.summary(for: serverID) {
-            Text(summary)
-                .font(.caption2.weight(.medium).monospacedDigit())
-                .foregroundStyle(selected ? Color.white.opacity(0.9) : Color.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(
-                    Capsule().fill(selected ? Color.white.opacity(0.18) : AgentTheme.separator.opacity(0.28))
-                )
-                .accessibilityLabel("\(summary) capabilities")
-        }
-    }
-}
-
 /// Per-tool switches for one server, with the enforcement boundary stated in
 /// the same card rather than in a tooltip.
 struct MCPCapabilitySection: View {
@@ -103,33 +81,33 @@ struct MCPCapabilitySection: View {
     let observedSafety: [String: MCPToolSafety]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 8) {
-                Text("Capabilities").font(.subheadline.weight(.semibold))
+        VStack(alignment: .leading, spacing: Space.sm) {
+            HStack(spacing: Space.md) {
+                Text("Capabilities").font(AgentFont.heading)
                 Spacer()
                 if let summary = intent.summary {
                     Text(summary)
-                        .font(.caption.weight(.medium).monospacedDigit())
+                        .font(AgentFont.captionMedium.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, Space.xxs)
 
             VStack(spacing: 0) {
                 if toolNames.isEmpty {
-                    HStack(spacing: 10) {
+                    HStack(spacing: Space.lg) {
                         Image(systemName: "questionmark.circle").foregroundStyle(.secondary)
                         Text(emptyMessage)
-                            .font(.callout)
+                            .font(AgentFont.body)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                         Spacer(minLength: 0)
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                 } else {
                     ForEach(Array(toolNames.enumerated()), id: \.element) { index, name in
                         toolRow(name)
-                        if index < toolNames.count - 1 { Divider().opacity(0.45) }
+                        if index < toolNames.count - 1 { Hairline() }
                     }
                 }
             }
@@ -137,24 +115,24 @@ struct MCPCapabilitySection: View {
             .standardPanel()
 
             if !toolNames.isEmpty {
-                HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .top, spacing: Space.md) {
                     Image(systemName: "info.circle").foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Space.xs) {
                         Text(MCPCapabilityIntent.enforcementNotice)
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                         if let recordPath = capabilities.recordPath {
                             LocationText(path: recordPath)
                         }
                         if let failure = capabilities.lastError {
                             Label(failure, systemImage: "exclamationmark.triangle")
-                                .font(.caption)
+                                .font(AgentFont.caption)
                                 .foregroundStyle(AgentTheme.warning)
                         }
                     }
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, Space.xxs)
             }
         }
     }
@@ -173,24 +151,24 @@ struct MCPCapabilitySection: View {
     @ViewBuilder
     private func toolRow(_ name: String) -> some View {
         let enabled = intent.isEnabled(name)
-        HStack(spacing: 11) {
+        HStack(spacing: Space.lg) {
             if let safety = observedSafety[name] {
                 Image(systemName: safety.symbolName)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(AgentFont.captionMedium)
                     .foregroundStyle(safety == .readOnly ? Color.secondary : AgentTheme.warning)
-                    .frame(width: 16)
+                    .frame(width: Size.glyphSlot)
                     .help(safety.detail)
             } else {
                 Image(systemName: "circle.dashed")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(AgentFont.captionMedium)
                     .foregroundStyle(.tertiary)
-                    .frame(width: 16)
+                    .frame(width: Size.glyphSlot)
             }
             Text(name)
-                .font(.system(.callout, design: .monospaced))
+                .font(AgentFont.monoBody)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Spacer(minLength: 16)
+            Spacer(minLength: Space.xl)
             Toggle(
                 "",
                 isOn: Binding(
@@ -203,7 +181,7 @@ struct MCPCapabilitySection: View {
             .controlSize(.mini)
             .accessibilityLabel("Want \(name)")
         }
-        .padding(.horizontal, 14)
-        .frame(minHeight: 38)
+        .padding(.horizontal, Space.xl)
+        .frame(minHeight: Size.compactRowHeight)
     }
 }

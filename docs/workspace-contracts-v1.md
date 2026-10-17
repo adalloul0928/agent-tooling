@@ -490,3 +490,24 @@ decode/re-encode rejects unsupported fields and alternate encodings.
 
 See [migration assembly](workspace-migration-assembly-v1.md) for the combined
 candidate and the remaining checkpoint, resolver and application cutover gates.
+
+## Portable schema 6 account preferences
+
+Schema 6 adds `accountPreferences: AccountPreferences?` to the portable
+document: the person's choices about the switches through which the claude.ai
+and ChatGPT accounts reach Claude Code and Codex. It is required at schema 6
+and above, may be empty, and is forbidden below. Each entry is a provider, a
+setting, an optional item and a value, at most 512 entries, sorted by provider
+(Claude first), then setting, then item.
+
+Nothing the accounts contain enters the document; each Mac reads that live.
+The field is omitted from the digest when absent, so documents at schemas 1–5
+keep their digests. New workspaces start at schema 6. An existing schema-5
+workspace stays at 5 until `SetAccountPreferencesCommand` saves its first
+choice, which raises it in the same revision. A build that predates schema 6
+cannot read it, so every Mac must run a newer build before a choice is saved.
+
+Merging is per switch, and two different choices for one switch are an
+`accountPreference` conflict settled by choosing a side. See
+[account surfaces](account-surfaces-v1.md) for the switches, validation,
+planning and apply rules.

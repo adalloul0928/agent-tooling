@@ -16,6 +16,9 @@ struct ClientsSection: View {
 
     @Environment(AppNavigationState.self) private var navigation
     @State private var reviewedRequest: PendingAgentRequest?
+    /// The assistant the reviewed request's own draft names, when it asks for
+    /// a skill to be written. The creator opens on that one.
+    @State private var draftingClient: ClientKind?
     @State private var refusal: String?
     @State private var isReviewingPlan = false
     @State private var isPreparing = false
@@ -57,6 +60,7 @@ struct ClientsSection: View {
                 request: request,
                 refusal: refusal,
                 isBusy: workspace.requests.isBusy,
+                draftingClient: draftingClient,
                 onDefer: { reviewedRequest = nil },
                 onReject: {
                     Task {
@@ -97,7 +101,7 @@ struct ClientsSection: View {
                     actionTitle: "Close",
                     action: { isReviewingPlan = false }
                 )
-                .frame(width: 480, height: 320)
+                .sheetSize(SheetSize.small)
                 .background(AgentTheme.contentBackground)
             }
         }
@@ -129,12 +133,23 @@ struct ClientsSection: View {
     private func present(_ request: PendingAgentRequest) {
         refusal = nil
         presentedRequestID = request.id
-        reviewedRequest = request
+        guard request.kind == .createSkill else {
+            draftingClient = nil
+            reviewedRequest = request
+            return
+        }
+        // The creator opens on the assistant the request's own draft names,
+        // so the sheet reads that draft before it says who will write it.
+        Task {
+            draftingClient = await workspace.requests.draftingClient(for: request)
+            reviewedRequest = request
+        }
     }
 
     private func finishRequestPresentation() {
         if let id = presentedRequestID { navigation.consumePendingRequest(id) }
         presentedRequestID = nil
+        draftingClient = nil
         refusal = nil
     }
 }

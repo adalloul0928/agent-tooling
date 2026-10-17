@@ -14,17 +14,17 @@ import Foundation
 /// claims no authority over its content. Nothing becomes `centralPersonal` from
 /// a scan — taking ownership of somebody's files is a decision they make, not
 /// one a first launch makes for them.
-public enum WorkspaceFirstRun {
-    public struct Result: Sendable {
-        public let document: PortableWorkspaceDocument
-        public let device: DeviceWorkspaceState
-        public let skillCount: Int
-        public let packageCount: Int
-        public let connectionCount: Int
+enum WorkspaceFirstRun {
+    struct Result: Sendable {
+        let document: PortableWorkspaceDocument
+        let device: DeviceWorkspaceState
+        let skillCount: Int
+        let packageCount: Int
+        let connectionCount: Int
     }
 
     /// Builds the first revision from a completed scan. Pure: it writes nothing.
-    public static func prepare(
+    static func prepare(
         observations: [TargetObservation],
         inventory: ScannedInventory,
         workspaceID: WorkspaceObjectID = WorkspaceObjectID(),
@@ -128,7 +128,7 @@ public enum WorkspaceFirstRun {
     /// first, and starting over on top of an existing one would discard whatever
     /// that workspace had decided.
     @discardableResult
-    public static func begin(
+    static func begin(
         containerRoot: URL,
         homeURL: URL,
         runner: any CommandRunning,
@@ -149,8 +149,9 @@ public enum WorkspaceFirstRun {
     }
 
     /// Everything this package claims, by its own record or by what a client
-    /// reported.
-    private static func claimedMembers(
+    /// reported. Shared with the reconciliation a later check runs, so the two
+    /// cannot disagree about what belongs to a package.
+    static func claimedMembers(
         of packageID: String, inventory: ScannedInventory, observations: [TargetObservation]
     ) -> Set<String> {
         var members = Set(inventory.plugins.first { $0.id == packageID }?.skills ?? [])
@@ -173,10 +174,7 @@ public enum WorkspaceFirstRun {
         let root = URL(fileURLWithPath: packageRoot).standardizedFileURL
         var child = URL(fileURLWithPath: path).standardizedFileURL
         if child.lastPathComponent == "SKILL.md" { child.deleteLastPathComponent() }
-        let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        guard child.path.hasPrefix(prefix) else { return nil }
-        let relative = String(child.path.dropFirst(prefix.count))
-        return relative.isEmpty ? nil : relative
+        return PathContainment.relativePath(ofNormalizedChild: child.path, inNormalizedRoot: root.path)
     }
 
     /// Every identifier some package claims, by its own record or by what a
@@ -201,7 +199,7 @@ public enum WorkspaceFirstRun {
     ///
     /// Two packages claiming one item is not a parent to pick between, so it is
     /// recorded as belonging to neither rather than arbitrarily to one.
-    private static func parentPackage(
+    static func parentPackage(
         of identifier: String,
         inventory: ScannedInventory,
         observations: [TargetObservation],

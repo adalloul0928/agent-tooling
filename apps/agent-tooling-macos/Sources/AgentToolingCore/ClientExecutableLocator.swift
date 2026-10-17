@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Finds a client's command-line tool on this Mac.
 ///
@@ -11,16 +12,57 @@ import Foundation
 /// on macOS is usually not the shell environment a person thinks they have, so a
 /// hit there would be neither reproducible nor explainable.
 public enum ClientExecutableLocator {
-    /// Where each client's tool is installed, in the order they are checked.
+    /// Folders somebody explicitly recorded as holding client tools, applied to
+    /// every lookup in this process. Registered from the device's own record at
+    /// launch and after a reviewed find — never harvested from `PATH` silently.
+    /// A lock rather than an actor because callers are synchronous and the
+    /// value changes a handful of times per launch.
+    private static let recordedRoots = OSAllocatedUnfairLock<[URL]>(initialState: [])
+
+    /// Replaces the recorded custom roots. Non-absolute paths are refused here
+    /// so a bad record degrades to the fixed roots instead of a bad probe.
+    public static func registerAdditionalRoots(_ directories: [String]) {
+        let roots = directories
+            .filter { $0.hasPrefix("/") }
+            .map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL }
+            .filter { NativeSkillDestination.isValidRoot($0) }
+        recordedRoots.withLock { $0 = roots }
+    }
+
+    /// Where each client's tool is installed, in the order they are checked:
+    /// the folders somebody recorded for this Mac first, then the fixed roots.
     public static func candidates(for client: ClientKind, homeURL: URL) -> [URL] {
         let name = executableName(for: client)
-        return [
-            URL(fileURLWithPath: "/opt/homebrew/bin"),
-            URL(fileURLWithPath: "/usr/local/bin"),
-            homeURL.appending(path: ".local/bin"),
-            homeURL.appending(path: ".bun/bin"),
-            homeURL.appending(path: ".npm-global/bin"),
-        ].map { $0.appending(path: name).standardizedFileURL }
+        var roots = recordedRoots.withLock { $0 }
+        roots.append(contentsOf: fixedRoots(homeURL: homeURL).filter { root in !roots.contains(root) })
+        return roots.map { $0.appending(path: name).standardizedFileURL }
+    }
+
+    /// The fixed roots, in the order they are checked. They are the folders on
+    /// the search path every child process gets, so a tool a child could start
+    /// by name is a tool found here; only the order is the locator's own.
+    ///
+    /// Six come first, in the order they always have, so a tool found before is
+    /// the tool found now; every other folder follows in the search path's own
+    /// order. `~/.toolbox/bin` is Amazon Toolbox's shim directory: internal
+    /// builds of these clients install there as symlinks to a dispatcher, which
+    /// the runnability check follows like any other link. It is checked before
+    /// the per-user install folders because a Mac that has it usually also has
+    /// an older native install beside it, and the managed shim is the one the
+    /// person's shell runs and the one that carries their sign-in.
+    static func fixedRoots(homeURL: URL) -> [URL] {
+        let home = ProcessCommandRunner.plainPath(of: homeURL)
+        let shared = ProcessCommandRunner.searchPath(home: home)
+        let first = [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "\(home)/.toolbox/bin",
+            "\(home)/.local/bin",
+            "\(home)/.bun/bin",
+            "\(home)/.npm-global/bin",
+        ]
+        .filter(shared.contains)
+        return (first + shared.filter { !first.contains($0) }).map { URL(filePath: $0, directoryHint: .isDirectory) }
     }
 
     public static func executableName(for client: ClientKind) -> String {
@@ -28,6 +70,7 @@ public enum ClientExecutableLocator {
         case .claude: "claude"
         case .codex: "codex"
         case .gemini: "gemini"
+        case .kiro: "kiro-cli"
         }
     }
 
@@ -46,7 +89,20 @@ public enum ClientExecutableLocator {
         homeURL: URL,
         fileManager: FileManager = .default
     ) -> URL? {
-        for candidate in candidates(for: client, homeURL: homeURL) {
+        locate(client, homeURL: homeURL, fileManager: fileManager, searching: { _ in true })
+    }
+
+    /// `locate`, looking only in the folders `searching` keeps, in the same
+    /// order. For tests: the fixed roots start with folders every process on
+    /// the Mac shares, such as `/opt/homebrew/bin`, and a test must not find a
+    /// tool that the Mac running it happens to have installed there.
+    static func locate(
+        _ client: ClientKind,
+        homeURL: URL,
+        fileManager: FileManager = .default,
+        searching: (URL) -> Bool
+    ) -> URL? {
+        for candidate in candidates(for: client, homeURL: homeURL) where searching(candidate.deletingLastPathComponent()) {
             let resolved = candidate.resolvingSymlinksInPath().standardizedFileURL
             var isDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: resolved.path, isDirectory: &isDirectory),

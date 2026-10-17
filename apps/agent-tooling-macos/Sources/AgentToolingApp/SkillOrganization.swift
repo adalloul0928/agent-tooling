@@ -178,12 +178,25 @@ struct SkillListGroup: Identifiable {
     var id: String
     var title: String
     var subtitle: String?
+    /// One row each. With copies collapsed, each is the best copy in this
+    /// section of a skill that may have others.
     var skills: [SkillEntry]
+    /// For each row, every copy in this section it stands for, itself first.
+    /// Empty when copies were not collapsed.
+    var collapsed: [ArtifactID: [SkillEntry]] = [:]
+
+    /// The copies a row stands for: just itself when nothing was collapsed.
+    func members(of skill: SkillEntry) -> [SkillEntry] { collapsed[skill.id] ?? [skill] }
 }
 
 enum SkillListPresentation {
+    /// The list's sections. When `copies` is given, each section shows one row
+    /// per skill rather than per copy: copies are collapsed within a section,
+    /// never across two, so grouping by plugin still shows each plugin's copy
+    /// under that plugin. `copies` returns every copy of a skill, best first.
     static func groups(
-        skills: [SkillEntry], grouping: SkillGrouping, presentation: (SkillEntry) -> SkillPresentation
+        skills: [SkillEntry], grouping: SkillGrouping, presentation: (SkillEntry) -> SkillPresentation,
+        copies: ((SkillEntry) -> [SkillEntry])? = nil
     ) -> [SkillListGroup] {
         var groups: [String: SkillListGroup] = [:]
         for skill in skills {
@@ -212,6 +225,7 @@ enum SkillListPresentation {
         }
         return groups.values.map { group in
             var sorted = group
+            if let copies { sorted = collapsingCopies(in: sorted, copies: copies) }
             sorted.skills.sort {
                 let order = $0.displayName.localizedStandardCompare($1.displayName)
                 return order == .orderedSame ? $0.id.rawValue.uuidString < $1.id.rawValue.uuidString : order == .orderedAscending
@@ -222,5 +236,24 @@ enum SkillListPresentation {
             let order = $0.title.localizedStandardCompare($1.title)
             return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
         }
+    }
+
+    private static func collapsingCopies(in group: SkillListGroup, copies: (SkillEntry) -> [SkillEntry]) -> SkillListGroup {
+        let present = Set(group.skills.map(\.id))
+        var collapsed: [ArtifactID: [SkillEntry]] = [:]
+        var rows: [SkillEntry] = []
+        var done = Set<ArtifactID>()
+        for skill in group.skills where !done.contains(skill.id) {
+            // The library's order of copies, kept to the ones in this section.
+            let here = copies(skill).filter { present.contains($0.id) }
+            let members = here.isEmpty ? [skill] : here
+            done.formUnion(members.map(\.id))
+            rows.append(members[0])
+            collapsed[members[0].id] = members
+        }
+        var result = group
+        result.skills = rows
+        result.collapsed = collapsed
+        return result
     }
 }

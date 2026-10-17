@@ -152,6 +152,6 @@ public enum WorkspaceRestorePoints {
                             head.rawValue.uuidString.lowercased(),
                             idempotencyKey.rawValue.uuidString.lowercased()]
             .joined(separator: "\u{0}").utf8)
-        return SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: payload).lowercaseHex
     }
 }

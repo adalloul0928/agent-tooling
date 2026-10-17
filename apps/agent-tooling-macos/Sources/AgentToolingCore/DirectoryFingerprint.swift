@@ -1,12 +1,16 @@
 import CryptoKit
 import Foundation
 
-public enum DirectoryFingerprint {
-    public static func sha256(
+enum DirectoryFingerprint {
+    /// - Parameter afterReading: runs with a file's relative path once its
+    ///   bytes are hashed and before it is checked again, so a test can change
+    ///   the file in between. Nothing else passes it.
+    static func sha256(
         of root: URL,
         fileManager: FileManager = .default,
         maximumItems: Int = 10_000,
-        maximumBytes: Int = 384 * 1_024 * 1_024
+        maximumBytes: Int = 384 * 1_024 * 1_024,
+        afterReading: (String) throws -> Void = { _ in }
     ) throws -> String {
         let normalizedRoot = root.standardizedFileURL
         let rootValues = try normalizedRoot.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
@@ -19,6 +23,11 @@ public enum DirectoryFingerprint {
                 ]
             )
         else { throw DirectoryFingerprintError.unsafeItem(normalizedRoot.path(percentEncoded: false)) }
+        // The walk names each item under the folder's real path, so a root
+        // reached through a link above it, or spelled in another case, is
+        // also matched as that real path. The root itself is still never a
+        // link: that is refused above.
+        let resolvedRoot = normalizedRoot.resolvingSymlinksInPath().standardizedFileURL
 
         let rootIsExecutable = try isExecutable(at: normalizedRoot, fileManager: fileManager)
         var entries: [Entry] = []
@@ -31,7 +40,7 @@ public enum DirectoryFingerprint {
             ])
             guard values.isSymbolicLink != true,
                 values.isDirectory == true || values.isRegularFile == true,
-                let relativePath = relativePath(of: url, under: normalizedRoot)
+                let relativePath = PathContainment.relativePath(ofEnumerated: url, under: normalizedRoot, resolvedRoot: resolvedRoot)
             else {
                 throw DirectoryFingerprintError.unsafeItem(url.path(percentEncoded: false))
             }
@@ -69,7 +78,13 @@ public enum DirectoryFingerprint {
             while let chunk = try handle.read(upToCount: 64 * 1_024), !chunk.isEmpty {
                 hasher.update(data: chunk)
             }
-            let finalValues = try entry.url.resourceValues(forKeys: [
+            try afterReading(entry.relativePath)
+            // The walk fetched these values with the URL and the URL keeps
+            // them, so asking it again would repeat them and the check could
+            // never fail. Clear them, so the file is looked at as it is now.
+            var current = entry.url
+            current.removeAllCachedResourceValues()
+            let finalValues = try current.resourceValues(forKeys: [
                 .contentModificationDateKey, .fileResourceIdentifierKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey,
             ])
             guard finalValues.isRegularFile == true,
@@ -82,7 +97,7 @@ public enum DirectoryFingerprint {
                 throw DirectoryFingerprintError.changedWhileReading(entry.relativePath)
             }
         }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        return hasher.finalize().lowercaseHex
     }
 
     private static func isExecutable(at url: URL, fileManager: FileManager) throws -> Bool {
@@ -91,16 +106,6 @@ public enum DirectoryFingerprint {
             throw DirectoryFingerprintError.unsafeItem(url.path(percentEncoded: false))
         }
         return permissions & 0o111 != 0
-    }
-
-    private static func relativePath(of child: URL, under root: URL) -> String? {
-        let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let childPath = child.standardizedFileURL.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard childPath.hasPrefix(rootPath + "/") else { return nil }
-        let relative = String(childPath.dropFirst(rootPath.count + 1))
-        let components = relative.split(separator: "/", omittingEmptySubsequences: false)
-        guard !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) else { return nil }
-        return relative
     }
 
     private struct Entry {

@@ -17,7 +17,7 @@ extension PackageClassification {
     /// the identity palette: a badge never competes with a package's tile.
     var tint: Color {
         switch self {
-        case .reference: AgentTheme.blue
+        case .reference: AgentTheme.selection
         case .official: AgentTheme.ok
         case .community: AgentTheme.graphite
         case .unverified: Color.secondary
@@ -34,12 +34,12 @@ struct ProvenanceBadge: View {
     var tint: Color?
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Space.xs) {
             Image(systemName: verdict.classification.symbol)
-                .font(.system(size: 11, weight: .semibold))
+                .font(AgentFont.captionSemibold)
             if showsLabel {
                 Text(verdict.classification.displayName)
-                    .font(.caption.weight(.medium))
+                    .font(AgentFont.captionMedium)
                     .lineLimit(1)
             }
         }
@@ -62,15 +62,15 @@ struct GradeChip: View {
         Group {
             if let grade = verdict.grade {
                 Text(grade.letter)
-                    .font(.caption.monospaced().weight(.bold))
+                    .font(AgentFont.mono.weight(.bold))
                     .foregroundStyle(tint(grade))
-                    .frame(width: 22, height: 20)
-                    .background(tint(grade).opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .frame(width: Size.pillHeight, height: Size.chipHeight)
+                    .background(tint(grade).opacity(Opacity.badgeWash), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
             } else {
                 Text(PackageGradeVerdict.notGradedLetter)
-                    .font(.caption.weight(.medium))
+                    .font(AgentFont.captionMedium)
                     .foregroundStyle(.secondary)
-                    .frame(height: 20)
+                    .frame(height: Size.chipHeight)
             }
         }
         .accessibilityLabel("\(verdict.kind.displayName) grade: \(verdict.letter)")
@@ -93,26 +93,26 @@ struct PackageGradeRows: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(verdicts) { verdict in
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .top, spacing: Space.lg) {
+                    VStack(alignment: .leading, spacing: Space.xxs) {
                         Text(verdict.kind.displayName)
-                            .font(.callout)
+                            .font(AgentFont.body)
                         Text(verdict.kind.qualifier)
-                            .font(.caption2)
+                            .font(AgentFont.micro)
                             .foregroundStyle(.tertiary)
                     }
-                    .frame(width: 132, alignment: .leading)
+                    .frame(width: Size.labelColumn, alignment: .leading)
                     Text(verdict.detail)
-                        .font(.callout)
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                         .frame(maxWidth: .infinity, alignment: .leading)
                     GradeChip(verdict: verdict)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, Space.xl)
+                .padding(.vertical, Space.lg)
                 .help(verdict.measurement)
-                if verdict.id != verdicts.last?.id { Divider() }
+                if verdict.id != verdicts.last?.id { Hairline() }
             }
         }
     }
@@ -133,28 +133,28 @@ struct DeclaredToolsCard: View {
                 VStack(spacing: 0) {
                     ForEach(tools) { tool in
                         DeclaredToolRow(tool: tool)
-                        if tool.id != tools.last?.id { Divider() }
+                        if tool.id != tools.last?.id { Hairline() }
                     }
-                    Divider()
+                    Hairline()
                     Text(
                         "Declared by the publisher in the \(sourceName) listing. Agent Tooling has not run this server, so nothing here is observed behavior. MCP treats a tool with no annotations as one that may change or delete data."
                     )
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, Space.xl)
+                    .padding(.vertical, Space.lg)
                 }
             } else {
                 Text(
                     "This listing publishes no tool list. The registry's server record has no field for tools, so only a publisher who adds one voluntarily has any to show — the tools themselves appear in the client once the server runs there."
                 )
-                .font(.callout)
+                .font(AgentFont.body)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
+                .padding(Space.xl)
             }
         }
     }
@@ -165,54 +165,54 @@ private struct DeclaredToolRow: View {
     @State private var isExpanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline, spacing: 9) {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            HStack(alignment: .firstTextBaseline, spacing: Space.md) {
                 Text(tool.displayName)
-                    .font(.callout.weight(.medium))
+                    .font(AgentFont.bodyMedium)
                     .lineLimit(1)
-                Spacer(minLength: 8)
+                Spacer(minLength: Space.md)
                 ToolAnnotationChips(annotations: tool.annotations)
             }
             if let summary = tool.summary {
                 Text(summary)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
             if tool.annotations.isEmpty {
                 Text("No annotations declared for this tool.")
-                    .font(.caption2)
+                    .font(AgentFont.micro)
                     .foregroundStyle(.secondary)
             }
             if tool.declaresInputSchema || tool.declaresOutputSchema {
                 DisclosureGroup(isExpanded: $isExpanded) {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Space.md) {
                         SchemaFieldList(title: "Input", fields: tool.inputFields, declared: tool.declaresInputSchema)
                         SchemaFieldList(title: "Output", fields: tool.outputFields, declared: tool.declaresOutputSchema)
                     }
-                    .padding(.top, 7)
+                    .padding(.top, Space.sm)
                 } label: {
                     Text(schemaSummary)
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
             } else {
                 Text("No input or output schema published for this tool.")
-                    .font(.caption2)
+                    .font(AgentFont.micro)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
     }
 
     private var schemaSummary: String {
         var parts: [String] = []
         if tool.declaresInputSchema {
-            parts.append("\(tool.inputFields.count) input field\(tool.inputFields.count == 1 ? "" : "s")")
+            parts.append(CountNoun("input field").phrase(tool.inputFields.count))
         }
         if tool.declaresOutputSchema {
-            parts.append("\(tool.outputFields.count) output field\(tool.outputFields.count == 1 ? "" : "s")")
+            parts.append(CountNoun("output field").phrase(tool.outputFields.count))
         }
         return parts.joined(separator: " · ")
     }
@@ -225,37 +225,37 @@ private struct SchemaFieldList: View {
 
     var body: some View {
         if declared {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: Space.xs) {
                 SectionCaption(text: title)
                 if fields.isEmpty {
                     Text("Declared with no fields.")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(fields) { field in
-                        HStack(spacing: 6) {
+                        HStack(spacing: Space.sm) {
                             if field.isSecretLike {
                                 Image(systemName: "lock.fill")
-                                    .font(.system(size: 9, weight: .semibold))
+                                    .font(AgentFont.microSemibold)
                                     .foregroundStyle(AgentTheme.warning)
                                     .accessibilityLabel("Secret field, masked")
                             }
                             Text(field.name)
-                                .font(.system(.caption, design: .monospaced))
+                                .font(AgentFont.mono)
                                 .textSelection(.enabled)
                             if let type = field.type {
                                 Text(type)
-                                    .font(.caption2)
+                                    .font(AgentFont.micro)
                                     .foregroundStyle(.secondary)
                             }
                             if field.isRequired {
                                 Text("required")
-                                    .font(.caption2)
+                                    .font(AgentFont.micro)
                                     .foregroundStyle(.tertiary)
                             }
                             if field.isSecretLike {
                                 Text(SecretFieldMasking.placeholder)
-                                    .font(.system(.caption, design: .monospaced))
+                                    .font(AgentFont.mono)
                                     .foregroundStyle(.tertiary)
                                     .help("This field reads like a credential. Agent Tooling never stores or displays its value.")
                             }
@@ -271,7 +271,7 @@ private struct ToolAnnotationChips: View {
     let annotations: MCPToolAnnotations
 
     var body: some View {
-        FlowLayout(spacing: 5) {
+        FlowLayout(spacing: Space.xs) {
             if annotations.destructive == true {
                 chip("Destructive", symbol: "exclamationmark.triangle.fill", tint: AgentTheme.failure)
             }
@@ -303,14 +303,14 @@ private struct ToolAnnotationChips: View {
     }
 
     private func chip(_ title: String, symbol: String, tint: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: symbol).font(.system(size: 9, weight: .semibold))
-            Text(title).font(.caption2.weight(.medium))
+        HStack(spacing: Space.xs) {
+            Image(systemName: symbol).font(AgentFont.microSemibold)
+            Text(title).font(AgentFont.microMedium)
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 7)
-        .frame(height: 19)
-        .background(tint.opacity(0.12), in: Capsule())
+        .padding(.horizontal, Space.sm)
+        .frame(height: Size.chipHeight)
+        .background(tint.opacity(Opacity.tagWash), in: Capsule())
     }
 }
 
@@ -323,25 +323,25 @@ struct RequestedCredentialNames: View {
     let names: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            FlowLayout(spacing: 6) {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            FlowLayout(spacing: Space.sm) {
                 ForEach(names, id: \.self) { name in
-                    HStack(spacing: 5) {
+                    HStack(spacing: Space.xs) {
                         Image(systemName: SecretFieldMasking.isSecretLike(name) ? "lock.fill" : "character.cursor.ibeam")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(AgentFont.microSemibold)
                             .foregroundStyle(SecretFieldMasking.isSecretLike(name) ? AgentTheme.warning : Color.secondary)
                         Text(name)
-                            .font(.system(.caption, design: .monospaced))
+                            .font(AgentFont.mono)
                             .lineLimit(1)
                         if SecretFieldMasking.isSecretLike(name) {
                             Text(SecretFieldMasking.placeholder)
-                                .font(.system(.caption, design: .monospaced))
+                                .font(AgentFont.mono)
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                    .padding(.horizontal, 8)
-                    .frame(height: 22)
-                    .background(Color.primary.opacity(0.055), in: Capsule())
+                    .padding(.horizontal, Space.md)
+                    .frame(height: Size.pillHeight)
+                    .background(AgentTheme.fillSubtle, in: Capsule())
                     .help(
                         SecretFieldMasking.isSecretLike(name)
                             ? "\(name) reads like a credential. Agent Tooling never stores or shows its value, and no value is ever written into a plan."
@@ -349,9 +349,9 @@ struct RequestedCredentialNames: View {
                 }
             }
             Text("Names only. Values are entered in the client and are never stored, displayed, or placed in a plan by Agent Tooling.")
-                .font(.caption2)
+                .font(AgentFont.micro)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .wrapsLines()
         }
     }
 }

@@ -120,4 +120,82 @@ struct WorkspaceActivitySessionTests {
         // matches what was approved — which is drift, and is now reported.
         #expect(states["still-there"] == .modifiedSinceReview)
     }
+
+    /// A store holding one operation receipt and an empty journal shows one
+    /// row, titled from the plan — the case the old screen showed as "No
+    /// activity yet" while Apps → Recent changes listed the very same install.
+    @Test func oneOperationReceiptWithAnEmptyJournalBecomesOneMergedRow() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let receipt = OperationReceipt(
+            planID: UUID(),
+            kind: .installSkill,
+            title: "Install 1 tool in Claude Code",
+            state: .healthy,
+            targetSurfaces: [.claudeCode],
+            results: [],
+            createdAt: .now,
+            verificationSummary: "Installed for Claude Code.",
+            itemOutcomes: [
+                OperationItemOutcome(id: UUID(), title: "Review Notes", status: .succeeded, reason: "Copied into place.")
+            ])
+        try fixture.store.recordOperationReceipt(receipt)
+        let session = WorkspaceActivitySession(store: fixture.store)
+
+        await session.refresh(driftReader: StubInstallDriftReader())
+
+        // The journal is empty, but the merged list is not: the receipt becomes
+        // one row titled from the plan and pointing back at itself.
+        #expect(session.activities.isEmpty)
+        #expect(session.mergedActivities.count == 1)
+        let row = try #require(session.mergedActivities.first)
+        #expect(row.title == "Install 1 tool in Claude Code")
+        #expect(row.detail == receipt.outcomeTally)
+        #expect(row.kind == .configuration)
+        #expect(row.state == .healthy)
+        #expect(row.operationReceiptID == receipt.id)
+    }
+
+    /// A journal entry that already links a receipt speaks for it, so that
+    /// receipt is not synthesized a second time: one receipt, one row.
+    @Test func aJournalEntryReferencingAReceiptIsNotDuplicated() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let receipt = try fixture.seedActivity()
+        let session = WorkspaceActivitySession(store: fixture.store)
+
+        await session.refresh(driftReader: StubInstallDriftReader())
+
+        #expect(session.mergedActivities.count == 1)
+        // The one row is the journal entry, not the synthesized receipt.
+        #expect(session.mergedActivities.first?.title == "Installed Example Skill")
+        #expect(session.mergedActivities.first?.operationReceiptID == receipt.id)
+    }
+
+    /// A receipt with no journal entry AND a journal entry with no receipt both
+    /// appear, newest first — nothing is dropped from either source.
+    @Test func mergedActivityCombinesBothSourcesNewestFirst() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let now = Date.now
+        let standaloneReceipt = OperationReceipt(
+            planID: UUID(), kind: .doctor, title: "Run setup check", state: .healthy,
+            targetSurfaces: [.claudeCode], results: [], createdAt: now,
+            verificationSummary: "All good.")
+        try fixture.store.recordOperationReceipt(standaloneReceipt)
+        let journal = AgentActivityJournal(entries: [
+            ActivityReceipt(
+                kind: .configuration, title: "Agent searched the inventory",
+                detail: "Read-only.", date: now.addingTimeInterval(-60), state: .healthy)
+        ])
+        try fixture.store.saveActivityJournal(journal)
+        let session = WorkspaceActivitySession(store: fixture.store)
+
+        await session.refresh(driftReader: StubInstallDriftReader())
+
+        #expect(session.mergedActivities.count == 2)
+        // Newest first: the receipt (now) leads the journal entry (a minute ago).
+        #expect(session.mergedActivities.first?.title == "Run setup check")
+        #expect(session.mergedActivities.last?.title == "Agent searched the inventory")
+    }
 }

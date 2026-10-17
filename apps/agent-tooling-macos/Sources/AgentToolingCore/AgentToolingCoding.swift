@@ -14,15 +14,3 @@ public enum AgentToolingCoding {
         return decoder
     }
 }
-
-extension JSONEncoder {
-    static func agentTooling() -> JSONEncoder {
-        AgentToolingCoding.encoder()
-    }
-}
-
-extension JSONDecoder {
-    static func agentTooling() -> JSONDecoder {
-        AgentToolingCoding.decoder()
-    }
-}

@@ -65,7 +65,7 @@ public struct MCPRuntimeServer: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-public protocol MCPRuntimeProvider: Sendable {
+protocol MCPRuntimeProvider: Sendable {
     var id: String { get }
     func status() async -> MCPRuntimeStatus
     func servers() async throws -> [MCPRuntimeServer]

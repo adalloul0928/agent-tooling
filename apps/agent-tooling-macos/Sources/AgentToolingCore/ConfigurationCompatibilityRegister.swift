@@ -44,8 +44,6 @@ public struct ConfigurationCompatibilityEntry: Hashable, Sendable {
 }
 
 public enum ConfigurationCompatibilityRegister {
-    public static let recordedOn = "2026-09-09"
-
     public static let entries: [ConfigurationCompatibilityEntry] = [
         .init(surface: .claudeCode, key: "model", versionRange: "2.x",
               sourceURL: "https://code.claude.com/docs/en/settings", direction: .readAndWrite),

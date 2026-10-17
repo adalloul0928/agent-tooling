@@ -205,7 +205,7 @@ final class SkillUpstreamLinkSession: Identifiable {
         case WorkspaceSkillPreparationError.invalidSkillDefinition:
             "The repository's definition does not say what the skill is called and what it does."
         case WorkspaceSkillPreparationError.pluginPackageRoot:
-            "That folder is a whole plugin rather than one skill, so it follows its package instead."
+            "That folder is a whole plugin rather than one skill. Choose the skill's own folder inside it."
         case WorkspaceSkillPreparationError.invalidUpstream:
             "This build follows public GitHub repositories only."
         case WorkspaceSkillCommandError.contentStoreUnavailable:
@@ -238,97 +238,96 @@ struct SkillUpstreamLinkSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Follow a repository").font(.title3.weight(.semibold))
-                    Text(skill.displayName).font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text("Follow a repository").font(AgentFont.title)
+                    Text(skill.displayName).font(AgentFont.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if session.isBusy { ProgressView().controlSize(.small) }
             }
-            .padding(20)
-            Divider()
+            .padding(Space.xxl)
+            Hairline()
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Space.xl) {
                     Text(
                         "Following a repository changes where this skill's next version comes from. It does not change the version you have now, and nothing is ever written into the repository."
                     )
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                     repository
                     if let message = session.errorMessage {
                         AttentionBanner(title: "That repository could not be followed", message: message)
                     }
                     if let checked = session.checked { result(checked) }
                 }
-                .padding(20)
+                .padding(Space.xxl)
             }
-            Divider()
+            Hairline()
             HStack {
                 if !session.canWrite {
                     Text("This workspace is open for reading only.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button("Keep this skill as your own") { dismiss() }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .keyboardShortcut(.cancelAction)
                 Button("Follow this repository") {
                     Task { if await session.link(skill) { dismiss() } }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(AgentTheme.selection)
+                .primaryActionStyle()
                 .keyboardShortcut(.defaultAction)
                 .disabled(!session.canLink)
             }
-            .padding(.horizontal, 20)
-            .frame(height: 68)
+            .padding(.horizontal, Space.xxl)
+            .frame(height: Size.sheetBarHeight)
         }
         // Tall enough that a check which did not match shows its reason and the
         // other way out of it without anybody having to scroll for them.
-        .frame(width: 660, height: 640)
+        .sheetSize(SheetSize.large)
         .background(AgentTheme.contentBackground)
     }
 
     @ViewBuilder private var repository: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             LabeledContent("Repository") {
                 TextField("https://github.com/owner/repository", text: $session.repositoryURL)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 340)
+                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldLink)
                     .accessibilityLabel("Repository address")
             }
             LabeledContent("Branch or tag") {
                 TextField("main", text: $session.ref)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 220)
+                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldRef)
                     .accessibilityLabel("Branch or tag")
             }
             LabeledContent("Folder in the repository") {
                 TextField("Repository root", text: $session.subdirectory)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 340)
+                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldLink)
                     .accessibilityLabel("Folder in the repository")
             }
-            HStack(spacing: 12) {
+            HStack(spacing: Space.lg) {
                 Button("Check repository", systemImage: "arrow.clockwise") {
                     Task { await session.check(for: skill) }
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .disabled(!session.canCheck)
                 Text("Reads the repository and reports what it publishes. Nothing is changed by checking.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(AgentFont.caption).foregroundStyle(.secondary)
+                    .wrapsLines()
             }
         }
-        .padding(16).standardPanel(cornerRadius: 12)
+        .padding(Space.xl).standardPanel()
     }
 
     @ViewBuilder private func result(_ checked: SkillUpstreamLinkSession.Checked) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             Label(
                 checked.matchesLibrary
                     ? "The repository publishes the version you have"
                     : "The repository publishes a different version",
                 systemImage: checked.matchesLibrary ? "checkmark.seal" : "exclamationmark.triangle"
             )
-            .font(.system(size: 14, weight: .medium))
+            .font(AgentFont.bodyMedium)
             LabeledContent("Commit") {
                 Text(checked.revision.value.prefix(12)).textSelection(.enabled).monospaced()
             }
@@ -341,18 +340,18 @@ struct SkillUpstreamLinkSheet: View {
                 Text(
                     "Following it records where the next version comes from. The files in your library stay exactly as they are."
                 )
-                .font(.callout).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .font(AgentFont.body).foregroundStyle(.secondary)
+                .wrapsLines()
             } else {
                 // The refusal's own words, because they name both ways out of
                 // it and this screen must not paraphrase either one.
                 Text(LinkSkillUpstreamRefusal.contentDiffersFromUpstream.reason)
-                    .font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
+                    .wrapsLines()
                 Button("Use the repository's version…", systemImage: "arrow.down.circle") {
                     isReplacing = true
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .disabled(!session.canWrite || session.isBusy)
                 .confirmationDialog(
                     "Replace this skill's files with the repository's?",
@@ -369,6 +368,6 @@ struct SkillUpstreamLinkSheet: View {
                 }
             }
         }
-        .padding(16).standardPanel(cornerRadius: 12)
+        .padding(Space.xl).standardPanel()
     }
 }

@@ -35,6 +35,26 @@ struct WorkspacePackageExportTests {
         #expect(recaptured.digest == Self.tree.digest)
     }
 
+    /// A file whose name begins with a combining mark or a variation selector
+    /// is a valid package entry. The guard that keeps each write inside the
+    /// export must place it there, not refuse the whole package as escaping.
+    @Test func aNameThatStartsWithACombiningMarkIsWrittenInsideTheExport() throws {
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "package-export-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let destination = root.appending(path: "export")
+        let tree = try CapturedPackageTree(entries: [
+            .init(relativePath: "SKILL.md", kind: .file(bytes: Data("---\nname: marks\n---\n".utf8), executable: false)),
+            .init(relativePath: "\u{301}run.sh", kind: .file(bytes: Data("#!/bin/sh\n".utf8), executable: true)),
+            .init(relativePath: "\u{FE0F}notes.md", kind: .file(bytes: Data("notes\n".utf8), executable: false)),
+        ])
+
+        try WorkspacePackageExporter.write(tree: tree, to: destination)
+
+        #expect(FileManager.default.fileExists(atPath: destination.appending(path: "\u{301}run.sh").path))
+        #expect(try Data(contentsOf: destination.appending(path: "\u{FE0F}notes.md")) == Data("notes\n".utf8))
+    }
+
     @Test func anExistingNonEmptyDestinationIsRefusedRatherThanMergedInto() throws {
         let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
             .appending(path: "package-export-\(UUID())")

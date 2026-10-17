@@ -35,7 +35,7 @@ A destination is admitted only when this device holds exactly one supported
 version, adapter contract version, component, transport and scope. That record
 is **derived from this Mac's own scan** by `TargetCapabilityEvidence.derive`,
 and it is written in exactly two places: `WorkspaceFirstRun.prepare` writes it
-alongside the first observations, and every "Check this Mac's apps" writes both
+alongside the first observations, and every "Check apps" writes both
 the fresh observations and the freshly derived evidence as one device-only
 change. A workspace whose evidence is empty is therefore repaired by its next
 check rather than by a migration.

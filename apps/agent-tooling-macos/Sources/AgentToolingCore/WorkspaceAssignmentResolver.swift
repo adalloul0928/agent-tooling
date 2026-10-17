@@ -53,11 +53,11 @@ public struct ResolvedAssignmentTarget: Hashable, Sendable {
     }
 }
 
-public struct MCPAssignmentDefinitionEvidence: Hashable, Sendable {
-    public var artifactID: ArtifactID
-    public var transport: String
+struct MCPAssignmentDefinitionEvidence: Hashable, Sendable {
+    var artifactID: ArtifactID
+    var transport: String
 
-    public init(artifactID: ArtifactID, transport: String) {
+    init(artifactID: ArtifactID, transport: String) {
         self.artifactID = artifactID
         self.transport = transport
     }
@@ -115,7 +115,7 @@ public struct EffectiveAssignmentRequirement: Hashable, Sendable {
     }
 }
 
-public enum WorkspaceAssignmentIssueKind: String, Hashable, Sendable {
+enum WorkspaceAssignmentIssueKind: String, Hashable, Sendable, CaseIterable {
     case duplicateContributionID
     case invalidDesiredPresence
     case unknownArtifact
@@ -124,6 +124,9 @@ public enum WorkspaceAssignmentIssueKind: String, Hashable, Sendable {
     case missingResolvedTarget
     case duplicateResolvedTarget
     case invalidResolvedTarget
+    /// The captured target carries no client version, so nothing recorded
+    /// about what that client accepts can be matched against it.
+    case unknownClientVersion
     case unsupportedArtifactKind
     case trackedOnlyOwnership
     case nativeChildAssignment
@@ -150,13 +153,13 @@ public enum WorkspaceAssignmentIssueKind: String, Hashable, Sendable {
     case incompatiblePhysicalStrategies
 }
 
-public struct WorkspaceAssignmentIssue: Hashable, Sendable {
-    public var kind: WorkspaceAssignmentIssueKind
-    public var contributionIDs: [WorkspaceObjectID]
-    public var artifactID: ArtifactID?
-    public var physicalDestinationID: WorkspaceObjectID?
+struct WorkspaceAssignmentIssue: Hashable, Sendable {
+    var kind: WorkspaceAssignmentIssueKind
+    var contributionIDs: [WorkspaceObjectID]
+    var artifactID: ArtifactID?
+    var physicalDestinationID: WorkspaceObjectID?
 
-    public init(
+    init(
         kind: WorkspaceAssignmentIssueKind,
         contributionIDs: [WorkspaceObjectID] = [],
         artifactID: ArtifactID? = nil,
@@ -169,13 +172,13 @@ public struct WorkspaceAssignmentIssue: Hashable, Sendable {
     }
 }
 
-public struct WorkspaceAssignmentResolution: Hashable, Sendable {
-    public var requirements: [EffectiveAssignmentRequirement]
-    public var issues: [WorkspaceAssignmentIssue]
+struct WorkspaceAssignmentResolution: Hashable, Sendable {
+    var requirements: [EffectiveAssignmentRequirement]
+    var issues: [WorkspaceAssignmentIssue]
     /// Contributions deliberately selecting no device, or another device, are preserved in wire intent but ignored here.
-    public var ignoredContributionIDs: [WorkspaceObjectID]
+    var ignoredContributionIDs: [WorkspaceObjectID]
 
-    public init(
+    init(
         requirements: [EffectiveAssignmentRequirement],
         issues: [WorkspaceAssignmentIssue],
         ignoredContributionIDs: [WorkspaceObjectID]
@@ -190,8 +193,8 @@ public struct WorkspaceAssignmentResolution: Hashable, Sendable {
 /// structurally validated portable graph; this narrow array API cannot validate
 /// source, project, or preset references. A returned requirement still needs
 /// S3/Y2 staging, destination-baseline validation and reviewed apply.
-public enum WorkspaceAssignmentResolver {
-    public static func resolve(
+enum WorkspaceAssignmentResolver {
+    static func resolve(
         artifacts: [ArtifactRecord],
         contributions: [AssignmentContribution],
         currentDeviceID: WorkspaceObjectID,
@@ -200,7 +203,8 @@ public enum WorkspaceAssignmentResolver {
         mcpDefinitions: [MCPAssignmentDefinitionEvidence] = [],
         contentEvidence: [AssignmentContentEvidence] = [],
         portableMCPDefinitions: [PortableMCPDefinitionRecord] = [],
-        deviceMCPBindings: [DeviceMCPDefinitionBinding] = []
+        deviceMCPBindings: [DeviceMCPDefinitionBinding] = [],
+        deviceRegistry: [DeviceRecord] = []
     ) -> WorkspaceAssignmentResolution {
         let artifactsByID = Dictionary(grouping: artifacts, by: { $0.identity.id })
         let contributionGroups = Dictionary(grouping: contributions, by: \.id)
@@ -233,7 +237,7 @@ public enum WorkspaceAssignmentResolver {
                 ))
                 continue
             }
-            guard applies(contribution.destination.deviceIDs, to: currentDeviceID) else {
+            guard contribution.destination.applies(to: currentDeviceID, registry: deviceRegistry) else {
                 ignored.insert(contributionID)
                 continue
             }
@@ -276,11 +280,16 @@ public enum WorkspaceAssignmentResolver {
                 contribution: contribution,
                 key: .init(artifactID: contribution.artifactID, physicalDestinationID: target.physicalDestinationID)
             ))
-            guard target.adapterContractVersion > 0,
-                let installedVersion = validText(target.installedClientVersion),
-                wellFormedComponentContexts(target.componentContexts)
-            else {
+            guard target.adapterContractVersion > 0, wellFormedComponentContexts(target.componentContexts) else {
                 issues.insert(issue(.invalidResolvedTarget, contribution, physical: target.physicalDestinationID))
+                continue
+            }
+            // A client that answered without a version is a different case from a
+            // malformed target: the target is fine, the app just never said what
+            // it is, so the person is told to check it again rather than to
+            // review the request.
+            guard let installedVersion = validText(target.installedClientVersion) else {
+                issues.insert(issue(.unknownClientVersion, contribution, physical: target.physicalDestinationID))
                 continue
             }
 
@@ -543,12 +552,13 @@ public enum WorkspaceAssignmentResolver {
         var physicalDestinationID: WorkspaceObjectID
     }
 
-    private static func applies(_ deviceIDs: [WorkspaceObjectID]?, to currentDeviceID: WorkspaceObjectID) -> Bool {
-        deviceIDs?.contains(currentDeviceID) ?? true
-    }
-
     private static func validSelector(_ destination: PortableDestination) -> Bool {
         if let deviceIDs = destination.deviceIDs, Set(deviceIDs).count != deviceIDs.count { return false }
+        if let excluded = destination.excludedDeviceIDs {
+            // Exclusions only qualify "every Mac"; beside an explicit list they
+            // are a contradiction, and duplicates are a malformed record.
+            if destination.deviceIDs != nil || Set(excluded).count != excluded.count { return false }
+        }
         return switch destination.scope {
         case .project, .localProject: destination.logicalProjectID != nil
         case .user, .workspace, .managed, .account, .session: destination.logicalProjectID == nil
@@ -628,7 +638,8 @@ public enum WorkspaceAssignmentResolver {
 
     private static func destinationKey(_ value: PortableDestination) -> [String] {
         [value.surface.rawValue, value.scope.rawValue, value.logicalProjectID?.rawValue.uuidString ?? "",
-         value.deviceIDs?.map { $0.rawValue.uuidString }.sorted().joined(separator: ",") ?? "*"]
+         value.deviceIDs?.map { $0.rawValue.uuidString }.sorted().joined(separator: ",") ?? "*",
+         value.excludedDeviceIDs?.map { $0.rawValue.uuidString }.sorted().joined(separator: ",") ?? ""]
     }
 
     private static func requirementKeyOrder(_ lhs: RequirementKey, _ rhs: RequirementKey) -> Bool {

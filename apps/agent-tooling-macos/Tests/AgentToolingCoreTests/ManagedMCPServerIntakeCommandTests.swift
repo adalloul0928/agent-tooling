@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -557,10 +558,7 @@ struct ManagedMCPServerIntakeCommandTests {
         let writerID: WorkspaceObjectID
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "managed-mcp-intake-\(UUID())")
-            try FileManager.default.createDirectory(
-                at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("managed-mcp-intake").url
             writerID = WorkspaceObjectID()
             let document = try WorkspaceDocumentCoding.seal(
                 .init(

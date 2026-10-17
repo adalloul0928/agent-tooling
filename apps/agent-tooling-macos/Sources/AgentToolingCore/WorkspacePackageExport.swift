@@ -137,7 +137,7 @@ public enum WorkspacePackageExporter {
         // and an empty directory in the package survives the round trip.
         for entry in tree.entries.sorted(by: { $0.relativePath < $1.relativePath }) {
             let url = destination.appending(path: entry.relativePath)
-            guard url.standardizedFileURL.path.hasPrefix(destination.path + "/") else {
+            guard PathContainment.relativePath(of: url, under: destination) != nil else {
                 throw WorkspacePackageExportError.invalidDestination
             }
             do {

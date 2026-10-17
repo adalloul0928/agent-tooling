@@ -3,13 +3,14 @@ import SwiftUI
 
 private struct LibraryDestinationStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.hoverSuppressed) private var suppressed
     @State private var hovering = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.primary.opacity(configuration.isPressed ? 0.08 : hovering ? 0.035 : 0))
+                RoundedRectangle.card
+                    .fill(configuration.isPressed ? AgentTheme.fillStrong : hovering && !suppressed ? AgentTheme.fillHover : Color.clear)
             }
             .onHover { hovering = $0 }
             .animation(reduceMotion ? nil : AgentMotion.quick, value: hovering)
@@ -47,6 +48,10 @@ struct OverviewView: View {
     @Environment(\.availableClients) private var enabledClients
     @AppStorage("onboarding.skipped.v2") private var onboardingSkipped = false
 
+    /// The last few applied plans this Mac recorded, read once off the body. See
+    /// `recentChangesCard`.
+    @State private var recentReceipts: [OperationReceipt] = []
+
     var body: some View {
         let attention = attentionItems
         let updates = updateItems
@@ -55,7 +60,7 @@ struct OverviewView: View {
                 Button {
                     Task { await workspace.device.refresh() }
                 } label: {
-                    Image(systemName: "arrow.clockwise").frame(width: 16, height: 16)
+                    Image(systemName: "arrow.clockwise").frame(width: Size.glyphLarge, height: Size.glyphLarge)
                 }
                 .buttonStyle(.glass)
                 .disabled(workspace.device.isChecking)
@@ -66,7 +71,7 @@ struct OverviewView: View {
                     reviewChanges()
                 } label: {
                     Label(
-                        workspace.deployment.isBusy ? "Preparing…" : "Review changes",
+                        workspace.deployment.isBusy ? "Preparing…" : reviewTitle,
                         systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.glass)
@@ -74,26 +79,50 @@ struct OverviewView: View {
                 .help("Work out what would change in your apps. Nothing is written until you approve it.")
             }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
-                    if showsOnboarding { onboardingCard }
-                    recommendationsSection
-                    librarySection
-                    if !enabledClients.isEmpty { conduit }
-                    if !attention.isEmpty || !updates.isEmpty {
-                        attentionSection(items: attention, updates: updates)
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Space.xl) {
+                        if showsOnboarding { onboardingCard }
+                        // Two columns where they fit; one column where they don't.
+                        // A narrow window stacks the same cards instead of
+                        // squeezing them past legibility.
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .top, spacing: Space.xl) {
+                                reviewColumn(attention: attention, updates: updates)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                    .frame(minWidth: Size.fieldWide)
+                                statusColumn
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                    .frame(minWidth: Size.fieldWide)
+                            }
+                            VStack(spacing: Space.xl) {
+                                reviewColumn(attention: attention, updates: updates)
+                                statusColumn
+                            }
+                            .frame(maxHeight: .infinity, alignment: .top)
+                        }
+                        // The dashboard fills the window rather than floating in
+                        // its top third: the columns take all the height the
+                        // page has, so no blank band is left under the cards at
+                        // the default window size.
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
-                    appFooter
+                    .padding(.horizontal, WorkspaceLayout.pageInset)
+                    .padding(.top, WorkspaceLayout.contentTopInset)
+                    .padding(.bottom, WorkspaceLayout.pageInset)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // Give the content at least the viewport's height so the
+                    // columns have a full page to expand into, while a taller
+                    // stacked layout can still scroll past it.
+                    .frame(minHeight: proxy.size.height, alignment: .top)
                 }
-                .padding(.horizontal, WorkspaceLayout.pageInset)
-                .padding(.top, WorkspaceLayout.contentTopInset)
-                .padding(.bottom, WorkspaceLayout.pageInset)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .font(AgentFont.titleRegular)
+                .scrollIndicators(.hidden)
             }
-            .font(.system(size: 15))
-            .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // No ground of its own: the shell paints the shared translucent canvas
+        // behind every section, so Home doubling it would only dim the glass.
     }
 
     // MARK: - Getting started
@@ -109,86 +138,91 @@ struct OverviewView: View {
         return !library.rows.isEmpty && library.rows.allSatisfy { $0.requestedAssignments.isEmpty }
     }
 
-    private var onboardingCard: some View {
-        HStack(spacing: 16) {
-            Image(systemName: "tray.and.arrow.down")
-                .font(.system(size: 25, weight: .regular))
-                .foregroundStyle(.secondary)
-                .frame(width: 36)
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Bring your existing setup into Agent Tooling")
-                    .font(.system(size: 17, weight: .semibold))
-                Text("Choose the skills, plugins, and MCP servers you want to manage or track.")
-                    .font(.system(size: 14)).foregroundStyle(.secondary)
+    /// The left column of the wide layout, and the top of the stacked one.
+    private func reviewColumn(
+        attention: [OverviewAttention],
+        updates: [OverviewUpdate]
+    ) -> some View {
+        VStack(spacing: Space.xl) {
+            if workspace.incoming.hasWork || !workspace.incoming.installedAutomatically.isEmpty {
+                incomingCard
             }
-            Spacer(minLength: 16)
+            reviewQueueCard(items: attention, updates: updates)
+            // The recommendation card takes the slack at the bottom of the
+            // column, so the page fills its height instead of leaving a band
+            // of empty canvas under a short queue.
+            recommendedCard
+                .frame(maxHeight: .infinity, alignment: .top)
+        }
+    }
+
+    /// The right column of the wide layout, and the bottom of the stacked one.
+    private var statusColumn: some View {
+        VStack(spacing: Space.xl) {
+            setupCard
+            libraryCard
+            appsCard
+            HStack(alignment: .top, spacing: Space.xl) {
+                readyMiniCard
+                recentChangesCard
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+    }
+
+    private var onboardingCard: some View {
+        HStack(spacing: Space.xl) {
+            Image(systemName: "tray.and.arrow.down")
+                .font(.system(size: Size.heroSymbol, weight: .regular))
+                .foregroundStyle(.secondary)
+                .frame(width: Size.tileLarge)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("Bring your existing setup into Agent Tooling")
+                    .font(AgentFont.titleLarge)
+                Text("Choose the skills, plugins, and connections you want to manage or track.")
+                    .font(AgentFont.body).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: Space.xl)
             Button("Set up your library") { navigate(.skills) }
-                .buttonStyle(.glassProminent).controlSize(.large)
+                .primaryActionStyle().controlSize(.large)
                 .disabled(workspace.library.isBusy)
         }
-        .padding(20)
-        .standardPanel(cornerRadius: 14)
+        .padding(Space.xxl)
+        .standardPanel()
     }
 
     // MARK: - Recommended for you
 
-    private var recommendationsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline, spacing: 24) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Recommended for you")
-                        .font(.system(size: 20, weight: .semibold))
-                    Text(
-                        recommendations.isEmpty
-                            ? "Find useful tools for the work you do."
-                            : "Useful tools based on your recent work."
-                    )
-                    .font(.system(size: 15))
-                    .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                if !recommendations.isEmpty {
-                    Button("All suggestions") { navigate(.insights) }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 15))
-                        .foregroundStyle(AgentTheme.blue)
-                }
-            }
-
+    private var recommendedCard: some View {
+        BentoCard(
+            symbol: "sparkles", title: "Recommended",
+            action: recommendations.isEmpty ? nil : ("All suggestions", { navigate(.insights) }),
+            fillsHeight: true
+        ) {
             if recommendations.isEmpty {
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack(alignment: .top, spacing: 18) {
-                        Image(systemName: "sparkle.magnifyingglass")
-                            .font(.system(size: 32, weight: .regular))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 48, height: 48)
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Explore what your apps can do")
-                                .font(.system(size: 18, weight: .semibold))
-                            Text("Browse skills, plugins, and connections, or review recent work in Insights.")
-                                .font(.system(size: 15))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: Space.xl) {
+                    Text("Explore what your apps can do")
+                        .font(AgentFont.title)
+                    Text("Browse skills, plugins, and connections, or review recent work in Insights.")
+                        .font(AgentFont.body)
+                        .foregroundStyle(.secondary)
+                        .wrapsLines()
+                    HStack(spacing: Space.lg) {
                         Button("Browse Discover") { navigate(.marketplace) }
-                            .buttonStyle(.glassProminent)
+                            .primaryActionStyle()
                         Button("Open Insights") { navigate(.insights) }
                             .buttonStyle(.glass)
                     }
-                    .controlSize(.large)
                 }
-                .padding(24)
+                .padding(Space.xl)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .standardPanel(cornerRadius: 18)
             } else {
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: 16, alignment: .top), GridItem(.flexible(), alignment: .top)],
-                    alignment: .leading, spacing: 12
-                ) {
+                VStack(spacing: 0) {
                     ForEach(recommendations) { recommendation in
                         recommendationRow(recommendation)
+                        if recommendation.id != recommendations.last?.id {
+                            Hairline(indent: Hairline.afterLeading(Size.discLarge))
+                        }
                     }
                 }
             }
@@ -199,33 +233,29 @@ struct OverviewView: View {
         Button {
             open(recommendation)
         } label: {
-            HStack(alignment: .top, spacing: 14) {
+            HStack(alignment: .center, spacing: Space.lg) {
                 ToolIdentityIcon(
                     packageID: recommendationPackageID(recommendation) ?? "",
-                    fallback: recommendationKind(recommendation), size: 40
-                )
-                .padding(.top, 2)
-                VStack(alignment: .leading, spacing: 6) {
+                    fallback: recommendationKind(recommendation), size: Size.discLarge)
+                VStack(alignment: .leading, spacing: Space.xxs) {
                     Text(recommendationTitle(recommendation))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(AgentFont.bodySemibold)
                         .foregroundStyle(.primary)
-                        .lineLimit(2)
+                        .lineLimit(1)
                     Text(recommendationSummary(recommendation))
-                        .font(.system(size: 15))
+                        .font(AgentFont.body)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    Text(recommendationAction(recommendation))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AgentTheme.blue)
-                        .padding(.top, 2)
+                        .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                Text(recommendationAction(recommendation))
+                    .font(AgentFont.bodyMedium)
+                    .foregroundStyle(AgentTheme.selection)
+                    .lineLimit(1)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
-            .standardPanel(cornerRadius: 12)
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, Space.xl)
+            .padding(.vertical, Space.lg)
+            .contentShape(Rectangle())
         }
         .buttonStyle(LibraryDestinationStyle())
         .accessibilityHint(recommendationAction(recommendation))
@@ -233,200 +263,352 @@ struct OverviewView: View {
 
     // MARK: - Your library
 
-    private var librarySection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 24) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Your library").font(.system(size: 20, weight: .semibold))
-                    Text(librarySummary)
-                        .font(.system(size: 15))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Button("Discover more", systemImage: "arrow.right") { navigate(.marketplace) }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 15))
-                    .foregroundStyle(AgentTheme.blue)
+    private var libraryCard: some View {
+        BentoCard(
+            symbol: "books.vertical",
+            title: inventory.map { "Library · \(distinctSkillCount + $0.plugins.count + $0.mcpServers.count)" } ?? "Library",
+            action: ("Open", { navigate(.skills) })
+        ) {
+            HStack(alignment: .top, spacing: Space.md) {
+                libraryKindCell("Skills", count: distinctSkillCount, kind: .skill, section: .skills)
+                libraryKindCell("Plugins", count: inventory?.plugins.count ?? 0, kind: .plugin, section: .plugins)
+                libraryKindCell("Connections", count: inventory?.mcpServers.count ?? 0, kind: .mcpServer, section: .mcpServers)
             }
-            HStack(spacing: 0) {
-                libraryDestination("Skills", count: inventory?.skills.count ?? 0, kind: .skill, section: .skills)
-                Divider().frame(height: 28).opacity(0.5)
-                libraryDestination("Plugins", count: inventory?.plugins.count ?? 0, kind: .plugin, section: .plugins)
-                Divider().frame(height: 28).opacity(0.5)
-                libraryDestination(
-                    "MCP servers", count: inventory?.mcpServers.count ?? 0, kind: .mcpServer, section: .mcpServers)
-            }
-            .padding(4)
-            .standardPanel(cornerRadius: 16)
-
-            if !featuredPlugins.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        ForEach(featuredPlugins) { row in
-                            Button {
-                                openPlugin(row)
-                            } label: {
-                                ToolIdentityIcon(packageID: row.nativeRoutes.first?.externalPluginID ?? "", size: 40)
-                            }
-                            .buttonStyle(.plain)
-                            .help(row.displayName)
-                            .accessibilityLabel("Open \(row.displayName)")
-                            .accessibilityHint("Show plugin details")
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 16)
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("Plugins your apps registered")
-            }
+            .padding(.horizontal, Space.lg)
+            .padding(.vertical, Space.xl)
         }
     }
 
-    /// What the library holds, counted the way the read model counts it: every
-    /// tool, and how many of them arrived inside a plugin rather than on their
-    /// own. Nothing here says any of them is installed.
-    private var librarySummary: String {
-        guard let library = libraryModel else { return "Reading your library…" }
-        guard library.toolCount > 0 else { return "Nothing here yet." }
-        let tools = "\(library.toolCount) \(library.toolCount == 1 ? "tool" : "tools")"
-        guard library.nestedToolCount > 0 else { return tools }
-        return "\(tools) · \(library.nestedToolCount) inside plugins"
-    }
-
-    /// Plugins an app's own registry named, with artwork this build ships, one
-    /// per distinct mark. A row without a native route has no catalog identity
-    /// to resolve, so it is not shown here rather than shown as a blank tile.
-    private var featuredPlugins: [WorkspaceLibraryReadModelRow] {
-        var seenArtwork = Set<String>()
-        return Array(
-            (libraryModel?.rows ?? [])
-                .filter { $0.kind == .nativePlugin || $0.kind == .package }
-                .sorted {
-                    let order = $0.displayName.localizedStandardCompare($1.displayName)
-                    return order == .orderedSame
-                        ? $0.artifactID.rawValue.uuidString < $1.artifactID.rawValue.uuidString
-                        : order == .orderedAscending
-                }
-                .filter { row in
-                    guard let route = row.nativeRoutes.first,
-                        let artwork = ToolIdentityAssets.asset(for: route.externalPluginID)
-                    else { return false }
-                    return seenArtwork.insert(artwork.asset).inserted
-                }
-                .prefix(10))
-    }
-
-    private func libraryDestination(_ title: String, count: Int, kind: ToolingKind, section: AppSection) -> some View {
+    private func libraryKindCell(_ title: String, count: Int, kind: ToolingKind, section: AppSection) -> some View {
         Button {
             navigate(section)
         } label: {
-            HStack(spacing: 10) {
-                KindTile(kind: kind, size: 26)
-                Text(title).font(.system(size: 16, weight: .medium)).lineLimit(1)
-                Spacer(minLength: 4)
+            VStack(spacing: Space.md) {
+                KindTile(kind: kind, size: Size.tileLarge)
                 Text(count, format: .number)
-                    .font(.system(size: 15)).monospacedDigit()
+                    .font(AgentFont.stat)
+                Text(title)
+                    .font(AgentFont.captionMedium)
                     .foregroundStyle(.secondary)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, minHeight: 64)
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Space.sm)
+            .contentShape(RoundedRectangle.card)
         }
         .buttonStyle(LibraryDestinationStyle())
-        .accessibilityLabel("Open \(title), \(count) items")
+        .accessibilityLabel("Open \(title), \(CountNoun("item").phrase(count))")
     }
 
-    // MARK: - The path to your apps
+    // MARK: - Mini cards
 
-    /// The product's signature path, drawn from the same three facts the Apps
-    /// screen draws it from: what the library holds, what is asked for, and
-    /// what the last check found in each app. Configurations are gone, so the
-    /// middle node states the asks rather than naming a profile.
-    private var conduit: some View {
-        SyncConduitView(
-            managedCount: managedCount,
-            discoveredCount: discoveredCount,
-            profileName: "Assignments",
-            desiredCount: desiredCount,
-            pendingCount: pendingCount,
-            terminals: enabledClients.map { client in
-                let verdict = workspace.device.verdict(for: client)
-                return ConduitTerminal(client: client, state: verdict.state, text: verdict.text)
-            },
-            onLibrary: { navigate(.skills) },
-            onProfile: { navigate(.projects) },
-            onClient: { navigation.openClient($0) })
+    /// Whether a prepared plan has any step still outstanding. When it does
+    /// not, there is nothing to review, and offering the button anyway would
+    /// send a person to an empty review.
+    private var hasChangesWaiting: Bool {
+        !(workspace.deployment.plan?.items.isEmpty ?? true)
     }
 
-    /// What this Mac is looking after, and what it has merely noticed.
-    private var managedCount: Int {
-        (libraryModel?.rows ?? [])
-            .filter { $0.ownership != .trackedOnly }
-            .reduce(0) { $0 + 1 + $1.childCount }
-    }
-
-    private var discoveredCount: Int {
-        libraryModel?.rows.count { $0.ownership == .trackedOnly } ?? 0
-    }
-
-    /// How many library items are asked for anywhere. Asked for, not installed.
-    private var desiredCount: Int {
-        libraryModel?.rows.count { !$0.requestedAssignments.isEmpty } ?? 0
-    }
-
-    /// Everything waiting on a person: the steps a prepared plan is holding, and
-    /// the requests nobody has decided. A plan that has been applied has already
-    /// re-read itself, so what is left here is what is still outstanding.
-    private var pendingCount: Int {
-        (workspace.deployment.plan?.items.count ?? 0) + requests.requests.count
-    }
-
-    // MARK: - Needs your attention
-
-    private func attentionSection(
-        items attentionItems: [OverviewAttention],
-        updates updateItems: [(row: WorkspaceLibraryReadModelRow, availability: UpdateAvailability)]
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Needs your attention").font(.system(size: 20, weight: .semibold))
-            VStack(spacing: 0) {
-                ForEach(attentionItems) { item in
-                    HStack(alignment: .top, spacing: 14) {
-                        StatusGlyph(state: item.state, size: 18).padding(.top, 2)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(item.title).font(.system(size: 16, weight: .medium))
-                            Text(item.detail).font(.system(size: 15)).foregroundStyle(.secondary).lineLimit(2)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        Button("Review") { navigate(item.destination) }.buttonStyle(.glass)
-                    }
-                    .padding(18)
-                    if item.id != attentionItems.last?.id || !updateItems.isEmpty { Divider().padding(.horizontal, 18) }
-                }
-                ForEach(updateItems, id: \.row.artifactID) { item in
-                    HStack(alignment: .top, spacing: 14) {
-                        ToolIdentityIcon(
-                            packageID: item.row.nativeRoutes.first?.externalPluginID ?? "",
-                            fallback: .plugin, size: 36)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Update available for \(item.row.displayName)").font(.system(size: 16, weight: .medium))
-                            Text(item.availability.detail).font(.system(size: 15)).foregroundStyle(.secondary).lineLimit(2)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        Button("Review") { openPlugin(item.row) }
-                            .buttonStyle(.glass)
-                    }
-                    .padding(18)
-                    if item.row.artifactID != updateItems.last?.row.artifactID { Divider().padding(.horizontal, 18) }
+    /// The steps a prepared plan is holding. A plan that has been applied has
+    /// already re-read itself, so what shows here is what is still outstanding.
+    /// A removal is one of those changes, so a plan holding one is not called
+    /// an install.
+    private var readyMiniCard: some View {
+        let waiting = workspace.deployment.plan?.items ?? []
+        let title = PlanReviewLabels.readyTitle(hasRemoval: waiting.contains(where: \.isRemoval))
+        return BentoCard(symbol: "arrow.down.circle", title: title, fillsHeight: true) {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                Text(waiting.count, format: .number)
+                    .font(AgentFont.statLarge)
+                    .foregroundStyle(waiting.isEmpty ? Color.secondary : AgentTheme.selection)
+                HStack(spacing: Space.md) {
+                    Text("\(CountNoun.change.word(for: waiting.count)) waiting")
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: Space.xs)
+                    Button(workspace.deployment.isBusy ? "Preparing…" : reviewTitle) { reviewChanges() }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                        .disabled(workspace.deployment.isBusy || !hasChangesWaiting)
+                        .help(
+                            hasChangesWaiting
+                                ? "Review the changes this plan is holding."
+                                : "There is nothing waiting to review. Assign a tool first, then prepare a plan.")
                 }
             }
-            .standardPanel(cornerRadius: 16)
+            .padding(.horizontal, Space.xl)
+            .padding(.bottom, Space.xl)
+            .padding(.top, Space.xxs)
         }
+    }
+
+    /// The last few things this Mac actually changed, read from the store's own
+    /// receipts. This is history, not a claim: each row is what one applied plan
+    /// recorded doing, worded the way the Activity screen words it.
+    private var recentChangesCard: some View {
+        BentoCard(
+            symbol: "clock.arrow.circlepath", title: "Recent changes",
+            action: ("Open Activity", { navigate(.activity) }), fillsHeight: true
+        ) {
+            VStack(alignment: .leading, spacing: 0) {
+                if recentReceipts.isEmpty {
+                    Text("Nothing has been changed yet.")
+                        .font(AgentFont.body)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, Space.xl)
+                        .padding(.bottom, Space.xl)
+                        .padding(.top, Space.xxs)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ForEach(recentReceipts) { receipt in
+                        HStack(alignment: .center, spacing: Space.lg) {
+                            StatusGlyph(state: receipt.state, size: Size.glyph)
+                            VStack(alignment: .leading, spacing: Space.xxs) {
+                                Text(receipt.title)
+                                    .font(AgentFont.bodyMedium)
+                                    .lineLimit(1)
+                                Text(receipt.outcomeTally)
+                                    .font(AgentFont.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(SnapshotTime.compact(receipt.createdAt))
+                                .font(AgentFont.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, Space.xl)
+                        .padding(.vertical, Space.md)
+                        if receipt.id != recentReceipts.last?.id {
+                            Hairline(indent: Hairline.afterLeading(Size.glyph + Space.xxs))
+                        }
+                    }
+                }
+            }
+        }
+        // Reading the store is I/O, so it happens off the body: a receipt is a
+        // record of something already done, and re-reading it on every layout
+        // pass would put a file read in the render path for no gain.
+        .task { await loadRecentReceipts() }
+    }
+
+    /// Reads the last three receipts the store kept. The store read is
+    /// synchronous and throwing; a failure here only means the card stays
+    /// empty, which reads the same as a Mac that has changed nothing yet.
+    private func loadRecentReceipts() async {
+        recentReceipts = (try? workspace.store.operationReceipts(limit: 3)) ?? []
+    }
+
+    // MARK: - From your other Macs
+
+    /// What other Macs asked for on this one. Kinds set to install
+    /// automatically were installed when they arrived and are named here once;
+    /// the rest wait for a press, or for a look when the plan said so.
+    private var incomingCard: some View {
+        let incoming = workspace.incoming
+        let installAll: () -> Void = { Task { @MainActor in await incoming.installAll() } }
+        let checkAgain: () -> Void = { Task { @MainActor in await incoming.review(installingAutomatically: false) } }
+        let action: (String, () -> Void) = incoming.waiting.count > 1 ? ("Install all", installAll) : ("Check again", checkAgain)
+        return BentoCard(symbol: "laptopcomputer.and.arrow.down", title: "From your other Macs", action: action) {
+            VStack(spacing: 0) {
+                if !incoming.installedAutomatically.isEmpty {
+                    HStack(alignment: .top, spacing: Space.lg) {
+                        StatusGlyph(state: .healthy, size: Size.glyphLarge)
+                        Text("Installed on arrival: \(incoming.installedAutomatically.formatted(.list(type: .and))).")
+                            .font(AgentFont.body).wrapsLines()
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                    if incoming.hasWork { Hairline(indent: Hairline.afterLeading(Size.glyphLarge + Space.xxs)) }
+                }
+                ForEach(incoming.waiting) { arrival in
+                    HStack(spacing: Space.lg) {
+                        KindTile(kind: arrival.kind == .mcpServer ? .mcpServer : (arrival.kind == .plugin ? .plugin : .skill), size: Size.disc)
+                        VStack(alignment: .leading, spacing: Space.xxs) {
+                            Text(arrival.displayName).font(AgentFont.bodySemibold).lineLimit(1)
+                            Text("Asked for in \(arrival.clients.map(\.rawValue).formatted(.list(type: .and)))")
+                                .font(AgentFont.body).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Button(incoming.isWorking ? "Installing…" : "Install") { Task { await incoming.install(arrival.artifactID) } }
+                            .buttonStyle(.glass).controlSize(.small).disabled(incoming.isWorking)
+                    }
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                    if arrival.id != incoming.waiting.last?.id || !incoming.heldForReview.isEmpty {
+                        Hairline(indent: Hairline.afterLeading(Size.glyphLarge + Space.xxs))
+                    }
+                }
+                ForEach(incoming.heldForReview) { arrival in
+                    HStack(spacing: Space.lg) {
+                        StatusGlyph(state: .attention, size: Size.glyphLarge)
+                        VStack(alignment: .leading, spacing: Space.xxs) {
+                            Text(arrival.displayName).font(AgentFont.bodySemibold).lineLimit(1)
+                            Text("Needs a look before installing here.").font(AgentFont.body).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Button(reviewTitle) { reviewChanges() }.buttonStyle(.glass).controlSize(.small)
+                    }
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                    if arrival.id != incoming.heldForReview.last?.id {
+                        Hairline(indent: Hairline.afterLeading(Size.glyphLarge + Space.xxs))
+                    }
+                }
+                if let message = incoming.errorMessage {
+                    Hairline()
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(AgentFont.caption).foregroundStyle(AgentTheme.warning).wrapsLines()
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Hairline()
+                Label(Self.incomingFooter(automatic: automaticKinds), systemImage: "checkmark.shield")
+                    .font(AgentFont.caption).foregroundStyle(.tertiary)
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    /// What the From your other Macs card can promise, given the kinds that
+    /// install on their own.
+    static func incomingFooter(automatic: [ToolingItemKind]) -> String {
+        guard !automatic.isEmpty else { return "Nothing from another Mac installs here until you press Install." }
+        return "Arriving \(automaticNames(automatic)) install on their own (\(updatesSettingsPath)). The rest wait here."
+    }
+
+    /// The kinds the update policy installs without a press, in Library order.
+    private var automaticKinds: [ToolingItemKind] {
+        let policy = workspace.device.updatePolicy
+        return ToolingItemKind.allCases.filter { policy.policy(for: $0) == .automatic }
+    }
+
+    /// Where the rows that set those kinds are. Both footers point at the same
+    /// card, so they name it the same way.
+    private static let updatesSettingsPath = "Settings › General › Updates"
+
+    /// The kinds in the plural, by the names of the Settings rows that set
+    /// them: "skills and connections".
+    private static func automaticNames(_ kinds: [ToolingItemKind]) -> String {
+        kinds.map { kind in
+            switch kind {
+            case .skill: CountNoun.skill.plural
+            case .plugin: CountNoun.plugin.plural
+            case .mcpServer: CountNoun.connection.plural
+            }
+        }
+        .formatted(.list(type: .and))
+    }
+
+    // MARK: - Waiting for your review
+
+    private func reviewQueueCard(
+        items attentionItems: [OverviewAttention],
+        updates updateItems: [OverviewUpdate]
+    ) -> some View {
+        let installable = updateItems.filter { $0.canUpdate }
+        return BentoCard(
+            symbol: "eye", title: "Waiting for your review",
+            action: installable.count > 1
+                ? ("Update all", { Task { await workspace.updates.updateAll() } })
+                : ("Open queue", { navigate(.syncCenter) })
+        ) {
+            VStack(spacing: 0) {
+                if attentionItems.isEmpty && updateItems.isEmpty {
+                    Text("Nothing is waiting on you.")
+                        .font(AgentFont.body)
+                        .foregroundStyle(.secondary)
+                        .padding(Space.xl)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ForEach(attentionItems) { item in
+                        HStack(alignment: .center, spacing: Space.lg) {
+                            StatusGlyph(state: item.state, size: Size.glyphLarge)
+                            VStack(alignment: .leading, spacing: Space.xxs) {
+                                Text(item.title).font(AgentFont.bodySemibold).lineLimit(1)
+                                Text(item.detail).font(AgentFont.body).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Button("Review") { navigate(item.destination) }
+                                .buttonStyle(.glass).controlSize(.small)
+                        }
+                        .padding(.horizontal, Space.xl)
+                        .padding(.vertical, Space.lg)
+                        if item.id != attentionItems.last?.id || !updateItems.isEmpty {
+                            Hairline(indent: Hairline.afterLeading(Size.glyphLarge + Space.xxs))
+                        }
+                    }
+                    ForEach(updateItems) { item in
+                        HStack(alignment: .center, spacing: Space.lg) {
+                            if item.row.kind == .nativePlugin || item.row.kind == .package {
+                                ToolIdentityIcon(
+                                    packageID: item.row.nativeRoutes.first?.externalPluginID ?? "",
+                                    fallback: .plugin, size: Size.disc)
+                            } else {
+                                KindTile(kind: item.row.kind == .mcpServer ? .mcpServer : .skill, size: Size.disc)
+                            }
+                            VStack(alignment: .leading, spacing: Space.xxs) {
+                                Text("Update available for \(item.row.displayName)")
+                                    .font(AgentFont.bodySemibold).lineLimit(1)
+                                Text(item.cannotUpdate ?? item.availability.detail)
+                                    .font(AgentFont.body).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            if item.canUpdate {
+                                Button(workspace.updates.updating.contains(item.id) ? "Updating…" : "Update") {
+                                    Task { await workspace.updates.update(item.id) }
+                                }
+                                .buttonStyle(.glass).controlSize(.small)
+                                .disabled(workspace.updates.isBusy)
+                            } else {
+                                Button("Review") { open(item.row) }
+                                    .buttonStyle(.glass).controlSize(.small)
+                            }
+                        }
+                        .padding(.horizontal, Space.xl)
+                        .padding(.vertical, Space.lg)
+                        if item.id != updateItems.last?.id {
+                            Hairline(indent: Hairline.afterLeading(Size.glyphLarge + Space.xxs))
+                        }
+                    }
+                }
+                if let message = workspace.updates.errorMessage {
+                    Hairline()
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(AgentFont.caption).foregroundStyle(AgentTheme.warning).wrapsLines()
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if let notice = workspace.updates.notice {
+                    Hairline()
+                    Label(notice, systemImage: "hand.raised")
+                        .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Hairline()
+                Label(Self.updatesFooter(automatic: automaticKinds), systemImage: "checkmark.shield")
+                    .font(AgentFont.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, Space.xl)
+                    .padding(.vertical, Space.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    /// What the Waiting for your review card can promise about installing,
+    /// given the kinds that install on their own.
+    static func updatesFooter(automatic: [ToolingItemKind]) -> String {
+        guard !automatic.isEmpty else { return "Nothing installs until you approve it here." }
+        return "Updates to \(automaticNames(automatic)) install on their own (\(updatesSettingsPath)). Everything else waits here."
+    }
+
+    /// One update Home can show: the row, the verdict, and whether the button
+    /// on it can do the work or has to send the person to the item.
+    struct OverviewUpdate: Identifiable {
+        let row: WorkspaceLibraryReadModelRow
+        let availability: UpdateAvailability
+        let cannotUpdate: String?
+        var id: ArtifactID { row.artifactID }
+        var canUpdate: Bool { cannotUpdate == nil }
     }
 
     /// What the last check and the review queue say is waiting, worst first.
@@ -439,13 +621,14 @@ struct OverviewView: View {
             workspace.device.verdict(for: $0).state == .attention
         }
         let clients = unreachable.map { client in
-            let observed = workspace.device.observations.filter { $0.surface.client == client }
+            // The verdict already says what is wrong in the same words the
+            // sidebar and Apps use, so Home repeats it rather than working
+            // out a second, possibly different, description from the scan.
+            let verdict = workspace.device.verdict(for: client)
             return OverviewAttention(
                 id: "client-\(client.rawValue)",
-                title: observed.contains(where: \.installed)
-                    ? "\(client.rawValue) command is unavailable"
-                    : "\(client.rawValue) was not found",
-                detail: observed.lazy.flatMap(\.notes).first ?? "The expected local path was checked.",
+                title: "\(client.rawValue): \(verdict.text.lowercased())",
+                detail: verdict.detail,
                 state: .attention, destination: .syncCenter)
         }
         let queued = requests.requests.map { request in
@@ -455,16 +638,49 @@ struct OverviewView: View {
                 detail: request.summary,
                 state: .pending, destination: .syncCenter)
         }
-        return Array((clients + queued).prefix(3))
+        // Connections the last health check found broken. Nothing is checked
+        // from here: a count appears only once somebody ran a check, so Home
+        // never reports a problem it has not seen.
+        let health = workspace.health.attentionCount
+        let connections: [OverviewAttention] = health == 0 ? [] : [
+            OverviewAttention(
+                id: "health",
+                title: "\(CountNoun.connection.phrase(health)) \(health == 1 ? "needs" : "need") attention",
+                detail: "Sign in again or reconnect on the Health tab.",
+                state: .attention, destination: .health)
+        ]
+        // What the account check found, once one has run: a client signed in
+        // some other way, a different account from the other Macs, shared
+        // choices this Mac does not follow yet.
+        let accountFindings = workspace.accounts.attentionFindings
+        let accounts: [OverviewAttention] = accountFindings.isEmpty ? [] : [
+            OverviewAttention(
+                id: "accounts",
+                title: accountFindings.count == 1 ? accountFindings[0].title : "\(accountFindings.count) account settings need attention",
+                detail: accountFindings.count == 1 ? accountFindings[0].detail : "Open Accounts to see what each app gets from your accounts.",
+                state: accountFindings.contains { $0.severity >= .medium } ? .attention : .pending, destination: .accounts)
+        ]
+        return Array((connections + accounts + clients + queued).prefix(3))
     }
 
     /// Plugins a catalog says have something newer. Before any catalog has been
     /// asked this is empty, because "not checked" is not news.
-    private var updateItems: [(row: WorkspaceLibraryReadModelRow, availability: UpdateAvailability)] {
+    /// Found updates, three at most. After a check has run, every kind the
+    /// update session compared; before one, the catalog's word on plugins, so a
+    /// first open is not blank where Discover already knows something.
+    private var updateItems: [OverviewUpdate] {
+        let rows = Dictionary((libraryModel?.rows ?? []).map { ($0.artifactID, $0) }, uniquingKeysWith: { first, _ in first })
+        let found = workspace.updates.available
+        if !found.isEmpty || workspace.device.lastUpdateCheck != nil {
+            return found.prefix(3).compactMap { entry in
+                rows[entry.id].map { OverviewUpdate(row: $0, availability: entry.availability, cannotUpdate: entry.cannotUpdate) }
+            }
+        }
         let evaluation = updateEvaluation
-        let rows = evaluation.rowsWithUpdates(in: libraryModel?.rows ?? [])
-        return rows.prefix(3).compactMap { row in
-            evaluation.availability[row.artifactID].map { (row, $0) }
+        return evaluation.rowsWithUpdates(in: libraryModel?.rows ?? []).prefix(3).compactMap { row in
+            evaluation.availability[row.artifactID].map {
+                OverviewUpdate(row: row, availability: $0, cannotUpdate: "Check for updates to install this from here.")
+            }
         }
     }
 
@@ -477,39 +693,107 @@ struct OverviewView: View {
             sources: catalog.sources.isEmpty ? nil : catalog.sources)
     }
 
-    // MARK: - On this Mac
+    // MARK: - Apps
 
-    private var appFooter: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Divider()
-            HStack {
-                Text("On this Mac").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
-                Spacer()
-                Button("Manage apps") { navigation.showAllClients() }
-                    .buttonStyle(.plain).font(.system(size: 14)).foregroundStyle(AgentTheme.blue)
-            }
-            FlowLayout(spacing: 24) {
-                ForEach(enabledClients) { client in
-                    Button {
-                        navigation.openClient(client)
-                    } label: {
-                        HStack(spacing: 10) {
-                            ClientBrandIcon(client: client, size: 22)
-                            Text(client.rawValue).font(.system(size: 15, weight: .medium))
-                            let verdict = workspace.device.verdict(for: client)
-                            Text(verdict.state == .healthy ? "Found locally" : verdict.text)
-                                .font(.system(size: 14)).foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                        .contentShape(Rectangle())
+    /// The last checkup in a sentence, and the way into the next one. Reads
+    /// the setup session's kept checkup; never starts one.
+    private var setupCard: some View {
+        let setup = workspace.setup
+        return BentoCard(
+            symbol: "stethoscope", title: "Your setup",
+            action: ("Checkup", { navigate(.checkup) })
+        ) {
+            HStack(spacing: Space.lg) {
+                if let checkup = setup.checkup {
+                    let open = checkup.openFindings.count + checkup.openRecommendations.count
+                    StatusGlyph(state: open == 0 ? .healthy : ((checkup.audit.highestSeverity ?? .info) >= .medium ? .attention : .pending), size: Size.glyphLarge)
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text(open == 0 ? "Nothing needs attention" : "\(CountNoun("thing").phrase(open)) to look at")
+                            .font(AgentFont.bodyMedium)
+                        Text("Checked \(SnapshotTime.compact(checkup.completedAt))" + (setup.isStale ? " · a new checkup is due" : ""))
+                            .font(AgentFont.caption).foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
+                } else {
+                    Image(systemName: "wand.and.stars").font(.system(size: Size.symbol)).foregroundStyle(.secondary).frame(width: Size.glyphSlot)
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text("This Mac has not been checked yet").font(AgentFont.bodyMedium)
+                        Text("Find what is broken, duplicated, or unmanaged, and have your assistant say what to do.")
+                            .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
+                    }
                 }
+                Spacer(minLength: Space.md)
             }
+            .padding(Space.xl)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var appsCard: some View {
+        BentoCard(
+            symbol: "square.grid.2x2", title: "Apps",
+            action: ("Manage", { navigation.showAllClients() })
+        ) {
             if enabledClients.isEmpty {
                 Text("Choose your apps to see their local setup here.")
-                    .font(.system(size: 15)).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
+                    .padding(Space.xl)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(alignment: .top, spacing: Space.sm) {
+                    ForEach(enabledClients) { client in
+                        appBadge(client)
+                    }
+                }
+                .padding(.horizontal, Space.lg)
+                .padding(.vertical, Space.xl)
+                .frame(maxWidth: .infinity)
             }
+        }
+    }
+
+    /// One app: its mark on a tile, its health as a dot on the tile's corner,
+    /// its name beneath. The verdict text lives in the help tag so the row of
+    /// icons stays scannable.
+    private func appBadge(_ client: ClientKind) -> some View {
+        let verdict = workspace.device.verdict(for: client)
+        return Button {
+            navigation.openClient(client)
+        } label: {
+            VStack(spacing: Space.md) {
+                ZStack(alignment: .bottomTrailing) {
+                    RoundedRectangle.card
+                        .fill(AgentTheme.controlBackground)
+                        .overlay {
+                            RoundedRectangle.card
+                                .strokeBorder(AgentTheme.hairlineStroke, lineWidth: Hairline.width)
+                        }
+                        .frame(width: Size.rowHeight, height: Size.rowHeight)
+                        .overlay { ClientBrandIcon(client: client, size: Size.tile) }
+                    Circle()
+                        .fill(statusDotColor(verdict.state))
+                        .frame(width: Size.dot, height: Size.dot)
+                        .overlay { Circle().strokeBorder(AgentTheme.controlBackground, lineWidth: Hairline.ring) }
+                        .offset(x: Size.badgeOverhang, y: Size.badgeOverhang)
+                }
+                Text(client.rawValue)
+                    .font(AgentFont.captionMedium)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(client.rawValue): \(verdict.text)")
+        .accessibilityLabel("\(client.rawValue), \(verdict.text)")
+    }
+
+    private func statusDotColor(_ state: HealthState) -> Color {
+        switch state {
+        case .healthy: AgentTheme.ok
+        case .attention: AgentTheme.warning
+        case .pending: AgentTheme.selection
+        case .unavailable: AgentTheme.failure
         }
     }
 
@@ -520,33 +804,57 @@ struct OverviewView: View {
     /// The library in the shape the surviving services already speak. Absent
     /// until the library has been read once; there is no empty one to stand in
     /// for it, and pretending otherwise would report a real library as empty.
+    /// Skills by the name a client calls them, so a skill three plugins
+    /// re-ship counts once, as it does on the Skills screen.
+    private var distinctSkillCount: Int {
+        Set((inventory?.skills ?? []).map { ToolCopyIdentity.callableName($0.name).map { "name:" + $0 } ?? "id:" + $0.id }).count
+    }
+
     private var inventory: VersionedInventoryProjection.Inventory? {
         libraryModel.map(VersionedInventoryProjection.inventory)
     }
 
     private var lastScanText: String {
         guard let date = workspace.device.observations.map(\.lastScannedAt).max() else { return "Not checked yet" }
-        return "Checked \(date.formatted(.relative(presentation: .named)))"
+        // The same phrasing the sidebar and Apps screen use for this very date,
+        // so one moment does not read as "9m ago" in one place and "43 minutes
+        // ago" in another.
+        return "Checked \(SnapshotTime.compact(date))"
     }
 
     /// These are stored Insights findings; Home never fabricates a personal
     /// recommendation and never starts a scan to get one.
     private var recommendations: [ToolRecommendation] {
-        Array((insights.report?.recommendations ?? []).prefix(4))
+        Array(ToolRecommendation.distinct(insights.report?.recommendations ?? []).prefix(4))
     }
 
     // MARK: - Acting
 
+    /// The title of every button on Home that opens the plan review: the
+    /// toolbar's, the card's, and a held arrival's. One title, counted from the
+    /// prepared plan, so the same action never reads two ways on one screen.
+    private var reviewTitle: String {
+        ActionTitles.reviewChanges(count: workspace.deployment.plan?.items.count)
+    }
+
     /// Works out what would change, on the screen that can approve it. Preparing
     /// reads only; nothing is written until somebody says so there.
     private func reviewChanges() {
+        // The same route "Install now…" takes: Apps prepares the plan and opens
+        // it for review, so the person lands on the sheet rather than on a
+        // screen they then have to ask again.
         navigation.showAllClients()
-        Task { await workspace.deployment.prepare() }
+        navigation.openScreenRequest(.reviewChanges)
     }
 
-    /// Reveals one plugin on the Plugins tab. Revealing is not acting on it.
-    private func openPlugin(_ row: WorkspaceLibraryReadModelRow) {
-        navigation.openItem(row.artifactID.rawValue.uuidString.lowercased(), in: .plugins)
+    /// The row's own screen: Plugins, Connections, or Skills by kind.
+    private func open(_ row: WorkspaceLibraryReadModelRow) {
+        let section: AppSection = switch row.kind {
+        case .nativePlugin, .package: .plugins
+        case .mcpServer: .mcpServers
+        case .skill, .preset, .logicalProject: .skills
+        }
+        navigation.openItem(row.artifactID.rawValue.uuidString.lowercased(), in: section)
     }
 
     private func recommendationSummary(_ recommendation: ToolRecommendation) -> String {
@@ -637,6 +945,62 @@ struct OverviewView: View {
     private func skill(_ id: String?) -> Skill? {
         guard let id else { return nil }
         return inventory?.skills.first { $0.id == id }
+    }
+}
+
+/// One bento card: an eyebrow — small symbol, tracked-out label, optional
+/// trailing action — above the card's own rows. The eyebrow is part of the
+/// card, unlike `TitledCard`, because the dashboard reads as a set of labeled
+/// tiles rather than as sections of a page.
+private struct BentoCard<Content: View>: View {
+    let symbol: String
+    let title: String
+    var action: (String, () -> Void)?
+    /// Whether the card's own surface grows to the height its column gives it.
+    /// A frame put on the card from outside stretches an invisible box; the
+    /// panel background has to be the thing that stretches for the page to
+    /// read as filled rather than as short cards over an empty canvas.
+    var fillsHeight = false
+    @ViewBuilder var content: Content
+
+    init(
+        symbol: String, title: String, action: (String, () -> Void)? = nil, fillsHeight: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.symbol = symbol
+        self.title = title
+        self.action = action
+        self.fillsHeight = fillsHeight
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: Space.sm) {
+                Image(systemName: symbol)
+                    .font(AgentFont.captionSemibold)
+                    .foregroundStyle(.secondary)
+                Text(title.uppercased())
+                    .font(AgentFont.captionSemibold)
+                    .kerning(AgentFont.capsKerning)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: Space.md)
+                if let action {
+                    Button(action.0, action: action.1)
+                        .buttonStyle(.plain)
+                        .font(AgentFont.bodyMedium)
+                        .foregroundStyle(AgentTheme.selection)
+                }
+            }
+            .padding(.horizontal, Space.xl)
+            .padding(.top, Space.lg)
+            .padding(.bottom, Space.md)
+            content
+        }
+        .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
+        .standardPanel(cornerRadius: Radius.xl)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
     }
 }
 

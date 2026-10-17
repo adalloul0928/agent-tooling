@@ -38,6 +38,7 @@ struct OperationCommandPolicy: Sendable {
         case "claude": try validateClaude(arguments)
         case "codex": try validateCodex(arguments)
         case "gemini": try validateGemini(arguments)
+        case "kiro-cli": try validateKiro(arguments)
         default: throw OperationEngineError.commandNotAllowed(executable)
         }
     }
@@ -76,12 +77,49 @@ struct OperationCommandPolicy: Sendable {
     }
 
     private func validateClaude(_ arguments: [String]) throws {
+        // The skill creator: Claude Code in print mode, answering one prompt
+        // from standard input inside a staged request folder. The whole
+        // shape is fixed except the session identifier.
+        if SkillCreatorCommandShapes.isClaudeCreatorShape(arguments) { return }
+        // Adding the official marketplace, which the skill-creator plugin
+        // install needs first. One literal, nothing variable.
+        if arguments == SkillCreatorCommandShapes.claudeOfficialMarketplaceAddArguments { return }
+        // Trying a skill: the interactive client, with `/name` as its first
+        // message. The name is one checked identifier.
+        if SkillTrialCommandShapes.isTrialShape(.claude, arguments) { return }
+        // The insights deep dive: print mode, no tools, one fixed schema.
+        if InsightsDeepDiveCommandShapes.isClaudeShape(arguments) { return }
+        // The setup review: print mode, reading only the tooling folders under
+        // home (and, for a client review, the web); never a shell or a write.
+        if SetupReviewCommandShapes.isClaudeShape(arguments, homeURL: homeURL) { return }
+        // Read-only listing and per-server lookup, plus the OAuth login flow.
+        // The login opens the browser itself; the app never handles a token.
+        if arguments == ["mcp", "list"] { return }
+        // The account reader's read-only questions: how Claude Code signs in,
+        // and which plugins it loads (the `@synced` rows are the account's).
+        if arguments == ClaudeAccountCommands.authStatus || arguments == ClaudeAccountCommands.pluginList { return }
+        if arguments.count == 3,
+            arguments[0] == "mcp",
+            ["get", "login"].contains(arguments[1]),
+            Self.isSafeMCPIdentifier(arguments[2])
+        {
+            return
+        }
+        if arguments.count == 4,
+            arguments[0] == "mcp",
+            arguments[1] == "login",
+            Self.isSafeMCPIdentifier(arguments[2]),
+            arguments[3] == "--no-browser"
+        {
+            return
+        }
         if arguments.count == 5,
             ["install", "uninstall", "update"].contains(arguments[1]),
             arguments[0] == "plugin",
             arguments[3] == "--scope",
             arguments[4] == "user",
-            Self.isSafePluginIdentifier(arguments[2])
+            Self.isSafePluginIdentifier(arguments[2]),
+            !ClaudeAccountSync.hasReservedOrigin(arguments[2])
         {
             return
         }
@@ -123,6 +161,37 @@ struct OperationCommandPolicy: Sendable {
     }
 
     private func validateCodex(_ arguments: [String]) throws {
+        // Read-only listing (text or JSON) and per-server lookup, plus the
+        // OAuth login flow for HTTP servers. The login opens the browser
+        // itself; no token passes through this app.
+        // The skill creator: Codex exec, starting a thread in a staged request
+        // folder under the home directory, or resuming one by identifier.
+        if SkillCreatorCommandShapes.isCodexCreatorShape(arguments, homeURL: homeURL) { return }
+        // Trying a skill: the interactive client, with `$name` as its first
+        // message. The name is one checked identifier.
+        if SkillTrialCommandShapes.isTrialShape(.codex, arguments) { return }
+        // The insights deep dive: read-only exec in a staged folder under the
+        // home directory, answering to the schema file inside it.
+        if InsightsDeepDiveCommandShapes.isCodexShape(arguments, homeURL: homeURL) { return }
+        // The setup review: read-only exec rooted at home so the tooling
+        // folders are in reach, answering to a schema file in a staged folder.
+        if SetupReviewCommandShapes.isCodexShape(arguments, homeURL: homeURL) { return }
+        if arguments == ["mcp", "list"] || arguments == ["mcp", "list", "--json"] { return }
+        if arguments.count == 3,
+            arguments[0] == "mcp",
+            ["get", "login"].contains(arguments[1]),
+            Self.isSafeMCPIdentifier(arguments[2])
+        {
+            return
+        }
+        if arguments.count == 4,
+            arguments[0] == "mcp",
+            arguments[1] == "login",
+            Self.isSafeMCPIdentifier(arguments[2]),
+            arguments[3] == "--no-browser"
+        {
+            return
+        }
         if arguments.count == 3,
             arguments[0] == "plugin",
             ["add", "remove"].contains(arguments[1]),
@@ -206,7 +275,67 @@ struct OperationCommandPolicy: Sendable {
         throw OperationEngineError.commandArgumentsNotAllowed("gemini")
     }
 
-    private static let allowedCommands: Set<String> = ["claude", "codex", "gemini", "git"]
+    /// Exactly the shapes `MCPClientCommand` emits for Kiro, verified against
+    /// kiro-cli 2.23.0: named flags, `global`/`workspace` scopes, and repeated
+    /// `--args` pairs after the fixed prefix for a stdio server.
+    private func validateKiro(_ arguments: [String]) throws {
+        let scopes = ["global", "workspace"]
+        // Trying a skill: an interactive chat with `/name` as its first
+        // message. The name is one checked identifier.
+        if SkillTrialCommandShapes.isTrialShape(.kiro, arguments) { return }
+        // Read-only listing. Kiro CLI 2.23.0 has no verified login command, so
+        // this is list-only; no login shape is admitted for it.
+        if arguments == ["mcp", "list"] { return }
+        if arguments.count == 6,
+            arguments[0] == "mcp",
+            arguments[1] == "remove",
+            arguments[2] == "--name",
+            Self.isSafeMCPIdentifier(arguments[3]),
+            arguments[4] == "--scope",
+            scopes.contains(arguments[5])
+        {
+            return
+        }
+        if arguments.count == 9,
+            arguments[0] == "mcp",
+            arguments[1] == "add",
+            arguments[2] == "--name",
+            Self.isSafeMCPIdentifier(arguments[3]),
+            arguments[4] == "--url",
+            Self.isSafeHTTPDestination(arguments[5]),
+            arguments[6] == "--scope",
+            scopes.contains(arguments[7]),
+            arguments[8] == "--force"
+        {
+            return
+        }
+        if arguments.count >= 9,
+            arguments[0] == "mcp",
+            arguments[1] == "add",
+            arguments[2] == "--name",
+            Self.isSafeMCPIdentifier(arguments[3]),
+            arguments[4] == "--command",
+            arguments[6] == "--scope",
+            scopes.contains(arguments[7]),
+            arguments[8] == "--force"
+        {
+            // The tail is pairs of `--args <value>`; the launched command is
+            // checked whole, the way the stdio validators already do.
+            let tail = Array(arguments.dropFirst(9))
+            var values: [String] = []
+            var index = 0
+            while index + 1 < tail.count, tail[index] == "--args" {
+                values.append(tail[index + 1])
+                index += 2
+            }
+            if index == tail.count, Self.isSafeStdioCommand([arguments[5]] + values) {
+                return
+            }
+        }
+        throw OperationEngineError.commandArgumentsNotAllowed("kiro-cli")
+    }
+
+    private static let allowedCommands: Set<String> = ["claude", "codex", "gemini", "kiro-cli", "git"]
 
     static func isSafePluginIdentifier(_ value: String) -> Bool {
         !value.isEmpty
@@ -240,10 +369,6 @@ struct OperationCommandPolicy: Sendable {
     }
 
     private static func contains(_ child: URL, in root: URL) -> Bool {
-        let childPath = child.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
+        PathContainment.containsResolved(child, in: root)
     }
 }

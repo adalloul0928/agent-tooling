@@ -22,10 +22,10 @@ struct ToolHiveWorkloadInspector: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(workload.name).font(.title2.weight(.semibold))
-                    Text("ToolHive workload").font(.callout).foregroundStyle(.secondary)
+            HStack(spacing: Space.xl) {
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(workload.name).font(AgentFont.titleLarge)
+                    Text("ToolHive workload").font(AgentFont.body).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button {
@@ -33,25 +33,25 @@ struct ToolHiveWorkloadInspector: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .help("Refresh status")
                 .accessibilityLabel("Refresh status")
                 .disabled(isInspecting)
-                Button("Done") { dismiss() }.buttonStyle(.borderedProminent)
+                Button("Done") { dismiss() }.primaryActionStyle()
             }
-            .padding(20)
-            Divider()
+            .padding(Space.xxl)
+            Hairline()
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: Space.xxl) {
                     statusSection
                     logSection
                 }
-                .padding(20)
-                .frame(maxWidth: 620, alignment: .leading)
+                .padding(Space.xxl)
+                .frame(maxWidth: Size.inspectorContentMax, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
         }
-        .frame(minWidth: 640, idealWidth: 720, minHeight: 480, idealHeight: 560)
+        .sheetSize(minimum: SheetSize.inspectorMinimum, ideal: SheetSize.inspectorIdeal)
         .background(AgentTheme.contentBackground)
         .task(id: inspectionRequestID) {
             await refreshInspection()
@@ -67,10 +67,10 @@ struct ToolHiveWorkloadInspector: View {
     }
 
     @ViewBuilder private var statusSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             HStack(alignment: .firstTextBaseline) {
                 Label("ToolHive status", systemImage: "server.rack")
-                    .font(.headline)
+                    .font(AgentFont.heading)
                 Spacer()
                 if isInspecting { ProgressView().controlSize(.small) }
             }
@@ -85,19 +85,19 @@ struct ToolHiveWorkloadInspector: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(14)
+        .padding(Space.xl)
         .standardPanel()
     }
 
     @ViewBuilder private func inspectionBody(_ inspection: ToolHiveInspectionResult<ToolHiveWorkloadStatus>) -> some View {
         switch inspection {
         case .available(let status, let diagnostic):
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 Text(status.status)
-                    .font(.title3.weight(.semibold))
+                    .font(AgentFont.title)
                 Spacer()
                 Text(status.transport)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }
             if let health = status.health {
@@ -105,12 +105,12 @@ struct ToolHiveWorkloadInspector: View {
             }
             if let diagnostic {
                 Text(diagnostic)
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
             DisclosureGroup("Workload details") {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Space.md) {
                     detail("Package", status.package)
                     detail("URL", status.url)
                     detail("Port", String(status.port))
@@ -119,9 +119,9 @@ struct ToolHiveWorkloadInspector: View {
                     if let group = status.group { detail("Group", group) }
                     if let uptime = status.uptime { detail("Reported uptime", uptime) }
                 }
-                .padding(.top, 8)
+                .padding(.top, Space.md)
             }
-            .font(.callout)
+            .font(AgentFont.body)
 
         case .unavailable(let diagnostic):
             statusFailure(diagnostic.isEmpty ? "ToolHive is not available on this Mac." : diagnostic)
@@ -133,26 +133,26 @@ struct ToolHiveWorkloadInspector: View {
     }
 
     private func statusFailure(_ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 9) {
+        HStack(alignment: .top, spacing: Space.md) {
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(.secondary)
             Text(detail)
-                .font(.callout)
+                .font(AgentFont.body)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         }
     }
 
     private var logSection: some View {
-        VStack(alignment: .leading, spacing: 11) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             HStack {
                 Label("Log snapshot", systemImage: "text.alignleft")
-                    .font(.headline)
+                    .font(AgentFont.heading)
                 Spacer()
                 if isLoadingLogs { ProgressView().controlSize(.small) }
             }
             Text("Load the latest output from this workload or its proxy.")
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
 
             Picker("Log source", selection: $proxyLogs) {
@@ -164,11 +164,11 @@ struct ToolHiveWorkloadInspector: View {
 
             HStack {
                 Button("Refresh logs") { logRequestID = UUID() }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .disabled(isLoadingLogs)
                 if let snapshot = logSnapshot, snapshot.isTruncated {
                     Label("Truncated", systemImage: "ellipsis")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -177,27 +177,27 @@ struct ToolHiveWorkloadInspector: View {
                 statusFailure(logError)
             } else if let snapshot = logSnapshot {
                 if let diagnostic = snapshot.diagnostic {
-                    Text(diagnostic).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                    Text(diagnostic).font(AgentFont.body).foregroundStyle(.secondary).textSelection(.enabled)
                 }
                 ScrollView {
                     Text(snapshot.output.isEmpty ? "No log output returned." : snapshot.output)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(AgentFont.mono)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
-                        .padding(10)
+                        .padding(Space.lg)
                 }
-                .frame(minHeight: 110, maxHeight: 240)
-                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 7))
+                .frame(minHeight: Size.logMinHeight, maxHeight: Size.logMaxHeight)
+                .background(AgentTheme.fillSubtle, in: RoundedRectangle.control)
             }
         }
-        .padding(14)
+        .padding(Space.xl)
         .standardPanel()
     }
 
     private func detail(_ title: String, _ value: String) -> some View {
         LabeledValueRow(title) {
             Text(value)
-                .font(.system(.caption, design: .monospaced))
+                .font(AgentFont.mono)
                 .textSelection(.enabled)
         }
     }
@@ -250,10 +250,10 @@ struct MCPRuntimesSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                SymbolTile(symbol: "shippingbox", size: 40)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("MCP runtimes").font(.title3.weight(.semibold))
+            HStack(spacing: Space.lg) {
+                SymbolTile(symbol: "shippingbox", size: Size.tileLarge)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text("MCP runtimes").font(AgentFont.title)
                     Text(subtitle).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
@@ -261,14 +261,14 @@ struct MCPRuntimesSheet: View {
                 Button(session.lastCheckedAt == nil ? "Check" : "Check again") {
                     Task { await session.refresh() }
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 .disabled(session.isBusy)
             }
-            .padding(22)
-            Divider()
+            .padding(Space.xxxl)
+            Hairline()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Space.xl) {
                     if let message = session.errorMessage {
                         AttentionBanner(title: "This Mac's runtimes could not be read", message: message)
                     }
@@ -281,20 +281,20 @@ struct MCPRuntimesSheet: View {
                                 "Agent Tooling starts no runtime on its own. Check reads which runtimes this Mac has "
                                 + "and, where one manages workloads, what it is holding. Nothing is started or stopped."
                         )
-                        .frame(minHeight: 220)
+                        .frame(minHeight: Size.emptyStatePaneHeight)
                     } else {
                         TitledCard("Runtimes", count: "\(session.statuses.count)") {
                             ForEach(Array(session.statuses.enumerated()), id: \.element.id) { index, status in
                                 InfoRow(status.displayName, detail: status.detail) {
-                                    StatusGlyph(state: status.isAvailable ? .healthy : .unavailable, size: 15)
+                                    StatusGlyph(state: status.isAvailable ? .healthy : .unavailable, size: Size.glyphLarge)
                                 } trailing: {
                                     if let version = status.version {
                                         Text(version)
-                                            .font(.caption.monospacedDigit())
+                                            .font(AgentFont.caption.monospacedDigit())
                                             .foregroundStyle(.secondary)
                                     }
                                 }
-                                if index < session.statuses.count - 1 { Divider().opacity(0.45) }
+                                if index < session.statuses.count - 1 { Hairline() }
                             }
                         }
 
@@ -305,20 +305,20 @@ struct MCPRuntimesSheet: View {
                                         "None. A runtime that manages workloads reports them here; direct client "
                                             + "configuration has none by design."
                                     )
-                                    .font(.caption)
+                                    .font(AgentFont.caption)
                                     .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                    .wrapsLines()
                                 }
                             } else {
                                 ForEach(Array(session.workloads.enumerated()), id: \.element.id) { index, workload in
                                     InfoRow(workload.name, detail: workloadClause(workload)) {
-                                        KindTile(kind: .mcpServer, size: 26, ghost: true)
+                                        KindTile(kind: .mcpServer, size: Size.tile, ghost: true)
                                     } trailing: {
                                         Button("Inspect…") { inspecting = workload }
-                                            .buttonStyle(.bordered)
+                                            .secondaryActionStyle()
                                             .controlSize(.small)
                                     }
-                                    if index < session.workloads.count - 1 { Divider().opacity(0.45) }
+                                    if index < session.workloads.count - 1 { Hairline() }
                                 }
                             }
                         }
@@ -326,25 +326,25 @@ struct MCPRuntimesSheet: View {
                         Text(
                             "Read only. Agent Tooling never starts, stops or reconfigures a runtime from this sheet."
                         )
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                     }
                 }
-                .padding(22)
+                .padding(Space.xxxl)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Divider()
+            Hairline()
             HStack {
                 Spacer()
                 Button("Done") { dismiss() }
-                    .buttonStyle(.borderedProminent)
+                    .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
             }
-            .padding(16)
+            .padding(Space.xl)
         }
-        .frame(width: 680, height: 620)
+        .sheetSize(SheetSize.large)
         .background(AgentTheme.contentBackground)
         .sheet(item: $inspecting) { workload in
             ToolHiveWorkloadInspector(workload: workload, inspector: inspector)

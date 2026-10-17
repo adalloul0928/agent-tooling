@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -164,7 +165,7 @@ struct WorkspaceSyncCoordinatorTests {
             let remote = root.appending(path: "remote.git")
             try FileManager.default.createDirectory(at: remote, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
-            try Self.git(["init", "--bare", "--initial-branch", "main", remote.path], in: root)
+            try GitTestFixture.git(["init", "--bare", "--initial-branch", "main", remote.path], in: root)
 
             let workspaceID = WorkspaceObjectID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e5")!)
             let writerA = WorkspaceObjectID()
@@ -187,8 +188,8 @@ struct WorkspaceSyncCoordinatorTests {
             try storeB.initialize(document: document, device: .init(workspaceID: workspaceID,
                 deviceID: storeB.deviceID))
 
-            let transportA = try await Self.enroll(remote: remote, checkout: root.appending(path: "checkout-a"))
-            transportB = try await Self.enroll(remote: remote, checkout: root.appending(path: "checkout-b"))
+            let transportA = try await GitTestFixture.enroll(remote: remote, checkout: root.appending(path: "checkout-a"))
+            transportB = try await GitTestFixture.enroll(remote: remote, checkout: root.appending(path: "checkout-b"))
             a = WorkspaceSyncCoordinator(store: storeA, transport: transportA, writerID: writerA)
             b = WorkspaceSyncCoordinator(store: storeB, transport: transportB, writerID: writerB)
         }
@@ -205,24 +206,6 @@ struct WorkspaceSyncCoordinatorTests {
                 document.artifacts[index].identity.displayName = name
                 return [artifact]
             }
-        }
-
-        static func enroll(remote: URL, checkout: URL) async throws -> GitWorkspaceTransport {
-            let transport = try await GitWorkspaceTransport.enroll(remote: remote.path, checkout: checkout)
-            try git(["config", "user.email", "fixture@example.com"], in: checkout)
-            try git(["config", "user.name", "Fixture"], in: checkout)
-            return transport
-        }
-
-        static func git(_ arguments: [String], in directory: URL) throws {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-            process.arguments = arguments
-            process.currentDirectoryURL = directory
-            process.standardOutput = Pipe()
-            process.standardError = Pipe()
-            try process.run()
-            process.waitUntilExit()
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }

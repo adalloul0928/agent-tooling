@@ -8,6 +8,7 @@ public enum SourceKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case geminiExtensionGallery
     case agentPlugins
     case mcpRegistry
+    case skillsShRegistry
 
     public var id: String { rawValue }
     public var displayName: String {
@@ -19,6 +20,7 @@ public enum SourceKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .geminiExtensionGallery: "Gemini extension gallery"
         case .agentPlugins: "Agent Plugins"
         case .mcpRegistry: "MCP registry"
+        case .skillsShRegistry: "skills.sh registry"
         }
     }
 }
@@ -83,6 +85,15 @@ public struct MarketplacePackage: Identifiable, Codable, Hashable, Sendable {
     /// published no tool list at all, which reads differently from a server
     /// that declares zero tools, so the two are never collapsed.
     public var tools: [MCPToolDescriptor]?
+    /// The install count the catalog itself published for this listing.
+    /// `nil` means the catalog publishes no counts — never zero installs.
+    /// This is the catalog's own report, not anything this app measured.
+    public var installCount: Int?
+    /// The category the catalog filed this listing under, such as "development"
+    /// or "security". `nil` means the catalog published none — it is the
+    /// catalog's own label, never one this app inferred, and it is presented as
+    /// a plain secondary tag rather than a claim about the package's behavior.
+    public var category: String?
 
     public init(
         id: String,
@@ -107,7 +118,9 @@ public struct MarketplacePackage: Identifiable, Codable, Hashable, Sendable {
         updateStatus: PackageUpdateStatus? = nil,
         conflicts: [PackageConflict]? = nil,
         lastUpdate: PackageUpdateRecord? = nil,
-        tools: [MCPToolDescriptor]? = nil
+        tools: [MCPToolDescriptor]? = nil,
+        installCount: Int? = nil,
+        category: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -132,6 +145,8 @@ public struct MarketplacePackage: Identifiable, Codable, Hashable, Sendable {
         self.conflicts = conflicts
         self.lastUpdate = lastUpdate
         self.tools = tools
+        self.installCount = installCount
+        self.category = category
     }
 
     public var installedClients: Set<ClientKind> {
@@ -147,6 +162,7 @@ public struct MarketplacePackage: Identifiable, Codable, Hashable, Sendable {
         if id.hasPrefix("claude:") { return .claudeMarketplace }
         if id.hasPrefix("codex:") { return .openAIPluginDirectory }
         if id.hasPrefix("mcp-registry:") { return .mcpRegistry }
+        if id.hasPrefix("skills-sh:") { return .skillsShRegistry }
         return nil
     }
 }
@@ -336,13 +352,6 @@ public enum SecretFieldMasking {
         let normalized = name.lowercased().filter { $0.isLetter || $0.isNumber }
         if secretTokens.contains(normalized) { return true }
         return tokens(in: name).contains { secretTokens.contains($0) }
-    }
-
-    /// A masked rendering for anything that could be a value. Values are never
-    /// stored, so this exists to keep a stray one out of a display.
-    public static func maskedValue(_ value: String?) -> String {
-        _ = value
-        return placeholder
     }
 
     private static func tokens(in name: String) -> [String] {

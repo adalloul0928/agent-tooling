@@ -48,6 +48,11 @@ struct MarketplaceSourceReport: Sendable {
     /// from an earlier refresh under one of these are still the truest thing
     /// known, so they survive rather than reading as a catalog that shrank.
     var incompletePackagePrefixes: Set<String> = []
+    /// Marketplaces a client has not added yet, though listings from them are
+    /// on screen (read from the published catalog file). Installing one of
+    /// those listings needs the marketplace added to the client first, and the
+    /// detail pane says so with the command that does it.
+    var marketplacesNotAdded: [ClientKind: Set<String>] = [:]
 }
 
 /// How a native client catalog names its listings, and which Sources row it is
@@ -57,26 +62,50 @@ enum NativeCatalogRows {
     static let byClient: [ClientKind: SourceKind] = [
         .claude: .claudeMarketplace, .codex: .openAIPluginDirectory,
     ]
-    static let byPrefix: [String: SourceKind] = [
-        "claude:": .claudeMarketplace, "codex:": .openAIPluginDirectory,
-    ]
     static let prefixByClient: [ClientKind: String] = [.claude: "claude:", .codex: "codex:"]
 }
 
 /// Which catalogs a live build asks.
 enum MarketplaceCatalogs {
     /// Every catalog this Mac can be asked about, in the order Discover has
-    /// always listed them: the registry, then what the installed clients
+    /// always listed them: the registries, then what the installed clients
     /// publish, then the folders somebody added themselves.
+    ///
+    /// The official Claude catalog and the Claude CLI answer for the same
+    /// Sources row, so they are folded into one `ClaudeMarketplaceCatalog` that
+    /// reads both and speaks for the row once. That leaves the generic native
+    /// catalog to answer only for Codex, so no two providers annotate the same
+    /// row and race to overwrite each other.
     static func live(in context: MarketplaceCatalogContext) -> [any MarketplaceProvider] {
         let store = context.store
-        return MarketplaceProviderRegistry.builtIn().map { MCPRegistryCatalog(asking: $0) }
-            + [
-                NativeClientCatalog(
-                    runner: ProcessCommandRunner(homeURL: context.homeRoot),
-                    clients: { managedClients(in: store) }),
-                RecordedFolderCatalog(store: store),
-            ]
+        let httpsClaude = try? ClaudePluginsOfficialCatalogProvider()
+        var providers = MarketplaceProviderRegistry.builtIn().compactMap(wrapped(_:))
+        providers.append(
+            ClaudeMarketplaceCatalog(
+                httpsCatalog: httpsClaude,
+                runner: ProcessCommandRunner(homeURL: context.homeRoot),
+                claudeManaged: { managedClients(in: store).contains(.claude) }))
+        providers.append(
+            NativeClientCatalog(
+                runner: ProcessCommandRunner(homeURL: context.homeRoot),
+                clients: { managedClients(in: store).intersection([.codex]) }))
+        providers.append(RecordedFolderCatalog(store: store))
+        return providers
+    }
+
+    /// Each remote provider is paired with the Sources row it answers for, so a
+    /// refusal or a count lands on the right row. The official Claude catalog is
+    /// dropped here because `ClaudeMarketplaceCatalog` reads it directly and
+    /// speaks for the Claude row itself; a provider this table does not know is
+    /// passed through unannotated rather than attributed to a row it never
+    /// spoke for.
+    private static func wrapped(_ provider: any MarketplaceProvider) -> (any MarketplaceProvider)? {
+        switch provider.id {
+        case "skills-sh.registry": SkillsShCatalog(asking: provider)
+        case "mcp.official-registry": MCPRegistryCatalog(asking: provider)
+        case "claude.plugins-official": nil
+        default: provider
+        }
     }
 
     /// Which clients this workspace manages, read when a refresh asks rather
@@ -86,9 +115,10 @@ enum MarketplaceCatalogs {
     /// A workspace that has not recorded a choice manages all of them, which is
     /// the same answer `WorkspaceDeviceSession` gives from the same record.
     private static func managedClients(in store: WorkspaceRevisionStore) -> Set<ClientKind> {
-        guard let recorded = (try? store.snapshot())?.device.applicationState?.preferences.enabledClients
-        else { return Set(ClientKind.allCases) }
-        return Set(recorded)
+        guard let device = (try? store.snapshot())?.device else { return Set(ClientKind.allCases) }
+        return ClientVisibilityPolicy.effectiveEnabledClients(
+            preferences: device.applicationState?.preferences,
+            observations: device.observations)
     }
 
     /// A fixed identity per built-in catalog row.
@@ -130,9 +160,8 @@ actor MCPRegistryCatalog: CatalogSourceReporting {
 
     func search(_ query: MarketplaceQuery) async throws -> MarketplacePage {
         let page = try await asking.search(query)
-        let count = page.packages.count
         report.summaries[.mcpRegistry] =
-            "\(count) server\(count == 1 ? "" : "s") loaded from \(asking.displayName); "
+            "\(CountNoun("server").phrase(page.packages.count)) loaded from \(asking.displayName); "
             + "package execution still requires review"
         report.refreshedKinds = [.mcpRegistry]
         return page
@@ -141,15 +170,111 @@ actor MCPRegistryCatalog: CatalogSourceReporting {
     func lastReport() -> MarketplaceSourceReport { report }
 }
 
-/// What the client CLIs already installed on this Mac publish.
+/// The skills.sh registry, named as the Sources row it answers for.
 ///
-/// Only the documented, machine-readable local catalogs each client exposes.
-/// No hosted web page is scraped, and nothing is installed: this is `claude
-/// plugin list --available` and its Codex equivalent, read.
+/// The registry itself answers search terms only — it has no public browse
+/// endpoint. To give Discover something browsable without a search term, this
+/// wrapper fans an unqueried refresh out over a fixed, shipped vocabulary of
+/// common skill topics, merges and dedupes the answers, and caps the result.
+/// The seed terms are a constant in code, never derived from anyone's data. A
+/// real search term bypasses the seeds entirely and asks the registry once, the
+/// way it always has. Only a queried or seeded answer dates the row.
+actor SkillsShCatalog: CatalogSourceReporting {
+    nonisolated var id: String { asking.id }
+    nonisolated var displayName: String { asking.displayName }
+    nonisolated var sourceKinds: Set<SourceKind> { [.skillsShRegistry] }
+
+    /// The starter vocabulary an unqueried refresh browses with. Fixed in code
+    /// so it is the same on every Mac and can never carry a value read from a
+    /// person's workspace. Chosen to cover the common reasons someone reaches
+    /// for a skill.
+    static let seedTerms = [
+        "code review", "testing", "documentation", "git", "debugging", "refactoring", "planning", "writing",
+    ]
+
+    /// At most this many seed searches run at once, so a browse fans out without
+    /// opening a request per term all at the same moment.
+    private static let maxConcurrentSeedSearches = 8
+    /// The most listings a browse keeps after merging every seed's answer.
+    private static let browseListingCeiling = 100
+
+    private let asking: any MarketplaceProvider
+    private var report = MarketplaceSourceReport()
+
+    init(asking: any MarketplaceProvider) {
+        self.asking = asking
+    }
+
+    func search(_ query: MarketplaceQuery) async throws -> MarketplacePage {
+        // A real search term asks the registry once, exactly as before.
+        if let term = SkillsShRegistryProvider.searchTerm(from: query) {
+            let page = try await asking.search(query)
+            report.summaries[.skillsShRegistry] =
+                "\(CountNoun.skill.phrase(page.packages.count)) matched “\(term)”; read the source repository before installing"
+            report.refreshedKinds = [.skillsShRegistry]
+            return page
+        }
+        // No search term: browse the shipped starter set instead of staying
+        // silent, so Discover has skill listings before anyone types anything.
+        return try await browseSeedTerms(limit: query.limit)
+    }
+
+    /// Fans the seed vocabulary out over the registry, bounded and cancellable,
+    /// then merges the answers into one deduplicated, capped page.
+    private func browseSeedTerms(limit: Int) async throws -> MarketplacePage {
+        let terms = Self.seedTerms
+        let asking = asking
+        let collected: [MarketplacePackage] = try await withThrowingTaskGroup(
+            of: [MarketplacePackage].self
+        ) { group in
+            var results: [MarketplacePackage] = []
+            var running = 0
+            var iterator = terms.makeIterator()
+
+            func addNext() {
+                guard let term = iterator.next() else { return }
+                running += 1
+                group.addTask {
+                    // Cancellation propagates: if the refresh is torn down, a
+                    // seed search in flight stops rather than finishing wasted.
+                    try Task.checkCancellation()
+                    return try await asking.search(MarketplaceQuery(search: term, limit: limit)).packages
+                }
+            }
+
+            for _ in 0..<min(Self.maxConcurrentSeedSearches, terms.count) { addNext() }
+            while running > 0 {
+                let page = try await group.next() ?? []
+                running -= 1
+                results.append(contentsOf: page)
+                addNext()
+            }
+            return results
+        }
+
+        let merged = MarketplaceService().deduplicatedPackages(collected)
+        let capped = Array(merged.prefix(Self.browseListingCeiling))
+        report.summaries[.skillsShRegistry] =
+            "Browsing skills.sh starter set; type to search"
+        report.refreshedKinds = [.skillsShRegistry]
+        return MarketplacePage(packages: capped)
+    }
+
+    func lastReport() -> MarketplaceSourceReport { report }
+}
+
+/// What the Codex CLI already installed on this Mac publishes.
+///
+/// Only the documented, machine-readable local catalog Codex exposes. No hosted
+/// web page is scraped, and nothing is installed: this is Codex's own
+/// `plugin list --available --json`, read. The Claude row is handled by
+/// `ClaudeMarketplaceCatalog`, which folds the Claude CLI together with the
+/// official HTTPS catalog, so this catalog speaks only for the Codex row even
+/// though the shared discovery it calls can read both clients.
 actor NativeClientCatalog: CatalogSourceReporting {
     nonisolated let id = "device.native-catalogs"
     nonisolated let displayName = "Installed client catalogs"
-    nonisolated var sourceKinds: Set<SourceKind> { [.claudeMarketplace, .openAIPluginDirectory] }
+    nonisolated var sourceKinds: Set<SourceKind> { [.openAIPluginDirectory] }
 
     private let runner: any CommandRunning
     /// Asked at refresh time, not captured when the screen opened.
@@ -176,7 +301,7 @@ actor NativeClientCatalog: CatalogSourceReporting {
         }
         let discovery = await MarketplaceService.discoverNativeCatalogs(runner: runner, clients: clients)
         for (client, outcome) in discovery.outcomes {
-            guard let kind = NativeCatalogRows.byClient[client] else { continue }
+            guard let kind = NativeCatalogRows.byClient[client], sourceKinds.contains(kind) else { continue }
             switch outcome {
             case .excluded:
                 built.summaries[kind] = "This workspace is not managing \(client.rawValue), so its catalog was not read."
@@ -195,6 +320,159 @@ actor NativeClientCatalog: CatalogSourceReporting {
     }
 
     func lastReport() -> MarketplaceSourceReport { report }
+}
+
+/// The Claude plugins marketplace, read from both angles at once: Claude Code's
+/// own CLI, and the official catalog file the marketplace repository publishes.
+///
+/// These two describe the same row, so one provider reads both and speaks for
+/// `.claudeMarketplace` once rather than racing another provider to annotate
+/// it. The listings are folded together by `MarketplaceService`'s own merge —
+/// a CLI row that knows a plugin is installed and its install count is combined
+/// with the file row that knows the plugin's category and homepage, so a person
+/// sees one card carrying both halves.
+///
+/// The row's wording follows what actually happened. When the CLI answered, its
+/// count leads. When the CLI could not be asked — an isolated HOME, a Toolbox
+/// shim, Claude not installed — but the file did answer, the row says the
+/// browsable listings came from the official catalog on GitHub and names, in
+/// plain words, why Claude Code itself could not be asked. Only when both fail
+/// does the row read as a failure.
+actor ClaudeMarketplaceCatalog: CatalogSourceReporting {
+    nonisolated let id = "device.claude-marketplace"
+    nonisolated let displayName = "Claude marketplaces"
+    nonisolated var sourceKinds: Set<SourceKind> { [.claudeMarketplace] }
+
+    private let httpsCatalog: (any MarketplaceProvider)?
+    private let runner: any CommandRunning
+    /// Asked at refresh time so turning Claude off in the sidebar takes effect
+    /// on the next refresh rather than the next launch.
+    private let claudeManaged: @Sendable () -> Bool
+    private var report = MarketplaceSourceReport()
+
+    init(
+        httpsCatalog: (any MarketplaceProvider)?,
+        runner: any CommandRunning,
+        claudeManaged: @escaping @Sendable () -> Bool
+    ) {
+        self.httpsCatalog = httpsCatalog
+        self.runner = runner
+        self.claudeManaged = claudeManaged
+    }
+
+    func search(_ query: MarketplaceQuery) async throws -> MarketplacePage {
+        var built = MarketplaceSourceReport()
+        guard claudeManaged() else {
+            built.summaries[.claudeMarketplace] =
+                "This workspace is not managing Claude Code, so its catalog was not read."
+            report = built
+            return MarketplacePage(packages: [])
+        }
+
+        // The CLI, read the same way the generic native catalog reads it, so a
+        // Claude row and a file row for one plugin carry the same identifier and
+        // fold together.
+        let cli = await MarketplaceService.discoverNativeCatalogs(runner: runner, clients: [.claude])
+        let cliOutcome = cli.outcomes[.claude] ?? .incomplete
+        let cliNote = cli.notes[.claude]
+
+        // The official catalog file. It is only asked when there is one to ask;
+        // a build that could not construct it (an unreachable configuration)
+        // leaves the row to the CLI alone.
+        var httpsPackages: [MarketplacePackage] = []
+        var httpsFailure: String?
+        if let httpsCatalog {
+            do {
+                httpsPackages = try await httpsCatalog.search(query).packages
+            } catch {
+                httpsFailure = SensitiveValueRedactor.redact(error.localizedDescription)
+            }
+        }
+        let httpsAnswered = httpsFailure == nil && httpsCatalog != nil
+
+        let merged = MarketplaceService().deduplicatedPackages(cli.packages + httpsPackages)
+
+        switch cliOutcome {
+        case .complete:
+            // Claude Code answered, so what it knows leads: which marketplaces
+            // are added and what is installed. The file fills in categories and
+            // homepages, and — when no marketplace has been added yet, so the
+            // CLI lists nothing — is the reason the row is not empty. The
+            // wording keeps those two facts apart so a person can tell which
+            // listings Claude Code can install today.
+            built.summaries[.claudeMarketplace] = Self.completeSummary(
+                cliCount: cli.packages.count, httpsCount: httpsPackages.count,
+                httpsAnswered: httpsAnswered, httpsFailure: httpsFailure, cliNote: cliNote)
+            built.refreshedKinds.insert(.claudeMarketplace)
+            if cli.packages.isEmpty, !httpsPackages.isEmpty {
+                built.marketplacesNotAdded[.claude] = [ClaudePluginsOfficialCatalogProvider.marketplaceName]
+            }
+        case .incomplete, .excluded:
+            // Claude Code could not be asked, or answered only partially. If the
+            // file answered, that is now the browsable source, and the row says
+            // so and names why the CLI could not be asked.
+            let reason = Self.shortReason(cliNote)
+            if httpsAnswered {
+                built.summaries[.claudeMarketplace] =
+                    "\(CountNoun.plugin.phrase(httpsPackages.count)) read from the official catalog on GitHub. "
+                    + "Claude Code itself could not be asked: \(reason)"
+                built.refreshedKinds.insert(.claudeMarketplace)
+            } else if let httpsFailure {
+                built.summaries[.claudeMarketplace] =
+                    "Neither Claude Code nor the official catalog on GitHub could be read. "
+                    + "Claude Code: \(reason) Catalog: \(httpsFailure)"
+            } else {
+                built.summaries[.claudeMarketplace] = cliNote ?? "Claude Code's catalog could not be read: \(reason)"
+            }
+            // Anything the CLI kept from a previous complete refresh is still the
+            // truest thing known, so its listings survive this partial answer.
+            if cliOutcome == .incomplete {
+                built.incompletePackagePrefixes.insert("claude:")
+            }
+        }
+        report = built
+        return MarketplacePage(packages: merged)
+    }
+
+    func lastReport() -> MarketplaceSourceReport { report }
+
+    /// The row's wording when Claude Code answered in full.
+    static func completeSummary(
+        cliCount: Int, httpsCount: Int, httpsAnswered: Bool, httpsFailure: String?, cliNote: String?
+    ) -> String {
+        var sentences: [String] = []
+        if cliCount == 0 {
+            // Installing a file-sourced listing needs the marketplace to be
+            // added to Claude Code first; the app does not add marketplaces
+            // itself, so it names the one command that does.
+            sentences.append(
+                "Claude Code lists no plugins yet, because no marketplace has been added to it. "
+                + "Before a plugin from the official catalog can be installed, run: "
+                + "claude plugin marketplace add anthropics/claude-plugins-official")
+        } else {
+            sentences.append("\(CountNoun.plugin.phrase(cliCount)) listed by Claude Code from its added marketplaces.")
+        }
+        if httpsAnswered {
+            sentences.append("\(CountNoun.plugin.phrase(httpsCount)) read from the official catalog on GitHub.")
+        } else if let httpsFailure {
+            sentences.append("The official catalog on GitHub could not be read: \(httpsFailure)")
+        }
+        if let cliNote, !cliNote.isEmpty { sentences.append(cliNote) }
+        return sentences.joined(separator: " ")
+    }
+
+    /// The CLI's own diagnostic, trimmed to the clause that follows "could not
+    /// be asked:". The discovery note reads "claude catalog unavailable:
+    /// <reason>", so the prefix is stripped when present and the whole note is
+    /// used otherwise.
+    private static func shortReason(_ note: String?) -> String {
+        guard let note else { return "Claude Code was not available on this Mac." }
+        if let range = note.range(of: "unavailable: ") {
+            let tail = note[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !tail.isEmpty { return tail }
+        }
+        return note
+    }
 }
 
 /// The catalog folders and Git checkouts this workspace records itself.
@@ -226,7 +504,7 @@ actor RecordedFolderCatalog: CatalogSourceReporting {
                 built.folderSummaries[source.id] =
                     inspected.isEmpty
                     ? "No portable packages found"
-                    : "\(inspected.count) package\(inspected.count == 1 ? "" : "s") discovered; review before installing"
+                    : "\(CountNoun("package").phrase(inspected.count)) discovered; review before installing"
                 built.refreshedFolders.insert(source.id)
             } catch {
                 // The folder's own refusal, with anything that looks like a

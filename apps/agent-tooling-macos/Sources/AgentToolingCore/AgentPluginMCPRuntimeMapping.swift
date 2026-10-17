@@ -1,7 +1,7 @@
 import Foundation
 
 /// Why a declared connection cannot be delivered to a particular app.
-public enum AgentPluginMCPRouteRefusal: String, Error, Hashable, Sendable, CaseIterable {
+enum AgentPluginMCPRouteRefusal: String, Error, Hashable, Sendable, CaseIterable {
     /// This app has no recorded evidence that it accepts MCP connections.
     case noRecordedSupport
     /// This app does not accept this transport.
@@ -19,32 +19,32 @@ public enum AgentPluginMCPRouteRefusal: String, Error, Hashable, Sendable, CaseI
 }
 
 /// One connection, resolved for one app on this Mac.
-public struct ResolvedPluginMCPServer: Hashable, Sendable {
-    public let name: String
-    public let surface: TargetSurface
-    public let transport: String
+struct ResolvedPluginMCPServer: Hashable, Sendable {
+    let name: String
+    let surface: TargetSurface
+    let transport: String
     /// Absolute for a command inside the package; a bare name otherwise, which
     /// the client resolves by its own PATH rules.
-    public let executable: String?
-    public let arguments: [String]
+    let executable: String?
+    let arguments: [String]
     /// The package's declared variables plus the two the client owns. The
     /// client-owned pair always wins.
-    public let environment: [String: String]
-    public let workingDirectory: String?
-    public let endpoint: String?
-    public let headers: [String: String]
+    let environment: [String: String]
+    let workingDirectory: String?
+    let endpoint: String?
+    let headers: [String: String]
 }
 
-public struct AgentPluginMCPRouteResult: Hashable, Sendable {
-    public let resolved: [ResolvedPluginMCPServer]
-    public let refused: [Refusal]
+struct AgentPluginMCPRouteResult: Hashable, Sendable {
+    let resolved: [ResolvedPluginMCPServer]
+    let refused: [Refusal]
 
-    public struct Refusal: Hashable, Sendable {
-        public let name: String
-        public let surface: TargetSurface
-        public let reason: AgentPluginMCPRouteRefusal
+    struct Refusal: Hashable, Sendable {
+        let name: String
+        let surface: TargetSurface
+        let reason: AgentPluginMCPRouteRefusal
         /// Static description. Never contains a path, endpoint or credential.
-        public let detail: String
+        let detail: String
     }
 }
 
@@ -59,15 +59,11 @@ public struct AgentPluginMCPRouteResult: Hashable, Sendable {
 ///
 /// This maps; it does not launch. Nothing here starts a process or opens a
 /// connection, and a resolved route is not evidence that the server works.
-public enum AgentPluginMCPRuntimeMapper {
-    /// The two variables the client owns. A package cannot set them — that is
-    /// refused at parse time — and here they always win over anything declared.
-    public static let clientOwnedVariables = ["PLUGIN_ROOT", "PLUGIN_DATA"]
-
+enum AgentPluginMCPRuntimeMapper {
     /// `dataRoot` is the package's persistent folder. It belongs to the client
     /// and survives updates, which is what makes it different from the package
     /// root: content is replaced on update, data is not.
-    public static func resolve(
+    static func resolve(
         servers: [String: AgentPluginMCPServerDeclaration],
         packageRoot: URL,
         dataRoot: URL,
@@ -235,9 +231,8 @@ public enum AgentPluginMCPRuntimeMapper {
         let candidate = (relative.isEmpty ? base : base.appending(path: relative))
             .resolvingSymlinksInPath().standardizedFileURL
         let anchor = base.resolvingSymlinksInPath().standardizedFileURL
-        let anchorPath = normalized(anchor)
-        let candidatePath = normalized(candidate)
-        guard candidatePath == anchorPath || candidatePath.hasPrefix(anchorPath + "/") else {
+        // Both sides are resolved above, so the comparison takes them as given.
+        guard PathContainment.containsAsGiven(candidate, in: anchor) else {
             return .failure(.escapesPackage)
         }
         return .success(candidate)
@@ -263,11 +258,5 @@ public enum AgentPluginMCPRuntimeMapper {
         guard fileManager.fileExists(atPath: resolved.path, isDirectory: &isDirectory),
               isDirectory.boolValue else { return nil }
         return resolved
-    }
-
-    private static func normalized(_ url: URL) -> String {
-        var path = url.path(percentEncoded: false)
-        while path.count > 1, path.hasSuffix("/") { path.removeLast() }
-        return path
     }
 }

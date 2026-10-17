@@ -44,6 +44,11 @@ final class WorkspaceSettingsSession {
     private(set) var pendingEdit: PendingEdit?
     private(set) var editMessage: String?
     private(set) var lastReceipt: ConfigurationEditReceipt?
+    /// Which apps this Mac manages, so a surface for an app somebody switched
+    /// off is never built. Defaults to every client until a screen that knows
+    /// the managed set narrows it, so a caller that does not care keeps its old
+    /// behaviour.
+    private var managedClients: Set<ClientKind> = Set(ClientKind.allCases)
 
     private let homeRoot: URL
     private let library: WorkspaceLibrarySession
@@ -158,6 +163,21 @@ final class WorkspaceSettingsSession {
         await reload()
     }
 
+    /// Reads only the apps this Mac manages. A client with no configuration
+    /// adapter (everything but Claude Code and Codex) is dropped inside
+    /// `reload`, so passing it here is harmless; passing an app this Mac does
+    /// not manage keeps its settings off the screen entirely.
+    func refresh(managedClients: [ClientKind]) async {
+        self.managedClients = Set(managedClients)
+        await refresh()
+    }
+
+    /// Whether every managed, adapter-backed surface has been read and none
+    /// remain — the screen then says nothing can be read rather than drawing an
+    /// empty page. Distinct from "still loading": a first render before any
+    /// refresh has `isBusy` true or no refresh yet, and does not claim this.
+    var hasNoReadableSurfaces: Bool { !isBusy && surfaces.isEmpty }
+
     /// Re-reads without taking the busy guard, so an action can finish by
     /// showing what is true now rather than what was true before it ran.
     private func reload() async {
@@ -178,31 +198,40 @@ final class WorkspaceSettingsSession {
         instructions = await Task.detached {
             AgentInstructionInventory.scan(homeRoot: scannedHome, projectRoot: scannedProject)
         }.value
+        // Only the two clients with a configuration adapter can be read at all,
+        // and only when this Mac manages them. An unmanaged app's own files are
+        // its own business and stay off this screen.
+        let readsClaude = managedClients.contains(.claude)
+        let readsCodex = managedClients.contains(.codex)
         surfaces = await Task.detached {
             let reader = ConfigurationLayerReader()
             var results: [Surface] = []
-            do {
-                let layers = try reader.claudeCodeLayers(homeRoot: home, projectRoot: projectRoot,
-                                                        managedPolicyPath: policy)
-                results.append(.init(id: .claudeCode, title: "Claude Code",
-                    configuration: EffectiveConfigurationResolver.resolve(
-                        adapter: ClaudeCodeConfigurationAdapter(),
-                        installedClientVersion: versions[.claudeCode], layers: layers),
-                    errorMessage: nil))
-            } catch {
-                results.append(.init(id: .claudeCode, title: "Claude Code", configuration: nil,
-                    errorMessage: Self.describe(error)))
+            if readsClaude {
+                do {
+                    let layers = try reader.claudeCodeLayers(homeRoot: home, projectRoot: projectRoot,
+                                                            managedPolicyPath: policy)
+                    results.append(.init(id: .claudeCode, title: "Claude Code",
+                        configuration: EffectiveConfigurationResolver.resolve(
+                            adapter: ClaudeCodeConfigurationAdapter(),
+                            installedClientVersion: versions[.claudeCode], layers: layers),
+                        errorMessage: nil))
+                } catch {
+                    results.append(.init(id: .claudeCode, title: "Claude Code", configuration: nil,
+                        errorMessage: Self.describe(error)))
+                }
             }
-            do {
-                let adapter = CodexConfigurationAdapter(installedClientVersion: versions[.codexCLI])
-                let layers = try reader.codexLayers(homeRoot: home, adapter: adapter)
-                results.append(.init(id: .codexCLI, title: "Codex",
-                    configuration: EffectiveConfigurationResolver.resolve(
-                        adapter: adapter, installedClientVersion: versions[.codexCLI], layers: layers),
-                    errorMessage: nil))
-            } catch {
-                results.append(.init(id: .codexCLI, title: "Codex", configuration: nil,
-                    errorMessage: Self.describe(error)))
+            if readsCodex {
+                do {
+                    let adapter = CodexConfigurationAdapter(installedClientVersion: versions[.codexCLI])
+                    let layers = try reader.codexLayers(homeRoot: home, adapter: adapter)
+                    results.append(.init(id: .codexCLI, title: "Codex",
+                        configuration: EffectiveConfigurationResolver.resolve(
+                            adapter: adapter, installedClientVersion: versions[.codexCLI], layers: layers),
+                        errorMessage: nil))
+                } catch {
+                    results.append(.init(id: .codexCLI, title: "Codex", configuration: nil,
+                        errorMessage: Self.describe(error)))
+                }
             }
             return results
         }.value
@@ -225,6 +254,8 @@ final class WorkspaceSettingsSession {
             "A backup of your file could not be written first, so nothing was changed."
         case ConfigurationEditError.valueRejected:
             "That value is not one this setting accepts."
+        case let tooLarge as ConfigurationFileTooLargeError:
+            tooLarge.localizedDescription
         default:
             "That setting could not be changed. Nothing was written."
         }
@@ -232,8 +263,8 @@ final class WorkspaceSettingsSession {
 
     private nonisolated static func describe(_ error: Error) -> String {
         switch error {
-        case ConfigurationLayerReadError.fileTooLarge:
-            "One of this app's settings files is too large to read safely."
+        case let tooLarge as ConfigurationFileTooLargeError:
+            tooLarge.localizedDescription
         case ConfigurationLayerReadError.unreadable:
             "One of this app's settings files could not be read. It was left exactly as it is."
         default:

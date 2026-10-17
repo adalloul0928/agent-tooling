@@ -1,6 +1,6 @@
 # Agent Tooling for Raycast
 
-This macOS-only Raycast extension is a keyboard-first companion for the Agent Tooling desktop app. It searches the local library, checks client health, opens tooling insights, prepares sync review, and submits Codex-only skill-creation requests. The desktop app remains the only component allowed to install packages or change client configuration.
+This macOS-only Raycast extension is a keyboard-first companion for the Agent Tooling desktop app. It searches the local library, checks client health, opens tooling insights, prepares sync review, and submits skill-creation requests for Codex or Claude Code to draft. The desktop app remains the only component allowed to install packages or change client configuration.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ Raycast development mode and explicitly enable **Allow Development Helper**.
 ## Commands
 
 - **Search Agent Tooling** searches skills, MCP servers, and plugins and opens the matching app destination.
-- **Create Skill Draft** sends an instruction over stdin to the Codex-backed Skill Creator workflow. It opens an opaque request identifier in the app for review. Claude and Gemini are optional install destinations only; neither is used to generate the draft.
+- **Create Skill Draft** sends an instruction over stdin to the Skill Creator workflow, drafted by the assistant chosen under **Assistant**: Codex, the default, or Claude Code. It opens an opaque request identifier in the app for review. Install destinations are a separate choice: picking Claude Code, Codex, or Gemini there does not ask that app to write the draft, and Gemini is never an assistant.
 - **Check Setup** runs the read-only doctor and accepts both healthy exit code `0` and attention exit code `2`.
 - **Review Tooling Insights** opens the app's Insights screen to scan recent Codex or Claude Code work, review skill usage and quality findings, and consider skill, MCP server, or plugin recommendations. The scan and every install review remain in the desktop app.
 - **Review Sync** opens the app's Sync screen. The desktop app performs scanning, preview, approval, and execution.
@@ -77,7 +77,7 @@ agent-tooling request create-skill --provider codex --scope global \
   --targets codex --instruction-stdin --json
 ```
 
-The instruction is supplied on stdin—not in argv, logs, or a deep link. A project-scoped request also passes `--project PATH`.
+`--provider` is `codex` or `claude`, the assistant chosen in the form; the extension sends `codex` unless Claude Code is picked. The instruction is supplied on stdin—not in argv, logs, or a deep link. A project-scoped request also passes `--project PATH`.
 
 The skill-creation request returns:
 

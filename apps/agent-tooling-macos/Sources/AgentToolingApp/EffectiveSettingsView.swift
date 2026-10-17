@@ -12,6 +12,7 @@ import SwiftUI
 /// changed from here.
 struct EffectiveSettingsView: View {
     let session: WorkspaceSettingsSession
+    @Environment(\.availableClients) private var managedClients
     @State private var refreshID = UUID()
 
     var body: some View {
@@ -31,8 +32,9 @@ struct EffectiveSettingsView: View {
                 }
                 Button("Refresh", systemImage: "arrow.clockwise") { refreshID = UUID() }
                     .labelStyle(.iconOnly).buttonStyle(.glass).disabled(session.isBusy)
+                    .help("Refresh")
             }
-            Divider()
+            Hairline()
             ScrollView {
                 VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                     Text("These values are read from your apps' own files. Only the few marked with a pencil can be changed here.")
@@ -41,13 +43,21 @@ struct EffectiveSettingsView: View {
                         Text(
                             "Agent Tooling was not told where an organization policy file would be on this Mac, so it cannot rule one out. If your organization sets one, it may decide a setting shown here as changeable."
                         )
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
                     }
                     if let receipt = session.lastReceipt {
                         receiptCard(receipt)
                     }
                     if let message = session.editMessage {
                         AttentionBanner(title: "That change was not made", message: message)
+                    }
+                    if session.hasNoReadableSurfaces {
+                        EmptyStateView(
+                            symbol: "gearshape",
+                            title: "No app settings to show",
+                            message: "No settings can be read yet for the apps this Mac manages."
+                        )
+                        .frame(maxWidth: .infinity, minHeight: Size.emptyStateStackMinHeight)
                     }
                     ForEach(session.surfaces) { surface in
                         surfaceCard(surface)
@@ -58,7 +68,8 @@ struct EffectiveSettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: refreshID) { await session.refresh() }
+        .task(id: refreshID) { await session.refresh(managedClients: managedClients) }
+        .task(id: managedClients) { await session.refresh(managedClients: managedClients) }
         .sheet(
             item: Binding(get: { session.pendingEdit }, set: { if $0 == nil { session.discardEdit() } })
         ) { edit in
@@ -68,13 +79,13 @@ struct EffectiveSettingsView: View {
 
     private func receiptCard(_ receipt: ConfigurationEditReceipt) -> some View {
         TitledCard("Changed \(receipt.key)") {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Space.sm) {
                 Label("Now \(receipt.effectiveValue.displayText)", systemImage: "checkmark.circle")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(AgentFont.bodyMedium)
                 Text("Your original file is kept beside it as a backup.").foregroundStyle(.secondary)
                 CompactPathText(path: receipt.backupPath, lineLimit: 2)
             }
-            .padding(14)
+            .padding(Space.xl)
         }
     }
 
@@ -83,47 +94,48 @@ struct EffectiveSettingsView: View {
         TitledCard(surface.title) {
             if let message = surface.errorMessage {
                 AttentionBanner(title: "Settings need attention", message: message)
-                    .padding(14)
+                    .padding(Space.xl)
             } else if let configuration = surface.configuration {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
-                        Text(configuration.summary).font(.callout).foregroundStyle(.secondary)
+                        Text(configuration.summary).font(AgentFont.body).foregroundStyle(.secondary)
                         Spacer()
                         Text(configuration.installedClientVersion.map { "Version \($0)" } ?? "Version unknown")
-                            .font(.callout).foregroundStyle(.secondary)
+                            .font(AgentFont.body).foregroundStyle(.secondary)
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                     if configuration.rows.isEmpty {
-                        Divider()
+                        Hairline()
                         Text("No settings were found for this app on this Mac.")
                             .foregroundStyle(.secondary)
-                            .padding(14)
+                            .padding(Space.xl)
                     }
                     ForEach(configuration.rows, id: \.key) { row in
-                        Divider()
+                        Hairline()
                         settingRow(row, in: surface)
                     }
                     if !configuration.combinedBreakdowns.filter({ $0.contributingFileCount > 0 }).isEmpty {
-                        Divider()
+                        Hairline()
                         combinedSection(configuration)
                     }
                     if !configuration.inactiveLayers.isEmpty {
-                        Divider()
+                        Hairline()
                         Text("Files this version does not read: \(configuration.inactiveLayers.map(label).joined(separator: ", "))")
-                            .font(.callout).foregroundStyle(.secondary)
-                            .padding(14)
+                            .font(AgentFont.body).foregroundStyle(.secondary)
+                            .padding(Space.xl)
                     }
                     if !configuration.unrecognized.isEmpty {
-                        Divider()
-                        DisclosureGroup("\(configuration.unrecognized.count) settings this app version manages itself") {
-                            VStack(alignment: .leading, spacing: 4) {
+                        Hairline()
+                        let unrecognized = CountNoun("setting").phrase(configuration.unrecognized.count)
+                        DisclosureGroup("\(unrecognized) this app version manages itself") {
+                            VStack(alignment: .leading, spacing: Space.xs) {
                                 ForEach(configuration.unrecognized, id: \.key) { entry in
                                     Text("\(entry.key) · \(label(entry.layer))")
-                                        .font(.callout).foregroundStyle(.secondary)
+                                        .font(AgentFont.body).foregroundStyle(.secondary)
                                 }
-                            }.padding(.top, 8)
+                            }.padding(.top, Space.md)
                         }
-                        .padding(14)
+                        .padding(Space.xl)
                     }
                 }
             }
@@ -134,12 +146,12 @@ struct EffectiveSettingsView: View {
         InfoRow(row.displayName, detail: rowDetail(row)) {
             EmptyView()
         } trailing: {
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 Text(row.value.displayText)
                     .multilineTextAlignment(.trailing).lineLimit(3).textSelection(.enabled)
                 if session.isEditable(row, surface: surface.id) {
                     Button("Edit", systemImage: "pencil") { session.beginEdit(row, surface: surface) }
-                        .labelStyle(.iconOnly).buttonStyle(.borderless)
+                        .labelStyle(.iconOnly).inlineActionStyle()
                         .disabled(session.isBusy)
                         .accessibilityLabel("Edit \(row.displayName)")
                 }
@@ -162,56 +174,52 @@ struct EffectiveSettingsView: View {
     @ViewBuilder
     private func combinedSection(_ configuration: EffectiveConfiguration) -> some View {
         let breakdowns = configuration.combinedBreakdowns.filter { $0.contributingFileCount > 0 }
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Settings that add up").font(.system(size: 15, weight: .medium))
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text("Settings that add up").font(AgentFont.title)
             Text("These are not overridden by the file with the most say — every file's entries are used together.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(AgentFont.body).foregroundStyle(.secondary)
             ForEach(breakdowns, id: \.key) { breakdown in
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Space.sm) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(breakdown.displayName).fontWeight(.medium)
-                        Spacer(minLength: 12)
-                        Text(
-                            breakdown.totalEntryCount == 1
-                                ? "1 in total, from 1 file"
-                                : "\(breakdown.totalEntryCount) in total, from \(breakdown.contributingFileCount) \(breakdown.contributingFileCount == 1 ? "file" : "files")"
-                        )
-                        .foregroundStyle(.secondary)
+                        Spacer(minLength: Space.lg)
+                        Text("\(breakdown.totalEntryCount) in total, from \(CountNoun("file").phrase(breakdown.contributingFileCount))")
+                            .foregroundStyle(.secondary)
                     }
                     if breakdown.key == "hooks" {
                         Label(
                             "Hooks run commands on this Mac. Agent Tooling does not read what each one does — open a file to see for yourself.",
                             systemImage: "exclamationmark.triangle"
                         )
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
                     }
                     ForEach(Array(breakdown.contributions.enumerated()), id: \.offset) { _, entry in
                         if entry.entryCount > 0 {
-                            HStack(spacing: 10) {
+                            HStack(spacing: Space.lg) {
                                 Text(entry.entryCount == 1 ? "1 from" : "\(entry.entryCount) from").foregroundStyle(.secondary)
                                 Text(label(entry.layer))
-                                Spacer(minLength: 12)
+                                Spacer(minLength: Space.lg)
                                 if let path = entry.sourcePath {
                                     Button("Show file") { reveal(path) }
-                                        .buttonStyle(.borderless)
+                                        .inlineActionStyle()
                                         .accessibilityLabel("Show the file for \(label(entry.layer))")
                                 }
                             }
-                            .font(.callout)
+                            .font(AgentFont.body)
                         }
                     }
                 }
-                .padding(.vertical, 5)
+                .padding(.vertical, Space.xs)
             }
         }
-        .padding(14)
+        .padding(Space.xl)
     }
 
     @ViewBuilder
     private var instructionsCard: some View {
         if let inventory = session.instructions, !inventory.entries.isEmpty || !inventory.notes.isEmpty {
             TitledCard("Standing instructions") {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: Space.xl) {
                     Text(
                         "Each app reads these at the start of every session, all of them together. A file closer to your project does not replace one further out."
                     )
@@ -222,17 +230,17 @@ struct EffectiveSettingsView: View {
                     ForEach(Self.instructionSurfaces, id: \.self) { surface in
                         let entries = inventory.entries.filter { $0.surface == surface }
                         if !entries.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(surface.displayName).font(.system(size: 15, weight: .medium))
+                            VStack(alignment: .leading, spacing: Space.md) {
+                                Text(surface.displayName).font(AgentFont.title)
                                 ForEach(entries, id: \.path) { entry in
                                     instructionRow(entry)
                                 }
                             }
-                            .padding(.vertical, 4)
+                            .padding(.vertical, Space.xs)
                         }
                     }
                 }
-                .padding(14)
+                .padding(Space.xl)
             }
         }
     }
@@ -242,10 +250,10 @@ struct EffectiveSettingsView: View {
             URL(fileURLWithPath: entry.path).lastPathComponent,
             detail: "\(describe(entry.kind)) · \(describe(entry.scope))" + (entry.isEmpty ? " · empty" : "")
         ) {
-            Image(systemName: symbol(entry.kind)).foregroundStyle(.secondary).frame(width: 18)
+            Image(systemName: symbol(entry.kind)).foregroundStyle(.secondary).frame(width: Size.glyphSlot)
         } trailing: {
             Button("Show file") { reveal(entry.path) }
-                .buttonStyle(.borderless)
+                .inlineActionStyle()
                 .accessibilityLabel("Show \(entry.path)")
         }
         .help(entry.path)
@@ -272,7 +280,7 @@ struct EffectiveSettingsView: View {
     private func describe(_ scope: AgentInstructionInventory.Scope) -> String {
         switch scope {
         case .managedPolicy: "your organization"
-        case .user: "your account on this Mac"
+        case .user: "every project on this Mac"
         case .project: "this project"
         case .localProject: "this project, just for you"
         }
@@ -289,70 +297,156 @@ struct EffectiveSettingsView: View {
         case .session: "the running session"
         case .localProject: "this project, just for you"
         case .project: "this project"
-        case .user: "your account on this Mac"
+        case .user: "every project on this Mac"
         case .builtInDefault: "the app's default"
         }
     }
 }
 
+/// The control the edit sheet offers for a setting's new value, decided by what
+/// the setting can hold rather than only by how its current value reads.
+///
+/// A setting its app defines a fixed set of values for is chosen from that set,
+/// so a typo cannot write a value the app would not read. A current value
+/// outside the set is offered as well, first, so opening the sheet neither drops
+/// it nor quietly replaces it: until another value is chosen, nothing changes.
+/// A number is typed, and only a finite number is accepted.
+enum EffectiveSettingInput: Equatable {
+    case toggle
+    /// The values to choose from, and the current value when it is not one of
+    /// them.
+    case choice(options: [ConfigurationValue], unlisted: ConfigurationValue?)
+    case number
+    case text
+
+    init(current: ConfigurationValue, choices: [ConfigurationValue]) {
+        if case .boolean = current {
+            self = .toggle
+        } else if !choices.isEmpty {
+            self = .choice(options: choices, unlisted: choices.contains(current) ? nil : current)
+        } else if case .number = current {
+            self = .number
+        } else {
+            self = .text
+        }
+    }
+
+    /// What was typed, switched or chosen, or nil while it is not a value this
+    /// setting can take: empty text, text that is not a finite number, no
+    /// choice.
+    func value(text: String, flag: Bool, choice: ConfigurationValue?) -> ConfigurationValue? {
+        switch self {
+        case .toggle: .boolean(flag)
+        case .choice: choice
+        case .number:
+            Double(text.trimmingCharacters(in: .whitespaces)).flatMap { $0.isFinite ? .number($0) : nil }
+        case .text: text.isEmpty ? nil : .string(text)
+        }
+    }
+
+    /// The value to write: the input's value when it is one and differs from
+    /// `current`, and nil when there is nothing to change.
+    func change(from current: ConfigurationValue, text: String, flag: Bool, choice: ConfigurationValue?) -> ConfigurationValue? {
+        value(text: text, flag: flag, choice: choice).flatMap { $0 == current ? nil : $0 }
+    }
+}
+
 /// One reviewed change to one setting in one file, restyled from the old
 /// Settings sheet: the file, its current value, and the new one, side by side.
-private struct EffectiveSettingEditSheet: View {
+struct EffectiveSettingEditSheet: View {
     let session: WorkspaceSettingsSession
     let edit: WorkspaceSettingsSession.PendingEdit
+    /// The values the setting's app defines for it, when it defines a fixed
+    /// set; the new value is then chosen from them. Empty means it is typed,
+    /// or switched for a setting that is on or off.
+    let choices: [ConfigurationValue]
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @State private var flag = false
+    @State private var choice: ConfigurationValue?
     @State private var loaded = false
+
+    init(
+        session: WorkspaceSettingsSession, edit: WorkspaceSettingsSession.PendingEdit, choices: [ConfigurationValue] = []
+    ) {
+        self.session = session
+        self.edit = edit
+        self.choices = choices
+        // A choice starts on the current value, listed or not, from the first
+        // frame: the sheet opens with nothing changed, and the picker never
+        // holds a selection it has no row for.
+        _choice = State(initialValue: edit.row.value)
+    }
+
+    private var input: EffectiveSettingInput { EffectiveSettingInput(current: edit.row.value, choices: choices) }
+
+    private var change: ConfigurationValue? {
+        input.change(from: edit.row.value, text: text, flag: flag, choice: choice)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Change \(edit.row.displayName)").font(.title3.weight(.semibold))
+                Text("Change \(edit.row.displayName)").font(AgentFont.title)
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(.glass).keyboardShortcut(.cancelAction)
-            }.padding(20)
-            Divider()
-            VStack(alignment: .leading, spacing: 18) {
+            }.padding(Space.xxl)
+            Hairline()
+            VStack(alignment: .leading, spacing: Space.xxl) {
                 Text(
                     "This writes into \(edit.surfaceTitle)'s own file. Your current file is copied beside it first, and the change is only reported as made once \(edit.surfaceTitle) would actually use it."
                 )
                 .foregroundStyle(.secondary)
                 LabeledContent("File") { Text(edit.sourcePath).textSelection(.enabled).lineLimit(2) }
                 LabeledContent("Now") { Text(edit.row.value.displayText) }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("New value").font(.headline)
-                    switch edit.row.value {
-                    case .boolean:
+                VStack(alignment: .leading, spacing: Space.md) {
+                    Text("New value").font(AgentFont.heading)
+                    switch input {
+                    case .toggle:
                         Toggle(edit.row.displayName, isOn: $flag).toggleStyle(.switch)
-                    default:
+                    case .choice(let options, let unlisted):
+                        Picker(edit.row.displayName, selection: $choice) {
+                            if let unlisted {
+                                Text("\(unlisted.displayText) (current)").tag(Optional(unlisted))
+                                Divider()
+                            }
+                            ForEach(options, id: \.self) { option in
+                                Text(option.displayText).tag(Optional(option))
+                            }
+                        }
+                        .frame(maxWidth: Size.fieldMedium, alignment: .leading)
+                    case .number, .text:
                         TextField(edit.row.displayName, text: $text)
-                            .textFieldStyle(.roundedBorder).frame(maxWidth: 360)
+                            .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldMedium)
+                        if input == .number, !text.isEmpty, input.value(text: text, flag: flag, choice: choice) == nil {
+                            Text("Enter a number.").font(AgentFont.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
                 if edit.row.requiresNewSession {
                     Label("Applies to new sessions, not one already running.", systemImage: "clock.arrow.circlepath")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-            }.padding(20)
-            Divider()
+            }.padding(Space.xxl)
+            Hairline()
             HStack {
                 if let message = session.editMessage {
-                    Text(message).font(.callout).foregroundStyle(.secondary).lineLimit(3)
+                    Text(message).font(AgentFont.body).foregroundStyle(.secondary).lineLimit(3)
                 }
                 Spacer()
                 Button("Change it") {
+                    guard let change else { return }
                     Task {
-                        await session.applyEdit(value)
+                        await session.applyEdit(change)
                         if session.editMessage == nil { dismiss() }
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(session.isBusy || !hasChange)
-            }.padding(20)
+                .primaryActionStyle()
+                .disabled(session.isBusy || change == nil)
+            }.padding(Space.xxl)
         }
-        .frame(width: 620, height: 460)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
         .task {
             guard !loaded else { return }
@@ -361,21 +455,6 @@ private struct EffectiveSettingEditSheet: View {
             case .boolean(let value): flag = value
             default: text = edit.row.value.displayText
             }
-        }
-    }
-
-    private var value: ConfigurationValue {
-        switch edit.row.value {
-        case .boolean: .boolean(flag)
-        case .number: Double(text).map { ConfigurationValue.number($0) } ?? .string(text)
-        default: .string(text)
-        }
-    }
-
-    private var hasChange: Bool {
-        switch edit.row.value {
-        case .boolean(let current): flag != current
-        default: !text.isEmpty && value != edit.row.value
         }
     }
 }

@@ -281,12 +281,12 @@ public struct ToolHiveLogSnapshot: Hashable, Sendable {
     }
 }
 
-public enum ToolHiveRuntimeInspectionError: LocalizedError, Sendable, Equatable {
+enum ToolHiveRuntimeInspectionError: LocalizedError, Sendable, Equatable {
     case invalidWorkloadName
     case invalidLogLimit
     case commandFailed(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .invalidWorkloadName:
             return "ToolHive workload names must use ToolHive's safe workload-name grammar."

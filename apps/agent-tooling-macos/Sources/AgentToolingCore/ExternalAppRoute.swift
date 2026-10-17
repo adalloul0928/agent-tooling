@@ -7,6 +7,10 @@ public enum ExternalAppRoute: Equatable, Sendable {
     case section(ExternalAppSection)
     case skill(String)
     case pendingRequest(UUID)
+    /// Opens the skill creator on a queued creation request. The creator
+    /// reads the request's payload and talks to the assistant it names;
+    /// nothing is saved until the person reviews the draft and chooses to.
+    case createSkill(UUID)
 
     public init?(url: URL) {
         guard url.scheme?.lowercased() == "agent-tooling",
@@ -26,6 +30,9 @@ public enum ExternalAppRoute: Equatable, Sendable {
         case ("skills", let values) where values.count == 1:
             guard let id = try? WorkspaceLibrary.normalizedIdentifier(values[0]), id == values[0] else { return nil }
             self = .skill(id)
+        case ("skills", let values) where values.count == 2 && values[0] == "create":
+            guard let id = UUID(uuidString: values[1]) else { return nil }
+            self = .createSkill(id)
         case (_, let values) where values.isEmpty:
             guard let section = ExternalAppSection(rawValue: host) else { return nil }
             self = .section(section)
@@ -47,4 +54,5 @@ public enum ExternalAppSection: String, CaseIterable, Sendable {
     case activity
     case accounts
     case settings
+    case checkup
 }

@@ -90,7 +90,7 @@ public struct WorkspaceAssignmentBatchCommand: Codable, Equatable, Sendable {
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         var bytes = Data("agent-tooling.assignment-batch.v1\n".utf8)
         bytes.append(try encoder.encode(self))
-        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: bytes).lowercaseHex
     }
 
     func apply(to document: inout PortableWorkspaceDocument) throws -> [ArtifactID] {

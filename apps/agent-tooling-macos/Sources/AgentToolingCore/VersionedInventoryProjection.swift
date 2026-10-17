@@ -14,7 +14,11 @@ import Foundation
 /// person *asked for*, and the legacy inventory recorded what a scan *found*.
 /// Those are not the same claim, so nothing in this projection reports a
 /// requested destination as an installed one. Every projected client state is
-/// `pending` and `isInstalled: false`, whatever the request says.
+/// `pending`, and its `isInstalled` is left `nil` — presence is *unknown* here,
+/// not *absent*. Only the Install step, or a later scan enrichment, can turn
+/// that unknown into a measured yes or no. Reporting `false` would be a claim
+/// this projection cannot honestly make, and it makes downstream health checks
+/// fire "not installed" findings against a skill nobody ever checked.
 public enum VersionedInventoryProjection {
     public struct Inventory: Sendable, Equatable {
         public var skills: [Skill]
@@ -43,7 +47,7 @@ public enum VersionedInventoryProjection {
                     skills.append(skill(child, parentLabel: row.displayName))
                 }
                 for child in row.includedChildren where child.kind == .mcpServer {
-                    servers.append(server(child, parentLabel: row.displayName))
+                    servers.append(server(child))
                 }
             case .preset, .logicalProject:
                 continue
@@ -54,9 +58,14 @@ public enum VersionedInventoryProjection {
 
     // MARK: - Records
 
+    // A skill's `name` is the one a client calls it by — the declared name
+    // without a plugin's namespace — so recent work that names a skill can be
+    // matched to it, and copies of one skill share it. A skill with nothing
+    // declared keeps its display name.
     private static func skill(_ row: WorkspaceLibraryReadModelRow) -> Skill {
         .init(
-            id: row.artifactID.rawValue.uuidString.lowercased(), name: row.displayName,
+            id: row.artifactID.rawValue.uuidString.lowercased(),
+            name: ToolCopyIdentity.bareName(row.declaredName) ?? row.displayName,
             displayName: row.displayName, summary: row.observedDescription ?? "",
             bundle: row.sourceLabel ?? "", scope: scope(row.requestedAssignments),
             owned: owns(row.ownership), triggers: [], negativeTrigger: "", files: [],
@@ -65,7 +74,8 @@ public enum VersionedInventoryProjection {
 
     private static func skill(_ item: WorkspaceLibraryIncludedItem, parentLabel: String) -> Skill {
         .init(
-            id: item.artifactID.rawValue.uuidString.lowercased(), name: item.displayName,
+            id: item.artifactID.rawValue.uuidString.lowercased(),
+            name: ToolCopyIdentity.bareName(item.declaredName) ?? item.displayName,
             displayName: item.displayName, summary: item.observedDescription ?? "",
             bundle: parentLabel, scope: scope(item.requestedAssignments),
             owned: owns(item.ownership), triggers: [], negativeTrigger: "", files: [],
@@ -89,7 +99,7 @@ public enum VersionedInventoryProjection {
             definitionOrigin: owns(row.ownership) ? .managed : .observed)
     }
 
-    private static func server(_ item: WorkspaceLibraryIncludedItem, parentLabel: String) -> MCPServer {
+    private static func server(_ item: WorkspaceLibraryIncludedItem) -> MCPServer {
         let connection = item.connection
         return .init(
             id: item.artifactID.rawValue.uuidString.lowercased(), name: item.displayName,
@@ -158,7 +168,7 @@ public enum VersionedInventoryProjection {
                 detail: count == 1
                     ? "Asked for in one place. Not checked against this Mac."
                     : "Asked for in \(count) places. Not checked against this Mac.",
-                isInstalled: false)
+                isInstalled: nil)
         }
     }
 }

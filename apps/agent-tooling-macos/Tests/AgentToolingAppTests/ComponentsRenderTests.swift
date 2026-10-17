@@ -1,4 +1,5 @@
 import AgentToolingCore
+import AgentToolingTestSupport
 import AppKit
 import Foundation
 import SwiftUI
@@ -48,9 +49,6 @@ struct ComponentsRenderTests {
             ),
             ("CommandDisclosure", AnyView(CommandDisclosure(title: "Repair command", command: "codex mcp repair").frame(width: 420))),
             ("ClientStatusRows", AnyView(ClientStatusRows(clients: Self.clients).frame(width: 420))),
-            ("TagCloud", AnyView(TagCloud(tags: ["review", "writing", "shell"]).frame(width: 320))),
-            ("CollectionPills", AnyView(CollectionPills(names: ["Writing", "Review", "Shell"]))),
-            ("TagPills", AnyView(TagPills(tags: ["review", "writing", "shell", "swift"]))),
             ("FilterPill", AnyView(FilterPill(title: "Untagged", count: 4, isOn: true, action: {}))),
             ("LocationText", AnyView(LocationText(path: "/Users/example/Library/Application Support/agent-tooling"))),
             ("CompactPathText", AnyView(CompactPathText(path: "/Users/example/Library/Application Support/agent-tooling"))),
@@ -87,15 +85,6 @@ struct ComponentsRenderTests {
                     )
                     .frame(width: 460, height: 320))
             ),
-            (
-                "TagFilterBar",
-                AnyView(
-                    TagFilterBar(
-                        tags: ["review", "writing"], untaggedCount: 4,
-                        selection: .constant(["review"]), untaggedOnly: .constant(false)
-                    )
-                    .frame(width: 360))
-            ),
         ]
 
         for (name, view) in cases {
@@ -108,9 +97,12 @@ struct ComponentsRenderTests {
     /// shell has wrapped yet, and inside the shell once one does.
     @Test("The page toolbar degrades to a plain heading with no shell around it")
     func toolbarWithoutEnvironmentShowsNoTabs() throws {
-        let bare = try measure(toolbar(title: "Library"))
-        let inShell = try measure(toolbar(title: "Library").environment(\.workspaceSelection, .skills))
-        let noTabs = try measure(toolbar(title: "Home").environment(\.workspaceSelection, .overview))
+        // Each is measured at its own intrinsic size rather than in a window,
+        // so a tab row is told apart from a few hundred points, not lost in a
+        // wash of page background.
+        let bare = try #require(fittingSize(of: toolbar(title: "Library")))
+        let inShell = try #require(fittingSize(of: toolbar(title: "Library").environment(\.workspaceSelection, .skills)))
+        let noTabs = try #require(fittingSize(of: toolbar(title: "Home").environment(\.workspaceSelection, .overview)))
 
         #expect(bare.height > 0)
         #expect(inShell.height > bare.height, "the Library tab row did not appear")
@@ -133,8 +125,8 @@ struct ComponentsRenderTests {
     /// tool is unavailable everywhere.
     @Test("Client marks fall back to every known client")
     func clientMarksFallBackToAllClients() throws {
-        let all = try measure(ClientMarks(present: [.codex]))
-        let one = try measure(ClientMarks(present: [.codex]).environment(\.availableClients, [.codex]))
+        let all = try #require(fittingSize(of: ClientMarks(present: [.codex])))
+        let one = try #require(fittingSize(of: ClientMarks(present: [.codex]).environment(\.availableClients, [.codex])))
 
         #expect(all.width > one.width)
     }
@@ -174,17 +166,6 @@ struct ComponentsRenderTests {
         #expect(distinctColours(in: bitmap) >= 2, "\(name) drew a blank frame", sourceLocation: location)
     }
 
-    /// Lays a primitive out at its own intrinsic size rather than in a window,
-    /// so a badge is measured against its own few hundred pixels instead of
-    /// being lost in a wash of page background.
-    private func measure(_ view: some View, _ location: SourceLocation = #_sourceLocation) throws -> CGSize {
-        let host = NSHostingView(rootView: AnyView(view.fixedSize()))
-        host.layoutSubtreeIfNeeded()
-        let size = host.fittingSize
-        #expect(size.width > 0 && size.height > 0, "laid out to nothing", sourceLocation: location)
-        return size
-    }
-
     private func rasterize(
         _ view: some View, _ name: String, _ location: SourceLocation = #_sourceLocation
     ) throws -> NSBitmapImageRep {
@@ -201,23 +182,5 @@ struct ComponentsRenderTests {
             "\(name) produced no drawable area", sourceLocation: location)
         host.cacheDisplay(in: host.bounds, to: bitmap)
         return bitmap
-    }
-
-    /// Counts colours over the whole primitive. A drawn one puts at least a
-    /// glyph or a word over its ground; a blank one is a single flat wash.
-    private func distinctColours(in bitmap: NSBitmapImageRep) -> Int {
-        var seen = Set<UInt32>()
-        for y in 0..<bitmap.pixelsHigh {
-            for x in 0..<bitmap.pixelsWide {
-                guard let colour = bitmap.colorAt(x: x, y: y) else { continue }
-                let packed =
-                    UInt32(colour.redComponent * 255) << 16
-                    | UInt32(colour.greenComponent * 255) << 8
-                    | UInt32(colour.blueComponent * 255)
-                seen.insert(packed)
-                if seen.count >= 2 { return seen.count }
-            }
-        }
-        return seen.count
     }
 }

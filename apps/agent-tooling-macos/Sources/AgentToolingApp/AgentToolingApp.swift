@@ -22,6 +22,11 @@ struct AgentToolingApplication: App {
                         navigation: navigation)
                 } else if let startupError {
                     StartupFailureView(message: startupError) { Task { await load() } }
+                } else if needsFirstLaunchChoice {
+                    FirstLaunchChooser(
+                        start: { Task { await load(createIfNeeded: true) } },
+                        join: { remote, branch in Task { await join(remote: remote, branch: branch) } },
+                        isBusy: isJoining, error: joinError)
                 } else {
                     // A first run scans the installed clients, which takes a
                     // moment and is worth saying rather than showing an empty
@@ -30,7 +35,7 @@ struct AgentToolingApplication: App {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minWidth: 1_180, minHeight: 760)
+            .frame(minWidth: WindowSize.minimum.width, minHeight: WindowSize.minimum.height)
             .containerBackground(.clear, for: .window)
             .background(WindowConfigurator())
             .preferredColorScheme(colorScheme)
@@ -40,22 +45,24 @@ struct AgentToolingApplication: App {
                 bringMainWindowForward()
             }
         }
-        .defaultSize(width: 1_440, height: 900)
+        .defaultSize(WindowSize.standard)
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandGroup(after: .newItem) {
-                Button("Sync Agent Tooling") {
-                    guard let workspace else { return }
+                // The same review the menu-bar item and the palette open, under
+                // the same name; a menu title-cases it.
+                Button(ActionTitles.reviewChangesCommand(.menu)) {
+                    guard workspace != nil else { return }
                     // Preparing is not applying. This opens Apps with a plan on
                     // it; writing anything is still a decision made there.
                     navigation.showAllClients()
-                    Task { await workspace.deployment.prepare() }
+                    navigation.openScreenRequest(.reviewChanges)
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(workspace?.deployment.isBusy != false)
 
-                Button("Check Setup") {
+                Button(ActionTitles.checkAppsCommand(.menu)) {
                     guard let workspace else { return }
                     Task { await workspace.device.refresh() }
                 }
@@ -75,13 +82,26 @@ struct AgentToolingApplication: App {
                 MenuBarContent(workspace: workspace, navigation: navigation)
             } else {
                 Text("Agent Tooling could not open your workspace")
-                Button("Try again") { Task { await load() } }
+                Button("Try Again") { Task { await load() } }
                 Divider()
                 Button("Quit Agent Tooling") { NSApp.terminate(nil) }
             }
         }
 
-        Settings { AppearanceSettingsView(appearance: $appearance) }
+        Settings {
+            // The system Settings window keeps the grouped-form idiom it is
+            // expected to have; the in-app Settings screen shows the same
+            // binding as one row in its own card.
+            Form {
+                Picker("Appearance", selection: $appearance) {
+                    Text("System").tag("System")
+                    Text("Light").tag("Light")
+                    Text("Dark").tag("Dark")
+                }
+            }
+            .formStyle(.grouped)
+            .frame(width: WindowSize.settingsWidth)
+        }
     }
 
     /// Opens the workspace, creating one on a first run.
@@ -89,10 +109,21 @@ struct AgentToolingApplication: App {
     /// Failure is shown rather than swallowed: an app that opens to an empty
     /// library after failing to read one looks exactly like an app whose
     /// library is empty.
-    private func load() async {
+    /// A Mac with no workspace yet is asked whether this is its first Mac or
+    /// its second, instead of silently becoming a workspace of its own.
+    @State private var needsFirstLaunchChoice = false
+    @State private var isJoining = false
+    @State private var joinError: String?
+
+    private func load(createIfNeeded: Bool = false) async {
         guard workspace == nil else { return }
+        let context = LaunchContext.current
+        if !createIfNeeded, !WorkspaceLaunch.hasWorkspace(supportRoot: context.workspaceRoot) {
+            needsFirstLaunchChoice = true
+            return
+        }
+        needsFirstLaunchChoice = false
         do {
-            let context = LaunchContext.current
             workspace = try await WorkspaceLaunch.open(
                 supportRoot: context.workspaceRoot,
                 homeRoot: context.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
@@ -106,9 +137,33 @@ struct AgentToolingApplication: App {
         }
     }
 
+    private func join(remote: String, branch: String) async {
+        guard workspace == nil, !isJoining else { return }
+        isJoining = true
+        joinError = nil
+        defer { isJoining = false }
+        let context = LaunchContext.current
+        do {
+            workspace = try await WorkspaceLaunch.join(
+                remote: remote, branch: branch.isEmpty ? "main" : branch,
+                supportRoot: context.workspaceRoot,
+                homeRoot: context.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
+            needsFirstLaunchChoice = false
+            startupError = nil
+        } catch let error as WorkspaceJoinError {
+            joinError = error.localizedDescription
+        } catch GitWorkspaceTransportError.invalidRemote {
+            joinError = WorkspaceJoinError.invalidRemote.localizedDescription
+        } catch {
+            joinError = "That repository could not be read from this Mac. Check the address and your access. (\(error.localizedDescription))"
+        }
+    }
+
     private func bringMainWindowForward() {
         NSApp.unhide(nil)
         NSApp.activate(ignoringOtherApps: true)
+        // The identifier WindowConfigurationView (Theme.swift) gives the main
+        // window when it appears; the scene id alone is not what AppKit sees.
         guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "agent-tooling-main" })
         else { return }
         window.deminiaturize(nil)
@@ -125,7 +180,8 @@ struct AgentToolingApplication: App {
 }
 
 /// The menu-bar item: open the window, read this Mac again, or go and look at
-/// what is out of step. Nothing here writes to a client.
+/// what is out of step. Nothing here writes to a client. Its items are menu
+/// items, so they title-case the way the system's own do, busy or not.
 private struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
     let workspace: WorkspaceLaunch.Workspace
@@ -134,14 +190,14 @@ private struct MenuBarContent: View {
     var body: some View {
         Button("Open Agent Tooling") { open() }
         Divider()
-        Button(workspace.device.isChecking ? "Checking setup…" : "Check Setup") {
+        Button(workspace.device.isChecking ? ActionTitles.checkingAppsMenu : ActionTitles.checkAppsCommand(.menu)) {
             Task { await workspace.device.refresh() }
         }
         .disabled(workspace.device.isChecking)
-        Button(workspace.deployment.isBusy ? "Preparing changes…" : "Review sync") {
+        Button(workspace.deployment.isBusy ? "Preparing Changes…" : ActionTitles.reviewChangesCommand(.menu)) {
             open()
             navigation.showAllClients()
-            Task { await workspace.deployment.prepare() }
+            navigation.openScreenRequest(.reviewChanges)
         }
         .disabled(workspace.deployment.isBusy)
         Divider()
@@ -158,20 +214,86 @@ struct AppearanceSettingsView: View {
     @Binding var appearance: String
 
     var body: some View {
-        Form {
+        // One row in the card it sits in, in the grammar of the other Settings
+        // rows. The card is titled "Appearance", so the row names the choice
+        // rather than printing the word a second time. A grouped Form here
+        // drew its own inset card and gray ground inside the section's card —
+        // three nested surfaces for one picker.
+        InfoRow("Light or dark", detail: "System follows macOS.") {
+            Image(systemName: "circle.lefthalf.filled").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
+        } trailing: {
             Picker("Appearance", selection: $appearance) {
                 Text("System").tag("System")
                 Text("Light").tag("Light")
                 Text("Dark").tag("Dark")
             }
+            .labelsHidden()
+            .fixedSize()
         }
-        .formStyle(.grouped)
-        .frame(width: 360)
-        .padding(20)
     }
 }
 
 /// Shown when the workspace could not be opened at all.
+/// The first thing a Mac with no workspace sees: is this your first Mac, or
+/// does another Mac already have your library?
+struct FirstLaunchChooser: View {
+    let start: () -> Void
+    let join: (String, String) -> Void
+    let isBusy: Bool
+    let error: String?
+    @State private var remote = ""
+    @State private var branch = "main"
+    @State private var showsJoin = false
+
+    var body: some View {
+        VStack(spacing: Space.xxl) {
+            Image(systemName: "laptopcomputer.and.iphone")
+                .font(.system(size: Size.heroSymbolLarge))
+                .foregroundStyle(.secondary)
+            VStack(spacing: Space.sm) {
+                Text("Welcome to Agent Tooling").font(AgentFont.pageTitle)
+                Text("Is this your first Mac, or does another Mac already have your library?")
+                    .font(AgentFont.body).foregroundStyle(.secondary).multilineTextAlignment(.center).wrapsLines()
+            }
+            if showsJoin {
+                VStack(alignment: .leading, spacing: Space.lg) {
+                    Text("Paste the repository address the other Mac is connected to (Settings › Sync on that Mac).")
+                        .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
+                    TextField("git@github.com:you/agent-tooling-workspace.git", text: $remote)
+                        .textFieldStyle(.roundedBorder)
+                    HStack {
+                        Text("Branch").font(AgentFont.caption).foregroundStyle(.secondary)
+                        TextField("main", text: $branch).textFieldStyle(.roundedBorder).frame(width: Size.fieldNarrow)
+                    }
+                    if let error { AttentionBanner(title: "Couldn’t join", message: error) }
+                    HStack {
+                        Button("Back") { showsJoin = false }.secondaryActionStyle().disabled(isBusy)
+                        Spacer()
+                        Button(isBusy ? "Joining…" : "Join") { join(remote, branch) }
+                            .primaryActionStyle().disabled(isBusy || remote.trimmingCharacters(in: .whitespaces).isEmpty)
+                            .keyboardShortcut(.defaultAction)
+                    }
+                }
+                .padding(Space.xl)
+                .frame(width: Size.firstLaunchFormWidth)
+                .standardPanel()
+            } else {
+                HStack(spacing: Space.lg) {
+                    Button("Start here", systemImage: "sparkles") { start() }.primaryActionStyle().keyboardShortcut(.defaultAction)
+                    Button("Join another Mac’s workspace", systemImage: "arrow.triangle.2.circlepath") { showsJoin = true }
+                        .secondaryActionStyle()
+                }
+                Text("Starting here scans this Mac’s apps and builds a library from them. Joining takes the library another Mac already shares, and this Mac becomes one of its Macs.")
+                    .font(AgentFont.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center).wrapsLines()
+                    .frame(maxWidth: Size.firstLaunchFormWidth)
+            }
+        }
+        .padding(Space.xxxl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AgentTheme.contentBackground)
+    }
+}
+
 struct StartupFailureView: View {
     let message: String
     var retry: () -> Void
@@ -182,7 +304,7 @@ struct StartupFailureView: View {
         } description: {
             Text(message)
         } actions: {
-            Button("Try again", action: retry).buttonStyle(.borderedProminent)
+            Button("Try again", action: retry).primaryActionStyle()
         }
     }
 }

@@ -37,4 +37,39 @@ struct DiscoverSectionRenderTests {
             MarketplaceView(workspace: fixture.workspace, session: session)
                 .environment(AppNavigationState()))
     }
+
+    /// Every catalog failed and nothing came back, so Discover leads with the
+    /// attention banner naming the failures rather than a bare empty grid.
+    @Test func discoverDrawsTheEmptyStateBannerWhenEveryCatalogFailed() async throws {
+        let fixture = try await ShellRenderFixture(
+            marketplaceProviders: [StubMarketplaceProvider(displayName: "Broken catalog", fails: true)])
+        defer { fixture.remove() }
+        let session = fixture.workspace.marketplace
+        await session.refresh()
+        #expect(session.packages.isEmpty)
+        #expect(session.catalogFailures.isEmpty == false)
+
+        try expectDrawn(
+            MarketplaceView(workspace: fixture.workspace, session: session)
+                .environment(AppNavigationState()))
+    }
+
+    /// Some catalogs answered and one did not, so the grid is real and the
+    /// shortfall is a one-line note above it rather than a banner.
+    @Test func discoverDrawsTheOneLineNoteWhenSomeCatalogsFailed() async throws {
+        let fixture = try await ShellRenderFixture(
+            marketplaceProviders: [
+                StubMarketplaceProvider(packages: [ShellRenderFixture.unheldPackage]),
+                StubMarketplaceProvider(id: "stub.broken", displayName: "Broken catalog", fails: true),
+            ])
+        defer { fixture.remove() }
+        let session = fixture.workspace.marketplace
+        await session.refresh()
+        #expect(session.packages.isEmpty == false)
+        #expect(session.catalogFailures.isEmpty == false)
+
+        try expectDrawn(
+            MarketplaceView(workspace: fixture.workspace, session: session)
+                .environment(AppNavigationState()))
+    }
 }

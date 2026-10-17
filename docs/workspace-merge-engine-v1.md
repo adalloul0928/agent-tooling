@@ -1,8 +1,10 @@
 # Workspace merge engine v1
 
-Status: the pure three-way merge is implemented and fixture-tested. No transport,
-revision-store merge commit, conflict inbox or two-Mac pilot exists yet, so this
-does not establish working multi-Mac synchronization.
+Superseded by docs/multi-mac-sync-v1.md for sync; kept for the merge rules.
+
+Status: the pure three-way merge is implemented and fixture-tested. The
+transport, revision-store merge commit, scheduler, enrollment and conflict inbox
+now exist (see multi-mac-sync-v1.md); the two-Mac acceptance pilot is pending.
 
 ## Contract
 
@@ -46,9 +48,9 @@ Contributions for items no side kept are dropped, since they have nothing to
 deliver. A result that still carries conflicts must not be applied; the caller
 resolves them and merges again.
 
-## Not yet implemented
+## Still open
 
-Common-ancestor discovery from stored history, merge commits in the revision
-store, the outbox and recovery journal for sync, `GitWorkspaceTransport`,
-enrollment, the background scheduler, the conflict inbox UI and an actual
-two-Mac convergence pilot all remain open (Y2–Y4).
+Common-ancestor discovery, revision-store merge commits, `GitWorkspaceTransport`,
+enrollment, the scheduler and the conflict inbox UI are all implemented and
+covered by multi-mac-sync-v1.md. What remains open is the sync outbox and
+recovery journal, and the two-Mac acceptance pilot.

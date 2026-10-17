@@ -42,30 +42,37 @@ final class AppNavigationState {
             if requestedSection == .syncCenter {
                 selectedClient = nil
             }
-            requestedSkillID = nil
-            requestedItemID = nil
-            requestedScreenRequest = nil
-            requestedMarketplacePackageID = nil
-            pendingRequestQueue.removeAll()
-            skillCreationQueue.removeAll()
+            clearRequests()
         case .skill(let id):
             requestedSection = .skills
+            clearRequests()
             requestedSkillID = id
-            requestedItemID = nil
-            requestedScreenRequest = nil
-            requestedMarketplacePackageID = nil
-            pendingRequestQueue.removeAll()
-            skillCreationQueue.removeAll()
         case .pendingRequest(let id):
-            requestedSkillID = nil
-            requestedItemID = nil
-            requestedScreenRequest = nil
-            requestedMarketplacePackageID = nil
+            // A queued review is additive: it keeps the queues it is joining,
+            // so only the one-shot scalar requests are cleared here.
+            clearRequests(clearPendingQueue: false, clearSkillCreationQueue: false)
             if !pendingRequestQueue.contains(id) {
                 pendingRequestQueue.append(id)
             }
+        case .createSkill(let id):
+            openSkillCreationRequest(id)
+            return
         }
         revision += 1
+    }
+
+    /// Resets the one-shot requests a fresh route must not carry with it. The
+    /// two queues are FIFO and additive, so a route that is joining one of them
+    /// keeps it by passing the matching flag as false; every exclusive route
+    /// clears both. Keeping this in one place is what stops the eight callers
+    /// from drifting apart over which of these they each remember to reset.
+    private func clearRequests(clearPendingQueue: Bool = true, clearSkillCreationQueue: Bool = true) {
+        requestedSkillID = nil
+        requestedItemID = nil
+        requestedScreenRequest = nil
+        requestedMarketplacePackageID = nil
+        if clearPendingQueue { pendingRequestQueue.removeAll() }
+        if clearSkillCreationQueue { skillCreationQueue.removeAll() }
     }
 
     /// Selects one catalog entry for review. Selecting is not installing, and
@@ -73,11 +80,8 @@ final class AppNavigationState {
     func openMarketplacePackage(_ id: String) {
         guard !id.isEmpty else { return }
         requestedSection = .marketplace
-        requestedSkillID = nil
-        requestedItemID = nil
-        requestedScreenRequest = nil
+        clearRequests(clearSkillCreationQueue: false)
         requestedMarketplacePackageID = id
-        pendingRequestQueue.removeAll()
         revision += 1
     }
 
@@ -86,12 +90,8 @@ final class AppNavigationState {
     func openItem(_ id: String, in section: AppSection) {
         guard !id.isEmpty else { return }
         requestedSection = section
-        requestedSkillID = nil
+        clearRequests()
         requestedItemID = id
-        requestedScreenRequest = nil
-        requestedMarketplacePackageID = nil
-        pendingRequestQueue.removeAll()
-        skillCreationQueue.removeAll()
         revision += 1
     }
 
@@ -106,12 +106,8 @@ final class AppNavigationState {
     /// is the screen's, once it consumes it.
     func openScreenRequest(_ request: ScreenRequest) {
         requestedSection = request.section
-        requestedSkillID = nil
-        requestedItemID = nil
+        clearRequests()
         requestedScreenRequest = request
-        requestedMarketplacePackageID = nil
-        pendingRequestQueue.removeAll()
-        skillCreationQueue.removeAll()
         revision += 1
     }
 
@@ -126,24 +122,14 @@ final class AppNavigationState {
     func openClient(_ client: ClientKind) {
         selectedClient = client
         requestedSection = .syncCenter
-        requestedSkillID = nil
-        requestedItemID = nil
-        requestedScreenRequest = nil
-        requestedMarketplacePackageID = nil
-        pendingRequestQueue.removeAll()
-        skillCreationQueue.removeAll()
+        clearRequests()
         revision += 1
     }
 
     func showAllClients() {
         selectedClient = nil
         requestedSection = .syncCenter
-        requestedSkillID = nil
-        requestedItemID = nil
-        requestedScreenRequest = nil
-        requestedMarketplacePackageID = nil
-        pendingRequestQueue.removeAll()
-        skillCreationQueue.removeAll()
+        clearRequests()
         revision += 1
     }
 
@@ -164,10 +150,9 @@ final class AppNavigationState {
 
     func openSkillCreationRequest(_ id: UUID) {
         requestedSection = .skills
-        requestedSkillID = nil
-        requestedItemID = nil
-        requestedScreenRequest = nil
-        requestedMarketplacePackageID = nil
+        // A creation request joins its own FIFO queue, so neither queue is
+        // cleared; only the one-shot scalar requests are.
+        clearRequests(clearPendingQueue: false, clearSkillCreationQueue: false)
         if !skillCreationQueue.contains(id) { skillCreationQueue.append(id) }
         revision += 1
     }
@@ -179,10 +164,9 @@ final class AppNavigationState {
 }
 
 extension AppSection {
-    /// External routes outlive the screens they were named for. Two of them now
-    /// land somewhere else: what Configurations used to answer — what a scope
-    /// requires — is Projects, and Accounts has no screen at all, so its route
-    /// stops at the Apps pane rather than at a dead end.
+    /// External routes outlive the screens they were named for. One of them now
+    /// lands somewhere else: what Configurations used to answer — what a scope
+    /// requires — is Projects. Accounts is a tab of Apps again.
     fileprivate init(_ section: ExternalAppSection) {
         switch section {
         case .overview: self = .overview
@@ -194,8 +178,9 @@ extension AppSection {
         case .configurations: self = .projects
         case .sync: self = .syncCenter
         case .activity: self = .activity
-        case .accounts: self = .syncCenter
+        case .accounts: self = .accounts
         case .settings: self = .settings
+        case .checkup: self = .checkup
         }
     }
 }

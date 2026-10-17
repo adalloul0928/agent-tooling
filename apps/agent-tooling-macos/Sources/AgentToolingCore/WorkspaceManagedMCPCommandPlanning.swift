@@ -1,6 +1,6 @@
 import Foundation
 
-public enum WorkspaceManagedMCPCommandPlanningError: Error, Equatable, Sendable {
+enum WorkspaceManagedMCPCommandPlanningError: Error, Equatable, Sendable {
     case invalidWorkspace
     case invalidRequirement
     case unsupportedEnablement
@@ -96,7 +96,8 @@ public enum WorkspaceManagedMCPCommandPlanning {
             targets: resolvedTargets,
             capabilityEvidence: device.capabilityEvidence,
             portableMCPDefinitions: document.mcpDefinitions ?? [],
-            deviceMCPBindings: device.mcpBindings ?? [])
+            deviceMCPBindings: device.mcpBindings ?? [],
+            deviceRegistry: document.deviceRegistry)
         // Only this destination's issues count, plus any the resolver could not
         // pin to a destination; a connection asked for elsewhere too is judged
         // there. See the same rule in `WorkspaceNativePluginCommandPlanning`.
@@ -120,12 +121,8 @@ public enum WorkspaceManagedMCPCommandPlanning {
             throw WorkspaceManagedMCPCommandPlanningError.invalidRequirement
         }
 
-        let client: ClientKind
-        switch target.selector.surface {
-        case .claudeCode: client = .claude
-        case .codexCLI: client = .codex
-        case .geminiCLI: client = .gemini
-        default: throw WorkspaceManagedMCPCommandPlanningError.unsupportedSurface(target.selector.surface)
+        guard let client = TargetSurfaceCapability.managedMCPClient(for: target.selector.surface) else {
+            throw WorkspaceManagedMCPCommandPlanningError.unsupportedSurface(target.selector.surface)
         }
         let expectedExecutable = MCPClientCommand.executable(for: client)
         guard NativeSkillDestination.isValidRoot(executableURL),

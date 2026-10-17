@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -93,10 +94,7 @@ struct WorkspaceLinkedPresetStoreTests {
         var file: URL { root.appending(path: "linked-presets.json") }
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "linked-preset-store-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("linked-preset-store").url
             store = try WorkspaceLinkedPresetStore(containerRoot: root)
         }
 

@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -141,10 +142,7 @@ struct WorkspaceOperationalRecordTests {
         let deviceID: WorkspaceObjectID
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "operational-records-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("operational-records").url
             let document = try WorkspaceDocumentCoding.seal(.init(
                 workspaceID: WorkspaceObjectID(), revision: .init(writerID: WorkspaceObjectID())))
             workspaceID = document.workspaceID

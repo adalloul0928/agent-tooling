@@ -223,18 +223,6 @@ public struct AgentPluginManifest: Codable, Hashable, Sendable {
     }
 }
 
-public struct PackageIdentity: Codable, Hashable, Sendable {
-    public var name: String
-    public var version: String?
-
-    public init(name: String, version: String? = nil) {
-        self.name = name
-        self.version = version
-    }
-
-    public var lockedDescription: String { version.map { "\(name)@\($0)" } ?? name }
-}
-
 public struct PackageSource: Codable, Hashable, Sendable {
     public var kind: SourceKind
     public var location: String
