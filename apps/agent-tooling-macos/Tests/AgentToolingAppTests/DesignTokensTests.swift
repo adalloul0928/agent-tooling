@@ -72,19 +72,14 @@ struct DesignTokensTests {
     /// tool run panel's output was set that way until `monoMicro` existed.
     @Test("Every font a view draws comes from AgentFont, never a text style")
     func fontsComeFromTheScale() throws {
-        let sources = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appending(path: "Sources/AgentToolingApp")
         let styles = "largeTitle|title|title2|title3|headline|subheadline|body|callout|footnote|caption|caption2"
         let textStyle = try NSRegularExpression(
             pattern: #"(\.system\(\s*\.|\.font\(\s*\.|(?<![A-Za-z])Font\.)("# + styles + #")\b"#)
         var found: [String] = []
-        let files = try #require(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
-        for case let file as URL in files where file.pathExtension == "swift" {
-            let lines = try String(contentsOf: file, encoding: .utf8).components(separatedBy: "\n")
-            for (index, line) in lines.enumerated()
+        for file in try PackageSourceFile.all(in: "AgentToolingApp") {
+            for (index, line) in file.lines.enumerated()
             where textStyle.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
-                found.append("\(file.lastPathComponent):\(index + 1)")
+                found.append("\(file.path):\(index + 1)")
             }
         }
         #expect(found.isEmpty, "a text-style font at \(found.joined(separator: ", "))")

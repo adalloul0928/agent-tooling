@@ -665,6 +665,9 @@ the suites would otherwise copy, one helper to a file:
 - `ContrastRatio` — the WCAG contrast between two colours.
 - `fittingSize(of:)` (`FittingSize.swift`) — the size a view lays itself out
   at on its own.
+- `PackageSourceFile` — a target's own Swift files, read as lines, for a test
+  that holds the source itself to a rule: the fonts the app draws with, or the
+  panels the gallery records.
 
 It imports only Foundation, AppKit, SwiftUI and the public `AgentToolingCore`
 API — no `import Testing`, no `@testable import` — so it builds clean under

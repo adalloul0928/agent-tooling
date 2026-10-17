@@ -4,15 +4,21 @@ import Testing
 @testable import AgentToolingApp
 
 /// The system-drawn surfaces the gallery does not screenshot — alerts,
-/// confirmation dialogs and open panels, each drawn by macOS rather than by a
-/// view the harness can host. They are recorded in the index with their exact
-/// text from the source, so the gallery still accounts for every surface.
+/// confirmation dialogs, open panels and menus, each drawn by macOS rather
+/// than by a view the harness can host. They are recorded in the index with
+/// their exact text from the source, so the gallery still accounts for every
+/// surface.
+///
+/// The open and save panels are `GalleryPanelRecord.all`, which
+/// `GalleryPanelRecordTests` checks against the source on every run; each
+/// panel's line is read from the source here, as it is recorded. The dialogs
+/// and menus are written out below and kept by hand.
 ///
 /// Enabled only when `AGENT_TOOLING_SCREEN_GALLERY` names an output folder.
 @Suite("Gallery · Unrenderable surfaces", .serialized, .enabled(if: GalleryOutput.isOn))
 @MainActor
 struct GalleryUnrenderableTests {
-    @Test func recordSystemDrawnSurfaces() {
+    @Test func recordSystemDrawnSurfaces() throws {
         let index = GalleryIndex.shared
 
         index.addUnrenderable(
@@ -33,26 +39,13 @@ struct GalleryUnrenderableTests {
             text: "Run <tool> on <server>? · <per-tool confirmation message> · [Run tool] [Cancel]",
             source: "Sources/AgentToolingApp/MCPTestConsoleView.swift:242")
 
-        index.addUnrenderable(
-            control: "Open panel",
-            text: "Export Package · prompt \"Export\" · \"Choose a folder on this Mac to write the package into.\" · folders",
-            source: "Sources/AgentToolingApp/CollectionSharing.swift:48")
-        index.addUnrenderable(
-            control: "Open panel",
-            text: "Choose the MCP project folder · prompt \"Choose\" · folders",
-            source: "Sources/AgentToolingApp/PasteImportSheet.swift:639")
-        index.addUnrenderable(
-            control: "Open panel",
-            text: "prompt \"Use folder\" · folders (link a workspace folder)",
-            source: "Sources/AgentToolingApp/SyncSettingsView.swift:374")
-        index.addUnrenderable(
-            control: "Open panel",
-            text: "prompt \"Use folder\" · folders (link a sync folder)",
-            source: "Sources/AgentToolingApp/SyncSettingsView.swift:385")
-        index.addUnrenderable(
-            control: "Open panel",
-            text: "prompt \"Use folder\" · folders (link a project folder)",
-            source: "Sources/AgentToolingApp/ProjectEditingSheets.swift:314")
+        let built = try SourcePanel.inApp()
+        for record in GalleryPanelRecord.all {
+            let line = built.first { $0.panel == record.panel }.map { ":\($0.line)" } ?? ""
+            index.addUnrenderable(
+                control: record.control, text: record.text,
+                source: "Sources/AgentToolingApp/\(record.panel.file)\(line)")
+        }
 
         index.addUnrenderable(
             control: "Menu",
