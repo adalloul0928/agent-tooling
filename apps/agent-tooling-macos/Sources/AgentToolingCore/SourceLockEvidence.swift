@@ -1,43 +1,43 @@
 import Foundation
 
-public enum SourceLockFormat: String, Codable, Hashable, Sendable {
+enum SourceLockFormat: String, Codable, Hashable, Sendable {
     case vercelGlobal, vercelProject
 }
 
-public enum SourceLockReadStatus: String, Codable, Hashable, Sendable {
+enum SourceLockReadStatus: String, Codable, Hashable, Sendable {
     case recognized, unsupportedVersion, malformed
 }
 
-public enum SourceLockContext: Hashable, Sendable {
+enum SourceLockContext: Hashable, Sendable {
     case global(lockFilePath: String)
     case project(lockFilePath: String, projectRoot: String)
 
-    public var format: SourceLockFormat {
+    var format: SourceLockFormat {
         switch self {
         case .global: .vercelGlobal
         case .project: .vercelProject
         }
     }
 
-    public var lockFilePath: String {
+    var lockFilePath: String {
         switch self {
         case .global(let path), .project(let path, _): path
         }
     }
 }
 
-public enum SourceLockLocator: Codable, Hashable, Sendable {
+enum SourceLockLocator: Codable, Hashable, Sendable {
     case remote(repositoryID: String, sourceType: String, repositoryURL: String?, baseURL: String?)
     case deviceLocal(originalPath: String, resolvedPath: String?)
     case unavailable(sourceType: String)
 }
 
-public enum SourceLockRevisionEvidence: Codable, Hashable, Sendable {
+enum SourceLockRevisionEvidence: Codable, Hashable, Sendable {
     /// A branch or tag request. It is not an approved or installed commit.
     case requestedRef(String)
 }
 
-public enum SourceLockIntegrityAlgorithm: String, Codable, Hashable, Sendable {
+enum SourceLockIntegrityAlgorithm: String, Codable, Hashable, Sendable {
     /// GitHub tree object ID for the skill folder. It is not a repository revision.
     case githubSkillFolderTreeObjectID
     /// Global v3 `skillFolderHash` from a non-GitHub provider; its algorithm is not declared.
@@ -48,17 +48,17 @@ public enum SourceLockIntegrityAlgorithm: String, Codable, Hashable, Sendable {
     case vercelWellKnownOpaque
 }
 
-public struct SourceLockIntegrityEvidence: Codable, Hashable, Sendable {
-    public var algorithm: SourceLockIntegrityAlgorithm
-    public var value: String
+struct SourceLockIntegrityEvidence: Codable, Hashable, Sendable {
+    var algorithm: SourceLockIntegrityAlgorithm
+    var value: String
 
-    public init(algorithm: SourceLockIntegrityAlgorithm, value: String) {
+    init(algorithm: SourceLockIntegrityAlgorithm, value: String) {
         self.algorithm = algorithm
         self.value = value
     }
 }
 
-public enum SourceEvidenceGap: String, Codable, Hashable, Sendable {
+enum SourceEvidenceGap: String, Codable, Hashable, Sendable {
     case missingRequestedRef
     case missingSkillPath
     case invalidSkillPath
@@ -67,14 +67,14 @@ public enum SourceEvidenceGap: String, Codable, Hashable, Sendable {
     case deviceLocalOnly
 }
 
-public struct SourceLockObservation: Codable, Hashable, Sendable {
+struct SourceLockObservation: Codable, Hashable, Sendable {
     /// Installer timestamps are device observation metadata, not portable source claims.
-    public var installedAt: String?
-    public var updatedAt: String?
-    public var pluginNameHint: String?
-    public var subagentHints: [String]
+    var installedAt: String?
+    var updatedAt: String?
+    var pluginNameHint: String?
+    var subagentHints: [String]
 
-    public init(
+    init(
         installedAt: String? = nil,
         updatedAt: String? = nil,
         pluginNameHint: String? = nil,
@@ -87,17 +87,17 @@ public struct SourceLockObservation: Codable, Hashable, Sendable {
     }
 }
 
-public struct SourceLockEvidence: Codable, Hashable, Sendable {
+struct SourceLockEvidence: Codable, Hashable, Sendable {
     /// A dictionary key from the foreign lock. It is a display/match hint, never identity.
-    public var skillNameHint: String
-    public var locator: SourceLockLocator
-    public var revision: SourceLockRevisionEvidence?
-    public var skillPath: String?
-    public var integrity: [SourceLockIntegrityEvidence]
-    public var observation: SourceLockObservation
-    public var gaps: [SourceEvidenceGap]
+    var skillNameHint: String
+    var locator: SourceLockLocator
+    var revision: SourceLockRevisionEvidence?
+    var skillPath: String?
+    var integrity: [SourceLockIntegrityEvidence]
+    var observation: SourceLockObservation
+    var gaps: [SourceEvidenceGap]
 
-    public init(
+    init(
         skillNameHint: String,
         locator: SourceLockLocator,
         revision: SourceLockRevisionEvidence? = nil,
@@ -116,7 +116,7 @@ public struct SourceLockEvidence: Codable, Hashable, Sendable {
     }
 }
 
-public enum SourceLockDiagnosticCode: String, Codable, Hashable, Sendable {
+enum SourceLockDiagnosticCode: String, Codable, Hashable, Sendable {
     case documentTooLarge
     case malformedJSON
     case invalidRoot
@@ -130,26 +130,26 @@ public enum SourceLockDiagnosticCode: String, Codable, Hashable, Sendable {
     case invalidContext
 }
 
-public struct SourceLockDiagnostic: Codable, Hashable, Sendable {
-    public var code: SourceLockDiagnosticCode
-    public var skillNameHint: String?
-    public var field: String?
+struct SourceLockDiagnostic: Codable, Hashable, Sendable {
+    var code: SourceLockDiagnosticCode
+    var skillNameHint: String?
+    var field: String?
 
-    public init(code: SourceLockDiagnosticCode, skillNameHint: String? = nil, field: String? = nil) {
+    init(code: SourceLockDiagnosticCode, skillNameHint: String? = nil, field: String? = nil) {
         self.code = code
         self.skillNameHint = skillNameHint
         self.field = field
     }
 }
 
-public struct SourceLockReadResult: Codable, Hashable, Sendable {
-    public var format: SourceLockFormat
-    public var schemaVersion: Int?
-    public var status: SourceLockReadStatus
-    public var evidence: [SourceLockEvidence]
-    public var diagnostics: [SourceLockDiagnostic]
+struct SourceLockReadResult: Codable, Hashable, Sendable {
+    var format: SourceLockFormat
+    var schemaVersion: Int?
+    var status: SourceLockReadStatus
+    var evidence: [SourceLockEvidence]
+    var diagnostics: [SourceLockDiagnostic]
 
-    public init(
+    init(
         format: SourceLockFormat,
         schemaVersion: Int?,
         status: SourceLockReadStatus,

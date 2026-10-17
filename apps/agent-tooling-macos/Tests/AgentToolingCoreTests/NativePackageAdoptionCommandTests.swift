@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -441,10 +442,7 @@ struct NativePackageAdoptionCommandTests {
             workspaceID: WorkspaceObjectID = WorkspaceObjectID(),
             base: PortableWorkspaceDocument? = nil
         ) throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "native-package-adoption-\(UUID())")
-            try FileManager.default.createDirectory(
-                at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("native-package-adoption").url
             let writerID = WorkspaceObjectID()
             self.workspaceID = workspaceID
             let revisionID = WorkspaceObjectID()

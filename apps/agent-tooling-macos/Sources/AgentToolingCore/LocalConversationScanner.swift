@@ -1,7 +1,4 @@
 import Foundation
-import SQLite3
-
-private let insightsSQLiteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 public struct LocalConversationScanner: Sendable {
     private let maximumClaudeTranscriptBytes: Int
@@ -56,7 +53,150 @@ public struct LocalConversationScanner: Sendable {
                 )
             }
         }
+        guard !Task.isCancelled else { return artifact }
+        if options.clients.contains(.kiro) {
+            artifact.merge(scanKiro(homeURL: homeURL, windowStart: windowStart, options: options, skillLookup: lookup))
+        }
 
+        return artifact
+    }
+
+    /// Kiro CLI keeps one `<id>.jsonl` per chat session, each line one item:
+    /// `Prompt` for the person, `AssistantMessage` for the model (with its tool
+    /// uses), `ToolResults` for what came back. A sibling `<id>.json` names the
+    /// session and its working directory.
+    private func scanKiro(
+        homeURL: URL,
+        windowStart: Date,
+        options: InsightScanOptions,
+        skillLookup: SkillNameLookup
+    ) -> ConversationScanArtifact {
+        var artifact = ConversationScanArtifact(windowStart: windowStart)
+        let kiroHome: URL
+        if let configured = ProcessInfo.processInfo.environment["KIRO_HOME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+            !configured.isEmpty
+        {
+            kiroHome = URL(filePath: configured, directoryHint: .isDirectory)
+        } else {
+            kiroHome = homeURL.appending(path: ".kiro", directoryHint: .isDirectory)
+        }
+        let sessionsURL = kiroHome.appending(path: "sessions/cli", directoryHint: .isDirectory)
+        let queriedFiles = recentJSONLFiles(
+            under: sessionsURL, containedBy: homeURL, limit: options.maximumConversationsPerClient + 1)
+        guard !queriedFiles.isEmpty else {
+            artifact.coverage = [
+                ConversationScanCoverage(
+                    client: .kiro, sourceID: "kiro-cli-sessions-jsonl-v1", sourceName: "Kiro CLI chat sessions",
+                    status: .unavailable, detail: "Kiro CLI chat sessions were not available.")
+            ]
+            return artifact
+        }
+        let files = Array(queriedFiles.prefix(options.maximumConversationsPerClient))
+        var scannedFiles = 0
+        var inspected = 0
+        var skipped = 0
+        var latestItemAt: Date?
+        var hadReadFailure = false
+        var wasTruncated = queriedFiles.count > options.maximumConversationsPerClient
+        var remainingTranscriptBytes = maximumClaudeTranscriptBytes
+        let maximumFileBytes = min(
+            16 * 1_024 * 1_024, max(options.maximumItemBytes, options.maximumItemBytes * options.maximumItemsPerConversation))
+
+        for file in files {
+            if Task.isCancelled { break }
+            guard let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= maximumFileBytes,
+                size <= remainingTranscriptBytes
+            else {
+                hadReadFailure = true
+                continue
+            }
+            remainingTranscriptBytes -= size
+            guard let contents = try? BoundedFileAccess.readUTF8(at: file, maximumBytes: maximumFileBytes, allowSymbolicLink: false)
+            else {
+                hadReadFailure = true
+                continue
+            }
+            let conversationID = file.deletingPathExtension().lastPathComponent
+            var digest = ConversationDigestBuilder(conversationID: conversationID, client: .kiro)
+            // The sibling metadata file names the session. It is small and its
+            // absence is fine; the transcript stands on its own.
+            let metadataURL = file.deletingPathExtension().appendingPathExtension("json")
+            if let metadataText = try? BoundedFileAccess.readUTF8(at: metadataURL, maximumBytes: 64 * 1_024, allowSymbolicLink: false),
+                let metadata = parseJSONObject(metadataText) as? [String: Any]
+            {
+                digest.title = metadata["title"] as? String
+                digest.workingDirectory = metadata["cwd"] as? String
+            }
+            let allLines = contents.split(whereSeparator: \Character.isNewline)
+            if allLines.count > options.maximumItemsPerConversation { wasTruncated = true }
+            var sawItemInWindow = false
+            var currentTurn = "before-first-prompt"
+            for (ordinal, line) in allLines.suffix(options.maximumItemsPerConversation).enumerated() {
+                if Task.isCancelled { break }
+                guard line.utf8.count <= options.maximumItemBytes,
+                    let object = parseJSONObject(String(line)) as? [String: Any],
+                    let kind = object["kind"] as? String,
+                    let data = object["data"] as? [String: Any]
+                else {
+                    skipped += 1
+                    continue
+                }
+                let date = ((data["meta"] as? [String: Any])?["timestamp"] as? Double).map { Date(timeIntervalSince1970: $0) }
+                    ?? Date.distantPast
+                guard date >= windowStart else { continue }
+                sawItemInWindow = true
+                inspected += 1
+                latestItemAt = maxDate(latestItemAt, date)
+                let texts = ((data["content"] as? [[String: Any]]) ?? []).compactMap { block -> String? in
+                    guard block["kind"] as? String == "text" else { return nil }
+                    return block["data"] as? String
+                }
+                switch kind {
+                case "Prompt":
+                    currentTurn = data["message_id"] as? String ?? "\(date.timeIntervalSince1970):\(ordinal)"
+                    let text = texts.joined(separator: "\n")
+                    guard !text.isEmpty else { continue }
+                    artifact.messages.append(
+                        .init(conversationID: conversationID, client: .kiro, date: date,
+                              tokens: insightTokens(from: sanitizeConversationText(text))))
+                    digest.noteUserMessage(text, at: date)
+                    // Kiro invokes a skill as a slash command in the prompt.
+                    for reference in slashSkillReferences(in: text) {
+                        digest.noteSkill(reference, at: date)
+                        if let skillID = skillLookup.resolve(reference) {
+                            artifact.evidence.insert(
+                                UsageEvidence(
+                                    key: "kiro:use:\(conversationID):\(currentTurn):\(skillID)", skillID: skillID,
+                                    precision: .exact, provenance: .kiroSlashCommand, client: .kiro, date: date))
+                        }
+                    }
+                case "AssistantMessage":
+                    for block in (data["content"] as? [[String: Any]]) ?? [] where block["kind"] as? String == "tool_use" {
+                        guard let use = block["data"] as? [String: Any], let name = use["name"] as? String else { continue }
+                        digest.noteTool(name, at: date)
+                    }
+                default:
+                    continue
+                }
+            }
+            if sawItemInWindow {
+                scannedFiles += 1
+                if let built = digest.digest { artifact.digests.append(built) }
+            }
+        }
+
+        artifact.coverage = [
+            ConversationScanCoverage(
+                client: .kiro, sourceID: "kiro-cli-sessions-jsonl-v1", sourceName: "Kiro CLI chat sessions",
+                status: (hadReadFailure || wasTruncated || skipped > 0) ? .degraded : .scanned,
+                conversationsScanned: scannedFiles, itemsInspected: inspected, itemsSkipped: skipped,
+                latestItemAt: latestItemAt, supportsUsageAttribution: true,
+                detail: hadReadFailure
+                    ? "One or more sessions exceeded safe read limits and were skipped."
+                    : wasTruncated
+                        ? "Newest bounded sessions were scanned; a skill is attributed when a prompt invokes it as a slash command."
+                        : "A skill is attributed when a prompt invokes it as a slash command; no session content was retained.")
+        ]
         return artifact
     }
 
@@ -99,6 +239,7 @@ public struct LocalConversationScanner: Sendable {
 
             for conversation in conversations {
                 if Task.isCancelled { break }
+                var digest = ConversationDigestBuilder(conversationID: conversation.id, client: .codex)
                 let queriedRows = try database.queryRows(
                     sql: """
                         SELECT item_type, item_json, created_at_ms, turn_id
@@ -141,6 +282,8 @@ public struct LocalConversationScanner: Sendable {
                                     tokens: insightTokens(from: sanitizeConversationText(text))
                                 )
                             )
+                            digest.noteUserMessage(text, at: row.date(milliseconds: true))
+                            for reference in dollarSkillReferences(in: text) { digest.noteSkill(reference, at: row.date(milliseconds: true)) }
                             for skillID in explicitlyReferencedSkills(in: text, lookup: skillLookup) {
                                 artifact.evidence.insert(
                                     UsageEvidence(
@@ -154,7 +297,15 @@ public struct LocalConversationScanner: Sendable {
                                 )
                             }
                         }
+                    case "mcpToolCall":
+                        if let dictionary = object as? [String: Any] {
+                            let server = dictionary["server"] as? String ?? ""
+                            let tool = dictionary["tool"] as? String ?? ""
+                            let name = [server, tool].filter { !$0.isEmpty }.joined(separator: "/")
+                            if !name.isEmpty { digest.noteTool(name, at: row.date(milliseconds: true)) }
+                        }
                     case "commandExecution":
+                        digest.noteTool("shell", at: row.date(milliseconds: true))
                         for command in commandStrings(from: object) {
                             for skillID in skillDefinitionReferences(in: command, lookup: skillLookup) {
                                 artifact.evidence.insert(
@@ -173,6 +324,7 @@ public struct LocalConversationScanner: Sendable {
                         break
                     }
                 }
+                if let built = digest.digest { artifact.digests.append(built) }
             }
 
             artifact.coverage = [
@@ -405,6 +557,7 @@ public struct LocalConversationScanner: Sendable {
             scannedFiles += 1
             var currentTurn = "before-first-user"
             let conversationFallback = file.deletingPathExtension().lastPathComponent
+            var digest = ConversationDigestBuilder(conversationID: conversationFallback, client: .claude)
             let allLines = contents.split(whereSeparator: \Character.isNewline)
             if allLines.count > options.maximumItemsPerConversation { wasTruncated = true }
             let lines = allLines.suffix(options.maximumItemsPerConversation)
@@ -425,12 +578,16 @@ public struct LocalConversationScanner: Sendable {
                     dictionary["sessionId"] as? String
                     ?? dictionary["conversation_uuid"] as? String
                     ?? conversationFallback
+                if digest.workingDirectory == nil, let cwd = dictionary["cwd"] as? String { digest.workingDirectory = cwd }
                 let type = (dictionary["type"] as? String)?.lowercased()
                 let message = dictionary["message"] ?? dictionary
 
                 if type == "user" || messageRole(from: message) == "user" {
                     currentTurn = dictionary["uuid"] as? String ?? "\(date.timeIntervalSince1970):\(ordinal)"
-                    if let text = messageText(from: message), !text.isEmpty {
+                    // A tool result comes back as a user-role item; it is the
+                    // tool speaking, not the person, and is not their message.
+                    let isToolResult = (message as? [String: Any]).map { isToolResultContent($0["content"]) } ?? false
+                    if !isToolResult, let text = messageText(from: message), !text.isEmpty {
                         artifact.messages.append(
                             .init(
                                 conversationID: conversationID,
@@ -439,6 +596,7 @@ public struct LocalConversationScanner: Sendable {
                                 tokens: insightTokens(from: sanitizeConversationText(text))
                             )
                         )
+                        digest.noteUserMessage(text, at: date)
                     }
                 } else if type == "assistant" || messageRole(from: message) == "assistant" {
                     collectClaudeAssistantEvidence(
@@ -449,8 +607,16 @@ public struct LocalConversationScanner: Sendable {
                         skillLookup: skillLookup,
                         artifact: &artifact
                     )
+                    for block in toolUseBlocks(in: dictionary) {
+                        guard let name = block["name"] as? String else { continue }
+                        digest.noteTool(name, at: date)
+                        if name.lowercased() == "skill" {
+                            for reference in possibleSkillNames(in: block["input"]) { digest.noteSkill(reference, at: date) }
+                        }
+                    }
                 }
             }
+            if let built = digest.digest { artifact.digests.append(built) }
         }
 
         artifact.coverage = [
@@ -485,6 +651,10 @@ struct ConversationScanArtifact: Sendable {
     var coverage: [ConversationScanCoverage] = []
     var evidence: Set<UsageEvidence> = []
     var messages: [TokenizedConversationMessage] = []
+    /// One bounded, redacted digest per conversation, for the deep dive. Kept
+    /// only in this in-memory artifact and in the prompt sent to the person's
+    /// own assistant; never in the saved report.
+    var digests: [ConversationDigest] = []
 
     var hasObservableSource: Bool {
         coverage.contains { $0.status == .scanned || ($0.status == .degraded && $0.itemsInspected > 0) }
@@ -494,6 +664,7 @@ struct ConversationScanArtifact: Sendable {
         coverage.append(contentsOf: other.coverage)
         evidence.formUnion(other.evidence)
         messages.append(contentsOf: other.messages)
+        digests.append(contentsOf: other.digests)
     }
 }
 
@@ -519,49 +690,9 @@ struct TokenizedConversationMessage: Sendable {
     var tokens: Set<String>
 }
 
-private struct SkillNameLookup {
-    private var aliases: [String: Set<String>]
-    private var skills: [Skill]
-
-    init(skills: [Skill]) {
-        self.skills = skills
-        var aliases: [String: Set<String>] = [:]
-        for skill in skills {
-            for candidate in [skill.id, skill.name, skill.displayName] {
-                let normalized = normalizeSkillReference(candidate)
-                guard !normalized.isEmpty else { continue }
-                aliases[normalized, default: []].insert(skill.id)
-                if let suffix = normalized.split(separator: ":").last {
-                    aliases[String(suffix), default: []].insert(skill.id)
-                }
-            }
-        }
-        self.aliases = aliases
-    }
-
-    func resolve(_ value: String) -> String? {
-        let normalized = normalizeSkillReference(value)
-        if let exact = uniqueValue(in: aliases[normalized]) { return exact }
-        if let suffix = normalized.split(separator: ":").last,
-            let match = uniqueValue(in: aliases[String(suffix)])
-        {
-            return match
-        }
-        let pathMatches = Set(
-            skills.compactMap { skill -> String? in
-                let name = normalizeSkillReference(skill.name)
-                return !name.isEmpty && normalized.contains("/\(name)/skill.md") ? skill.id : nil
-            })
-        return uniqueValue(in: pathMatches)
-    }
-
-    private func uniqueValue(in values: Set<String>?) -> String? {
-        guard let values, values.count == 1 else { return nil }
-        return values.first
-    }
-}
-
-private func normalizeSkillReference(_ value: String) -> String {
+/// Not `private`: `SkillNameLookup` moved to its own file and normalises
+/// references through this helper.
+func normalizeSkillReference(_ value: String) -> String {
     value
         .trimmingCharacters(in: .whitespacesAndNewlines)
         .trimmingCharacters(in: CharacterSet(charactersIn: "$`\"'"))
@@ -740,6 +871,31 @@ private func messageContentStrings(from value: Any) -> [String] {
     return []
 }
 
+/// Whether a user-role item's content is a tool result rather than something
+/// the person typed. Claude Code records tool results as user items.
+private func isToolResultContent(_ content: Any?) -> Bool {
+    guard let blocks = content as? [Any], !blocks.isEmpty else { return false }
+    return blocks.allSatisfy { ($0 as? [String: Any])?["type"] as? String == "tool_result" }
+}
+
+/// The `/name` slash commands at the start of a Kiro prompt or a line in it.
+private func slashSkillReferences(in text: String) -> [String] {
+    guard let expression = try? NSRegularExpression(pattern: #"(?m)^\s*/([a-z0-9][a-z0-9_.:-]{1,63})\b"#, options: [.caseInsensitive])
+    else { return [] }
+    return expression.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+        Range(match.range(at: 1), in: text).map { String(text[$0]) }
+    }
+}
+
+/// The `$name` skill invocations in a Codex message.
+private func dollarSkillReferences(in text: String) -> [String] {
+    guard let expression = try? NSRegularExpression(pattern: #"(?<![\w$])\$([a-z0-9][a-z0-9_.-]{1,63})"#, options: [.caseInsensitive])
+    else { return [] }
+    return expression.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+        Range(match.range(at: 1), in: text).map { String(text[$0]) }
+    }
+}
+
 private func messageRole(from object: Any) -> String? {
     guard let dictionary = object as? [String: Any] else { return nil }
     return (dictionary["role"] as? String)?.lowercased()
@@ -750,7 +906,9 @@ private func parseJSONObject(_ text: String) -> Any? {
     return try? JSONSerialization.jsonObject(with: Data(text.utf8), options: [.fragmentsAllowed])
 }
 
-private func sanitizeConversationText(_ text: String) -> String {
+/// Not `private`: `ConversationDigestBuilder` moved to its own file and
+/// redacts its strings through this helper.
+func sanitizeConversationText(_ text: String) -> String {
     var result = text
     let containerNames = [
         "app-context", "in-app-browser-context", "environment_context", "system", "developer", "recommended_plugins",
@@ -846,10 +1004,13 @@ private func recentJSONLFiles(under root: URL, containedBy homeURL: URL, limit: 
     }.prefix(limit).map(\.0)
 }
 
-private func isContained(_ child: URL, by root: URL) -> Bool {
-    let rootPath = root.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-    let childPath = child.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-    return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
+/// Shared by the scanner and the read-only SQLite reader to keep every path
+/// inside the home root. Not `private`: `ReadOnlyInsightsDatabase` lives in its
+/// own file and calls this.
+func isContained(_ child: URL, by root: URL) -> Bool {
+    // Both callers resolve the URLs before passing them, so the bytes given
+    // are the bytes compared.
+    PathContainment.containsAsGiven(child, in: root)
 }
 
 private func skippedItemDetail(_ count: Int, suffix: String) -> String {
@@ -859,175 +1020,4 @@ private func skippedItemDetail(_ count: Int, suffix: String) -> String {
 private func maxDate(_ lhs: Date?, _ rhs: Date) -> Date {
     guard let lhs else { return rhs }
     return max(lhs, rhs)
-}
-
-private struct DatabaseConversation {
-    var id: String
-    var timestamp: Double
-}
-
-private struct DatabaseRow {
-    var kind: String
-    var payload: String
-    var timestamp: Double
-    var turnID: String?
-
-    func date(milliseconds: Bool) -> Date {
-        Date(timeIntervalSince1970: milliseconds ? timestamp / 1_000 : timestamp)
-    }
-}
-
-private final class ReadOnlyInsightsDatabase {
-    enum Error: Swift.Error {
-        case missing
-        case unsafePath
-        case open
-        case query
-    }
-
-    private var handle: OpaquePointer?
-
-    init(url: URL, containedBy homeURL: URL) throws {
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: url.path(percentEncoded: false)) else { throw Error.missing }
-        let directValues = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-        let resolvedHome = homeURL.resolvingSymlinksInPath().standardizedFileURL
-        let resolvedURL = url.resolvingSymlinksInPath().standardizedFileURL
-        guard directValues.isRegularFile == true,
-            directValues.isSymbolicLink != true,
-            directValues.fileSize.map({ $0 >= 0 && $0 <= 8 * 1_024 * 1_024 * 1_024 }) == true,
-            isContained(resolvedURL, by: resolvedHome)
-        else { throw Error.unsafePath }
-
-        var database: OpaquePointer?
-        guard
-            sqlite3_open_v2(
-                resolvedURL.path(percentEncoded: false),
-                &database,
-                SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX,
-                nil
-            ) == SQLITE_OK, let database
-        else {
-            if database != nil { sqlite3_close(database) }
-            throw Error.open
-        }
-        handle = database
-        guard sqlite3_busy_timeout(database, 1_000) == SQLITE_OK,
-            sqlite3_exec(database, "PRAGMA query_only = ON", nil, nil, nil) == SQLITE_OK
-        else {
-            sqlite3_close(database)
-            handle = nil
-            throw Error.open
-        }
-    }
-
-    deinit {
-        if let handle { sqlite3_close(handle) }
-    }
-
-    func queryConversationIDs(sql: String, cutoff: Double, limit: Int) throws -> [DatabaseConversation] {
-        guard let handle else { throw Error.open }
-        var statement: OpaquePointer?
-        defer { sqlite3_finalize(statement) }
-        guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK,
-            sqlite3_bind_double(statement, 1, cutoff) == SQLITE_OK,
-            sqlite3_bind_int64(statement, 2, Int64(limit)) == SQLITE_OK
-        else { throw Error.query }
-        var result: [DatabaseConversation] = []
-        while sqlite3_step(statement) == SQLITE_ROW {
-            guard let id = boundedText(statement, column: 0, maximumBytes: 8 * 1_024) else { continue }
-            result.append(.init(id: id, timestamp: sqlite3_column_double(statement, 1)))
-        }
-        guard sqlite3_errcode(handle) == SQLITE_OK || sqlite3_errcode(handle) == SQLITE_DONE else { throw Error.query }
-        return result
-    }
-
-    func queryRows(
-        sql: String,
-        conversationID: String,
-        cutoff: Double,
-        limit: Int,
-        maximumTextBytes: Int
-    ) throws -> [DatabaseRow?] {
-        try queryRows(
-            sql: sql,
-            bindings: [.text(conversationID), .double(cutoff), .integer(limit)],
-            maximumTextBytes: maximumTextBytes
-        )
-    }
-
-    func queryRows(
-        sql: String,
-        repeatedConversationID: String,
-        repeatedCutoff: Double,
-        limit: Int,
-        maximumTextBytes: Int
-    ) throws -> [DatabaseRow?] {
-        try queryRows(
-            sql: sql,
-            bindings: [
-                .text(repeatedConversationID), .double(repeatedCutoff),
-                .text(repeatedConversationID), .double(repeatedCutoff), .integer(limit),
-            ],
-            maximumTextBytes: maximumTextBytes
-        )
-    }
-
-    private enum Binding {
-        case text(String)
-        case double(Double)
-        case integer(Int)
-    }
-
-    private func queryRows(sql: String, bindings: [Binding], maximumTextBytes: Int) throws -> [DatabaseRow?] {
-        guard let handle else { throw Error.open }
-        var statement: OpaquePointer?
-        defer { sqlite3_finalize(statement) }
-        guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else { throw Error.query }
-        for (offset, binding) in bindings.enumerated() {
-            let index = Int32(offset + 1)
-            let result: Int32
-            switch binding {
-            case .text(let value):
-                result = sqlite3_bind_text(statement, index, value, -1, insightsSQLiteTransient)
-            case .double(let value):
-                result = sqlite3_bind_double(statement, index, value)
-            case .integer(let value):
-                result = sqlite3_bind_int64(statement, index, Int64(value))
-            }
-            guard result == SQLITE_OK else { throw Error.query }
-        }
-
-        var rows: [DatabaseRow?] = []
-        while sqlite3_step(statement) == SQLITE_ROW {
-            guard let kind = boundedText(statement, column: 0, maximumBytes: 256),
-                let payload = boundedText(statement, column: 1, maximumBytes: maximumTextBytes)
-            else {
-                rows.append(nil)
-                continue
-            }
-            let turnID =
-                sqlite3_column_count(statement) > 3
-                ? boundedText(statement, column: 3, maximumBytes: 8 * 1_024)
-                : nil
-            rows.append(
-                DatabaseRow(
-                    kind: kind,
-                    payload: payload,
-                    timestamp: sqlite3_column_double(statement, 2),
-                    turnID: turnID
-                )
-            )
-        }
-        guard sqlite3_errcode(handle) == SQLITE_OK || sqlite3_errcode(handle) == SQLITE_DONE else { throw Error.query }
-        return rows
-    }
-
-    private func boundedText(_ statement: OpaquePointer?, column: Int32, maximumBytes: Int) -> String? {
-        let byteCount = Int(sqlite3_column_bytes(statement, column))
-        guard byteCount >= 0, byteCount <= maximumBytes,
-            let pointer = sqlite3_column_text(statement, column)
-        else { return nil }
-        return String(bytes: UnsafeBufferPointer(start: pointer, count: byteCount), encoding: .utf8)
-    }
 }

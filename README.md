@@ -10,8 +10,20 @@ an application repository.
 ## macOS app
 
 The repository also contains the native [Agent Tooling macOS app](apps/agent-tooling-macos/README.md),
-a local-first control center for skills, MCP servers, plugins, configurations,
-sync, and guarded client operations across Codex, Claude Code, and Gemini CLI.
+a local-first control center for Codex, Claude Code, Gemini CLI, and Kiro CLI.
+
+The app holds a library of skills, plugins, and connections. Install opens one
+picker that assigns an item, plans what that means for this Mac, and applies it,
+showing the plan inline for review when it would do more than the button said;
+every client write runs through an allowlisted executor. Updates run by a
+per-kind policy of install automatically or ask first. Projects are keyed by
+repository, so a project set up on one Mac finds its folder on the next.
+Checkup audits each client and walks proposed fixes one reviewed action at a
+time. Insights reads local chat history to find recurring work that has no
+skill yet. Macs sync through a private Git repository where every Mac is a full
+peer: content and published status travel, and nothing runs on another Mac from
+this one. See the [app README](apps/agent-tooling-macos/README.md) and the
+[docs index](docs/README.md).
 
 Versioned `agent-tooling-app-v*` tags build a Developer ID-signed and notarized
 DMG through GitHub Actions. The one-time credential setup and release procedure

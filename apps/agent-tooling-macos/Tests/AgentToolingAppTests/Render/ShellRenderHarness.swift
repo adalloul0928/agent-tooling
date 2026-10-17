@@ -22,10 +22,18 @@ import Testing
 let shellWindowSize = CGSize(width: 1_100, height: 760)
 
 /// The shell, opened on one section, at the size a window would give it.
+///
+/// The size defaults to `shellWindowSize`, so every section test that just
+/// wants a real window's worth of space is unchanged. The gallery passes the
+/// window size it is capturing at, so the shell fills that window rather than
+/// standing a fixed 1100×760 shell inside a larger frame with margins around
+/// it.
 @MainActor
-func renderShell(_ section: AppSection, fixture: ShellRenderFixture) -> some View {
+func renderShell(
+    _ section: AppSection, fixture: ShellRenderFixture, size: CGSize = shellWindowSize
+) -> some View {
     AppShellView(workspace: fixture.workspace, initialSection: section)
-        .frame(width: shellWindowSize.width, height: shellWindowSize.height)
+        .frame(width: size.width, height: size.height)
 }
 
 /// Lays the screen out at a real window size and rasterizes it.
@@ -36,20 +44,38 @@ func renderShell(_ section: AppSection, fixture: ShellRenderFixture) -> some Vie
 @MainActor
 func expectDrawn(
     _ view: some View,
+    size: CGSize = shellWindowSize,
+    appearance: RenderAppearance = .light,
     _ location: SourceLocation = #_sourceLocation
 ) throws {
-    let bitmap = try rasterize(view, location)
+    let bitmap = try rasterize(view, size: size, appearance: appearance, location)
     #expect(
         distinctColours(in: bitmap) > 4, "the screen drew a blank frame",
         sourceLocation: location)
+}
+/// The light or dark face a screen is drawn under. Defaulting to light keeps
+/// every existing `rasterize` call rendering exactly as it did.
+enum RenderAppearance {
+    case light
+    case dark
+
+    /// The system appearance to put on the window and host. Nil leaves the
+    /// process default (light under the test runner) in place.
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
 }
 
 @MainActor
 func rasterize(
     _ view: some View,
+    size: CGSize = shellWindowSize,
+    appearance: RenderAppearance = .light,
     _ location: SourceLocation = #_sourceLocation
 ) throws -> NSBitmapImageRep {
-    let size = shellWindowSize
     let host = NSHostingView(rootView: AnyView(view.frame(width: size.width, height: size.height)))
     host.frame = CGRect(origin: .zero, size: size)
     // A bare hosting view never finishes compositing an enabled glass control
@@ -58,6 +84,13 @@ func rasterize(
     let window = NSWindow(
         contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    // Dark mode has to reach both the window the glass settles against and the
+    // host the SwiftUI tree reads its colour scheme from, or half the frame
+    // comes back in the wrong face.
+    if let nsAppearance = appearance.nsAppearance {
+        window.appearance = nsAppearance
+        host.appearance = nsAppearance
+    }
     window.contentView = host
     window.orderFrontRegardless()
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
@@ -83,8 +116,14 @@ func distinctColours(in bitmap: NSBitmapImageRep) -> Int {
     for y in stride(from: 0, to: bitmap.pixelsHigh, by: step) {
         for x in stride(from: 0, to: bitmap.pixelsWide, by: step) {
             guard let colour = bitmap.colorAt(x: x, y: y) else { continue }
+            // An off-window hosting view renders text as black-on-transparent,
+            // so text pixels share RGB 0,0,0 with the transparent ground and
+            // the whole frame collapses to one colour. Alpha is the only
+            // channel that separates a drawn glyph from the empty canvas
+            // behind it, so it has to be part of what makes a colour distinct.
             let packed =
-                UInt32(colour.redComponent * 255) << 16
+                UInt32(colour.alphaComponent * 255) << 24
+                | UInt32(colour.redComponent * 255) << 16
                 | UInt32(colour.greenComponent * 255) << 8
                 | UInt32(colour.blueComponent * 255)
             seen.insert(packed)
@@ -101,7 +140,7 @@ func distinctColours(in bitmap: NSBitmapImageRep) -> Int {
 /// sidebar on screen depending on whose Mac it was.
 struct StubDeviceObserver: DeviceObserving {
     var observations: [TargetObservation] = [
-        ShellRenderFixture.observation(.claudeCode, installed: true, commandAvailable: true),
+        ShellRenderFixture.observation(.claudeCode, installed: true, commandAvailable: true, version: "2.1.263"),
         ShellRenderFixture.observation(.codexCLI, installed: false, commandAvailable: false),
     ]
 
@@ -111,6 +150,27 @@ struct StubDeviceObserver: DeviceObserving {
 /// A workspace with the shapes each screen reaches for: a plugin that carries a
 /// skill, a standalone skill, a server, a preset and a project.
 ///
+/// Answers an account read from a script, so no test runs Claude Code or
+/// Codex, or starts a login shell, on the Mac that runs it.
+struct StubAccountReader: AccountSurfaceReading {
+    private let answers: [AccountProvider: AccountObservation]
+
+    init(answers: [AccountProvider: AccountObservation] = [:]) {
+        self.answers = answers
+    }
+
+    func read(_ providers: [AccountProvider], depth: AccountSurfaceProbe.Depth, now: Date) async -> [AccountObservation] {
+        return providers.map { provider in
+            var observation = answers[provider] ?? AccountObservation(
+                provider: provider, observedAt: now,
+                unavailableReason: "Not read in tests.")
+            observation.observedAt = now
+            if depth == .signInOnly { observation.contentsRead = false; observation.items = [] }
+            return observation
+        }
+    }
+}
+
 /// The store is real and lives in a temporary folder, and the sessions come from
 /// the app's own launch wiring, so a screen that outgrows what launch hands it
 /// fails here rather than only on a real Mac.
@@ -138,6 +198,8 @@ struct StubDeviceObserver: DeviceObserving {
         insightsServices: any InsightsServicing = StubInsightsServices(
             answer: ShellRenderFixture.insightsReport()),
         requestQueue: any PendingRequestQueuing = StubPendingRequestQueue(),
+        setupServices: any SetupServicing = StubSetupServices(),
+        accountReader: any AccountSurfaceReading = StubAccountReader(),
         readsLibrary: Bool = true
     ) async throws {
         root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
@@ -199,7 +261,8 @@ struct StubDeviceObserver: DeviceObserving {
         workspace = WorkspaceLaunch.sessions(
             store: store, homeRoot: home, isFirstRun: true, deviceObserver: deviceObserver,
             marketplaceProviders: { _ in marketplaceProviders },
-            insightsServices: { _ in insightsServices }, requestQueue: requestQueue)
+            insightsServices: { _ in insightsServices }, requestQueue: requestQueue,
+            setupServices: { _ in setupServices }, accountReader: { _ in accountReader })
         // A test of the cold launch itself wants the library still unread.
         if readsLibrary { await workspace.library.refresh() }
     }

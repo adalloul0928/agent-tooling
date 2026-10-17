@@ -80,6 +80,12 @@ public enum MarketplaceProvenanceClassifier {
             )
         case .localFolder, .gitRepository:
             return userAddedVerdict()
+        case .skillsShRegistry:
+            return PackageClassificationVerdict(
+                classification: .community,
+                evidence:
+                    "skills.sh listed this skill from a public GitHub repository and reported its own install count. The registry does not verify who wrote a skill, so the publisher stays a third party until you read the source yourself."
+            )
         case .agentPlugins, .geminiExtensionGallery:
             return PackageClassificationVerdict(
                 classification: .unverified,

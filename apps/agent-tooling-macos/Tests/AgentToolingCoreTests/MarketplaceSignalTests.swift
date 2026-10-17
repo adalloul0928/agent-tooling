@@ -273,9 +273,4 @@ struct SecretFieldMaskingTests {
             #expect(!SecretFieldMasking.isSecretLike(name), "\(name) should not be treated as a secret field")
         }
     }
-
-    @Test func maskedValuesNeverEchoTheirInput() {
-        #expect(SecretFieldMasking.maskedValue("sk-live-1234") == SecretFieldMasking.placeholder)
-        #expect(SecretFieldMasking.maskedValue(nil) == SecretFieldMasking.placeholder)
-    }
 }

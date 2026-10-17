@@ -153,7 +153,7 @@ extension ShellRenderFixture {
     /// Claude Code's installer layout in this fixture's home: the binary under
     /// a version number, and `~/.local/bin/claude` pointing at it. The fake
     /// tool appends what it was asked to a log and exits cleanly.
-    fileprivate func installFakeClaude() throws -> URL {
+    func installFakeClaude() throws -> URL {
         let log = home.appending(path: "claude-was-asked.txt")
         let versioned = home.appending(path: ".local/share/claude/versions/2.1.268")
         try FileManager.default.createDirectory(

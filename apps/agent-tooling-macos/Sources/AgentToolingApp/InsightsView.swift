@@ -16,6 +16,7 @@ struct InsightsView: View {
     @Environment(\.availableClients) private var enabledClients
     @State private var includeClaude = true
     @State private var includeCodex = true
+    @State private var includeKiro = true
     @State private var lookbackDays = 30
     @State private var maximumConversations = 25
     /// Off unless somebody turns it on: a local scan must never start reaching
@@ -32,10 +33,10 @@ struct InsightsView: View {
     var body: some View {
         VStack(spacing: 0) {
             PageToolbar(title: "Insights", context: toolbarContext) {
-                Button("Scan options", systemImage: "slider.horizontal.3") { showingScanOptions.toggle() }
+                Button("Scan options…", systemImage: "slider.horizontal.3") { showingScanOptions.toggle() }
                     .buttonStyle(.glass)
                     .popover(isPresented: $showingScanOptions) {
-                        ScrollView { scanConfiguration.padding(18) }.frame(width: 590, height: 520)
+                        ScrollView { scanConfiguration.padding(Space.xxl) }.sheetSize(SheetSize.medium)
                     }
                 if session.isScanning {
                     Button(role: .cancel) {
@@ -52,14 +53,22 @@ struct InsightsView: View {
                     } label: {
                         Label("Scan recent work", systemImage: "magnifyingglass")
                     }
-                    .buttonStyle(.glassProminent)
-                    .tint(AgentTheme.selection)
+                    .buttonStyle(.glass)
                     .disabled(!canScan)
-                    .keyboardShortcut(.return, modifiers: [.command])
                     .accessibilityHint("Reads selected local chat history and saves only aggregate findings")
+                    Button {
+                        startScan(deepDive: true)
+                    } label: {
+                        Label(deepDiveButtonTitle, systemImage: "sparkles")
+                    }
+                    .primaryActionStyle()
+                    .disabled(!canScan || deepDiveClient == nil || session.isDeepDiving)
+                    .keyboardShortcut(.return, modifiers: [.command])
+                    .help(deepDiveHelp)
+                    .accessibilityHint(deepDiveHelp)
                 }
             }
-            Divider()
+            Hairline()
 
             // With nothing to show yet the empty state takes the pane rather
             // than sitting at the top of a page that is otherwise blank.
@@ -67,7 +76,7 @@ struct InsightsView: View {
                 firstRunState
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                         if session.isScanning {
                             scanningState
                         } else if let message = routeError ?? session.errorMessage {
@@ -78,7 +87,7 @@ struct InsightsView: View {
                             reportContent(report)
                         }
                     }
-                    .frame(maxWidth: 1_100, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, WorkspaceLayout.pageInset)
                     .padding(.top, WorkspaceLayout.contentTopInset)
                     .padding(.bottom, WorkspaceLayout.pageInset)
@@ -92,7 +101,7 @@ struct InsightsView: View {
             isPresented: $isPresentingClearConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Clear Saved Insights", role: .destructive) { session.clear() }
+            Button("Clear saved insights", role: .destructive) { session.clear() }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes the saved aggregate report. Client chat history will not be changed.")
@@ -104,42 +113,51 @@ struct InsightsView: View {
     private var scanConfiguration: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Scan recent work")
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 15)
-                .frame(minHeight: 43, alignment: .leading)
-            Divider().opacity(0.32)
+                .font(AgentFont.heading)
+                .padding(.horizontal, Space.xl)
+                // The strip and the hairline under it make one header height.
+                .frame(minHeight: Size.headerHeight - Hairline.width, alignment: .leading)
+            Hairline()
 
             VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text("Look for repeated work, underused skills, and tools that may help next time.")
-                        .font(.callout)
+                        .font(AgentFont.body)
                     Text(
                         "Chat text is processed transiently. The app saves only aggregate counts and recommendations—not messages or excerpts."
                     )
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
                 }
-                .padding(15)
+                .padding(Space.xl)
 
-                Divider()
+                Hairline()
 
-                VStack(spacing: 14) {
+                VStack(spacing: Space.xl) {
                     configurationRow("Sources", detail: "Local history only") {
-                        VStack(alignment: .leading, spacing: 9) {
+                        VStack(alignment: .leading, spacing: Space.md) {
                             if workspace.device.isEnabled(.claude) {
                                 Toggle(isOn: $includeClaude) {
-                                    HStack(spacing: 8) {
-                                        ClientBrandIcon(client: .claude, size: 16)
+                                    HStack(spacing: Space.md) {
+                                        ClientBrandIcon(client: .claude, size: Size.brandMark)
                                         Text("Claude Code")
                                     }
                                 }
                             }
                             if workspace.device.isEnabled(.codex) {
                                 Toggle(isOn: $includeCodex) {
-                                    HStack(spacing: 8) {
-                                        ClientBrandIcon(client: .codex, size: 16)
+                                    HStack(spacing: Space.md) {
+                                        ClientBrandIcon(client: .codex, size: Size.brandMark)
                                         Text("Codex")
+                                    }
+                                }
+                            }
+                            if workspace.device.isEnabled(.kiro) {
+                                Toggle(isOn: $includeKiro) {
+                                    HStack(spacing: Space.md) {
+                                        ClientBrandIcon(client: .kiro, size: Size.brandMark)
+                                        Text("Kiro CLI")
                                     }
                                 }
                             }
@@ -147,7 +165,7 @@ struct InsightsView: View {
                         .toggleStyle(.checkbox)
                     }
 
-                    Divider()
+                    Hairline()
 
                     configurationRow("Review period", detail: "How far back to inspect") {
                         WorkspaceSegmentedPicker("Review period", selection: $lookbackDays) {
@@ -156,34 +174,37 @@ struct InsightsView: View {
                             Text("90 days").tag(90)
                         }
                         .labelsHidden()
-                        .frame(maxWidth: 330)
+                        .frame(maxWidth: Size.segmentedPickerMax)
                         .accessibilityLabel("Review period")
                     }
 
-                    Divider()
+                    Hairline()
 
                     configurationRow("Conversation limit", detail: "Per selected source") {
+                        // The row's title names the noun, so each segment is the
+                        // count alone: three "N conversations" do not fit the
+                        // picker, and "chats" would be a second name for them.
                         WorkspaceSegmentedPicker("Conversation limit", selection: $maximumConversations) {
-                            Text("10 chats").tag(10)
-                            Text("25 chats").tag(25)
-                            Text("50 chats").tag(50)
+                            Text("10").tag(10)
+                            Text("25").tag(25)
+                            Text("50").tag(50)
                         }
                         .labelsHidden()
-                        .frame(maxWidth: 330)
+                        .frame(maxWidth: Size.segmentedPickerMax)
                         .accessibilityLabel("Maximum conversations per source")
                     }
 
-                    Divider()
+                    Hairline()
 
                     configurationRow("Catalog suggestions", detail: "Optional network access") {
-                        VStack(alignment: .leading, spacing: 5) {
+                        VStack(alignment: .leading, spacing: Space.xs) {
                             Toggle(
-                                "Include established plugins, skills, and MCP servers from connected catalogs",
+                                "Include established plugins, skills, and connections from connected catalogs",
                                 isOn: $includeCatalogSuggestions
                             )
                             .toggleStyle(.checkbox)
                             .disabled(!session.canReachCatalog)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                             // Offering a switch that reaches nothing would be a
                             // claim this build cannot keep, so it stays off
                             // until a catalog exists to ask.
@@ -192,20 +213,20 @@ struct InsightsView: View {
                                     ? "Leave this off to keep the scan entirely local. Turning it on sends up to four search terms to the catalogs Discover lists — chosen from a fixed vocabulary this app ships, never words taken from your conversations."
                                     : "This Mac has no catalog to ask, so a scan answers from local history alone."
                             )
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .wrapsLines()
                         }
                     }
                 }
-                .padding(15)
+                .padding(Space.xl)
 
                 if let warning = sourceWarning {
-                    Divider()
+                    Hairline()
                     Label(warning, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                        .padding(15)
+                        .padding(Space.xl)
                         .accessibilityLabel("A conversation source is required")
                 }
             }
@@ -216,21 +237,27 @@ struct InsightsView: View {
     // MARK: - States
 
     private var scanningState: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.lg) {
             ProgressView()
                 .controlSize(.small)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Reviewing recent work")
-                    .font(.callout.weight(.medium))
-                Text("The scan is read-only. No skill, plugin, or MCP server will be installed.")
-                    .font(.caption)
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(Self.scanningTitle)
+                    .font(AgentFont.bodyMedium)
+                Text(Self.scanningDetail)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, Space.xs)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Scanning recent work. No tools will be installed.")
+        .accessibilityLabel(Self.scanningAccessibilityLabel)
     }
+
+    /// What the scanning state says. VoiceOver hears the same two lines, so a
+    /// scan is not "reviewing" on screen and "scanning" out loud.
+    nonisolated static let scanningTitle = "Reviewing recent work"
+    nonisolated static let scanningDetail = "The scan is read-only. No skill, plugin, or connection will be installed."
+    nonisolated static var scanningAccessibilityLabel: String { "\(scanningTitle). \(scanningDetail)" }
 
     private var firstRunState: some View {
         EmptyStateView(
@@ -243,100 +270,117 @@ struct InsightsView: View {
 
     private func errorState(_ message: String) -> some View {
         InsightPanel("The scan could not finish") {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Space.lg) {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text(message)
-                        .font(.callout)
+                        .font(AgentFont.body)
                         .textSelection(.enabled)
                     Button("Try again") {
                         startScan()
                     }
-                    .buttonStyle(.link)
+                    .inlineActionStyle()
                     .disabled(!canScan)
                 }
                 Spacer()
             }
-            .padding(15)
+            .padding(Space.xl)
         }
     }
 
     // MARK: - Report
 
     private func reportContent(_ report: InsightsReport) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
             reportSummary(report)
-            HStack(spacing: 10) {
-                Text("View")
-                    .font(.callout.weight(.medium))
-                Picker("View", selection: $selection) {
-                    Text("Opportunities").tag(InsightSelection.opportunities)
+            HStack(spacing: Space.lg) {
+                WorkspaceSegmentedPicker("Insight category", selection: $selection) {
+                    Text("Worth adding").tag(InsightSelection.opportunities)
                     Text("Skill health").tag(InsightSelection.skillHealth)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .frame(width: 180, alignment: .leading)
+                .fixedSize()
             }
             .accessibilityLabel("Insight category")
 
             switch selection {
             case .opportunities:
-                opportunitiesSection(report.recommendations)
+                deepDiveSection(report)
+                opportunitiesSection(ToolRecommendation.distinct(report.recommendations))
             case .skillHealth:
                 skillHealthSection(report)
             }
 
-            DisclosureGroup("Scan coverage · \(report.conversationsScanned) conversations") {
-                coverageSection(report.coverage).padding(.top, 10)
+            DisclosureGroup("Scan coverage · \(InsightCount.conversation.phrase(report.conversationsScanned))") {
+                coverageSection(report.coverage).padding(.top, Space.lg)
                 if let discovery = report.marketplaceDiscovery,
                     discovery.queriesAttempted > 0 || discovery.queriesFailed > 0 || discovery.wasCancelled
                 {
                     catalogDiscoverySection(discovery)
                 }
             }
-            .font(.callout).foregroundStyle(.secondary)
+            .font(AgentFont.body).foregroundStyle(.secondary)
         }
     }
 
     private func reportSummary(_ report: InsightsReport) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("Last scan")
-                .font(.headline)
-            Text(report.generatedAt, format: .relative(presentation: .named))
-                .foregroundStyle(.secondary)
-            Text("·")
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
-            Text(
-                "\(report.conversationsScanned) \(report.conversationsScanned == 1 ? "conversation" : "conversations") reviewed"
-            )
-            .foregroundStyle(.secondary)
-            Spacer()
-            Button("Clear results") {
-                isPresentingClearConfirmation = true
+        HStack(alignment: .center, spacing: 0) {
+            summaryStat(
+                report.conversationsScanned, "Conversations scanned", tint: .primary)
+            Hairline(.vertical).frame(height: Size.compactRowHeight).padding(.horizontal, Space.xs)
+            summaryStat(
+                ToolRecommendation.distinct(report.recommendations).count, "Worth adding",
+                tint: report.recommendations.isEmpty ? .secondary : AgentTheme.selection)
+            Hairline(.vertical).frame(height: Size.compactRowHeight).padding(.horizontal, Space.xs)
+            summaryStat(
+                report.qualityFindings.count, "Skill findings",
+                tint: report.qualityFindings.isEmpty ? .secondary : AgentTheme.warning)
+            Spacer(minLength: Space.xl)
+            VStack(alignment: .trailing, spacing: Space.xs) {
+                Text("Last scan \(report.generatedAt, format: .relative(presentation: .named))")
+                    .font(AgentFont.body)
+                    .foregroundStyle(.secondary)
+                Button("Clear results…") {
+                    isPresentingClearConfirmation = true
+                }
+                .inlineActionStyle()
+                .font(AgentFont.body)
+                .accessibilityHint("Removes the saved aggregate report after confirmation")
             }
-            .buttonStyle(.link)
-            .accessibilityHint("Removes the saved aggregate report after confirmation")
+            .padding(.trailing, Space.xl)
         }
-        .font(.callout)
-        .padding(.horizontal, 4)
+        .padding(.vertical, Space.lg)
+        .standardPanel()
+    }
+
+    private func summaryStat(_ count: Int, _ label: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: Space.xxs) {
+            Text(count, format: .number)
+                .font(AgentFont.stat)
+                .foregroundStyle(tint)
+            Text(label)
+                .font(AgentFont.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, Space.xl)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(count)")
     }
 
     private func coverageSection(_ coverage: [ConversationScanCoverage]) -> some View {
         InsightPanel("Scan coverage") {
             if coverage.isEmpty {
                 Text("No history source reported coverage for this scan.")
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                    .padding(15)
+                    .padding(Space.xl)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(coverage.enumerated()), id: \.element.id) { index, source in
                         CoverageRow(coverage: source)
                         if index < coverage.count - 1 {
-                            Divider().padding(.leading, 45)
+                            Hairline()
                         }
                     }
                 }
@@ -344,23 +388,96 @@ struct InsightsView: View {
         }
     }
 
+    /// What the person's own assistant concluded, above the keyword pass. It
+    /// is the slow, considered read; the keyword rows below are the instant one.
+    @ViewBuilder private func deepDiveSection(_ report: InsightsReport) -> some View {
+        if session.isDeepDiving {
+            InsightPanel("Deep dive") {
+                HStack(spacing: Space.lg) {
+                    ProgressView().controlSize(.small)
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text("\(deepDiveClient?.rawValue ?? "Your assistant") is reading your recent conversations…")
+                            .font(AgentFont.bodyMedium)
+                        Text("This takes a few minutes. The findings below are the instant keyword pass; the considered read replaces them here when it lands.")
+                            .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
+                    }
+                    Spacer()
+                }
+                .padding(Space.xl)
+            }
+        } else if let message = session.deepDiveMessage {
+            InsightPanel("Deep dive") {
+                HStack(alignment: .top, spacing: Space.lg) {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(AgentTheme.warning)
+                    Text(message).font(AgentFont.body).wrapsLines()
+                    Spacer()
+                }
+                .padding(Space.xl)
+            }
+        } else if let dive = report.deepDive {
+            InsightPanel("Deep dive — what \(dive.client.rawValue) sees in your recent work") {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: Space.sm) {
+                        Text(dive.summary).font(AgentFont.body).wrapsLines()
+                        Text(
+                            "\(InsightCount.conversation.phrase(dive.conversationsConsidered)) read · "
+                                + dive.generatedAt.formatted(.relative(presentation: .named))
+                        )
+                        .font(AgentFont.micro).foregroundStyle(.secondary)
+                    }
+                    .padding(Space.xl)
+                    if !dive.themes.isEmpty {
+                        Hairline()
+                        ForEach(Array(dive.themes.enumerated()), id: \.element.id) { index, theme in
+                            HStack(alignment: .top, spacing: Space.lg) {
+                                Image(systemName: "repeat").foregroundStyle(.secondary).frame(width: Size.tile)
+                                VStack(alignment: .leading, spacing: Space.xs) {
+                                    Text(theme.title).font(AgentFont.bodySemibold)
+                                    Text(theme.detail).font(AgentFont.caption).foregroundStyle(.secondary)
+                                        .wrapsLines()
+                                    Text(themeMetadata(theme)).font(AgentFont.micro).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, Space.xl).padding(.vertical, Space.lg)
+                            if index < dive.themes.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
+                        }
+                    }
+                    if !dive.recommendations.isEmpty {
+                        Hairline()
+                        ForEach(Array(dive.recommendations.enumerated()), id: \.element.id) { index, recommendation in
+                            RecommendationRow(recommendation: recommendation, assistant: draftingClient) { open(recommendation) }
+                            if index < dive.recommendations.count - 1 { Hairline(indent: Hairline.afterLeading(Size.tile)) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func themeMetadata(_ theme: DeepDiveTheme) -> String {
+        var parts = ["Seen in \(InsightCount.conversation.phrase(theme.conversationCount))"]
+        if !theme.clients.isEmpty { parts.append(theme.clients.map(\.rawValue).joined(separator: ", ")) }
+        return parts.joined(separator: " · ")
+    }
+
     private func opportunitiesSection(_ recommendations: [ToolRecommendation]) -> some View {
-        InsightPanel("Opportunities") {
+        InsightPanel("Worth adding — keyword pass") {
             if recommendations.isEmpty {
                 EmptyStateView(
                     symbol: "checkmark.circle",
-                    title: "No clear opportunities found",
+                    title: "Nothing worth adding right now",
                     message: "The scan did not find a repeated workflow or catalog match strong enough to recommend."
                 )
-                .frame(maxWidth: .infinity, minHeight: 190)
+                .frame(maxWidth: .infinity, minHeight: Size.emptyStatePanelHeight)
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(recommendations.enumerated()), id: \.element.id) { index, recommendation in
-                        RecommendationRow(recommendation: recommendation) {
+                        RecommendationRow(recommendation: recommendation, assistant: draftingClient) {
                             open(recommendation)
                         }
                         if index < recommendations.count - 1 {
-                            Divider().padding(.leading, 49)
+                            Hairline(indent: Hairline.afterLeading(Size.tile))
                         }
                     }
                 }
@@ -370,28 +487,28 @@ struct InsightsView: View {
 
     private func catalogDiscoverySection(_ discovery: MarketplaceDiscoverySummary) -> some View {
         InsightPanel("Catalog search") {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Space.lg) {
                 Image(systemName: catalogDiscoverySymbol(discovery))
                     .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
+                    .frame(width: Size.tileSmall, height: Size.tileSmall)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text(catalogDiscoveryTitle(discovery))
-                        .font(.callout.weight(.medium))
+                        .font(AgentFont.bodyMedium)
                     Text(catalogDiscoveryDetail(discovery))
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
                 Spacer()
             }
-            .padding(15)
+            .padding(Space.xl)
             .accessibilityElement(children: .combine)
         }
     }
 
     private func skillHealthSection(_ report: InsightsReport) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
             InsightPanel("Suggested improvements") {
                 if report.qualityFindings.isEmpty {
                     EmptyStateView(
@@ -399,7 +516,7 @@ struct InsightsView: View {
                         title: "No quality issues found",
                         message: "The managed skills inspected by this scan passed the available static checks."
                     )
-                    .frame(maxWidth: .infinity, minHeight: 170)
+                    .frame(maxWidth: .infinity, minHeight: Size.emptyStatePanelHeight)
                 } else {
                     let findings = sortedFindings(report.qualityFindings)
                     LazyVStack(spacing: 0) {
@@ -408,7 +525,7 @@ struct InsightsView: View {
                                 navigation.open(.skill(finding.skillID))
                             }
                             if index < findings.count - 1 {
-                                Divider().padding(.leading, 49)
+                                Hairline(indent: Hairline.afterLeading(Size.tile))
                             }
                         }
                     }
@@ -420,27 +537,27 @@ struct InsightsView: View {
                     Text(
                         "Counts are a lower bound based on the history sources listed in Scan coverage. “No observed use” is not the same as zero use."
                     )
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(15)
+                    .wrapsLines()
+                    .padding(Space.xl)
 
                     if report.skillUsage.isEmpty {
-                        Divider()
+                        Hairline()
                         Text("No installed skills were available for usage comparison.")
-                            .font(.callout)
+                            .font(AgentFont.body)
                             .foregroundStyle(.secondary)
-                            .padding(15)
+                            .padding(Space.xl)
                     } else {
                         let usage = sortedUsage(report.skillUsage)
-                        Divider()
+                        Hairline()
                         LazyVStack(spacing: 0) {
                             ForEach(Array(usage.enumerated()), id: \.element.id) { index, metric in
                                 SkillUsageRow(metric: metric) {
                                     navigation.open(.skill(metric.skillID))
                                 }
                                 if index < usage.count - 1 {
-                                    Divider().padding(.leading, 49)
+                                    Hairline(indent: Hairline.afterLeading(Size.tile))
                                 }
                             }
                         }
@@ -453,14 +570,14 @@ struct InsightsView: View {
     // MARK: - Option rows
 
     private func configurationLabel(_ title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             Text(title)
-                .font(.callout.weight(.medium))
+                .font(AgentFont.bodyMedium)
             Text(detail)
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(width: 180, alignment: .leading)
+        .frame(width: Size.optionLabelColumn, alignment: .leading)
     }
 
     private func configurationRow(
@@ -468,7 +585,7 @@ struct InsightsView: View {
         detail: String,
         @ViewBuilder content: () -> some View
     ) -> some View {
-        HStack(alignment: .top, spacing: 28) {
+        HStack(alignment: .top, spacing: Space.huge) {
             configurationLabel(title, detail: detail)
             content()
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -482,6 +599,7 @@ struct InsightsView: View {
         var clients: Set<ClientKind> = []
         if includeClaude, workspace.device.isEnabled(.claude) { clients.insert(.claude) }
         if includeCodex, workspace.device.isEnabled(.codex) { clients.insert(.codex) }
+        if includeKiro, workspace.device.isEnabled(.kiro) { clients.insert(.kiro) }
         return clients
     }
 
@@ -489,15 +607,33 @@ struct InsightsView: View {
         !scannableClients.isEmpty && !session.isScanning
     }
 
+    /// The assistant that reads the digests: Claude Code when this Mac manages
+    /// it, else Codex. Kiro has no print mode this app drives, so it is a
+    /// source but never the reader.
+    private var deepDiveClient: ClientKind? {
+        WorkspaceInsightsSession.deepDiveClient(managed: workspace.device.managedClients)
+    }
+
+    private var deepDiveButtonTitle: String {
+        deepDiveClient.map { "Deep dive with \($0.rawValue)" } ?? "Deep dive"
+    }
+
+    private var deepDiveHelp: String {
+        guard let client = deepDiveClient else {
+            return "A deep dive needs Claude Code or Codex; this Mac is not managing either."
+        }
+        return "Runs the keyword pass, then has your signed-in \(client.rawValue) read digests of the selected conversations and say what you keep doing by hand. Runs on its own once a day when the app opens."
+    }
+
     /// Why there is nothing to scan, when there is nothing to scan. An app this
     /// Mac is not managing is a different reason from one that is switched off
     /// here, and saying the wrong one sends someone to the wrong screen.
     private var sourceWarning: String? {
         guard scannableClients.isEmpty else { return nil }
-        let managed = workspace.device.isEnabled(.claude) || workspace.device.isEnabled(.codex)
+        let managed = [ClientKind.claude, .codex, .kiro].contains { workspace.device.isEnabled($0) }
         return managed
-            ? "Select Claude Code, Codex, or both to scan."
-            : "This Mac is not managing Claude Code or Codex, so there is no local chat history to review."
+            ? "Select at least one app to scan."
+            : "This Mac is not managing Claude Code, Codex, or Kiro CLI, so there is no local chat history to review."
     }
 
     private var toolbarContext: String? {
@@ -505,7 +641,7 @@ struct InsightsView: View {
         return "Updated \(report.generatedAt.formatted(.relative(presentation: .named)))"
     }
 
-    private func startScan() {
+    private func startScan(deepDive: Bool = false) {
         guard canScan else { return }
         let options = InsightScanOptions(
             clients: scannableClients,
@@ -513,7 +649,15 @@ struct InsightsView: View {
             maximumConversationsPerClient: maximumConversations,
             includeMarketplaceRecommendations: includeCatalogSuggestions && session.canReachCatalog
         )
-        Task { await session.scan(options: options) }
+        let reader = deepDive ? deepDiveClient : nil
+        Task { await session.scan(options: options, deepDiveWith: reader) }
+    }
+
+    /// The assistant a recommendation to create a skill is drafted with: Claude
+    /// Code when this Mac manages it, else Codex. The request names it, and the
+    /// creator opens on it, so the row's button names it too.
+    private var draftingClient: ClientKind {
+        [ClientKind.claude, .codex].first(where: enabledClients.contains) ?? .codex
     }
 
     /// A recommendation opens a screen. Nothing here installs, nothing here
@@ -522,7 +666,7 @@ struct InsightsView: View {
     private func open(_ recommendation: ToolRecommendation) {
         switch recommendation.kind {
         case .createCustomSkill:
-            draftWithCodex(recommendation)
+            draftWithAssistant(recommendation)
         case .useExistingSkill:
             if let skillID = recommendation.skillID {
                 navigation.open(.skill(skillID))
@@ -536,20 +680,24 @@ struct InsightsView: View {
         }
     }
 
-    /// Writes down what this recommendation would ask Codex for and opens the
-    /// creator on it. Nothing is generated here and nothing is saved: the
-    /// creator shows every generated file before anything reaches the library.
-    private func draftWithCodex(_ recommendation: ToolRecommendation) {
+    /// Writes down what this recommendation would ask an assistant for and
+    /// opens the creator on it. Nothing is generated here and nothing is
+    /// saved: the creator shows every generated file before anything reaches
+    /// the library. The assistant is the first managed one that has a skill
+    /// creator; the creator lets the person switch before the first turn.
+    private func draftWithAssistant(_ recommendation: ToolRecommendation) {
         let instruction = recommendation.draftInstruction ?? recommendation.summary
         guard !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         routeError = nil
-        let request = CodexSkillDraftRequest(
+        let client = draftingClient
+        let request = SkillDraftRequest(
+            client: client,
             instruction: instruction,
-            targets: enabledClients.isEmpty ? [.codex] : enabledClients)
+            targets: enabledClients.isEmpty ? [client] : enabledClients)
         let store = workspace.store
         Task {
             guard await WorkspaceSkillDraftSeed.save(request, in: store) else {
-                routeError = "This Mac could not record what to ask Codex for. Nothing was changed."
+                routeError = "This Mac could not record what to ask \(client.rawValue) for. Nothing was changed."
                 return
             }
             navigation.openSkillCreationRequest(request.id)
@@ -610,285 +758,11 @@ struct InsightsView: View {
 
     private func catalogDiscoveryDetail(_ discovery: MarketplaceDiscoverySummary) -> String {
         let successful =
-            "\(discovery.queriesSucceeded) privacy-filtered \(discovery.queriesSucceeded == 1 ? "query" : "queries") completed"
-        let packages =
-            "\(discovery.packagesReturned) \(discovery.packagesReturned == 1 ? "catalog result" : "catalog results") reviewed locally"
+            "\(discovery.queriesSucceeded) privacy-filtered \(InsightCount.query.word(for: discovery.queriesSucceeded)) completed"
+        let packages = "\(InsightCount.catalogResult.phrase(discovery.packagesReturned)) reviewed locally"
         if discovery.queriesFailed > 0 {
             return "\(successful); \(discovery.queriesFailed) failed. \(packages). No chat text or local names were sent."
         }
         return "\(successful). \(packages). No chat text or local names were sent."
-    }
-}
-
-private struct InsightPanel<Content: View>: View {
-    let title: String
-    let content: Content
-
-    init(_ title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 15)
-                .frame(maxWidth: .infinity, minHeight: 43, alignment: .leading)
-            Divider().opacity(0.32)
-            content
-        }
-        .standardPanel()
-    }
-}
-
-private enum InsightSelection: Hashable {
-    case opportunities
-    case skillHealth
-}
-
-private struct CoverageRow: View {
-    let coverage: ConversationScanCoverage
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ClientDisc(client: coverage.client, size: 30)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
-                    Text(coverage.sourceName)
-                        .font(.callout.weight(.medium))
-                    Label(statusText, systemImage: statusSymbol)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(coverage.conversationsScanned) chats · \(coverage.itemsInspected) items")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Text(coverage.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let latestItemAt = coverage.latestItemAt {
-                    Text("Latest item \(latestItemAt.formatted(.relative(presentation: .named)))")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(coverage.sourceName), \(statusText), \(coverage.conversationsScanned) conversations, \(coverage.itemsInspected) items. \(coverage.detail)"
-        )
-    }
-
-    private var statusText: String {
-        switch coverage.status {
-        case .scanned: "Scanned"
-        case .degraded: "Limited coverage"
-        case .unavailable: "Unavailable"
-        }
-    }
-
-    private var statusSymbol: String {
-        switch coverage.status {
-        case .scanned: "checkmark"
-        case .degraded: "exclamationmark.triangle"
-        case .unavailable: "slash.circle"
-        }
-    }
-}
-
-private struct RecommendationRow: View {
-    let recommendation: ToolRecommendation
-    let action: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 13) {
-            KindTile(kind: recommendationKind, size: 28)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(recommendation.title)
-                    .font(.callout.weight(.semibold))
-                Text(displaySummary)
-                    .font(.callout)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(recommendation.rationale)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(metadata)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 20)
-
-            Button(actionTitle, action: action)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .accessibilityHint(actionHint)
-        }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 13)
-    }
-
-    private var recommendationKind: ToolingKind {
-        switch recommendation.kind {
-        case .useExistingSkill, .createCustomSkill, .marketplaceSkill: .skill
-        case .mcpServer: .mcpServer
-        case .plugin: .plugin
-        }
-    }
-
-    private var actionTitle: String {
-        switch recommendation.kind {
-        case .useExistingSkill: "Open skill"
-        case .createCustomSkill: "Create with Codex"
-        case .marketplaceSkill, .mcpServer, .plugin:
-            recommendation.marketplacePackageID == nil ? "Browse Discover" : "Review in Discover"
-        }
-    }
-
-    private var actionHint: String {
-        switch recommendation.kind {
-        case .useExistingSkill: "Opens the installed skill details"
-        case .createCustomSkill: "Opens a Codex draft you review file by file. Nothing is created and nothing is installed"
-        case .marketplaceSkill, .mcpServer, .plugin: "Opens Discover without installing anything"
-        }
-    }
-
-    private var metadata: String {
-        var parts = [confidenceText]
-        if recommendation.supportingConversationCount > 0 {
-            parts.append(
-                "Based on \(recommendation.supportingConversationCount) \(recommendation.supportingConversationCount == 1 ? "conversation" : "conversations")"
-            )
-        }
-        if let sourceName = recommendation.sourceName, !sourceName.isEmpty {
-            parts.append("Source: \(sourceName)")
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    private var displaySummary: String {
-        let normalized = recommendation.summary
-            .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-        guard normalized.count > 240 else { return normalized }
-        var preview = String(normalized.prefix(240))
-        if let boundary = preview.lastIndex(of: " ") {
-            preview.removeSubrange(boundary...)
-        }
-        return preview + "…"
-    }
-
-    private var confidenceText: String {
-        switch recommendation.confidence {
-        case .high: "Strong pattern match"
-        case .medium: "Possible pattern match"
-        case .exploratory: "Exploratory match"
-        }
-    }
-}
-
-private struct QualityFindingRow: View {
-    let finding: SkillQualityFinding
-    let openSkill: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 13) {
-            Image(systemName: symbol)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(severityColor)
-                .frame(width: 24, height: 24)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(finding.title)
-                    .font(.callout.weight(.semibold))
-                Text(finding.detail)
-                    .font(.callout)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(finding.recommendedAction)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 20)
-            Button("Open skill", action: openSkill)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .accessibilityHint("Opens this skill for review")
-        }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 13)
-    }
-
-    private var symbol: String {
-        switch finding.severity {
-        case .information: "info.circle"
-        case .warning: "exclamationmark.triangle.fill"
-        case .actionRequired: "exclamationmark.circle.fill"
-        }
-    }
-
-    private var severityColor: Color {
-        switch finding.severity {
-        case .information: .secondary
-        case .warning: AgentTheme.warning
-        case .actionRequired: AgentTheme.failure
-        }
-    }
-}
-
-private struct SkillUsageRow: View {
-    let metric: SkillUsageMetric
-    let openSkill: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 13) {
-            Image(systemName: "chart.bar")
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(.secondary)
-                .frame(width: 24, height: 24)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(metric.skillName)
-                    .font(.callout.weight(.semibold))
-                Text(metric.usageSummary)
-                    .font(.callout)
-                Text(evidenceDetail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 20)
-            Button("Open skill", action: openSkill)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .accessibilityHint("Opens this skill for review")
-        }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 13)
-    }
-
-    private var evidenceDetail: String {
-        var parts: [String] = []
-        if !metric.observedClients.isEmpty {
-            let clients = metric.observedClients
-                .map(\.rawValue)
-                .sorted()
-                .joined(separator: ", ")
-            parts.append("Observed in \(clients)")
-        }
-        if let lastObservedAt = metric.lastObservedAt {
-            parts.append("Last observed \(lastObservedAt.formatted(.relative(presentation: .named)))")
-        }
-        if parts.isEmpty {
-            parts.append("No supported activation evidence was available in the selected history")
-        }
-        return parts.joined(separator: " · ")
     }
 }

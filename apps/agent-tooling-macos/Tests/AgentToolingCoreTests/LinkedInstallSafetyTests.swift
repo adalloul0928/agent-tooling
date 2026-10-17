@@ -44,8 +44,9 @@ struct LinkedInstallSafetyTests {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }
         let plan = try fixture.plan(baseline: baseline)
-        let review = OperationPlanSafetyReviewer(authority: .init(), managedRoots: []).review(plan)
-        #expect(review.hasBlockedSteps)
+        let ownership = DestinationOwnershipInspector.ownership(
+            of: fixture.destination, managedRoots: [], authority: .init(), expectedFingerprint: baseline)
+        #expect(!ownership.isProven)
         let receipt = await OperationEngine(store: fixture.store, homeURL: fixture.home).execute(plan)
         #expect(receipt.results.first?.status == .failed)
         #expect(try fixture.contents() == "baseline")
@@ -55,9 +56,11 @@ struct LinkedInstallSafetyTests {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }
         let plan = try fixture.plan(baseline: DirectoryFingerprint.sha256(of: fixture.destination))
+        let baseline = try DirectoryFingerprint.sha256(of: fixture.destination)
         try FileManager.default.removeItem(at: fixture.destination)
-        let review = OperationPlanSafetyReviewer(authority: .init(), managedRoots: []).review(plan)
-        #expect(review.hasBlockedSteps)
+        let ownership = DestinationOwnershipInspector.ownership(
+            of: fixture.destination, managedRoots: [], authority: .init(), expectedFingerprint: baseline)
+        #expect(!ownership.isProven)
         let receipt = await OperationEngine(store: fixture.store, homeURL: fixture.home).execute(plan)
         #expect(receipt.results.first?.status == .failed)
         #expect(!FileManager.default.fileExists(atPath: fixture.destination.path))

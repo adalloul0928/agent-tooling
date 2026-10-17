@@ -58,9 +58,12 @@ struct OnboardingWizardTests {
         defer { fixture.remove() }
         var finishCount = 0
         for step in OnboardingStep.allCases {
+            // Grounded the way the shell grounds every section: the wizard
+            // itself is translucent and the canvas behind it is the shell's.
             try expectDrawnWarmed(
                 OnboardingWizard(workspace: fixture.workspace, step: step) { finishCount += 1 }
-                    .environment(AppNavigationState()))
+                    .environment(AppNavigationState())
+                    .background(AgentTheme.canvasGradient))
         }
         #expect(finishCount == 0)
         #expect(fixture.workspace.library.lastReceipt == nil)
@@ -81,6 +84,23 @@ struct OnboardingWizardTests {
         try expectDrawnWarmed(
             OnboardingWizard(workspace: fixture.workspace, step: .assign) {}
                 .environment(AppNavigationState()))
+    }
+
+    /// The assign step's finish is an explicit action, not something drawing it
+    /// triggers. When nothing can be assigned the primary button becomes a
+    /// plain "Done" that ends onboarding, but rendering the step must never
+    /// call `onFinish` on its own — otherwise a person would be bounced off the
+    /// step the instant it appeared.
+    @Test func theAssignStepDoesNotFinishJustByBeingDrawnWhenNothingCanBeAssigned() async throws {
+        let fixture = try await OnboardingTrackedOnlyFixture()
+        defer { fixture.remove() }
+        var finishCount = 0
+
+        try expectDrawnWarmed(
+            OnboardingWizard(workspace: fixture.workspace, step: .assign) { finishCount += 1 }
+                .environment(AppNavigationState()))
+
+        #expect(finishCount == 0)
     }
 
     /// Once an assignment is actually saved, the assign step has reached its

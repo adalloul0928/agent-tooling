@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -154,10 +155,7 @@ struct WorkspaceLinkedDestinationTests {
         let root: URL
 
         init() throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "linked-destination-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("linked-destination").url
         }
 
         func remove() { try? FileManager.default.removeItem(at: root) }
@@ -183,6 +181,30 @@ struct LinkedDestinationWriteBoundsTests {
         #expect(refused.outputs.first?.contains("refused to write outside") == true,
                 "\(refused.outputs)")
         #expect(!FileManager.default.fileExists(atPath: fixture.other.appending(path: "personal").path))
+    }
+
+    /// A registered folder reached through a link above it, the shape of
+    /// ~/workplace -> /Volumes/workplace, or spelled in another case, is the
+    /// same folder. The engine fingerprints its staged copy beside the
+    /// destination, and that walk names files under the real path, so the
+    /// install must still succeed rather than fail as an unsupported item.
+    @Test func aRegisteredFolderReachedThroughALinkOrSpelledInAnotherCaseIsWritable() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let alias = fixture.root.appending(path: "alias")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: fixture.root)
+
+        var spellings = [alias.appending(path: "linked")]
+        // Only on a volume that compares names without case is this the same folder.
+        let otherCase = fixture.linked.path(percentEncoded: false).uppercased()
+        if FileManager.default.fileExists(atPath: otherCase) { spellings.append(URL(fileURLWithPath: otherCase)) }
+        for (index, folder) in spellings.enumerated() {
+            let name = "personal-\(index)"
+            let result = await fixture.install(named: name, into: folder, registering: [folder])
+
+            #expect(result.failed == 0, "\(folder.path(percentEncoded: false)): \(result.outputs)")
+            #expect(try Data(contentsOf: fixture.linked.appending(path: "\(name)/SKILL.md")) == fixture.skillBytes)
+        }
     }
 
     @Test func registeringOneFolderDoesNotOpenTheOneBesideIt() async throws {

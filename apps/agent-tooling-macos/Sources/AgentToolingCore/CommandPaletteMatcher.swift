@@ -6,7 +6,7 @@ public protocol PaletteSearchable {
     var paletteSubtitle: String { get }
     var paletteKeywords: [String] { get }
     /// Ranking tiebreaker for equal text matches, highest first. Actions sit
-    /// above objects so typing "check" reaches Check Setup before a receipt.
+    /// above objects so typing "check" reaches Check apps before a receipt.
     var palettePriority: Int { get }
 }
 

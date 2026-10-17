@@ -136,7 +136,7 @@ public enum WorkspaceLinkedPresetResolver {
                        change.destination.logicalProjectID?.rawValue.uuidString.lowercased() ?? ""]
         }
         let payload = Data(fields.joined(separator: "\u{0}").utf8)
-        return SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: payload).lowercaseHex
     }
 }
 

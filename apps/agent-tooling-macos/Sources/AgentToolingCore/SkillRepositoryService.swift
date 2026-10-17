@@ -18,22 +18,10 @@ struct SkillRepositoryService: Sendable {
         let manager = FileManager.default
         let taskRoot = cacheURL.appending(path: "skill-repositories/\(UUID().uuidString)")
         try Self.createPrivateDirectory(taskRoot)
-        let gitRoot = taskRoot.appending(path: "repository.git")
         let export = taskRoot.appending(path: "files")
         do {
             try Self.createPrivateDirectory(export)
-            _ = try await git(["init", "--bare", "--template=", gitRoot.path], root: taskRoot)
-            try Self.createPrivateDirectory(gitRoot.appending(path: "info"))
-            try "* -filter -text -ident -working-tree-encoding\n".write(
-                to: gitRoot.appending(path: "info/attributes"), atomically: true, encoding: .utf8)
-            _ = try await git(
-                [
-                    "--git-dir=\(gitRoot.path)", "fetch", "--depth=1", "--no-tags", "--no-recurse-submodules",
-                    "--", binding.repositoryURL, binding.ref,
-                ], root: taskRoot)
-            let revision = try await git(["--git-dir=\(gitRoot.path)", "rev-parse", "--verify", "FETCH_HEAD^{commit}"], root: taskRoot)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard SkillRepositoryBinding.isHash(revision, lengths: [40, 64]) else { throw SkillRepositoryError.invalidRevision }
+            let (gitRoot, revision) = try await shallowFetch(binding.repositoryURL, ref: binding.ref, into: taskRoot)
             let selected = binding.subdirectory.isEmpty ? "." : binding.subdirectory
             let listing = try await git(
                 [
@@ -61,6 +49,112 @@ struct SkillRepositoryService: Sendable {
     }
 
     func discard(_ checkout: Checkout) { try? FileManager.default.removeItem(at: checkout.rootURL) }
+
+    /// One commit of one ref into a fresh bare repository under `taskRoot`:
+    /// no tags, no submodules, no history. Returns where it landed and the
+    /// commit it resolved to.
+    private func shallowFetch(_ repositoryURL: String, ref: String, into taskRoot: URL) async throws -> (gitRoot: URL, revision: String) {
+        let gitRoot = taskRoot.appending(path: "repository.git")
+        _ = try await git(["init", "--bare", "--template=", gitRoot.path], root: taskRoot)
+        try Self.createPrivateDirectory(gitRoot.appending(path: "info"))
+        try "* -filter -text -ident -working-tree-encoding\n".write(
+            to: gitRoot.appending(path: "info/attributes"), atomically: true, encoding: .utf8)
+        _ = try await git(
+            [
+                "--git-dir=\(gitRoot.path)", "fetch", "--depth=1", "--no-tags", "--no-recurse-submodules",
+                "--", repositoryURL, ref,
+            ], root: taskRoot)
+        let revision = try await git(["--git-dir=\(gitRoot.path)", "rev-parse", "--verify", "FETCH_HEAD^{commit}"], root: taskRoot)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard SkillRepositoryBinding.isHash(revision, lengths: [40, 64]) else { throw SkillRepositoryError.invalidRevision }
+        return (gitRoot, revision)
+    }
+
+    // MARK: - Finding a skill the listing only named
+
+    /// The most SKILL.md files this will look inside when no folder carries the
+    /// skill's name. A registry listing names the skill, not the folder.
+    static let frontmatterProbeLimit = 64
+
+    /// Where one skill lives in a repository, when all that is known is the
+    /// repository and the skill's name (what a registry such as skills.sh
+    /// publishes). Resolves the repository's default branch, reads the tree at
+    /// its tip, and takes the SKILL.md whose folder is named for the skill;
+    /// failing that, the one whose frontmatter names it. Returns a binding to
+    /// that folder on that branch, ready to fetch and to follow.
+    func locate(skillID: String, repositoryURL: String) async throws -> SkillRepositoryBinding {
+        let probe = try SkillRepositoryBinding(repositoryURL: repositoryURL)
+        let wanted = Self.comparableName(skillID)
+        guard !wanted.isEmpty else { throw SkillRepositoryError.sourceMissing }
+        let manager = FileManager.default
+        let taskRoot = cacheURL.appending(path: "skill-repositories/\(UUID().uuidString)")
+        try Self.createPrivateDirectory(taskRoot)
+        defer { try? manager.removeItem(at: taskRoot) }
+
+        let ref = try await defaultBranch(of: probe.repositoryURL, root: taskRoot) ?? probe.ref
+        let (gitRoot, revision) = try await shallowFetch(probe.repositoryURL, ref: ref, into: taskRoot)
+        let listing = try await git(
+            ["--git-dir=\(gitRoot.path)", "ls-tree", "-r", "-z", "--name-only", "--full-tree", revision], root: taskRoot)
+        let folders = try Self.skillFolders(in: listing)
+
+        // The folder named for the skill, shallowest first.
+        let named = folders.filter { Self.comparableName($0.split(separator: "/").last.map(String.init) ?? "") == wanted }
+        if let folder = Self.shallowest(named) {
+            return try SkillRepositoryBinding(repositoryURL: probe.repositoryURL, ref: ref, subdirectory: folder)
+        }
+        // Otherwise the skill that says it is this one, in its own frontmatter.
+        var declared: [String] = []
+        for folder in folders.sorted(by: Self.shallowerFirst).prefix(Self.frontmatterProbeLimit) {
+            let path = folder.isEmpty ? "SKILL.md" : folder + "/SKILL.md"
+            guard let content = try? await git(["--git-dir=\(gitRoot.path)", "show", "\(revision):\(path)"], root: taskRoot),
+                  content.utf8.count <= BoundedFileAccess.maximumConfigurationBytes,
+                  let frontmatter = try? SkillFrontmatter.parse(content),
+                  Self.comparableName(frontmatter.name) == wanted
+            else { continue }
+            declared.append(folder)
+        }
+        guard let folder = Self.shallowest(declared) else { throw SkillRepositoryError.sourceMissing }
+        return try SkillRepositoryBinding(repositoryURL: probe.repositoryURL, ref: ref, subdirectory: folder)
+    }
+
+    /// The branch the repository's HEAD points at, from `ls-remote --symref`,
+    /// or nil when the remote does not say. Only a name the binding would
+    /// accept is returned; anything else is treated as not said.
+    private func defaultBranch(of repositoryURL: String, root: URL) async throws -> String? {
+        let output = try await git(["ls-remote", "--symref", "--", repositoryURL, "HEAD"], root: root)
+        for line in output.split(separator: "\n") where line.hasPrefix("ref: refs/heads/") {
+            let name = String(line.dropFirst("ref: refs/heads/".count).split(separator: "\t").first ?? "")
+            if (try? SkillRepositoryBinding(repositoryURL: repositoryURL, ref: name)) != nil { return name }
+        }
+        return nil
+    }
+
+    /// Folders holding a SKILL.md, as repository-relative paths ("" for the
+    /// root), from a NUL-separated name-only tree listing. The listing is
+    /// bounded like any other tree this service reads.
+    static func skillFolders(in listing: String) throws -> [String] {
+        let paths = listing.split(separator: "\0", omittingEmptySubsequences: true).map(String.init)
+        guard paths.count <= 10_000, listing.utf8.count < 1_000_000 else { throw SkillRepositoryError.unsafeTree }
+        return paths.compactMap { path in
+            guard SkillRepositoryBinding.safeRelativePath(path) else { return nil }
+            if path == "SKILL.md" { return "" }
+            guard path.hasSuffix("/SKILL.md") else { return nil }
+            return String(path.dropLast("/SKILL.md".count))
+        }
+    }
+
+    /// Names compare without case or the hyphen/underscore distinction, which
+    /// is how registries and folders usually differ for one skill.
+    static func comparableName(_ name: String) -> String { SkillRepositoryBinding.comparableSkillName(name) }
+
+    private static func shallowerFirst(_ lhs: String, _ rhs: String) -> Bool {
+        let (l, r) = (lhs.split(separator: "/").count, rhs.split(separator: "/").count)
+        return l == r ? lhs < rhs : l < r
+    }
+
+    private static func shallowest(_ folders: [String]) -> String? {
+        folders.sorted(by: shallowerFirst).first
+    }
 
     private func git(_ arguments: [String], root: URL) async throws -> String {
         let environment = [

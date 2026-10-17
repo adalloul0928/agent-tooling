@@ -43,7 +43,7 @@ public struct PackageTreeEntry: Hashable, Sendable {
 }
 
 /// Sanitized failures: no raw source paths, content, link values, or OS error strings.
-public enum PackageTreeError: Error, Equatable, Sendable {
+enum PackageTreeError: Error, Equatable, Sendable {
     case invalidPath, caseCollision, invalidStructure, unsupportedItem, unsafeSymbolicLink
     case limitExceeded, changedDuringCapture, ioFailure, invalidDigest
 }
@@ -112,37 +112,6 @@ public struct CapturedPackageTree: Hashable, Sendable {
         self.excludedRootGitMetadata = excludedRootGitMetadata
     }
 
-    /// Selects one complete directory and rebases its contents as a new tree.
-    /// This is a byte projection only; it does not create a new artifact or
-    /// confer independent content authority. Links are revalidated after the
-    /// rebase, so a link that leaves the selected subtree rejects the export.
-    public func subtree(at relativePath: String) throws -> CapturedPackageTree {
-        try Task.checkCancellation()
-        if relativePath == "." { return self }
-        guard relativePath.utf8.elementsEqual(relativePath.precomposedStringWithCanonicalMapping.utf8) else {
-            throw PackageTreeError.invalidPath
-        }
-        try Self.validatePath(relativePath, limits: .default)
-        guard let selected = entries.first(where: { $0.relativePath == relativePath }) else {
-            throw PackageTreeError.invalidStructure
-        }
-        guard case .directory = selected.kind else {
-            throw PackageTreeError.unsupportedItem
-        }
-
-        let prefix = relativePath + "/"
-        let projected = entries.compactMap { entry -> PackageTreeEntry? in
-            guard entry.relativePath.hasPrefix(prefix) else { return nil }
-            return PackageTreeEntry(
-                relativePath: String(entry.relativePath.dropFirst(prefix.count)),
-                kind: entry.kind
-            )
-        }
-        // Root administrative metadata cannot occur below the captured root:
-        // nested .git components are rejected by the original tree validator.
-        return try CapturedPackageTree(entries: projected)
-    }
-
     private static func validatePath(_ path: String, limits: PackageTreeLimits) throws {
         guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("\\"),
               !path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
@@ -204,7 +173,7 @@ public struct CapturedPackageTree: Hashable, Sendable {
                 appendBytes(Data(target.utf8), to: &hash)
             }
         }
-        return .init(value: hash.finalize().map { String(format: "%02x", $0) }.joined())
+        return .init(value: hash.finalize().lowercaseHex)
     }
 
     private static func appendInteger(_ value: Int, to hash: inout SHA256) {

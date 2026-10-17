@@ -32,6 +32,10 @@ public enum WorkspaceMergeConflictKind: String, Hashable, Sendable, CaseIterable
     case catalogSource
     /// Both sides renamed or re-rooted the same logical project.
     case projectField
+    case deviceField
+    /// Both Macs set one shared account choice differently, or one let it go
+    /// while the other changed it. The object identity is the switch's key.
+    case accountPreference
     /// A document version this build cannot merge.
     case unsupportedVersion
     /// The merged graph does not satisfy the workspace contract.
@@ -58,14 +62,14 @@ public struct WorkspaceMergeConflict: Hashable, Sendable {
     }
 }
 
-public struct WorkspaceMergeResult: Sendable {
+struct WorkspaceMergeResult: Sendable {
     /// Unsealed. The caller seals it against its own writer and revision.
-    public let document: PortableWorkspaceDocument?
-    public let conflicts: [WorkspaceMergeConflict]
+    let document: PortableWorkspaceDocument?
+    let conflicts: [WorkspaceMergeConflict]
     /// True when a document was produced and nothing needs a person's decision.
-    public var isResolved: Bool { document != nil && conflicts.isEmpty }
+    var isResolved: Bool { document != nil && conflicts.isEmpty }
 
-    public init(document: PortableWorkspaceDocument?, conflicts: [WorkspaceMergeConflict]) {
+    init(document: PortableWorkspaceDocument?, conflicts: [WorkspaceMergeConflict]) {
         self.document = document
         self.conflicts = conflicts
     }
@@ -82,8 +86,8 @@ public struct WorkspaceMergeResult: Sendable {
 /// the same fact in different directions. Every conflicting record is preserved
 /// in the result under the local value, so nothing is lost while the person
 /// decides; callers must not apply a result that still carries conflicts.
-public enum WorkspaceMergeEngine {
-    public static func merge(
+enum WorkspaceMergeEngine {
+    static func merge(
         base: PortableWorkspaceDocument?,
         local: PortableWorkspaceDocument,
         remote: PortableWorkspaceDocument,
@@ -169,6 +173,11 @@ public enum WorkspaceMergeEngine {
             combine: { ancestor, mine, theirs in
                 mergePreset(ancestor: ancestor, mine: mine, theirs: theirs)
             })
+        let devices = mergeCollection(
+            base: base?.deviceRegistry, local: local.deviceRegistry, remote: remote.deviceRegistry, key: { $0.id },
+            combine: { ancestor, mine, theirs in
+                mergeDevice(ancestor: ancestor, mine: mine, theirs: theirs, report: conflict)
+            })
         var assignments = mergeCollection(
             base: base?.assignments, local: local.assignments, remote: remote.assignments, key: { $0.id },
             combine: { ancestor, mine, theirs in
@@ -229,7 +238,13 @@ public enum WorkspaceMergeEngine {
                     base: base?.configurationState, local: local.configurationState,
                     remote: remote.configurationState, report: conflict)
                 : nil,
-            mcpDefinitions: definitions
+            mcpDefinitions: definitions,
+            devices: devices.isEmpty ? nil : devices,
+            accountPreferences: schemaVersion >= PortableWorkspaceDocument.accountPreferencesSchemaVersion
+                ? mergeAccountPreferences(
+                    base: base?.accountPreferences, local: local.accountPreferences,
+                    remote: remote.accountPreferences, report: conflict)
+                : nil
         )
         document = document.canonicalized()
         do { try document.validateStructure() }
@@ -356,6 +371,33 @@ extension WorkspaceMergeEngine {
         return merged
     }
 
+    /// A device's record is mostly its own Mac's to write (last seen), so those
+    /// fields take the newest; the person-set fields resolve like any other.
+    static func mergeDevice(
+        ancestor: DeviceRecord?,
+        mine: DeviceRecord?,
+        theirs: DeviceRecord?,
+        report: Report
+    ) -> DeviceRecord? {
+        guard let mine else { return theirs }
+        guard let theirs else { return mine }
+        if mine == theirs { return mine }
+        var merged = mine
+        merged.name = resolve(ancestor?.name, mine.name, theirs.name) {
+            report(.deviceField, nil, mine.id, "Both Macs renamed \u{201C}\(mine.name)\u{201D} differently.")
+        }
+        merged.receivesSharedAssignments = resolve(
+            ancestor?.receivesSharedAssignments, mine.receivesSharedAssignments, theirs.receivesSharedAssignments
+        ) {
+            report(.deviceField, nil, mine.id, "Both Macs changed whether \u{201C}\(mine.name)\u{201D} takes shared assignments.")
+        }
+        // Retiring is one-way and never conflicts: either side retiring wins.
+        merged.retiredAt = [mine.retiredAt, theirs.retiredAt].compactMap { $0 }.min()
+        merged.lastSeenAt = [mine.lastSeenAt, theirs.lastSeenAt].compactMap { $0 }.max()
+        merged.registeredAt = min(mine.registeredAt, theirs.registeredAt)
+        return merged
+    }
+
     /// Membership is a set of records: additions and removals from each side
     /// combine, so one Mac adding a member never resurrects what the other
     /// deliberately removed.
@@ -396,8 +438,19 @@ extension WorkspaceMergeEngine {
             report(.assignmentEnablement, mine.artifactID, mine.id,
                    "One Mac asked for this item here while the other asked to remove it.")
         }
-        merged.destination = resolve(ancestor?.destination, mine.destination, theirs.destination) {
+        // Which Macs a shared destination leaves out combines as a set; the
+        // rest of the destination (app, scope, project, explicit list) is one
+        // choice that resolves like any other field.
+        var mineBare = mine.destination, theirsBare = theirs.destination, ancestorBare = ancestor?.destination
+        mineBare.excludedDeviceIDs = nil; theirsBare.excludedDeviceIDs = nil; ancestorBare?.excludedDeviceIDs = nil
+        merged.destination = resolve(ancestorBare, mineBare, theirsBare) {
             report(.assignmentField, mine.artifactID, mine.id, "Both Macs changed where this item should go.")
+        }
+        if merged.destination.deviceIDs == nil {
+            let excluded = mergeSet(
+                ancestor?.destination.excludedDeviceIDs, mine.destination.excludedDeviceIDs ?? [],
+                theirs.destination.excludedDeviceIDs ?? [])
+            merged.destination.excludedDeviceIDs = excluded.isEmpty ? nil : excluded
         }
         if mine.reason != theirs.reason {
             report(.assignmentField, mine.artifactID, mine.id, "Both Macs recorded a different reason for this request.")

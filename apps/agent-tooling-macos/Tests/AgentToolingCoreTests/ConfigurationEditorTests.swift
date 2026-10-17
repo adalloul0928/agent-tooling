@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -102,6 +103,32 @@ struct ConfigurationEditorTests {
         #expect(try fixture.contents() == before)
     }
 
+    /// JSON has no NaN or infinity. JSONSerialization raises an Objective-C
+    /// exception for one rather than throwing, which ended the app, so such a
+    /// number is refused, alone or in a list, before anything is written.
+    @Test func aNumberJSONCannotHoldIsRefusedBeforeAnythingIsWritten() throws {
+        let values: [(key: String, value: ConfigurationValue)] = [
+            ("cleanupPeriodDays", .number(.nan)), ("cleanupPeriodDays", .number(.infinity)),
+            ("cleanupPeriodDays", .number(-.infinity)), ("permissions.allow", .list([.string("Read"), .number(.nan)])),
+        ]
+        for (key, value) in values {
+            let fixture = try Fixture(#"{"cleanupPeriodDays":30}"#)
+            defer { fixture.remove() }
+            let editor = ConfigurationEditor()
+            let before = try fixture.contents()
+
+            #expect(throws: ConfigurationEditError.valueRejected, "\(value)") {
+                _ = try editor.apply(
+                    .init(
+                        key: key, layer: .user, sourcePath: fixture.path, newValue: value,
+                        expectedFingerprint: try editor.fingerprint(of: fixture.path)),
+                    adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0")
+            }
+            #expect(try fixture.contents() == before)
+            #expect(!FileManager.default.fileExists(atPath: fixture.path + ".agent-tooling-backup"))
+        }
+    }
+
     @Test func aListSettingIsWrittenIntoItsDocumentedNesting() throws {
         let fixture = try Fixture(#"{"permissions":{"deny":["Bash"]}}"#)
         defer { fixture.remove() }
@@ -119,15 +146,64 @@ struct ConfigurationEditorTests {
         #expect(permissions["deny"] as? [String] == ["Bash"])
     }
 
+    /// The editor reads under the limit every client configuration read
+    /// shares, not a smaller one of its own: a file past its old 1 MB cap
+    /// still has a fingerprint to review against.
+    @Test func aFileUnderTheSharedConfigurationLimitIsRead() throws {
+        let fixture = try Fixture(#"{"model":"old-model"}"# + String(repeating: " ", count: 1 << 20))
+        defer { fixture.remove() }
+
+        #expect(try ConfigurationEditor().fingerprint(of: fixture.path) != nil)
+    }
+
+    /// Over the shared limit the file is refused before it is loaded, with the
+    /// error that names it and the limit, and nothing is written: neither the
+    /// file nor a backup beside it.
+    @Test func aFileOverTheSharedConfigurationLimitIsRefusedByNameAndLimit() throws {
+        let limit = BoundedFileAccess.maximumConfigurationBytes
+        let fixture = try Fixture(#"{"model":"old-model"}"# + String(repeating: " ", count: limit))
+        defer { fixture.remove() }
+        let before = try fixture.contents()
+        let refusal = ConfigurationFileTooLargeError(path: fixture.path, maximumBytes: limit)
+        let edit = ConfigurationEdit(
+            key: "model", layer: .user, sourcePath: fixture.path, newValue: .string("new-model"), expectedFingerprint: nil)
+
+        #expect(throws: refusal) { _ = try ConfigurationEditor().fingerprint(of: fixture.path) }
+        #expect(throws: refusal) {
+            _ = try ConfigurationEditor().apply(edit, adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0")
+        }
+        #expect(try fixture.contents() == before)
+        #expect(!FileManager.default.fileExists(atPath: fixture.path + ".agent-tooling-backup"))
+    }
+
+    /// A rewrite the editor cannot read back to check has still been written.
+    /// It is reported as written and not shown to take effect, with the
+    /// original beside it, rather than as a change that never happened. A
+    /// value longer than a settings layer is read up to makes such a rewrite.
+    @Test func aRewriteThatCannotBeReadBackIsReportedAsWrittenButNotEffective() throws {
+        let fixture = try Fixture(#"{"model":"old-model"}"#)
+        defer { fixture.remove() }
+        let editor = ConfigurationEditor()
+        let before = try fixture.contents()
+        let long = String(repeating: "x", count: BoundedFileAccess.maximumConfigurationBytes)
+
+        #expect(throws: ConfigurationEditError.notEffectiveAfterWrite) {
+            _ = try editor.apply(
+                .init(
+                    key: "model", layer: .user, sourcePath: fixture.path, newValue: .string(long),
+                    expectedFingerprint: try editor.fingerprint(of: fixture.path)),
+                adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0")
+        }
+        #expect(try fixture.object()["model"] as? String == long, "the file was written")
+        #expect(try Data(contentsOf: URL(fileURLWithPath: fixture.path + ".agent-tooling-backup")) == before)
+    }
+
     private struct Fixture {
         let root: URL
         let path: String
 
         init(_ contents: String) throws {
-            root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-                .appending(path: "configuration-editor-\(UUID())")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
+            root = try TemporaryFolder("configuration-editor").url
             path = root.appending(path: "settings.json").path
             try Data(contents.utf8).write(to: URL(fileURLWithPath: path))
         }

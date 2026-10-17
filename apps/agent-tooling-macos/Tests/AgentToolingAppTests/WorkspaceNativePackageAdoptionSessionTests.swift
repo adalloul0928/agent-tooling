@@ -27,7 +27,7 @@ struct WorkspaceNativePackageAdoptionSessionTests {
         #expect(match.displayName == "Atlas")
         #expect(session.adoption?.packageID == listing.id)
         #expect(
-            session.adoption?.message == "Added to your library. Choose where it goes on the Apps screen.")
+            session.adoption?.message == "Added to your library. Install picks the apps and writes it.")
         // One row, holding the route and nothing else.
         let snapshot = try #require(try fixture.store.snapshot())
         let added = try #require(snapshot.document.artifacts.first { $0.identity.id == match.artifactID })

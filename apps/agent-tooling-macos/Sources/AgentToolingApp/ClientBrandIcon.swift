@@ -4,7 +4,8 @@ import SwiftUI
 
 struct ClientBrandIcon: View {
     let client: ClientKind
-    var size: CGFloat = 22
+    /// Always one of the `Size` tokens, chosen by the caller for its row.
+    let size: CGFloat
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -30,6 +31,7 @@ struct ClientBrandIcon: View {
         case .codex: "ClientCodex"
         case .claude: "ClientClaude"
         case .gemini: "ClientGemini"
+        case .kiro: "ClientKiro"
         }
     }
 }
@@ -63,6 +65,9 @@ enum ClientBrandAssets {
         case .gemini:
             imageSet = "ClientGemini.imageset"
             fileName = "gemini.svg"
+        case .kiro:
+            imageSet = "ClientKiro.imageset"
+            fileName = "kiro.svg"
         }
 
         let url = Bundle.module.resourceURL?

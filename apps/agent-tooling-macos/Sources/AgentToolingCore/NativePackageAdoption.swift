@@ -105,6 +105,7 @@ public enum NativePackageAdoption {
         case .claude: "claude.plugin"
         case .codex: "codex.plugin"
         case .gemini: "gemini.plugin"
+        case .kiro: "kiro.plugin"
         }
     }
 }

@@ -12,7 +12,10 @@ enum CommandPaletteOutcome: Equatable {
     case screenRequest(ScreenRequest)
     case openSkill(String)
     /// Read this Mac's apps again. Reads only.
-    case checkSetup
+    case checkApps
+    /// Read each managed app's connections again and show the Health screen.
+    /// Reads only.
+    case checkConnectionHealth
     /// Prepare one plan for everything out of step, and show it. Preparing is
     /// not applying; the Apps screen still asks before anything is written.
     case reviewSync
@@ -79,6 +82,18 @@ struct CommandPaletteItem: Identifiable, PaletteSearchable {
         guard case .openClient(let client) = outcome else { return nil }
         return client
     }
+
+    /// What pointing at the result says it will do. A screen is gone to, an
+    /// action says what it does, and anything else opens on its screen; one
+    /// sentence shape for all of them read "Open Home in Go to".
+    var help: String {
+        switch outcome {
+        case .navigate: "Go to \(title)"
+        case .checkApps, .checkConnectionHealth, .reviewSync: subtitle
+        case .screenRequest(let request) where request.itemID == nil: subtitle
+        case .openClient, .openSkill, .screenRequest: "Open \(title) in \(contextLabel)"
+        }
+    }
 }
 
 /// Every named object the app already holds, in one list. Built once when the
@@ -95,41 +110,57 @@ enum CommandPaletteCatalog {
             + receipts(workspace)
     }
 
+    /// The palette is part of the window, so its entries are sentence case;
+    /// the same commands keep title case in the menus. An entry that opens a
+    /// sheet ends in an ellipsis, as its button on the screen does. A name an
+    /// entry used to have stays among its keywords, so typing it still lands.
     private static func actions() -> [CommandPaletteItem] {
         [
+            // The Apps toolbar's refresh, by its name and its symbol there.
+            // "Setup" and the stethoscope are Checkup's, which this is not.
             CommandPaletteItem(
-                id: "action.checkSetup",
-                title: "Check Setup",
+                id: "action.checkApps",
+                title: ActionTitles.checkAppsCommand(.palette),
                 subtitle: "Read this Mac again for what each app actually has",
                 contextLabel: "Action",
                 kind: nil,
-                symbol: "stethoscope",
-                keywords: ["doctor", "scan", "health", "check", "clients"],
+                symbol: "arrow.clockwise",
+                keywords: ["check setup", "setup", "doctor", "scan", "health", "refresh", "clients"],
                 priority: 100,
-                outcome: .checkSetup),
+                outcome: .checkApps),
             CommandPaletteItem(
                 id: "action.reviewSync",
-                title: "Review Sync",
+                title: ActionTitles.reviewChangesCommand(.palette),
                 subtitle: "Prepare one plan for everything that is out of step",
                 contextLabel: "Action",
                 kind: nil,
                 symbol: "arrow.triangle.2.circlepath",
-                keywords: ["sync", "install", "plan", "reconcile", "apps"],
+                keywords: ["sync", "install", "plan", "reconcile", "apps", "review sync"],
                 priority: 100,
                 outcome: .reviewSync),
             CommandPaletteItem(
+                id: "action.checkConnectionHealth",
+                title: "Check connection health",
+                subtitle: "Read each managed app's connections and see which need signing in",
+                contextLabel: "Action",
+                kind: nil,
+                symbol: "waveform.path.ecg",
+                keywords: ["health", "connection", "mcp", "connector", "auth", "login", "reauthenticate"],
+                priority: 100,
+                outcome: .checkConnectionHealth),
+            CommandPaletteItem(
                 id: "action.addServer",
-                title: "Add MCP server",
+                title: "Add connection…",
                 subtitle: "Paste a definition to see what it describes",
                 contextLabel: "Action",
                 kind: .mcpServer,
                 symbol: "plus",
-                keywords: ["mcp", "new", "server", "add", "connection"],
+                keywords: ["mcp", "new", "server", "add", "connection", "add mcp server"],
                 priority: 100,
                 outcome: .screenRequest(.addMCPServer)),
             CommandPaletteItem(
                 id: "action.paste",
-                title: "Paste to import",
+                title: "Paste to import…",
                 subtitle: "Read an mcp add command, a JSON block, a server URL, or a SKILL.md",
                 contextLabel: "Action",
                 kind: nil,
@@ -140,6 +171,9 @@ enum CommandPaletteCatalog {
         ]
     }
 
+    /// Every screen, by its title. The name on its tab is a keyword, because a
+    /// tab can be called something its screen's title is not: Activity's
+    /// first tab reads "Receipts", and Settings' reads "General".
     private static func sections() -> [CommandPaletteItem] {
         AppSection.allCases.map { section in
             CommandPaletteItem(
@@ -149,7 +183,7 @@ enum CommandPaletteCatalog {
                 contextLabel: "Go to",
                 kind: nil,
                 symbol: section.symbol,
-                keywords: [section.rawValue, section.workspaceTitle ?? ""],
+                keywords: [section.rawValue, section.tabTitle, section.workspaceTitle ?? ""],
                 priority: 60,
                 outcome: .navigate(section))
         }
@@ -159,7 +193,7 @@ enum CommandPaletteCatalog {
     /// place a search result can send them.
     @MainActor
     private static func clients(for workspace: WorkspaceLaunch.Workspace) -> [CommandPaletteItem] {
-        workspace.device.availableClients.filter(workspace.device.isEnabled).map { client in
+        workspace.device.managedClients.map { client in
             CommandPaletteItem(
                 id: "client.\(client.id)",
                 title: client.rawValue,
@@ -225,8 +259,7 @@ enum CommandPaletteCatalog {
             CommandPaletteItem(
                 id: "preset.\(preset.id.rawValue.uuidString.lowercased())",
                 title: preset.name,
-                subtitle: preset.memberArtifactIDs.count == 1
-                    ? "Preset · 1 item" : "Preset · \(preset.memberArtifactIDs.count) items",
+                subtitle: "Preset · \(CountNoun("item").phrase(preset.memberArtifactIDs.count))",
                 contextLabel: "Presets",
                 kind: .collection,
                 symbol: AppSection.presets.symbol,
@@ -282,6 +315,13 @@ struct CommandPaletteView: View {
     @State private var query = ""
     @State private var items: [CommandPaletteItem] = []
     @State private var highlighted = 0
+    /// Where the pointer last was, in window coordinates. Hover follows the
+    /// pointer only when it moves: a row that scrolls under a still pointer
+    /// (after an arrow key) must not take the highlight back.
+    @State private var lastPointer: CGPoint?
+    /// Set when the pointer moved the highlight, so the list does not scroll
+    /// to a row that is already under it.
+    @State private var highlightedByPointer = false
     @FocusState private var searchFocused: Bool
 
     private var results: [CommandPaletteItem] { CommandPaletteMatcher.rank(items, query: query) }
@@ -289,29 +329,38 @@ struct CommandPaletteView: View {
     var body: some View {
         VStack(spacing: 0) {
             searchField
-            Divider()
+            Hairline()
             resultList
-            Divider()
+            Hairline()
             hints
         }
-        .frame(width: 660, height: 460)
+        .sheetSize(SheetSize.medium)
         .background(AgentTheme.contentBackground)
+        // The container declares the field as its default focus, and .onAppear
+        // sets it again on the next run-loop turn. The palette floats in as an
+        // overlay, where setting focus during the same turn the view appears was
+        // unreliable — typed text landed in the page behind it — so the delayed
+        // set is what actually lands the caret in the field.
+        .defaultFocus($searchFocused, true)
         .onAppear {
             items = CommandPaletteCatalog.items(for: workspace)
-            searchFocused = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(60))
+                searchFocused = true
+            }
         }
         .onChange(of: query) { _, _ in highlighted = 0 }
         .onExitCommand(perform: onClose)
     }
 
     private var searchField: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Space.lg) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
+                .font(AgentFont.bodyMedium)
                 .foregroundStyle(.secondary)
             TextField("Search apps, tools, presets, projects, and actions", text: $query)
                 .textFieldStyle(.plain)
-                .font(.title3)
+                .font(AgentFont.titleRegular)
                 .focused($searchFocused)
                 .accessibilityLabel("Search everything")
                 .onSubmit(activateHighlighted)
@@ -324,25 +373,25 @@ struct CommandPaletteView: View {
                     return .handled
                 }
         }
-        .padding(.horizontal, 18)
-        .frame(height: 56)
+        .padding(.horizontal, Space.xxl)
+        .frame(height: Size.rowHeightTall)
     }
 
     @ViewBuilder
     private var resultList: some View {
         if results.isEmpty {
-            VStack(spacing: 6) {
+            VStack(spacing: Space.sm) {
                 Text("Nothing matches \(query)")
-                    .font(.callout.weight(.medium))
-                Text("Search by name, or type an action such as Check Setup.")
-                    .font(.caption)
+                    .font(AgentFont.bodyMedium)
+                Text("Search by name, or type an action such as \(ActionTitles.checkAppsCommand(.palette)).")
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    LazyVStack(spacing: Space.xxs) {
                         ForEach(Array(results.enumerated()), id: \.element.id) { index, item in
                             Button {
                                 highlighted = index
@@ -351,36 +400,49 @@ struct CommandPaletteView: View {
                                 CommandPaletteRow(item: item, selected: index == highlighted)
                             }
                             .buttonStyle(.plain)
+                            .onContinuousHover(coordinateSpace: .global) { phase in
+                                guard case .active(let location) = phase else { return }
+                                // The first report is where the pointer already
+                                // was when the palette opened, not a movement.
+                                defer { lastPointer = location }
+                                guard let lastPointer, lastPointer != location, highlighted != index else { return }
+                                highlightedByPointer = true
+                                highlighted = index
+                            }
                             .id(item.id)
-                            .help("Open \(item.title) in \(item.contextLabel)")
+                            .help(item.help)
                             .accessibilityLabel("\(item.title), \(item.subtitle)")
                             .accessibilityValue(index == highlighted ? "Selected" : "")
                         }
                     }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 8)
+                    .padding(.vertical, Space.sm)
+                    .padding(.horizontal, Space.md)
                 }
                 .onChange(of: highlighted) { _, index in
+                    if highlightedByPointer {
+                        highlightedByPointer = false
+                        return
+                    }
                     guard results.indices.contains(index) else { return }
-                    withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(results[index].id, anchor: .center) }
+                    withAnimation(AgentMotion.quick) { proxy.scrollTo(results[index].id, anchor: .center) }
                 }
             }
         }
     }
 
     private var hints: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: Space.xl) {
             Label("Move", systemImage: "arrow.up.arrow.down")
             Label("Open", systemImage: "return")
             Label("Close", systemImage: "escape")
             Spacer()
-            Text("\(results.count) result\(results.count == 1 ? "" : "s")")
+            Text(CountNoun("result").phrase(results.count))
                 .monospacedDigit()
         }
-        .font(.caption)
+        .font(AgentFont.caption)
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 16)
-        .frame(height: 34)
+        .padding(.horizontal, Space.xl)
+        .frame(height: Size.compactRowHeight)
     }
 
     private func move(by offset: Int) {
@@ -399,39 +461,43 @@ private struct CommandPaletteRow: View {
     let selected: Bool
 
     var body: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: Space.lg) {
             if let client = item.client {
-                ClientBrandIcon(client: client, size: 18)
-                    .frame(width: 24, height: 24)
+                ClientBrandIcon(client: client, size: Size.tileSmall)
+                    .frame(width: Size.tile, height: Size.tile)
             } else if let kind = item.kind {
-                KindTile(kind: kind, size: 24)
+                KindTile(kind: kind, size: Size.tile)
             } else {
                 Image(systemName: item.symbol)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(selected ? Color.white : Color.secondary)
-                    .frame(width: 24, height: 24)
+                    .font(AgentFont.bodyMedium)
+                    .foregroundStyle(selected ? AgentTheme.onSelection : Color.secondary)
+                    .frame(width: Size.tile, height: Size.tile)
             }
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(item.title)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .font(AgentFont.bodyMedium)
+                    .foregroundStyle(selected ? AgentTheme.onSelection : Color.primary)
                     .lineLimit(1)
                 Text(item.subtitle)
-                    .font(.caption)
-                    .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary)
+                    .font(AgentFont.caption)
+                    .foregroundStyle(selected ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection) : Color.secondary)
                     .lineLimit(1)
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.lg)
             Text(item.contextLabel)
-                .font(.caption)
-                .foregroundStyle(selected ? Color.white.opacity(0.78) : Color.secondary.opacity(0.75))
+                .font(AgentFont.caption)
+                .foregroundStyle(
+                    selected
+                        ? AgentTheme.onSelection.opacity(Opacity.secondaryOnSelection)
+                        : Color.secondary.opacity(Opacity.supporting)
+                )
                 .lineLimit(1)
         }
-        .padding(.horizontal, 10)
-        .frame(height: 42)
+        .padding(.horizontal, Space.lg)
+        .frame(height: Size.rowHeight)
         .background {
             if selected {
-                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AgentTheme.blue)
+                RoundedRectangle.control.fill(AgentTheme.selection)
             }
         }
         .contentShape(Rectangle())

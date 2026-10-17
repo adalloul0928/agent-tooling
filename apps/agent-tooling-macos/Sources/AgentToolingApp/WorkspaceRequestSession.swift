@@ -107,6 +107,15 @@ final class WorkspaceRequestSession {
         return request
     }
 
+    /// The assistant a request to write a skill is drafted with: the one its
+    /// own stored draft names, which is the one the creator opens on and runs.
+    /// Nil for every other kind of request, and for a draft that cannot be
+    /// read, so a review never names an assistant it only guessed.
+    func draftingClient(for request: PendingAgentRequest) async -> ClientKind? {
+        guard request.kind == .createSkill else { return nil }
+        return await access.draftingClient(request.id)
+    }
+
     /// Removes one row without changing any client.
     @discardableResult
     func reject(_ request: PendingAgentRequest) async -> Bool {
@@ -264,7 +273,7 @@ final class WorkspaceRequestSession {
             }
             let destinations = request.targets.sorted { $0.rawValue < $1.rawValue }.map { client in
                 PortableDestination(
-                    surface: surface(client), scope: request.scope,
+                    surface: client.defaultSurface, scope: request.scope,
                     logicalProjectID: nil, deviceIDs: [library.deviceID])
             }
             return .assign(row.artifactID, destinations)
@@ -286,14 +295,6 @@ final class WorkspaceRequestSession {
             case "plugin": [.nativePlugin, .package]
             default: nil
             }
-        }
-    }
-
-    private func surface(_ client: ClientKind) -> TargetSurface {
-        switch client {
-        case .claude: .claudeCode
-        case .codex: .codexCLI
-        case .gemini: .geminiCLI
         }
     }
 
@@ -353,6 +354,14 @@ final class WorkspaceRequestSession {
         func discardDraft(_ id: UUID) async {
             let store = store
             await Task.detached { try? store.deleteRequestDraft(id) }.value
+        }
+
+        /// Which assistant a skill request's stored draft names.
+        func draftingClient(_ id: UUID) async -> ClientKind? {
+            let store = store
+            return await Task.detached {
+                (try? store.requestDraft(id, as: SkillDraftRequest.self))?.client
+            }.value
         }
     }
 
@@ -432,8 +441,8 @@ enum PendingRequestEnvelope {
         case .createSkill:
             guard let instruction = details.instruction,
                 !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                instruction.count <= CodexSkillDraftRequest.maximumInstructionCharacters,
-                instruction.utf8.count <= CodexSkillDraftRequest.maximumInstructionBytes,
+                instruction.count <= SkillDraftRequest.maximumInstructionCharacters,
+                instruction.utf8.count <= SkillDraftRequest.maximumInstructionBytes,
                 details.endpoint == nil, details.transport == nil, details.source == nil,
                 details.componentKind == nil
             else { return nil }

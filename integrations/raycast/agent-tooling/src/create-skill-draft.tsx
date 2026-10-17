@@ -13,22 +13,38 @@ import {
   openAgentToolingRoute,
   userMessageForError,
 } from "./lib/agent-tooling";
-import { SkillScope, SkillTarget } from "./lib/contracts";
-import { validateSkillInstruction } from "./lib/skill-request";
+import { SkillProvider, SkillScope, SkillTarget } from "./lib/contracts";
+import {
+  DEFAULT_SKILL_PROVIDER,
+  isSkillProvider,
+  SKILL_PROVIDERS,
+  skillProviderTitle,
+  validateSkillInstruction,
+} from "./lib/skill-request";
 
 interface CreateSkillFormValues {
   instruction: string;
+  provider: SkillProvider;
   scope: SkillScope;
   targets: SkillTarget[];
   projectPath?: string[];
 }
 
+const PROVIDER_ICONS: Record<SkillProvider, Icon> = {
+  codex: Icon.Terminal,
+  claude: Icon.Code,
+};
+
 export default function CreateSkillDraftCommand() {
+  const [provider, setProvider] = useState<SkillProvider>(
+    DEFAULT_SKILL_PROVIDER,
+  );
   const [scope, setScope] = useState<SkillScope>("global");
   const [instructionError, setInstructionError] = useState<string>();
   const [projectError, setProjectError] = useState<string>();
   const [targetError, setTargetError] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const providerTitle = skillProviderTitle(provider);
 
   async function submit(values: CreateSkillFormValues) {
     const instructionValidation = validateSkillInstruction(values.instruction);
@@ -53,11 +69,12 @@ export default function CreateSkillDraftCommand() {
     setIsSubmitting(true);
     const toast = await showToast({
       style: Toast.Style.Animated,
-      title: "Opening Codex skill creator",
+      title: `Opening ${skillProviderTitle(values.provider)} skill creator`,
     });
     try {
       const request = await createSkillDraft({
         instruction: instructionValidation.instruction,
+        provider: values.provider,
         scope: values.scope,
         targets: values.targets,
         projectPath,
@@ -82,15 +99,17 @@ export default function CreateSkillDraftCommand() {
       actions={
         <ActionPanel>
           <Action.SubmitForm
-            title="Create Draft with Codex"
+            title={`Create Draft with ${providerTitle}`}
             icon={Icon.Wand}
             onSubmit={submit}
           />
         </ActionPanel>
       }
     >
-      <Form.Description text="Codex will use Agent Tooling's Skill Creator workflow. Nothing is installed until you review and approve the draft in the desktop app." />
-      <Form.Description text="Codex is the only generator. Install destinations are optional targets for the portable skill after review; they do not invoke Claude or Gemini to create it." />
+      <Form.Description
+        text={`${providerTitle} will use Agent Tooling's Skill Creator workflow. Nothing is installed until you review and approve the draft in the desktop app.`}
+      />
+      <Form.Description text="Only the assistant you choose writes the draft. Install destinations are optional targets for the portable skill after review; picking one does not ask that app to write it." />
       <Form.TextArea
         id="instruction"
         title="Instruction"
@@ -100,6 +119,24 @@ export default function CreateSkillDraftCommand() {
         autoFocus
       />
       <Form.Separator />
+      <Form.Dropdown
+        id="provider"
+        title="Assistant"
+        info="Skill creation runs in your signed-in local Claude Code or Codex."
+        value={provider}
+        onChange={(value) => {
+          if (isSkillProvider(value)) setProvider(value);
+        }}
+      >
+        {SKILL_PROVIDERS.map((value) => (
+          <Form.Dropdown.Item
+            key={value}
+            value={value}
+            title={skillProviderTitle(value)}
+            icon={PROVIDER_ICONS[value]}
+          />
+        ))}
+      </Form.Dropdown>
       <Form.Dropdown
         id="scope"
         title="Scope"

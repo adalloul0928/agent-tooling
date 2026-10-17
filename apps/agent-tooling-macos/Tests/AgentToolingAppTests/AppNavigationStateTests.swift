@@ -78,6 +78,23 @@ struct AppNavigationStateTests {
         #expect(navigation.selectedClient == nil)
     }
 
+    /// Health is a tab of the Apps family: it lights up the Apps sidebar row,
+    /// sits alongside Clients and Settings in the family's tab row, and reads
+    /// under the "Apps" heading.
+    @Test("Health belongs to the Apps family")
+    @MainActor
+    func healthIsATabOfTheAppsFamily() {
+        #expect(AppSection.health.rawValue == "Health")
+        #expect(AppSection.health.tabTitle == "Health")
+        #expect(AppSection.health.sidebarDestination == .syncCenter)
+        #expect(AppSection.health.workspaceTitle == "Apps")
+        #expect(AppSection.health.workspaceTabs == [.syncCenter, .accounts, .checkup, .appSettings, .health])
+        // The family's other members offer the same tab row, so Health is
+        // reachable from Clients and from Settings within Apps.
+        #expect(AppSection.syncCenter.workspaceTabs.contains(.health))
+        #expect(AppSection.appSettings.workspaceTabs.contains(.health))
+    }
+
     @Test("Brand icons are available as a compiled catalog or source assets")
     @MainActor
     func brandIconsAreAvailableAcrossSwiftToolchains() {
@@ -195,8 +212,8 @@ struct AppNavigationStateTests {
     }
 
     /// The two screens that no longer exist still have live external routes.
-    /// Neither may dead-end: Configurations asked what a scope requires, which
-    /// is now Projects, and Accounts has no screen, so it stops at Apps.
+    /// None may dead-end: Configurations asked what a scope requires, which is
+    /// now Projects, and Accounts is a tab of Apps again.
     @Test("Every external route reaches a section that still exists")
     @MainActor
     func everyExternalRouteLands() {
@@ -214,7 +231,7 @@ struct AppNavigationStateTests {
 
         let accounts = AppNavigationState()
         accounts.open(.section(.accounts))
-        #expect(accounts.requestedSection == .syncCenter)
+        #expect(accounts.requestedSection == .accounts)
     }
 }
 
@@ -232,8 +249,18 @@ struct AppSectionTests {
     func retiredSectionsAreAbsent() {
         let names = AppSection.allCases.map(\.rawValue)
         #expect(!names.contains("Configurations"))
-        #expect(!names.contains("Accounts"))
         #expect(Set(names).count == names.count)
+    }
+
+    /// Accounts reads the hosted accounts; it is a tab of Apps, lit by the
+    /// Apps row, and the old external `accounts` route lands on it.
+    @Test("Accounts belongs to the Apps family")
+    func accountsIsATabOfTheAppsFamily() {
+        #expect(AppSection.accounts.rawValue == "Accounts")
+        #expect(AppSection.accounts.tabTitle == "Accounts")
+        #expect(AppSection.accounts.sidebarDestination == .syncCenter)
+        #expect(AppSection.accounts.workspaceTitle == "Apps")
+        #expect(AppSection.syncCenter.workspaceTabs.contains(.accounts))
     }
 
     @Test("A sidebar row says where it goes, not what it holds")
@@ -250,7 +277,7 @@ struct AppSectionTests {
     func tabFamiliesAreSymmetric() {
         let families: [[AppSection]] = [
             [.skills, .plugins, .mcpServers, .presets],
-            [.syncCenter, .appSettings],
+            [.syncCenter, .accounts, .checkup, .appSettings, .health],
             [.activity, .history],
             [.settings, .sync],
         ]
@@ -265,13 +292,14 @@ struct AppSectionTests {
     }
 
     /// A tab sits under its family's heading, so it must not repeat it. Only
-    /// three tabs disagree with their durable identifier, and each disagrees
+    /// four tabs disagree with their durable identifier, and each disagrees
     /// because the identifier would read wrongly under that heading.
     @Test("Tab labels read correctly under their own heading")
     func tabTitlesAreScopedToTheirFamily() {
         #expect(AppSection.syncCenter.tabTitle == "Clients")
         #expect(AppSection.appSettings.tabTitle == "Settings")
         #expect(AppSection.settings.tabTitle == "General")
+        #expect(AppSection.activity.tabTitle == "Receipts")
         #expect(AppSection.skills.tabTitle == "Skills")
         #expect(AppSection.presets.tabTitle == "Presets")
         #expect(AppSection.history.tabTitle == "History")
@@ -279,9 +307,26 @@ struct AppSectionTests {
 
         #expect(AppSection.skills.workspaceTitle == "Library")
         #expect(AppSection.appSettings.workspaceTitle == "Apps")
+        #expect(AppSection.checkup.workspaceTitle == "Apps")
         #expect(AppSection.history.workspaceTitle == "Activity")
         #expect(AppSection.sync.workspaceTitle == "Settings")
         #expect(AppSection.overview.workspaceTitle == nil)
+    }
+
+    /// The family's name is the heading, so a tab with the same name reads as
+    /// a duplicate rather than a child, the way the Activity heading sat over
+    /// an Activity tab. The tab row stays the same from tab to tab, and so does
+    /// the heading above it: Checkup once fell back to its own name there.
+    @Test("No tab repeats its family's heading, and a family keeps one heading")
+    func tabsNeverRepeatTheirHeading() {
+        for section in AppSection.allCases where !section.workspaceTabs.isEmpty {
+            let heading = section.workspaceTitle
+            #expect(heading != nil, "\(section.rawValue) has tabs but no heading")
+            for tab in section.workspaceTabs {
+                #expect(tab.tabTitle != heading, "\(tab.rawValue) repeats its heading")
+                #expect(tab.workspaceTitle == heading, "\(tab.rawValue) is headed unlike \(section.rawValue)")
+            }
+        }
     }
 
     @Test("Every tab keeps its family's sidebar row selected")

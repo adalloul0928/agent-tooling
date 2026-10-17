@@ -19,7 +19,6 @@ struct GitCheckoutSourceReaderTests {
         #expect(recognition.checkout.upstream?.requestedRef == "main")
         #expect(recognition.checkout.upstream?.repositoryURL == "https://github.com/example/skill-library")
         #expect(recognition.checkout.headCommit?.kind == .gitCommitSHA1)
-        #expect(!recognition.checkout.isLinkedWorktree)
         #expect(try fixture.gitFiles() == before)
 
         let artifact = ArtifactRecord(identity: .init(id: id, kind: .skill, displayName: "A display name"), authority: .trackedOnly)
@@ -40,7 +39,6 @@ struct GitCheckoutSourceReaderTests {
         try await fixture.git(["worktree", "add", "--detach", linked.path, "HEAD"])
         let main = try await GitCheckoutSourceReader().capture(directory: fixture.root)
         let other = try await GitCheckoutSourceReader().recognize(artifactID: .init(), directory: linked)
-        #expect(other.checkout.isLinkedWorktree)
         #expect(other.checkout.commonGitDirectory == main.commonGitDirectory)
         #expect(other.checkout.gitDirectory != main.gitDirectory)
         #expect(other.checkout.headCommit == main.headCommit)

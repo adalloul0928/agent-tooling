@@ -139,6 +139,73 @@ struct WorkspaceDeploymentPlannerTests {
                 "\(plan.items.first?.reasons ?? []) \(plan.exclusions)")
     }
 
+    @Test func aDestinationThisMacCannotReachIsExcludedByNameWithTheSuppliedDetail() throws {
+        let document = try Self.document(
+            artifacts: [Self.personal],
+            assignments: [Self.assignment(Self.personalID, surface: .codexCLI)])
+        let selector = ResolvedAssignmentSelector(surface: .codexCLI, scope: .user)
+        let detail = "Order History has no folder on this Mac yet. Choose one on the Projects screen."
+
+        let plan = WorkspaceDeploymentPlanner.plan(
+            document: document, device: Self.device, targets: [],
+            availableContent: [Self.held(Self.personalID, "a")],
+            unavailableDestinations: [selector: detail])
+
+        // Named once, with the caller's plain-words detail — not a generic
+        // "needs review" from the resolver having found no target.
+        #expect(plan.items.isEmpty)
+        #expect(plan.exclusions.map(\.reason) == [.noDestination])
+        #expect(plan.exclusions.first?.detail == detail)
+        #expect(plan.exclusions.first?.artifactID == Self.personalID)
+    }
+
+    @Test func aMissingClientVersionIsUnknownRatherThanUnsupported() throws {
+        let document = try Self.document(
+            artifacts: [Self.personal],
+            assignments: [Self.assignment(Self.personalID, surface: .codexCLI)])
+        // A target with no capability evidence behind it: the app never reported
+        // its version, so what it accepts is unknown.
+        var blind = DeviceWorkspaceState(workspaceID: Self.workspaceID, deviceID: Self.deviceID)
+        blind.observations = [.init(surface: .codexCLI, installed: true, version: nil,
+                                    capabilities: Self.emptyCapabilities)]
+        let target = ResolvedAssignmentTarget(
+            selector: .init(surface: .codexCLI, scope: .user, logicalProjectID: nil),
+            physicalDestinationID: WorkspaceObjectID(
+                UUID(uuidString: "00000000-0000-0000-0000-000000000101")!),
+            installedClientVersion: "1.0.0", adapterContractVersion: 1,
+            componentContexts: [.init(component: .skill, transport: nil)])
+
+        let plan = WorkspaceDeploymentPlanner.plan(
+            document: document, device: blind, targets: [target],
+            availableContent: [Self.held(Self.personalID, "a")])
+
+        #expect(plan.items.isEmpty)
+        #expect(plan.exclusions.map(\.reason) == [.unknownClientVersion])
+        // Plain words, and never a code word.
+        let detail = try #require(plan.exclusions.first?.detail)
+        #expect(detail.contains("did not report its version"))
+    }
+
+    @Test func describeNeverLeaksARawEnumValue() {
+        // Every kind the resolver can raise, so a new one added upstream is
+        // checked here the moment it exists.
+        let allKinds = WorkspaceAssignmentIssueKind.allCases
+        for kind in allKinds {
+            let sentence = WorkspaceDeploymentPlanner.describe(kind)
+            #expect(!sentence.contains(kind.rawValue), "\(kind.rawValue) leaked in: \(sentence)")
+            // A real sentence, not an empty or code-shaped string.
+            #expect(sentence.contains(" "), "\(kind.rawValue): \(sentence)")
+        }
+    }
+
+    private static var emptyCapabilities: TargetCapabilities {
+        .init(
+            supportsPluginInstall: false, supportsProjectScope: false,
+            supportsLocalMarketplace: false, supportsMCPAuthentication: false,
+            supportsConnectorDiscovery: false, requiresNewSession: false,
+            requiresRestart: false, supportsMachineReadableOutput: false)
+    }
+
     private static let personalID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)
     private static let trackedID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!)
     private static let otherID = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000c3")!)

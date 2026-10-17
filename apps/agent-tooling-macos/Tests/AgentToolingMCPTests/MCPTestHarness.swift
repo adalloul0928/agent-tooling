@@ -15,7 +15,6 @@ final class MCPTestHarness {
     let service: ToolingMCPService
     private let rootURL: URL
     private var nextID = 0
-    private var issuedIdentifiers: [UUID] = []
 
     /// One workspace, built from the items and assignments a test needs.
     /// `observations` and `receipts` are this device's own records.

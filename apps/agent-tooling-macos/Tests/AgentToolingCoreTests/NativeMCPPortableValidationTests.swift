@@ -22,6 +22,8 @@ struct NativeMCPPortableValidationTests {
             document.minimumWriterVersion = version
             document.configurationState = version == 1 ? nil : .init()
             document.mcpDefinitions = version < 3 ? nil : []
+            // A historical document predates account choices (schema 6).
+            document.accountPreferences = nil
             #expect(throws: WorkspaceDomainValidationError.self) {
                 try document.validateStructure()
             }

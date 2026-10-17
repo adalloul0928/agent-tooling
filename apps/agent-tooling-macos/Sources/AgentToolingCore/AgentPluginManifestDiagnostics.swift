@@ -61,13 +61,13 @@ public struct AgentPluginManifestIngestionPolicy: Hashable, Sendable {
     }
 }
 
-public enum AgentPluginManifestPolicyError: LocalizedError, Sendable {
+enum AgentPluginManifestPolicyError: LocalizedError, Sendable {
     case maximumStringCharacters(field: String)
     case maximumKeywords
     case maximumKeywordCharacters
     case controlCharacters(field: String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .maximumStringCharacters(let field): "Manifest ingestion limit exceeded for \(field)"
         case .maximumKeywords: "Manifest ingestion keyword limit exceeded"

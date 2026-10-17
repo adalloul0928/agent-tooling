@@ -17,6 +17,10 @@ struct PluginsView: View {
     @State private var query = ""
     @State private var clientFilter: ClientKind?
     @State private var selection: Set<ArtifactID> = []
+    // Presentation is separate from selection, the way Discover keeps them: a
+    // closed inspector remembers what was selected without occupying half the
+    // window, and Escape closes the pane rather than forgetting the row.
+    @State private var showingDetails = false
     @State private var stackClient: ClientKind = .claude
     @State private var refreshID = UUID()
 
@@ -32,22 +36,27 @@ struct PluginsView: View {
                 } label: {
                     Label(workspace.device.isChecking ? "Checking…" : "Check plugins", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.glassProminent)
-                .tint(AgentTheme.selection)
+                .primaryActionStyle()
                 .disabled(workspace.device.isChecking)
             }
 
-            if selection.isEmpty {
-                collectionPane(rows: listed, inventory: inventory, updates: updates)
-            } else {
-                HSplitView {
-                    collectionPane(rows: listed, inventory: inventory, updates: updates)
-                        .frame(minWidth: 320, idealWidth: 600)
-                    VStack(spacing: 0) {
-                        InspectorHeader(title: "Plugin details") { selection = [] }
-                        detailPane(inventory: inventory, updates: updates)
-                    }.frame(minWidth: 400, idealWidth: 600)
+            GeometryReader { proxy in
+                Group {
+                    if showingDetails, !selection.isEmpty {
+                        HSplitView {
+                            collectionPane(rows: listed, updates: updates)
+                                .frame(minWidth: Size.listPaneMin, idealWidth: proxy.size.width * Proportion.listShare)
+                            VStack(spacing: 0) {
+                                InspectorHeader(title: "Plugin details") { showingDetails = false }
+                                detailPane(inventory: inventory, updates: updates)
+                            }
+                            .frame(minWidth: Size.detailPaneMin, idealWidth: proxy.size.width * Proportion.detailShare)
+                        }
+                    } else {
+                        collectionPane(rows: listed, updates: updates)
+                    }
                 }
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -59,24 +68,25 @@ struct PluginsView: View {
         .onChange(of: inventory.rows.map(\.artifactID)) { _, _ in pruneSelection(in: inventory.rows) }
         .onChange(of: listed.map(\.artifactID)) { _, _ in pruneSelection(in: inventory.rows) }
         .onChange(of: navigation.revision) { _, _ in consumeRequestedSelection(in: inventory.rows) }
-        .onExitCommand { selection = [] }
+        .onChange(of: selection) { _, changed in if !changed.isEmpty { showingDetails = true } }
+        .onExitCommand { showingDetails = false }
     }
 
     // MARK: Collection
 
     private func collectionPane(
-        rows: [WorkspaceLibraryReadModelRow], inventory: PluginInventoryIndex,
+        rows: [WorkspaceLibraryReadModelRow],
         updates: PluginUpdateEvaluation
     ) -> some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 Picker("App", selection: $clientFilter) {
                     Text("All apps").tag(nil as ClientKind?)
                     ForEach(availableClients) { client in Text(client.rawValue).tag(client as ClientKind?) }
                 }.inventoryMenuStyle().fixedSize()
                 Spacer()
                 InventorySearchField(placeholder: "Search plugins", text: $query)
-                    .frame(maxWidth: 420)
+                    .frame(maxWidth: Size.fieldWide)
                     .accessibilityLabel("Search plugins")
             }
             .padding(.horizontal, WorkspaceLayout.pageInset)
@@ -99,70 +109,57 @@ struct PluginsView: View {
                     }
                 }
             } else {
-                GeometryReader { geometry in
-                    if geometry.size.width < 820 {
-                        narrowTable(rows: rows)
-                    } else {
-                        wideTable(rows: rows, updates: updates)
-                    }
-                }
+                pluginList(rows: rows, updates: updates)
             }
         }
         .paneMaterial()
     }
 
-    private func narrowTable(rows: [WorkspaceLibraryReadModelRow]) -> some View {
-        Table(rows, selection: $selection) {
-            TableColumn("Plugin") { row in
-                HStack(spacing: 12) {
-                    pluginIcon(for: row, size: 30)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(row.displayName).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                        Text(row.sourceLabel.map { "From \($0)" } ?? row.ownershipLabel)
-                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }.padding(.vertical, 8)
+    /// The rows live in a `List`, keeping native multiple selection and
+    /// keyboard travel, and the columns are plain frames laid out by hand, the
+    /// way every collection table does it (`CollectionColumns`).
+    private func pluginList(rows: [WorkspaceLibraryReadModelRow], updates: PluginUpdateEvaluation) -> some View {
+        GeometryReader { geometry in
+            // The card's inner width, less the row's own insets.
+            let columns = CollectionColumns(width: geometry.size.width - Space.xl * 2, layout: .plugins)
+            // Leading, so the list keeps the header's leading edge even when
+            // a row's columns cannot fit and both run past the card.
+            VStack(alignment: .leading, spacing: 0) {
+                Self.columnHeader(columns)
+                List(rows, selection: $selection) { row in
+                    PluginCollectionRow(
+                        row: row,
+                        update: updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet."),
+                        clients: availableClients,
+                        columns: columns,
+                        selected: selection.contains(row.artifactID)
+                    )
+                    .tag(row.artifactID)
+                    .collectionTableRowChrome(selected: selection.contains(row.artifactID))
+                    .accessibilityLabel(row.displayName)
                 }
-            }.width(min: 190, ideal: 350)
-            TableColumn("Managed by") { row in
-                TableClientMarks(clients: availableClients, present: Set(row.nativeRoutes.map(\.client)))
-            }.width(90)
+                .collectionListChrome()
+            }
         }
-        .tableStyle(.inset(alternatesRowBackgrounds: false))
-        .scrollContentBackground(.hidden)
+        .collectionSurface()
     }
 
-    private func wideTable(rows: [WorkspaceLibraryReadModelRow], updates: PluginUpdateEvaluation) -> some View {
-        Table(rows, selection: $selection) {
-            TableColumn("Name") { row in
-                HStack(spacing: 12) {
-                    pluginIcon(for: row, size: 30)
-                    Text(row.displayName).font(.callout.weight(.medium))
-                }.padding(.vertical, 8)
-            }.width(min: 180, ideal: 250)
-            TableColumn("Description") { row in
-                let text = description(for: row)
-                Text(text).foregroundStyle(.secondary).lineLimit(1).help(text)
-            }.width(min: 120, ideal: 360)
-            TableColumn("Source") { row in
-                Text(row.sourceLabel ?? "Not recorded").foregroundStyle(.secondary).lineLimit(1)
-            }.width(min: 120, ideal: 150)
-            TableColumn("Skills") { row in
-                Text("\(row.childCount)").monospacedDigit().foregroundStyle(.secondary)
-            }.width(50)
-            TableColumn("Managed by") { row in
-                TableClientMarks(clients: availableClients, present: Set(row.nativeRoutes.map(\.client)))
-            }.width(90)
-            TableColumn("Updates") { row in
-                let update = updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet.")
-                if update.hasUpdate {
-                    UpdateStateBadge(availability: update)
-                } else {
-                    Text(update.title).font(.caption).foregroundStyle(.secondary)
-                }
-            }.width(min: 110, ideal: 130)
+    /// The column titles, from the same widths as the rows under them. The
+    /// narrow layout is the name and Managed by after one gap, the reserve
+    /// `CollectionColumns.Layout.plugins` keeps.
+    static func columnHeader(_ columns: CollectionColumns) -> some View {
+        CollectionColumnHeader {
+            Text(columns.expanded ? "Name" : "Plugin").frame(width: columns.name, alignment: .leading)
+            if columns.expanded {
+                Text("Description").frame(maxWidth: .infinity, alignment: .leading)
+                Text("Source").frame(width: CollectionColumn.source, alignment: .leading)
+                Text("Skills").frame(width: CollectionColumn.narrow, alignment: .trailing)
+            }
+            Text("Managed by").frame(width: CollectionColumn.clientMarks, alignment: .trailing)
+            if columns.expanded {
+                Text("Updates").frame(width: CollectionColumn.Plugins.updates, alignment: .leading)
+            }
         }
-        .tableStyle(.inset(alternatesRowBackgrounds: false))
-        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder
@@ -180,7 +177,8 @@ struct PluginsView: View {
             PluginDetailView(
                 row: row,
                 availability: updates.availability[row.artifactID] ?? .notChecked(reason: "Not checked yet."),
-                library: workspace.library
+                library: workspace.library,
+                workspace: workspace
             )
         } else {
             EmptyStateView(
@@ -194,7 +192,7 @@ struct PluginsView: View {
     /// This Mac's apps this workspace manages, in the registry's own order —
     /// the set every marks glyph and picker in this screen draws from.
     private var availableClients: [ClientKind] {
-        workspace.device.availableClients.filter(workspace.device.isEnabled)
+        workspace.device.managedClients
     }
 
     private var libraryRows: [WorkspaceLibraryReadModelRow] {
@@ -210,11 +208,6 @@ struct PluginsView: View {
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
 
-    private func description(for row: WorkspaceLibraryReadModelRow) -> String {
-        guard let observed = row.observedDescription, !observed.isEmpty else { return row.ownershipLabel }
-        return observed
-    }
-
     private func searchText(_ row: WorkspaceLibraryReadModelRow) -> String {
         ([row.displayName, row.sourceLabel ?? "", row.observedDescription ?? ""] + row.includedChildren.map(\.displayName))
             .joined(separator: " ")
@@ -223,7 +216,7 @@ struct PluginsView: View {
     private var hasFilters: Bool { !query.isEmpty || clientFilter != nil }
 
     private func toolbarContext(_ inventory: PluginInventoryIndex) -> String {
-        "\(inventory.rows.count) plugin\(inventory.rows.count == 1 ? "" : "s")"
+        CountNoun.plugin.phrase(inventory.rows.count)
     }
 
     /// Several picks, one plan. Removing plugins one at a time means one review
@@ -242,6 +235,8 @@ struct PluginsView: View {
         let visible = Set(filtered(rows).map(\.artifactID))
         let kept = selection.intersection(visible)
         if kept != selection { selection = kept }
+        // A pruned-empty selection has nothing to inspect; the flag follows.
+        if kept.isEmpty, showingDetails { showingDetails = false }
     }
 
     /// Answers a palette result that named one plugin row: `openItem(_:in:.plugins)`
@@ -274,73 +269,135 @@ private func pluginIcon(for row: WorkspaceLibraryReadModelRow, size: CGFloat) ->
     }
 }
 
-/// Removing several plugins from one app is one reviewed operation, or none: a
-/// stack with nothing recorded for the chosen app is refused with the reason,
-/// never partially planned.
+/// One plugin on the Plugins table, laid out from the table's columns. Its
+/// narrow layout is the name and the Managed by marks after one gap, exactly
+/// what `CollectionColumns.Layout.plugins` reserves beside the name, so the
+/// row fills the table's width and never pushes the marks past the card.
+struct PluginCollectionRow: View {
+    let row: WorkspaceLibraryReadModelRow
+    let update: UpdateAvailability
+    /// This Mac's managed apps, in the order every row draws their marks.
+    let clients: [ClientKind]
+    let columns: CollectionColumns
+    let selected: Bool
+
+    var body: some View {
+        HStack(spacing: Space.lg) {
+            HStack(spacing: Space.lg) {
+                pluginIcon(for: row, size: Size.tile)
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(row.displayName).font(AgentFont.bodyMedium).lineLimit(1)
+                        .collectionRowForeground(selected: selected)
+                    if !columns.expanded {
+                        Text(row.sourceLabel.map { "From \($0)" } ?? row.ownershipLabel)
+                            .font(AgentFont.caption).lineLimit(1)
+                            .collectionRowForeground(selected: selected, secondary: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(width: columns.name, alignment: .leading)
+            if columns.expanded {
+                Text(description).font(AgentFont.body).lineLimit(1).help(description)
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(row.sourceLabel ?? "Not recorded").font(AgentFont.caption).lineLimit(1)
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .frame(width: CollectionColumn.source, alignment: .leading)
+                Text("\(row.childCount)").font(AgentFont.caption.monospacedDigit())
+                    .collectionRowForeground(selected: selected, secondary: true)
+                    .frame(width: CollectionColumn.narrow, alignment: .trailing)
+            }
+            TableClientMarks(clients: clients, present: Set(row.nativeRoutes.map(\.client)), selected: selected)
+                .frame(width: CollectionColumn.clientMarks, alignment: .trailing)
+            if columns.expanded {
+                Group {
+                    if update.hasUpdate {
+                        UpdateStateBadge(availability: update)
+                    } else {
+                        Text(update.title).font(AgentFont.caption).lineLimit(1)
+                            .collectionRowForeground(selected: selected, secondary: true)
+                    }
+                }
+                .frame(width: CollectionColumn.Plugins.updates, alignment: .leading)
+            }
+        }
+        .padding(.vertical, Space.md)
+    }
+
+    private var description: String {
+        guard let observed = row.observedDescription, !observed.isEmpty else { return row.ownershipLabel }
+        return observed
+    }
+}
+
+/// Withdrawing several plugins' requests for one app is one reviewed
+/// operation, or none: a stack with nothing recorded for the chosen app is
+/// refused with the reason, never partially planned. It is the "Stop asking…"
+/// Connections offers, and like it uninstalls nothing.
 private struct PluginStackPane: View {
     let rows: [WorkspaceLibraryReadModelRow]
     let library: WorkspaceLibrarySession
     let availableClients: [ClientKind]
     @Binding var client: ClientKind
     let onClear: () -> Void
-    @State private var removal: RemovalRequest?
+    @State private var removal: AssignmentRemovalPresentation?
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 14) {
-                    KindTile(kind: .plugin, size: 40)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(rows.count) plugins selected").font(.title3.weight(.semibold))
-                        Text("Remove their assignment to one app through one reviewed plan.")
-                            .font(.callout)
+            VStack(alignment: .leading, spacing: Space.xl) {
+                HStack(spacing: Space.xl) {
+                    KindTile(kind: .plugin, size: Size.tileLarge)
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text("\(CountNoun.plugin.phrase(rows.count)) selected").font(AgentFont.title)
+                        Text("Stop asking for them in one app, through one reviewed plan.")
+                            .font(AgentFont.body)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Review removal plan", action: review)
-                        .buttonStyle(.borderedProminent)
-                        .tint(AgentTheme.selection)
+                    Button(ActionTitles.stopAsking, action: review)
+                        .primaryActionStyle()
                         .disabled(library.isBusy || contributionIDs.isEmpty)
                 }
 
                 if let error = library.errorMessage {
                     AttentionBanner(title: "This stack cannot be planned yet", message: error) {
                         Button("Keep one", action: onClear)
-                            .buttonStyle(.bordered)
+                            .secondaryActionStyle()
                             .controlSize(.small)
                     }
                 } else if contributionIDs.isEmpty {
                     AttentionBanner(
-                        title: "Nothing to remove for \(client.rawValue)",
+                        title: "Nothing asked for in \(client.rawValue)",
                         message: "None of the selected plugins have a saved assignment for this app.")
                 }
 
-                GroupBox("Remove from") {
+                GroupBox("Stop asking in") {
                     WorkspaceSegmentedPicker("App", selection: $client) {
                         ForEach(availableClients) { candidate in Text(candidate.rawValue).tag(candidate) }
                     }
                     .labelsHidden()
-                    .padding(13)
-                    .accessibilityLabel("App to remove from")
+                    .padding(Space.lg)
+                    .accessibilityLabel("App to stop asking in")
                 }
 
                 GroupBox("In this stack") {
                     VStack(spacing: 0) {
                         ForEach(rows) { row in
                             InfoRow(row.displayName, detail: row.ownershipLabel) {
-                                pluginIcon(for: row, size: 26)
+                                pluginIcon(for: row, size: Size.tile)
                             } trailing: {
-                                ClientMarks(present: Set(row.nativeRoutes.map(\.client)), size: 13)
+                                ClientMarks(present: Set(row.nativeRoutes.map(\.client)), size: Size.brandMark)
                             }
-                            if row.id != rows.last?.id { Divider().opacity(0.35) }
+                            if row.id != rows.last?.id { Hairline() }
                         }
                     }
                 }
             }
-            .padding(22)
+            .padding(Space.xxxl)
         }
         .sheet(item: $removal) { request in
-            WorkspaceAssignmentSheet(session: library, artifactIDs: request.artifactIDs)
+            AssignmentRemovalSheet(session: library, presentation: request)
         }
     }
 
@@ -356,33 +413,33 @@ private struct PluginStackPane: View {
     private func review() {
         let ids = contributionIDs
         guard !ids.isEmpty else { return }
-        Task {
-            await library.reviewRemoval(contributionIDs: ids)
-            if library.review != nil {
-                removal = RemovalRequest(artifactIDs: rows.map(\.artifactID))
-            }
-        }
+        removal = .init(
+            kind: .plugin,
+            name: rows.count == 1 ? (rows.first?.displayName ?? "plugin") : CountNoun.plugin.phrase(rows.count),
+            contributionIDs: ids)
     }
 
-    private struct RemovalRequest: Identifiable {
-        let id = UUID()
-        let artifactIDs: [ArtifactID]
-    }
 }
 
 private struct PluginDetailView: View {
     let row: WorkspaceLibraryReadModelRow
     let availability: UpdateAvailability
     let library: WorkspaceLibrarySession
-    @State private var removal: RemovalRequest?
+    var workspace: WorkspaceLaunch.Workspace?
+    @State private var removal: AssignmentRemovalPresentation?
     @State private var isAssigning = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Space.xl) {
                 header
                 if let message = library.errorMessage {
                     AttentionBanner(title: "This couldn't be saved", message: message)
+                }
+                if let accountRoute {
+                    AttentionBanner(
+                        title: "This plugin comes from your claude.ai account",
+                        message: "Claude Code loads it from the account as \(accountRoute). Add, remove and update it on claude.ai; turn it off on every Mac from Apps › Accounts.")
                 }
                 managedByCard
                 if !includedSkills.isEmpty {
@@ -394,11 +451,10 @@ private struct PluginDetailView: View {
                 updatesDisclosure
                 originCard
             }
-            .padding(22)
+            .padding(Space.xxxl)
         }
         .sheet(item: $removal) { request in
-            WorkspaceAssignmentSheet(session: library, artifactIDs: [row.artifactID])
-                .task { await library.reviewRemoval(contributionIDs: request.contributionIDs) }
+            AssignmentRemovalSheet(session: library, presentation: request)
         }
         .sheet(isPresented: $isAssigning) {
             WorkspaceAssignmentSheet(session: library, artifactIDs: [row.artifactID])
@@ -406,18 +462,20 @@ private struct PluginDetailView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
-            pluginIcon(for: row, size: 44)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(row.displayName).font(.system(size: 22, weight: .semibold))
-                Text(row.sourceLabel ?? row.ownershipLabel).font(.callout).foregroundStyle(.secondary)
+        HStack(spacing: Space.xl) {
+            pluginIcon(for: row, size: Size.identityIconLarge)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(row.displayName).font(AgentFont.pageTitle)
+                Text(row.sourceLabel ?? row.ownershipLabel).font(AgentFont.body).foregroundStyle(.secondary)
             }
             Spacer()
             if availability.hasUpdate { UpdateStateBadge(availability: availability) }
             Button("Assign…", systemImage: "arrow.turn.up.right") { isAssigning = true }
-                .buttonStyle(.bordered)
-                .disabled(library.isBusy || !row.isAssignable)
-                .help(row.isAssignable ? "Choose where this plugin should be used." : (row.assignmentExplanation ?? ""))
+                .secondaryActionStyle()
+                .disabled(library.isBusy || !row.isAssignable || accountRoute != nil)
+                .help(accountRoute != nil
+                    ? "An account plugin is placed by claude.ai, not by an assignment."
+                    : row.isAssignable ? "Choose where this plugin should be used." : (row.assignmentExplanation ?? ""))
         }
     }
 
@@ -426,33 +484,33 @@ private struct PluginDetailView: View {
             VStack(spacing: 0) {
                 if row.nativeRoutes.isEmpty {
                     Text("Not associated with a specific app yet.")
-                        .font(.callout).foregroundStyle(.secondary)
-                        .padding(14)
+                        .font(AgentFont.body).foregroundStyle(.secondary)
+                        .padding(Space.xl)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     ForEach(Array(row.nativeRoutes.enumerated()), id: \.offset) { index, route in
-                        HStack(spacing: 12) {
-                            ClientDisc(client: route.client, size: 30)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(route.client.rawValue).font(.callout.weight(.medium))
+                        HStack(spacing: Space.lg) {
+                            ClientDisc(client: route.client, size: Size.disc)
+                            VStack(alignment: .leading, spacing: Space.xxs) {
+                                Text(route.client.rawValue).font(AgentFont.bodyMedium)
                                 Text("Registered as \(route.externalPluginID)")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                    .font(AgentFont.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
                             if let ids = contributionIDs(for: route.client), !ids.isEmpty {
-                                Button("Remove…") { remove(contributionIDs: ids) }
-                                    .buttonStyle(.bordered)
+                                Button(ActionTitles.stopAsking) { remove(contributionIDs: ids) }
+                                    .secondaryActionStyle()
                                     .controlSize(.small)
-                                    .accessibilityLabel("Remove \(row.displayName) from \(route.client.rawValue)")
-                                    .disabled(library.isBusy)
+                                    .accessibilityLabel("Stop asking for \(row.displayName) in \(route.client.rawValue)")
+                                    .disabled(library.isBusy || ClaudeAccountSync.hasReservedOrigin(route.externalPluginID))
                             } else {
                                 Text("Not a saved assignment")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                    .font(AgentFont.caption).foregroundStyle(.secondary)
                                     .help("This app reported the plugin itself; this workspace has no assignment for it to take back.")
                             }
                         }
-                        .padding(12)
-                        if index < row.nativeRoutes.count - 1 { Divider() }
+                        .padding(Space.lg)
+                        if index < row.nativeRoutes.count - 1 { Hairline() }
                     }
                 }
             }
@@ -464,12 +522,12 @@ private struct PluginDetailView: View {
             VStack(spacing: 0) {
                 ForEach(includedSkills) { child in
                     HStack {
-                        Text(child.displayName).font(.callout)
+                        Text(child.displayName).font(AgentFont.body)
                         Spacer()
                     }
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 38)
-                    if child.id != includedSkills.last?.id { Divider() }
+                    .padding(.horizontal, Space.xl)
+                    .frame(minHeight: Size.compactRowHeight)
+                    if child.id != includedSkills.last?.id { Hairline() }
                 }
             }
         }
@@ -479,14 +537,18 @@ private struct PluginDetailView: View {
         GroupBox("Requested for") {
             VStack(spacing: 0) {
                 Text("These are saved choices. Installing them in an app is a separate, reviewed step.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .padding(.horizontal, 14).padding(.top, 10)
+                    .font(AgentFont.caption).foregroundStyle(.secondary)
+                    .padding(.horizontal, Space.xl).padding(.top, Space.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 ForEach(row.requestedAssignments) { assignment in
                     LabeledValueRow("\(assignment.destination.surface.displayName) · \(assignment.destination.scope.displayName)") {
-                        Text(deviceScopeLabel(assignment.deviceScope)).foregroundStyle(.secondary)
+                        if let workspace {
+                            AssignmentDeviceScopeMenu(assignment: assignment, workspace: workspace)
+                        } else {
+                            Text(deviceScopeLabel(assignment.deviceScope)).foregroundStyle(.secondary)
+                        }
                     }
-                    if assignment.id != row.requestedAssignments.last?.id { Divider() }
+                    if assignment.id != row.requestedAssignments.last?.id { Hairline() }
                 }
             }
         }
@@ -495,11 +557,11 @@ private struct PluginDetailView: View {
     private var updatesDisclosure: some View {
         DisclosureGroup("Updates and revision") {
             LabeledValueRow(availability.title) {
-                HStack(spacing: 8) {
-                    StatusGlyph(state: availability.health, size: 14)
+                HStack(spacing: Space.md) {
+                    StatusGlyph(state: availability.health, size: Size.glyph)
                     Text(availability.detail)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .wrapsLines()
                 }
             }
         }
@@ -509,7 +571,7 @@ private struct PluginDetailView: View {
         GroupBox("Origin") {
             VStack(spacing: 0) {
                 LabeledValueRow("Source") { Text(row.sourceLabel ?? "Not recorded").foregroundStyle(.secondary) }
-                Divider()
+                Hairline()
                 LabeledValueRow("Ownership") { Text(row.ownershipLabel).foregroundStyle(.secondary) }
             }
         }
@@ -519,24 +581,22 @@ private struct PluginDetailView: View {
         row.includedChildren.filter { $0.kind == .skill }
     }
 
+    /// A library recorded before account plugins were kept out of it can
+    /// still hold a `<name>@synced` row. It is the account's: say so, and
+    /// offer nothing that would ask Claude Code to install or remove it.
+    private var accountRoute: String? {
+        row.nativeRoutes.first { $0.client == .claude && ClaudeAccountSync.hasReservedOrigin($0.externalPluginID) }?.externalPluginID
+    }
+
     private func contributionIDs(for client: ClientKind) -> [WorkspaceObjectID]? {
         let ids = row.requestedAssignments.filter { $0.destination.surface.client == client }.map(\.id)
         return ids.isEmpty ? nil : ids
     }
 
     private func remove(contributionIDs: [WorkspaceObjectID]) {
-        Task {
-            await library.reviewRemoval(contributionIDs: contributionIDs)
-            if library.review != nil {
-                removal = RemovalRequest(contributionIDs: contributionIDs)
-            }
-        }
+        removal = .init(kind: .plugin, name: row.displayName, contributionIDs: contributionIDs)
     }
 
-    private struct RemovalRequest: Identifiable {
-        let id = UUID()
-        let contributionIDs: [WorkspaceObjectID]
-    }
 }
 
 /// The device scope a saved assignment covers. Kept local to this file: the

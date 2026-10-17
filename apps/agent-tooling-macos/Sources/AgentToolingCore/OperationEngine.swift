@@ -334,6 +334,77 @@ public actor OperationExecutor {
             let note = forgetManagedInstall(destination: destination)
             return (.succeeded, "Removed \(destination.path(percentEncoded: false)).\(note)")
 
+        case .removeUnmanagedSkillCopy:
+            guard let destinationPath = step.destinationPath else { throw OperationEngineError.malformedStep(step.title) }
+            let destination = try unmanagedSkillCopy(destinationPath)
+            let values = try? destination.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
+            let isLink = values?.isSymbolicLink == true
+            guard isLink || fileManager.fileExists(atPath: destination.path(percentEncoded: false)) else {
+                return (.skipped, "Nothing to remove at \(destination.path(percentEncoded: false)).")
+            }
+            if isLink {
+                // A link holds nothing of its own; the target is untouched.
+                try fileManager.removeItem(at: destination)
+                return (.succeeded, "Removed the link at \(destination.path(percentEncoded: false)). What it pointed at was not touched.")
+            }
+            // The folder is kept in this workspace's trash under a dated name,
+            // so a removal somebody regrets can be reversed by hand.
+            let trash = store.rootURL.appending(path: "trash", directoryHint: .isDirectory)
+                .appending(path: Self.trashStamp(), directoryHint: .isDirectory)
+            try fileManager.createDirectory(at: trash, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let kept = trash.appending(path: destination.lastPathComponent, directoryHint: .isDirectory)
+            try fileManager.moveItem(at: destination, to: kept)
+            return (.succeeded, "Moved \(destination.path(percentEncoded: false)) to \(kept.path(percentEncoded: false)).")
+
+        case .removeUnmanagedPluginCache:
+            guard let destinationPath = step.destinationPath else { throw OperationEngineError.malformedStep(step.title) }
+            let destination = try unmanagedPluginCacheVersion(destinationPath)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: destination.path(percentEncoded: false), isDirectory: &isDirectory), isDirectory.boolValue else {
+                return (.skipped, "Nothing to remove at \(destination.path(percentEncoded: false)).")
+            }
+            let trash = store.rootURL.appending(path: "trash", directoryHint: .isDirectory)
+                .appending(path: Self.trashStamp(), directoryHint: .isDirectory)
+            try fileManager.createDirectory(at: trash, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let kept = trash.appending(path: destination.deletingLastPathComponent().lastPathComponent + "-" + destination.lastPathComponent, directoryHint: .isDirectory)
+            try fileManager.moveItem(at: destination, to: kept)
+            return (.succeeded, "Moved \(destination.path(percentEncoded: false)) to \(kept.path(percentEncoded: false)).")
+
+        case .editClientConfiguration:
+            guard let destinationPath = step.destinationPath, let contents = step.contents else { throw OperationEngineError.malformedStep(step.title) }
+            guard let file = ClientConfigurationFile.matching(destinationPath, homeURL: homeURL) else {
+                throw OperationEngineError.unsafeDestination(destinationPath)
+            }
+            let edit = try ClientConfigurationEdit.decode(contents)
+            guard edit.file == file, edit.isSafe else { throw OperationEngineError.unsafeDestination(destinationPath) }
+            let destination = file.url(homeURL: homeURL)
+            // Read bounded so an oversized configuration is refused before it
+            // is loaded, rather than read whole and measured afterwards, with
+            // the refusal that names the file and the limit. A missing or
+            // otherwise unreadable file still reads as empty, the new-file
+            // case: the commit-time check in writeConfiguration refuses to
+            // replace a file that is there but did not read as this text.
+            let existing: String
+            do {
+                existing = try file.readText(homeURL: homeURL) ?? ""
+            } catch let tooLarge as ConfigurationFileTooLargeError {
+                throw tooLarge
+            } catch {
+                existing = ""
+            }
+            let updated = try ClientConfigurationEditor.apply(edit, to: existing)
+            if updated == existing { return (.skipped, "\(destination.lastPathComponent) already says that.") }
+            // The file as it was, kept whole under a dated name, so any edit
+            // can be undone by putting it back.
+            if !existing.isEmpty {
+                let trash = store.rootURL.appending(path: "trash", directoryHint: .isDirectory)
+                    .appending(path: Self.trashStamp(), directoryHint: .isDirectory)
+                try fileManager.createDirectory(at: trash, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                try Data(existing.utf8).write(to: trash.appending(path: destination.lastPathComponent), options: .atomic)
+            }
+            try writeConfiguration(updated, existing: existing, to: destination, planStepID: step.id)
+            return (.succeeded, edit.summary + ".")
+
         case .replaceManagedLibrary:
             guard let destinationPath = step.destinationPath, let contents = step.contents else {
                 throw OperationEngineError.malformedStep(step.title)
@@ -445,12 +516,10 @@ public actor OperationExecutor {
 
     /// Counts destination entries the incoming package does not contain, and
     /// says whether the comparison was complete. Used only to describe the
-    /// completed replacement in the receipt; the plan review lists them by name
+    /// completed replacement in the receipt; nothing lists the entries by name
     /// before approval.
     private func removedEntryCount(replacing destination: URL, with source: URL) -> (count: Int, isTruncated: Bool) {
         let reviewer = OperationPlanSafetyReviewer(
-            authority: installAuthority,
-            managedRoots: managedRoots,
             fileManager: fileManager
         )
         return reviewer.replacementRemovalCount(replacing: destination, with: source)
@@ -528,6 +597,7 @@ public actor OperationExecutor {
             (homeURL.appending(path: ".claude/skills", directoryHint: .isDirectory), homeURL),
             (homeURL.appending(path: ".agents/skills", directoryHint: .isDirectory), homeURL),
             (homeURL.appending(path: ".gemini/skills", directoryHint: .isDirectory), homeURL),
+            (homeURL.appending(path: ".kiro/skills", directoryHint: .isDirectory), homeURL),
         ].map { ($0.0.standardizedFileURL, $0.1.standardizedFileURL) }
 
         // Folders this device registered. Each is its own anchor, so the item
@@ -554,6 +624,7 @@ public actor OperationExecutor {
                     (projectRoot.appending(path: ".claude/skills", directoryHint: .isDirectory), projectRoot),
                     (projectRoot.appending(path: ".agents/skills", directoryHint: .isDirectory), projectRoot),
                     (projectRoot.appending(path: ".gemini/skills", directoryHint: .isDirectory), projectRoot),
+                    (projectRoot.appending(path: ".kiro/skills", directoryHint: .isDirectory), projectRoot),
                 ].map { ($0.0.standardizedFileURL, $0.1.standardizedFileURL) })
             if linkedUpdate {
                 permittedSkillRoots.append((projectRoot.appending(path: ".codex/skills").standardizedFileURL, projectRoot))
@@ -569,6 +640,58 @@ public actor OperationExecutor {
         }
         try validateContainedPath(permitted.root, within: permitted.anchor)
         return destination
+    }
+
+    /// A skill copy this app may remove: directly inside one of the known
+    /// user-level skills folders, with a checked name, and not the library's.
+    /// The same roots the app may write into are the only ones it may remove
+    /// from; a project folder is not offered here.
+    private func unmanagedSkillCopy(_ rawPath: String) throws -> URL {
+        let destination = URL(fileURLWithPath: rawPath).standardizedFileURL
+        let roots = [".claude/skills", ".agents/skills", ".codex/skills", ".gemini/skills", ".kiro/skills"].map {
+            homeURL.appending(path: $0, directoryHint: .isDirectory).standardizedFileURL
+        }
+        guard OperationCommandPolicy.isSafeMCPIdentifier(destination.lastPathComponent),
+            roots.contains(where: { Self.samePath(destination.deletingLastPathComponent(), $0) }),
+            // Claude Code's own folder of account skills is never a copy this
+            // app may move: the next sync would only download it again.
+            !ClaudeAccountSync.isInsideSyncedSkills(destination, homeURL: homeURL),
+            !Self.samePath(destination, store.libraryURL),
+            // A deny check: nothing this app keeps is moved, however spelled.
+            !PathContainment.mightContainLexically(destination, in: store.rootURL)
+        else { throw OperationEngineError.unsafeDestination(rawPath) }
+        return destination
+    }
+
+    /// A plugin version folder this app may remove: `<cache>/<marketplace>/
+    /// <plugin>/<version>` under a client's plugin cache, with checked names.
+    /// The version in use is refused: it is the one the client's install
+    /// record names, and the ledger of that is the plugin metadata the audit
+    /// read, so the audit never offers it.
+    private func unmanagedPluginCacheVersion(_ rawPath: String) throws -> URL {
+        let destination = URL(fileURLWithPath: rawPath).standardizedFileURL
+        let caches = [".claude/plugins/cache", ".codex/plugins/cache"].map {
+            homeURL.appending(path: $0, directoryHint: .isDirectory).standardizedFileURL
+        }
+        // cache / marketplace / plugin / version: exactly three levels down.
+        let plugin = destination.deletingLastPathComponent()
+        let marketplace = plugin.deletingLastPathComponent()
+        let cache = marketplace.deletingLastPathComponent()
+        guard caches.contains(where: { Self.samePath(cache, $0) }),
+            [destination, plugin, marketplace].allSatisfy({ OperationCommandPolicy.isSafePluginIdentifier($0.lastPathComponent) || OperationCommandPolicy.isSafeMCPIdentifier($0.lastPathComponent) }),
+            !PathContainment.mightContainLexically(destination, in: store.rootURL)
+        else { throw OperationEngineError.unsafeDestination(rawPath) }
+        return destination
+    }
+
+    private static func trashStamp() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        // UTC, with a trailing Z, so dated trash folders sort by instant across
+        // a DST change and are comparable across Macs in a synced workspace.
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        return formatter.string(from: .now) + "Z-" + UUID().uuidString.prefix(8).lowercased()
     }
 
     private func commandWorkingDirectory(_ rawPath: String?, authorizedProjectRootPath: String?) throws -> URL? {
@@ -694,6 +817,30 @@ public actor OperationExecutor {
         }
     }
 
+    /// A client configuration file, written the way every other destination
+    /// is: staged beside it, then swapped in only after the destination is
+    /// checked again to be the plain file whose text the edit was computed
+    /// from. A link or a changed file appearing between read and write is
+    /// refused rather than followed or overwritten. The check reads under the
+    /// same limit as the first read, so a file that grew past it in between is
+    /// refused too rather than loaded whole to be compared.
+    private func writeConfiguration(_ updated: String, existing: String, to destination: URL, planStepID: UUID) throws {
+        let parent = destination.deletingLastPathComponent()
+        try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+        let staged = parent.appending(path: ".agent-tooling-config-\(UUID().uuidString)", directoryHint: .notDirectory)
+        defer { removeStagingItemIfPresent(staged) }
+        try Data(updated.utf8).write(to: staged, options: .atomic)
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: staged.path(percentEncoded: false))
+        try commitPreparedItem(staged, to: destination, planStepID: planStepID) {
+            let path = destination.path(percentEncoded: false)
+            guard self.fileManager.fileExists(atPath: path) else { return }   // new file: nothing to check
+            let values = try destination.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            guard values.isSymbolicLink != true, values.isRegularFile == true,
+                (try? BoundedFileAccess.readUTF8(at: destination, maximumBytes: BoundedFileAccess.maximumConfigurationBytes)) == existing
+            else { throw OperationEngineError.unsafeDestination(path) }
+        }
+    }
+
     private func replaceManagedLibrary(at destination: URL, files: [EncryptedLibraryFile], planStepID: UUID) throws {
         let parent = destination.deletingLastPathComponent()
         try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
@@ -758,6 +905,10 @@ public actor OperationExecutor {
             .appending(path: planStepID.uuidString, directoryHint: .isDirectory)
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
             .appending(path: destination.lastPathComponent, directoryHint: .isDirectory)
+        // The receipts root must exist to be resolved against; a store that has
+        // not written a receipt yet still gets its rollback copy.
+        try fileManager.createDirectory(at: store.receiptsURL, withIntermediateDirectories: true,
+                                        attributes: [.posixPermissions: 0o700])
         try validateContainedPath(rollback.deletingLastPathComponent(), within: store.receiptsURL)
         try fileManager.createDirectory(at: rollback.deletingLastPathComponent(), withIntermediateDirectories: true)
         try fileManager.copyItem(at: destination, to: rollback)
@@ -889,11 +1040,7 @@ public actor OperationExecutor {
     }
 
     private func isContained(_ child: URL, in root: URL) -> Bool {
-        let childPath = child.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
+        PathContainment.containsResolved(child, in: root)
     }
 
     private static let maximumTreeItems = 10_000
@@ -915,15 +1062,11 @@ public actor OperationExecutor {
     }
 
     private static func isLexicallyContained(_ child: URL, in root: URL) -> Bool {
-        let childPath = normalizedPath(child)
-        let rootPath = normalizedPath(root)
-        return childPath == rootPath || childPath.hasPrefix(rootPath + "/")
+        PathContainment.containsLexically(child, in: root)
     }
 
     private static func normalizedPath(_ url: URL) -> String {
-        let path = url.standardizedFileURL.path(percentEncoded: false)
-        guard path.count > 1 else { return path }
-        return path.hasSuffix("/") ? String(path.dropLast()) : path
+        PathContainment.lexicalPath(url)
     }
 
     private static func persistableOutput(_ text: String) -> String {
@@ -935,7 +1078,7 @@ public actor OperationExecutor {
     private static let maximumPersistedOutputCharacters = 60_000
 }
 
-public typealias OperationEngine = OperationExecutor
+typealias OperationEngine = OperationExecutor
 
 enum OperationEngineError: LocalizedError, Sendable {
     case malformedStep(String)

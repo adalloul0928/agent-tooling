@@ -1,9 +1,14 @@
 # Git transport, package export and ToolHive actions v1
 
-Status: three foundations implemented and fixture-tested. The Git transport is
-exercised against real local repositories; the ToolHive actions are exercised
-against a scripted `thv`, never a live runtime. No two-Mac pilot, no live
-ToolHive qualification and no export UI exist yet.
+Superseded by docs/multi-mac-sync-v1.md for sync; kept for the export section
+and as the record of the ToolHive actions, which the app no longer has.
+
+Status: the Git transport, revision-store sync lifecycle and package export are
+implemented and fixture-tested, and the Git transport is exercised against real
+local repositories. The ToolHive lifecycle actions are not in the app: 8abce2b
+removed `ToolHiveLifecycleService` and its tests, and the code can be restored
+from 8abce2b^. ToolHive stays read-only inspection, described in
+toolhive-runtime-inspection-v1.md. The two-Mac acceptance pilot remains open.
 
 ## Git workspace transport
 
@@ -52,22 +57,25 @@ it, so an export is not an install route.
 
 ## ToolHive lifecycle actions
 
-`ToolHiveLifecycleService` supports start, stop and restart. Each action names
-one exact workload, is bound to the state observed when it was prepared, and is
-confirmed by re-reading that workload afterwards.
+Not in the app. `ToolHiveLifecycleService` offered start, stop and restart, but
+nothing in the app called it, and it would have started and stopped workloads
+outside `OperationEngine`. 8abce2b removed it, along with its scripted-`thv`
+tests and the one live case that drove it; the code can be restored from
+8abce2b^. The app offers no start, stop or restart, so a workload is started and
+stopped with ToolHive's own tools.
 
-A clean exit is not the postcondition. A command that succeeds without producing
-the expected state is reported as `ambiguous` and never retried automatically. A
-workload that changed between review and apply is reported as `stalePlan` and no
-command runs. An already-satisfied state runs nothing, except for restart, which
-always acts. Other workloads named by the caller are read before and after, and
-a change in one is reported rather than ignored.
+The removed service bound each action to one exact workload and to the state
+observed when the action was prepared, and confirmed it by re-reading that
+workload afterwards. A clean exit without the expected state was reported as
+`ambiguous` and never retried, and a workload that changed between review and
+apply was reported as `stalePlan` with no command run.
 
-Replacement, upgrade and deletion are deliberately absent. The inspected
-workload API exposes no conditional-mutation contract, so this app cannot
-promise its view is current when it writes; those actions stay in ToolHive's own
-tools until such a contract exists.
+Replacement, upgrade and deletion were never offered. The inspected workload API
+exposes no conditional-mutation contract, so this app cannot promise its view is
+current when it writes; those actions stay in ToolHive's own tools until such a
+contract exists.
 
+Read-only inspection stays, as toolhive-runtime-inspection-v1.md describes.
 `status` now distinguishes an absent `thv` from a failing command, matching
 `version`, so a caller can offer installation instead of an error.
 
@@ -97,8 +105,13 @@ publish, adopt whole, independent edits on both sides converging on one head,
 and a conflicting rename that commits and publishes nothing. Two stores are not
 two Macs; the two-Mac pilot remains a required gate.
 
-## Not yet implemented
+## Still open
 
-There is no sync outbox, background scheduler, enrollment flow, conflict inbox,
-devices UI, export UI or lifecycle UI. No adapter or runtime action has been
-checked against a live installation, and no encrypted-folder transport exists.
+The scheduler, enrollment flow, devices UI, conflict inbox and package export
+session are implemented (see multi-mac-sync-v1.md and
+`WorkspacePackageExportSession`), and the encrypted-folder transport exists
+(`EncryptedFolderWorkspaceTransport`, encrypted-folder-sync-v1.md). What remains
+open is the sync outbox and recovery journal and the two-Mac acceptance pilot.
+With the ToolHive actions removed, nothing here needs qualifying against a live
+ToolHive; live qualification of the read-only inspection is tracked in
+toolhive-runtime-inspection-v1.md.

@@ -51,9 +51,11 @@ struct VersionedInventoryProjectionTests {
         let skill = try #require(inventory.skills.first)
         let state = try #require(skill.clients.first)
         #expect(state.client == .codex)
-        // The whole point: an ask is not a measurement.
+        // The whole point: an ask is not a measurement. Presence is unknown
+        // here — nil, never a false "not installed" — so a health check cannot
+        // read the placeholder as drift.
         #expect(state.state == .pending)
-        #expect(state.isInstalled == false)
+        #expect(state.isInstalled == nil)
         #expect(!state.reportsLocalPresence)
         #expect(state.detail.contains("Not checked against this Mac"))
     }
@@ -100,6 +102,20 @@ struct VersionedInventoryProjectionTests {
         #expect(inventory.skills.isEmpty)
         #expect(inventory.mcpServers.isEmpty)
         #expect(inventory.plugins.isEmpty)
+    }
+
+    @Test func aLibrarySkillsFilesAndDescriptionAreUnknownUntilTheContentIsRead() throws {
+        let inventory = try Self.inventory(
+            artifacts: [Self.artifact(Self.alpha, "Alpha", kind: .skill, authority: .centralPersonal)])
+
+        let skill = try #require(inventory.skills.first)
+        // The projection reports requested intent, not read content: files and
+        // description are left empty (unknown), never a guessed value. The scan
+        // fills them from the captured tree; the placeholders here must not read
+        // as "no files" or "blank description" to a health check.
+        #expect(skill.files.isEmpty)
+        #expect(skill.summary.isEmpty)
+        #expect(skill.owned)
     }
 
     private static let alpha = ArtifactID(UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!)

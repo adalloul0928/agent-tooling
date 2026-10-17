@@ -12,14 +12,7 @@ import Testing
 /// The wizard's "Continue" is enabled from the first frame, which is what
 /// first showed that a bare hosting view cannot composite an enabled glass
 /// control before a synchronous read-back. The shared harness now rasterizes
-/// inside a real window; these two names remain for the wizard tests.
-@MainActor
-func rasterizeWarmed(
-    _ view: some View, _ location: SourceLocation = #_sourceLocation
-) throws -> NSBitmapImageRep {
-    try rasterize(view, location)
-}
-
+/// inside a real window; this name remains for the wizard tests.
 @MainActor
 func expectDrawnWarmed(
     _ view: some View, _ location: SourceLocation = #_sourceLocation
@@ -75,7 +68,8 @@ extension ShellRenderFixture {
             containerRoot: container, workspaceID: document.workspaceID, deviceID: device.deviceID)
         try store.initialize(document: document, device: device)
         workspace = WorkspaceLaunch.sessions(
-            store: store, homeRoot: home, isFirstRun: true, deviceObserver: StubDeviceObserver())
+            store: store, homeRoot: home, isFirstRun: true, deviceObserver: StubDeviceObserver(),
+            accountReader: { _ in StubAccountReader() })
         await workspace.library.refresh()
     }
 

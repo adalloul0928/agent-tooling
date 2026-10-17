@@ -24,11 +24,11 @@ struct SyncSettingsView: View {
             PageToolbar(title: "Sync", context: session.statusText) {
                 if session.isConnected {
                     Button("Sync now", systemImage: "arrow.triangle.2.circlepath") { Task { await session.sync() } }
-                        .buttonStyle(.glassProminent).tint(AgentTheme.selection)
+                        .primaryActionStyle()
                         .disabled(session.isBusy)
                 }
             }
-            Divider()
+            Hairline()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                     if let message = session.errorMessage {
@@ -37,6 +37,7 @@ struct SyncSettingsView: View {
                     if let recovery = session.recoveryPhrase { recoveryCard(recovery) }
                     if let enrollment = session.enrollment { connectedCard(enrollment) } else { setupCard }
                     if !session.conflicts.isEmpty { conflictsCard }
+                    if session.isConnected || session.devices.count > 1 { macsCard }
                 }
                 .padding(WorkspaceLayout.pageInset)
             }
@@ -57,9 +58,9 @@ struct SyncSettingsView: View {
 
     private var setupCard: some View {
         TitledCard("Use the same setup on more than one Mac") {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: Space.xl) {
                 Text(
-                    "Agent Tooling keeps one file describing your library and where each tool belongs. Your skills' own repositories, your app settings, and anything else on this Mac are not shared."
+                    "Agent Tooling shares your library and where each tool belongs. Through a repository it also carries the files of skills you wrote here, so another Mac can install them. Your app settings and anything else on this Mac are not shared."
                 )
                 .foregroundStyle(.secondary)
                 if session.supportsEncryptedFolder {
@@ -71,19 +72,19 @@ struct SyncSettingsView: View {
                 }
                 if kind == .git { gitSetup } else { folderSetup }
             }
-            .padding(14)
+            .padding(Space.xl)
         }
     }
 
     private var gitSetup: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Space.xl) {
             Text("A repository is not encrypted storage. Anyone with access to it can read what is published there.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(AgentFont.body).foregroundStyle(.secondary)
             LabeledContent("Repository") {
                 TextField("https://github.com/you/workspace.git", text: $remote)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 420)
+                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldWide)
             }
-            HStack(spacing: 12) {
+            HStack(spacing: Space.lg) {
                 Button("Choose folder on this Mac…") { chooseCheckout() }
                 Text(checkout?.path ?? "No folder chosen").foregroundStyle(.secondary).lineLimit(1)
             }
@@ -93,31 +94,31 @@ struct SyncSettingsView: View {
                     await session.connect(remote: remote.trimmingCharacters(in: .whitespacesAndNewlines), checkout: checkout)
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .primaryActionStyle()
             .disabled(session.isBusy || checkout == nil || remote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
     private var folderSetup: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Space.xl) {
             Text(
                 "Point this at a folder iCloud Drive, Dropbox or a network share already keeps in step between your Macs. What lands there is sealed: the service moving it cannot read your library."
             )
-            .font(.callout).foregroundStyle(.secondary)
+            .font(AgentFont.body).foregroundStyle(.secondary)
             SyncScopePanel()
-            HStack(spacing: 12) {
+            HStack(spacing: Space.lg) {
                 Button("Choose folder…") { chooseFolder() }
                 Text(folder?.path ?? "No folder chosen").foregroundStyle(.secondary).lineLimit(1)
             }
             LabeledContent("Phrase from your other Mac") {
                 TextField("Leave empty on your first Mac", text: $phrase)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 420)
+                    .textFieldStyle(.roundedBorder).frame(maxWidth: Size.fieldWide)
             }
             Button("Connect") {
                 guard let folder else { return }
                 Task { await session.connectFolder(folder, phrase: phrase) }
             }
-            .buttonStyle(.borderedProminent)
+            .primaryActionStyle()
             .disabled(session.isBusy || folder == nil)
         }
     }
@@ -126,30 +127,30 @@ struct SyncSettingsView: View {
     /// reminder to move it into a password manager sits right beside it.
     private func recoveryCard(_ phrase: String) -> some View {
         TitledCard("Write this down now") {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Space.lg) {
                 Text(phrase)
-                    .font(.system(size: 15, design: .monospaced))
+                    .font(AgentFont.monoBody)
                     .textSelection(.enabled)
-                    .padding(12)
+                    .padding(Space.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AgentTheme.contentBackground, in: RoundedRectangle(cornerRadius: 8))
+                    .background(AgentTheme.fillSubtle, in: RoundedRectangle.control)
                 Text(
                     "This is the only way to open that folder from another Mac. Agent Tooling will not show it again, and cannot recover it for you."
                 )
-                .font(.callout)
+                .font(AgentFont.body)
                 .foregroundStyle(.secondary)
                 Text("Copy it to a password manager before you need it on another Mac.")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                 HStack {
                     Button(recoveryCopied ? "Copied" : "Copy") { copyRecoveryPhrase(phrase) }
-                        .buttonStyle(.bordered)
+                        .secondaryActionStyle()
                         .disabled(recoveryCopied)
                     Button("I have written it down") { session.dismissRecoveryPhrase() }
-                        .buttonStyle(.borderedProminent)
+                        .primaryActionStyle()
                 }
             }
-            .padding(14)
+            .padding(Space.xl)
         }
     }
 
@@ -158,34 +159,34 @@ struct SyncSettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 if enrollment.kind == .git {
                     InfoRow("Repository", detail: nil) {
-                        Image(systemName: "arrow.triangle.branch").foregroundStyle(.secondary).frame(width: 20)
+                        Image(systemName: "arrow.triangle.branch").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                     } trailing: {
                         Text(enrollment.remote).textSelection(.enabled).lineLimit(1)
                     }
-                    Divider()
+                    Hairline()
                     InfoRow("Branch", detail: nil) {
-                        Image(systemName: "arrow.triangle.branch").foregroundStyle(.secondary).frame(width: 20)
+                        Image(systemName: "arrow.triangle.branch").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                     } trailing: {
                         Text(enrollment.branch)
                     }
-                    Divider()
+                    Hairline()
                     InfoRow("Folder on this Mac", detail: nil) {
-                        Image(systemName: "folder").foregroundStyle(.secondary).frame(width: 20)
+                        Image(systemName: "folder").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                     } trailing: {
                         LocationText(path: enrollment.checkoutPath)
                     }
                 } else {
                     InfoRow("Shared folder", detail: "Sealed. The service moving it cannot read your library.") {
-                        Image(systemName: "lock.folder").foregroundStyle(.secondary).frame(width: 20)
+                        Image(systemName: "lock.folder").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                     } trailing: {
                         LocationText(path: enrollment.checkoutPath)
                     }
-                    Divider()
+                    Hairline()
                     SyncScopePanel()
                 }
-                Divider()
+                Hairline()
                 InfoRow("Sync on its own while the app is open", detail: session.scheduleText) {
-                    Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary).frame(width: 20)
+                    Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                 } trailing: {
                     Toggle(
                         "Sync on its own while the app is open",
@@ -195,27 +196,128 @@ struct SyncSettingsView: View {
                     .toggleStyle(.switch)
                     .disabled(session.isBusy)
                 }
-                Divider()
+                Hairline()
                 Text(
-                    "Syncing shares what your library holds and where each tool belongs. It does not install or remove anything in your apps; that stays a separate reviewed step."
+                    enrollment.kind == .git
+                        ? "Syncing shares your library — including the files of skills you wrote here — and where each tool belongs. Installing on each Mac is that Mac's own step, by its own Updates policy."
+                        : "Syncing shares what your library holds and where each tool belongs. The sealed folder carries no skill files; a skill you wrote here reaches another Mac only if it also follows a repository."
                 )
-                .font(.callout).foregroundStyle(.secondary)
-                .padding(14)
-                Divider()
+                .font(AgentFont.body).foregroundStyle(.secondary)
+                .padding(Space.xl)
+                Hairline()
                 InfoRow(
                     "Disconnect this Mac",
                     detail: enrollment.kind == .git
                         ? "The repository and its history are left alone."
                         : "The folder is left alone, and stays readable by any Mac that still has the phrase."
                 ) {
-                    Image(systemName: "xmark.circle").foregroundStyle(.secondary).frame(width: 20)
+                    Image(systemName: "xmark.circle").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                 } trailing: {
                     Button("Disconnect") { session.disconnect() }
-                        .buttonStyle(.bordered)
+                        .secondaryActionStyle()
                         .disabled(session.isBusy)
                 }
             }
         }
+    }
+
+    @State private var renaming: DeviceRecord?
+    @State private var renameText = ""
+
+    /// Every Mac in the workspace: this one first. Rename, take-shared, retire.
+    private var macsCard: some View {
+        let devices = session.devices.filter { !$0.isRetired }
+        let retired = session.devices.filter(\.isRetired)
+        return TitledCard("Macs", count: "\(devices.count)") {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(devices.sorted { lhs, rhs in
+                    if lhs.id == session.deviceID { return true }
+                    if rhs.id == session.deviceID { return false }
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                }) { device in
+                    macRow(device)
+                    Hairline(indent: Hairline.afterLeading(Size.glyphSlot))
+                }
+                if !retired.isEmpty {
+                    Text("Retired: \(retired.map(\.name).formatted(.list(type: .and))). Kept for history; they take nothing.")
+                        .font(AgentFont.caption).foregroundStyle(.tertiary).wrapsLines()
+                        .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
+                    Hairline()
+                }
+                Text("Every Mac keeps its own apps. Turning off shared assignments makes a Mac opt-in: it gets only what names it, and nothing on it is marked missing.")
+                    .font(AgentFont.caption).foregroundStyle(.tertiary).wrapsLines()
+                    .padding(.horizontal, Space.xl).padding(.vertical, Space.md)
+            }
+        }
+        .sheet(item: $renaming) { device in
+            renameSheet(device)
+        }
+    }
+
+    private func macRow(_ device: DeviceRecord) -> some View {
+        let isThis = device.id == session.deviceID
+        let status = session.status(of: device.id)
+        return InfoRow(
+            isThis ? "\(device.name) (this Mac)" : device.name,
+            detail: macDetail(device, status: status)
+        ) {
+            Image(systemName: isThis ? "desktopcomputer" : "laptopcomputer").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
+        } trailing: {
+            HStack(spacing: Space.md) {
+                Toggle("Takes shared assignments", isOn: Binding(
+                    get: { device.receivesSharedAssignments },
+                    set: { value in Task { await session.setReceivesSharedAssignments(value, for: device.id) } }))
+                    .labelsHidden().toggleStyle(.switch).disabled(session.isBusy)
+                    .help("Off: this Mac gets only items assigned to it by name.")
+                Menu {
+                    Button("Rename…") { renameText = device.name; renaming = device }
+                    if !isThis {
+                        Button("Retire this Mac", role: .destructive) { Task { await session.retireDevice(device.id) } }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.button).buttonStyle(.glass).disabled(session.isBusy)
+            }
+        }
+    }
+
+    private func macDetail(_ device: DeviceRecord, status: PublishedDeviceStatus?) -> String {
+        var parts: [String] = []
+        if device.id == session.deviceID {
+            parts.append(session.lastSynced.map { "Synced \(SnapshotTime.compact($0))" } ?? "Not synced yet")
+        } else if let status {
+            parts.append("Published \(SnapshotTime.compact(status.publishedAt))")
+            let installed = status.apps.filter(\.installed)
+            if !installed.isEmpty {
+                parts.append(installed.map { "\($0.surface.displayName) \(CountNoun.skill.phrase($0.skillCount))" }.joined(separator: ", "))
+            }
+            if !status.pending.isEmpty { parts.append("\(status.pending.count) pending") }
+        } else {
+            parts.append(device.lastSeenText)
+        }
+        if !device.receivesSharedAssignments { parts.append(DeviceLabels.limitedMac) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func renameSheet(_ device: DeviceRecord) -> some View {
+        VStack(alignment: .leading, spacing: Space.xl) {
+            Text("Rename \(device.name)").font(AgentFont.title)
+            TextField("Name", text: $renameText).textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button("Cancel") { renaming = nil }.secondaryActionStyle().keyboardShortcut(.cancelAction)
+                Button("Rename") {
+                    let name = renameText
+                    renaming = nil
+                    Task { await session.renameDevice(device.id, to: name) }
+                }
+                .primaryActionStyle().keyboardShortcut(.defaultAction)
+                .disabled(renameText.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(Space.xxl)
+        .sheetSize(SheetSize.small)
     }
 
     private var conflictsCard: some View {
@@ -224,11 +326,11 @@ struct SyncSettingsView: View {
                 Text(
                     "Two Macs changed the same thing differently. Nothing was changed here; open each item and choose which result to keep."
                 )
-                .font(.callout).foregroundStyle(.secondary)
-                .padding(14)
+                .font(AgentFont.body).foregroundStyle(.secondary)
+                .padding(Space.xl)
                 ForEach(Array(session.conflicts.enumerated()), id: \.offset) { index, conflict in
-                    Divider()
-                    VStack(alignment: .leading, spacing: 8) {
+                    Hairline()
+                    VStack(alignment: .leading, spacing: Space.md) {
                         Text(title(conflict.kind)).fontWeight(.medium)
                         Text(conflict.detail).foregroundStyle(.secondary)
                         if session.canDecide(index) {
@@ -242,28 +344,28 @@ struct SyncSettingsView: View {
                                 Text("Keep this Mac's version").tag(WorkspaceConflictChoice?.some(.keepLocal))
                                 Text("Take the other Mac's version").tag(WorkspaceConflictChoice?.some(.takeRemote))
                             }
-                            .labelsHidden().pickerStyle(.segmented).fixedSize()
+                            .labelsHidden().pickerStyle(.segmented).controlSize(.regular).fixedSize()
                             .disabled(session.isBusy)
                         } else {
                             Text("This one cannot be settled by picking a Mac. Change what each item asks for, then sync again.")
-                                .font(.callout).foregroundStyle(.secondary)
+                                .font(AgentFont.body).foregroundStyle(.secondary)
                         }
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                 }
-                Divider()
+                Hairline()
                 HStack {
                     Button("Apply decisions") { Task { await session.applyDecisions() } }
-                        .buttonStyle(.borderedProminent)
+                        .primaryActionStyle()
                         .disabled(session.isBusy || session.hasUndecidedConflicts)
                     Text(
                         session.hasUndecidedConflicts
                             ? "Decide every item above before applying."
                             : "Your decisions are applied against the newest shared version."
                     )
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(AgentFont.body).foregroundStyle(.secondary)
                 }
-                .padding(14)
+                .padding(Space.xl)
             }
         }
     }
@@ -274,7 +376,7 @@ struct SyncSettingsView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "Use Folder"
+        panel.prompt = "Use folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         folder = url.standardizedFileURL
     }
@@ -285,7 +387,7 @@ struct SyncSettingsView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "Use Folder"
+        panel.prompt = "Use folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         checkout = url.standardizedFileURL
     }
@@ -316,11 +418,13 @@ struct SyncSettingsView: View {
         case .assignmentEnablement: "Two different on or off requests"
         case .assignmentField: "Two different destinations for one request"
         case .destinationCollision: "Two items would share one place"
-        case .nativeRouteCollision: "The same app package added twice"
+        case .nativeRouteCollision: "The same plugin added twice"
         case .subscriptionOwnerCollision: "The same skill linked to a repository twice"
         case .subscriptionContentMismatch: "Linked on one Mac, edited on another"
         case .catalogSource: "Two different catalogs recorded as one"
         case .projectField: "Two different project names"
+        case .deviceField: "Two different settings for one Mac"
+        case .accountPreference: "Two different account choices"
         case .unsupportedVersion: "A newer format than this app can read"
         case .invalidResult: "The combined setup did not pass its own checks"
         }
@@ -337,22 +441,22 @@ struct SyncSettingsView: View {
 /// session has nothing further to report until the folder is connected.
 private struct SyncScopePanel: View {
     private static let travels = [
-        "Your library: skills, plugins, servers and presets",
-        "Where each tool is assigned, and to which apps",
-        "Attached authoring sources",
+        "Your library's records: skills, plugins, connections, presets, projects",
+        "Where each tool is assigned, to which apps and which Macs",
+        "The names of the Macs sharing the library",
     ]
 
     private static let stays = [
         "The encryption key — Keychain only",
-        "Package content this Mac has not approved",
+        "Skill files — a sealed folder carries records only; a repository carries the files too",
         "This Mac's own observed state and receipts",
         "Project folders and local sources",
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("What an archive contains").font(.callout.weight(.medium))
-            HStack(alignment: .top, spacing: 22) {
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text("What an archive contains").font(AgentFont.bodyMedium)
+            HStack(alignment: .top, spacing: Space.xxxl) {
                 column(title: "Travels to another Mac", symbol: "checkmark.circle.fill", tint: AgentTheme.ok, items: Self.travels)
                 column(title: "Never leaves this Mac", symbol: "minus.circle.fill", tint: .secondary, items: Self.stays)
             }
@@ -362,12 +466,12 @@ private struct SyncScopePanel: View {
     }
 
     private func column(title: String, symbol: String, tint: Color, items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text(title).font(AgentFont.captionSemibold).foregroundStyle(.secondary)
             ForEach(items, id: \.self) { item in
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Image(systemName: symbol).font(.caption2).foregroundStyle(tint)
-                    Text(item).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+                    Image(systemName: symbol).font(AgentFont.micro).foregroundStyle(tint)
+                    Text(item).font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                 }
             }
         }

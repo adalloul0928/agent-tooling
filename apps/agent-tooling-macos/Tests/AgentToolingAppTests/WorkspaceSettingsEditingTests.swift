@@ -70,6 +70,50 @@ struct WorkspaceSettingsEditingTests {
         #expect(session.lastReceipt == nil)
     }
 
+    /// A settings file that grows past the configuration limit while the sheet
+    /// is open is refused before it is loaded, and the message names the file
+    /// and the limit, the same refusal every other configuration read gives.
+    @Test func aFileThatGrewPastTheLimitIsRefusedByNameAndLimit() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.writeUserSettings(#"{"model":"opus"}"#)
+        let session = fixture.session()
+        await session.refresh()
+        let surface = try #require(session.surfaces.first { $0.id == .claudeCode })
+        let model = try #require(surface.configuration?.rows.first { $0.key == "model" })
+        session.beginEdit(model, surface: surface)
+
+        let limit = BoundedFileAccess.maximumConfigurationBytes
+        try fixture.writeUserSettings(#"{"model":"opus"}"# + String(repeating: " ", count: limit))
+        let grown = try Data(contentsOf: URL(fileURLWithPath: fixture.userSettingsPath))
+        await session.applyEdit(.string("sonnet"))
+
+        #expect(
+            session.editMessage
+                == ConfigurationFileTooLargeError(path: fixture.userSettingsPath, maximumBytes: limit).errorDescription)
+        #expect(try Data(contentsOf: URL(fileURLWithPath: fixture.userSettingsPath)) == grown)
+        #expect(session.lastReceipt == nil)
+    }
+
+    /// A settings file over the limit every configuration read shares cannot
+    /// be shown, and the screen says which file and what limit, in the words
+    /// the editor and every other reader of it use.
+    @Test func aSettingsFileOverTheLimitIsNamedWithTheLimitOnTheScreen() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let limit = BoundedFileAccess.maximumConfigurationBytes
+        try fixture.writeUserSettings(#"{"model":"opus"}"# + String(repeating: " ", count: limit))
+        let session = fixture.session()
+
+        await session.refresh()
+
+        let surface = try #require(session.surfaces.first { $0.id == .claudeCode })
+        #expect(surface.configuration == nil)
+        #expect(
+            surface.errorMessage
+                == ConfigurationFileTooLargeError(path: fixture.userSettingsPath, maximumBytes: limit).errorDescription)
+    }
+
     @Test func aSettingSomethingWithMoreSayDecidesIsNotEditableHere() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -116,6 +160,45 @@ struct WorkspaceSettingsEditingTests {
         // so every row is read-only — but the values are still shown.
         #expect(surface.configuration?.rows.isEmpty == false)
         #expect(surface.configuration?.rows.allSatisfy { !session.isEditable($0, surface: .codexCLI) } == true)
+    }
+
+    /// Only the apps this Mac manages get a settings surface. An app switched
+    /// off has its own files left alone and off this screen.
+    @Test func onlyManagedClientsGetASurface() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.writeUserSettings(#"{"model":"opus"}"#)
+        try fixture.writeCodexConfig("model = \"gpt-5\"\n")
+        let session = fixture.session()
+
+        // Managing only Claude Code: Codex is not built even though its file
+        // is right there to read.
+        await session.refresh(managedClients: [.claude])
+        #expect(session.surfaces.map(\.id) == [.claudeCode])
+        #expect(session.hasNoReadableSurfaces == false)
+
+        // Managing only Codex: the opposite.
+        await session.refresh(managedClients: [.codex])
+        #expect(session.surfaces.map(\.id) == [.codexCLI])
+
+        // Managing both: both, in the order they are read.
+        await session.refresh(managedClients: [.claude, .codex])
+        #expect(session.surfaces.map(\.id) == [.claudeCode, .codexCLI])
+    }
+
+    /// A client with no configuration adapter — everything but Claude Code and
+    /// Codex — contributes no surface, so managing only those leaves nothing to
+    /// read and the screen says so rather than drawing an empty page.
+    @Test func managingOnlyAdapterlessClientsLeavesNothingToRead() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.writeUserSettings(#"{"model":"opus"}"#)
+        let session = fixture.session()
+
+        await session.refresh(managedClients: [.gemini, .kiro])
+
+        #expect(session.surfaces.isEmpty)
+        #expect(session.hasNoReadableSurfaces)
     }
 
     @Test func standingInstructionsAreListedBesideTheSettings() async throws {

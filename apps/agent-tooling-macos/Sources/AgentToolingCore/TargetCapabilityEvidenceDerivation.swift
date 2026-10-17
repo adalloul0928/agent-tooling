@@ -15,10 +15,10 @@ public struct NativePluginInstallSupport: Sendable {
 
     public func hasRecordedInstallCommand(for client: ClientKind) -> Bool { recorded(client) }
 
-    /// The register this app ships. The identifier below is a well-formed name
-    /// to ask the question with; no command is built from it and none is run.
+    /// The register this app ships. Answers with the recorded facts; no command
+    /// is built from the question and none is run.
     public static let register = NativePluginInstallSupport { client in
-        NativePluginInstallRegister.command(for: client, externalPluginID: "agent-tooling-probe") != nil
+        NativePluginInstallRegister.supportsClient(client)
     }
 }
 
@@ -144,24 +144,16 @@ extension TargetCapabilityEvidence {
     /// record naming one would claim something no plan could ever use.
     private static let mcpScopes: [ToolingScope] = [.user, .project, .localProject, .workspace]
 
-    /// `WorkspaceManagedMCPCommandPlanning`'s own surface switch.
+    /// The same predicate `WorkspaceManagedMCPCommandPlanning` acts on, so the
+    /// evidence can never claim a connection a planner would refuse.
     private static func mcpCommandClient(for surface: TargetSurface) -> ClientKind? {
-        switch surface {
-        case .claudeCode: .claude
-        case .codexCLI: .codex
-        case .geminiCLI: .gemini
-        default: nil
-        }
+        TargetSurfaceCapability.managedMCPClient(for: surface)
     }
 
-    /// `WorkspaceNativePluginCommandPlanning`'s own surface switch, which is
-    /// narrower: it has no Gemini case at all.
+    /// The same predicate `WorkspaceNativePluginCommandPlanning` acts on, which
+    /// is narrower: only a client whose install command the register holds.
     private static func pluginCommandClient(for surface: TargetSurface) -> ClientKind? {
-        switch surface {
-        case .claudeCode: .claude
-        case .codexCLI: .codex
-        default: nil
-        }
+        TargetSurfaceCapability.nativePluginClient(for: surface)
     }
 
     /// The exact string the captured target will carry, or nothing.

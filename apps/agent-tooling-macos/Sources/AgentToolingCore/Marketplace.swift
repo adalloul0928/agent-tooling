@@ -42,7 +42,8 @@ public final class MarketplaceService {
         switch source.kind {
         case .localFolder, .gitRepository:
             return try inspectFolder(source)
-        case .agentPlugins, .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry:
+        case .agentPlugins, .claudeMarketplace, .openAIPluginDirectory, .geminiExtensionGallery, .mcpRegistry,
+            .skillsShRegistry:
             // Vendor listings are intentionally represented as sources rather
             // than copied packages. Native CLIs remain the install authority.
             return []
@@ -66,6 +67,10 @@ public final class MarketplaceService {
             ToolingSource(
                 name: "MCP Registry", kind: .mcpRegistry, location: "https://registry.modelcontextprotocol.io",
                 trustSummary: "Server metadata only; credentials and target bindings are reviewed separately"),
+            ToolingSource(
+                name: "skills.sh", kind: .skillsShRegistry, location: "https://skills.sh",
+                trustSummary:
+                    "Community skill registry — answers Discover searches with skill listings and its own install counts"),
         ]
     }
 
@@ -450,6 +455,13 @@ public final class MarketplaceService {
         // record and the tool list that actually exists, never an empty one.
         merged.lastUpdate = [current.lastUpdate, candidate.lastUpdate].compactMap { $0 }.max { $0.date < $1.date }
         merged.tools = preferred.tools ?? current.tools ?? candidate.tools
+        // The CLI and the HTTPS catalog describe the same Claude plugin from two
+        // angles: the CLI knows whether it is installed and how many installs it
+        // has, while the file supplies the category, homepage, and author the
+        // CLI leaves out. Neither is dropped — whichever source has each field
+        // keeps it, so a merged row carries both halves.
+        merged.installCount = preferred.installCount ?? current.installCount ?? candidate.installCount
+        merged.category = current.category ?? candidate.category
 
         var routesByID = Dictionary(uniqueKeysWithValues: current.nativeInstalls.map { ($0.id, $0) })
         for route in candidate.nativeInstalls {
@@ -928,9 +940,7 @@ public final class MarketplaceService {
     }
 
     private func contains(_ candidate: URL, in root: URL) -> Bool {
-        let rootPath = canonicalPath(root)
-        let candidatePath = canonicalPath(candidate)
-        return candidatePath == rootPath || candidatePath.hasPrefix(rootPath + "/")
+        PathContainment.containsResolved(candidate, in: root)
     }
 
     private func canonicalPath(_ url: URL) -> String {

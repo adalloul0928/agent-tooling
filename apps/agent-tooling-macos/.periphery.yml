@@ -1,0 +1,14 @@
+retain_codable_properties: true
+retain_swift_ui_previews: true
+relative_results: true
+retain_files:
+  # Portable MCP mapper — contract docs/portable-mcp-delivery-v1.md (AP5). Built
+  # and tested, but installs do not route servers through it yet.
+  - Sources/AgentToolingCore/AgentPluginMCPRuntimeMapping.swift
+  # Source recognition — contract docs/source-recognition-contracts-v1.md (S1).
+  # Built and tested evidence readers; no inventory scan or source-review UI
+  # calls them yet.
+  - Sources/AgentToolingCore/VercelSkillLockReader.swift
+  - Sources/AgentToolingCore/SourceLockEvidence.swift
+  - Sources/AgentToolingCore/SourceEvidenceResolver.swift
+  - Sources/AgentToolingCore/GitCheckoutSourceReader.swift

@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// Why a catalog could not be added to this workspace's list, or taken off it.
@@ -159,11 +158,7 @@ public struct WorkspaceCatalogSourceCommand: Sendable {
                 idempotencyKey.rawValue.uuidString.lowercased(), id.rawValue.uuidString.lowercased(),
             ]
         }
-        let framed = fields.map {
-            let value = $0.precomposedStringWithCanonicalMapping
-            return String(value.utf8.count) + ":" + value
-        }.joined(separator: "|")
-        return SHA256.hash(data: Data(framed.utf8)).map { String(format: "%02x", $0) }.joined()
+        return framedDigest(fields: fields)
     }
 
     /// The portable half, and what this Mac's half needs to finish the same

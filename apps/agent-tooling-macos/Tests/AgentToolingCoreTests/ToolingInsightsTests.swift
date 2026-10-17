@@ -186,7 +186,9 @@ struct ToolingInsightsTests {
         )
 
         let report = await ToolingInsightsService().scan(
-            options: InsightScanOptions(lookbackDays: 7, includeMarketplaceRecommendations: true),
+            // This fixture Mac has Claude and Codex history. Naming them keeps
+            // a Kiro source that is not there from reading as unavailable.
+            options: InsightScanOptions(clients: [.claude, .codex], lookbackDays: 7, includeMarketplaceRecommendations: true),
             skills: [releaseSkill, unusedSkill, singleUseSkill],
             marketplacePackages: [package, routeInstalledPackage],
             homeURL: home.url
@@ -367,6 +369,51 @@ struct ToolingInsightsTests {
         #expect(secondUsage.evidenceLevel == .noObservedUse)
     }
 
+    @Test func copiesOfOneSkillAreJudgedOnceAndCreditedByName() async throws {
+        let home = try TemporaryInsightsHome()
+        defer { home.remove() }
+        let now = Date.now.timeIntervalSince1970 * 1_000
+        try home.createCodexHistory(
+            rows: [
+                (
+                    "copy-thread", "userMessage",
+                    [
+                        "type": "userMessage", "fixtureTurnID": "copy-turn",
+                        "content": [["type": "text", "text": "Use $review"]],
+                    ],
+                    now
+                )
+            ]
+        )
+        // Two plugins re-ship one skill: same name, same description.
+        let first = makeSkill(
+            id: "plugin-one:review", displayName: "Review", summary: "Reviews a change.",
+            triggers: ["Review this change"], negativeTrigger: "")
+        let second = makeSkill(
+            id: "plugin-two:review", displayName: "Review", summary: "Reviews a change.",
+            triggers: ["Review this change"], negativeTrigger: "")
+
+        let report = await ToolingInsightsService().scan(
+            options: InsightScanOptions(clients: [.codex]), skills: [first, second], marketplacePackages: [], homeURL: home.url)
+
+        #expect(report.skillUsage.count == 1, "one skill, one line")
+        let usage = try #require(report.skillUsage.first)
+        #expect(usage.inferredObservedUses + usage.exactObservedUses == 1, "the bare name is no longer ambiguous")
+        #expect(!report.recommendations.contains { $0.kind == .useExistingSkill }, "a used skill is not recommended")
+    }
+
+    @Test func aSavedReportOffersEachLocalSkillOnce() {
+        func use(_ id: String) -> ToolRecommendation {
+            ToolRecommendation(
+                id: "local-skill:\(id)", kind: .useExistingSkill, title: "Use Thermo Nuclear Code Quality Review", summary: "",
+                rationale: "", confidence: .medium, supportingConversationCount: 2, skillID: id)
+        }
+        let custom = ToolRecommendation(
+            id: "custom:release", kind: .createCustomSkill, title: "Create a release skill", summary: "", rationale: "",
+            confidence: .medium, supportingConversationCount: 2)
+        #expect(ToolRecommendation.distinct([use("a"), custom, use("b")]).map(\.id) == ["local-skill:a", "custom:release"])
+    }
+
     @Test func boundedScansKeepNewestItemsAndMarkCoverageDegraded() async throws {
         let home = try TemporaryInsightsHome()
         defer { home.remove() }
@@ -423,7 +470,7 @@ struct ToolingInsightsTests {
         )
 
         let report = await ToolingInsightsService().scan(
-            options: InsightScanOptions(maximumItemsPerConversation: 10),
+            options: InsightScanOptions(clients: [.claude, .codex], maximumItemsPerConversation: 10),
             skills: [oldSkill, newSkill],
             marketplacePackages: [],
             homeURL: home.url
@@ -731,7 +778,8 @@ struct ToolingInsightsTests {
             negativeTrigger: "",
             files: ["/Users/example/private/helper.sh"],
             clients: [],
-            validationCount: 0
+            validationCount: 0,
+            filesKnown: true
         )
         let driftSkill = Skill(
             id: "drift-skill",
@@ -802,6 +850,143 @@ struct ToolingInsightsTests {
         #expect(!identifiers.contains(where: { $0.hasPrefix("vendor-skill:") }))
         #expect(!identifiers.contains("metadata-unavailable:missing-triggers"))
         #expect(!identifiers.contains("metadata-unavailable:missing-negative-trigger"))
+    }
+
+    @Test func unknownPresenceFilesAndDescriptionProduceNoneOfTheThreeFalseFindings() async throws {
+        let home = try TemporaryInsightsHome()
+        defer { home.remove() }
+        // A library-authored skill exactly as the projection first hands it over:
+        // an empty description (not yet read from SKILL.md), an empty file list
+        // (the captured tree was not read), and a requested-but-unmeasured client
+        // (isInstalled == nil). None of description-too-short, missing-skill-file,
+        // or client-drift may fire on these unknowns.
+        let unknownSkill = Skill(
+            id: "unknown-skill",
+            name: "unknown-skill",
+            displayName: "Review Notes",
+            summary: "",
+            bundle: "fixture",
+            scope: "This Mac",
+            owned: true,
+            triggers: [],
+            negativeTrigger: "",
+            files: [],
+            clients: [
+                ClientState(client: .claude, state: .pending, detail: "Asked for.", isInstalled: nil)
+            ],
+            validationCount: 0
+        )
+        // The same skill once the scan read its content: a real description and a
+        // real SKILL.md. The description is long enough, and SKILL.md is present,
+        // so neither finding fires — the read facts clear the false findings.
+        let readSkill = Skill(
+            id: "read-skill",
+            name: "read-skill",
+            displayName: "Review Notes",
+            summary: "Captures review notes and organizes them into a shareable summary.",
+            bundle: "fixture",
+            scope: "This Mac",
+            owned: true,
+            triggers: [],
+            negativeTrigger: "",
+            files: ["SKILL.md", "references/reference.md"],
+            clients: [
+                ClientState(client: .claude, state: .pending, detail: "Asked for.", isInstalled: nil)
+            ],
+            validationCount: 0,
+            filesKnown: true
+        )
+
+        let report = await ToolingInsightsService().scan(
+            options: InsightScanOptions(clients: []),
+            skills: [unknownSkill, readSkill],
+            marketplacePackages: [],
+            homeURL: home.url
+        )
+        let identifiers = Set(report.qualityFindings.map(\.id))
+
+        // Unknown never reads as a defect.
+        #expect(!identifiers.contains("unknown-skill:description-too-short"))
+        #expect(!identifiers.contains("unknown-skill:missing-skill-file"))
+        #expect(!identifiers.contains("unknown-skill:client-drift"))
+        // Read facts that are fine also stay silent.
+        #expect(!identifiers.contains("read-skill:description-too-short"))
+        #expect(!identifiers.contains("read-skill:missing-skill-file"))
+        #expect(!identifiers.contains("read-skill:client-drift"))
+    }
+
+    @Test func knownMissingSkillFileAndKnownAbsentClientStillProduceFindings() async throws {
+        let home = try TemporaryInsightsHome()
+        defer { home.remove() }
+        // A file list that was actually inventoried but lacks SKILL.md is a real
+        // structural defect; a client measured absent (isInstalled == false) is
+        // real drift. Both must still fire.
+        let brokenSkill = Skill(
+            id: "broken-skill",
+            name: "broken-skill",
+            displayName: "Broken Skill",
+            summary: "Has a real, sufficiently long description but no entry point file.",
+            bundle: "fixture",
+            scope: "This Mac",
+            owned: true,
+            triggers: [],
+            negativeTrigger: "",
+            files: ["README.md", "helper.py"],
+            clients: [
+                ClientState(client: .codex, state: .attention, detail: "Expected but missing", isInstalled: false)
+            ],
+            validationCount: 0,
+            filesKnown: true
+        )
+
+        let report = await ToolingInsightsService().scan(
+            options: InsightScanOptions(clients: []),
+            skills: [brokenSkill],
+            marketplacePackages: [],
+            homeURL: home.url
+        )
+        let identifiers = Set(report.qualityFindings.map(\.id))
+
+        #expect(identifiers.contains("broken-skill:missing-skill-file"))
+        #expect(identifiers.contains("broken-skill:client-drift"))
+    }
+
+    @Test func skillContentFactsReadDescriptionAndFilesFromACapturedTree() throws {
+        let markdown = """
+            ---
+            name: review-notes
+            description: Captures review notes and organizes them into a shareable summary.
+            ---
+
+            # Review Notes
+            """
+        let tree = try CapturedPackageTree(entries: [
+            .init(relativePath: "SKILL.md", kind: .file(bytes: Data(markdown.utf8), executable: false)),
+            .init(relativePath: "references", kind: .directory),
+            .init(
+                relativePath: "references/reference.md",
+                kind: .file(bytes: Data("# Reference\n".utf8), executable: false)),
+        ])
+
+        let facts = SkillContentFacts.read(from: tree)
+
+        #expect(facts.description == "Captures review notes and organizes them into a shareable summary.")
+        // Directories are not files; the required entry point lists as the exact
+        // name the structure check looks for.
+        #expect(facts.files == ["SKILL.md", "references/reference.md"])
+    }
+
+    @Test func skillContentFactsLeaveDescriptionUnknownWhenNoSkillFileIsPresent() throws {
+        let tree = try CapturedPackageTree(entries: [
+            .init(relativePath: "README.md", kind: .file(bytes: Data("# Notes\n".utf8), executable: false))
+        ])
+
+        let facts = SkillContentFacts.read(from: tree)
+
+        // No SKILL.md to read a description from: unknown, not blank. The files
+        // it does have are still reported honestly.
+        #expect(facts.description == nil)
+        #expect(facts.files == ["README.md"])
     }
 }
 

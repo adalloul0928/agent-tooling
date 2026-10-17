@@ -34,20 +34,42 @@ struct PasteImportSheet: View {
     @State private var isSaving = false
     @State private var savedSkillName: String?
     @State private var savedServerName: String?
+    /// A preview seed: text to interpret on appear, so a gallery or preview can
+    /// show the parsed and parse-error layouts the sheet otherwise reaches only
+    /// from text a person types. Nil on every normal path.
+    private let previewText: String?
+
+    /// The sheet as the app presents it: nothing seeded, text comes from the
+    /// person.
+    init(workspace: WorkspaceLaunch.Workspace, mode: Mode = .paste) {
+        self.workspace = workspace
+        self.mode = mode
+        self.previewText = nil
+    }
+
+    /// A preview-only initializer that seeds the paste field and interprets it
+    /// on appear, so the parsed-definition and parse-error layouts can be shown
+    /// without a person typing. Internal, used by the screen gallery.
+    init(workspace: WorkspaceLaunch.Workspace, mode: Mode = .paste, previewText: String) {
+        self.workspace = workspace
+        self.mode = mode
+        self.previewText = previewText
+        _text = State(initialValue: previewText)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
+            Hairline()
             content
-            Divider()
+            Hairline()
             footer
         }
         .onAppear {
             skillDraft.selectedTargets.formIntersection(Set(availableClients))
-            startNewConnectionIfNeeded()
+            if let previewText { read(previewText) } else { startNewConnectionIfNeeded() }
         }
-        .frame(width: 680, height: 620)
+        .sheetSize(SheetSize.large)
         .background(AgentTheme.contentBackground)
     }
 
@@ -63,24 +85,24 @@ struct PasteImportSheet: View {
     // MARK: - Chrome
 
     private var header: some View {
-        HStack(spacing: 12) {
-            KindTile(kind: shape == .skillMarkdown ? .skill : .mcpServer, size: 40)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: Space.lg) {
+            KindTile(kind: shape == .skillMarkdown ? .skill : .mcpServer, size: Size.tileLarge)
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(mode == .newConnection ? "Add a connection" : "Paste to import")
-                    .font(.title3.weight(.semibold))
+                    .font(AgentFont.title)
                 Text(subtitle).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             if let shape {
                 Text(shape.displayName)
-                    .font(.caption.weight(.medium))
+                    .font(AgentFont.captionMedium)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 9)
-                    .frame(height: 22)
-                    .background(Capsule().fill(Color.primary.opacity(0.06)))
+                    .padding(.horizontal, Space.md)
+                    .frame(height: Size.pillHeight)
+                    .background(Capsule().fill(AgentTheme.fillHover))
             }
         }
-        .padding(22)
+        .padding(Space.xxxl)
     }
 
     private var subtitle: String {
@@ -98,15 +120,15 @@ struct PasteImportSheet: View {
                 symbol: "checkmark.circle",
                 title: "\(savedSkillName) is in your library",
                 message:
-                    "The skill was created in the managed library. Choosing where it is used is a separate reviewed "
-                    + "step, and installing it in an app is another one on the Apps screen.")
+                    "The skill was created in the managed library. Install, on the skill, picks the apps and writes it; "
+                    + "anything that would change files you did not put there is shown first.")
         } else if let savedServerName {
             EmptyStateView(
                 symbol: "checkmark.circle",
                 title: "\(savedServerName) is in your library",
                 message:
-                    "The connection was recorded. Nothing was started, signed in to, or contacted. Choosing which "
-                    + "apps use it is a separate reviewed step, and putting it in one is another on the Apps screen.")
+                    "The connection was recorded. Nothing was started, signed in to, or contacted. Install, on the "
+                    + "connection, picks the apps and writes it.")
         } else if shape == .skillMarkdown {
             skillReview
         } else if !servers.isEmpty {
@@ -120,33 +142,31 @@ struct PasteImportSheet: View {
         HStack {
             if shape != nil, !isSaved {
                 Button("Start over") { reset() }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
             }
             Spacer()
             if isSaving { ProgressView().controlSize(.small) }
             if !isSaved {
                 Button("Cancel") { dismiss() }
-                    .buttonStyle(.bordered)
+                    .secondaryActionStyle()
                     .keyboardShortcut(.cancelAction)
                 Button(primaryTitle) { performPrimaryAction() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
                     .disabled(isPrimaryDisabled)
                     .help(primaryHelp)
             } else {
                 Button("Done") { dismiss() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AgentTheme.selection)
+                    .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(16)
+        .padding(Space.xl)
     }
 
     private var primaryTitle: String {
         if shape == .skillMarkdown { return "Create skill" }
-        if !servers.isEmpty { return "Add server" }
+        if !servers.isEmpty { return "Add connection" }
         return "Read paste"
     }
 
@@ -189,45 +209,45 @@ struct PasteImportSheet: View {
     // MARK: - Input
 
     private var inputStep: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Space.lg) {
             Text(
                 "Paste one definition. Nothing is run: the text is read as data, bounded, and shown back to you "
                     + "before anything is saved."
             )
-            .font(.callout)
+            .font(AgentFont.body)
             .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .wrapsLines()
 
             TextEditor(text: $text)
-                .font(.system(.caption, design: .monospaced))
+                .font(AgentFont.mono)
                 .scrollContentBackground(.hidden)
-                .padding(8)
+                .padding(Space.md)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .standardPanel()
                 .accessibilityLabel("Pasted definition")
 
-            HStack(spacing: 8) {
+            HStack(spacing: Space.md) {
                 Button {
                     readClipboard()
                 } label: {
                     Label("Paste from clipboard", systemImage: "doc.on.clipboard")
                 }
-                .buttonStyle(.bordered)
+                .secondaryActionStyle()
                 Spacer()
                 Text("Examples: an mcp add command, {\"mcpServers\": …}, https://…, or a SKILL.md")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
 
             if let failure {
                 Label(failure, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .wrapsLines()
             }
         }
-        .padding(22)
+        .padding(Space.xxxl)
     }
 
     // MARK: - Server review
@@ -236,30 +256,30 @@ struct PasteImportSheet: View {
         Form {
             Section {
                 Label(Self.serverIntakeExplanation, systemImage: "tray.and.arrow.down")
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
                 if let placementClause {
                     Label(placementClause, systemImage: "arrow.triangle.2.circlepath")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
                 if !canWrite {
                     Label(Self.readOnlyExplanation, systemImage: "lock")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
             if servers.count > 1 {
-                Section("Servers read") {
+                Section("Connections read") {
                     Picker("Show", selection: $selectedServer) {
                         ForEach(Array(servers.enumerated()), id: \.offset) { index, server in
                             Text(server.draft.name).tag(index)
                         }
                     }
-                    .accessibilityLabel("Server to show")
-                    Text("\(servers.count) servers were read.")
-                        .font(.caption)
+                    .accessibilityLabel("Connection to show")
+                    Text("\(CountNoun.connection.phrase(servers.count)) were read.")
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -268,7 +288,7 @@ struct PasteImportSheet: View {
                 Section("What was understood") {
                     ForEach(currentNotes, id: \.self) { note in
                         Label(note, systemImage: "text.magnifyingglass")
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -276,12 +296,12 @@ struct PasteImportSheet: View {
 
             Section("Connection") {
                 TextField("Name", text: $serverDraft.name)
-                    .accessibilityLabel("Server name")
+                    .accessibilityLabel("Connection name")
                 Picker("Transport", selection: $serverDraft.transport) {
                     ForEach(MCPTransport.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 TextField("Endpoint or command", text: $serverDraft.endpoint)
-                    .font(.system(.body, design: .monospaced))
+                    .font(AgentFont.monoBody)
                     .accessibilityLabel("Endpoint or command")
                 Picker("Authentication", selection: $serverDraft.authentication) {
                     ForEach(["OAuth", "API key", "Doppler", "None"], id: \.self) { Text($0).tag($0) }
@@ -300,7 +320,7 @@ struct PasteImportSheet: View {
                 }
                 if !credentialNames.isEmpty {
                     LabeledContent("Credential names", value: credentialNames.joined(separator: ", "))
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                         .accessibilityLabel("Credential names recorded")
                 }
@@ -316,7 +336,7 @@ struct PasteImportSheet: View {
             if let message = serverError ?? failure {
                 Section {
                     Label(message, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.red)
                 }
             }
@@ -363,7 +383,7 @@ struct PasteImportSheet: View {
     private var serverError: String? {
         let rawName = serverDraft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !rawName.isEmpty else {
-            return mode == .newConnection ? "Name this connection." : "The paste named no server."
+            return mode == .newConnection ? "Name this connection." : "The paste named no connection."
         }
         guard (try? WorkspaceLibrary.normalizedIdentifier(rawName)) != nil else {
             return ManagedMCPServerIntakeError.invalidConnectionName(rawName).errorDescription
@@ -376,7 +396,7 @@ struct PasteImportSheet: View {
         if serverDraft.scope != .user {
             do {
                 _ = try ConfigurationValidator.normalizedScopedRoot(
-                    scope: serverDraft.scope, value: serverDraft.projectRoot, noun: "MCP server")
+                    scope: serverDraft.scope, value: serverDraft.projectRoot, noun: "connection")
             } catch {
                 return error.localizedDescription
             }
@@ -391,12 +411,12 @@ struct PasteImportSheet: View {
             Section("What was understood") {
                 ForEach(skill?.notes ?? [], id: \.self) { note in
                     Label(note, systemImage: "text.magnifyingglass")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
                 ForEach(skill?.missingFields ?? [], id: \.self) { missing in
                     Label("\(missing) was not in the paste. Add it below.", systemImage: "pencil.line")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -420,17 +440,16 @@ struct PasteImportSheet: View {
 
             Section("Where it goes") {
                 Text(
-                    "The skill is created in the managed library first. Choosing which apps use it is a separate "
-                        + "reviewed step, and installing it is another one on the Apps screen."
+                    "The skill goes into your library first. Install, on the skill, then picks the apps and writes it."
                 )
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 if !canWrite {
                     Label(
                         "This workspace is open for review, so nothing can be saved into it.",
                         systemImage: "lock"
                     )
-                    .font(.caption)
+                    .font(AgentFont.caption)
                     .foregroundStyle(.secondary)
                 }
             }
@@ -438,7 +457,7 @@ struct PasteImportSheet: View {
             if let failure {
                 Section {
                     Label(failure, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
+                        .font(AgentFont.caption)
                         .foregroundStyle(.red)
                 }
             }
@@ -640,7 +659,7 @@ struct PasteImportSheet: View {
 
     private func chooseProjectFolder() {
         let panel = NSOpenPanel()
-        panel.title = "Choose the MCP project folder"
+        panel.title = "Choose this connection's project folder"
         panel.prompt = "Choose"
         panel.canChooseDirectories = true
         panel.canChooseFiles = false

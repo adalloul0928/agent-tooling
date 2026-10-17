@@ -203,10 +203,6 @@ public enum PendingRequestQueueService {
         }
     }
 
-    public static func request(id: UUID, store: WorkspaceRevisionStore) throws -> PendingAgentRequest? {
-        try pendingRequests(store: store).first { $0.id == id }
-    }
-
     /// Returns the current queue while transactionally removing rows whose
     /// original review window has expired. This gives the app and read-only MCP
     /// surface the same lifecycle view even when no new request is arriving.
@@ -239,6 +235,6 @@ public enum PendingRequestQueueService {
     ) -> String {
         let canonical = ([kind.rawValue, scope.rawValue] + targets.map(\.rawValue).sorted() + inputs)
             .joined(separator: "\u{001F}")
-        return SHA256.hash(data: Data(canonical.utf8)).map { String(format: "%02x", $0) }.joined()
+        return SHA256.hash(data: Data(canonical.utf8)).lowercaseHex
     }
 }

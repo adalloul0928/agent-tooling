@@ -20,6 +20,7 @@ struct SettingsGeneralView: View {
                     appearanceCard
                     runtimesCard
                     behaviorCard
+                    updatesCard
                     managedPolicyCard
                 }
                 .padding(WorkspaceLayout.pageInset)
@@ -43,65 +44,89 @@ struct SettingsGeneralView: View {
     private var runtimesCard: some View {
         TitledCard("MCP connection modes") {
             VStack(alignment: .leading, spacing: 0) {
-                Text(
-                    "Servers stay configured directly in each client by default. ToolHive is an optional, separate host for isolated workloads; Agent Tooling never moves servers into it automatically."
-                )
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(Self.connectionModesExplanation)
+                    .font(AgentFont.body)
+                    .foregroundStyle(.secondary)
+                    .padding(Space.xl)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 if let runtimes, !runtimes.statuses.isEmpty {
                     ForEach(runtimes.statuses, id: \.id) { status in
-                        Divider()
+                        Hairline()
                         statusRow(status)
                     }
                     if let error = runtimes.mcpRuntimeError {
-                        Divider()
+                        Hairline()
                         Text(error)
-                            .font(.caption)
+                            .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
-                            .padding(14)
+                            .padding(Space.xl)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Divider()
+                    Hairline()
                     HStack {
                         Text(workloadSummary)
-                            .font(.callout)
+                            .font(AgentFont.body)
                             .foregroundStyle(.secondary)
                         Spacer()
                         Button("Refresh") { Task { await runtimes.refresh() } }
-                            .buttonStyle(.bordered)
+                            .secondaryActionStyle()
                             .controlSize(.small)
                             .disabled(runtimes.isRefreshingMCPRuntimes)
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                 } else {
-                    Divider()
+                    Hairline()
                     HStack {
-                        Text("Connection mode check").font(.callout.weight(.medium))
+                        Text("Connection mode check").font(AgentFont.bodyMedium)
                         Spacer()
-                        Button("Check Modes") { Task { await runtimes?.refresh() } }
-                            .buttonStyle(.bordered)
+                        Button("Check modes") { Task { await runtimes?.refresh() } }
+                            .secondaryActionStyle()
                             .controlSize(.small)
                             .disabled(runtimes?.isRefreshingMCPRuntimes == true)
                     }
-                    .padding(14)
+                    .padding(Space.xl)
                 }
             }
         }
     }
 
+    /// What the connection modes are. A configured entry is a connection, as
+    /// the Updates card below calls it; an MCP server is only what ToolHive
+    /// runs.
+    static let connectionModesExplanation =
+        "Connections stay configured directly in each client by default. ToolHive is an optional, separate host "
+        + "that runs MCP servers as isolated workloads; Agent Tooling never moves a connection into it automatically."
+
     private func statusRow(_ status: MCPRuntimeStatus) -> some View {
-        InfoRow(status.displayName, detail: status.version.map { "\(status.detail) Version \($0)." } ?? status.detail) {
+        InfoRow(status.displayName, detail: rowDetail(status)) {
             Image(systemName: status.id == "toolhive" ? "server.rack" : "app.connected.to.app.below.fill")
                 .foregroundStyle(.secondary)
-                .frame(width: 20)
+                .frame(width: Size.glyphSlot)
         } trailing: {
             Text(runtimeAvailabilityLabel(for: status))
-                .font(.caption)
+                .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
         }
+        .help(status.detail)
+    }
+
+    /// The row's own line. Direct configuration always says what it reported;
+    /// ToolHive says its version when it answered, and otherwise a plain
+    /// sentence rather than the shell's own words, which stay in the tooltip.
+    private func rowDetail(_ status: MCPRuntimeStatus) -> String {
+        guard status.id == "toolhive" else {
+            return status.version.map { "\(status.detail) Version \($0)." } ?? status.detail
+        }
+        if status.isAvailable, status.capabilities.contains(.health) {
+            return status.version.map { "\(status.detail) Version \($0)." } ?? status.detail
+        }
+        // Not runnable at all reads as not installed; runnable but unreadable
+        // reads as a check that could not complete. The raw diagnostic (for
+        // example "env: thv: No such file or directory") stays in the tooltip.
+        return status.isAvailable
+            ? "ToolHive could not be checked."
+            : "ToolHive (thv) is not installed on this Mac."
     }
 
     private func runtimeAvailabilityLabel(for status: MCPRuntimeStatus) -> String {
@@ -117,7 +142,7 @@ struct SettingsGeneralView: View {
         guard runtimes.mcpRuntimeError == nil else { return "" }
         return runtimes.servers.isEmpty
             ? "No ToolHive workloads were reported by the last successful refresh."
-            : runtimes.servers.count == 1 ? "1 ToolHive workload" : "\(runtimes.servers.count) ToolHive workloads"
+            : CountNoun("ToolHive workload").phrase(runtimes.servers.count)
     }
 
     private var behaviorCard: some View {
@@ -127,7 +152,7 @@ struct SettingsGeneralView: View {
                     "Check health automatically",
                     detail: "Check this Mac's apps when Agent Tooling opens, instead of waiting for a manual refresh."
                 ) {
-                    Image(systemName: "switch.2").foregroundStyle(.secondary).frame(width: 20)
+                    Image(systemName: "switch.2").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                 } trailing: {
                     Toggle(
                         "Check health automatically",
@@ -139,16 +164,86 @@ struct SettingsGeneralView: View {
                     .toggleStyle(.switch)
                     .disabled(workspace.device.isChecking)
                 }
-                Divider()
-                Text(
-                    "Recorded for this Mac now. The check Agent Tooling runs when it opens does not read this choice yet, so switching it off does not change that check today."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+
+    /// How this Mac handles updates to what it manages. One cadence, and per
+    /// kind the choice between installing a found update at once and leaving
+    /// it on Home with an Update button.
+    private var updatesCard: some View {
+        let updates = workspace.updates
+        return TitledCard("Updates") {
+            VStack(alignment: .leading, spacing: 0) {
+                InfoRow(
+                    "Check for updates",
+                    detail: updatesCheckDetail
+                ) {
+                    Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
+                } trailing: {
+                    HStack(spacing: Space.md) {
+                        Button(updates.isChecking ? "Checking…" : "Check now") {
+                            Task { await updates.check() }
+                        }
+                        .secondaryActionStyle()
+                        .disabled(updates.isBusy)
+                        Picker("Check for updates", selection: binding(\.cadence)) {
+                            ForEach(UpdateCheckCadence.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        .labelsHidden()
+                        .frame(width: Size.pickerWidth)
+                    }
+                }
+                Hairline()
+                policyRow(
+                    "Skills", kind: .skill, symbol: "doc.text",
+                    detail: "Skills that follow a repository. Installing replaces the copies this app put in your apps.")
+                Hairline()
+                policyRow(
+                    "Plugins", kind: .plugin, symbol: "puzzlepiece.extension",
+                    detail: "Compared with their catalog. Installing asks the app to update its own copy.")
+                Hairline()
+                policyRow(
+                    "Connections", kind: .mcpServer, symbol: "point.3.connected.trianglepath.dotted",
+                    detail: "Compared with the catalog entry of the same name, when there is one.")
+            }
+        }
+    }
+
+    private var updatesCheckDetail: String {
+        if let last = workspace.device.lastUpdateCheck {
+            return "Last checked \(SnapshotTime.compact(last)). \(workspace.device.updatePolicy.cadence.detail)"
+        }
+        return "Not checked yet. \(workspace.device.updatePolicy.cadence.detail)"
+    }
+
+    private func policyRow(_ title: String, kind: ToolingItemKind, symbol: String, detail: String) -> some View {
+        InfoRow(title, detail: detail) {
+            Image(systemName: symbol).foregroundStyle(.secondary).frame(width: Size.glyphSlot)
+        } trailing: {
+            Picker(title, selection: Binding(
+                get: { workspace.device.updatePolicy.policy(for: kind) },
+                set: { value in
+                    var policy = workspace.device.updatePolicy
+                    policy.setPolicy(value, for: kind)
+                    Task { await workspace.device.setUpdatePolicy(policy) }
+                })
+            ) {
+                ForEach(UpdateInstallPolicy.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .labelsHidden()
+            .frame(width: Size.pickerWidth)
+        }
+    }
+
+    private func binding<Value>(_ keyPath: WritableKeyPath<UpdatePolicy, Value>) -> Binding<Value> {
+        Binding(
+            get: { workspace.device.updatePolicy[keyPath: keyPath] },
+            set: { value in
+                var policy = workspace.device.updatePolicy
+                policy[keyPath: keyPath] = value
+                Task { await workspace.device.setUpdatePolicy(policy) }
+            })
     }
 
     @ViewBuilder
@@ -160,7 +255,7 @@ struct SettingsGeneralView: View {
                         "Location checked on this Mac",
                         detail: "Agent Tooling knows where to look for an organization policy on this Mac."
                     ) {
-                        Image(systemName: "building.2.crop.circle").foregroundStyle(.secondary).frame(width: 20)
+                        Image(systemName: "building.2.crop.circle").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
                     } trailing: {
                         PathInfoButton(path: policyPath.path(percentEncoded: false))
                     }
@@ -168,17 +263,11 @@ struct SettingsGeneralView: View {
                     Text(
                         "Agent Tooling was not told where an organization policy file would be on this Mac, so it cannot rule one out. If your organization sets one, it may decide a setting shown elsewhere as changeable."
                     )
-                    .font(.callout)
+                    .font(AgentFont.body)
                     .foregroundStyle(.secondary)
-                    .padding(14)
+                    .padding(Space.xl)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Divider()
-                Text("Importing a policy file from here is being restored; nothing on this Mac is affected by that yet.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }

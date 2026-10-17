@@ -14,6 +14,18 @@ public enum WorkspaceDeploymentOperationError: Error, Equatable, Sendable {
 
 /// A reviewed content deployment, staged and ready for the existing executor.
 public struct StagedDeployment: Hashable, Sendable {
+    /// Which kind of content change a staged copy represents, so an operation
+    /// title can tell a first install from a replacement rather than calling
+    /// every non-removal an "update".
+    public enum Change: Hashable, Sendable {
+        /// Nothing is at the destination; this creates it.
+        case install
+        /// Something is there and differs; this replaces it.
+        case update
+        /// The installed copy is being removed.
+        case remove
+    }
+
     public let artifactID: ArtifactID
     public let deploymentName: String
     /// Empty for a removal: nothing is staged to put there.
@@ -23,12 +35,18 @@ public struct StagedDeployment: Hashable, Sendable {
     public let destinationPath: String
     public let client: ClientKind
     public let scope: ToolingScope
-    public let isRemoval: Bool
+    public let change: Change
+    /// The project folder a project-scoped copy lands under, so the executor
+    /// can admit that folder's own client directory. Absent for user scope.
+    public let projectRootPath: String?
+    public var isRemoval: Bool { change == .remove }
 
     public init(
         artifactID: ArtifactID, deploymentName: String, stagingPath: String, fingerprint: String,
-        destinationPath: String, client: ClientKind, scope: ToolingScope, isRemoval: Bool = false
+        destinationPath: String, client: ClientKind, scope: ToolingScope, change: Change = .install,
+        projectRootPath: String? = nil
     ) {
+        self.projectRootPath = projectRootPath
         self.artifactID = artifactID
         self.deploymentName = deploymentName
         self.stagingPath = stagingPath
@@ -36,7 +54,7 @@ public struct StagedDeployment: Hashable, Sendable {
         self.destinationPath = destinationPath
         self.client = client
         self.scope = scope
-        self.isRemoval = isRemoval
+        self.change = change
     }
 }
 
@@ -81,10 +99,11 @@ public enum WorkspaceDeploymentOperations {
         for item in plan.items {
             let digest: ContentDigest
             var removing = false
+            let change: StagedDeployment.Change
             switch item.action {
-            case .installContent(let value): digest = value
-            case .updateContent(_, let value): digest = value
-            case .removeContent(let value): digest = value; removing = true
+            case .installContent(let value): digest = value; change = .install
+            case .updateContent(_, let value): digest = value; change = .update
+            case .removeContent(let value): digest = value; removing = true; change = .remove
             // These are the command bridges' work, not a folder copy.
             case .installNativePackage, .configureManagedConnection: continue
             }
@@ -144,12 +163,21 @@ public enum WorkspaceDeploymentOperations {
                     artifactID: item.artifactID, deploymentName: deploymentName,
                     stagingPath: "", fingerprint: installed,
                     destinationPath: destination.path, client: client, scope: item.scope,
-                    isRemoval: true))
+                    change: .remove, projectRootPath: projectRoot?.path))
                 continue
             }
             guard let tree else { throw WorkspaceDeploymentOperationError.missingContent }
             let folder = stagingRoot.appending(path: item.artifactID.rawValue.uuidString.lowercased()
                 + "-" + item.physicalDestinationID.rawValue.uuidString.lowercased())
+            // The staging folder is named after the item and its destination,
+            // so a second attempt at the same install finds the last attempt's
+            // copy still there and the exporter refuses a non-empty folder.
+            // What is staged is always rebuilt from the library, so the old copy
+            // is disposable; anything else under the staging root is left alone.
+            if FileManager.default.fileExists(atPath: folder.path) {
+                do { try FileManager.default.removeItem(at: folder) }
+                catch { throw WorkspaceDeploymentOperationError.stagingFailed }
+            }
             do { try WorkspacePackageExporter.write(tree: tree, to: folder) }
             catch { throw WorkspaceDeploymentOperationError.stagingFailed }
             let fingerprint: String
@@ -159,7 +187,8 @@ public enum WorkspaceDeploymentOperations {
             staged.append(.init(
                 artifactID: item.artifactID, deploymentName: deploymentName,
                 stagingPath: folder.path, fingerprint: fingerprint,
-                destinationPath: destination.path, client: client, scope: item.scope))
+                destinationPath: destination.path, client: client, scope: item.scope,
+                change: change, projectRootPath: projectRoot?.path))
         }
         return staged
     }
@@ -183,11 +212,12 @@ public enum WorkspaceDeploymentOperations {
                             id: identifiers(),
                             kind: .removeManagedDirectory,
                             title: "Remove \(deployment.deploymentName)",
-                            detail: "Remove the copy this app installed in \(key.client.rawValue).",
+                            detail: "Remove the copy Agent Tooling installed in \(key.client.rawValue).",
                             destinationPath: deployment.destinationPath,
                             // Bound to the installed tree; an edited folder is
                             // left alone rather than deleted.
-                            destinationFingerprint: deployment.fingerprint)
+                            destinationFingerprint: deployment.fingerprint,
+                            projectRootPath: deployment.projectRootPath)
                         : OperationStep(
                             id: identifiers(),
                             kind: .copyDirectory,
@@ -197,17 +227,37 @@ public enum WorkspaceDeploymentOperations {
                             // The executor recomputes this before committing, so a
                             // staged folder that changed cannot slip past review.
                             sourceFingerprint: deployment.fingerprint,
-                            destinationPath: deployment.destinationPath)
+                            destinationPath: deployment.destinationPath,
+                            // Names the project folder the copy lands under, so the
+                            // executor admits that folder's client directory and
+                            // nothing outside it.
+                            projectRootPath: deployment.projectRootPath)
                 }
                 let removals = sorted.filter(\.isRemoval).count
+                let installs = sorted.filter { $0.change == .install }.count
+                let updates = sorted.filter { $0.change == .update }.count
+                let count = sorted.count
+                let tools = count == 1 ? "1 tool" : "\(count) tools"
+                let title: String
+                if removals == count {
+                    title = "Remove \(tools) from \(key.client.rawValue)"
+                } else if installs == count {
+                    title = "Install \(tools) in \(key.client.rawValue)"
+                } else if updates == count {
+                    title = "Update \(tools) in \(key.client.rawValue)"
+                } else {
+                    // A folder that gets some first installs and some
+                    // replacements at once is neither, so it is a change.
+                    title = "Change \(tools) in \(key.client.rawValue)"
+                }
                 return OperationPlan(
                     id: identifiers(),
-                    kind: .installSkill,
-                    title: removals == sorted.count
-                        ? "Remove \(sorted.count == 1 ? "1 tool" : "\(sorted.count) tools") from \(key.client.rawValue)"
-                        : "Update \(sorted.count == 1 ? "1 tool" : "\(sorted.count) tools") in \(key.client.rawValue)",
+                    // A plan that only replaces what an app already has is an
+                    // update, and history says so.
+                    kind: updates == count && removals == 0 ? .updateSkill : .installSkill,
+                    title: title,
                     summary: "Only what you reviewed changes. Nothing else in that folder is touched.",
-                    targetSurfaces: [key.client.primarySurface],
+                    targetSurfaces: [key.client.defaultSurface],
                     scope: key.scope,
                     steps: steps)
             }
@@ -266,15 +316,5 @@ public enum WorkspaceDeploymentOperations {
     private struct DestinationKey: Hashable {
         let client: ClientKind
         let scope: ToolingScope
-    }
-}
-
-private extension ClientKind {
-    var primarySurface: TargetSurface {
-        switch self {
-        case .claude: .claudeCode
-        case .codex: .codexCLI
-        case .gemini: .geminiCLI
-        }
     }
 }

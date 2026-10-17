@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -133,6 +134,23 @@ struct ToolHiveRuntimeInspectionTests {
         #expect(diagnostic?.contains("secret") == false)
         let statusCalls = await runner.recordedCalls()
         #expect(statusCalls.map { $0.1 } == [["status", "files", "--format", "json"]])
+    }
+
+    /// An absent ToolHive is not a failing command. The shell's 127 for a
+    /// missing `thv` reads as unavailable, so a caller can offer installation,
+    /// while an installed ToolHive whose status command fails reads as a
+    /// failed command, the way `version` tells them apart.
+    @Test func statusTellsAnAbsentToolHiveFromAFailingCommand() async throws {
+        let absent = ToolHiveRuntimeInspection(runner: RefusingCommandRunner())
+        #expect(try await absent.status(workloadName: "files") == .unavailable(diagnostic: "command not found: thv"))
+
+        let arguments = ["status", "files", "--format", "json"]
+        let failing = ScriptedCommandRunner([
+            arguments: CommandOutput(status: 1, standardOutput: "", standardError: "workload files not found")
+        ])
+        let failed = try await ToolHiveRuntimeInspection(runner: failing).status(workloadName: "files")
+        #expect(failed == .commandFailed(diagnostic: "workload files not found"))
+        #expect(await failing.calls == [arguments])
     }
 
     @Test func mismatchedOrOversizedStatusResponsesAreUnsupportedBeforeUse() async throws {

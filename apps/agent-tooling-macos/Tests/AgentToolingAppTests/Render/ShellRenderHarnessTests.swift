@@ -28,7 +28,7 @@ struct ShellRenderHarnessTests {
         // The wizard's primary action is enabled from the first frame, and a
         // bare `NSHostingView` with no window does not finish compositing an
         // enabled `.glassProminent` control before this reads it back; see
-        // `rasterizeWarmed` in `Fixture+Onboarding.swift`.
+        // `expectDrawnWarmed` in `Fixture+Onboarding.swift`.
         try expectDrawnWarmed(
             OnboardingWizard(workspace: fixture.workspace) {}
                 .environment(AppNavigationState()))
@@ -58,6 +58,7 @@ struct ShellRenderHarnessTests {
         await fixture.workspace.device.refresh()
 
         #expect(fixture.workspace.device.verdict(for: .claude).state == .healthy)
-        #expect(fixture.workspace.device.verdict(for: .codex) == ClientVerdict(state: .attention, text: "Not found"))
+        #expect(fixture.workspace.device.verdict(for: .codex).state == .attention)
+        #expect(fixture.workspace.device.verdict(for: .codex).text == "Not found")
     }
 }

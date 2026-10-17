@@ -14,6 +14,25 @@ public struct ToolingInsightsService: Sendable {
         homeURL: URL,
         marketplaceProviders: [any MarketplaceProvider] = []
     ) async -> InsightsReport {
+        await scanWithDigests(
+            options: options, skills: skills, marketplacePackages: marketplacePackages, homeURL: homeURL,
+            marketplaceProviders: marketplaceProviders
+        ).report
+    }
+
+    /// The report, and the digests the same pass produced for a deep dive.
+    /// The digests are returned rather than kept: they hold redacted
+    /// conversation text, which the saved report never does.
+    public func scanWithDigests(
+        options: InsightScanOptions,
+        skills: [Skill],
+        marketplacePackages: [MarketplacePackage],
+        homeURL: URL,
+        marketplaceProviders: [any MarketplaceProvider] = []
+    ) async -> (report: InsightsReport, digests: [ConversationDigest]) {
+        // Copies of one skill are one skill to recent work: a client records
+        // the name it used, not which copy, so each is judged once.
+        let skills = ToolCopyIdentity.collapsingCopies(skills)
         let now = Date.now
         let artifact = scanner.scan(options: options, skills: skills, homeURL: homeURL, now: now)
         let discovery = await discoverMarketplacePackages(
@@ -32,7 +51,7 @@ public struct ToolingInsightsService: Sendable {
             usage: usage,
             messages: artifact.messages
         )
-        return InsightsReport(
+        let report = InsightsReport(
             generatedAt: now,
             windowStart: artifact.windowStart,
             coverage: artifact.coverage.sorted { lhs, rhs in lhs.client.rawValue < rhs.client.rawValue },
@@ -43,6 +62,7 @@ public struct ToolingInsightsService: Sendable {
             conversationsScanned: artifact.coverage.reduce(0) { $0 + $1.conversationsScanned },
             itemsInspected: artifact.coverage.reduce(0) { $0 + $1.itemsInspected }
         )
+        return (report, artifact.digests)
     }
 }
 
@@ -96,7 +116,11 @@ private func buildQualityFindings(
     for skill in skills {
         guard skill.owned else { continue }
         let summary = skill.summary.trimmingCharacters(in: .whitespacesAndNewlines)
-        if summary.count < 24 {
+        // An empty summary is unknown, not too short: a library-authored skill
+        // whose SKILL.md description could not be read leaves this blank rather
+        // than proven short. Flagging blank-as-unknown would tell a person to
+        // "clarify" a description the app never actually looked at.
+        if !summary.isEmpty, summary.count < 24 {
             findings.append(
                 finding(
                     skill: skill,
@@ -156,7 +180,12 @@ private func buildQualityFindings(
                 )
             }
         }
-        if !skill.files.contains(where: { $0.lowercased() == "skill.md" }) {
+        // Only a file list that was actually inventoried can be missing a
+        // required entry. A skill whose captured tree was never read has an
+        // unknown inventory (filesKnown == false) — a library-authored skill
+        // whose tree was not read is one — and an unknown inventory must never
+        // be reported as one missing SKILL.md.
+        if skill.filesKnown, !skill.files.contains(where: { $0.lowercased() == "skill.md" }) {
             findings.append(
                 finding(
                     skill: skill,
@@ -183,8 +212,12 @@ private func buildQualityFindings(
                 )
             )
         }
-        let missingClients = skill.clients.filter { !$0.reportsLocalPresence }.map(\.client.rawValue).sorted()
-        if !skill.clients.isEmpty, !missingClients.isEmpty {
+        // Drift is only real for a client this app actually checked and found
+        // the skill absent (`isInstalled == false`). A `nil` presence is
+        // unknown — the projection records a requested destination without ever
+        // measuring it — and unknown must never be reported as missing.
+        let missingClients = skill.clients.filter { $0.isInstalled == false }.map(\.client.rawValue).sorted()
+        if !missingClients.isEmpty {
             findings.append(
                 finding(
                     skill: skill,

@@ -75,6 +75,14 @@ struct SkillInventoryIndex: Equatable {
     let observedPaths: [ArtifactID: String]
     /// The folder an attached skill is authored in, on this Mac.
     let authoringPaths: [ArtifactID: String]
+    /// What the last check found each copy's folder to hold, compared with
+    /// its packaging stamp ignored. Absent where the check could not read it.
+    let definitionDigests: [ArtifactID: String]
+    /// The tool that placed a standalone copy and keeps it in step, when it
+    /// left a record saying so.
+    let externalManagers: [ArtifactID: ObservedExternalManager]
+    /// Every entry by its copy group, best copy first. See `copyKey(for:)`.
+    private let copyGroups: [String: [SkillEntry]]
     let marketplaces: [SourceOption]
     let plugins: [SourceOption]
     let mineCount: Int
@@ -161,6 +169,8 @@ struct SkillInventoryIndex: Equatable {
         // guess by display name would put another skill's marks on it.
         var found: [ArtifactID: Set<ClientKind>] = [:]
         var paths: [ArtifactID: String] = [:]
+        var digests: [ArtifactID: String] = [:]
+        var managers: [ArtifactID: ObservedExternalManager] = [:]
         var byName: [String: [SkillEntry]] = [:]
         for skill in entries {
             guard let declared = skill.declaredName, !declared.isEmpty else { continue }
@@ -172,11 +182,33 @@ struct SkillInventoryIndex: Equatable {
                 for skill in byName[name] ?? [] {
                     found[skill.id, default: []].insert(client)
                     if paths[skill.id] == nil { paths[skill.id] = metadata.path }
+                    if digests[skill.id] == nil, let digest = metadata.definitionDigest { digests[skill.id] = digest }
+                    if managers[skill.id] == nil, let manager = metadata.externalManager { managers[skill.id] = manager }
                 }
             }
         }
         observedClients = found
         observedPaths = paths
+        definitionDigests = digests
+        externalManagers = managers
+
+        // Copies are entries a client calls by one name. The best copy leads
+        // its group: the one this library maintains, then the one found in the
+        // most apps, then the one somebody asked for somewhere.
+        var groups: [String: [SkillEntry]] = [:]
+        for skill in entries { groups[Self.copyKey(for: skill), default: []].append(skill) }
+        copyGroups = groups.mapValues { members in
+            members.sorted { lhs, rhs in
+                if lhs.isMaintainedHere != rhs.isMaintainedHere { return lhs.isMaintainedHere }
+                let left = found[lhs.id]?.count ?? 0
+                let right = found[rhs.id]?.count ?? 0
+                if left != right { return left > right }
+                if lhs.requestedClients.count != rhs.requestedClients.count {
+                    return lhs.requestedClients.count > rhs.requestedClients.count
+                }
+                return lhs.id < rhs.id
+            }
+        }
 
         var authoring: [ArtifactID: String] = [:]
         for skill in entries {
@@ -186,6 +218,38 @@ struct SkillInventoryIndex: Equatable {
             authoring[skill.id] = path
         }
         authoringPaths = authoring
+    }
+
+    // MARK: - Copies
+
+    /// Which entries are one skill: the name a client calls it by, without a
+    /// plugin's namespace. An entry that declares no name is a group of one,
+    /// since a display name is not enough to say two entries are the same.
+    static func copyKey(for skill: SkillEntry) -> String {
+        ToolCopyIdentity.callableName(skill.declaredName).map { "name:" + $0 }
+            ?? "id:" + skill.id.rawValue.uuidString.lowercased()
+    }
+
+    /// Every copy of this skill in the library, best first, itself included.
+    func copies(of skill: SkillEntry) -> [SkillEntry] {
+        copyGroups[Self.copyKey(for: skill)] ?? [skill]
+    }
+
+    /// How many different skills the library holds, counting copies once.
+    var distinctCount: Int { copyGroups.count }
+
+    /// The different contents among `copies`, most common first, each with
+    /// the copies that hold it. Copies the last check could not read are left
+    /// out; they are "not compared", not a version of their own.
+    func versions(among copies: [SkillEntry]) -> [[SkillEntry]] {
+        let byDigest = Dictionary(grouping: copies.filter { definitionDigests[$0.id] != nil }) { definitionDigests[$0.id] ?? "" }
+        // Each value is non-empty: `grouping` makes a bucket only for a member.
+        return byDigest.values.sorted { lhs, rhs in lhs.count != rhs.count ? lhs.count > rhs.count : lhs[0].id < rhs[0].id }
+    }
+
+    /// Who manages this copy, in the Managed column's words.
+    func management(of skill: SkillEntry) -> SkillManagement {
+        SkillManagement(skill, placedBy: externalManagers[skill.id])
     }
 
     func presentation(for skill: SkillEntry) -> SkillPresentation {

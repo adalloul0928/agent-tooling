@@ -14,7 +14,13 @@ enum AppSection: String, CaseIterable, Identifiable {
     case plugins = "Plugins"
     case presets = "Presets"
     case syncCenter = "Clients"
+    /// What the claude.ai and ChatGPT accounts put in front of this Mac's
+    /// clients. The name was an earlier screen's; that screen recorded
+    /// connections by hand and is gone, and this one reads the accounts.
+    case accounts = "Accounts"
     case appSettings = "App settings"
+    case health = "Health"
+    case checkup = "Checkup"
     case activity = "Activity"
     case history = "History"
     case projects = "Projects"
@@ -37,10 +43,13 @@ enum AppSection: String, CaseIterable, Identifiable {
     /// What a tab calls itself inside its own family, where the family name is
     /// already on the heading above it. "Clients" and "Settings" only read
     /// correctly under "Apps"; "General" only reads correctly under "Settings".
+    /// A tab never repeats its heading: under "Activity" the first tab is the
+    /// list of receipts, so it is called that.
     var tabTitle: String {
         switch self {
         case .appSettings: "Settings"
         case .settings: "General"
+        case .activity: "Receipts"
         default: rawValue
         }
     }
@@ -50,7 +59,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     var sidebarDestination: AppSection {
         switch self {
         case .plugins, .mcpServers, .presets: .skills
-        case .appSettings: .syncCenter
+        case .appSettings, .health, .checkup, .accounts: .syncCenter
         case .history: .activity
         case .sync: .settings
         default: self
@@ -60,19 +69,20 @@ enum AppSection: String, CaseIterable, Identifiable {
     var workspaceTabs: [AppSection] {
         switch self {
         case .skills, .plugins, .mcpServers, .presets: [.skills, .plugins, .mcpServers, .presets]
-        case .syncCenter, .appSettings: [.syncCenter, .appSettings]
+        case .syncCenter, .accounts, .appSettings, .health, .checkup: [.syncCenter, .accounts, .checkup, .appSettings, .health]
         case .activity, .history: [.activity, .history]
         case .settings, .sync: [.settings, .sync]
         default: []
         }
     }
 
-    /// The heading above a family's tabs. A section that stands alone has none,
-    /// and its screen keeps whatever title it gave its own toolbar.
+    /// The heading above a family's tabs, the same on every tab of it. A
+    /// section that stands alone has none, and its screen keeps whatever title
+    /// it gave its own toolbar.
     var workspaceTitle: String? {
         switch self {
         case .skills, .plugins, .mcpServers, .presets: "Library"
-        case .syncCenter, .appSettings: "Apps"
+        case .syncCenter, .accounts, .checkup, .appSettings, .health: "Apps"
         case .activity, .history: "Activity"
         case .settings, .sync: "Settings"
         default: nil
@@ -89,7 +99,10 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .plugins: "puzzlepiece.extension"
         case .presets: "square.stack"
         case .syncCenter: "desktopcomputer"
+        case .accounts: "person.badge.key"
         case .appSettings: "slider.horizontal.3"
+        case .health: "waveform.path.ecg"
+        case .checkup: "stethoscope"
         case .activity: "list.bullet.rectangle"
         case .history: "clock.arrow.circlepath"
         case .projects: "folder.badge.gearshape"

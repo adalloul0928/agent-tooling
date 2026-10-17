@@ -317,11 +317,15 @@ enum ToolCatalog {
                 properties: [
                     "instruction": ToolSchema.string(
                         "What the skill should do, in plain language.",
-                        maximumLength: CodexSkillDraftRequest.maximumInstructionCharacters
+                        maximumLength: SkillDraftRequest.maximumInstructionCharacters
                     ),
                     "proposedName": ToolSchema.string(
                         "Suggested skill identifier, lower case with hyphens.",
                         maximumLength: 96
+                    ),
+                    "assistant": ToolSchema.enumeration(
+                        "Which signed-in local app drafts the skill with the person. Codex when omitted.",
+                        values: ["claude-code", "codex"]
                     ),
                     "scope": ToolSchema.scope,
                     "projectRoot": ToolSchema.projectRoot,

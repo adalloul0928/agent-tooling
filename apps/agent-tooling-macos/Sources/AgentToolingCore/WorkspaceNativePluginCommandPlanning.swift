@@ -94,7 +94,8 @@ public enum WorkspaceNativePluginCommandPlanning {
             contributions: artifactContributions,
             currentDeviceID: device.deviceID,
             targets: resolvedTargets,
-            capabilityEvidence: device.capabilityEvidence)
+            capabilityEvidence: device.capabilityEvidence,
+            deviceRegistry: document.deviceRegistry)
         // Only this destination's issues count, plus any the resolver could not
         // pin to a destination. The package may be asked for elsewhere too, and
         // a destination with no route for it (a Claude Code package asked for
@@ -121,11 +122,7 @@ public enum WorkspaceNativePluginCommandPlanning {
             throw WorkspaceNativePluginCommandPlanningError.invalidRequirement
         }
 
-        let client: ClientKind
-        switch target.selector.surface {
-        case .claudeCode: client = .claude
-        case .codexCLI: client = .codex
-        default:
+        guard let client = TargetSurfaceCapability.nativePluginClient(for: target.selector.surface) else {
             throw WorkspaceNativePluginCommandPlanningError.unsupportedSurface(target.selector.surface)
         }
         guard target.selector.scope == .user, target.selector.logicalProjectID == nil else {
@@ -139,7 +136,10 @@ public enum WorkspaceNativePluginCommandPlanning {
               artifact.identity.parentPackageID == nil,
               artifact.authority == .nativeOwned,
               artifact.nativeRoutes.filter({ $0.client == client }) == [route],
-              OperationCommandPolicy.isSafePluginIdentifier(route.externalPluginID) else {
+              OperationCommandPolicy.isSafePluginIdentifier(route.externalPluginID),
+              // An account plugin (`@synced`) or a session-only one has no
+              // marketplace to install it from; it is never planned here.
+              !(client == .claude && ClaudeAccountSync.hasReservedOrigin(route.externalPluginID)) else {
             throw WorkspaceNativePluginCommandPlanningError.invalidRequirement
         }
 
@@ -174,7 +174,7 @@ public enum WorkspaceNativePluginCommandPlanning {
         case .codex:
             expectedExecutable = "codex"
             expectedArguments = ["plugin", "add", route.externalPluginID]
-        case .gemini:
+        case .gemini, .kiro:
             throw WorkspaceNativePluginCommandPlanningError.unsupportedSurface(target.selector.surface)
         }
         guard reviewedInstall.client == client,

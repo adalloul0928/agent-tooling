@@ -2,8 +2,12 @@
 
 `WorkspaceApplicationService.previewAssignmentBatch` and
 `applyAssignmentBatch` share one portable intent command. They are available to
-trusted local callers; the MCP interface remains request/queue-only. This packet
-does not execute a native install or report an installation receipt.
+trusted local callers; the MCP interface remains request/queue-only. These
+commands change portable intent only. Native execution and the installation
+receipt run from the install surface: `WorkspaceInstallSession` assigns, plans
+what that means for this Mac, classifies the plan with
+`OperationPlanRiskClassifier`, and applies through `WorkspaceDeploymentSession`
+and the operation executor, reporting a receipt.
 
 ## Everyday batch and Apply once
 
@@ -37,12 +41,13 @@ an earlier Apply once. Linked preset subscriptions are separate future P1 work.
 Portable metadata, native deployment files and device observations remain
 separate: this service changes the first and leaves the latter two untouched.
 
-## Integration still required
+## Integration
 
-The shared Library/Project/onboarding assignment sheet must retain the reviewed
-command rather than recreate IDs on retry. It must resolve target capabilities
-and present native operation plans/results independently from saved intent.
-Current assignment command fixtures exercise the real revision store, including
-independent reasons, replacement, preset changes, replay, stale input and
-whole-plugin protection. They are not packaged assignment-flow or native
-consumption evidence.
+The shared Library/Project/onboarding assignment sheet retains the reviewed
+command rather than recreating IDs on retry, resolves target capabilities, and
+presents native operation plans and results independently from saved intent.
+`WorkspaceInstallSession` runs the one-step install (assign, plan,
+risk-classify, apply) and reports a receipt; `WorkspaceDeploymentSession` drives
+the native plugin and managed-MCP command bridges. Current assignment command
+fixtures exercise the real revision store, including independent reasons,
+replacement, preset changes, replay, stale input and whole-plugin protection.

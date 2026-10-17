@@ -46,6 +46,29 @@ struct InsightsSectionRenderTests {
             "the kept report changed nothing on screen")
     }
 
+    /// A kept deep dive is shown above the keyword pass: the screen with one
+    /// draws differently from the screen with the same report and none.
+    @Test func theShellDrawsAKeptDeepDive() async throws {
+        let report = ShellRenderFixture.insightsReport()
+        var withDive = report
+        withDive.deepDive = ShellRenderFixture.insightsDeepDive()
+        let dived = try await ShellRenderFixture(
+            insightsServices: StubInsightsServices(answer: report, restored: withDive))
+        defer { dived.remove() }
+        let plain = try await ShellRenderFixture(
+            insightsServices: StubInsightsServices(answer: report, restored: report))
+        defer { plain.remove() }
+
+        try expectDrawn(renderShell(.insights, fixture: dived))
+        #expect(
+            try rasterize(renderShell(.insights, fixture: dived)).tiffRepresentation
+                != rasterize(renderShell(.insights, fixture: plain)).tiffRepresentation,
+            "the deep dive changed nothing on screen")
+        // Opening the screen still reads nothing: the daily run belongs to the
+        // shell's open, not to the screen.
+        #expect(dived.workspace.insights.isDeepDiving == false)
+    }
+
     /// The scan options draw whether or not a catalog can be asked, and the
     /// switch that decides it is the only thing that differs between them.
     @Test func theScanOptionsDrawWithAndWithoutACatalogToAsk() async throws {

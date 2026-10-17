@@ -33,7 +33,10 @@ public enum InventoryCompiler {
                 clients: ClientKind.allCases.map { client in
                     state(for: id, in: byClient[client] ?? [], type: .skill, client: client)
                 },
-                validationCount: 0
+                validationCount: 0,
+                // The file list came from scanning the installed skill's own
+                // folder on this Mac, so its inventory is known.
+                filesKnown: true
             )
         }
 
@@ -228,6 +231,7 @@ public enum InventoryCompiler {
 enum LocalTargetScan {
     static func perform(
         surface: TargetSurface,
+        homeURL: URL,
         executable: String,
         configurationURLs: [URL],
         skillRoots: [URL],
@@ -236,8 +240,16 @@ enum LocalTargetScan {
         runner: any CommandRunning
     ) async -> TargetObservation {
         let fileManager = FileManager.default
-        async let commandProbe = probe(executable: executable, runner: runner)
-        async let nativeInventory = nativeInventory(executable: executable, runner: runner)
+        // The tool is probed where the locator actually found it. A bare name
+        // would go through the PATH this app inherited, which is not the
+        // shell's — exactly how an installed tool reads as "unavailable".
+        let resolvedExecutable =
+            surface.client
+            .flatMap { ClientExecutableLocator.locate($0, homeURL: homeURL)?.path(percentEncoded: false) }
+            ?? executable
+        async let commandProbe = probe(executable: resolvedExecutable, runner: runner)
+        async let nativeInventory = nativeInventory(
+            client: surface.client, executable: resolvedExecutable, runner: runner)
         let existingConfig = configurationURLs.filter { fileManager.fileExists(atPath: $0.path(percentEncoded: false)) }
         var configurationDocuments: [String] = []
         var notes: [String] = []
@@ -253,11 +265,21 @@ enum LocalTargetScan {
         let native = await nativeInventory
         var skillMetadata: [String: ObservedSkillMetadata] = [:]
         for root in skillRoots {
-            skillMetadata.merge(skillRecords(under: root, source: "Standalone \(surface.displayName) skill", fileManager: fileManager)) {
-                current, _ in current
-            }
+            // Claude Code keeps the skills it downloads from a claude.ai
+            // account in `~/.claude/skills/synced`. They are the account's,
+            // not loose skills on this Mac, so they never enter the inventory
+            // (and from there the library, the audit, or a removal).
+            let records = skillRecords(under: root, source: "Standalone \(surface.displayName) skill", fileManager: fileManager)
+                .filter { !ClaudeAccountSync.isInsideSyncedSkills(URL(fileURLWithPath: $0.value.path), homeURL: homeURL) }
+            skillMetadata.merge(records) { current, _ in current }
         }
         skillMetadata.merge(native.skillMetadata) { _, native in native }
+        // A standalone folder another tool placed is that tool's, not loose.
+        let managers = ExternalSkillManagerIndex.load(homeURL: homeURL, fileManager: fileManager)
+        for (id, metadata) in skillMetadata where metadata.providerPluginID == nil {
+            skillMetadata[id]?.externalManager = managers.manager(
+                forSkillAt: URL(fileURLWithPath: metadata.path))
+        }
 
         var pluginMetadata = native.pluginMetadata
         let configuredPlugins = configurationDocuments.flatMap(pluginNames(from:))
@@ -265,7 +287,7 @@ enum LocalTargetScan {
             pluginMetadata[id] = ObservedPluginMetadata(
                 name: displayName(forPluginID: id), source: "\(surface.displayName) configuration", scope: "This Mac", enabled: true)
         }
-        if executable == "gemini" {
+        if surface.client == .gemini {
             for id in pluginRoots.flatMap({ childDirectories(under: $0, fileManager: fileManager) }) where pluginMetadata[id] == nil {
                 pluginMetadata[id] = ObservedPluginMetadata(
                     name: displayName(forPluginID: id), source: "Gemini extension directory", scope: "This Mac", enabled: true)
@@ -276,7 +298,12 @@ enum LocalTargetScan {
         for document in configurationDocuments {
             mcpMetadata.merge(mcpRecords(from: document, source: "\(surface.displayName) configuration")) { current, _ in current }
         }
-        mcpMetadata.merge(native.mcpMetadata) { _, native in native }
+        // A plugin's server beside one the client was configured with by
+        // hand is two definitions, and both are kept. The client's own
+        // listing of its configuration is not: it is the same definition.
+        mcpMetadata.merge(native.mcpMetadata) { configured, native in
+            native.source.contains("@") ? native.adding(source: configured.source) : native
+        }
         let installed =
             probe.available || !existingConfig.isEmpty
             || skillRoots.contains {
@@ -285,7 +312,19 @@ enum LocalTargetScan {
             || pluginRoots.contains {
                 fileManager.fileExists(atPath: $0.path(percentEncoded: false))
             }
-        if !probe.available { notes.append("The \(executable) CLI was not available on PATH; configuration was scanned from disk only.") }
+        if !probe.available {
+            let name = surface.client.map(ClientExecutableLocator.executableName(for:)) ?? executable
+            notes.append("The \(name) CLI was not available in any known install location; configuration was scanned from disk only.")
+        } else if let status = probe.unansweredExitStatus {
+            // The tool is present but did not answer --version, so its version is
+            // unknown. Say so plainly: a later plan cannot confirm what an
+            // unknown version accepts, which is different from the app not
+            // supporting the request.
+            let name = surface.client.map(ClientExecutableLocator.executableName(for:)) ?? executable
+            notes.append(
+                "The \(name) CLI is present but did not answer --version (exit \(status)), "
+                + "so its version is unknown and Agent Tooling cannot confirm what it accepts.")
+        }
         notes.append(contentsOf: native.notes)
         if surface.isCloud { notes.append("Cloud state is not inferred from local configuration.") }
         return TargetObservation(
@@ -312,10 +351,15 @@ enum LocalTargetScan {
         var notes: [String] = []
     }
 
-    private static func nativeInventory(executable: String, runner: any CommandRunning) async -> NativeInventory {
+    /// Keyed on the client, never on the executable string: the executable is
+    /// the locator's absolute path, and matching it against bare names is how
+    /// a located tool silently loses its native inventory.
+    private static func nativeInventory(
+        client: ClientKind?, executable: String, runner: any CommandRunning
+    ) async -> NativeInventory {
         let fileManager = FileManager.default
-        switch executable {
-        case "claude":
+        switch client {
+        case .claude:
             guard
                 let output = try? await runner.run(executable: executable, arguments: ["plugin", "list", "--json"], currentDirectory: nil),
                 output.status == 0
@@ -323,7 +367,7 @@ enum LocalTargetScan {
                 return NativeInventory(notes: ["Claude's native plugin inventory was unavailable; disk configuration was used instead."])
             }
             return claudeInventory(from: output.standardOutput, fileManager: fileManager)
-        case "codex":
+        case .codex:
             async let pluginOutput = runner.run(
                 executable: executable, arguments: ["plugin", "list", "--json"], currentDirectory: nil)
             async let mcpOutput = runner.run(executable: executable, arguments: ["mcp", "list", "--json"], currentDirectory: nil)
@@ -351,6 +395,10 @@ enum LocalTargetScan {
         var inventory = NativeInventory()
         for entry in entries.prefix(BoundedFileAccess.maximumDirectoryEntries) {
             guard let id = boundedIdentifier(entry["id"] as? String) else { continue }
+            // `<name>@synced` is a plugin the claude.ai account supplies. It
+            // is read on the Accounts screen, never recorded as a package this
+            // Mac installed, so nothing here can offer to reinstall or remove it.
+            if ClaudeAccountSync.isSyncedPluginID(id) { continue }
             let name = displayName(forPluginID: id)
             let source = boundedText(entry["installPath"] as? String, maximum: 8_192) ?? "Claude plugin inventory"
             let scope = boundedText((entry["scope"] as? String)?.capitalized, maximum: 4_096) ?? "This Mac"
@@ -368,7 +416,13 @@ enum LocalTargetScan {
                 for (rawServerID, value) in servers.prefix(BoundedFileAccess.maximumDirectoryEntries) {
                     guard let serverID = boundedIdentifier(rawServerID) else { continue }
                     mcpIDs.append(serverID)
-                    inventory.mcpMetadata[serverID] = mcpMetadata(from: value, source: id)
+                    // Several plugins can each bring a server by one name;
+                    // the first keeps the record and the rest are listed on it.
+                    if let earlier = inventory.mcpMetadata[serverID] {
+                        inventory.mcpMetadata[serverID] = earlier.adding(source: id)
+                    } else {
+                        inventory.mcpMetadata[serverID] = mcpMetadata(from: value, source: id)
+                    }
                 }
             }
             inventory.pluginMetadata[id] = ObservedPluginMetadata(
@@ -434,7 +488,9 @@ enum LocalTargetScan {
             guard BoundedFileAccess.isRegularFile(url.appending(path: "SKILL.md")) else { continue }
             let id = namespace.map { "\($0):\(url.lastPathComponent)" } ?? url.lastPathComponent
             guard boundedIdentifier(id) != nil else { continue }
-            records[id] = ObservedSkillMetadata(path: url.path(percentEncoded: false), source: source, providerPluginID: providerPluginID)
+            records[id] = ObservedSkillMetadata(
+                path: url.path(percentEncoded: false), source: source, providerPluginID: providerPluginID,
+                definitionDigest: ToolCopyIdentity.definitionDigest(ofSkillAt: url, fileManager: fileManager))
         }
         return records
     }
@@ -442,6 +498,11 @@ enum LocalTargetScan {
     private struct CommandProbe {
         var available: Bool
         var version: String?
+        /// The exit status of `--version` when the tool ran but did not report
+        /// a version. `nil` means either it answered cleanly or was not found.
+        /// Present only for the "present but did not answer" case, so a note can
+        /// say the version is unknown rather than the tool being unsupported.
+        var unansweredExitStatus: Int32?
     }
 
     private static func probe(executable: String, runner: any CommandRunning) async -> CommandProbe {
@@ -449,12 +510,17 @@ enum LocalTargetScan {
             output.status != 126,
             output.status != 127
         else {
-            return CommandProbe(available: false, version: nil)
+            return CommandProbe(available: false, version: nil, unansweredExitStatus: nil)
         }
         let value = (output.standardOutput.isEmpty ? output.standardError : output.standardOutput)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let version = output.status == 0 && !value.isEmpty ? value.components(separatedBy: "\n").first : nil
-        return CommandProbe(available: true, version: version)
+        // The tool ran (it was not missing, 126 and 127 already returned above),
+        // but a non-zero exit or empty output left the version unknown. Keep it
+        // available with no version, and record the exit status so the caller
+        // can say the version is unknown rather than that the tool is missing.
+        let unanswered: Int32? = version == nil ? output.status : nil
+        return CommandProbe(available: true, version: version, unansweredExitStatus: unanswered)
     }
 
     private static func childDirectories(under root: URL, fileManager: FileManager) -> [String] {
@@ -587,7 +653,8 @@ enum LocalTargetScan {
             boundedText(dictionary?["auth_status"] as? String, maximum: 4_096)
             ?? (dictionary?["url"] == nil ? "Not inferred" : "Account or OAuth")
         return ObservedMCPMetadata(
-            transport: transport, authentication: authentication, source: source, enabled: dictionary?["enabled"] as? Bool ?? true)
+            transport: transport, authentication: authentication, source: source,
+            enabled: dictionary?["enabled"] as? Bool ?? !(dictionary?["disabled"] as? Bool ?? false))
     }
 
     private static func displayName(forPluginID id: String) -> String {
