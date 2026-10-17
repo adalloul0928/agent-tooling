@@ -80,7 +80,7 @@ struct SkillsBrowser: View {
                         Button("Attach a folder you author…", systemImage: "folder.badge.plus") { attaching = true }
                             .disabled(workspace.library.isBusy || !canWrite)
                         Divider()
-                        Button("Check this Mac's apps", systemImage: "arrow.clockwise") {
+                        Button(ActionTitles.checkApps, systemImage: "arrow.clockwise") {
                             Task { await workspace.device.refresh() }
                         }
                         .disabled(workspace.device.isChecking)
