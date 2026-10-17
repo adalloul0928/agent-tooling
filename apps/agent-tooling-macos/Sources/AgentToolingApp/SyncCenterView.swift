@@ -777,9 +777,9 @@ struct ManagedClientsPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
-            Text("Clients you use").font(AgentFont.heading)
+            Text("Apps you use").font(AgentFont.heading)
             Text(
-                "Unchecked clients are hidden throughout Agent Tooling and excluded from checks and changes. Their software and configuration stay on this Mac."
+                "Unchecked apps are hidden throughout Agent Tooling and excluded from checks and changes. Their software and configuration stay on this Mac."
             )
             .font(AgentFont.caption).foregroundStyle(.secondary)
             ForEach(device.availableClients) { client in
