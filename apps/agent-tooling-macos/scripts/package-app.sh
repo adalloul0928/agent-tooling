@@ -92,6 +92,7 @@ codesign "${signing_arguments[@]}" \
   "$assembled_bundle/Contents/Helpers/agent-tooling-mcp"
 codesign "${signing_arguments[@]}" "$assembled_bundle"
 codesign --verify --deep --strict "$assembled_bundle"
+"$assembled_bundle/Contents/MacOS/AgentTooling" --verify-resources
 
 mkdir -p "$bundle_parent"
 replacement_root=$(mktemp -d "$bundle_parent/.agent-tooling-install.XXXXXX")

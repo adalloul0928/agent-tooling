@@ -14,7 +14,7 @@ struct ToolIdentityIcon: View {
         Group {
             if let asset = artwork {
                 if ClientBrandAssets.hasCompiledCatalog {
-                    Image(asset.asset, bundle: .module)
+                    Image(asset.asset, bundle: AppResources.bundle)
                         .resizable()
                         .scaledToFit()
                 } else if let image = ToolIdentityAssets.image(for: asset, colorScheme: colorScheme) {
@@ -69,7 +69,7 @@ enum ToolIdentityAssets {
 
     private static let images = NSCache<NSString, NSImage>()
     private static let assets: [String: Asset] = {
-        guard let url = Bundle.module.url(forResource: "ToolIconSources", withExtension: "json"),
+        guard let url = AppResources.bundle.url(forResource: "ToolIconSources", withExtension: "json"),
             let data = try? Data(contentsOf: url),
             let manifest = try? JSONDecoder().decode(Manifest.self, from: data)
         else { return [:] }
@@ -112,7 +112,7 @@ enum ToolIdentityAssets {
             var resolved: NSImage?
             let appearance = NSAppearance(named: colorScheme == .dark ? .darkAqua : .aqua)
             appearance?.performAsCurrentDrawingAppearance {
-                guard let image = Bundle.module.image(forResource: NSImage.Name(asset.asset)) else { return }
+                guard let image = AppResources.bundle.image(forResource: NSImage.Name(asset.asset)) else { return }
                 var bounds = NSRect(origin: .zero, size: image.size)
                 guard let pixels = image.cgImage(forProposedRect: &bounds, context: nil, hints: nil) else { return }
                 resolved = NSImage(cgImage: pixels, size: bounds.size)
@@ -121,7 +121,7 @@ enum ToolIdentityAssets {
             return resolved
         }
         guard
-            let url = Bundle.module.resourceURL?
+            let url = AppResources.bundle.resourceURL?
                 .appending(path: "Assets.xcassets", directoryHint: .isDirectory)
                 .appending(path: "\(asset.asset).imageset", directoryHint: .isDirectory)
                 .appending(path: file, directoryHint: .notDirectory),

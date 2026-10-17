@@ -11,7 +11,7 @@ struct ClientBrandIcon: View {
     var body: some View {
         Group {
             if ClientBrandAssets.hasCompiledCatalog {
-                Image(assetName, bundle: .module)
+                Image(ClientBrandAssets.assetName(for: client), bundle: AppResources.bundle)
                     .resizable()
             } else if let image = ClientBrandAssets.image(for: client, colorScheme: colorScheme) {
                 Image(nsImage: image)
@@ -25,8 +25,10 @@ struct ClientBrandIcon: View {
         .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
+}
 
-    private var assetName: String {
+enum ClientBrandAssets {
+    static func assetName(for client: ClientKind) -> String {
         switch client {
         case .codex: "ClientCodex"
         case .claude: "ClientClaude"
@@ -34,11 +36,9 @@ struct ClientBrandIcon: View {
         case .kiro: "ClientKiro"
         }
     }
-}
 
-enum ClientBrandAssets {
     static let hasCompiledCatalog: Bool = {
-        Bundle.module.url(forResource: "Assets", withExtension: "car") != nil
+        AppResources.bundle.url(forResource: "Assets", withExtension: "car") != nil
     }()
 
     @MainActor private static let fallbackImages = NSCache<NSString, NSImage>()
@@ -70,7 +70,7 @@ enum ClientBrandAssets {
             fileName = "kiro.svg"
         }
 
-        let url = Bundle.module.resourceURL?
+        let url = AppResources.bundle.resourceURL?
             .appending(path: "Assets.xcassets", directoryHint: .isDirectory)
             .appending(path: imageSet, directoryHint: .isDirectory)
             .appending(path: fileName, directoryHint: .notDirectory)

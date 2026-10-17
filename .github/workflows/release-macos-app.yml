@@ -228,6 +228,7 @@ jobs:
       - name: Verify Developer ID signature
         run: |
           app="$RUNNER_TEMP/Agent Tooling.app"
+          "$app/Contents/MacOS/AgentTooling" --verify-resources
           helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling"
           mcp_helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling-mcp"
           test -x "$helper"
