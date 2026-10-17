@@ -33,11 +33,14 @@ struct SkillsProjectsActivityWordingTests {
         #expect(!folder(connections: 3).foundFolderSummary.contains("server"))
     }
 
-    @Test("A found folder lists each kind it holds, in the singular for one")
+    @Test("A found folder lists each kind it holds in the Library's order, in the singular for one")
     func foundFolderCountsEachKind() {
         #expect(
             folder(skills: 1, connections: 1, plugins: 1, branch: "main").foundFolderSummary
-                == "1 skill · 1 connection · 1 plugin · on main")
+                == "1 skill · 1 plugin · 1 connection · on main")
+        #expect(
+            folder(skills: 2, connections: 4, plugins: 3).foundFolderSummary
+                == LibraryCounts(skills: 2, plugins: 3, connections: 4).presentPhrases.joined(separator: " · "))
         #expect(folder(skills: 2, plugins: 3).foundFolderSummary == "2 skills · 3 plugins")
         #expect(folder(skills: 1, branch: "4f2a9c1", detached: true).foundFolderSummary == "1 skill · at 4f2a9c1")
     }

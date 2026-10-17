@@ -397,15 +397,13 @@ private struct DiscoveredFolderRow: View {
 }
 
 extension DiscoveredProject {
-    /// What a folder found on this Mac holds, in the library's words and
-    /// counted the way every screen counts: "2 skills · 1 connection · on
-    /// main". A folder with none of those names its agent files instead, so
-    /// the row never reads as empty.
+    /// What a folder found on this Mac holds, in the Library's words and
+    /// order, counted the way every screen counts: "2 skills · 1 plugin · 1
+    /// connection · on main". A folder with none of those names its agent
+    /// files instead, so the row never reads as empty.
     var foundFolderSummary: String {
-        var parts: [String] = []
-        if !skills.isEmpty { parts.append(CountNoun.skill.phrase(skills.count)) }
-        if !mcpServers.isEmpty { parts.append(CountNoun.connection.phrase(mcpServers.count)) }
-        if !plugins.isEmpty { parts.append(CountNoun.plugin.phrase(plugins.count)) }
+        var parts = LibraryCounts(skills: skills.count, plugins: plugins.count, connections: mcpServers.count)
+            .presentPhrases
         if parts.isEmpty {
             parts.append(instructionFileTitles.isEmpty ? "No agent files" : instructionFileTitles.joined(separator: ", "))
         }
