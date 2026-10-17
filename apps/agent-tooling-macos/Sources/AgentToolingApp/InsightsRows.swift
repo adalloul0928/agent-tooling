@@ -148,11 +148,12 @@ struct RecommendationRow: View {
     private var actionTitle: String { Self.actionTitle(for: recommendation, assistant: assistant) }
 
     /// Opening a skill or Discover only navigates. Creating one opens the
-    /// skill creator, a sheet, so it takes the ellipsis.
+    /// skill creator, a sheet, so it takes the ellipsis, and its title comes
+    /// from the builder the request review sheet's create button uses.
     nonisolated static func actionTitle(for recommendation: ToolRecommendation, assistant: ClientKind) -> String {
         switch recommendation.kind {
         case .useExistingSkill: "Open skill"
-        case .createCustomSkill: "Create with \(assistant.rawValue)…"
+        case .createCustomSkill: ActionTitles.createSkill(with: assistant)
         case .marketplaceSkill, .mcpServer, .plugin:
             recommendation.marketplacePackageID == nil ? "Browse Discover" : "Review in Discover"
         }

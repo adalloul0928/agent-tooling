@@ -97,6 +97,10 @@ struct SkillsProjectsActivityWordingTests {
         let create = recommendation(.createCustomSkill)
         #expect(RecommendationRow.actionTitle(for: create, assistant: .claude) == "Create with Claude Code…")
         #expect(RecommendationRow.actionTitle(for: create, assistant: .codex) == "Create with Codex…")
+        // The request review sheet's create button is titled by the same builder.
+        for assistant in ClientKind.allCases {
+            #expect(RecommendationRow.actionTitle(for: create, assistant: assistant) == ActionTitles.createSkill(with: assistant))
+        }
     }
 
     @Test("Opening a skill or Discover only navigates, so takes no ellipsis")
