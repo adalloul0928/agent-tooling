@@ -224,12 +224,13 @@ jobs:
           "$RUNNER_TEMP/shellcheck-v${shellcheck_version}/shellcheck" -x scripts/package-app.sh scripts/create-dmg.sh scripts/verify-dmg.sh
           plutil -lint Resources/Info.plist
 
+      # All suites use Swift Testing; disabling XCTest keeps XML at the requested path.
       - name: Run tests and strict release build
         run: |
           test "$(uname -m)" = arm64
-          swift test --disable-sandbox --no-parallel --skip '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/release-gate-core.xml"
+          swift test --disable-sandbox --no-parallel --skip '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/release-gate-core.xml"
           ../../scripts/check-test-report "$RUNNER_TEMP/release-gate-core.xml"
-          swift test --disable-sandbox --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/release-gate-ui.xml"
+          swift test --disable-sandbox --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/release-gate-ui.xml"
           ../../scripts/check-test-report "$RUNNER_TEMP/release-gate-ui.xml"
           swift build --configuration release -Xswiftc -warnings-as-errors
 

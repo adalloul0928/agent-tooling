@@ -51,24 +51,25 @@ jobs:
           swift scripts/render-dmg-layout.swift picture 0.0.0 "$RUNNER_TEMP/dmg-picture-check"
           plutil -lint Resources/Info.plist
 
+      # All suites use Swift Testing; disabling XCTest keeps XML at the requested path.
       - name: Run Core and MCP tests
         run: |
-          swift test --disable-sandbox --no-parallel --skip '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/debug-core.xml"
+          swift test --disable-sandbox --no-parallel --skip '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/debug-core.xml"
           ../../scripts/check-test-report "$RUNNER_TEMP/debug-core.xml"
 
       - name: Run UI tests
         run: |
-          swift test --disable-sandbox --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/debug-ui.xml"
+          swift test --disable-sandbox --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/debug-ui.xml"
           ../../scripts/check-test-report "$RUNNER_TEMP/debug-ui.xml"
 
       - name: Run Core and MCP tests with Thread Sanitizer
         run: |
-          swift test --disable-sandbox --sanitize=thread --no-parallel --skip '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/thread-core.xml"
+          swift test --disable-sandbox --sanitize=thread --no-parallel --skip '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/thread-core.xml"
           ../../scripts/check-test-report "$RUNNER_TEMP/thread-core.xml"
 
       - name: Run UI tests with Thread Sanitizer
         run: |
-          swift test --disable-sandbox --sanitize=thread --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/thread-ui.xml"
+          swift test --disable-sandbox --sanitize=thread --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/thread-ui.xml"
           ../../scripts/check-test-report "$RUNNER_TEMP/thread-ui.xml"
 
       - name: Build release with warnings as errors
@@ -77,12 +78,12 @@ jobs:
 
       - name: Run Core and MCP release tests
         run: |
-          swift test --disable-sandbox --configuration release --no-parallel --skip '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/release-core.xml"
+          swift test --disable-sandbox --configuration release --no-parallel --skip '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/release-core.xml"
           ../../scripts/check-test-report "$RUNNER_TEMP/release-core.xml"
 
       - name: Run UI release tests
         run: |
-          swift test --disable-sandbox --configuration release --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/release-ui.xml"
+          swift test --disable-sandbox --configuration release --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/release-ui.xml"
           ../../scripts/check-test-report "$RUNNER_TEMP/release-ui.xml"
 
       - name: Smoke test Raycast CLI contract

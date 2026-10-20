@@ -1,4 +1,6 @@
 from pathlib import Path
+import re
+import shlex
 import unittest
 
 
@@ -21,6 +23,37 @@ class CIContractTests(unittest.TestCase):
         self.assertIn("swift test --disable-sandbox --sanitize=thread", workflow)
         self.assertIn("swift build --configuration release -Xswiftc -warnings-as-errors", workflow)
         self.assertIn("codesign --verify --deep --strict", workflow)
+
+    def test_swift_testing_reports_are_validated_at_the_requested_path(self) -> None:
+        for name, expected_runs in (("macos-app.yml", 6), ("release-macos-app.yml", 2)):
+            workflow = (REPOSITORY_ROOT / ".github/workflows" / name).read_text()
+            lines = [line.strip() for line in workflow.replace("\\\n", " ").splitlines() if line.strip()]
+            runs = [(index, shlex.split(line)) for index, line in enumerate(lines) if line.startswith("swift test ")]
+            self.assertEqual(len(runs), expected_runs, f"{name}: every test lane must produce a checked report")
+            for index, command in runs:
+                with self.subTest(workflow=name, command=command):
+                    self.assertIn("--disable-xctest", command, "XCTest redirects Swift Testing reports to another path")
+                    self.assertNotIn("--enable-xctest", command)
+                    self.assertIn("--xunit-output", command)
+                    report_index = command.index("--xunit-output") + 1
+                    self.assertLess(report_index, len(command), "The report path is required")
+                    self.assertLess(index + 1, len(lines), "The report must be validated after the test run")
+                    self.assertEqual(
+                        shlex.split(lines[index + 1]),
+                        ["../../scripts/check-test-report", command[report_index]],
+                        "Validate the same report path immediately after the test run",
+                    )
+
+    def test_disabling_xctest_does_not_skip_repository_tests(self) -> None:
+        sources = list((REPOSITORY_ROOT / "apps/agent-tooling-macos/Tests").rglob("*.swift"))
+        self.assertTrue(sources, "Expected Swift test sources")
+        xctest = re.compile(r"\bimport(?:\s+(?:class|struct|enum|protocol|func|var|let|typealias))?\s+XCTest\b|\bXCTestCase\b")
+        for source in sources:
+            with self.subTest(source=source.relative_to(REPOSITORY_ROOT)):
+                self.assertNotRegex(
+                    source.read_text(), xctest,
+                    "CI disables XCTest; add an XCTest lane and validate its report before introducing XCTest tests",
+                )
 
     def test_macos_release_authorizes_tag_before_secret_bearing_job(self) -> None:
         workflow = (REPOSITORY_ROOT / ".github/workflows/release-macos-app.yml").read_text()
