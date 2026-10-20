@@ -15,9 +15,9 @@ jobs:
   build:
     name: Test and package
     runs-on: macos-26
-    # There is no build cache, so every run builds four times. Main at f5278d9
-    # took 42m05s of the old 45; the headroom keeps a slow runner from failing.
-    timeout-minutes: 60
+    # Debug and sanitizer validation took 41 minutes on an uncached runner;
+    # allow time for release tests, CLI validation, and packaging as well.
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: apps/agent-tooling-macos
