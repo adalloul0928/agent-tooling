@@ -210,21 +210,17 @@ struct LaunchpadAccessibilityPassTests {
     @Test(arguments: [RenderAppearance.light, .dark])
     func reduceTransparencyMakesTheGroundOpaque(appearance: RenderAppearance) throws {
         let point = CGPoint(x: WindowSize.stage.width / 2, y: WindowSize.stage.height / 2)
-        let normal = try Self.pixel(Self.emptyStage, at: point, size: WindowSize.stage, appearance: appearance)
+        let normalStage = Self.emptyStage.environment(\._accessibilityReduceTransparency, false)
+        let reducedStage = Self.emptyStage.environment(\._accessibilityReduceTransparency, true)
+        // Behind-window material depends on the desktop and window activation,
+        // so check its presence instead of comparing pixels from separate windows.
+        #expect(Self.backdropMaterials(in: normalStage, appearance: appearance).count == 1)
+        #expect(Self.backdropMaterials(in: reducedStage, appearance: appearance).isEmpty)
         let reduced = try Self.pixel(
-            Self.emptyStage.environment(\._accessibilityReduceTransparency, true), at: point, size: WindowSize.stage,
-            appearance: appearance)
+            reducedStage, at: point, size: WindowSize.stage, appearance: appearance)
         let opaque = try Self.pixel(StageGround(opaque: true), at: point, size: WindowSize.stage, appearance: appearance)
-        let translucent = try Self.pixel(StageGround(opaque: false), at: point, size: WindowSize.stage, appearance: appearance)
         #expect(reduced.alphaComponent == 1, "the ground lets the desktop through under Reduce Transparency")
         #expect(Self.same(reduced, opaque), "the ground is not the opaque ground: \(reduced) against \(opaque)")
-        #expect(Self.same(normal, translucent), "the ground is not the translucent ground: \(normal) against \(translucent)")
-        if appearance == .light {
-            // Off screen the window material has no desktop to show, so in
-            // dark the two grounds come out within a step of each other; in
-            // light they part, which is what makes this check mean something.
-            #expect(!Self.same(opaque, translucent), "the two grounds draw alike: \(opaque) against \(translucent)")
-        }
     }
 
     // MARK: - Increase Contrast
@@ -396,6 +392,25 @@ struct LaunchpadAccessibilityPassTests {
         } overlay: {
             EmptyView()
         }
+    }
+
+    private static func backdropMaterials(in view: some View, appearance: RenderAppearance) -> [NSVisualEffectView] {
+        let host = NSHostingView(rootView: AnyView(view))
+        host.frame = CGRect(origin: .zero, size: WindowSize.stage)
+        let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = appearance.nsAppearance
+        host.appearance = appearance.nsAppearance
+        window.contentView = host
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        host.layoutSubtreeIfNeeded()
+
+        func materials(in root: NSView) -> [NSVisualEffectView] {
+            ((root as? NSVisualEffectView).map { [$0] } ?? []) + root.subviews.flatMap(materials)
+        }
+        return materials(in: host)
     }
 
     /// The colour `view` draws at `point`, in points from its top left, at
