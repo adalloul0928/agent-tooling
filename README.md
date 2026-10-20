@@ -3,66 +3,65 @@
 A native macOS app for managing skills, plugins, and MCP connections across
 **Codex, Claude Code, Gemini CLI, and Kiro CLI**.
 
-Keep a local library, choose which apps and projects use each tool, and review
-changes before they affect your setup.
+Keep a local library, choose where tools are installed, and review changes to
+your setup.
 
-![Agent Tooling Home with a sample library](docs/images/app-home.png)
+[App guide](apps/agent-tooling-macos/README.md) ·
+[Releases](https://github.com/adalloul0928/agent-tooling/releases) ·
+[Report an issue](https://github.com/adalloul0928/agent-tooling/issues)
+
+![Home: connected apps, library status, and recent activity](docs/images/app-home.png)
 
 ## Install
 
 **Requires macOS 26 or later and an Apple Silicon Mac.**
 
-Packaged builds will be available on the [Releases page](https://github.com/adalloul0928/agent-tooling/releases).
-The first public DMG has not been published yet. When available, download
-`Agent-Tooling-arm64.dmg`, open it, and drag **Agent Tooling** into
-**Applications**. Eject the DMG and open the app from Applications. Updates use
-the same process; quit the app before replacing it.
+The first public DMG has not been published yet. [Build from source](#build-from-source)
+to try the app today, or check [Releases](https://github.com/adalloul0928/agent-tooling/releases)
+for a signed download.
 
-You can [build from source](#build-from-source) now. Agent Tooling manages
-existing client installations; install and sign in to the clients you want to
-use separately.
+Once a release is available, open `Agent-Tooling-arm64.dmg`, drag **Agent
+Tooling** into **Applications**, eject the DMG, and open the app. To update,
+quit Agent Tooling and replace it with the new version.
 
-## First launch
-
-Choose which apps to manage, review what Agent Tooling will read, and approve
-each installation. Setup can be resumed later from the Home screen.
-
-![Agent Tooling guided setup with sample data](docs/images/app-setup.png)
+Install and sign in to your chosen clients separately. Supported operations
+depend on each client's version; see [compatibility](docs/compatibility.md).
 
 ## What it does
 
-- **See your tools in one place.** Browse skills, plugins, and MCP connections
-  discovered in supported clients, with their sources and installation status.
-- **Install where you need them.** Assign tools to apps or projects, keep native
-  plugins together, and review conflicts or changes to existing files.
-- **Follow updates.** Track repository sources, check for new versions, and
-  choose whether to review or automatically install updates by tool type.
-- **Create and maintain skills.** Edit a local skill or draft one with an
-  installed Claude Code or Codex client.
-- **Check your setup.** Inspect configuration and proposed fixes, with receipts
-  and backups for changes made through the app.
-- **Use more than one Mac.** Optionally sync your library through a Git repository
-  you control. Each Mac applies its own changes.
+- **Manage your library.** Browse tools, inspect their sources, and assign them
+  to clients or projects. Native plugins stay together as packages.
+- **Review installations and updates.** Check conflicts and changes to existing
+  files, track repository updates, and keep receipts and backups of app changes.
+- **Create skills and check your setup.** Edit skills locally, or use an
+  installed Claude Code or Codex client to draft skills and inspect configuration.
+- **Share a library across Macs.** Optionally sync through a Git repository you
+  control. Each Mac reviews and applies its own installation changes.
 
-![Agent Tooling skill library using sample content](docs/images/app-library.png)
+![Library: skills, sources, and app assignments](docs/images/app-library.png)
 
-Screenshots show the app’s SwiftUI views rendered with synthetic test data.
+## Set up your Mac
+
+Guided setup lets you choose clients, review the locations Agent Tooling will
+read, and build a library from what it finds. Then choose tools to install,
+assistant permissions, and optional sync. You can resume setup from Home or
+reopen it from **Agent Tooling → Set Up This Mac…**.
+
+<img src="docs/images/app-setup.png" alt="Guided setup: choose which clients receive each tool" width="720">
+
+All screenshots show the app's actual SwiftUI views with synthetic sample data.
 
 ## Your data
 
-The app stores its workspace in
-`~/Library/Application Support/Agent Tooling/`. A GitHub account or sync
-repository is not required for local use.
+Your library lives in `~/Library/Application Support/Agent Tooling/`. Local use
+does not require a GitHub account or sync repository.
 
-Credentials remain with their owning client, account, or keychain. The portable
-workspace stores secret reference names rather than credential values. Client
-installs use a restricted command policy, and the app keeps records of its
-changes.
+Credentials stay with their owning client, account, or keychain. Portable
+workspace records contain credential references rather than secret values.
 
 Discovery, update checks, optional sync, and assistant features contact the
-services you choose. Assistant features use your installed client and its
-account. See the [app guide](apps/agent-tooling-macos/README.md) for details and
-limits.
+services you choose. Assistant requests use your installed client and account.
+See [privacy and feature limits](apps/agent-tooling-macos/README.md#assistants-accounts-and-privacy).
 
 ## Build from source
 
@@ -75,10 +74,9 @@ cd agent-tooling/apps/agent-tooling-macos
 open '.build/Agent Tooling.app'
 ```
 
-The packaging script builds the app and checks that its bundled dependency
-notices are present.
-Local builds use ad hoc signing; public distribution uses a separate signed
-and notarized [release workflow](docs/macos-app-release.md).
+The script builds, packages, and checks the app. Local builds use ad hoc
+signing. Public downloads use the signed and notarized
+[release workflow](docs/macos-app-release.md).
 
 To run the Swift tests from the same directory:
 
@@ -86,21 +84,20 @@ To run the Swift tests from the same directory:
 swift test --disable-sandbox --no-parallel
 ```
 
-## Documentation
+## Contribute
 
-- [App guide and development](apps/agent-tooling-macos/README.md)
+Report bugs and request features in [GitHub Issues](https://github.com/adalloul0928/agent-tooling/issues).
+Include the app version, macOS version, and steps to reproduce. Remove account
+details, secrets, and private paths from logs before sharing them.
+
+- [App guide and development](apps/agent-tooling-macos/README.md#development)
 - [Architecture and behavioral contracts](docs/README.md)
 - [Release instructions](docs/macos-app-release.md)
 - [Third-party components](docs/third-party-reuse-2026-09.md)
 
-Report bugs or request features in [GitHub Issues](https://github.com/adalloul0928/agent-tooling/issues).
-Include the app version, macOS version, and steps to reproduce. Remove secrets,
-account details, and private paths from logs before sharing them.
-
 ## License
 
-Agent Tooling is licensed under the [MIT License](LICENSE).
-Copyright © 2026 Agent Tooling contributors.
+Agent Tooling is [MIT licensed](LICENSE). Copyright © 2026 Agent Tooling contributors.
 
 Third-party dependencies retain their own licenses and notices. The macOS app
 includes its MIT license and [third-party notices](apps/agent-tooling-macos/Sources/AgentToolingApp/Resources/ThirdPartyNotices.txt).

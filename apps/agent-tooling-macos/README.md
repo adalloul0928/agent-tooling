@@ -4,18 +4,20 @@ Agent Tooling manages a local library of skills, plugins, and MCP connections
 for Codex, Claude Code, Gemini CLI, and Kiro CLI. It is built with SwiftUI and
 stores its workspace in SQLite.
 
-![Agent Tooling Home](../../docs/images/app-home.png)
+[Overview and screenshots](../../README.md) ·
+[Compatibility](../../docs/compatibility.md) ·
+[Release guide](../../docs/macos-app-release.md)
 
 ## Install
 
 Requires macOS 26 or later and Apple Silicon. The first public DMG has not been
-published yet; check [Releases](https://github.com/adalloul0928/agent-tooling/releases)
-for availability. When available, download `Agent-Tooling-arm64.dmg`, open it, and drag **Agent Tooling** into
+published yet. [Build from source](#build-and-run) to try the app now, or check
+[Releases](https://github.com/adalloul0928/agent-tooling/releases) for availability.
+When available, download `Agent-Tooling-arm64.dmg`, open it, and drag **Agent Tooling** into
 **Applications**. Eject the DMG and open the app from Applications. To update,
 quit the app and replace it with the new version. Packaged builds do not require
 Xcode or a repository checkout.
 
-To use the app before a release is available, [build from source](#build-and-run).
 Install and sign in to your chosen clients separately.
 
 ## First launch
@@ -116,11 +118,9 @@ and Swift 6.2 or later. Run these commands in `apps/agent-tooling-macos`:
 open '.build/Agent Tooling.app'
 ```
 
-The script uses the release configuration, assembles the app bundle, signs it
-ad hoc, and runs `--verify-resources` against the packaged app. This check reads
-the dependency notices from the app itself, preventing a missing resource bundle
-from being hidden by files left in a development directory. Tool and client
-icons use native SF Symbols.
+The script builds the release configuration, assembles and signs the bundle ad
+hoc, then verifies its bundled resources. Tool and client icons use native SF
+Symbols.
 
 To choose another destination or a debug build:
 
@@ -141,7 +141,7 @@ lives inside the app bundle and is also used by the optional
 
 ```sh
 swift build --disable-sandbox
-swift test --disable-sandbox
+swift test --disable-sandbox --no-parallel
 swift format lint --strict -r Sources Tests Package.swift
 ```
 
@@ -171,8 +171,9 @@ installation, sync, and security contracts.
 
 ## Documentation screenshots
 
-Run `./scripts/capture-screenshots.sh` to capture the Home, Library, and setup screens into
-`docs/images/`. The app's real SwiftUI views use temporary test workspaces and
+Run `./scripts/capture-screenshots.sh` from this directory to capture Home,
+Library, and setup into the repository's `docs/images/` folder. The app's real
+SwiftUI views use temporary test workspaces and
 stub services, with no real accounts or client commands. The script briefly
 opens sample windows and requires Screen Recording access. Captures include
 only those windows; image metadata is removed before saving.
