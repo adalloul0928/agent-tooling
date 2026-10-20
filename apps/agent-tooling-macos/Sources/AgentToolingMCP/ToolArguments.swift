@@ -139,7 +139,7 @@ struct ToolArguments {
             names.append(text)
         }
         guard let targets = IntegrationTextSanitizer.parseTargets(names.joined(separator: ",")) else {
-            throw ToolInputError.notInEnumeration(name, ["codex", "claude-code", "gemini"])
+            throw ToolInputError.notInEnumeration(name, ToolSchema.targetNames)
         }
         return targets
     }

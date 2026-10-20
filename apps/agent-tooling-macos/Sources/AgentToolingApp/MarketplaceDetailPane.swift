@@ -222,21 +222,9 @@ extension MarketplaceView {
         return .plugins
     }
 
-    /// Install routes state the scope the client would use in its own words,
-    /// and offer the one act this screen performs: adding the package to the
-    /// library.
-    ///
-    /// Adding is not installing, and the control says so rather than leaving a
-    /// person to find out afterwards. A row that lands here is a library item
-    /// with no assignment and no destination; what a client is asked to run is
-    /// decided on Apps, from a reviewed plan, and nowhere else.
-    ///
-    /// An MCP-server listing is added once, through the same managed-MCP intake
-    /// the Paste sheet uses, so it is never four dead per-client buttons: a
-    /// server is not a per-client plugin. A plugin listing keeps its per-client
-    /// buttons, but only for the clients this Mac manages, and a client that
-    /// cannot act on the listing says why in a line under the buttons rather
-    /// than only in a tooltip nobody hovers.
+    /// Adds catalog items to the library without assigning or installing them.
+    /// MCP listings use managed intake once; plugin routes remain per-client and
+    /// show why unavailable routes cannot run.
     @ViewBuilder
     func installRoutes(for package: MarketplacePackage) -> some View {
         if let listing = WorkspaceMarketplaceSession.skillsShListing(package) {

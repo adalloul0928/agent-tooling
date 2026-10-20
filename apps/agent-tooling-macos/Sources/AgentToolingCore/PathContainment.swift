@@ -1,39 +1,13 @@
 import Foundation
 
-/// One place that answers "is this path the root, or inside it," so the several
-/// call sites that each used to spell out their own `hasPrefix` check cannot
-/// drift apart or get the edge cases subtly wrong.
-///
-/// The sites did not all normalize the same way, and that is deliberate: a path
-/// the caller has already resolved must not be resolved again, and a check that
-/// must follow symlinks must not be turned into a lexical one. So the shared
-/// primitive is the comparison, and each named variant applies exactly the
-/// normalization its site always applied. The variants are not interchangeable;
-/// pick the one that normalizes the way the site's own paths already are.
-///
-/// A check must also err in the direction its answer is used, so there are two
-/// families, and a site picks by what a wrong answer would cost:
-///
-/// - An allow check asks whether a path may be read, written or removed. It
-///   compares exactly, so on a case-insensitive volume a differently cased
-///   spelling of an allowed root is refused, and the filesystem root contains
-///   only itself. Either mistake costs a refusal, never access.
-/// - A deny or exclusion check asks whether a path must be left alone. It folds
-///   case the way a case-insensitive volume compares names, on every volume,
-///   and treats the filesystem root as containing everything. Either can refuse
-///   a path the disk keeps apart, such as a folder that differs from a
-///   protected one only by case on a case-sensitive volume, but no spelling of
-///   a protected path that differs only in case or in how its characters are
-///   composed gets through. The check still compares text, not the folders the
-///   text reaches: a path that reaches a protected folder through a symbolic
-///   link, or by any other route to the same folder, is not seen as inside it.
-///   A site that must catch that resolves the path, or refuses links, first.
-///
-/// Deny checks fold case everywhere rather than asking a volume, because a path
-/// has no single answer: each component is looked up on the volume holding its
-/// parent. `/volumes/work/repo` reaches a case-sensitive volume mounted at
-/// `/Volumes/work` through the case-insensitive startup volume, and a path that
-/// does not exist yet has no volume to ask.
+/// Path containment with explicit normalization and conservative comparison.
+/// Choose the lexical or symlink-resolving variant to match the call site.
+/// Allow checks compare case exactly and treat `/` as containing only itself.
+/// Deny checks fold case and Unicode composition, with `/` containing all paths.
+/// This can reject distinct names on case-sensitive volumes, but prevents
+/// alternate spellings bypassing exclusions. Mixed-volume paths make a single
+/// volume's case-sensitivity insufficient. Lexical checks do not detect aliases;
+/// callers requiring that guarantee must resolve or refuse symlinks first.
 enum PathContainment {
     // MARK: - Allow checks: exact
 
@@ -80,15 +54,10 @@ enum PathContainment {
         )
     }
 
-    /// The relative path of an item a directory walk of `root` returned, and
-    /// only for such an item. A walk names what it finds under the folder's
-    /// real path: links above the folder resolved, letter case as the disk
-    /// stores it, `/private` put back. So the item is matched against `root`
-    /// as given and then against `resolvedRoot`, the same folder with its
-    /// links resolved, which the caller works out once per walk. A walk never
-    /// returns anything outside the folder it opened, so the second spelling
-    /// changes how an item is named, never which items are let in: each must
-    /// still be inside one spelling of the root.
+    /// Only for children returned by a directory walk. Enumeration may use
+    /// resolved spelling, disk case or /private, so accept containment under
+    /// either the supplied root or its pre-resolved equivalent. This changes
+    /// path spelling only; the child must remain inside one of those roots.
     static func relativePath(ofEnumerated child: URL, under root: URL, resolvedRoot: URL) -> String? {
         relativePath(of: child, under: root) ?? relativePath(of: child, under: resolvedRoot)
     }
@@ -165,18 +134,10 @@ enum PathContainment {
 
     // MARK: - Normalization
 
-    /// Standardize and drop one trailing separator, without resolving the
-    /// path's symlinks. This is the normalization `OperationEngine.normalizedPath`
-    /// performed, kept here so the lexical variant and the engine's own policy
-    /// share one spelling.
-    ///
-    /// Standardizing is not purely textual. When the whole path exists,
-    /// Foundation resolves its `..` on disk, so a `..` after a symbolic link
-    /// names the parent of the link's target, the folder the kernel would
-    /// reach. When the path does not exist, `..` is removed as text, even
-    /// right after a link. A link with no `..` after it stays a plain
-    /// component either way, and a leading `/private` is dropped when the
-    /// path without it exists.
+    /// Standardizes and removes one trailing separator without explicitly
+    /// resolving symlinks. Foundation resolves `..` against existing paths but
+    /// removes it lexically for missing paths; it may also drop `/private`.
+    /// A symlink without a following `..` stays unresolved.
     static func lexicalPath(_ url: URL) -> String {
         let path = url.standardizedFileURL.path(percentEncoded: false)
         guard path.count > 1 else { return path }

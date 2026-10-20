@@ -2,15 +2,8 @@ import SwiftUI
 
 // MARK: - Collection lists
 
-// Every collection in the app — Skills, Plugins, Connections, Projects,
-// Activity, History — is a run of rows on one standing card, separated by one
-// hairline, with the accent fill for selection. Native `List` and `Table`
-// draw their own separators in colours that have nothing to do with that
-// card (the black lines on the Activity screen), so a collection built on a
-// `List` switches the system chrome off here and draws the shared chrome
-// instead. `Table` cannot be quieted the same way; the two screens that used
-// it now lay their columns out by hand inside a `List`, which keeps native
-// multiple selection and keyboard navigation.
+// Shared collection styling replaces native separators with the app's card
+// chrome. Lists retain keyboard navigation and multiple selection.
 
 extension View {
     /// The chrome of a native `List` used as a collection: the system's own
@@ -109,18 +102,10 @@ struct CollectionColumnHeader<Columns: View>: View {
 
 // MARK: - Collection tables
 
-/// How a collection laid out as a table by hand divides its width: the
-/// Skills, Plugins and Connections tables. `Table` draws its own row
-/// separators in a colour the card cannot control, so these tables are rows of
-/// plain frames, and the header and every row read their widths from one value
-/// of this.
-///
-/// One rule serves all three. A table shows its wide layout from its own
-/// `expandedFrom` width up, and its narrow layout below it. In the wide layout
-/// the name column takes its share of the width, up to a ceiling; in the
-/// narrow one it takes what the columns beside it leave, down to a floor. The
-/// other columns are fixed widths from `CollectionColumn`, or take a share of
-/// their own through `share(_:upTo:)`.
+/// Shared column widths for Skills, Plugins, and Connections headers and rows.
+/// At `expandedFrom`, the name column uses a capped share of the width;
+/// narrower layouts use the remaining width, respecting the minimum.
+/// Other columns use fixed tokens or `share(_:upTo:)`.
 struct CollectionColumns {
     /// One table's numbers, all from `CollectionColumn`.
     struct Layout {

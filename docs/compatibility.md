@@ -1,25 +1,27 @@
-# Compatibility matrix
+# Compatibility
 
-This matrix records the minimum client builds exercised by the current release
-gate. Newer builds still require a canary when they change plugin, skill, MCP,
-hook, or marketplace behavior.
+Agent Tooling requires macOS 26 or later. The public release target is Apple
+Silicon. Install each client separately; the app checks available executables
+and supported operations before preparing an install.
 
-| Surface | Minimum tested version | Required gate |
-|---|---:|---|
-| Claude Code CLI | 2.1.207 | `claude plugin validate`, isolated marketplace add/install |
-| Claude Desktop Code | Same bundled Code generation as CLI | normal-use Obsidian canary |
-| Codex CLI | 0.144.0-alpha.4 | isolated marketplace add/install |
-| Codex Desktop | Bundled Codex CLI generation above | normal-use Obsidian canary |
-| Claude Code account reader | 2.1.300; account skill and plugin sync needs 2.1.273 | `auth status --json`, `plugin list --json` and `mcp list` fixtures |
-| Codex account reader | 0.162.1 (`codex app-server`) | `initialize`, `account/read`, `config/read`, `app/list` and `app/installed` fixtures |
-| Agent Skills spec | `skills-ref` package 0.1.1 | `agentskills validate` |
-| Microsoft APM | 0.25.0 | informational spike only; not a release dependency |
+The versions below identify interfaces used during development. They are not
+a guarantee that every feature works on every newer client build.
 
-Hosted Claude and ChatGPT surfaces do not share a meaningful local client
-version. Record their verification date and installed marketplace revision in
-the account checklist once hosted canaries begin.
+| Client or interface | Recorded version | Coverage |
+|---|---|---|
+| Claude Code CLI | 2.1.207 | Plugin validation and isolated marketplace add/install |
+| Codex CLI | 0.144.0-alpha.4 | Isolated marketplace add/install |
+| Claude Code account reader | 2.1.300; account skill and plugin sync needs 2.1.273 | `auth status --json`, `plugin list --json`, and `mcp list` fixtures |
+| Codex account reader | 0.162.1 (`codex app-server`) | Account/configuration/app response fixtures |
+| Agent Skills validation | `skills-ref` 0.1.1 | `agentskills validate` |
 
-The account readers' fixtures come from the versions above, checked on a Mac
-signed in through Amazon Bedrock. They have not yet been run against a live
-claude.ai or ChatGPT subscription sign-in; see
-[account surfaces](account-surfaces-v1.md).
+Gemini CLI and Kiro CLI adapters have fixture coverage for their supported
+skill and MCP formats. No minimum live-tested version is recorded here.
+Unsupported operations remain available for manual review.
+
+Hosted accounts have separate installation and authentication state. The account
+readers have not been verified against live claude.ai or ChatGPT subscription
+sign-in. See [account surfaces](account-surfaces-v1.md) for their exact scope.
+
+Recheck native commands and configuration schemas when a client changes its
+plugin, skill, MCP, hook, or marketplace behavior.

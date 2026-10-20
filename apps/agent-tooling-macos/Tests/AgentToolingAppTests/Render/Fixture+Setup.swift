@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 
 @testable import AgentToolingApp
@@ -10,6 +11,7 @@ final class StubSetupServices: SetupServicing, @unchecked Sendable {
     private var kept: SetupCheckup?
     private var answer: Result<SetupReview, any Error>?
     private var reviews: [(client: ClientKind, purpose: SetupReviewPrompt.Purpose, focus: ClientKind?, releaseNotes: Int)] = []
+    private var searchPaths = 0
     private let holdFor: Duration?
 
     /// `review` scripts the assistant's answer; nil means it cannot be reached.
@@ -23,8 +25,28 @@ final class StubSetupServices: SetupServicing, @unchecked Sendable {
         lock.withLock { reviews }
     }
     var keptCheckup: SetupCheckup? { lock.withLock { kept } }
+    /// How many times the login shell was asked for the search path. The
+    /// setup stage's audit never asks it.
+    var searchPathCalls: Int { lock.withLock { searchPaths } }
 
-    func searchPath(homeURL: URL) async -> [URL] { [] }
+    /// Holds every search-path read until it opens, as a slow login shell
+    /// would, so a test can keep an audit under way.
+    var searchPathGate: GatedCommandRunner? {
+        get { lock.withLock { gate } }
+        set { lock.withLock { gate = newValue } }
+    }
+    private var gate: GatedCommandRunner?
+    private var keeps = 0
+    /// How many times a checkup was kept: once for each audit that ran.
+    var keepCalls: Int { lock.withLock { keeps } }
+
+    func searchPath(homeURL: URL) async -> [URL] {
+        lock.withLock { searchPaths += 1 }
+        if let gate = searchPathGate {
+            _ = try? await gate.run(executable: "/bin/zsh", arguments: ["-l", "-i"], currentDirectory: nil)
+        }
+        return []
+    }
 
     func review(
         client: ClientKind, purpose: SetupReviewPrompt.Purpose, audit: SetupAuditReport, digests: [ConversationDigest],
@@ -40,7 +62,12 @@ final class StubSetupServices: SetupServicing, @unchecked Sendable {
     }
 
     func lastCheckup() -> SetupCheckup? { lock.withLock { kept } }
-    func keep(_ checkup: SetupCheckup) throws { lock.withLock { kept = checkup } }
+    func keep(_ checkup: SetupCheckup) throws {
+        lock.withLock {
+            kept = checkup
+            keeps += 1
+        }
+    }
 
     /// Scripted notes per client; a client not listed has none to fetch.
     var notes: [ClientKind: Result<[ClientReleaseNote], any Error>] = [:]
@@ -96,10 +123,11 @@ extension ShellRenderFixture {
                         .removeSkillCopy(path: home.appending(path: ".claude/skills/docx").path(percentEncoded: false), client: .claude),
                     ]),
                 SetupFinding(
-                    kind: .missingPluginInstall, severity: .high, client: .codex, subject: "gone@aim",
+                    kind: .missingPluginInstall, severity: .high, client: .codex, subject: "gone@example",
                     title: "Gone is listed but its files are gone",
-                    detail: "Codex records this plugin at a folder that does not exist.", evidence: ["~/.codex/plugins/cache/aim/gone/1.0"],
-                    actions: [.reinstallPlugin(pluginID: "gone@aim", client: .codex)]),
+                    detail: "Codex records this plugin at a folder that does not exist.",
+                    evidence: ["~/.codex/plugins/cache/example/gone/1.0"],
+                    actions: [.reinstallPlugin(pluginID: "gone@example", client: .codex)]),
             ],
             counts: [.claude: .init(skills: 12, plugins: 3, mcpServers: 4), .codex: .init(skills: 5, plugins: 2, mcpServers: 4)])
         return SetupCheckup(audit: audit, review: review ? setupReview(over: audit) : nil)

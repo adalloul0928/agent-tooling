@@ -16,7 +16,6 @@ struct CheckupView: View {
     @State private var expanded: Set<String> = []
     @State private var summaryExpanded = false
     @State private var confirmingFixAll = false
-    @State private var openingSetup = false
     @State private var showingFine = false
 
     private var items: [CheckupItem] { session.checkup.map(CheckupTriage.items) ?? [] }
@@ -47,10 +46,6 @@ struct CheckupView: View {
                 .buttonStyle(.glass)
                 .disabled(session.isBusy || session.reviewClient == nil)
                 .help(reviewHelp)
-
-                Button("Walk through…", systemImage: "wand.and.stars") { openingSetup = true }
-                    .buttonStyle(.glass)
-                    .help("One step per category, with the findings and recommendations for it.")
 
                 if !fixAll.isEmpty {
                     Button {
@@ -97,9 +92,6 @@ struct CheckupView: View {
             .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sheet(isPresented: $openingSetup) {
-            SetupWizardSheet(workspace: workspace, session: session, onClose: { openingSetup = false })
-        }
         .sheet(isPresented: $confirmingFixAll) {
             FixAllSheet(plan: fixAll, onCancel: { confirmingFixAll = false }) {
                 confirmingFixAll = false
@@ -117,10 +109,13 @@ struct CheckupView: View {
         return "Checked \(SnapshotTime.compact(checkup.completedAt))"
     }
 
+    /// What asking for a review hands the assistant: summaries go with it
+    /// only while this Mac allows the weekly review, and the help says so
+    /// then.
     private var reviewHelp: String {
-        guard let client = session.reviewClient else { return "A review needs Claude Code or Codex; this Mac is not managing either." }
-        return
-            "\(client.rawValue) reads the audit and the apps' configuration folders, then says what to change. It can read; it cannot change anything."
+        guard let client = session.reviewClient else { return AssistantRunCopy.noAssistant }
+        return AssistantRunCopy.reviewHelp(
+            reviewer: client, sendsSummaries: workspace.device.effectiveAssistantRuns.weeklyReview)
     }
 
     /// The whole picture in one line: how much is left in each bucket.
@@ -528,30 +523,6 @@ struct ProvenanceLabel: View {
         case .audit: "Grounded in a finding the deterministic audit proved."
         case .investigated(let source): "The assistant read this itself: \(source)"
         case .opinion: "The assistant's judgment, with no specific file or finding behind it."
-        }
-    }
-}
-
-extension SetupFinding.Kind {
-    var title: String {
-        switch self {
-        case .brokenSkillLink: "Links that point at nothing"
-        case .missingPluginInstall: "Plugins whose files are gone"
-        case .duplicateSkillInClient: "Skills an app can reach twice"
-        case .unmanagedSkill: "Skills not managed by this app"
-        case .unreachableMCPCommand: "MCP servers that cannot start"
-        case .stalePluginCache: "Old plugin versions on disk"
-        case .toolUnavailable: "Apps whose command could not be run"
-        case .neverChecked: "Apps never checked"
-        case .skillWithoutDefinition: "Skill folders with no definition"
-        case .mcpServerRepeatedAcrossClients: "Connections configured in several apps"
-        case .mcpServerDefinedSeveralTimes: "Connections an app gets from several places"
-        case .pluginSkillsOverlap: "Plugins that carry the same skills"
-        case .accountSignIn: "Apps not signed in with their accounts"
-        case .accountShellOverride: "Shell variables that change an app's sign-in"
-        case .accountChoicesNotFollowed: "Shared account choices not applied here"
-        case .accountDiffersFromOtherMacs: "Accounts that differ from your other Macs"
-        case .accountConnectorNeedsSignIn: "Account connectors that need attention"
         }
     }
 }

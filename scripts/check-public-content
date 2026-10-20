@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""Check current public source; never print matched private values."""
+
+import hashlib
+from pathlib import Path
+import re
+import struct
+import subprocess
+import sys
+from urllib.parse import unquote
+
+PRIVATE_WORD_HASHES = frozenset({
+    "b923405ba2c6a80ac557a30930e6119300a1c0805536c8dd0795340970591324",
+    "b248a647f0070ee4b5c26e9086fbc00d0321d81fe52fd1d2a76b8c134736fe0f",
+    "19d5380008998207af49bdd5861eae34ca7d8ed2d8222fad7f35eda9b3c1f6d8",
+    "06c66eaeb7333f73566cbb12667045bb40939bdd1834edb05d72e8d6ad6aab6e",
+    "fe3865abe14763f96f21269c97399c05d4c7b5b8a715c4c07b0417465b6b3ad9",
+    "7320b0e072fe67f7ea15bed1af6f4835effd8fc28c5ff769077bec44c51af2dd",
+    "d466b6749a1c0111bfa09e29378b1e3bb24529af0564e269cc59cd981b3229d4",
+    "a27f98238d2c1c02f2a131d894d29410f0915d9f930bff80389e5fe0b55e243c",
+    "cbc62794911ff31b2864ecd3dbbbee7ebcb7ea41c5a42e2cba377f3cfdb42811",
+    "f805983b885f50e10f1db808b7ade8c377080006b2e3aebb0263ff9c50040fcd",
+    "5f1110c9f92405acc0b707edb14698723b9d8cb13d9d4138ec243ea10f2a15c2",
+    "0d0433baa87067bcbfeac0c6401ed441070d76e54a07f132bb7142a8e7d79637",
+    "ebccae3c6988f73a0d94521c4f55d133d56f4022febbc634ef3227e55717b2fe",
+    "0997b9703453928fc1fade5ec1eb748bf90e80363e46a73bd89fd922c3325989",
+    "acccac74766bcfbfbae9c644efe7b48795d228c27a2285cc324d436b81694063",
+    "1984dbad1809215a0e26c18f9e02ff9fc8bad0a7335b6589bf86d7566a626f54",
+    "9d0d14dbca5aeb2984ede0a61985ee9947f782e37337a5c8e0d6032f9f7ddac9",
+    "8c586bee4f38e9b6a31435e8d7cfd2ac200a5240602e7ade475fd7b147f3ed70",
+    "6f6f2408523c88c6018e72c6c7a0b4bea1b6967aea46454d65caf2f579069cd6",
+    "a1cb74cdd69438fa1f5db6388f284b55e1019ef2297a577d36babf5fb309e78f",
+    "3755e100ece4dfdb25fbc6a2f56e0a9aea23f81e0f87f030f71cefa40199c727",
+    "8758607d0bcaa8a6efc8f92aa63bf367a6f088001d8fd2f16d1583c356a1a23f",
+    "2a0abe451aede7f7139e3b7be00c2adff97b5ef4a50c6b5f4a2165125b55cc15",
+    "5c8f52ca28966103ff0aad98160bc8e978c9ca0285a2043a521481d11ed17506",
+    "c6ee04c16c3aca87f63cfe789cc8058b70cd700015a345290f35e02a3f220773",
+    "373b50e4d67183b0a610b2eeaf9f5f749125e204795b8864c9e93734030626e1",
+})
+PRIVATE_ROOTS = ("plugins/", "profiles/", ".claude-plugin/", ".agents/")
+CREDENTIAL_SUFFIXES = {".p12", ".p8", ".pem", ".key", ".pfx", ".mobileprovision"}
+EXAMPLE_HOME = re.compile(r"^(?:example(?:2|ish|-work)?|exam|ex|me(?:2|ow)?|fixture|testperson|someone|another-person|other|private|x|y)$", re.I)
+EMAIL = re.compile(r"[\w.+%-]+@([\w.-]+\.[A-Za-z]{2,})")
+RETINA_IMAGE = re.compile(r"[\w.-]+@[23]x\.(?:png|jpe?g|gif|webp)", re.I)
+LINK = re.compile(r"!?\[[^]\n]*\]\(([^)\n]+)\)")
+
+
+def text_issues(text, private_hashes=None):
+    if private_hashes is None:
+        private_hashes = PRIVATE_WORD_HASHES
+    issues = []
+    for number, line in enumerate(text.splitlines(), 1):
+        words = re.findall(r"[A-Za-z0-9]+", line.lower())
+        candidates = ("-".join(words[start:start + count])
+                      for start in range(len(words)) for count in range(1, min(4, len(words) - start) + 1))
+        if any(hashlib.sha256(word.encode()).hexdigest() in private_hashes for word in candidates):
+            issues.append((number, "private vocabulary"))
+        for match in re.finditer(r"/(?:Users|home)/([A-Za-z0-9_-][A-Za-z0-9_.-]*)", line):
+            if not EXAMPLE_HOME.fullmatch(match[1]):
+                issues.append((number, "personal home directory"))
+        for address in EMAIL.finditer(line):
+            if RETINA_IMAGE.fullmatch(address[0]):
+                continue
+            domain = address[1].lower()
+            if not (domain in {"github.com", "gitlab.com", "example.com", "example.invalid", "example.org"}
+                    or domain.endswith((".example.com", ".example.invalid"))):
+                issues.append((number, "non-example email or account address"))
+    return sorted(set(issues))
+
+
+def png_has_metadata(data):
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return False
+    offset = 8
+    while offset + 12 <= len(data):
+        length = struct.unpack(">I", data[offset:offset + 4])[0]
+        kind = data[offset + 4:offset + 8]
+        if kind in {b"tEXt", b"zTXt", b"iTXt", b"eXIf"}:
+            return True
+        offset += length + 12
+    return False
+
+
+def image_has_metadata(data):
+    if png_has_metadata(data):
+        return True
+    if data.startswith(b"icns"):
+        offset = 8
+        while offset + 8 <= len(data):
+            size = struct.unpack(">I", data[offset + 4:offset + 8])[0]
+            if size < 8 or offset + size > len(data):
+                break
+            if png_has_metadata(data[offset + 8:offset + size]):
+                return True
+            offset += size
+    return False
+
+
+def inspect_file(root, path):
+    relative = path.relative_to(root).as_posix()
+    issues = [(0, reason) for _, reason in text_issues(relative)]
+    if relative.startswith(PRIVATE_ROOTS):
+        issues.append((0, "private catalog directory"))
+    if path.suffix.lower() in CREDENTIAL_SUFFIXES or (path.name.startswith(".env") and path.name != ".env.example"):
+        issues.append((0, "credential/configuration file"))
+    if path.is_symlink():
+        if not path.resolve().is_relative_to(root.resolve()):
+            issues.append((0, "symlink escapes repository"))
+        return issues
+    data = path.read_bytes()
+    if path.suffix.lower() in {".png", ".icns"} and image_has_metadata(data):
+        issues.append((0, "image contains text or EXIF metadata"))
+    if b"\0" in data:
+        return issues
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return issues
+    issues.extend(text_issues(text))
+    if path.suffix == ".md":
+        for number, line in enumerate(text.splitlines(), 1):
+            for match in LINK.finditer(line):
+                target = match[1].split(' "', 1)[0].strip("<>")
+                if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", target) or target.startswith("#"):
+                    continue
+                target = unquote(target.split("#", 1)[0])
+                if not target:
+                    continue
+                resolved = root / target.lstrip("/") if target.startswith("/") else path.parent / target
+                if not resolved.exists():
+                    issues.append((number, "broken local Markdown link"))
+    return issues
+
+
+def diagnostic_name(name):
+    if text_issues(name):
+        return "file-" + hashlib.sha256(name.encode()).hexdigest()[:12]
+    return name
+
+
+def main():
+    root = Path(__file__).resolve().parents[1]
+    listed = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=root)
+    paths = sorted(set(listed.decode().split("\0")) - {""})
+    failures = []
+    inspected = 0
+    for name in paths:
+        path = root / name
+        if not (path.is_file() or path.is_symlink()):
+            continue
+        inspected += 1
+        for line, reason in inspect_file(root, path):
+            failures.append(f"{diagnostic_name(name)}:{line}: {reason}")
+    if failures:
+        print("\n".join(failures), file=sys.stderr)
+        print(f"Public-content check failed: {len(failures)} issue(s).", file=sys.stderr)
+        return 1
+    print(f"Public-content check passed: {inspected} files. Run Gitleaks separately for secrets.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

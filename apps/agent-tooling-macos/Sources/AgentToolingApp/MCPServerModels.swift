@@ -103,9 +103,9 @@ extension WorkspaceLibraryOwnership {
 
     /// What a row's clause calls this authority. Restored from the dead-view
     /// sweep: `WorkspaceLibraryView.swift` had no caller left and was deleted,
-    /// but Skills, Plugins, Projects, the command palette catalog and Getting
-    /// Started all still read this label, so it stays module-wide rather than
-    /// going down with the screen it was declared beside.
+    /// but Skills, Plugins, Projects and the command palette catalog all still
+    /// read this label, so it stays module-wide rather than going down with
+    /// the screen it was declared beside.
     var libraryLabel: String {
         switch self {
         case .centralPersonal: "Personal library"
@@ -124,19 +124,5 @@ extension WorkspaceLibraryReadModelRow {
     var ownershipLabel: String {
         kind == .mcpServer && ownership == .centralPersonal
             ? "Managed connection" : ownership.libraryLabel
-    }
-}
-
-extension ArtifactKind {
-    /// Same provenance as `WorkspaceLibraryOwnership.libraryLabel`; Getting
-    /// Started still reads it for a row it draws before any screen owns one.
-    var librarySymbol: String {
-        switch self {
-        case .skill: "doc.text"
-        case .package, .nativePlugin: "puzzlepiece.extension"
-        case .mcpServer: "server.rack"
-        case .preset: "square.stack"
-        case .logicalProject: "folder"
-        }
     }
 }

@@ -2,22 +2,9 @@ import AgentToolingCore
 import Foundation
 
 extension SectionHealth {
-    /// The sidebar's verdicts, given what this Mac has actually checked.
-    ///
-    /// The library on its own cannot reach one. A requested assignment records
-    /// where somebody asked for a tool, not what an app holds, so every client
-    /// state the projection produces is `pending` and the library rules run and
-    /// answer nothing. The last read-only check of this Mac can answer: it knows
-    /// which apps it found and which it did not.
-    ///
-    /// One fact is worth a glyph. An app this Mac manages that the check could
-    /// not reach stops every tool this workspace asked that app for, and the
-    /// library is where those asks live, so the library row is where it is said.
-    /// The apps row already carries its own count and is left alone.
-    ///
-    /// Nothing checked means nothing claimed. Before the first check, and for an
-    /// app that has never been looked at, the row stays undecorated rather than
-    /// being marked suspect — or reassured — on no evidence.
+    /// Derives sidebar health from device observations and library assignments.
+    /// An unreachable managed app affects its assigned tools. Unchecked clients
+    /// remain undecorated; assignment intent alone never establishes health.
     @MainActor
     static func observed(
         library: WorkspaceLibraryReadModel?,

@@ -96,7 +96,7 @@ public struct AccountSignIn: Codable, Hashable, Sendable {
         case token
         /// A key helper script supplies the credential.
         case keyHelper
-        /// A third-party provider: Amazon Bedrock, Google Cloud, a gateway.
+        /// A third-party provider: Bedrock, Google Cloud, a gateway.
         case thirdParty
         case signedOut
         case unknown
@@ -152,7 +152,7 @@ public struct AccountSignIn: Codable, Hashable, Sendable {
 
     static func providerLabel(_ provider: String) -> String {
         switch provider.lowercased() {
-        case "bedrock", "amazonbedrock": "Amazon Bedrock"
+        case "bedrock": "Bedrock"
         case "vertex", "vertexai", "agentplatform": "Google Cloud"
         case "foundry", "azure": "Microsoft Foundry"
         default: provider

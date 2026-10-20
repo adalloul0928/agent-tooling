@@ -31,7 +31,7 @@ struct CheckupTriageTests {
             finding(
                 .unmanagedSkill, "pdf", client: .codex, actions: [.adoptSkill(path: "/Users/example/.agents/skills/pdf", client: .codex)]),
             // Two plugins both carry it: nothing to remove.
-            finding(.duplicateSkillInClient, "brazil", actions: []),
+            finding(.duplicateSkillInClient, "build", actions: []),
             // A loose copy beside a plugin's: the loose one can go.
             finding(.duplicateSkillInClient, "cr-review", actions: [.removeSkillCopy(path: path("cr-review"), client: .claude)]),
             finding(
@@ -93,7 +93,9 @@ struct CheckupTriageTests {
         let stale = (1...2).map {
             finding(
                 .stalePluginCache, "p\($0)", client: .codex,
-                actions: [.pruneStalePluginCache(paths: ["/Users/example/.aim/plugins/codex/other\($0)"], client: .codex)])
+                actions: [
+                    .pruneStalePluginCache(paths: ["/Users/example/.config/example-manager/plugins/codex/other\($0)"], client: .codex)
+                ])
         }
         let audit = SetupAuditReport(clients: [.claude, .codex], findings: loose + stale, counts: [:])
         let review = SetupReview(
@@ -106,7 +108,8 @@ struct CheckupTriageTests {
                 SetupRecommendation(
                     id: "r2", category: .cleanup, title: "Do not run the Codex cleanups", summary: "Those are other plugins",
                     rationale: "r", client: .codex, priority: 5,
-                    provenance: .investigated(source: "~/.aim/plugins/codex"), action: .readOnly, findingIDs: stale.map(\.id)),
+                    provenance: .investigated(source: "~/.config/example-manager/plugins/codex"), action: .readOnly,
+                    findingIDs: stale.map(\.id)),
                 SetupRecommendation(
                     id: "r3", category: .settings, title: "Turn on tool search", summary: "s", rationale: "r", client: .claude, priority: 9,
                     provenance: .opinion, action: .setSetting(client: .claude, key: "toolSearch", value: "true"), findingIDs: []),

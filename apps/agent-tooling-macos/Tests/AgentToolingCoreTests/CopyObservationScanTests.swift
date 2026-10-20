@@ -26,34 +26,33 @@ struct CopyObservationScanTests {
             .write(to: home.appending(path: ".claude.json"), atomically: true, encoding: .utf8)
         let plugins = #"""
             [
-              {"id": "Woot-all@aim", "installPath": "cache", "mcpServers": {"builder": {"command": "builder-mcp", "args": ["--a"]}}},
-              {"id": "Atlas-all@aim", "installPath": "cache", "mcpServers": {"builder": {"command": "builder-mcp", "args": ["--b"]}}}
+              {"id": "Example-all@example", "installPath": "cache", "mcpServers": {"builder": {"command": "builder-mcp", "args": ["--a"]}}},
+              {"id": "Additional-all@example", "installPath": "cache", "mcpServers": {"builder": {"command": "builder-mcp", "args": ["--b"]}}}
             ]
             """#
 
         let observation = await ClaudeCodeAdapter().scan(homeURL: home, runner: ScriptedRunner(pluginList: plugins))
 
         let builder = try #require(observation.mcpMetadata["builder"])
-        #expect(Set(builder.allSources) == ["Woot-all@aim", "Atlas-all@aim", "Claude Code configuration"])
+        #expect(Set(builder.allSources) == ["Example-all@example", "Additional-all@example", "Claude Code configuration"])
         try WorkspaceSnapshotValidator.validate(observation)
     }
 
-    @Test func aSkillAimPlacedInKirosFolderIsRecordedAsAims() async throws {
+    @Test func standaloneKiroSkillsHaveContentDigestsWithoutAnExternalManager() async throws {
         let home = try temporaryHome()
         defer { try? FileManager.default.removeItem(at: home) }
         let skills = home.appending(path: ".kiro/skills", directoryHint: .isDirectory)
-        for name in ["brazil", "mine"] {
+        for name in ["build", "mine"] {
             let folder = skills.appending(path: name, directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             try "---\nname: \(name)\ndescription: d\n---\n".write(to: folder.appending(path: "SKILL.md"), atomically: true, encoding: .utf8)
         }
-        try "core-skills\n".write(to: skills.appending(path: "brazil/.aim-managed"), atomically: true, encoding: .utf8)
 
         let observation = await KiroCLIAdapter().scan(homeURL: home, runner: ScriptedRunner(pluginList: "[]"))
 
-        let brazil = try #require(observation.skillMetadata["brazil"])
-        #expect(brazil.externalManager == ObservedExternalManager(tool: "AIM", package: "core-skills"))
-        #expect(brazil.definitionDigest?.count == 64)
+        let build = try #require(observation.skillMetadata["build"])
+        #expect(build.externalManager == nil)
+        #expect(build.definitionDigest?.count == 64)
         #expect(observation.skillMetadata["mine"]?.externalManager == nil, "a folder nothing claims stays loose")
         try WorkspaceSnapshotValidator.validate(observation)
     }

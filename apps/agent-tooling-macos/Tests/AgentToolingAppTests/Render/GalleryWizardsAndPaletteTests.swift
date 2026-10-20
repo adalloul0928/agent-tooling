@@ -5,85 +5,17 @@ import Testing
 @testable import AgentToolingApp
 @testable import AgentToolingCore
 
-/// First run, the wizards, the skill creator, the command palette, and the
-/// sidebar on its own. The wizards and the creator carry the states that change
-/// their layout; the sidebar is captured separately because the shell's
-/// behind-window sidebar material does not composite in an off-screen capture.
+/// The skill creator, the command palette, and the sidebar on its own. The
+/// creator carries the states that change its layout; the sidebar is captured
+/// separately because the shell's behind-window sidebar material does not
+/// composite in an off-screen capture. The setup stage has galleries of its
+/// own.
 ///
 /// Enabled only when `AGENT_TOOLING_SCREEN_GALLERY` names an output folder.
-@Suite("Gallery · First run and palette", .serialized, .enabled(if: GalleryOutput.isOn))
+@Suite("Gallery · Creator and palette", .serialized, .enabled(if: GalleryOutput.isOn))
 @MainActor
 struct GalleryWizardsAndPaletteTests {
     private static let both: [RenderAppearance] = [.light, .dark]
-    private static let wizardSize = CGSize(width: 860, height: 640)
-
-    // MARK: First-launch chooser
-
-    /// The chooser the app shows before a workspace exists: start fresh, and
-    /// the join-another-Mac form it expands into.
-    @Test func firstLaunchChooser() throws {
-        for appearance in Self.both {
-            try gallerySnapshot(
-                FirstLaunchChooser(start: {}, join: { _, _ in }, isBusy: false, error: nil),
-                area: "First run and wizards", screen: "First-launch chooser", state: "start",
-                size: Self.wizardSize, appearance: appearance,
-                source: "Sources/AgentToolingApp/AgentToolingApp.swift:235")
-            try gallerySnapshot(
-                FirstLaunchChooser(
-                    start: {}, join: { _, _ in }, isBusy: false,
-                    error: "That folder is not a workspace this Mac can join."),
-                area: "First run and wizards", screen: "First-launch chooser", state: "error",
-                size: Self.wizardSize, appearance: appearance,
-                source: "Sources/AgentToolingApp/AgentToolingApp.swift:235")
-        }
-    }
-
-    // MARK: Onboarding wizard
-
-    /// Every stop of the onboarding wizard: what the first run found, choosing
-    /// apps, and assigning.
-    @Test func onboardingWizardSteps() async throws {
-        for appearance in Self.both {
-            let fixture = try await ShellRenderFixture()
-            defer { fixture.remove() }
-            await fixture.workspace.device.refresh()
-            for step in [OnboardingStep.found, .apps, .assign] {
-                try gallerySnapshot(
-                    OnboardingWizard(workspace: fixture.workspace, step: step, onFinish: {})
-                        .environment(AppNavigationState()),
-                    area: "First run and wizards", screen: "Onboarding wizard",
-                    state: "step-\(step.title.lowercased())",
-                    size: Self.wizardSize, appearance: appearance,
-                    source: "Sources/AgentToolingApp/OnboardingWizard.swift:58")
-            }
-        }
-    }
-
-    // MARK: Setup wizard
-
-    /// Every stop of the setup wizard, over a checkup with one finding of each
-    /// kind and a review on top.
-    @Test func setupWizardSteps() async throws {
-        let checkup = ShellRenderFixture.setupCheckup(home: URL(filePath: "/Users/example"))
-        let stops: [SetupWizardStep] = [
-            .apps, .audit, .review, .category(.cleanup), .category(.unmanaged),
-            .category(.settings), .done,
-        ]
-        for appearance in Self.both {
-            let fixture = try await ShellRenderFixture(setupServices: StubSetupServices(restored: checkup))
-            defer { fixture.remove() }
-            for stop in stops {
-                try gallerySnapshot(
-                    SetupWizardSheet(
-                        workspace: fixture.workspace, session: fixture.workspace.setup,
-                        onClose: {}, initialStep: stop),
-                    area: "First run and wizards", screen: "Setup wizard",
-                    state: "step-\(setupStepName(stop))",
-                    size: Self.wizardSize, appearance: appearance,
-                    source: "Sources/AgentToolingApp/SetupWizardSheet.swift:79")
-            }
-        }
-    }
 
     // MARK: Skill creator
 
@@ -171,16 +103,5 @@ struct GalleryWizardsAndPaletteTests {
                 size: CGSize(width: 260, height: 720), appearance: appearance,
                 source: "Sources/AgentToolingApp/SidebarView.swift:9")
         }
-    }
-}
-
-/// A short, file-safe name for a setup-wizard stop.
-private func setupStepName(_ step: SetupWizardStep) -> String {
-    switch step {
-    case .apps: "apps"
-    case .audit: "audit"
-    case .review: "review"
-    case .category(let category): "category-\(category)"
-    case .done: "done"
     }
 }

@@ -15,7 +15,9 @@ jobs:
   build:
     name: Test and package
     runs-on: macos-26
-    timeout-minutes: 45
+    # There is no build cache, so every run builds four times. Main at f5278d9
+    # took 42m05s of the old 45; the headroom keeps a slow runner from failing.
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: apps/agent-tooling-macos
@@ -34,7 +36,7 @@ jobs:
       - name: Validate source and release scripts
         run: |
           swift format lint --strict -r Sources Tests Package.swift
-          bash -n scripts/package-app.sh scripts/create-dmg.sh
+          bash -n scripts/package-app.sh scripts/create-dmg.sh scripts/verify-dmg.sh
           shellcheck_version=0.11.0
           shellcheck_archive="shellcheck-v${shellcheck_version}.darwin.aarch64.tar.xz"
           curl --fail --location --proto '=https' --tlsv1.2 \
@@ -44,42 +46,50 @@ jobs:
             '56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79' \
             "$RUNNER_TEMP/$shellcheck_archive" | shasum -a 256 --check
           tar -xJf "$RUNNER_TEMP/$shellcheck_archive" -C "$RUNNER_TEMP"
-          "$RUNNER_TEMP/shellcheck-v${shellcheck_version}/shellcheck" -x scripts/package-app.sh scripts/create-dmg.sh
+          "$RUNNER_TEMP/shellcheck-v${shellcheck_version}/shellcheck" -x scripts/package-app.sh scripts/create-dmg.sh scripts/verify-dmg.sh
+          # Validate rendering for a release version other than the bundled artwork.
+          swift scripts/render-dmg-layout.swift picture 0.0.0 "$RUNNER_TEMP/dmg-picture-check"
           plutil -lint Resources/Info.plist
 
-      # Keep fixture and rendering load within the runner's capacity. The two
-      # complementary filters run every test; concurrency inside tests is retained.
       - name: Run Core and MCP tests
         run: |
-          swift test --disable-sandbox --no-parallel --skip '^AgentToolingAppTests\.'
+          swift test --disable-sandbox --no-parallel --skip '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/debug-core.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/debug-core.xml"
 
       - name: Run UI tests
-        run: swift test --disable-sandbox --skip-build --no-parallel --filter '^AgentToolingAppTests\.'
+        run: |
+          swift test --disable-sandbox --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/debug-ui.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/debug-ui.xml"
 
       - name: Run Core and MCP tests with Thread Sanitizer
-        run: swift test --disable-sandbox --sanitize=thread --no-parallel --skip '^AgentToolingAppTests\.'
+        run: |
+          swift test --disable-sandbox --sanitize=thread --no-parallel --skip '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/thread-core.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/thread-core.xml"
 
       - name: Run UI tests with Thread Sanitizer
-        run: swift test --disable-sandbox --sanitize=thread --skip-build --no-parallel --filter '^AgentToolingAppTests\.'
+        run: |
+          swift test --disable-sandbox --sanitize=thread --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/thread-ui.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/thread-ui.xml"
 
       - name: Build release with warnings as errors
         run: |
           swift build --configuration release -Xswiftc -warnings-as-errors
 
-      # A validator once refused every input only in release, so the full suite
-      # also runs against the configuration that is packaged.
       - name: Run Core and MCP release tests
-        run: swift test --disable-sandbox --configuration release --no-parallel --skip '^AgentToolingAppTests\.'
+        run: |
+          swift test --disable-sandbox --configuration release --no-parallel --skip '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/release-core.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/release-core.xml"
 
       - name: Run UI release tests
-        run: swift test --disable-sandbox --configuration release --skip-build --no-parallel --filter '^AgentToolingAppTests\.'
+        run: |
+          swift test --disable-sandbox --configuration release --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --xunit-output "$RUNNER_TEMP/release-ui.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/release-ui.xml"
 
       - name: Smoke test Raycast CLI contract
         run: |
           cli=$(swift build --configuration release --show-bin-path)/agent-tooling
           workspace="$RUNNER_TEMP/raycast-cli-workspace"
-          # The CLI opens an existing workspace; first-run setup belongs to the app.
-          # Seed an empty one through the same API without scanning the runner's clients.
+          # Seed an isolated workspace for the CLI.
           fixture=$(mktemp -d "$RUNNER_TEMP/raycast-cli-fixture.XXXXXX")
           mkdir -p "$workspace" "$fixture/Sources/SeedWorkspace"
           cat > "$fixture/Package.swift" <<SWIFT
@@ -152,19 +162,20 @@ jobs:
           test -x "$helper"
           file "$helper"
           codesign --verify --strict --verbose=2 "$helper"
+          # Setup registers this path with the agents, which then launch the
+          # server on their own, so it must be signed and start by itself.
+          mcp_helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling-mcp"
+          test -x "$mcp_helper"
+          file "$mcp_helper"
+          codesign --verify --strict --verbose=2 "$mcp_helper"
+          "$mcp_helper" --version
           resource_bundle="$RUNNER_TEMP/Agent Tooling.app/Contents/Resources/AgentTooling_AgentToolingApp.bundle"
           resources="$resource_bundle"
           if [[ -d "$resource_bundle/Contents/Resources" ]]; then
             resources="$resource_bundle/Contents/Resources"
           fi
-          if [[ -f "$resources/Assets.car" ]]; then
-            file "$resources/Assets.car"
-          else
-            test -f "$resources/Assets.xcassets/ClientClaude.imageset/claude.svg"
-            test -f "$resources/Assets.xcassets/ClientCodex.imageset/codex-light.svg"
-            test -f "$resources/Assets.xcassets/ClientCodex.imageset/codex-dark.svg"
-            test -f "$resources/Assets.xcassets/ClientGemini.imageset/gemini.svg"
-          fi
+          test -s "$resources/ThirdPartyNotices.txt"
+          cmp ../../LICENSE "$RUNNER_TEMP/Agent Tooling.app/Contents/Resources/LICENSE.txt"
           file "$RUNNER_TEMP/Agent Tooling.app/Contents/MacOS/AgentTooling"
 
       - name: Create unsigned CI disk image

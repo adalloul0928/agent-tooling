@@ -173,14 +173,14 @@ struct WorkspaceDeviceSessionTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         var claude = Fixture.claudeCode(commandAvailable: true, version: "2.1.263")
-        let packageRoot = fixture.home.appending(path: ".claude/plugins/cache/aim/core/1.0").path(percentEncoded: false)
-        claude.discoveredPlugins = ["core@aim"]
-        claude.discoveredSkills = ["core:brazil", "docx"]
+        let packageRoot = fixture.home.appending(path: ".claude/plugins/cache/example/core/1.0").path(percentEncoded: false)
+        claude.discoveredPlugins = ["core@example"]
+        claude.discoveredSkills = ["core:build", "docx"]
         claude.pluginMetadata = [
-            "core@aim": .init(name: "Core", source: packageRoot, scope: "User", enabled: true, skillIDs: ["core:brazil"])
+            "core@example": .init(name: "Core", source: packageRoot, scope: "User", enabled: true, skillIDs: ["core:build"])
         ]
         claude.skillMetadata = [
-            "core:brazil": .init(path: "\(packageRoot)/skills/brazil/", source: "core@aim", providerPluginID: "core@aim"),
+            "core:build": .init(path: "\(packageRoot)/skills/build/", source: "core@example", providerPluginID: "core@example"),
             "docx": .init(
                 path: fixture.home.appending(path: ".claude/skills/docx/").path(percentEncoded: false),
                 source: "Standalone Claude Code skill"),
@@ -195,8 +195,8 @@ struct WorkspaceDeviceSessionTests {
         // The package and the standalone skill are rows; the package's member
         // is listed inside it.
         #expect(rows.count == before.count + 2)
-        let package = try #require(rows.first { $0.kind == .nativePlugin && $0.declaredName == "core@aim" })
-        #expect(package.includedChildren.map(\.displayName) == ["Brazil"])
+        let package = try #require(rows.first { $0.kind == .nativePlugin && $0.declaredName == "core@example" })
+        #expect(package.includedChildren.map(\.displayName) == ["Build"])
         #expect(package.includedChildren.first?.kind == .skill)
         let standalone = try #require(rows.first { $0.kind == .skill && $0.declaredName == "docx" })
         #expect(standalone.ownership == .trackedOnly)
@@ -721,6 +721,70 @@ struct WorkspaceDeviceSessionTests {
         #expect(snapshot.device.observations == observed)
         // Unknown never becomes an actionable install claim.
         #expect(snapshot.device.capabilityEvidence.isEmpty)
+    }
+
+    @Test(arguments: OwnershipRead.allCases)
+    func readsPreserveRecordedExternalOwnershipAtTheSamePath(route: OwnershipRead) async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let owner = ObservedExternalManager(tool: "Example Manager", package: "shared-skills")
+        let path = fixture.home.appending(path: ".claude/skills/review").path
+        var previous = Fixture.claudeCode(commandAvailable: true)
+        previous.skillMetadata = ["review": .init(path: path + "/", source: "Standalone skill", externalManager: owner)]
+        let saved = previous
+        _ = try await fixture.service.recordDeviceChange { $0.observations = [saved] }
+        var scanned = previous
+        scanned.skillMetadata = ["review": .init(path: path, source: "Standalone skill")]
+        let session = await fixture.session(observer: ScriptedObserver(results: [.success([scanned])]))
+
+        switch route {
+        case .full: await session.refresh()
+        case .selected: await session.refresh(only: [.claude])
+        case .setup: await session.adopt([scanned])
+        }
+
+        #expect(session.observations.first?.skillMetadata["review"]?.externalManager == owner)
+        let snapshot = try #require(try fixture.store.snapshot())
+        #expect(snapshot.device.observations.first?.skillMetadata["review"]?.externalManager == owner)
+        let audit = SetupAuditor(homeURL: fixture.home).audit(
+            observations: session.observations, managed: [.claude], library: .init(managedSkillNames: []))
+        #expect(!audit.findings.contains { $0.kind == .unmanagedSkill && $0.subject == "review" })
+    }
+
+    @Test(arguments: OwnershipRead.allCases)
+    func readsKeepNewPathsAndOwnershipSeparateFromRecordedOwners(route: OwnershipRead) async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let old = ObservedExternalManager(tool: "Old Manager")
+        let replacement = ObservedExternalManager(tool: "New Manager")
+        var previous = Fixture.claudeCode(commandAvailable: true)
+        for id in ["moved", "native", "replaced"] {
+            previous.skillMetadata[id] = .init(
+                path: fixture.home.appending(path: id).path, source: "Standalone skill", externalManager: old)
+        }
+        let saved = previous
+        _ = try await fixture.service.recordDeviceChange { $0.observations = [saved] }
+        var scanned = previous
+        scanned.skillMetadata["moved"] = .init(path: fixture.home.appending(path: "elsewhere/moved").path, source: "Standalone skill")
+        scanned.skillMetadata["native"] = .init(
+            path: fixture.home.appending(path: "native").path, source: "Plugin", providerPluginID: "tools@example")
+        scanned.skillMetadata["replaced"]?.externalManager = replacement
+        let session = await fixture.session(observer: ScriptedObserver(results: [.success([scanned])]))
+
+        switch route {
+        case .full: await session.refresh()
+        case .selected: await session.refresh(only: [.claude])
+        case .setup: await session.adopt([scanned])
+        }
+
+        let metadata = try #require(session.observations.first?.skillMetadata)
+        #expect(metadata["moved"]?.externalManager == nil)
+        #expect(metadata["native"]?.externalManager == nil)
+        #expect(metadata["replaced"]?.externalManager == replacement)
+    }
+
+    enum OwnershipRead: CaseIterable {
+        case full, selected, setup
     }
 
     private struct ScanFailure: Error {}

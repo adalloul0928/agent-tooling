@@ -24,7 +24,7 @@ struct WorkspaceNativePackageAdoptionSessionTests {
         await session.adopt(listing, client: .claude)
 
         let match = try #require(session.libraryMatch(for: listing))
-        #expect(match.displayName == "Atlas")
+        #expect(match.displayName == "Additional")
         #expect(session.adoption?.packageID == listing.id)
         #expect(
             session.adoption?.message == "Added to your library. Install picks the apps and writes it.")
@@ -63,7 +63,7 @@ struct WorkspaceNativePackageAdoptionSessionTests {
 
         await session.adopt(listing, client: .claude)
 
-        #expect(session.adoption?.message == "Atlas is already in your library. Open it to choose where it goes.")
+        #expect(session.adoption?.message == "Additional is already in your library. Open it to choose where it goes.")
         #expect(try #require(try fixture.store.snapshot()).document.artifacts.count == 2)
     }
 

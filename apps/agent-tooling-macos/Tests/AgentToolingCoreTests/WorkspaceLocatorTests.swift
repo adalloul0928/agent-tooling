@@ -36,8 +36,8 @@ struct WorkspaceLocatorTests {
         try Data(#"{"formatVersion":99}"#.utf8).write(to: fixture.locator.recordURL)
 
         // Treating it as absent would start a second workspace beside one that
-        // already exists.
-        #expect(throws: WorkspaceLocatorError.unsupportedFormat) { _ = try fixture.locator.read() }
+        // already exists. A higher format version is a newer build's record.
+        #expect(throws: WorkspaceLocatorError.newerFormat) { _ = try fixture.locator.read() }
     }
 
     @Test func theRecordNamesIdentifiersAndNoPath() throws {

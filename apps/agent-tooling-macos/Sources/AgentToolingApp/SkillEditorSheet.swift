@@ -16,6 +16,13 @@ struct SkillEditorSheet: View {
     let isBusy: Bool
     let canWrite: Bool
     let errorMessage: String?
+    /// The sheet's size: the shared editor's, or the setup stage's when it
+    /// opens over the stage, where it has to sit inside the stage's window.
+    var size: CGSize = SheetSize.editor
+    /// Whether the form offers to choose where the skill is used straight
+    /// afterwards. The setup stage leaves it out: there, putting things in
+    /// apps is a step of its own, and the skill joins it.
+    var offersPlacementNext = true
     /// Returns true when the skill was admitted. `assign` says the person asked
     /// to choose where it is used straight afterwards.
     let onCreate: (SkillDraft, _ assign: Bool) -> Void
@@ -40,12 +47,13 @@ struct SkillEditorSheet: View {
             Hairline()
             footer
         }
-        .sheetSize(SheetSize.editor)
+        .sheetSize(size)
         .background(AgentTheme.contentBackground)
         .onAppear {
             // The form's own defaults describe the old install step, which this
             // screen no longer performs.
             draft.runCanary = false
+            if !offersPlacementNext { draft.syncClients = false }
         }
     }
 
@@ -198,15 +206,19 @@ struct SkillEditorSheet: View {
             }
             .standardPanel()
 
-            AutomationToggle(
-                title: "Choose where to use it next",
-                detail: "Opens the assignment review as soon as the skill is created",
-                isOn: $draft.syncClients
-            )
-            .standardPanel()
+            if offersPlacementNext {
+                AutomationToggle(
+                    title: "Choose where to use it next",
+                    detail: "Opens the assignment review as soon as the skill is created",
+                    isOn: $draft.syncClients
+                )
+                .standardPanel()
+            }
 
             Text(
-                "Saving changes the skill in your library. Where it is installed is chosen with Install, on the skill, which writes it."
+                offersPlacementNext
+                    ? "Saving changes the skill in your library. Where it is installed is chosen with Install, on the skill, which writes it."
+                    : LaunchpadCopy.Library.editorPlacement
             )
             .font(AgentFont.caption)
             .foregroundStyle(.secondary)
@@ -269,8 +281,7 @@ struct SkillEditorSheet: View {
                     Hairline()
                     ReviewRow(label: "Kept in", value: "Your personal library")
                     Hairline()
-                    ReviewRow(
-                        label: "Next", value: draft.syncClients ? "Choose where to use it" : "Nothing until you ask")
+                    ReviewRow(label: "Next", value: nextStep)
                 }
                 .standardPanel()
 
@@ -302,7 +313,7 @@ struct SkillEditorSheet: View {
                     .primaryActionStyle()
                     .disabled(!canContinue)
             } else {
-                Button("Create skill") { onCreate(draft, draft.syncClients) }
+                Button("Create skill") { onCreate(draft, assignsNext) }
                     .primaryActionStyle()
                     .keyboardShortcut(.defaultAction)
                     .disabled(!isDraftValid || isBusy || !canWrite)
@@ -322,6 +333,17 @@ struct SkillEditorSheet: View {
             "e.g. Turn review comments into a checklist",
         ]
         return examples[min(index, examples.count - 1)]
+    }
+
+    /// Whether creating the skill goes straight on to choosing where it is
+    /// used: only where the form offers it, and the person asked.
+    private var assignsNext: Bool { offersPlacementNext && draft.syncClients }
+
+    /// What follows Create skill. Over the setup stage that is the stage's
+    /// own next step, where the skill joins what is put in apps.
+    private var nextStep: String {
+        guard offersPlacementNext else { return LaunchpadCopy.Library.editorNext }
+        return assignsNext ? "Choose where to use it" : "Nothing until you ask"
     }
 
     private var normalizedName: String {

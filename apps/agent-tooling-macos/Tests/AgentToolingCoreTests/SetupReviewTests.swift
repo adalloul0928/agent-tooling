@@ -33,8 +33,8 @@ struct SetupReviewTests {
     @Test func theClaudeShapesReadOnlyTheToolingFoldersAndReachTheWebOnlyForAReview() throws {
         let local = SetupReviewCommandShapes.claude(homeURL: home, web: false)
         let web = SetupReviewCommandShapes.claude(homeURL: home, web: true)
-        #expect(local.contains("Read(/Users/example/.claude/**)"))
-        #expect(local.contains("Read(/Users/example/.kiro/**)"))
+        #expect(local.contains("Read(//Users/example/.claude/**)"))
+        #expect(local.contains("Read(//Users/example/.kiro/**)"))
         #expect(!local.contains { $0.hasPrefix("Read(") && !$0.contains("/Users/example/.") }, "a Read outside the tooling folders")
         // Bash and the writers are disallowed in both; the web only in the review.
         for shape in [local, web] {
@@ -51,7 +51,8 @@ struct SetupReviewTests {
         let webAllowedStart = try #require(web.firstIndex(of: "--allowedTools"))
         let webDisallowedStart = try #require(web.firstIndex(of: "--disallowedTools"))
         let webAllowed = web[(webAllowedStart + 1)..<webDisallowedStart]
-        #expect(webAllowed.contains("WebSearch") && webAllowed.contains("WebFetch"))
+        #expect(webAllowed.contains("WebSearch") && webAllowed.contains("WebFetch(domain:docs.claude.com)"))
+        #expect(!webAllowed.contains("WebFetch"), "a fetch reaches the apps' documentation only")
     }
 
     @Test func thePolicyAdmitsExactlyTheFourShapesAndRefusesNearMisses() throws {
@@ -70,11 +71,11 @@ struct SetupReviewTests {
         }
         // Widen the read to the whole home: refused.
         var wide = SetupReviewCommandShapes.claude(homeURL: home, web: false)
-        wide[try #require(wide.firstIndex(of: "Read(/Users/example/.claude/**)"))] = "Read(/Users/example/**)"
+        wide[try #require(wide.firstIndex(of: "Read(//Users/example/.claude/**)"))] = "Read(//Users/example/**)"
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "claude", arguments: wide) }
         // Allow Bash: refused.
         var shell = SetupReviewCommandShapes.claude(homeURL: home, web: false)
-        shell.insert("Bash", at: try #require(shell.firstIndex(of: "Glob")))
+        shell.insert("Bash", at: try #require(shell.firstIndex(of: "--disallowedTools")))
         #expect(throws: OperationEngineError.self) { try policy.validate(executable: "claude", arguments: shell) }
         // Another person's home: refused.
         #expect(throws: OperationEngineError.self) {
@@ -110,16 +111,12 @@ struct SetupReviewTests {
     // MARK: The prompt
 
     @Test func thePromptCarriesTheFindingsWithTheirIdsAndActionsAndSaysWhatTheRunIsFor() {
-        let setup = SetupReviewPrompt.render(
-            purpose: .setup, audit: audit, digests: [], focus: nil, clientVersions: [.claude: "2.1.285"])
-        #expect(setup.contains("first-time setup"))
-        #expect(setup.contains(audit.findings[0].id))
-        #expect(setup.contains("action[0]: Remove the broken link"), "the offered actions are listed by index")
-        #expect(setup.contains("- Claude Code: 2.1.285"))
-        #expect(setup.contains("Never recommend deleting the only copy"))
-
-        let checkup = SetupReviewPrompt.render(purpose: .checkup, audit: audit, digests: [], focus: nil, clientVersions: [:])
+        let checkup = SetupReviewPrompt.render(
+            purpose: .checkup, audit: audit, digests: [], focus: nil, clientVersions: [.claude: "2.1.285"])
         #expect(checkup.contains("routine check"))
+        #expect(checkup.contains(audit.findings[0].id))
+        #expect(checkup.contains("action[0]: Remove the broken link"), "the offered actions are listed by index")
+        #expect(checkup.contains("- Claude Code: 2.1.285"))
 
         let review = SetupReviewPrompt.render(
             purpose: .clientReview, audit: audit, digests: [], focus: .claude, clientVersions: [.claude: "2.1.285"],

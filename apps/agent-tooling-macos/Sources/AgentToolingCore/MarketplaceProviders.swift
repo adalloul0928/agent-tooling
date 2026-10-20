@@ -619,18 +619,10 @@ private struct RegistryEnvironmentVariable: Decodable {
     var name: String
 }
 
-/// The skills.sh community skill registry, asked through its search API.
-///
-/// skills.sh is the registry behind the `npx skills` CLI. Its one public,
-/// machine-readable endpoint is `/api/search`, which answers a semantic query
-/// with skill listings and the install counts the registry itself publishes.
-/// There is no public browse or leaderboard endpoint, so this provider answers
-/// only when there is a search term: an unqueried refresh returns an empty page
-/// rather than fabricating a browsable catalog. No web page is scraped.
-///
-/// A listing here is a pointer, not an installation: the skill's content lives
-/// in the GitHub repository the registry names, and nothing is fetched or
-/// executed from it. The install count is the registry's own report.
+/// Queries skills.sh's public `/api/search` endpoint. Empty queries return
+/// no listings because the registry has no public browse endpoint.
+/// Results retain registry-reported install counts and GitHub content links;
+/// this provider neither scrapes pages nor fetches or executes skill content.
 public struct SkillsShRegistryProvider: MarketplaceProvider {
     public let id = "skills-sh.registry"
     public let displayName = "skills.sh"

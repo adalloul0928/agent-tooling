@@ -185,6 +185,7 @@ enum ClaudeAccountParsing {
     /// Skills under `~/.claude/skills/synced`. A folder with a `SKILL.md`
     /// is one skill, named by its frontmatter when it has a readable one.
     static func syncedSkills(in directory: URL, fileManager: FileManager = .default) -> [ClaudeSyncedSkill] {
+        defer { ScanTrace.read(directory) }
         var skills: [String: ClaudeSyncedSkill] = [:]
         for url in BoundedFileAccess.descendantDirectories(under: directory, fileManager: fileManager, maximumDepth: 3) {
             let definition = url.appending(path: "SKILL.md")
@@ -360,6 +361,7 @@ public struct ClaudeAccountReader: Sendable {
     }
 
     private func readSettings(at url: URL) -> ClaudeAccountSettings {
+        defer { ScanTrace.read(url) }
         guard let text = try? BoundedFileAccess.readUTF8(at: url, maximumBytes: BoundedFileAccess.maximumConfigurationBytes)
         else { return ClaudeAccountSettings() }
         return ClaudeAccountParsing.settings(fromJSON: text)

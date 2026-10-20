@@ -13,6 +13,10 @@ import SwiftUI
 struct HealthView: View {
     let session: WorkspaceHealthSession
     let device: WorkspaceDeviceSession
+    /// The apps this Mac has Agent Tooling's own connection set up for: in
+    /// those, the connection under its name is labelled as Agent Tooling's.
+    /// One at that name anywhere else is somebody's own.
+    var ownConnectionApps: Set<ClientKind> = []
 
     /// All connections, or only the ones worth looking at. Defaults to the
     /// needs-attention view whenever there is anything to attend to, so opening
@@ -179,6 +183,8 @@ struct HealthView: View {
                     if index > 0 { Hairline() }
                     HealthRow(
                         entry: entry,
+                        isOwnConnection: entry.name == AgentToolingConnection.declaredName
+                            && ownConnectionApps.contains(entry.client),
                         action: session.action(for: entry),
                         actionState: session.actionState[entry.id] ?? .idle,
                         commandText: session.loginCommandText(for: entry),
@@ -218,6 +224,8 @@ struct HealthView: View {
 /// can do about it.
 private struct HealthRow: View {
     let entry: ConnectionHealthEntry
+    /// This app's registration of Agent Tooling's own connection.
+    let isOwnConnection: Bool
     let action: ConnectionHealthAction
     let actionState: WorkspaceHealthSession.ActionState
     let commandText: String?
@@ -269,7 +277,11 @@ private struct HealthRow: View {
 
     @ViewBuilder
     private var sourceBadge: some View {
-        if let plugin = entry.pluginName, !plugin.isEmpty {
+        if isOwnConnection {
+            // Not a library entry: bound to this Mac, and shown here, where it
+            // acts, so a person can tell it from their own connections.
+            HealthBadge(text: "Agent Tooling’s own connection", tint: AgentTheme.selection)
+        } else if let plugin = entry.pluginName, !plugin.isEmpty {
             HealthBadge(text: "Plugin · \(plugin)", tint: AgentTheme.plugin)
         } else if entry.isClaudeAIConnector {
             HealthBadge(text: "claude.ai connector", tint: AgentTheme.selection)

@@ -26,6 +26,11 @@ final class AppNavigationState {
     var requestedPendingRequestID: UUID? { pendingRequestQueue.first }
     private var skillCreationQueue: [UUID] = []
     var requestedSkillCreationID: UUID? { skillCreationQueue.first }
+    /// The setup stage a link asked for (`agent-tooling://setup`), which the
+    /// shell opens once it is up. Asking opens the stage and nothing more: no
+    /// other request and no queue is cleared, so a review another Mac asked
+    /// for, or a skill to create, still waits for the screen that answers it.
+    private(set) var requestedSetup: SetupEntry?
     private(set) var revision = 0
 
     @discardableResult
@@ -57,6 +62,11 @@ final class AppNavigationState {
         case .createSkill(let id):
             openSkillCreationRequest(id)
             return
+        case .setup:
+            // Set up this Mac…: the stage at Your apps, over whatever the
+            // window shows. A window of its own, not a screen of this one, so
+            // it clears nothing.
+            requestedSetup = .rerun
         }
         revision += 1
     }
@@ -136,6 +146,34 @@ final class AppNavigationState {
     func consumeRequestedSection(_ section: AppSection) {
         guard requestedSection == section else { return }
         requestedSection = nil
+    }
+
+    /// The shell opened the stage a link asked for.
+    func consumeSetupRequest() {
+        requestedSetup = nil
+    }
+
+    /// Drops the section a route asked for, with the one-shot reveals that
+    /// came with it: the setup stage's hand-off opens its own section, which
+    /// wins over a link queued while setup ran. Neither queue is cleared, so a
+    /// review another Mac asked for, or a skill to create, still waits for the
+    /// screen that answers it.
+    ///
+    /// A setup link queued while setup ran goes with the section: the stage
+    /// it asked for is the one handing off, and the shell the hand-off opens
+    /// would otherwise open it again.
+    func discardRequestedSection() {
+        requestedSection = nil
+        requestedSetup = nil
+        clearRequests(clearPendingQueue: false, clearSkillCreationQueue: false)
+    }
+
+    /// Shows `section` in a shell that is already open: the hand-off back
+    /// from a stage opened over it. A reveal, nothing more; no queue or
+    /// request is cleared.
+    func reveal(_ section: AppSection) {
+        requestedSection = section
+        revision += 1
     }
 
     func consumeMarketplacePackage(_ id: String) {

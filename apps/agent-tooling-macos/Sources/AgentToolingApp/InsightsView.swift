@@ -123,12 +123,10 @@ struct InsightsView: View {
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text("Look for repeated work, underused skills, and tools that may help next time.")
                         .font(AgentFont.body)
-                    Text(
-                        "Chat text is processed transiently. The app saves only aggregate counts and recommendations—not messages or excerpts."
-                    )
-                    .font(AgentFont.caption)
-                    .foregroundStyle(.secondary)
-                    .wrapsLines()
+                    Text(AssistantRunCopy.transientNote)
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                        .wrapsLines()
                 }
                 .padding(Space.xl)
 
@@ -620,12 +618,12 @@ struct InsightsView: View {
         deepDiveClient.map { "Deep dive with \($0.rawValue)" } ?? "Deep dive"
     }
 
+    /// What the deep dive does, and that it runs on its own only while this
+    /// Mac allows the daily one.
     private var deepDiveHelp: String {
-        guard let client = deepDiveClient else {
-            return "A deep dive needs Claude Code or Codex; this Mac is not managing either."
-        }
-        return
-            "Runs the keyword pass, then has your signed-in \(client.rawValue) read digests of the selected conversations and say what you keep doing by hand. Runs on its own once a day when the app opens."
+        guard let client = deepDiveClient else { return AssistantRunCopy.noDeepDiveAssistant }
+        return AssistantRunCopy.deepDiveHelp(
+            reviewer: client, runsDaily: workspace.device.effectiveAssistantRuns.dailyDeepDive)
     }
 
     /// Why there is nothing to scan, when there is nothing to scan. An app this

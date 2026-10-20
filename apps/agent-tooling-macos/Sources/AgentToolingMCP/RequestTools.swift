@@ -1,22 +1,9 @@
 import AgentToolingCore
 import Foundation
 
-/// Tier 2. Each tool appends exactly one bounded row to the review queue and
-/// returns a link to it.
-///
-/// What these tools deliberately do *not* do:
-///
-/// * They never build an `OperationPlan`. The plan is composed in the app, from
-///   the app's own state, when a person opens the link. A plan built here would
-///   be an artifact the caller controls, reviewed as if a person had chosen it.
-/// * They never write to a client configuration, the managed library, or the
-///   file system.
-/// * They accept one component per call. There is no bulk variant, so a single
-///   injected instruction cannot become twenty rows.
-///
-/// The return value is a promise of *attention*, not of action. Nothing has
-/// happened when a caller sees `pending-review`, and nothing will happen unless
-/// a person opens the link and decides.
+/// Queues one bounded request per call and returns its review link.
+/// These tools cannot build plans or modify clients, library items or files.
+/// The app constructs the operation from its own state during human review.
 enum RequestTools {
     static func handle(_ name: String, context: ToolCallContext) throws -> ToolOutcome {
         switch name {

@@ -3,13 +3,8 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// Everything the Skills screen does that leaves the window: reading a skill's
-/// stored files, writing an edited one back, admitting a new one, and asking a
-/// public repository whether the skill it publishes has moved on.
-///
-/// A protocol rather than four calls, so a test can hand in an implementation
-/// that answers from memory and never reads a content store, runs `git`, or
-/// reaches the network.
+/// Injectable skill content I/O, including stored files and upstream Git fetches.
+/// Tests can replace it without accessing disk or network.
 protocol SkillContentServing: Sendable {
     /// Reads one revision's complete content for one skill. Reads only.
     func read(
@@ -74,12 +69,8 @@ extension EnvironmentValues {
     @Entry var skillContentService: any SkillContentServing = LiveSkillContentService()
 }
 
-/// One skill's stored files, and the three things a person can do to them.
-///
-/// Reading is never automatic and never blocks the list: the pane asks for a
-/// skill's source when a person opens it, the work happens off this actor, and
-/// a skill whose bytes this workspace does not hold says so instead of showing
-/// somebody else's.
+/// Loads stored skill content on demand without blocking the list. Missing central
+/// content is reported rather than replaced with potentially stale client files.
 @MainActor @Observable
 final class SkillContentSession {
     /// What a check of a followed repository concluded, in the words a person
@@ -149,13 +140,7 @@ final class SkillContentSession {
         errorMessage = nil
     }
 
-    /// Reads one skill's stored files. Safe to call again for the same skill;
-    /// it returns without re-reading.
-    ///
-    /// Moving to another skill while a read is still running is ordinary — a
-    /// person clicks down a list faster than a content store answers — so the
-    /// answer that arrives is kept only while it is still the one being asked
-    /// for. Otherwise a slow read lands on the row somebody has already left.
+    /// Loads once per skill and discards results superseded by a later selection.
     func load(_ skill: SkillEntry) async {
         guard loadedID != skill.id else { return }
         forgetLoaded()
@@ -324,11 +309,7 @@ final class SkillContentSession {
     }
 }
 
-/// The package a new skill starts life as.
-///
-/// One definition, and only the extra files that were asked for. The shape is
-/// the one the library has always written: a `SKILL.md` beside optional
-/// `scripts/` and `references/` folders.
+/// Creates SKILL.md with only the requested scripts/ and references/ files.
 enum SkillTemplate {
     static func displayName(for identifier: String) -> String {
         identifier.split(separator: "-").map { $0.capitalized }.joined(separator: " ")

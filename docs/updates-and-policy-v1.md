@@ -37,7 +37,15 @@ an installed revision were actually compared.
 ## Behaviour
 
 `WorkspaceUpdateSession.checkIfDue` reads the device policy's cadence and runs a
-check only when one is due. `check(installingAutomatically:)` compares each kind
+check only when one is due. On open it runs in the launch work's first lane,
+before the sync pass, and only while the catalogs may be asked over the
+network (`LaunchWorkPolicy.allowsNetworkCatalogs`): never while a first run is
+on the setup stage, and not for a first run left for later before How Agent
+Tooling behaves was seen, where the person chose the cadence. Home's catalog
+refresh is held the same way and reloads the kept catalogs instead. The
+assistant's runs go in the second lane at the same time, so a review that
+takes minutes never holds up an update check or a sync. See
+[Launchpad setup](launchpad-setup-v1.md#what-the-shell-may-start). `check(installingAutomatically:)` compares each kind
 with its source:
 
 - Followed skills are compared with their repository. One bounded Git fetch per
@@ -67,7 +75,9 @@ executor's allowlist. An MCP server update is refused from here with a
 
 Multi-Mac arrivals reuse this policy. `WorkspaceIncomingSession.review` runs
 after a sync pass and inspects plan items for assignments that did not originate
-on this Mac (`arrivals`). For each, when the kind's policy is `automatic` it
+on this Mac (`arrivals`): neither one naming only this Mac, nor one naming only
+other Macs, nor one this Mac's own setup placed (the setup record's
+placements and the list each walk keeps, read at every review). For each, when the kind's policy is `automatic` it
 installs through the ordinary one-step path (`deployment.risk` then
 `applyDirect`); a plan the risk classifier marks `needsReview` is held in
 `heldForReview` rather than applied. Items whose kind is `ask` stay in `waiting`
@@ -90,7 +100,8 @@ secret or local decision travels to another Mac.
 
 Settings holds the Updates card (`SettingsGeneralView.swift`): a cadence picker,
 a Check now button, and one install-policy picker per kind (Skills, Plugins, MCP
-servers). Home surfaces available updates with Update buttons. Available plugin
+servers). The setup stage's How Agent Tooling behaves sets the same cadence and
+policies, each saved as it changes. Home surfaces available updates with Update buttons. Available plugin
 updates also appear on Library. Incoming arrivals from other Macs surface on
 Home.
 

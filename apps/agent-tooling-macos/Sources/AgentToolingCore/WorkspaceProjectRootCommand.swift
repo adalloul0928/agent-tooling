@@ -40,20 +40,10 @@ public enum WorkspaceProjectRootError: Error, Equatable, Sendable, LocalizedErro
     }
 }
 
-/// Binds a logical project to an absolute folder on this Mac, or removes the
-/// binding it already has.
-///
-/// The binding is device-local: it lives in this device's own record and never
-/// enters the portable document (it is stripped on export), because a folder on
-/// this Mac means nothing on another one. A project has at most one folder here,
-/// and a folder backs at most one project, so rebinding replaces the project's
-/// old folder and a folder already used by another project is refused by name.
-///
-/// The filesystem is checked before anything is recorded — the path must be
-/// absolute, must exist, must be a directory, and must not be a symlink at its
-/// leaf — using the same lexical and symlink rules the skill-target capture
-/// relies on, so a folder this command accepts is one a later install can write
-/// into rather than one recorded now and rejected then.
+/// Sets or removes a device-local project folder, excluded from exports.
+/// Bindings are one-to-one: rebinding replaces the old folder and rejects
+/// folders used by another project. Requires an existing absolute directory
+/// without a leaf symlink, using the same containment rules as skill targets.
 enum WorkspaceProjectRootCommand {
     /// Records that a project's folder on this Mac is `rootPath`, replacing any
     /// folder it was bound to before. Validates the path against the filesystem

@@ -7,7 +7,9 @@ public enum WorkspaceSkillTargetCaptureError: Error, Equatable, Sendable {
     case unsupportedSurface(TargetSurface)
     case invalidProjectBindings
     case missingProject(ArtifactID)
-    case missingObservation(TargetSurface)
+    /// This Mac holds no observation of the surface: the app has not been
+    /// checked here yet. A skip reason, never thrown.
+    case notChecked(TargetSurface)
     case ambiguousObservation(TargetSurface)
     case unavailableClient(TargetSurface)
     case invalidRoot
@@ -26,9 +28,10 @@ public struct CapturedSkillAssignmentTarget: Hashable, Sendable {
 
 /// One selector the capture could not turn into a target, paired with the
 /// reason. This is a per-selector outcome, not a failure of the whole read:
-/// a Kiro selector, a project with no folder on this Mac, or a client that is
-/// not installed are all ordinary situations the caller reports rather than a
-/// wall that takes every other client down with it.
+/// a Kiro selector, a project with no folder on this Mac, a client that is
+/// not installed, or one that has not been checked here yet are all ordinary
+/// situations the caller reports rather than a wall that takes every other
+/// client down with it.
 public struct SkippedSkillAssignmentSelector: Equatable, Sendable {
     public let selector: ResolvedAssignmentSelector
     public let reason: WorkspaceSkillTargetCaptureError
@@ -169,7 +172,14 @@ public enum WorkspaceSkillTargetCapture {
             }
             let matches = observations.filter { $0.surface == selector.surface }
             guard matches.count <= 1 else { throw WorkspaceSkillTargetCaptureError.ambiguousObservation(selector.surface) }
-            guard let observation = matches.first else { throw WorkspaceSkillTargetCaptureError.missingObservation(selector.surface) }
+            // No observation means the app has not been checked on this Mac
+            // yet, for example one skipped during the first read. That is a
+            // state to report, not a broken read, so the selector is skipped
+            // and every app that was checked still resolves.
+            guard let observation = matches.first else {
+                skipped.append(.init(selector: selector, reason: .notChecked(selector.surface)))
+                continue
+            }
             // A client that is not installed cannot carry anything. That is an
             // ordinary state, so it is skipped and reported, not thrown.
             guard observation.installed else {

@@ -290,6 +290,9 @@ struct SkillDetailView: View {
                     let launch = try await opening.tryOut(skillName: name, in: client)
                     trialNotice = TrialNotice(
                         text: "Opened Terminal running \(launch.commandLine). Nothing here changed.", isError: false)
+                    // Home's Finish setting up card counts a skill tried
+                    // from here, and says it was tried from Library.
+                    workspace.setupProgress.recordTrial(skillName: skill.displayName, client: client, place: .library)
                 } catch {
                     trialNotice = TrialNotice(
                         text: (error as? any LocalizedError)?.errorDescription ?? "Terminal could not be opened.",
@@ -316,23 +319,12 @@ struct SkillDetailView: View {
         return "Opens Terminal running \(client.rawValue) with \(invocation ?? "this skill") as the first message."
     }
 
-    /// Why this skill cannot be tried in `client` right now, or nil when it can.
+    /// Why this skill cannot be tried in `client` right now, or nil when it
+    /// can: the same check Home's Try it makes.
     private func cannotTryReason(in client: ClientKind) -> String? {
-        guard SkillTrialCommandShapes.isSupported(client) else {
-            return "Trying a skill in \(client.rawValue) from here is not supported yet."
-        }
-        guard let name = skill.declaredName, SkillTrialCommandShapes.isValidSkillReference(name) else {
-            return "This skill has no name a client could call."
-        }
-        guard inventory.observedClients[skill.id]?.contains(client) == true else {
-            return skill.requestedClients.contains(client)
-                ? "Install it in \(client.rawValue) first; the last check did not find it there."
-                : "The last check did not find this skill in \(client.rawValue)."
-        }
-        guard trialOpening(workspace).canTry(in: client) else {
-            return "\(client.rawValue)'s command-line tool was not found on this Mac."
-        }
-        return nil
+        SkillTrialAvailability.cannotTryReason(
+            skillName: skill.declaredName, in: client, observedIn: inventory.observedClients[skill.id] ?? [],
+            requestedIn: skill.requestedClients, canOpen: trialOpening(workspace).canTry(in: client))
     }
 
     private struct TrialNotice: Equatable {

@@ -1,17 +1,8 @@
 import Foundation
 
-/// What each client reads as standing instructions, and which agent definitions
-/// it has, on this Mac and in one project.
-///
-/// The locations are recorded facts, not guesses, and the pages they were read
-/// from are named beside each list. Nothing here is inferred from another
-/// client: Claude Code and Codex disagree about which filename they read, and
-/// that disagreement is one of the more useful things this can tell somebody.
-///
-/// Read-only throughout. It reports what exists, how big it is, and that these
-/// files are used **together** rather than overriding each other. It does not
-/// read what any of them say — instruction files are prose written for an
-/// agent, and summarising one would be inventing a claim about behavior.
+/// Inventories client instruction files and agent definitions using each
+/// client's documented locations. Reports existence, size and cumulative
+/// loading behavior without reading or interpreting instruction content.
 public enum AgentInstructionInventory {
     /// Where each fact here came from, so a stale one can be rechecked against
     /// the page it was taken from rather than argued about.

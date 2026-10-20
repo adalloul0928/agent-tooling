@@ -8,7 +8,7 @@ Direction: native `NavigationSplitView` and sidebar `List`, with the system's `N
 
 Palette: porcelain `#F5F5F7`, white `#FFFFFF`, charcoal `#1C1C1E`, raised charcoal `#2C2C2E`, graphite `#6E6E73`, and system Apple blue for actions. Home uses a 32 pt heading, 18 pt recommendation titles, and 15–16 pt descriptions. Remove rounded display lettering and colored secondary-button fills.
 
-The supplied Codex directory screenshots inform the latest refinement: recognizable artwork, short descriptions, quiet two-column rows, and room to read. Home now leads with saved recommendations. The library strip and installed-tool icons provide secondary entry points; routine activity remains in Activity. Original artwork from 24 known tool identities is bundled locally with provenance records. Unknown identities retain neutral SF Symbols.
+Public tool directories inform the interface: recognizable artwork, short descriptions, quiet two-column rows, and room to read. Home now leads with saved recommendations. The library strip and installed-tool icons provide secondary entry points; routine activity remains in Activity. Tool and client icons use native SF Symbols.
 
 ```text
 translucent sidebar │ Home                         (↻) (Review changes)
@@ -17,7 +17,7 @@ translucent sidebar │ Home                         (↻) (Review changes)
                     │        Short summary          Short summary
                     │ Your library
                     │ ┌───────────────────────────────────────────┐
-                    │ │ Skills · 176 │ Plugins · 53 │ Servers · 14│
+                    │ │ Skills       │ Plugins      │ Connections │
                     │ └───────────────────────────────────────────┘
                     │ Installed tool icons
                     │ Actionable updates, when present
@@ -28,7 +28,7 @@ translucent sidebar │ Home                         (↻) (Review changes)
 
 Agent Tooling is a native workspace for a person who collects, creates, and maintains capabilities across AI apps. Its primary job is to make it easy to find a useful capability, understand where it comes from and where it is available, and make a deliberate change.
 
-Reviewed the nine supplied screenshots, the running macOS app, all thirteen destinations and their authoring/review flows in source, the package library and source model, navigation contracts, and existing app tests. The starting checkout is `fe36b65735444ab29b783ba2c1892fbb911b87f8`. Findings about third-party products below use their public documentation and published interfaces; they are not installation or runtime validation. Native Codex UI automation is unavailable, so OpenAI research uses its official documentation and product walkthrough.
+This review covered navigation, authoring, review flows, the package library and source model, and app tests. The starting checkout is `fe36b65735444ab29b783ba2c1892fbb911b87f8`. Findings about third-party products below use their public documentation and published interfaces; they are not installation or runtime validation. Native Codex UI automation is unavailable, so OpenAI research uses its official documentation and product walkthrough.
 
 ## Comparable products
 

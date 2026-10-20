@@ -110,6 +110,9 @@ struct EffectiveConfigurationResolverTests {
         #expect(CodexConfigurationAdapter(installedClientVersion: "0.134.0").usesSeparateProfileFiles)
         #expect(CodexConfigurationAdapter(installedClientVersion: "0.140.2").usesSeparateProfileFiles)
         #expect(CodexConfigurationAdapter(installedClientVersion: "v1.2.0").usesSeparateProfileFiles)
+        // What Codex's --version prints, and what an observation records.
+        #expect(CodexConfigurationAdapter(installedClientVersion: "codex-cli 0.164.0").usesSeparateProfileFiles)
+        #expect(CodexConfigurationAdapter(installedClientVersion: "codex-cli 0.133.9").usesSeparateProfileFiles == false)
         // An unknown or unreadable version claims neither layout.
         #expect(CodexConfigurationAdapter(installedClientVersion: nil).usesSeparateProfileFiles == false)
         #expect(CodexConfigurationAdapter(installedClientVersion: "nightly").usesSeparateProfileFiles == false)

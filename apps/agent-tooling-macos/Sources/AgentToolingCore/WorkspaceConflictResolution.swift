@@ -9,17 +9,10 @@ public enum WorkspaceConflictChoice: String, Hashable, Sendable, CaseIterable {
 }
 
 extension WorkspaceMergeConflictKind {
-    /// Whether "keep this Mac's version" or "take the other Mac's version" is
-    /// an answer to this conflict at all.
-    ///
-    /// The rest need a different act rather than a choice between two Macs: a
-    /// colliding destination needs different intent, two records of one app
-    /// package need one of them removed, two separate links to one skill need
-    /// one of them dropped on the Mac that made it, and an unreadable or
-    /// invalid document cannot be fixed by picking a side. A screen that offers
-    /// a picker for one of those offers something that cannot work, so it asks
-    /// here rather than keeping its own list — `WorkspaceConflictResolver`
-    /// sets aside exactly these, and one list cannot drift from itself.
+    /// Whether choosing one device's version can resolve this conflict.
+    /// Destination, native-route and subscription collisions require explicit
+    /// repairs; invalid or unsupported documents cannot be resolved by a side
+    /// picker. The UI and resolver share this classification.
     public var isSettledByChoosingASide: Bool {
         switch self {
         case .destinationCollision, .nativeRouteCollision, .subscriptionOwnerCollision,

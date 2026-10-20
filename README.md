@@ -1,140 +1,106 @@
 # Agent Tooling
 
-Private, cross-client tooling for Claude Code and Codex.
+A native macOS app for managing skills, plugins, and MCP connections across
+**Codex, Claude Code, Gemini CLI, and Kiro CLI**.
 
-This repository is the source of truth for portable Agent Skills and the thin,
-platform-native manifests that package them. It does not contain machine-local
-settings, OAuth state, secrets, or project-critical instructions that belong in
-an application repository.
+Keep a local library, choose which apps and projects use each tool, and review
+changes before they affect your setup.
 
-## macOS app
+![Agent Tooling Home with a sample library](docs/images/app-home.png)
 
-The repository also contains the native [Agent Tooling macOS app](apps/agent-tooling-macos/README.md),
-a local-first control center for Codex, Claude Code, Gemini CLI, and Kiro CLI.
+## Install
 
-The app holds a library of skills, plugins, and connections. Install opens one
-picker that assigns an item, plans what that means for this Mac, and applies it,
-showing the plan inline for review when it would do more than the button said;
-every client write runs through an allowlisted executor. Updates run by a
-per-kind policy of install automatically or ask first. Projects are keyed by
-repository, so a project set up on one Mac finds its folder on the next.
-Checkup audits each client and walks proposed fixes one reviewed action at a
-time. Insights reads local chat history to find recurring work that has no
-skill yet. Macs sync through a private Git repository where every Mac is a full
-peer: content and published status travel, and nothing runs on another Mac from
-this one. See the [app README](apps/agent-tooling-macos/README.md) and the
-[docs index](docs/README.md).
+**Requires macOS 26 or later and an Apple Silicon Mac.**
 
-Versioned `agent-tooling-app-v*` tags build a Developer ID-signed and notarized
-DMG through GitHub Actions. The one-time credential setup and release procedure
-are documented in [docs/macos-app-release.md](docs/macos-app-release.md).
+Packaged builds will be available on the [Releases page](https://github.com/adalloul0928/agent-tooling/releases).
+The first public DMG has not been published yet. When available, download
+`Agent-Tooling-arm64.dmg`, open it, and drag **Agent Tooling** into
+**Applications**. Eject the DMG and open the app from Applications. Updates use
+the same process; quit the app before replacing it.
 
-## Status
+You can [build from source](#build-from-source) now. Agent Tooling manages
+existing client installations; install and sign in to the clients you want to
+use separately.
 
-The dual catalogs publish seven focused native plugins from shared skill cores
-and native MCP adapters:
+## First launch
 
-- `personal`: local-first Personal AI / Life OS, Obsidian vault, communication,
-  planning/review, family check-in, and personal task workflows;
-- `developer-workflows`: reusable cross-project development quality workflows;
-- `cyrus-workflows`: PUMPD research, planning, review, delegation, learning,
-  and retrospective workflows for Cyrus;
-- `pumpd-workflows`: small local PUMPD maintenance workflows outside Cyrus;
-- `pumpd-automations`: scheduled PUMPD scans that report and file Linear
-  Triage suggestions;
-- `wet-in-seattle`: IAWIS workflows with a Doppler-backed Analytics MCP.
-- `mobile-development`: reusable iOS Simulator and HeroUI Native MCPs, with
-  HeroUI Native Pro authentication injected by Doppler.
+Choose which apps to manage, review what Agent Tooling will read, and approve
+each installation. Setup can be resumed later from the Home screen.
 
-These plugins and their bundled skills are first-party creations. Vendor
-plugins, MCP servers, and CLIs remain with their publishers and are referenced
-through desired-state profiles rather than copied into this repository.
+![Agent Tooling guided setup with sample data](docs/images/app-setup.png)
 
-Existing standalone installations remain the rollback path until Git-backed
-install, update, and normal-use canaries pass.
+## What it does
 
-## Repository contract
+- **See your tools in one place.** Browse skills, plugins, and MCP connections
+  discovered in supported clients, with their sources and installation status.
+- **Install where you need them.** Assign tools to apps or projects, keep native
+  plugins together, and review conflicts or changes to existing files.
+- **Follow updates.** Track repository sources, check for new versions, and
+  choose whether to review or automatically install updates by tool type.
+- **Create and maintain skills.** Edit a local skill or draft one with an
+  installed Claude Code or Codex client.
+- **Check your setup.** Inspect configuration and proposed fixes, with receipts
+  and backups for changes made through the app.
+- **Use more than one Mac.** Optionally sync your library through a Git repository
+  you control. Each Mac applies its own changes.
 
-```text
-agent-tooling/
-  .claude-plugin/marketplace.json
-  .agents/plugins/marketplace.json
-  plugins/
-    <plugin>/
-      .claude-plugin/plugin.json
-      .codex-plugin/plugin.json
-      skills/<skill>/SKILL.md
-      .mcp.json
+![Agent Tooling skill library using sample content](docs/images/app-library.png)
+
+Screenshots show the app’s SwiftUI views rendered with synthetic test data.
+
+## Your data
+
+The app stores its workspace in
+`~/Library/Application Support/Agent Tooling/`. A GitHub account or sync
+repository is not required for local use.
+
+Credentials remain with their owning client, account, or keychain. The portable
+workspace stores secret reference names rather than credential values. Client
+installs use a restricted command policy, and the app keeps records of its
+changes.
+
+Discovery, update checks, optional sync, and assistant features contact the
+services you choose. Assistant features use your installed client and its
+account. See the [app guide](apps/agent-tooling-macos/README.md) for details and
+limits.
+
+## Build from source
+
+Install Xcode with the macOS 26 SDK and Swift 6.2 or later, then run:
+
+```sh
+git clone https://github.com/adalloul0928/agent-tooling.git
+cd agent-tooling/apps/agent-tooling-macos
+./scripts/package-app.sh
+open '.build/Agent Tooling.app'
 ```
 
-- Keep one physical skill core under its plugin directory.
-- Keep Claude and Codex manifests as separate adapters.
-- Share scripts, references, assets, and tool-neutral workflow guidance.
-- Keep MCP authentication, client settings, and hosted-environment configuration
-  outside this repository.
-- Keep application-critical skills committed in the application repository.
+The packaging script builds the app and checks that its bundled dependency
+notices are present.
+Local builds use ad hoc signing; public distribution uses a separate signed
+and notarized [release workflow](docs/macos-app-release.md).
 
-## Version policy
+To run the Swift tests from the same directory:
 
-- `main` is the rolling release channel for both native marketplaces. A native
-  marketplace refresh resolves the newest merged commit from that branch.
-- Omit Claude and Codex plugin `version` fields unless a future compatibility
-  requirement changes the policy.
-- Historical tags may remain as repository history, but workstation profiles do
-  not pin to them.
-
-Microsoft APM was tested as a possible compiler. The result was a partial adopt:
-native manifests remain authoritative, while APM's lockfile and audit features
-remain candidates for a later optional layer. See [docs/apm-spike.md](docs/apm-spike.md).
-
-## Rollout
-
-1. Validate the repository contract and each plugin package.
-2. Test local path installation in isolated client homes.
-3. Test private GitHub marketplace installation and refresh behavior.
-4. Run explicit invocation, implicit invocation, non-trigger, read, write, and
-   Git-review canaries.
-5. Remove the matching standalone copies only after the relevant canaries pass.
-
-## Setting up a new machine
-
-[docs/new-machine-setup.md](docs/new-machine-setup.md) is the ordered runbook:
-prerequisites, `doppler login`, marketplace and plugin installs,
-`./scripts/setup <profile> --apply`, MCP OAuth, the automations, and the
-account-side steps that cannot be automated.
-
-## Validation
-
-Run the cross-client validation and isolated Claude/Codex install smoke tests:
-
-```bash
-./scripts/validate
+```sh
+swift test --disable-sandbox --no-parallel
 ```
 
-Claude's validator reports the intentionally omitted Claude plugin version as a
-warning. The warning is expected while the rolling Git branch is the release
-mechanism.
+## Documentation
 
-## Desired-state profiles
+- [App guide and development](apps/agent-tooling-macos/README.md)
+- [Architecture and behavioral contracts](docs/README.md)
+- [Release instructions](docs/macos-app-release.md)
+- [Third-party components](docs/third-party-reuse-2026-09.md)
 
-Composable profiles record what a workstation or project should contain without
-storing secrets or pretending hosted account state is synchronized. The
-read-only doctor compares those profiles with native local configuration:
+Report bugs or request features in [GitHub Issues](https://github.com/adalloul0928/agent-tooling/issues).
+Include the app version, macOS version, and steps to reproduce. Remove secrets,
+account details, and private paths from logs before sharing them.
 
-```bash
-./scripts/doctor
-./scripts/doctor pumpd-project --json
-./scripts/doctor pumpd-workstation --project-root /path/to/pumpd-mobile-app
-```
+## License
 
-See [docs/profiles-and-doctor.md](docs/profiles-and-doctor.md) for the profile
-model, status meanings, and safety boundary.
+Agent Tooling is licensed under the [MIT License](LICENSE).
+Copyright © 2026 Agent Tooling contributors.
 
-## Inventory and placement
-
-[docs/tooling-inventory.md](docs/tooling-inventory.md) is the canonical map of
-owned skills, vendor plugins, project tooling, MCPs, hosted connectors, and
-authentication across Claude Code, Claude.ai, Codex, and ChatGPT. Use it before
-adding a capability or deciding whether it belongs in this repository, an
-application repository, a vendor marketplace, local configuration, or a hosted
-account.
+Third-party dependencies retain their own licenses and notices. The macOS app
+includes its MIT license and [third-party notices](apps/agent-tooling-macos/Sources/AgentToolingApp/Resources/ThirdPartyNotices.txt).

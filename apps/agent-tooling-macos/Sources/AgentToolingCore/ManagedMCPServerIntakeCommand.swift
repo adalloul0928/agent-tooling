@@ -7,6 +7,9 @@ import Foundation
 /// characters and unmatched quotes better than anything written here would.
 public enum ManagedMCPServerIntakeError: LocalizedError, Equatable, Sendable {
     case alreadyManaged(String)
+    /// The name Agent Tooling's own connection goes by, which only setup's
+    /// Let your apps ask records (`ConnectAgentToolingCommand`).
+    case reservedName(String)
     case invalidConnectionName(String)
     case invalidCredentialName(String)
     case identityCollision
@@ -16,6 +19,9 @@ public enum ManagedMCPServerIntakeError: LocalizedError, Equatable, Sendable {
         switch self {
         case .alreadyManaged(let name):
             "A connection called \(name) is already in your library. Open it to change how it is reached."
+        case .reservedName(let name):
+            "\(name) is the name of Agent Tooling’s own connection, which setup’s Let your apps ask adds. "
+                + "Choose another name. Nothing was saved."
         case .invalidConnectionName(let name):
             "\(name) is not a name this workspace will record for a connection. "
                 + "Use lowercase letters, numbers and single hyphens."
@@ -30,30 +36,12 @@ public enum ManagedMCPServerIntakeError: LocalizedError, Equatable, Sendable {
     }
 }
 
-/// Writes down how one MCP connection is reached.
-///
-/// This is a declaration and nothing more. Recording it does not start a
-/// server, sign in to anything, contact an endpoint, or put the connection in
-/// an app: choosing where it is used is a separate reviewed step, and
-/// installing it is another one.
-///
-/// Two decisions are taken here rather than left to the caller.
-///
-/// **Portable or device.** An `https` endpoint whose host is a multi-label DNS
-/// name that is not `.local` or `.localhost` is the same address on every Mac,
-/// so it is recorded in the portable document. Everything else — `http`, IP
-/// literals, single-label and local names, and every stdio command — is
-/// resolved separately on each Mac, so the portable half records only that the
-/// connection is device-bound and this Mac's own address or argument vector
-/// goes in its device binding. The command computes the split so two Macs
-/// cannot disagree about one connection.
-///
-/// **Secrets stay out of both halves.** The paste parser keeps environment and
-/// header *names* and drops every value; the definition validator refuses
-/// credential flags, bearer headers, secret-shaped `KEY=value` arguments and
-/// URLs carrying a user, password or query; and a credential requirement name
-/// that itself looks like a value is refused here, quoted, rather than dropped
-/// without saying so.
+/// Records an MCP connection without starting, installing or authenticating it.
+/// HTTPS endpoints with nonlocal, multilabel DNS hosts are portable. Stdio,
+/// HTTP, IP literals and local hosts use device bindings.
+/// Both halves exclude credentials: the parser drops header/environment values,
+/// and validation rejects credential arguments, URL credentials or queries,
+/// and credential requirement names that resemble secret values.
 public struct ManagedMCPServerIntakeCommand: Sendable {
     public let expectedRevisionID: WorkspaceObjectID
     public let idempotencyKey: WorkspaceObjectID
@@ -109,6 +97,58 @@ public struct ManagedMCPServerIntakeCommand: Sendable {
                 workspaceRootPath = root
             }
         }
+    }
+
+    /// A command bound to this Mac by its argument vector, with nothing to
+    /// sign in to: how Agent Tooling's own connection is recorded.
+    ///
+    /// Nothing is parsed from a pasted line, so a path with a space in it
+    /// stays one argument, and the vector goes to this Mac's binding exactly
+    /// as given. It is held to the same rules as a pasted command: no control
+    /// characters, nothing credential-shaped, within the size limits.
+    /// `ConnectAgentToolingCommand` records the connection through it.
+    init(
+        expectedRevisionID: WorkspaceObjectID,
+        idempotencyKey: WorkspaceObjectID = WorkspaceObjectID(),
+        artifactID: ArtifactID = ArtifactID(),
+        displayName: String,
+        stdioCommand: [String]
+    ) throws {
+        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        try WorkspaceDomainValidation.requireText(name, field: "connection display name", maximum: 512)
+        guard let identifier = try? WorkspaceLibrary.normalizedIdentifier(name) else {
+            throw ManagedMCPServerIntakeError.invalidConnectionName(name)
+        }
+        try MCPDefinitionValidator.validateCommandArguments(stdioCommand)
+        guard let executable = stdioCommand.first else { throw MCPDefinitionValidationError.emptyCommand }
+
+        self.expectedRevisionID = expectedRevisionID
+        self.idempotencyKey = idempotencyKey
+        self.artifactID = artifactID
+        self.displayName = name
+        declaredName = identifier
+        connection = .deviceBound(transport: .stdio)
+        destination = .stdio(executable: executable, arguments: Array(stdioCommand.dropFirst()))
+        credentialRequirementNames = []
+        authenticationRequirement = .none
+        workspaceRootPath = nil
+    }
+
+    /// Whether `declaredName` is the name Agent Tooling's own connection goes
+    /// by. A connection a person pastes or adds from a catalog under it would
+    /// read as that connection: left out of the library and labelled as
+    /// Agent Tooling's in each app. Only Let your apps ask records it.
+    public static func isReservedName(_ declaredName: String) -> Bool {
+        declaredName.compare(AgentToolingConnection.declaredName, options: .caseInsensitive) == .orderedSame
+    }
+
+    /// This command, refused when it would record a connection under the
+    /// name Agent Tooling's own connection goes by (`isReservedName`). What a
+    /// person pastes or adds from a catalog goes through this; setup's own
+    /// command does not.
+    public func refusingReservedName() throws -> Self {
+        guard !Self.isReservedName(declaredName) else { throw ManagedMCPServerIntakeError.reservedName(declaredName) }
+        return self
     }
 
     // MARK: - The contract's split

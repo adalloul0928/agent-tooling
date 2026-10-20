@@ -34,7 +34,7 @@ struct NativePackageAdoptionCommandTests {
         #expect(snapshot.document.artifacts.count == 1)
         #expect(artifact.identity.id == artifactID)
         #expect(artifact.identity.kind == .nativePlugin)
-        #expect(artifact.identity.displayName == "Atlas")
+        #expect(artifact.identity.displayName == "Additional")
         #expect(artifact.identity.parentPackageID == nil)
         #expect(artifact.authority == .nativeOwned)
         #expect(artifact.declaredName == "atlas@vendor")
@@ -72,7 +72,7 @@ struct NativePackageAdoptionCommandTests {
             Issue.record("An adopted package is the package the library holds.")
             return
         }
-        #expect(match.displayName == "Atlas")
+        #expect(match.displayName == "Additional")
         #expect(match.reason == .nativeRoute)
     }
 
@@ -107,10 +107,10 @@ struct NativePackageAdoptionCommandTests {
             Issue.record("Expected the row it already holds to be named, got \(String(describing: refusal)).")
             return
         }
-        #expect(match.displayName == "Atlas")
+        #expect(match.displayName == "Additional")
         #expect(
             refusal?.localizedDescription
-                == "Atlas is already in your library. Open it to choose where it goes.")
+                == "Additional is already in your library. Open it to choose where it goes.")
         #expect(try #require(try fixture.store.snapshot()).document.artifacts.count == 1)
     }
 
@@ -120,7 +120,7 @@ struct NativePackageAdoptionCommandTests {
         let fixture = try Fixture(
             artifacts: [
                 .init(
-                    identity: .init(kind: .nativePlugin, displayName: "Atlas, already scanned"),
+                    identity: .init(kind: .nativePlugin, displayName: "Additional, already scanned"),
                     authority: .nativeOwned, declaredName: "atlas@vendor",
                     nativeRoutes: [.init(client: .claude, externalPluginID: "atlas@vendor")])
             ])
@@ -146,7 +146,7 @@ struct NativePackageAdoptionCommandTests {
         let fixture = try Fixture(
             artifacts: [
                 .init(
-                    identity: .init(kind: .nativePlugin, displayName: "Atlas, as this Mac found it"),
+                    identity: .init(kind: .nativePlugin, displayName: "Additional, as this Mac found it"),
                     authority: .trackedOnly, declaredName: "atlas@vendor")
             ])
         defer { fixture.remove() }
@@ -164,7 +164,7 @@ struct NativePackageAdoptionCommandTests {
         #expect(
             refusal?.localizedDescription
                 == """
-                Your library already has a package called atlas@vendor — Atlas, as this Mac found it — recorded from another app. \
+                Your library already has a package called atlas@vendor — Additional, as this Mac found it — recorded from another app. \
                 Open it rather than adding a second record of the same name.
                 """)
         // Promoting a tracked record to native ownership is its own command.
@@ -180,7 +180,7 @@ struct NativePackageAdoptionCommandTests {
         let fixture = try Fixture(
             artifacts: [
                 .init(
-                    identity: .init(kind: .nativePlugin, displayName: "Atlas from Codex"),
+                    identity: .init(kind: .nativePlugin, displayName: "Additional from Codex"),
                     authority: .nativeOwned, declaredName: "atlas@vendor",
                     nativeRoutes: [.init(client: .codex, externalPluginID: "atlas@vendor")])
             ])
@@ -508,7 +508,7 @@ struct NativePackageAdoptionCommandTests {
         /// One native-catalog plugin listing, shaped exactly as the Claude
         /// catalog parser leaves one: a `claude:` identifier, one component, and
         /// a client that agrees with it.
-        static func listing(id: String = "claude:atlas@vendor", name: String = "Atlas") -> MarketplacePackage {
+        static func listing(id: String = "claude:atlas@vendor", name: String = "Additional") -> MarketplacePackage {
             MarketplacePackage(
                 id: id, name: name, publisher: "vendor", summary: "A catalog listing.",
                 sourceName: "vendor", revision: "1.4.0", components: [.plugin], supportedClients: [.claude],

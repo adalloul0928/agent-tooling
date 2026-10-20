@@ -43,16 +43,10 @@ public struct PackageClassificationVerdict: Codable, Hashable, Sendable {
     }
 }
 
-/// Turns the catalog a package came from into a provenance badge.
-///
-/// The official MCP registry is the only catalog here that verifies a
-/// publisher at all, and it verifies two different things: a reverse-DNS
-/// namespace is proved with a DNS record for that domain, while an
-/// `io.github.*` namespace is proved with the GitHub account that owns it.
-/// Those are exactly PulseMCP's "official" and "community", so the badge is
-/// reporting a fact rather than a guess. Everything else — native client
-/// catalogs, folders and Git checkouts a person added — carries no publisher
-/// verification, and is labeled `unverified` with the reason.
+/// Classifies publisher provenance from catalog evidence. The official MCP
+/// registry verifies reverse-DNS namespaces through DNS and io.github.* through
+/// account ownership, corresponding to official and community badges.
+/// Native catalogs, local folders and user-added Git sources stay unverified.
 public enum MarketplaceProvenanceClassifier {
     private static let protocolNamespace = "io.modelcontextprotocol"
     private static let protocolAccount = "modelcontextprotocol"

@@ -58,7 +58,7 @@ extension ShellRenderFixture {
 
     nonisolated static var unheldPackage: MarketplacePackage {
         catalogPackage(
-            id: "claude:atlas@vendor", name: "Atlas",
+            id: "claude:atlas@vendor", name: "Additional",
             summary: "A catalog listing this workspace has never held.")
     }
 

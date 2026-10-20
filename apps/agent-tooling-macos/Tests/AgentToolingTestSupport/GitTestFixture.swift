@@ -8,9 +8,17 @@ import Foundation
 /// provide. `enroll` enrolls a checkout and stamps it with the fixed fixture
 /// identity so commits have a stable author.
 public enum GitTestFixture {
+    /// A `git` run that `checkingStatus` asked to succeed, and that did not.
+    public struct CommandFailed: Error, Equatable {
+        public let arguments: [String]
+        public let status: Int32
+    }
+
     /// Runs `git` with `arguments` in `directory`, discarding its output, and
-    /// waits for it to finish.
-    public static func git(_ arguments: [String], in directory: URL) throws {
+    /// waits for it to finish. With `checkingStatus`, a run that ends with any
+    /// status but 0 throws `CommandFailed`, for a fixture whose later steps
+    /// would otherwise fail far from the cause.
+    public static func git(_ arguments: [String], in directory: URL, checkingStatus: Bool = false) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = arguments
@@ -19,6 +27,9 @@ public enum GitTestFixture {
         process.standardError = Pipe()
         try process.run()
         process.waitUntilExit()
+        guard !checkingStatus || process.terminationStatus == 0 else {
+            throw CommandFailed(arguments: arguments, status: process.terminationStatus)
+        }
     }
 
     /// Enrolls a checkout against `remote` and sets the fixed fixture Git

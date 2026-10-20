@@ -37,7 +37,7 @@ struct GallerySectionsTests {
     ]
 
     /// A fixture populated past every screen's empty state, so the gallery
-    /// shows real rows rather than onboarding gates.
+    /// shows real rows rather than empty lists.
     private func populated(for section: AppSection) async throws -> (ShellRenderFixture, RenderPreferences) {
         // Accounts and Checkup read from sessions the default offline fixture
         // leaves empty, so each is built with the gallery's scripted reader or
@@ -117,20 +117,20 @@ struct GallerySectionsTests {
     }
 
     /// The empty and first-run states a reviewer should see distinctly from the
-    /// populated screen: the library's getting-started gate, Discover with
-    /// every catalog failed, and an empty projects list.
+    /// populated screen: a library nothing has been assigned in yet, Discover
+    /// with every catalog failed, and an empty projects list.
     @Test func distinctEmptyStates() async throws {
-        // The library stands its onboarding gate in front of Skills and Plugins
-        // until something is assigned.
-        let gateFixture = try await ShellRenderFixture()
-        defer { gateFixture.remove() }
-        let gatePreferences = try ShellRenderFixture.preferences(onboardingSkipped: false)
-        defer { gatePreferences.remove() }
+        // A library nothing has been assigned in, as a Mac's first run leaves
+        // it: Skills opens straight onto its rows.
+        let unassignedFixture = try await ShellRenderFixture()
+        defer { unassignedFixture.remove() }
+        let unassignedPreferences = try ShellRenderFixture.preferences()
+        defer { unassignedPreferences.remove() }
         try galleryShellSnapshot(
-            renderShell(.skills, fixture: gateFixture, size: GallerySize.standard)
+            renderShell(.skills, fixture: unassignedFixture, size: GallerySize.standard)
                 .environment(\.skillContentService, StubSkillContentService())
-                .defaultAppStorage(gatePreferences.defaults),
-            area: "Library · Skills", screen: "Library", state: "onboarding-gate",
+                .defaultAppStorage(unassignedPreferences.defaults),
+            area: "Library · Skills", screen: "Library", state: "nothing-assigned",
             source: "Sources/AgentToolingApp/Sections/SkillsSection.swift")
 
         // Discover with nothing to show because every catalog failed.

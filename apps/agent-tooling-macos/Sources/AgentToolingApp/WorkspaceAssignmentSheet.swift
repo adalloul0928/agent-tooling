@@ -10,7 +10,7 @@ import SwiftUI
 /// top. Afterwards it says where the item went, with Undo.
 ///
 /// This keeps the name every screen already presents, so Discover, the
-/// Library, Projects, Presets and onboarding all get the one-step flow.
+/// Library, Projects and Presets all get the one-step flow.
 struct WorkspaceAssignmentSheet: View {
     let session: WorkspaceLibrarySession
     let artifactIDs: [ArtifactID]
@@ -204,14 +204,9 @@ struct WorkspaceAssignmentSheet: View {
                     Text("Apps").font(AgentFont.heading)
                     Spacer()
                     WorkspaceSegmentedPicker("Where", selection: $placement) {
-                        if otherDevices.isEmpty {
-                            Text("This Mac").tag(InstallWhere.everyMac)
-                        } else {
-                            Text("Every Mac").tag(InstallWhere.everyMac)
-                            Text("This Mac only").tag(InstallWhere.thisMac)
-                            Text("Choose Macs").tag(InstallWhere.chooseMacs)
+                        ForEach(Self.placementChoices(hasOtherMacs: !otherDevices.isEmpty), id: \.placement) { choice in
+                            Text(choice.title).tag(choice.placement)
                         }
-                        Text("One project").tag(InstallWhere.project)
                     }
                     .fixedSize()
                     .onChange(of: placement) { _, value in scope = value == .project ? .project : .user }
@@ -270,15 +265,44 @@ struct WorkspaceAssignmentSheet: View {
     }
 
     private var whereExplanation: String {
+        Self.whereExplanation(placement, otherMacs: otherDevices.map(\.name))
+    }
+
+    /// One choice of the Where control.
+    struct PlacementChoice: Equatable {
+        let placement: InstallWhere
+        let title: String
+    }
+
+    /// What the Where control offers. Every Mac is offered on a first Mac
+    /// too, beside This Mac only: a Mac that joins later takes what every Mac
+    /// gets, so the two already differ before a second Mac exists. Choose
+    /// Macs needs other Macs to choose from.
+    static func placementChoices(hasOtherMacs: Bool) -> [PlacementChoice] {
+        var choices = [PlacementChoice(placement: .everyMac, title: "Every Mac"), .init(placement: .thisMac, title: "This Mac only")]
+        if hasOtherMacs { choices.append(.init(placement: .chooseMacs, title: "Choose Macs")) }
+        choices.append(.init(placement: .project, title: "One project"))
+        return choices
+    }
+
+    /// The line under the apps: what the Where choice means, naming the
+    /// other Macs when there are any.
+    static func whereExplanation(_ placement: InstallWhere, otherMacs: [String]) -> String {
         switch placement {
         case .everyMac:
-            return otherDevices.isEmpty
-                ? "For every project on this Mac. Other Macs that join this library get it too."
-                : "For every project, on this Mac and \(otherDevices.count == 1 ? otherDevices[0].name : "\(otherDevices.count) other Macs"). A Mac set to take only what names it is left out."
+            return otherMacs.isEmpty
+                ? "For every project on this Mac. Macs that join later get it too."
+                : "For every project, on this Mac and \(otherMacs.count == 1 ? otherMacs[0] : "\(otherMacs.count) other Macs"). A Mac set to take only what names it is left out."
         case .thisMac: return "For every project on this Mac. Other Macs are left out."
         case .chooseMacs: return "Only the Macs ticked above."
         case .project: return "For one project only."
         }
+    }
+
+    /// Why a step is left alone, naming the app as a person knows it:
+    /// "Codex", never its surface's "Codex CLI".
+    static func leftAloneSentence(for item: WorkspaceDeploymentItem) -> String {
+        "\(item.surface.client?.rawValue ?? item.surface.displayName) already has a copy Agent Tooling did not put there. It won’t be overwritten."
     }
 
     /// Checkboxes for this Mac and each other Mac. A limited Mac can be named
@@ -481,10 +505,8 @@ struct WorkspaceAssignmentSheet: View {
                                 }
                                 VStack(alignment: .leading, spacing: Space.xxs) {
                                     Text(item.displayName).font(AgentFont.bodyMedium)
-                                    Text(
-                                        "\(item.surface.displayName) already has a copy Agent Tooling did not put there. It won’t be overwritten."
-                                    )
-                                    .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
+                                    Text(Self.leftAloneSentence(for: item))
+                                        .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
                                 }
                                 Spacer(minLength: Space.lg)
                                 if navigation != nil {

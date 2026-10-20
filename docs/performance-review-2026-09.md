@@ -4,9 +4,9 @@ The reported delays have several concrete causes: repeated inventory derivation 
 
 ## Evidence and method
 
-- Inspected the running packaged app with 176 skills and 53 plugins, including Library navigation. A native process sample confirmed repeated marketplace projections and update evaluation in plugin rendering. Accessibility hierarchy inspection consumed a large part of that sample; automation wall time is **not** a trustworthy measurement of click latency.
+- Inspected Library navigation in the packaged app. A native process sample confirmed repeated marketplace projections and update evaluation in plugin rendering. Accessibility hierarchy inspection consumed a large part of that sample; automation wall time is **not** a trustworthy measurement of click latency.
 - Preserved the original package sources before changing them. The before/after benchmark runs the same isolated fixture and compiler configuration: 500 skills, 100 plugins, 100 MCP servers, three observations, 25 collections, and 500 tag assignments. No real client configuration is changed and no client command is allowed.
-- Environment: Apple Silicon, macOS 27.0 (26A5425a), Apple Swift 6.4 (swiftlang-6.4.0.20.104).
+- Benchmark environment: Apple Silicon, macOS 27, Swift 6.4.
 - Each benchmark records one first sample and five warm samples. The table below uses warm medians. Synchronous mounting includes constructing the hosting view, attaching it to a window, and requested layout. It is useful for comparing work, but is not a production frame-rate or end-to-end input-latency measurement.
 - Update/settling measurements include a deliberate 60 ms run-loop window. They must not be presented as pure rendering time. The metadata change is different on every iteration; it exercises actual invalidation.
 - Apple recommends reducing view-body work and unnecessary updates, and inspecting main-thread activity for hangs. See [Understanding and improving SwiftUI performance](https://developer.apple.com/documentation/Xcode/understanding-and-improving-swiftui-performance) and [Optimize SwiftUI performance with Instruments](https://developer.apple.com/videos/play/wwdc2025/306/).

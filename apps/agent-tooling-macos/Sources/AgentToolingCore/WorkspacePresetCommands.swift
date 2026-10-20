@@ -41,17 +41,10 @@ public enum WorkspacePresetCommandError: LocalizedError, Equatable, Sendable {
     }
 }
 
-/// Creates a preset: a named set of items already in the library.
-///
-/// A preset lives in two places at once — an `ArtifactRecord` of kind `.preset`
-/// that the rest of the document can point at, and a `PresetRecord` that holds
-/// its name, revision and members — so both are written in one transaction or
-/// neither is. Creating a preset assigns nothing and installs nothing: putting
-/// its members in place is the separate act of following it and catching up.
-///
-/// Every rule the document enforces on a preset is checked here first, in the
-/// words a person can read: a non-empty, trimmed, bounded, unique name, and at
-/// least one member that is a live artifact in the same document.
+/// Creates a named preset from live library items, writing its ArtifactRecord
+/// and PresetRecord atomically. Validates a trimmed, bounded, unique name and
+/// at least one live member. Following and installing the preset are separate
+/// operations.
 public struct CreatePresetCommand: Sendable {
     public let expectedRevisionID: WorkspaceObjectID
     public let idempotencyKey: WorkspaceObjectID

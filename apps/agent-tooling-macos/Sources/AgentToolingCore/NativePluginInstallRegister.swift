@@ -1,19 +1,8 @@
 import Foundation
 
-/// The command a client uses to install one of its own packages.
-///
-/// Recorded rather than inferred, and recorded the same way the configuration
-/// register records a setting: with the place it was read from and the release
-/// it was checked against. An entry here is a claim that this exact command
-/// works on that version, and it is the only place a command is written down.
-///
-/// This does not make running one automatic. A command from here still becomes
-/// an operation a person approves, the executor still checks it against its own
-/// policy, and the client's tool still has to be a runnable file on this Mac.
-/// What the register removes is the earlier situation, where the only way to get
-/// a command was to echo one back from a catalog record — which meant a package
-/// nobody had catalogued could never be installed even though the command was
-/// perfectly well known.
+/// Client package commands with their documented source and verified release.
+/// Execution still requires user review, executor-policy checks and a runnable
+/// client binary. Catalog records cannot supply arbitrary commands.
 public struct NativePluginInstallCommand: Hashable, Sendable {
     public let client: ClientKind
     public let executable: String
@@ -75,8 +64,7 @@ public enum NativePluginInstallRegister {
         case .gemini:
             return nil
         case .kiro:
-            // Kiro CLI publishes no plugin command anyone here has verified.
-            // AIM manages Kiro's packages; wiring it is a reviewed follow-up.
+            // No supported Kiro plugin installation command.
             return nil
         }
     }

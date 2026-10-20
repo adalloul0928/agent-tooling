@@ -141,25 +141,24 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
         // crash as an unreferenced complete object. Never delete/GC it here.
     }
 
-    /// Changes the library label only. The declared package name, aliases,
-    /// content, native route and physical destinations remain intact.
-    /// What would change on this device for the committed intent, with the
-    /// content this workspace can actually supply. Nothing is assumed already
-    /// present: without fresh observations every requirement is proposed, and
-    /// the existing reviewed operation path still checks each destination.
-    ///
-    /// This returns a request for that path. It installs nothing and proves
-    /// nothing about whether an adapter will accept an item.
+    /// Builds a review request from committed intent and available content. Missing
+    /// observations propose every requirement; destination checks remain in the
+    /// reviewed operation path. `additions` previews a batch with the same validation
+    /// and refusal errors, saving nothing. Capture `targets` for that same intent.
     public func deploymentPlan(
         targets: [ResolvedAssignmentTarget],
         observations: [WorkspaceDeploymentObservation] = [],
         provenInstalls: Set<WorkspaceDeploymentInstallKey> = [],
         nativeInstallRoutes: Set<NativePackageRoute> = [],
-        unavailableDestinations: [ResolvedAssignmentSelector: String] = [:]
+        unavailableDestinations: [ResolvedAssignmentSelector: String] = [:],
+        assuming additions: [AssignmentContribution] = [],
+        provenConnections: [TargetSurface: Set<String>] = [:]
     ) async throws -> WorkspaceDeploymentPlan {
-        guard let snapshot = try store.snapshot() else {
+        guard let committed = try store.snapshot() else {
             throw WorkspaceRevisionStoreError.notInitialized
         }
+        let snapshot = WorkspaceApplicationSnapshot(
+            document: try Self.document(committed.document, assuming: additions), device: committed.device)
         var available: [AssignmentContentEvidence] = []
         if let contentStore {
             for artifact in snapshot.document.artifacts {
@@ -173,7 +172,19 @@ public actor WorkspaceApplicationService: WorkspaceLibraryServing {
             document: snapshot.document, device: snapshot.device, targets: targets,
             availableContent: available, observations: observations,
             provenInstalls: provenInstalls, nativeInstallRoutes: nativeInstallRoutes,
-            unavailableDestinations: unavailableDestinations)
+            unavailableDestinations: unavailableDestinations, provenConnections: provenConnections)
+    }
+
+    /// `document` with `additions` applied the way a batch applies them, in
+    /// memory only.
+    static func document(
+        _ document: PortableWorkspaceDocument, assuming additions: [AssignmentContribution]
+    ) throws -> PortableWorkspaceDocument {
+        guard !additions.isEmpty else { return document }
+        var candidate = document
+        _ = try WorkspaceAssignmentBatchCommand(expectedRevisionID: document.revision.id, additions: additions)
+            .apply(to: &candidate)
+        return candidate.canonicalized()
     }
 
     /// Registers a folder this person already authors in. The folder is not

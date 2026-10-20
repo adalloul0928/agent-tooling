@@ -1,15 +1,8 @@
 import AgentToolingCore
 import SwiftUI
 
-/// Restore points: the earlier versions of this workspace, and the way back to
-/// one of them.
-///
-/// `WorkspaceHistorySession` carries all of the logic here and is frozen; what
-/// this file changes is the screen around it, so History reads with the same
-/// panel and card language `ActivityView` uses rather than the bespoke layout
-/// `WorkspaceHistoryView` used before Activity existed for it to match. The two
-/// are tabs of one family (see `AppSection.workspaceTabs`), so switching
-/// between them should read as one screen, not two.
+/// Restore-point browser backed by `WorkspaceHistorySession`.
+/// Restoring changes the library; client installations remain a separate step.
 struct HistorySection: View {
     let workspace: WorkspaceLaunch.Workspace
     @State private var isConfirming = false

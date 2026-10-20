@@ -3,102 +3,71 @@ import SwiftUI
 
 @main
 struct AgentToolingApplication: App {
+    @NSApplicationDelegateAdaptor(AppLifecycleDelegate.self) private var lifecycle
+    /// Shared outside window lifecycles so menu-bar commands and links use the same
+    /// navigation, and opening the library does not depend on a visible window.
+    @State private var launch: AppLaunchState
+    @AppStorage private var appearance: String
+    @AppStorage private var showMenuBarItem: Bool
+    @AppStorage private var sidebarCollapsed: Bool
+
     init() {
+        // First, before anything about the launch is decided or read.
         if ProcessInfo.processInfo.arguments.contains("--verify-resources") {
             do {
                 try AppResources.verifyPackagedResources()
-                print("Packaged client and package artwork verified.")
+                print("Packaged third-party notices verified.")
                 exit(EXIT_SUCCESS)
             } catch {
                 FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))
                 exit(EXIT_FAILURE)
             }
         }
+        let launch = AppLaunchState.live(context: LaunchContext.current)
+        AppLaunchState.active = launch
+        _launch = State(initialValue: launch)
+        // The launch's one store, which every scene's root shares.
+        _appearance = AppPreferences.appearance(launch.defaults)
+        _showMenuBarItem = AppPreferences.showMenuBarItem(launch.defaults)
+        _sidebarCollapsed = AppPreferences.sidebarCollapsed(launch.defaults)
     }
 
-    @State private var workspace: WorkspaceLaunch.Workspace?
-    @State private var startupError: String?
-    /// Held here rather than in the window so a menu-bar item, an app command
-    /// and a link all reach the same navigation the sidebar reads.
-    @State private var navigation = AppNavigationState()
-    @AppStorage("appearance") private var appearance = "System"
-    @AppStorage("showMenuBarItem") private var showMenuBarItem = true
-    @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
-
     var body: some Scene {
-        Window("Agent Tooling", id: "main") {
-            Group {
-                if let workspace {
-                    AppShellView(
-                        workspace: workspace,
-                        initialSection: LaunchContext.current.request?.section ?? LaunchContext.current.section ?? .overview,
-                        navigation: navigation)
-                } else if let startupError {
-                    StartupFailureView(message: startupError) { Task { await load() } }
-                } else if needsFirstLaunchChoice {
-                    FirstLaunchChooser(
-                        start: { Task { await load(createIfNeeded: true) } },
-                        join: { remote, branch in Task { await join(remote: remote, branch: branch) } },
-                        isBusy: isJoining, error: joinError)
-                } else {
-                    // A first run scans the installed clients, which takes a
-                    // moment and is worth saying rather than showing an empty
-                    // window somebody would take for a broken one.
-                    ProgressView("Opening your workspace…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .frame(minWidth: WindowSize.minimum.width, minHeight: WindowSize.minimum.height)
-            .containerBackground(.clear, for: .window)
-            .background(WindowConfigurator())
-            .preferredColorScheme(colorScheme)
-            .task { await load() }
-            .onOpenURL { url in
-                guard navigation.open(url: url) else { return }
-                bringMainWindowForward()
-            }
+        // The shell's window. Suppressed while setup owns the app; it opens at
+        // the hand-off, and on any later launch. It takes links only once the
+        // stage no longer does.
+        Window("Agent Tooling", id: AppWindow.main.sceneID) {
+            MainWindowRoot(launch: launch)
+                .launchPreferences(launch.defaults)
+                .preferredColorScheme(colorScheme)
         }
         .defaultSize(WindowSize.standard)
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
+        .defaultLaunchBehavior(launch.mainLaunchBehavior)
+        .handlesExternalEvents(matching: launch.ownsLaunch ? [] : ["*"])
         .commands {
-            CommandGroup(after: .newItem) {
-                // The same review the menu-bar item and the palette open, under
-                // the same name; a menu title-cases it.
-                Button(ActionTitles.reviewChangesCommand(.menu)) {
-                    guard workspace != nil else { return }
-                    // Preparing is not applying. This opens Apps with a plan on
-                    // it; writing anything is still a decision made there.
-                    navigation.showAllClients()
-                    navigation.openScreenRequest(.reviewChanges)
-                }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-                .disabled(workspace?.deployment.isBusy != false)
-
-                Button(ActionTitles.checkAppsCommand(.menu)) {
-                    guard let workspace else { return }
-                    Task { await workspace.device.refresh() }
-                }
-                .keyboardShortcut("d", modifiers: [.command, .shift])
-                .disabled(workspace?.device.isChecking != false)
-            }
-            CommandGroup(after: .sidebar) {
-                Button(sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar") {
-                    sidebarCollapsed.toggle()
-                }
-                .keyboardShortcut("s", modifiers: [.command, .control])
-            }
+            AppCommands(launch: launch, sidebarCollapsed: $sidebarCollapsed)
         }
 
+        // Setup owns incoming links until hand-off; queue them for the shell.
+        // This fixed-size stage is excluded from restoration and the Window menu.
+        Window(LaunchpadCopy.Welcome.windowTitle, id: AppWindow.setup.sceneID) {
+            SetupStageWindow(launch: launch)
+                .launchPreferences(launch.defaults)
+                .preferredColorScheme(colorScheme)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+        .restorationBehavior(.disabled)
+        .defaultLaunchBehavior(launch.stageLaunchBehavior)
+        .handlesExternalEvents(matching: launch.ownsLaunch ? ["*"] : [])
+        .commandsRemoved()
+
         MenuBarExtra("Agent Tooling", systemImage: "slider.horizontal.3", isInserted: $showMenuBarItem) {
-            if let workspace {
-                MenuBarContent(workspace: workspace, navigation: navigation)
-            } else {
-                Text("Agent Tooling could not open your workspace")
-                Button("Try Again") { Task { await load() } }
-                Divider()
-                Button("Quit Agent Tooling") { NSApp.terminate(nil) }
-            }
+            MenuBarRoot(launch: launch)
+                .launchPreferences(launch.defaults)
         }
 
         Settings {
@@ -107,120 +76,35 @@ struct AgentToolingApplication: App {
             // binding as one row in its own card.
             Form {
                 Picker("Appearance", selection: $appearance) {
-                    Text("System").tag("System")
-                    Text("Light").tag("Light")
-                    Text("Dark").tag("Dark")
+                    ForEach(AppAppearance.allCases, id: \.self) { choice in
+                        Text(choice.title).tag(choice.rawValue)
+                    }
                 }
             }
             .formStyle(.grouped)
             .frame(width: WindowSize.settingsWidth)
+            .launchPreferences(launch.defaults)
         }
-    }
-
-    /// Opens the workspace, creating one on a first run.
-    ///
-    /// Failure is shown rather than swallowed: an app that opens to an empty
-    /// library after failing to read one looks exactly like an app whose
-    /// library is empty.
-    /// A Mac with no workspace yet is asked whether this is its first Mac or
-    /// its second, instead of silently becoming a workspace of its own.
-    @State private var needsFirstLaunchChoice = false
-    @State private var isJoining = false
-    @State private var joinError: String?
-
-    private func load(createIfNeeded: Bool = false) async {
-        guard workspace == nil else { return }
-        let context = LaunchContext.current
-        if !createIfNeeded, !WorkspaceLaunch.hasWorkspace(supportRoot: context.workspaceRoot) {
-            needsFirstLaunchChoice = true
-            return
-        }
-        needsFirstLaunchChoice = false
-        do {
-            workspace = try await WorkspaceLaunch.open(
-                supportRoot: context.workspaceRoot,
-                homeRoot: context.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
-            startupError = nil
-            // A launch that names a screen request arrives with it already asked
-            // for, so the section it opens on consumes it as it would from the palette.
-            if let request = context.request { navigation.openScreenRequest(request) }
-        } catch {
-            workspace = nil
-            startupError = error.localizedDescription
-        }
-    }
-
-    private func join(remote: String, branch: String) async {
-        guard workspace == nil, !isJoining else { return }
-        isJoining = true
-        joinError = nil
-        defer { isJoining = false }
-        let context = LaunchContext.current
-        do {
-            workspace = try await WorkspaceLaunch.join(
-                remote: remote, branch: branch.isEmpty ? "main" : branch,
-                supportRoot: context.workspaceRoot,
-                homeRoot: context.homeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
-            needsFirstLaunchChoice = false
-            startupError = nil
-        } catch let error as WorkspaceJoinError {
-            joinError = error.localizedDescription
-        } catch GitWorkspaceTransportError.invalidRemote {
-            joinError = WorkspaceJoinError.invalidRemote.localizedDescription
-        } catch {
-            joinError =
-                "That repository could not be read from this Mac. Check the address and your access. (\(error.localizedDescription))"
-        }
-    }
-
-    private func bringMainWindowForward() {
-        NSApp.unhide(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        // The identifier WindowConfigurationView (Theme.swift) gives the main
-        // window when it appears; the scene id alone is not what AppKit sees.
-        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "agent-tooling-main" })
-        else { return }
-        window.deminiaturize(nil)
-        window.makeKeyAndOrderFront(nil)
     }
 
     private var colorScheme: ColorScheme? {
-        switch appearance {
-        case "Light": .light
-        case "Dark": .dark
-        default: nil
-        }
+        AppAppearance(appearance).colorScheme
     }
 }
 
-/// The menu-bar item: open the window, read this Mac again, or go and look at
-/// what is out of step. Nothing here writes to a client. Its items are menu
-/// items, so they title-case the way the system's own do, busy or not.
-private struct MenuBarContent: View {
-    @Environment(\.openWindow) private var openWindow
-    let workspace: WorkspaceLaunch.Workspace
-    let navigation: AppNavigationState
-
-    var body: some View {
-        Button("Open Agent Tooling") { open() }
-        Divider()
-        Button(workspace.device.isChecking ? ActionTitles.checkingAppsMenu : ActionTitles.checkAppsCommand(.menu)) {
-            Task { await workspace.device.refresh() }
-        }
-        .disabled(workspace.device.isChecking)
-        Button(workspace.deployment.isBusy ? "Preparing Changes…" : ActionTitles.reviewChangesCommand(.menu)) {
-            open()
-            navigation.showAllClients()
-            navigation.openScreenRequest(.reviewChanges)
-        }
-        .disabled(workspace.deployment.isBusy)
-        Divider()
-        Button("Quit Agent Tooling") { NSApp.terminate(nil) }
+/// The app's own preferences the `App` reads itself, each kept in the
+/// launch's defaults, so `--defaults-suite` moves them with every screen's.
+enum AppPreferences {
+    static func appearance(_ defaults: UserDefaults) -> AppStorage<String> {
+        AppStorage(wrappedValue: AppAppearance.system.rawValue, AppPreferenceKey.appearance, store: defaults)
     }
 
-    private func open() {
-        openWindow(id: "main")
-        NSApp.activate(ignoringOtherApps: true)
+    static func showMenuBarItem(_ defaults: UserDefaults) -> AppStorage<Bool> {
+        AppStorage(wrappedValue: true, AppPreferenceKey.showMenuBarItem, store: defaults)
+    }
+
+    static func sidebarCollapsed(_ defaults: UserDefaults) -> AppStorage<Bool> {
+        AppStorage(wrappedValue: false, AppPreferenceKey.sidebarCollapsed, store: defaults)
     }
 }
 
@@ -228,18 +112,14 @@ struct AppearanceSettingsView: View {
     @Binding var appearance: String
 
     var body: some View {
-        // One row in the card it sits in, in the grammar of the other Settings
-        // rows. The card is titled "Appearance", so the row names the choice
-        // rather than printing the word a second time. A grouped Form here
-        // drew its own inset card and gray ground inside the section's card —
-        // three nested surfaces for one picker.
+        // Use a row here: a grouped Form would nest its own card inside this card.
         InfoRow("Light or dark", detail: "System follows macOS.") {
             Image(systemName: "circle.lefthalf.filled").foregroundStyle(.secondary).frame(width: Size.glyphSlot)
         } trailing: {
             Picker("Appearance", selection: $appearance) {
-                Text("System").tag("System")
-                Text("Light").tag("Light")
-                Text("Dark").tag("Dark")
+                ForEach(AppAppearance.allCases, id: \.self) { choice in
+                    Text(choice.title).tag(choice.rawValue)
+                }
             }
             .labelsHidden()
             .fixedSize()
@@ -247,76 +127,15 @@ struct AppearanceSettingsView: View {
     }
 }
 
-/// Shown when the workspace could not be opened at all.
-/// The first thing a Mac with no workspace sees: is this your first Mac, or
-/// does another Mac already have your library?
-struct FirstLaunchChooser: View {
-    let start: () -> Void
-    let join: (String, String) -> Void
-    let isBusy: Bool
-    let error: String?
-    @State private var remote = ""
-    @State private var branch = "main"
-    @State private var showsJoin = false
-
-    var body: some View {
-        VStack(spacing: Space.xxl) {
-            Image(systemName: "laptopcomputer.and.iphone")
-                .font(.system(size: Size.heroSymbolLarge))
-                .foregroundStyle(.secondary)
-            VStack(spacing: Space.sm) {
-                Text("Welcome to Agent Tooling").font(AgentFont.pageTitle)
-                Text("Is this your first Mac, or does another Mac already have your library?")
-                    .font(AgentFont.body).foregroundStyle(.secondary).multilineTextAlignment(.center).wrapsLines()
-            }
-            if showsJoin {
-                VStack(alignment: .leading, spacing: Space.lg) {
-                    Text("Paste the repository address the other Mac is connected to (Settings › Sync on that Mac).")
-                        .font(AgentFont.caption).foregroundStyle(.secondary).wrapsLines()
-                    TextField("git@github.com:you/agent-tooling-workspace.git", text: $remote)
-                        .textFieldStyle(.roundedBorder)
-                    HStack {
-                        Text("Branch").font(AgentFont.caption).foregroundStyle(.secondary)
-                        TextField("main", text: $branch).textFieldStyle(.roundedBorder).frame(width: Size.fieldNarrow)
-                    }
-                    if let error { AttentionBanner(title: "Couldn’t join", message: error) }
-                    HStack {
-                        Button("Back") { showsJoin = false }.secondaryActionStyle().disabled(isBusy)
-                        Spacer()
-                        Button(isBusy ? "Joining…" : "Join") { join(remote, branch) }
-                            .primaryActionStyle().disabled(isBusy || remote.trimmingCharacters(in: .whitespaces).isEmpty)
-                            .keyboardShortcut(.defaultAction)
-                    }
-                }
-                .padding(Space.xl)
-                .frame(width: Size.firstLaunchFormWidth)
-                .standardPanel()
-            } else {
-                HStack(spacing: Space.lg) {
-                    Button("Start here", systemImage: "sparkles") { start() }.primaryActionStyle().keyboardShortcut(.defaultAction)
-                    Button("Join another Mac’s workspace", systemImage: "arrow.triangle.2.circlepath") { showsJoin = true }
-                        .secondaryActionStyle()
-                }
-                Text(
-                    "Starting here scans this Mac’s apps and builds a library from them. Joining takes the library another Mac already shares, and this Mac becomes one of its Macs."
-                )
-                .font(AgentFont.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center).wrapsLines()
-                .frame(maxWidth: Size.firstLaunchFormWidth)
-            }
-        }
-        .padding(Space.xxxl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AgentTheme.contentBackground)
-    }
-}
-
+/// Recovery after a readable locator fails to open its library. Unreadable
+/// locators are handled by the setup stage.
 struct StartupFailureView: View {
     let message: String
     var retry: () -> Void
 
     var body: some View {
         ContentUnavailableView {
-            Label("Agent Tooling could not open your workspace", systemImage: "exclamationmark.triangle")
+            Label(LaunchpadCopy.Welcome.couldNotOpenWorkspace, systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
@@ -325,42 +144,156 @@ struct StartupFailureView: View {
     }
 }
 
-/// Where this launch was told to look, and what it was told to open. Used by
-/// tests and packaged pilots to point the app at a scratch folder; absent in
-/// ordinary use.
-struct LaunchContext {
+/// Launch arguments, read once by `current`.
+/// `--workspace` and `--home` select data roots; `--section` and `--request` select
+/// navigation. `--defaults-suite` isolates app preferences, but AppKit may still
+/// read saved frames and maintain system panel preferences in the app domain.
+/// `--after-move <pid> [<volume>]` identifies the old instance and optional image;
+/// its parser never consumes the next flag as a value.
+/// Installation and Applications-folder overrides require `--workspace`.
+struct LaunchContext: Sendable {
     var workspaceRoot: URL?
     var homeRoot: URL?
     /// The screen this launch opens on. Absent means Home.
     var section: AppSection?
     /// A screen request to open on, such as `reviewChanges`; its section wins.
     var request: ScreenRequest?
+    /// The defaults suite the app's own preferences are kept in, if not the
+    /// app's own domain.
+    var defaultsSuite: String?
+    /// The move to Applications this copy was opened to finish.
+    var afterMove: AfterMove?
+    private var requestedInstallation: InstallationOverride?
+    private var requestedApplicationsFolder: URL?
 
-    static var current: LaunchContext {
-        var context = LaunchContext()
-        var arguments = ProcessInfo.processInfo.arguments.dropFirst().makeIterator()
+    /// Waits for the old process to exit, then ejects its optional disk image.
+    /// Translocated and ordinary-folder launches have no volume to eject.
+    struct AfterMove: Equatable, Sendable {
+        var pid: Int32
+        var volume: URL?
+    }
+
+    /// Where a rehearsal says this copy runs from.
+    enum InstallationOverride: String, CaseIterable, Sendable {
+        case applications
+        case diskImage = "disk-image"
+        case translocated
+        case elsewhere
+        case development
+    }
+
+    /// This process's own arguments, read once.
+    static let current = LaunchContext(arguments: ProcessInfo.processInfo.arguments)
+
+    /// The context `arguments` describe. The first is the executable, as in
+    /// `ProcessInfo.arguments`, and is skipped.
+    init(arguments: [String] = []) {
+        var arguments = LaunchArguments(arguments.dropFirst())
         while let argument = arguments.next() {
             switch argument {
             case "--workspace":
-                context.workspaceRoot = arguments.next().map { URL(fileURLWithPath: $0).standardizedFileURL }
+                workspaceRoot = arguments.next().map { URL(fileURLWithPath: $0).standardizedFileURL }
             case "--home":
-                context.homeRoot = arguments.next().map { URL(fileURLWithPath: $0).standardizedFileURL }
+                homeRoot = arguments.next().map { URL(fileURLWithPath: $0).standardizedFileURL }
             case "--section":
-                context.section = arguments.next().flatMap(AppSection.named)
+                section = arguments.next().flatMap(AppSection.named)
             case "--request":
-                context.request = arguments.next().flatMap(ScreenRequest.named)
+                request = arguments.next().flatMap(ScreenRequest.named)
+            case "--defaults-suite":
+                defaultsSuite = arguments.next().flatMap { $0.isEmpty ? nil : $0 }
+            case "--after-move":
+                guard let pid = arguments.next(where: { Int32($0) != nil }).flatMap({ Int32($0) }) else { continue }
+                let volume = arguments.next(where: { !$0.isEmpty && !$0.hasPrefix("--") }).map {
+                    URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL
+                }
+                afterMove = AfterMove(pid: pid, volume: volume)
+            case "--installation-override":
+                requestedInstallation = arguments.next().flatMap(InstallationOverride.init(rawValue:))
+            case "--applications-folder":
+                requestedApplicationsFolder = arguments.next().map {
+                    URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL
+                }
             default: continue
             }
         }
-        return context
+    }
+
+    /// The app's own preferences: the suite `--defaults-suite` names, or the
+    /// app's own domain. Each read makes a new store object, so the launch
+    /// reads it once (`AppLaunchState.defaults`) and shares that.
+    var defaults: UserDefaults {
+        defaultsSuite.flatMap { UserDefaults(suiteName: $0) } ?? .standard
+    }
+
+    /// Where a rehearsal says this copy runs from, only beside `--workspace`.
+    var installationOverride: InstallationOverride? {
+        workspaceRoot == nil ? nil : requestedInstallation
+    }
+
+    /// The Applications folder a rehearsal moves into, only beside
+    /// `--workspace`; nil means `/Applications`.
+    var applicationsFolder: URL? {
+        workspaceRoot == nil ? nil : requestedApplicationsFolder
+    }
+
+    /// This copy as inspection found it, or as a rehearsal says it runs from.
+    /// The bundle, its helpers and its signature stay this copy's own; only
+    /// where it is changes.
+    func installation(inspected: AgentToolingInstallation) -> AgentToolingInstallation {
+        guard let override = installationOverride else { return inspected }
+        let bundle = inspected.bundleURL
+        let location: AgentToolingInstallation.Location
+        switch override {
+        case .applications:
+            location = .applications(applicationsFolder ?? URL(filePath: "/Applications", directoryHint: .isDirectory))
+        case .diskImage:
+            location = .diskImage(
+                volumeName: "Agent Tooling", volumeURL: URL(filePath: "/Volumes/Agent Tooling", directoryHint: .isDirectory))
+        case .translocated:
+            location = .translocated(bundle)
+        case .elsewhere:
+            location = .elsewhere(bundle.deletingLastPathComponent())
+        case .development:
+            location = .developmentBuild
+        }
+        let helpers = bundle.appending(path: "Contents/Helpers", directoryHint: .isDirectory)
+        return AgentToolingInstallation(
+            bundleURL: bundle, location: location,
+            mcpHelperURL: inspected.mcpHelperURL ?? Self.executable(helpers.appending(path: "agent-tooling-mcp")),
+            cliHelperURL: inspected.cliHelperURL ?? Self.executable(helpers.appending(path: "agent-tooling")),
+            isAdHocSigned: inspected.isAdHocSigned)
+    }
+
+    /// `url` when it is a file this user may run.
+    private static func executable(_ url: URL) -> URL? {
+        FileManager.default.isExecutableFile(atPath: url.path(percentEncoded: false)) ? url : nil
+    }
+}
+
+/// A launch's arguments, read front to back.
+private struct LaunchArguments {
+    private var rest: ArraySlice<String>
+
+    init(_ arguments: ArraySlice<String>) {
+        rest = arguments
+    }
+
+    /// The next argument, whatever it is.
+    mutating func next() -> String? {
+        rest.popFirst()
+    }
+
+    /// The next argument when `accepts` takes it as this flag's value;
+    /// otherwise it is left to be read as what it is.
+    mutating func next(where accepts: (String) -> Bool) -> String? {
+        guard let first = rest.first, accepts(first) else { return nil }
+        return rest.popFirst()
     }
 }
 
 extension AppSection {
-    /// Accepts either how a section is written down — its durable raw value —
-    /// or how it is written in code, because both appear in scripts and neither
-    /// is more correct than the other. An unrecognised name is no answer rather
-    /// than a wrong one, so a typo opens Home instead of a random screen.
+    /// Accepts durable display names and code names used by scripts. Unknown names
+    /// return nil so launch falls back to Home.
     static func named(_ name: String) -> AppSection? {
         let wanted = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !wanted.isEmpty else { return nil }

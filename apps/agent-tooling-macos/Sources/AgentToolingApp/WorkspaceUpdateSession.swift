@@ -1,23 +1,10 @@
 import AgentToolingCore
 import Foundation
 
-/// Updates to what this Mac manages: finding them, and installing them.
-///
-/// A check asks each source what it publishes now and compares it with what
-/// the library approved. Followed skills are compared with their repository;
-/// native plugins with the catalog this Mac kept from Discover; MCP servers
-/// with the catalog entry of the same name, when one exists. Nothing changes
-/// during a check.
-///
-/// Installing an update is the same two steps installing anything is: the
-/// library takes the new content, then the planner replaces the copies this
-/// app proved it installed. A native plugin is different: its app owns it, so
-/// the update is the app's own `plugin update` command, run through the
-/// executor's allowlist like every other command.
-///
-/// `UpdatePolicy` decides, per kind, whether a found update is installed at
-/// once or waits for a press. The scheduled check reads that policy; the
-/// buttons ignore it, because a press is the ask.
+/// Checks followed repositories and cached catalogs for updates without writes.
+/// Installation adopts new library content before planning managed replacements;
+/// native plugins use allowlisted client update commands.
+/// Scheduled installation follows `UpdatePolicy`; explicit button actions do not.
 @MainActor @Observable
 final class WorkspaceUpdateSession {
     struct Entry: Identifiable, Equatable {

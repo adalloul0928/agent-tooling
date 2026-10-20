@@ -1,35 +1,38 @@
 import AgentToolingCore
 import SwiftUI
 
-/// What installing would do to this Mac, shown before anything is written.
-///
-/// The plan on screen is the plan that runs: `deployment.apply()` applies this
-/// exact `WorkspaceDeploymentPlan`, so nothing here is a rehearsal of a
-/// different list. Each step names the tool, the app it lands in, and — for a
-/// step that runs a command rather than copying a folder — the command itself.
-///
-/// A saved assignment is never reported as installed. What has only been asked
-/// for appears under "not being installed" with the reason, and only a step
-/// that succeeds turns into a result.
+/// Reviews and applies the exact supplied plan through `ScopedPlanReview`.
+/// Unowned replacements remain visible but cannot run; already-present items
+/// are omitted. Only a fresh ⌘Return installs. Assignment intent is never shown
+/// as an installation result until execution succeeds.
 struct PlanReviewSheet: View {
     let workspace: WorkspaceLaunch.Workspace
-    let plan: WorkspaceDeploymentPlan
+    @State private var review: ScopedPlanReview
     @Environment(\.dismiss) private var dismiss
-    @State private var isSubmitting = false
-    @State private var executionTask: Task<Void, Never>?
-    /// Computed before approval, never during execution. A person cannot
-    /// consent to content they were only shown afterwards.
-    @State private var reviewState: ReviewState = .loading
     /// The "not being installed" list starts open when there is nothing else to
     /// show, so the reasons are in front of the person rather than hidden behind
     /// a closed disclosure while the sheet reads "nothing to install".
     @State private var exclusionsExpanded = false
+    /// A plain ↩ reached the sheet, where only ⌘↩ installs.
+    @State private var commandReturnHint = false
+    @State private var commandReturnFlash = 0
+
+    init(workspace: WorkspaceLaunch.Workspace, plan: WorkspaceDeploymentPlan) {
+        self.init(workspace: workspace, review: ScopedPlanReview(workspace: workspace, reviewing: plan, includingRemovals: true))
+    }
+
+    /// The sheet over a review someone already holds, read or not: it reads
+    /// it only if nobody has.
+    init(workspace: WorkspaceLaunch.Workspace, review: ScopedPlanReview) {
+        self.workspace = workspace
+        _review = State(initialValue: review)
+    }
 
     var body: some View {
         ReviewSheetLayout(size: SheetSize.xlarge) {
             HStack(alignment: .top, spacing: Space.xl) {
                 VStack(alignment: .leading, spacing: Space.xs) {
-                    Text(title).font(AgentFont.titleLarge)
+                    Text(review.title).font(AgentFont.titleLarge)
                     Text(summary).font(AgentFont.body).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -46,19 +49,17 @@ struct PlanReviewSheet: View {
                 }
                 .font(AgentFont.caption)
 
-                if let headline = review?.headline {
-                    AttentionBanner(title: "Before you approve", message: headline)
+                // Facts, never a verdict: one neutral line, as on the stage's
+                // panel. A finding is drawn under its own step.
+                if let line = review.beforeYouApprove {
+                    ReviewSafetyRow(text: line, overhang: 0)
                 }
 
-                if let message = workspace.deployment.errorMessage {
-                    AttentionBanner(title: PlanReviewLabels.nothingDoneTitle(hasRemoval: planHasRemoval), message: message)
-                }
-
-                switch reviewState {
-                case .loading:
+                switch review.phase {
+                case .preparing:
                     HStack(spacing: Space.md) {
                         ProgressView().controlSize(.small)
-                        Text("Checking destinations and package contents…")
+                        Text(LaunchpadCopy.Review.checking)
                             .font(AgentFont.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -67,12 +68,18 @@ struct PlanReviewSheet: View {
                     .standardPanel()
                 case .failed(let message):
                     AttentionBanner(title: "This plan cannot be reviewed", message: message)
-                case .ready:
+                case .notRun(let message):
+                    AttentionBanner(title: PlanReviewLabels.nothingDoneTitle(hasRemoval: review.hasRemoval), message: message)
+                case .stale:
+                    AttentionBanner(
+                        title: PlanReviewLabels.nothingDoneTitle(hasRemoval: review.hasRemoval),
+                        message: LaunchpadCopy.Review.changedWhileOpen)
+                case .ready, .running, .finished:
                     EmptyView()
                 }
 
-                if plan.items.isEmpty {
-                    if plan.exclusions.isEmpty {
+                if review.listedCount == 0, review.phase != .preparing {
+                    if review.exclusions.isEmpty {
                         EmptyStateView(
                             symbol: "checkmark.circle",
                             title: "Nothing to install",
@@ -87,54 +94,89 @@ struct PlanReviewSheet: View {
                             symbol: "exclamationmark.triangle",
                             title: "Nothing can be installed right now",
                             message:
-                                "\(CountNoun("requested item").phrase(plan.exclusions.count)) "
-                                + "\(plan.exclusions.count == 1 ? "is" : "are") "
+                                "\(CountNoun("requested item").phrase(review.exclusions.count)) "
+                                + "\(review.exclusions.count == 1 ? "is" : "are") "
                                 + "not being installed. The reasons are listed below."
                         )
                         .frame(height: Size.emptyStateMinHeight)
                     }
-                } else {
+                } else if !review.groups.isEmpty {
                     Text("Planned steps")
                         .font(AgentFont.heading)
-                    VStack(spacing: 0) {
-                        ForEach(Array(plan.items.enumerated()), id: \.offset) { index, item in
-                            PlanStepRow(
-                                number: index + 1,
-                                item: item,
-                                linkedPath: linkedPath(for: item),
-                                command: review?.command(for: item),
-                                nothingRuns: review?.reasonNothingRuns(for: item),
-                                contentRisk: review?.contentRisk(for: item))
-                            if index < plan.items.count - 1 { Hairline() }
+                    VStack(alignment: .leading, spacing: Space.lg) {
+                        ForEach(review.groups) { group in
+                            VStack(alignment: .leading, spacing: Space.xs) {
+                                ReviewAppHeader(client: group.client, summary: group.summary)
+                                ForEach(group.steps) { step in
+                                    ReviewStepRow(step: step, accessibilityText: review.accessibilityLabel(for: step))
+                                }
+                            }
                         }
                     }
+                    .padding(Space.xl)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .standardPanel()
                 }
 
-                if !plan.exclusions.isEmpty { excluded }
+                if !review.exclusions.isEmpty { excluded }
                 if !workspace.deployment.linkedDestinations.isEmpty { linkedDestinations }
 
                 HStack(spacing: Space.md) {
                     Image(systemName: "lock.shield")
                         .foregroundStyle(.secondary)
-                    Text(
-                        "Commands use a fixed allowlist. File changes are limited to the managed library, supported client paths, and the folders you pointed a destination at; replaced files are saved as rollback artifacts."
-                    )
-                    .font(AgentFont.caption)
-                    .foregroundStyle(.secondary)
+                    Text(LaunchpadCopy.Review.safety)
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                        .wrapsLines()
                 }
                 .padding(Space.xl)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .standardPanel()
             }
             .padding(Space.xxxl)
         } footer: {
-            HStack {
-                Button(
-                    isRunning ? "Stop" : "Cancel",
-                    role: isRunning ? .destructive : .cancel
-                ) {
-                    if isRunning {
-                        executionTask?.cancel()
+            footer
+        }
+        .background(AgentTheme.contentBackground)
+        .interactiveDismissDisabled(review.isBusy)
+        // ⌘↩ installs only while the plan waits on it; once there is a
+        // result, ↩ is the footer's again.
+        .commandReturnAction(
+            isActive: LaunchpadReviewPanel.awaitsCommandReturn(review), isReady: review.canInstall, perform: install,
+            onPlainReturn: {
+                commandReturnHint = true
+                commandReturnFlash &+= 1
+            }
+        )
+        .task {
+            guard !review.hasBegunReading else { return }
+            await review.prepare()
+            // With nothing installable, open the reasons by default so they
+            // are read rather than hidden behind a closed disclosure.
+            exclusionsExpanded = review.listedCount == 0 && !review.exclusions.isEmpty
+        }
+        .onDisappear {
+            // Closed mid-install: it stops after the step it is on.
+            if review.isBusy { review.stop() }
+        }
+    }
+
+    // MARK: - Footer
+
+    @ViewBuilder private var footer: some View {
+        HStack(spacing: Space.md) {
+            if case .finished(let outcome) = review.phase {
+                Text(outcome.summary)
+                    .font(AgentFont.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Done") { dismiss() }
+                    .primaryActionStyle()
+                    .keyboardShortcut(.defaultAction)
+            } else {
+                Button(review.isBusy ? "Stop" : "Cancel", role: review.isBusy ? .destructive : .cancel) {
+                    if review.isBusy {
+                        review.stop()
                     } else {
                         dismiss()
                     }
@@ -142,56 +184,50 @@ struct PlanReviewSheet: View {
                 .secondaryActionStyle()
                 .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button {
-                    guard !isSubmitting, canInstall else { return }
-                    isSubmitting = true
-                    executionTask = Task { @MainActor in
-                        await workspace.deployment.apply()
-                        isSubmitting = false
-                        executionTask = nil
-                        if workspace.deployment.errorMessage == nil { dismiss() }
-                    }
-                } label: {
-                    if isRunning {
-                        ProgressView()
-                            .controlSize(.small)
-                            .accessibilityLabel(PlanReviewLabels.runningLabel(hasRemoval: planHasRemoval))
+                if commandReturnHint, review.phase == .ready {
+                    Text(LaunchpadCopy.Footer.commandReturnHint)
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if review.phase == .stale {
+                    Button(LaunchpadCopy.Review.reviewAgain) { Task { await review.reviewAgain() } }
+                        .secondaryActionStyle()
+                }
+                Button(action: install) {
+                    if review.isBusy {
+                        HStack(spacing: Space.sm) {
+                            ProgressView().controlSize(.small)
+                            Text(review.progressLine ?? PlanReviewLabels.runningLabel(hasRemoval: review.hasRemoval))
+                        }
+                        .accessibilityLabel(PlanReviewLabels.runningLabel(hasRemoval: review.hasRemoval))
                     } else {
-                        Text(installLabel)
+                        HStack(spacing: Space.sm) {
+                            Text(review.title)
+                            KeyCombo(shortcut: StageShortcut.commandReturn)
+                                .modifier(KeycapFlash(trigger: commandReturnFlash))
+                        }
+                        .environment(\.keycapOnAccent, true)
                     }
                 }
                 .primaryActionStyle()
-                .keyboardShortcut(.defaultAction)
-                .disabled(!canInstall)
+                .disabled(!review.canInstall)
+                .accessibilityHint(LaunchpadCopy.Footer.commandReturnAccessibilityHint)
             }
         }
-        .background(AgentTheme.contentBackground)
-        .interactiveDismissDisabled(isRunning)
-        .task(id: planIdentity) {
-            // With nothing installable, open the reasons by default so they are
-            // read rather than hidden behind a closed disclosure.
-            exclusionsExpanded = plan.items.isEmpty && !plan.exclusions.isEmpty
-            reviewState = .loading
-            guard let contentStore = workspace.contentStore else {
-                reviewState = .failed(
-                    "This workspace has no verified content store, so nothing here can be read before it is written."
-                )
-                return
-            }
-            guard let snapshot = workspace.library.state?.snapshot else {
-                reviewState = .failed(
-                    "The library has not been read yet. Close this and check your apps again.")
-                return
-            }
-            let plan = self.plan
-            let homeRoot = workspace.homeRoot
-            let reviewed = await DeploymentPlanReviewer.review(
-                plan: plan, snapshot: snapshot, contentStore: contentStore, homeRoot: homeRoot)
-            guard !Task.isCancelled else { return }
-            reviewState = .ready(reviewed)
-        }
-        .onDisappear {
-            if isSubmitting { executionTask?.cancel() }
+    }
+
+    /// ⌘↩ or a click on Install: exactly what the sheet lists runs. The
+    /// review is running before this returns, so a ⎋ handled next is Stop,
+    /// not a Cancel that closes the sheet as the install begins. A complete
+    /// install closes the sheet; a failure, or a Stop, stays in front of the
+    /// person.
+    private func install() {
+        commandReturnHint = false
+        let review = review
+        guard let installing = review.begin() else { return }
+        Task {
+            await installing.value
+            if case .finished(let outcome) = review.phase, outcome.isComplete { dismiss() }
         }
     }
 
@@ -208,7 +244,7 @@ struct PlanReviewSheet: View {
                 .font(AgentFont.caption)
                 .foregroundStyle(.secondary)
                 .wrapsLines()
-                ForEach(Array(plan.exclusions.enumerated()), id: \.offset) { _, exclusion in
+                ForEach(Array(review.exclusions.enumerated()), id: \.offset) { _, exclusion in
                     VStack(alignment: .leading, spacing: Space.xxs) {
                         Text(exclusionTitle(exclusion.reason)).font(AgentFont.bodyMedium)
                         Text(exclusion.detail).font(AgentFont.caption).foregroundStyle(.secondary)
@@ -219,7 +255,7 @@ struct PlanReviewSheet: View {
             .padding(.top, Space.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
-            Text("\(plan.exclusions.count) not being installed")
+            Text("\(review.exclusions.count) not being installed")
         }
         .padding(Space.xl)
         .standardPanel()
@@ -240,7 +276,7 @@ struct PlanReviewSheet: View {
                 HStack(spacing: Space.lg) {
                     Image(systemName: "folder").foregroundStyle(.secondary)
                     Text(
-                        "\(destination.surface.displayName) · \(destination.projectName ?? destination.scope.displayName)"
+                        "\(destination.surface.client?.rawValue ?? destination.surface.displayName) · \(destination.projectName ?? destination.scope.displayName)"
                     )
                     .font(AgentFont.bodyMedium)
                     Spacer(minLength: Space.lg)
@@ -255,94 +291,29 @@ struct PlanReviewSheet: View {
 
     // MARK: - Derived
 
-    private var isRunning: Bool { isSubmitting || workspace.deployment.isBusy }
-
-    private var canInstall: Bool {
-        guard case .ready(let reviewed) = reviewState else { return false }
-        return workspace.deployment.canApply && !isRunning && runnableCount > 0
-            && !reviewed.hasBlockedItems
-    }
-
-    /// Steps that will do something when the button is pressed. Until the
-    /// review has looked, every listed step is taken at its word; once it has,
-    /// a step it could build no command for is left out.
-    private var runnableSteps: [WorkspaceDeploymentItem] {
-        review?.runnableSteps(of: plan.items) ?? plan.items
-    }
-
-    private var runnableCount: Int { runnableSteps.count }
-
-    private var installLabel: String {
-        PlanReviewLabels.actionLabel(
-            listedCount: plan.items.count,
-            runnableCount: runnableCount,
-            hasRemoval: planHasRemoval)
-    }
-
-    /// True when a step that will run removes content. The wording follows
-    /// what pressing the button does, so a plan that removes anything is never
-    /// called an install, and a step that will not run does not decide it.
-    private var planHasRemoval: Bool {
-        runnableSteps.contains(where: \.isRemoval)
-    }
-
-    private var review: DeploymentPlanReview? {
-        guard case .ready(let reviewed) = reviewState else { return nil }
-        return reviewed
-    }
-
-    private var title: String {
-        PlanReviewLabels.title(
-            listedCount: plan.items.count,
-            runnableCount: runnableCount,
-            hasRemoval: planHasRemoval,
-            hasExclusions: !plan.exclusions.isEmpty)
-    }
-
     private var summary: String {
         "Each app is handled on its own, and nothing else in its folder is touched."
     }
 
+    /// Where the steps land: the scopes the plan's steps are in, then the
+    /// apps, as a person names them.
     private var appliesTo: String {
-        let scopes = Set(plan.items.map(\.scope)).map(\.displayName).sorted()
-        let surfaces = Set(plan.items.map(\.surface)).map(\.displayName).sorted()
-        let parts = scopes + surfaces
-        return parts.isEmpty ? "Nothing on this Mac" : parts.joined(separator: " · ")
+        let apps = review.groups.map(\.client.rawValue)
+        return apps.isEmpty ? "Nothing on this Mac" : (review.scopes.map(\.displayName) + apps).joined(separator: " · ")
     }
 
     private var planRunsCommands: Bool {
-        plan.items.contains { item in
-            switch item.action {
-            case .installNativePackage, .configureManagedConnection: true
-            case .installContent, .updateContent, .removeContent: false
-            }
-        }
+        review.groups.contains { $0.steps.contains { $0.isChange && $0.action.runsAppsOwnTool } }
     }
 
     private var executionLabel: String {
-        switch reviewState {
-        case .loading: return "Checking safety"
+        switch review.phase {
+        case .preparing: return "Checking safety"
         case .failed: return "Review unavailable"
-        case .ready(let reviewed):
-            if reviewed.hasBlockedItems { return "Blocked" }
+        case .ready, .stale, .running, .finished, .notRun:
+            if review.isBlocked { return "Blocked" }
         }
         return planRunsCommands ? "Review required" : "Ready to run"
-    }
-
-    /// Identifies this exact plan, so re-preparing re-reviews rather than
-    /// leaving an older answer beside a newer list.
-    private var planIdentity: String {
-        plan.items
-            .map {
-                "\($0.artifactID.rawValue.uuidString)|\($0.physicalDestinationID.rawValue.uuidString)|\($0.surface.rawValue)"
-            }
-            .joined(separator: ",")
-    }
-
-    private func linkedPath(for item: WorkspaceDeploymentItem) -> String? {
-        workspace.deployment.linkedDestinations.first {
-            $0.surface == item.surface && $0.scope == item.scope
-        }?.path
     }
 
     private func exclusionTitle(_ reason: WorkspaceDeploymentExclusionReason) -> String {
@@ -357,99 +328,6 @@ struct PlanReviewSheet: View {
         case .needsAssignmentReview: "Needs review first"
         case .alreadyPresent: "Already there"
         }
-    }
-
-    private enum ReviewState {
-        case loading
-        case ready(DeploymentPlanReview)
-        case failed(String)
-    }
-}
-
-// MARK: - Steps
-
-private struct PlanStepRow: View {
-    let number: Int
-    let item: WorkspaceDeploymentItem
-    var linkedPath: String?
-    var command: String?
-    /// Why pressing Install does nothing for this step, when it does nothing.
-    var nothingRuns: String?
-    var contentRisk: ContentRiskReport?
-
-    var body: some View {
-        HStack(alignment: .top, spacing: Space.lg) {
-            Text("\(number)")
-                .font(AgentFont.caption.monospacedDigit())
-                .foregroundStyle(.tertiary)
-                .frame(width: Size.indexBadge, alignment: .trailing)
-            VStack(alignment: .leading, spacing: Space.xs) {
-                HStack(spacing: Space.sm) {
-                    Image(systemName: symbol)
-                        .font(AgentFont.caption)
-                        .foregroundStyle(.secondary)
-                    Text(item.displayName).font(AgentFont.bodySemibold)
-                    if contentRisk?.isComplete == false {
-                        StatusBadge(state: .attention, text: "Blocked", tint: AgentTheme.failure)
-                    }
-                    if nothingRuns != nil {
-                        StatusBadge(state: .attention, text: "Will not run", tint: AgentTheme.warning)
-                    }
-                }
-                Text("\(clause) · \(item.surface.displayName)")
-                    .font(AgentFont.caption)
-                    .foregroundStyle(.secondary)
-                if let note = item.planActionNote {
-                    Text(note)
-                        .font(AgentFont.caption)
-                        .foregroundStyle(.secondary)
-                        .wrapsLines()
-                }
-                if let nothingRuns {
-                    Text(nothingRuns)
-                        .font(AgentFont.caption)
-                        .foregroundStyle(AgentTheme.warning)
-                        .wrapsLines()
-                }
-                if let command {
-                    Text(command)
-                        .font(AgentFont.mono)
-                        .textSelection(.enabled)
-                        .padding(Space.md)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            AgentTheme.fillSubtle,
-                            in: RoundedRectangle.control
-                        )
-                        .overlay {
-                            RoundedRectangle.control
-                                .stroke(AgentTheme.fillStrong, lineWidth: Hairline.width)
-                        }
-                }
-                if let linkedPath {
-                    CompactPathText(path: linkedPath)
-                }
-                if let contentRisk, !contentRisk.isClean {
-                    PlanContentRiskPanel(report: contentRisk)
-                }
-            }
-        }
-        .padding(Space.xl)
-    }
-
-    private var symbol: String {
-        switch item.action {
-        case .installContent: "arrow.down.circle"
-        case .updateContent: "arrow.triangle.2.circlepath"
-        case .installNativePackage: "puzzlepiece.extension"
-        case .configureManagedConnection: "cable.connector"
-        case .removeContent: "trash"
-        }
-    }
-
-    private var clause: String {
-        let place = item.scope == .project ? "in this project" : "on this Mac"
-        return item.planActionClause(place: place)
     }
 }
 
@@ -504,10 +382,10 @@ private struct PlanFindingPanel<Content: View>: View {
     }
 }
 
-/// Content-scan findings, shown in the same sheet as the approve button so the
-/// operator decides with the finding in front of them. Nothing is dropped or
-/// filtered on their behalf.
-private struct PlanContentRiskPanel: View {
+/// Content-scan findings, shown in the same review as the approve button so
+/// the operator decides with the finding in front of them (the shared sheet
+/// and the stage's panel). Nothing is dropped or filtered on their behalf.
+struct PlanContentRiskPanel: View {
     let report: ContentRiskReport
 
     var body: some View {

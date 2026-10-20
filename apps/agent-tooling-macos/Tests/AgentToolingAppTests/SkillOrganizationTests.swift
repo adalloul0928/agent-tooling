@@ -40,7 +40,7 @@ struct SkillOrganizationTests {
 @Suite("Automatic skill provenance")
 struct AutomaticSkillProvenanceTests {
     @Test func personalAndIndependentPublishersAreRecognizedWithoutAdoption() {
-        #expect(owner("cyrus-workflows@agent-tooling") == "mine")
+        #expect(owner("developer-workflows@agent-tooling") == "mine")
         #expect(owner("react-native@callstack-agent-skills") == "thirdParty")
         #expect(owner("simview@toolingtools") == "thirdParty")
     }
@@ -89,12 +89,12 @@ struct AutomaticSkillProvenanceTests {
 @Suite("Skill list presentation")
 struct SkillListPresentationTests {
     @Test func pluginAndMarketplaceHaveSeparateHumanLabels() {
-        let origin = SkillPresentation(pluginID: "cyrus-workflows@agent-tooling")
-        #expect(origin.pluginID == "cyrus-workflows@agent-tooling")
-        #expect(origin.pluginName == "Cyrus Workflows")
+        let origin = SkillPresentation(pluginID: "developer-workflows@agent-tooling")
+        #expect(origin.pluginID == "developer-workflows@agent-tooling")
+        #expect(origin.pluginName == "Developer Workflows")
         #expect(origin.marketplaceID == "agent-tooling")
         #expect(origin.marketplaceName == "Agent Tooling")
-        #expect(origin.compactDescription == "Cyrus Workflows · Agent Tooling")
+        #expect(origin.compactDescription == "Developer Workflows · Agent Tooling")
         #expect(origin.compactDescription?.contains("@") == false)
         #expect(SkillPresentation(pluginID: nil).pluginName == nil)
         #expect(SkillPresentation(pluginID: nil).marketplaceName == nil)
@@ -103,20 +103,21 @@ struct SkillListPresentationTests {
     @Test func declaredDisplayNameIsPreservedWithoutRepeatingTheCatalogSuffix() {
         #expect(SkillPresentation(pluginID: "ios-tools@agent-tooling", pluginDisplayName: "iOS Tools").pluginName == "iOS Tools")
         #expect(
-            SkillPresentation(pluginID: "cyrus-workflows@agent-tooling", pluginDisplayName: "Cyrus Workflows@Agent Tooling").pluginName
-                == "Cyrus Workflows")
+            SkillPresentation(pluginID: "developer-workflows@agent-tooling", pluginDisplayName: "Developer Workflows@Agent Tooling")
+                .pluginName
+                == "Developer Workflows")
     }
 
     @Test func marketplaceAndPluginFiltersAreIndependentAndIntersect() {
-        let cyrus = SkillPresentation(pluginID: "cyrus-workflows@agent-tooling")
+        let developer = SkillPresentation(pluginID: "developer-workflows@agent-tooling")
         let personal = SkillPresentation(pluginID: "personal@agent-tooling")
-        let external = SkillPresentation(pluginID: "cyrus-workflows@another-marketplace")
-        #expect(cyrus.matches(marketplace: "agent-tooling", plugin: ""))
+        let external = SkillPresentation(pluginID: "developer-workflows@another-marketplace")
+        #expect(developer.matches(marketplace: "agent-tooling", plugin: ""))
         #expect(personal.matches(marketplace: "agent-tooling", plugin: ""))
         #expect(!external.matches(marketplace: "agent-tooling", plugin: ""))
-        #expect(cyrus.matches(marketplace: "", plugin: "cyrus-workflows@agent-tooling"))
-        #expect(!external.matches(marketplace: "", plugin: "cyrus-workflows@agent-tooling"))
-        #expect(!cyrus.matches(marketplace: "another-marketplace", plugin: "cyrus-workflows@agent-tooling"))
+        #expect(developer.matches(marketplace: "", plugin: "developer-workflows@agent-tooling"))
+        #expect(!external.matches(marketplace: "", plugin: "developer-workflows@agent-tooling"))
+        #expect(!developer.matches(marketplace: "another-marketplace", plugin: "developer-workflows@agent-tooling"))
         #expect(!SkillPresentation(pluginID: nil).matches(marketplace: "agent-tooling", plugin: ""))
     }
 
@@ -245,25 +246,23 @@ struct SkillInventoryIndexTests {
         #expect(index.observedClients[skill] == nil)
     }
 
-    /// Two plugins re-ship one skill and AIM copies it into Kiro's folder:
-    /// three entries, one skill. The list shows one row, the copies say where
-    /// each one is and whether they match, and AIM's copy is AIM's.
+    /// Group copies by skill while preserving content differences and ownership.
     @Test func copiesOfOneSkillAreOneRowWithTheirDifferencesKept() throws {
         let scenario = try SkillCopiesScenario()
         let index = scenario.index
-        let (wootSkill, coreSkill, loose) = (scenario.wootSkill, scenario.coreSkill, scenario.loose)
+        let (exampleSkill, coreSkill, loose) = (scenario.exampleSkill, scenario.coreSkill, scenario.loose)
         let entry = try #require(index.skills.first { $0.id == loose })
         let copies = index.copies(of: entry)
-        #expect(copies.map(\.id).first == wootSkill, "the copy found in the most apps leads")
-        #expect(Set(copies.map(\.id)) == [wootSkill, coreSkill, loose])
+        #expect(copies.map(\.id).first == exampleSkill, "the copy found in the most apps leads")
+        #expect(Set(copies.map(\.id)) == [exampleSkill, coreSkill, loose])
         #expect(index.distinctCount == 1)
-        #expect(index.versions(among: copies).map(\.count) == [2, 1], "two match, AIM's Kiro copy differs")
-        #expect(index.management(of: entry) == .byTool(.init(tool: "AIM", package: "core-skills")))
-        #expect(index.management(of: entry).label == "AIM")
+        #expect(index.versions(among: copies).map(\.count) == [2, 1], "two match, Example Manager's Kiro copy differs")
+        #expect(index.management(of: entry) == .byTool(.init(tool: "Example Manager", package: "core-skills")))
+        #expect(index.management(of: entry).label == "Example Manager")
 
         let flat = SkillListPresentation.groups(
             skills: index.skills, grouping: .none, presentation: index.presentation(for:), copies: index.copies(of:))
-        #expect(flat.flatMap(\.skills).map(\.id) == [wootSkill], "one row")
+        #expect(flat.flatMap(\.skills).map(\.id) == [exampleSkill], "one row")
         #expect(flat.first?.members(of: copies[0]).count == 3)
         let byPlugin = SkillListPresentation.groups(
             skills: index.skills, grouping: .plugin, presentation: index.presentation(for:), copies: index.copies(of:))

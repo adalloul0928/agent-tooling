@@ -1,29 +1,10 @@
 import AgentToolingCore
 import Foundation
 
-/// Which plugins in this library have news, and which have not been compared at
-/// all, worked out once from what the workspace holds and what a catalog last
-/// published — so Home and Library › Plugins can never disagree about it.
-///
-/// Three rules decide every verdict here, and none of them is invented.
-///
-/// Nothing is claimed before a catalog has been asked. With no packages and no
-/// source that has ever been refreshed, every plugin reports "not checked"
-/// rather than an answer nobody went and got.
-///
-/// Identity is the native route, never a name. A projected plugin's `id` is the
-/// workspace's own artifact identifier, which no catalog has ever heard of, so
-/// a listing is matched through `NativeCatalogPackageIdentity` — the same
-/// recognition Discover uses in the other direction — before falling back to
-/// the evaluator's own package match. A namesake is never taken for the package
-/// you actually have.
-///
-/// The comparison itself belongs to `UpdateAvailabilityEvaluator`. The
-/// versioned document pins content by digest rather than by a version string a
-/// person would recognise, so `VersionedInventoryProjection` claims no revision
-/// for a plugin and nothing here invents one: what this can do is relay what a
-/// catalog said about the package a row actually came from, which is exactly
-/// what the evaluator was written to do.
+/// Shared update verdicts for Home and the plugin library. Unchecked catalogs
+/// produce no update claim. Native routes establish package identity; display
+/// names do not. Comparison remains with `UpdateAvailabilityEvaluator`, and
+/// absent installed revisions are never inferred from content digests.
 struct PluginUpdateEvaluation {
     /// One verdict per plugin row, keyed the way both screens hold their rows.
     let availability: [ArtifactID: UpdateAvailability]

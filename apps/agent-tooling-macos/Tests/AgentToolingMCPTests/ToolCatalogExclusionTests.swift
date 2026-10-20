@@ -4,13 +4,8 @@ import Testing
 
 @testable import AgentToolingMCP
 
-/// These are the load-bearing tests. Every other test here checks that a
-/// feature works; these check that a feature is *absent*, and absence is the
-/// thing a well-meaning future change quietly removes.
-///
-/// If one of these fails, do not adjust the test. Read
-/// `ExcludedCapabilities` and understand why the capability was excluded before
-/// deciding the exclusion was wrong.
+/// Guards capabilities excluded by the MCP security boundary.
+/// Review `ExcludedCapabilities` before changing these assertions.
 @Suite("Tool catalog exclusions")
 struct ToolCatalogExclusionTests {
     @Test func catalogContainsNoApplyApproveDenyOrRunTool() {
@@ -94,7 +89,7 @@ struct ToolCatalogExclusionTests {
 
     @Test func theBinaryAcceptsNoConfigurationOnTheCommandLine() {
         // --home and --workspace exist on the CLI helper for tests. Reachable
-        // from an MCP client they would let a caller aim the server at a
+        // from an MCP client they would let a caller point the server at a
         // workspace it wrote itself.
         #expect(!ExcludedCapabilities.permittedArguments.contains("--home"))
         #expect(!ExcludedCapabilities.permittedArguments.contains("--workspace"))

@@ -282,16 +282,16 @@ struct ReviewQueueTests {
             arguments: [
                 "skillID": .string("release-summary"),
                 "scope": .string("project"),
-                "projectRoot": .string("/Users/someone/Projects/pumpd"),
+                "projectRoot": .string("/Users/someone/Projects/sample-app"),
                 "targets": .array([.string("codex")]),
             ]
         )
         let rows = try harness.pendingRequests()
         // Standardized the same way `agent-tooling request create-skill --project`
         // standardizes it, trailing separator included, so the app sees one shape.
-        #expect(rows[0].reviewDetails.projectRoot == "/Users/someone/Projects/pumpd/")
+        #expect(rows[0].reviewDetails.projectRoot == "/Users/someone/Projects/sample-app/")
         // The reviewer sees the root in the app. The caller never gets it back.
-        #expect(!JSONValue.object(payload).allStrings.contains { $0.contains("pumpd") })
+        #expect(!JSONValue.object(payload).allStrings.contains { $0.contains("sample-app") })
     }
 
     @Test func requestToolsAcceptOneComponentAndRefuseAnythingUndeclared() throws {

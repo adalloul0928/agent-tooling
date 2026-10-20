@@ -92,21 +92,21 @@ extension ShellRenderFixture {
             windowStart: generatedAt.addingTimeInterval(-30 * 86_400),
             themes: [
                 DeepDiveTheme(
-                    title: "Brazil build repair", detail: "Eleven sessions begin from a failed brazil-build.",
+                    title: "Build build repair", detail: "Eleven sessions begin from a failed build-build.",
                     conversationCount: 11, clients: [.claude, .kiro])
             ],
             recommendations: [
                 ToolRecommendation(
-                    id: "deep-dive:claude:0:brazil-build-triage", kind: .createCustomSkill, title: "Brazil build triage",
-                    summary: "Diagnose a failed brazil-build from its log.", rationale: "Repeated across 11 sessions.",
+                    id: "deep-dive:claude:0:build-build-triage", kind: .createCustomSkill, title: "Build build triage",
+                    summary: "Diagnose a failed build-build from its log.", rationale: "Repeated across 11 sessions.",
                     confidence: .high, supportingConversationCount: 11, sourceName: "Claude Code deep dive",
-                    draftInstruction: "Create a skill that reads a brazil-build log and names the failing step."),
+                    draftInstruction: "Create a skill that reads a build-build log and names the failing step."),
                 ToolRecommendation(
                     id: "deep-dive:claude:1:use-crux", kind: .useExistingSkill, title: "Use crux-code-reviews",
                     summary: "You write CR descriptions by hand.", rationale: "Six sessions.", confidence: .medium,
                     supportingConversationCount: 6, skillID: "crux-code-reviews", sourceName: "Claude Code deep dive"),
             ],
-            summary: "Most of your recent sessions repair failed Brazil builds and write CR descriptions by hand.")
+            summary: "Most of your recent sessions repair failed Build builds and write CR descriptions by hand.")
     }
 }
 

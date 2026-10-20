@@ -1,14 +1,6 @@
-/// The wording for a deployment plan wherever it is named: the review sheet's
-/// title and button, and the cards and lines on Home and Apps that count what
-/// a plan is holding. Kept apart from the views so every case can be pinned in
-/// a test.
-///
-/// A plan can install, update, remove, or any mix. Calling a plan that only
-/// removes "Install 1 change" misreads what the button does, so the verb is
-/// "Apply" whenever the plan removes anything and "Install" otherwise, and the
-/// same verb names the plan everywhere it is counted. The two empty-plan titles
-/// are unchanged: a plan with nothing to run says so rather than counting zero
-/// changes.
+/// Shared deployment-plan labels for Home, Apps, and review sheets.
+/// Plans containing removals use "Apply"; other actionable plans use "Install".
+/// Empty plans receive an explanatory title instead of a zero-change count.
 enum PlanReviewLabels {
     /// "Install" while every step puts something in place; "Apply" once any
     /// step takes something out.

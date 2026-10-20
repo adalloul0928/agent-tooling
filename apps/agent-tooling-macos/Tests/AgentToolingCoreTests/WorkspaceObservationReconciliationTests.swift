@@ -19,15 +19,15 @@ struct WorkspaceObservationReconciliationTests {
         let document = try Fixture.document(artifacts: [
             .init(
                 identity: .init(id: packageID, kind: .nativePlugin, displayName: "Core"),
-                authority: .nativeOwned, declaredName: "core@aim",
-                nativeRoutes: [.init(client: .claude, externalPluginID: "core@aim")])
+                authority: .nativeOwned, declaredName: "core@example",
+                nativeRoutes: [.init(client: .claude, externalPluginID: "core@example")])
         ])
         let observation = Fixture.observation(
-            .claudeCode, skills: ["core:brazil", "core:wiki-edit"], plugins: ["core@aim"],
-            memberships: ["core:brazil": "core@aim", "core:wiki-edit": "core@aim"])
+            .claudeCode, skills: ["core:build", "core:wiki-edit"], plugins: ["core@example"],
+            memberships: ["core:build": "core@example", "core:wiki-edit": "core@example"])
         let inventory = ScannedInventory(
-            skills: [Fixture.skill("core:brazil"), Fixture.skill("core:wiki-edit")], mcpServers: [],
-            plugins: [Fixture.plugin("core@aim", members: ["core:brazil", "core:wiki-edit"])])
+            skills: [Fixture.skill("core:build"), Fixture.skill("core:wiki-edit")], mcpServers: [],
+            plugins: [Fixture.plugin("core@example", members: ["core:build", "core:wiki-edit"])])
 
         let plan = WorkspaceObservationReconciliation.plan(
             document: document, observations: [observation], inventory: inventory)
@@ -42,8 +42,8 @@ struct WorkspaceObservationReconciliationTests {
             #expect(member.authority == .nativeOwned)
             #expect(member.nativeRoutes.isEmpty)
         }
-        #expect(plan.additions.map(\.packageRelativePath) == ["skills/brazil", "skills/wiki-edit"])
-        #expect(plan.additions.map(\.declaredName) == ["core:brazil", "core:wiki-edit"])
+        #expect(plan.additions.map(\.packageRelativePath) == ["skills/build", "skills/wiki-edit"])
+        #expect(plan.additions.map(\.declaredName) == ["core:build", "core:wiki-edit"])
         // The document the plan lands in is valid: a member has its parent and
         // its path.
         var applied = document
@@ -155,12 +155,12 @@ struct WorkspaceObservationReconciliationTests {
 
     @Test func aPackageSomebodyRemovedIsNotPutBackAndNeitherAreItsMembers() throws {
         let document = try Fixture.document(
-            artifacts: [], tombstoneAliases: [NativePackageAdoption.pluginAlias(client: .claude, externalPluginID: "core@aim")])
+            artifacts: [], tombstoneAliases: [NativePackageAdoption.pluginAlias(client: .claude, externalPluginID: "core@example")])
         let observation = Fixture.observation(
-            .claudeCode, skills: ["core:brazil"], plugins: ["core@aim"], memberships: ["core:brazil": "core@aim"])
+            .claudeCode, skills: ["core:build"], plugins: ["core@example"], memberships: ["core:build": "core@example"])
         let inventory = ScannedInventory(
-            skills: [Fixture.skill("core:brazil")], mcpServers: [],
-            plugins: [Fixture.plugin("core@aim", members: ["core:brazil"])])
+            skills: [Fixture.skill("core:build")], mcpServers: [],
+            plugins: [Fixture.plugin("core@example", members: ["core:build"])])
 
         let plan = WorkspaceObservationReconciliation.plan(
             document: document, observations: [observation], inventory: inventory)
@@ -175,26 +175,26 @@ struct WorkspaceObservationReconciliationTests {
         let document = try Fixture.document(artifacts: [
             .init(
                 identity: .init(id: packageID, kind: .nativePlugin, displayName: "Core"),
-                authority: .nativeOwned, declaredName: "core@aim",
-                nativeRoutes: [.init(client: .claude, externalPluginID: "core@aim")])
+                authority: .nativeOwned, declaredName: "core@example",
+                nativeRoutes: [.init(client: .claude, externalPluginID: "core@example")])
         ])
         // The client reports the member but not where the package lives, so
         // no relative path can be worked out.
-        var observation = Fixture.observation(.claudeCode, skills: ["core:brazil"], plugins: ["core@aim"])
-        observation.pluginMetadata["core@aim"] = .init(
-            name: "Core", source: "Claude plugin inventory", scope: "This Mac", enabled: true, skillIDs: ["core:brazil"])
-        observation.skillMetadata["core:brazil"] = .init(
-            path: "/Users/fixture/.claude/plugins/cache/aim/core/1.0/skills/brazil", source: "core@aim",
-            providerPluginID: "core@aim")
+        var observation = Fixture.observation(.claudeCode, skills: ["core:build"], plugins: ["core@example"])
+        observation.pluginMetadata["core@example"] = .init(
+            name: "Core", source: "Claude plugin inventory", scope: "This Mac", enabled: true, skillIDs: ["core:build"])
+        observation.skillMetadata["core:build"] = .init(
+            path: "/Users/fixture/.claude/plugins/cache/example/core/1.0/skills/build", source: "core@example",
+            providerPluginID: "core@example")
         let inventory = ScannedInventory(
-            skills: [Fixture.skill("core:brazil")], mcpServers: [],
-            plugins: [Fixture.plugin("core@aim", members: ["core:brazil"])])
+            skills: [Fixture.skill("core:build")], mcpServers: [],
+            plugins: [Fixture.plugin("core@example", members: ["core:build"])])
 
         let plan = WorkspaceObservationReconciliation.plan(
             document: document, observations: [observation], inventory: inventory)
 
         #expect(plan.isEmpty)
-        #expect(plan.skipped == ["core:brazil: its package owns it, but the check could not say where inside it."])
+        #expect(plan.skipped == ["core:build: its package owns it, but the check could not say where inside it."])
     }
 
     @Test func anItemTwoPackagesClaimBelongsToNeither() throws {
@@ -219,10 +219,10 @@ struct WorkspaceObservationReconciliationTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let observation = Fixture.observation(
-            .claudeCode, skills: ["core:brazil", "docx"], plugins: ["core@aim"], memberships: ["core:brazil": "core@aim"])
+            .claudeCode, skills: ["core:build", "docx"], plugins: ["core@example"], memberships: ["core:build": "core@example"])
         let inventory = ScannedInventory(
-            skills: [Fixture.skill("core:brazil"), Fixture.skill("docx")], mcpServers: [],
-            plugins: [Fixture.plugin("core@aim", members: ["core:brazil"])])
+            skills: [Fixture.skill("core:build"), Fixture.skill("docx")], mcpServers: [],
+            plugins: [Fixture.plugin("core@example", members: ["core:build"])])
         let head = try #require(try fixture.store.snapshot()).document
         let plan = WorkspaceObservationReconciliation.plan(document: head, observations: [observation], inventory: inventory)
         let command = WorkspaceObservationReconciliationCommand(expectedRevisionID: head.revision.id, plan: plan)
@@ -276,7 +276,7 @@ struct WorkspaceObservationReconciliationTests {
 
     private struct Fixture {
         static let existing = ArtifactID()
-        static let packageRoot = "/Users/fixture/.claude/plugins/cache/aim/core/1.0"
+        static let packageRoot = "/Users/fixture/.claude/plugins/cache/example/core/1.0"
         let root: URL
         let store: WorkspaceRevisionStore
         let service: WorkspaceApplicationService

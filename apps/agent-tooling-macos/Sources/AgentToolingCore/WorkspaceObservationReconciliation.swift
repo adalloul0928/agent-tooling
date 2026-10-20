@@ -1,19 +1,9 @@
 import Foundation
 
-/// Brings the library up to date with what a later check of this Mac found.
-///
-/// A first run records what the scan saw. Every check after it used to update
-/// only the marks — where each row was found — and never the rows themselves,
-/// so a skill a client gained afterwards was visible to that client and
-/// invisible here. This closes that gap with the same rules the first run
-/// applies, applied to the difference: a package a client installed is
-/// `nativeOwned` with the route it was found under, its members belong to it
-/// and share its authority, and everything else is `trackedOnly`.
-///
-/// It only ever adds. A row already here is left exactly as it is, whatever
-/// its authority, and a row somebody removed is not put back. Taking something
-/// away because a scan did not see it this time is a decision a person makes,
-/// and one a scan that missed a folder would otherwise make for them.
+/// Adds newly observed tools using first-run ownership rules: installed native
+/// packages and their members are `nativeOwned`; other tools are `trackedOnly`.
+/// Existing records and tombstones are preserved. Missing scan results never
+/// remove library items.
 public enum WorkspaceObservationReconciliation {
     /// What one check would add, ready to write.
     public struct Plan: Codable, Hashable, Sendable {

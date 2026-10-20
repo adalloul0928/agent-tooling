@@ -570,27 +570,6 @@ struct GalleryMoreSurfacesTests {
                 + "editing Sources, so both are left to their menu/inline presentation.")
     }
 
-    // MARK: First run — onboarding picker and included contents
-
-    /// The onboarding assignment picker, and one choice row expanded to its
-    /// included-contents popover.
-    @Test func onboardingPickerAndContents() async throws {
-        for appearance in Self.both {
-            let fixture = try await ShellRenderFixture()
-            defer { fixture.remove() }
-            await fixture.workspace.device.refresh()
-            try gallerySnapshot(
-                OnboardingAssignmentPickerSheet(session: fixture.workspace.library),
-                area: "First run and wizards", screen: "Onboarding assignment picker", state: "choose",
-                size: SheetGallerySize.medium, appearance: appearance,
-                source: "Sources/AgentToolingApp/OnboardingWizard.swift:455")
-        }
-        GalleryIndex.shared.addNote(
-            "Onboarding included-contents popover (OnboardingChoiceRow.swift:44) lists a chosen package's "
-                + "bundled contents; its content is an inline VStack built from an OnboardingChoiceRow row model "
-                + "that is private to the wizard's internals, so it is left to its inline popover presentation.")
-    }
-
     // MARK: Components — the path popover
 
     /// The path popover a `PathInfoButton` opens, over a local path and a URL.

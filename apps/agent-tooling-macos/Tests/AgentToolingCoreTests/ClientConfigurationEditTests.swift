@@ -86,7 +86,7 @@ struct ClientConfigurationEditTests {
         [mcp_servers.other]
           command = "other"
 
-        [plugins."WootAICapabilities-all@aim"]
+        [plugins."ExampleTools-all@example"]
           enabled = true
         """
 
@@ -104,8 +104,8 @@ struct ClientConfigurationEditTests {
         #expect(added.contains("[mcp_servers.other]\n  command = \"other\"\n  enabled = false\n"), "added at the end of its table")
 
         let quoted = try ClientConfigurationEditor.apply(
-            .init(file: .codexConfig, keyPath: ["plugins", "WootAICapabilities-all@aim", "enabled"], value: .bool(false)), to: codexConfig)
-        #expect(quoted.contains("[plugins.\"WootAICapabilities-all@aim\"]\n  enabled = false"), "a quoted table name is found")
+            .init(file: .codexConfig, keyPath: ["plugins", "ExampleTools-all@example", "enabled"], value: .bool(false)), to: codexConfig)
+        #expect(quoted.contains("[plugins.\"ExampleTools-all@example\"]\n  enabled = false"), "a quoted table name is found")
 
         let root = try ClientConfigurationEditor.apply(
             .init(file: .codexConfig, keyPath: ["model_reasoning_effort"], value: .string("high")), to: codexConfig)
@@ -124,7 +124,7 @@ struct ClientConfigurationEditTests {
         let removed = try ClientConfigurationEditor.apply(
             .init(file: .codexConfig, keyPath: ["mcp_servers", "slack-mcp", "enabled"], value: .remove), to: codexConfig)
         #expect(!removed.contains("enabled = true\n\n[mcp_servers.other]"))
-        #expect(removed.contains("[plugins.\"WootAICapabilities-all@aim\"]\n  enabled = true"), "only the one key went")
+        #expect(removed.contains("[plugins.\"ExampleTools-all@example\"]\n  enabled = true"), "only the one key went")
     }
 
     // MARK: Safety

@@ -6,7 +6,7 @@ import Testing
 @testable import AgentToolingApp
 @testable import AgentToolingCore
 
-/// The harness itself, and the one screen that stands in front of another.
+/// The harness itself: its blank-frame check, its fixture and its scripted scan.
 @Suite("Shell render harness")
 @MainActor
 struct ShellRenderHarnessTests {
@@ -18,20 +18,6 @@ struct ShellRenderHarnessTests {
     @Test func theBlankFrameCheckWouldCatchAScreenThatDrewNothing() throws {
         let empty = try rasterize(Color(nsColor: .windowBackgroundColor))
         #expect(distinctColours(in: empty) <= 4)
-    }
-
-    /// Getting started stands in front of the library, and only the library,
-    /// while a writable workspace has items and nothing assigned.
-    @Test func firstRunDrawsBeforeAnythingIsAssigned() async throws {
-        let fixture = try await ShellRenderFixture()
-        defer { fixture.remove() }
-        // The wizard's primary action is enabled from the first frame, and a
-        // bare `NSHostingView` with no window does not finish compositing an
-        // enabled `.glassProminent` control before this reads it back; see
-        // `expectDrawnWarmed` in `Fixture+Onboarding.swift`.
-        try expectDrawnWarmed(
-            OnboardingWizard(workspace: fixture.workspace) {}
-                .environment(AppNavigationState()))
     }
 
     /// The fixture is the app's own wiring, so what a screen is handed here is

@@ -29,6 +29,16 @@ struct ClientVerdict: Equatable, Sendable {
 /// what happens to be installed on the machine running it.
 protocol DeviceObserving: Sendable {
     func observe(homeRoot: URL) async throws -> [TargetObservation]
+    /// Reads only `clients`: the re-check after an install touched them.
+    func observe(homeRoot: URL, clients: Set<ClientKind>) async throws -> [TargetObservation]
+}
+
+extension DeviceObserving {
+    /// A full check kept to `clients`, for an observer that can only read
+    /// everything.
+    func observe(homeRoot: URL, clients: Set<ClientKind>) async throws -> [TargetObservation] {
+        try await observe(homeRoot: homeRoot).filter { $0.surface.client.map(clients.contains) ?? false }
+    }
 }
 
 /// The real scan: the same adapters, over the same runner, that a first run
@@ -52,6 +62,12 @@ struct LiveDeviceObserver: DeviceObserving {
         await registry.scanAll(
             homeURL: homeRoot, runner: ProcessCommandRunner(homeURL: homeRoot), clients: clients)
     }
+
+    /// Scans only `clients`, so a re-check of two apps runs two apps' tools.
+    func observe(homeRoot: URL, clients wanted: Set<ClientKind>) async -> [TargetObservation] {
+        await registry.scanAll(
+            homeURL: homeRoot, runner: ProcessCommandRunner(homeURL: homeRoot), clients: clients.intersection(wanted))
+    }
 }
 
 /// What this Mac's apps look like, and which of them this Mac manages.
@@ -71,6 +87,9 @@ final class WorkspaceDeviceSession {
     /// When the last check that succeeded finished. A failed check leaves it
     /// alone rather than claiming a check that did not happen.
     private(set) var lastCheckedAt: Date?
+    /// A full refresh or adopted setup read counts for this launch. Scoped
+    /// post-install refreshes and reads saved by earlier launches do not.
+    private(set) var hasCheckedThisLaunch = false
     private(set) var isChecking = false
     private(set) var errorMessage: String?
     /// Which apps this Mac manages. Local to this Mac, never portable bytes.
@@ -105,6 +124,21 @@ final class WorkspaceDeviceSession {
     private(set) var lastUpdateCheck: Date?
     /// Folders this Mac looks in for projects, besides where Claude Code ran.
     private(set) var projectScanRoots: [String] = []
+    /// Which of the assistant's own runs this Mac allows, as recorded. Nil on
+    /// a workspace made before the choice existed.
+    private(set) var assistantRuns: AssistantRunConsent?
+    /// Whether project discovery also reads the folder names in Claude Code's
+    /// history, as recorded. Nil (made before the choice existed) means on.
+    private(set) var findsProjectsFromClaudeHistory: Bool?
+
+    /// The runs in force: what was chosen, else what a workspace made before
+    /// the choice existed has always done.
+    var effectiveAssistantRuns: AssistantRunConsent { assistantRuns ?? .existingBehaviour }
+
+    /// This Mac's choices as the store holds them, for the shell's launch
+    /// work to decide from. A flip still on its way to the store is not in
+    /// it.
+    var preferences: DeviceWorkspacePreferences { recordedPreferences }
 
     /// Every app this build knows how to speak to, in the registry's own order,
     /// so every list and picker offers them the same way round.
@@ -126,8 +160,24 @@ final class WorkspaceDeviceSession {
     private let library: WorkspaceLibrarySession
     private let homeRoot: URL
     private let observer: any DeviceObserving
+    private var retainedOwnership: [ExternalSkillKey: ObservedExternalManager] = [:]
+
+    private struct ExternalSkillKey: Hashable {
+        let surface: TargetSurface
+        let skillID: String
+        let path: String
+
+        init(surface: TargetSurface, skillID: String, metadata: ObservedSkillMetadata) {
+            self.surface = surface
+            self.skillID = skillID
+            self.path = URL(filePath: metadata.path).standardizedFileURL.path
+        }
+    }
     /// Scripted by tests; live launches ask the login shell for real.
     private let toolProbeRunner: (any CommandRunning)?
+    /// Applies recorded tool folders to every lookup in the process. A
+    /// fixture hands in one that does nothing.
+    private let registerToolRoots: @Sendable ([String]) -> Void
 
     /// The last device write asked for, so the next one starts only after it
     /// has finished. Two quick toggle flips each start their own task; queued
@@ -149,6 +199,9 @@ final class WorkspaceDeviceSession {
     /// The message a failed choice left on screen, so a later choice that
     /// saves can take that message down without taking down a check's.
     @ObservationIgnored private var writeFailureMessage: String?
+    /// A scoped re-check or an adopted read that arrived while a check was
+    /// running, waiting for it to finish.
+    @ObservationIgnored private var checkWaiters: [CheckedContinuation<Void, Never>] = []
 
     /// One setting a device write changes.
     private enum DeviceSetting: Hashable {
@@ -156,6 +209,8 @@ final class WorkspaceDeviceSession {
         case automaticHealth
         case updatePolicy
         case scanRoots
+        case assistantRuns
+        case projectHistory
 
         var isClient: Bool {
             if case .client = self { true } else { false }
@@ -178,7 +233,8 @@ final class WorkspaceDeviceSession {
         homeRoot: URL,
         observer: any DeviceObserving = LiveDeviceObserver(),
         toolProbeRunner: (any CommandRunning)? = nil,
-        recorder: (any DeviceStateRecording)? = nil
+        recorder: (any DeviceStateRecording)? = nil,
+        registerToolRoots: @escaping @Sendable ([String]) -> Void = { ClientExecutableLocator.registerAdditionalRoots($0) }
     ) {
         self.service = service
         self.recorder = recorder ?? service
@@ -186,8 +242,16 @@ final class WorkspaceDeviceSession {
         self.homeRoot = homeRoot
         self.observer = observer
         self.toolProbeRunner = toolProbeRunner
+        self.registerToolRoots = registerToolRoots
         let device = (try? store.snapshot())?.device
         let preferences = device?.applicationState?.preferences
+        // What the last recorded check found is what is known about this Mac
+        // until the next one, so a screen opened now shows it rather than
+        // "Not checked yet", and nothing rescans only because the session is
+        // new.
+        let recordedObservations = device?.observations ?? []
+        observations = recordedObservations
+        lastCheckedAt = recordedObservations.map(\.lastScannedAt).max()
         // The visibility rule lives in one place: an explicit choice wins, and
         // without one the clients the last recorded check found are the ones
         // shown, so an app that is not installed stays out of the way until it
@@ -199,8 +263,11 @@ final class WorkspaceDeviceSession {
         updatePolicy = preferences?.effectiveUpdatePolicy ?? UpdatePolicy()
         lastUpdateCheck = preferences?.lastUpdateCheck
         projectScanRoots = preferences?.projectScanRoots ?? []
+        assistantRuns = preferences?.assistantRuns
+        findsProjectsFromClaudeHistory = preferences?.findsProjectsFromClaudeHistory
         recordedPreferences = preferences ?? DeviceWorkspacePreferences()
-        ClientExecutableLocator.registerAdditionalRoots(preferences?.customToolDirectories ?? [])
+        registerToolRoots(preferences?.customToolDirectories ?? [])
+        rememberExternalOwnership(device?.observations ?? [])
     }
 
     /// A surface with no client of its own is never hidden by the choice.
@@ -292,7 +359,7 @@ final class WorkspaceDeviceSession {
                 // Process-wide registration is the live app's concern only. A
                 // scripted probe (a test) asserts the recorded preference and
                 // must not bleed roots into every other test's locator.
-                if toolProbeRunner == nil { ClientExecutableLocator.registerAdditionalRoots(recorded) }
+                if toolProbeRunner == nil { registerToolRoots(recorded) }
             } catch {
                 smartFindMessage = "Tools were found, but where they live could not be recorded. Nothing was changed."
                 return
@@ -344,6 +411,45 @@ final class WorkspaceDeviceSession {
         }
     }
 
+    /// Records which of the assistant's own runs this Mac allows. Shown at
+    /// once and queued with every other device write, so quick flips reach
+    /// the store in order and the last one stays; one that does not save is
+    /// put back as recorded, with the reason. Recording any choice, even
+    /// today's runs, ends the notice a workspace made before the choice
+    /// existed shows.
+    ///
+    /// Let your assistant help, Home's notice and Settings › General record
+    /// a choice through `WorkspaceLaunch.Workspace.recordAssistantRuns`, which
+    /// also stops a scheduled run the choice no longer allows.
+    func setAssistantRuns(_ consent: AssistantRunConsent) async {
+        guard assistantRuns != consent else { return }
+        assistantRuns = consent
+        errorMessage = nil
+        do {
+            try await writePreferences(.assistantRuns, failure: Self.choiceNotRecorded) { $0.assistantRuns = consent }
+            await library.refresh()
+        } catch {
+            // Already settled: the runs are shown as recorded, with the reason.
+        }
+    }
+
+    /// Records whether project discovery also reads the folder names in
+    /// Claude Code's history: What Agent Tooling reads on a rerun, once the
+    /// rerun's read is adopted. Saved the same way as every choice here.
+    func setFindsProjectsFromClaudeHistory(_ finds: Bool) async {
+        guard findsProjectsFromClaudeHistory != finds else { return }
+        findsProjectsFromClaudeHistory = finds
+        errorMessage = nil
+        do {
+            try await writePreferences(.projectHistory, failure: Self.choiceNotRecorded) {
+                $0.findsProjectsFromClaudeHistory = finds
+            }
+            await library.refresh()
+        } catch {
+            // Already settled: the choice is shown as recorded, with the reason.
+        }
+    }
+
     /// Records the folders this Mac looks in for projects. Saved before it is
     /// shown, like every device choice here; a write that fails shows them as
     /// recorded again before the error reaches the caller.
@@ -375,16 +481,9 @@ final class WorkspaceDeviceSession {
         }
     }
 
-    /// Runs one change to this Mac's own record after every one asked for
-    /// before it, so the writes reach the store in the order they were made
-    /// and the last flip is the one that stays.
-    ///
-    /// The head is read in the same call that commits, so another device write
-    /// landing in between cannot make this one stale. Each write is settled in
-    /// that same order before the next one starts: `setting` names what it
-    /// changes, and `message` is what a person is told if a choice of theirs
-    /// did not save. A write that failed does not stop the next one, and its
-    /// error still reaches its caller.
+    /// Serializes device writes in request order and reads the head at commit.
+    /// Each caller receives its own failure; a failed write does not block later
+    /// changes. `setting` identifies the operation and `message` explains failure.
     @discardableResult
     private func serializeDeviceWrite(
         _ setting: DeviceSetting? = nil, failure message: String? = nil,
@@ -417,7 +516,16 @@ final class WorkspaceDeviceSession {
     ) {
         switch result {
         case .success(let device):
-            if let preferences = device.applicationState?.preferences { recordedPreferences = preferences }
+            if let preferences = device.applicationState?.preferences {
+                recordedPreferences = preferences
+                // A choice with no flip of its own on the way is shown as
+                // recorded; one with a flip queued keeps showing the flip
+                // until its last write settles it (`showRecorded`).
+                if writesInFlight[.assistantRuns] == nil { assistantRuns = preferences.assistantRuns }
+                if writesInFlight[.projectHistory] == nil {
+                    findsProjectsFromClaudeHistory = preferences.findsProjectsFromClaudeHistory
+                }
+            }
             // A later choice that saved makes "Nothing was changed" untrue, so
             // the message an earlier one left comes down with it.
             if message != nil, let failure = writeFailureMessage {
@@ -458,7 +566,43 @@ final class WorkspaceDeviceSession {
             updatePolicy = recorded.effectiveUpdatePolicy
         case .scanRoots:
             projectScanRoots = recorded.projectScanRoots ?? []
+        case .assistantRuns:
+            assistantRuns = recorded.assistantRuns
+        case .projectHistory:
+            findsProjectsFromClaudeHistory = recorded.findsProjectsFromClaudeHistory
         }
+    }
+
+    /// An unsupported ownership detector must not turn a previously protected
+    /// folder into an unmanaged copy. New owners and changed paths take precedence.
+    private func preservingExternalOwnership(in scanned: [TargetObservation]) -> [TargetObservation] {
+        scanned.map { observation in
+            var result = observation
+            for (id, metadata) in result.skillMetadata where metadata.providerPluginID == nil && metadata.externalManager == nil {
+                let key = ExternalSkillKey(surface: result.surface, skillID: id, metadata: metadata)
+                result.skillMetadata[id]?.externalManager = retainedOwnership[key]
+            }
+            return result
+        }
+    }
+
+    private func rememberExternalOwnership(_ observations: [TargetObservation]) {
+        retainedOwnership = [:]
+        for observation in observations {
+            for (id, metadata) in observation.skillMetadata where metadata.providerPluginID == nil {
+                guard let manager = metadata.externalManager else { continue }
+                let key = ExternalSkillKey(surface: observation.surface, skillID: id, metadata: metadata)
+                retainedOwnership[key] = manager
+            }
+        }
+    }
+
+    /// Counts the read the setup stage made, and handed this Mac to the shell
+    /// straight after, as this launch's check of the apps: the stage read
+    /// them moments ago, so a main window opened again later in the same
+    /// launch does not read them again. Nothing is read or recorded.
+    func countStageReadAsThisLaunchsCheck() {
+        hasCheckedThisLaunch = true
     }
 
     /// Checks this Mac's apps. Reads only.
@@ -469,7 +613,7 @@ final class WorkspaceDeviceSession {
     func refresh() async {
         guard !isChecking else { return }
         isChecking = true
-        defer { isChecking = false }
+        defer { endCheck() }
         errorMessage = nil
         let observed: [TargetObservation]
         do {
@@ -484,7 +628,80 @@ final class WorkspaceDeviceSession {
                 : "This Mac's apps could not be checked again. What is shown is the last check."
             return
         }
+        // A check that was stopped part-way is not a check: what it read is
+        // dropped rather than recorded as this Mac's apps.
+        guard !Task.isCancelled else { return }
+        hasCheckedThisLaunch = true
+        await take(observed)
+    }
+
+    /// Checks only `clients` again, and keeps every other app's last check:
+    /// the re-check after an install touched those apps. What it reads
+    /// replaces only the surfaces it read, and it is not this launch's check
+    /// of the apps (`hasCheckedThisLaunch`).
+    ///
+    /// A check already running is waited for, then this one runs: that check
+    /// may have read the apps before the install changed them, so it is no
+    /// stand-in for this one.
+    func refresh(only clients: Set<ClientKind>) async {
+        guard !clients.isEmpty else { return }
+        await beginCheck()
+        defer { endCheck() }
+        errorMessage = nil
+        let observed: [TargetObservation]
+        do {
+            observed = try await observer.observe(homeRoot: homeRoot, clients: clients)
+        } catch {
+            errorMessage = "This Mac's apps could not be checked again. What is shown is the last check."
+            return
+        }
+        guard !Task.isCancelled else { return }
+        await take(Self.merged(observations, with: observed.filter { $0.surface.client.map(clients.contains) ?? false }))
+    }
+
+    /// Records a read the setup stage already made, as a check: nothing is
+    /// scanned. What it read replaces the surfaces it read; every other app's
+    /// last check stays. A check already running is waited for, and this read
+    /// lands over what it found: it is the read the person was shown.
+    func adopt(_ observed: [TargetObservation]) async {
+        await beginCheck()
+        defer { endCheck() }
+        errorMessage = nil
+        hasCheckedThisLaunch = true
+        await take(Self.merged(observations, with: observed))
+    }
+
+    /// Waits until no check is running, then starts one, so the checks a
+    /// session is asked for run one at a time.
+    private func beginCheck() async {
+        while isChecking {
+            await withCheckedContinuation { checkWaiters.append($0) }
+        }
+        isChecking = true
+    }
+
+    /// Ends the check running and lets the next one waiting begin.
+    private func endCheck() {
+        isChecking = false
+        let waiting = checkWaiters
+        checkWaiters = []
+        for waiter in waiting { waiter.resume() }
+    }
+
+    /// `existing` with every surface `fresh` read replaced by its new reading,
+    /// in surface order: the order a check reports them in.
+    nonisolated static func merged(_ existing: [TargetObservation], with fresh: [TargetObservation]) -> [TargetObservation] {
+        let replaced = Set(fresh.map(\.surface))
+        return (existing.filter { !replaced.contains($0.surface) } + fresh)
+            .sorted { $0.surface.displayName < $1.surface.displayName }
+    }
+
+    /// Keeps `observed` as this Mac's last check: on screen, and on its
+    /// record. Whether it is this launch's check is the caller's to say.
+    private func take(_ scanned: [TargetObservation]) async {
+        let observed = preservingExternalOwnership(in: scanned)
         observations = observed
+        rememberExternalOwnership(observed)
         lastCheckedAt = .now
         // A find that has nothing left to find has said its piece: once every
         // managed tool answers, the message would only strand on screen.
@@ -499,20 +716,9 @@ final class WorkspaceDeviceSession {
         await record(observed)
     }
 
-    /// Keeps what the check found, so the rest of the app reads this check
-    /// rather than the one a first run did.
-    ///
-    /// Both halves are written together: what was seen, and what each client
-    /// that answered can be asked to carry. The second is what admits a
-    /// destination into an install plan, and deriving it anywhere else would
-    /// leave a workspace able to record an assignment it could never plan.
-    ///
-    /// Recorded the way `setEnabled` records which apps this Mac manages: one
-    /// device-only change under the same head check as everything else, with
-    /// the portable document untouched, queued with the toggles so a flip made
-    /// while a check records is neither raced nor rejected as stale. What was
-    /// found stays on screen either way — a scan that ran is not undone by a
-    /// store that would not take it.
+    /// Records observations and derived client capabilities together in device
+    /// state. Writes share the toggle queue and head check; portable state is
+    /// unchanged. Observations remain visible even if persistence fails.
     private func record(_ observed: [TargetObservation]) async {
         let evidence = TargetCapabilityEvidence.derive(from: observed)
         do {

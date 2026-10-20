@@ -41,10 +41,31 @@ an earlier Apply once. Linked preset subscriptions are separate future P1 work.
 Portable metadata, native deployment files and device observations remain
 separate: this service changes the first and leaves the latter two untouched.
 
+## Placing exact pairs
+
+`WorkspaceAssignmentBatchCommand.place(document:placements:withdrawing:
+idempotencyKey:)` (internal to Core) builds the batch the setup stage's Put in
+apps saves: explicit `WorkspacePlacement(artifactID:destination:)` pairs, each
+a manual contribution. A pair something already asks for, by
+`WorkspacePlacement.isAsked(by:)` (the same item and destination, the Macs in
+any order, any reason), is skipped and reported, never asked for twice; the
+what-if plan uses the same rule. `withdrawing` names this setup's own earlier
+contributions, and only those where no cell still wants them are removed, so
+Back then Continue changes only what this setup placed. The app reaches it
+through `WorkspaceLibrarySession.reviewPlacements(_:withdrawing:)`, which
+waits for a read and for any work in flight first, then
+`applyReviewedAssignments()`; with nothing to save, the review stays nil and
+writes nothing.
+
+`WorkspaceApplicationService.deploymentPlan(..., assuming:)` plans with
+contributions applied in memory, the way a batch would apply them, and throws
+the batch's errors; `WorkspaceDeploymentSession.previewPlan(assuming:)` builds
+the grid's cells from it without writing session state.
+
 ## Integration
 
-The shared Library/Project/onboarding assignment sheet retains the reviewed
-command rather than recreating IDs on retry, resolves target capabilities, and
+The shared Library and Project assignment sheet retains the reviewed command
+rather than recreating IDs on retry, resolves target capabilities, and
 presents native operation plans and results independently from saved intent.
 `WorkspaceInstallSession` runs the one-step install (assign, plan,
 risk-classify, apply) and reports a receipt; `WorkspaceDeploymentSession` drives

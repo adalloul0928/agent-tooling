@@ -19,24 +19,11 @@ enum InteractiveLoginProcessError: Error, Equatable, Sendable {
     case cannotSpawn(Int32)
 }
 
-/// Runs a client's own sign-in command the way a person would in a terminal.
-///
-/// `claude mcp login` and `codex mcp login` refuse to run when their standard
-/// input is not a terminal: the flow prints an authorization URL, opens a
-/// callback listener, and waits, and they insist on an interactive session
-/// for the paste-the-redirect fallback. A plain pipe therefore fails at once.
-/// This type gives the tool a pseudo-terminal instead, so it behaves as it
-/// does in Terminal.app, while the app still controls exactly which argv runs
-/// (the caller has already checked it against the operation policy), which
-/// environment it sees (the same HOME-scoped allowlist every other child
-/// gets), and how long it may wait.
-///
-/// The app reads the terminal's output only to find the authorization URL the
-/// tool prints with `--no-browser`, so it can open the browser itself and show
-/// the person what it opened. It never reads a token: the OAuth code returns
-/// to the tool's own localhost callback, and the tool stores the credential
-/// where it always does. Nothing typed into the terminal is ever sent; the
-/// pseudo-terminal exists so the tool will run at all.
+/// Runs client sign-in commands in a pseudo-terminal required by their login
+/// flows. Callers validate argv; the process uses the HOME-scoped environment
+/// allowlist and a timeout. Output is read only for the `--no-browser` URL.
+/// OAuth callbacks and credential storage remain with the client. No terminal
+/// input is forwarded.
 struct InteractiveLoginProcess: Sendable {
     /// Bounds on what is kept from the terminal, so a chatty tool cannot grow
     /// memory without limit while a person is away.

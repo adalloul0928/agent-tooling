@@ -1,80 +1,24 @@
 import AgentToolingCore
-import AppKit
 import SwiftUI
 
 struct ClientBrandIcon: View {
     let client: ClientKind
-    /// Always one of the `Size` tokens, chosen by the caller for its row.
     let size: CGFloat
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Group {
-            if ClientBrandAssets.hasCompiledCatalog {
-                Image(ClientBrandAssets.assetName(for: client), bundle: AppResources.bundle)
-                    .resizable()
-            } else if let image = ClientBrandAssets.image(for: client, colorScheme: colorScheme) {
-                Image(nsImage: image)
-                    .resizable()
-            } else {
-                Image(systemName: "app")
-                    .resizable()
-            }
-        }
-        .scaledToFit()
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
+        Image(systemName: Self.symbol(for: client))
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
-}
 
-enum ClientBrandAssets {
-    static func assetName(for client: ClientKind) -> String {
+    static func symbol(for client: ClientKind) -> String {
         switch client {
-        case .codex: "ClientCodex"
-        case .claude: "ClientClaude"
-        case .gemini: "ClientGemini"
-        case .kiro: "ClientKiro"
+        case .codex: "chevron.left.forwardslash.chevron.right"
+        case .claude: "text.bubble"
+        case .gemini: "sparkles"
+        case .kiro: "terminal"
         }
-    }
-
-    static let hasCompiledCatalog: Bool = {
-        AppResources.bundle.url(forResource: "Assets", withExtension: "car") != nil
-    }()
-
-    @MainActor private static let fallbackImages = NSCache<NSString, NSImage>()
-
-    @MainActor
-    static func image(for client: ClientKind, colorScheme: ColorScheme) -> NSImage? {
-        let key = "\(client.rawValue)/\(colorScheme == .dark ? "dark" : "light")" as NSString
-        if let cached = fallbackImages.object(forKey: key) { return cached }
-        guard let url = sourceURL(for: client, colorScheme: colorScheme), let image = NSImage(contentsOf: url) else { return nil }
-        fallbackImages.setObject(image, forKey: key)
-        return image
-    }
-
-    static func sourceURL(for client: ClientKind, colorScheme: ColorScheme) -> URL? {
-        let imageSet: String
-        let fileName: String
-        switch client {
-        case .codex:
-            imageSet = "ClientCodex.imageset"
-            fileName = colorScheme == .dark ? "codex-dark.svg" : "codex-light.svg"
-        case .claude:
-            imageSet = "ClientClaude.imageset"
-            fileName = "claude.svg"
-        case .gemini:
-            imageSet = "ClientGemini.imageset"
-            fileName = "gemini.svg"
-        case .kiro:
-            imageSet = "ClientKiro.imageset"
-            fileName = "kiro.svg"
-        }
-
-        let url = AppResources.bundle.resourceURL?
-            .appending(path: "Assets.xcassets", directoryHint: .isDirectory)
-            .appending(path: imageSet, directoryHint: .isDirectory)
-            .appending(path: fileName, directoryHint: .notDirectory)
-        guard let url, FileManager.default.isReadableFile(atPath: url.path) else { return nil }
-        return url
     }
 }

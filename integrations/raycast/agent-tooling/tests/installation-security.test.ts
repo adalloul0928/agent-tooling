@@ -9,7 +9,7 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AGENT_TOOLING_BUNDLE_ID,
   AGENT_TOOLING_HELPER_ID,
@@ -22,8 +22,20 @@ import {
   verifyCodeIdentity,
 } from "../src/lib/installation-security";
 
+const signingConfig = vi.hoisted(() => ({ teamID: "TESTTEAM01" }));
+vi.mock("../src/lib/signing-team", () => ({
+  get AGENT_TOOLING_TEAM_ID() {
+    return signingConfig.teamID;
+  },
+}));
+
 const temporaryRoots: string[] = [];
-const expectedAuthority = `Developer ID Application: AVAD Technologies LLC (${AGENT_TOOLING_TEAM_ID})`;
+const expectedAuthority =
+  "Developer ID Application: Example Developer (TESTTEAM01)";
+
+beforeEach(() => {
+  signingConfig.teamID = "TESTTEAM01";
+});
 
 afterEach(async () => {
   await Promise.all(
@@ -61,10 +73,31 @@ describe("Agent Tooling installation security", () => {
       ]),
     );
     const requirement = developerIDRequirement(AGENT_TOOLING_BUNDLE_ID);
-    expect(requirement).toContain('identifier "com.arendalloul.agent-tooling"');
-    expect(requirement).toContain('subject.OU] = "434X69L4Z5"');
+    expect(requirement).toContain('identifier "dev.agenttooling.app"');
+    expect(requirement).toContain('subject.OU] = "TESTTEAM01"');
     expect(requirement).toContain("1.2.840.113635.100.6.1.13");
   });
+
+  it.each(["", "*", "INVALID", 'TESTTEAM01" or true'])(
+    "rejects an unconfigured or invalid signing team: %s",
+    async (teamID) => {
+      signingConfig.teamID = teamID;
+      const runCodesign = vi.fn();
+      await expect(
+        verifyCodeIdentity(
+          "/Applications/Agent Tooling.app",
+          AGENT_TOOLING_BUNDLE_ID,
+          runCodesign,
+        ),
+      ).rejects.toThrow("no configured signing identity");
+      expect(runCodesign).not.toHaveBeenCalled();
+
+      const { appPath } = await makeInstallation();
+      await expect(
+        validatePackagedInstallation(appPath, matchingVerifier()),
+      ).rejects.toThrow("no configured signing identity");
+    },
+  );
 
   it("accepts only canonical in-bundle helpers with the same identity", async () => {
     const { appPath, helperPath } = await makeInstallation();

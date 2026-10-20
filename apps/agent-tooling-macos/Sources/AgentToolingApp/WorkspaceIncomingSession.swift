@@ -1,18 +1,10 @@
 import AgentToolingCore
 import Foundation
 
-/// What other Macs asked for on this one, and what this Mac does about it.
-///
-/// A sync pass that brings the document forward may leave assignments this Mac
-/// has not satisfied: an install made on another Mac as "every Mac", or one
-/// that names this Mac. That is the same situation as a found update and is
-/// handled by the same rule — `UpdatePolicy` per kind: install automatically,
-/// or ask. The install itself is the ordinary one-step path: plan, classify,
-/// direct apply (or hold for review), receipts. Arriving intent is never
-/// evidence that a file changed.
-///
-/// A Mac set to take only what names it is never asked about items that do not
-/// apply to it; the planner already leaves those out.
+/// Applies incoming assignments using this Mac's per-kind update policy.
+/// Automatic installs use the normal planning and risk-review pipeline; other
+/// assignments wait for review. Received intent does not prove installation,
+/// and the planner excludes assignments outside this device's scope.
 @MainActor @Observable
 final class WorkspaceIncomingSession {
     struct Arrival: Identifiable, Equatable {
@@ -39,16 +31,23 @@ final class WorkspaceIncomingSession {
     private let device: WorkspaceDeviceSession
     private let service: WorkspaceApplicationService
     private let sync: WorkspaceSyncSession?
+    /// Assignments this Mac's own setup made, as they stand at each look.
+    /// They are never arrivals, even those that name every Mac: what a person
+    /// placed here did not come from another Mac. Asked at every review,
+    /// because setup keeps adding them while the workspace is open.
+    private let excludedContributionIDs: @MainActor () -> Set<WorkspaceObjectID>
 
     init(
         library: WorkspaceLibrarySession, deployment: WorkspaceDeploymentSession,
-        device: WorkspaceDeviceSession, service: WorkspaceApplicationService, sync: WorkspaceSyncSession?
+        device: WorkspaceDeviceSession, service: WorkspaceApplicationService, sync: WorkspaceSyncSession?,
+        excludedContributionIDs: @escaping @MainActor () -> Set<WorkspaceObjectID> = { [] }
     ) {
         self.library = library
         self.deployment = deployment
         self.device = device
         self.service = service
         self.sync = sync
+        self.excludedContributionIDs = excludedContributionIDs
     }
 
     var hasWork: Bool { !waiting.isEmpty || !heldForReview.isEmpty }
@@ -69,7 +68,8 @@ final class WorkspaceIncomingSession {
             errorMessage = deployment.errorMessage
             return
         }
-        let arrivals = Self.arrivals(in: plan, library: state.library, thisDevice: library.deviceID)
+        let arrivals = Self.arrivals(
+            in: plan, library: state.library, thisDevice: library.deviceID, excluding: excludedContributionIDs())
         lastChecked = .now
         guard installingAutomatically else {
             waiting = arrivals
@@ -132,12 +132,12 @@ final class WorkspaceIncomingSession {
         for arrival in waiting { await install(arrival.artifactID) }
     }
 
-    /// Plan items for assignments that did not originate on this Mac. An
-    /// assignment that names only this Mac was made here (or for here, by
-    /// name, which is the same decision); a shared one or one naming several
-    /// Macs came from the shared document.
+    /// Finds plan items from shared assignments applicable to this Mac. Assignments
+    /// only for this Mac and contributions in `excluding` are local intent. Those
+    /// only for other Macs are irrelevant. Arrival apps retain the standard order.
     static func arrivals(
-        in plan: WorkspaceDeploymentPlan, library: WorkspaceLibraryReadModel, thisDevice: WorkspaceObjectID
+        in plan: WorkspaceDeploymentPlan, library: WorkspaceLibraryReadModel, thisDevice: WorkspaceObjectID,
+        excluding: Set<WorkspaceObjectID> = []
     ) -> [Arrival] {
         let rows = Dictionary(library.rows.map { ($0.artifactID, $0) }, uniquingKeysWith: { first, _ in first })
         var byArtifact: [ArtifactID: Set<ClientKind>] = [:]
@@ -146,13 +146,14 @@ final class WorkspaceIncomingSession {
             // and removal is its own review; neither is "from your other Macs".
             switch item.action {
             case .installContent, .installNativePackage, .configureManagedConnection: break
-            case .updateContent, .removeContent: continue
+            case .updateContent, .removeContent, .removeManagedConnection: continue
             }
             guard let row = rows[item.artifactID] else { continue }
             let fromElsewhere = row.requestedAssignments.contains { assignment in
-                assignment.destination.surface == item.surface
+                !excluding.contains(assignment.id)
+                    && assignment.destination.surface == item.surface
                     && assignment.destination.scope == item.scope
-                    && assignment.destination.deviceIDs != [thisDevice]
+                    && Self.isShared(assignment.destination.deviceIDs, with: thisDevice)
             }
             guard fromElsewhere, let client = item.surface.client else { continue }
             byArtifact[item.artifactID, default: []].insert(client)
@@ -161,8 +162,15 @@ final class WorkspaceIncomingSession {
             guard let row = rows[id], let kind = Self.kind(of: row.kind) else { return nil }
             return Arrival(
                 artifactID: id, displayName: row.displayName, kind: kind,
-                clients: clients.sorted { $0.rawValue < $1.rawValue })
+                clients: ClientKind.allCases.filter(clients.contains))
         }.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+
+    /// Whether an assignment to `devices` reaches this Mac from the shared
+    /// document: every Mac (nil), or several naming this one.
+    static func isShared(_ devices: [WorkspaceObjectID]?, with thisDevice: WorkspaceObjectID) -> Bool {
+        guard let devices else { return true }
+        return devices.contains(thisDevice) && devices != [thisDevice]
     }
 
     private static func kind(of kind: ArtifactKind) -> ToolingItemKind? {

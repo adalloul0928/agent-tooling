@@ -3,15 +3,9 @@ import AppKit
 import Foundation
 import Observation
 
-/// The Health screen's state: what the last connection check found, and the
-/// reviewed re-authentication a person can start from a row.
-///
-/// Checking is a read: it runs each managed client's own list command through
-/// the injected runner and parses it, touching nothing. Re-authenticating is
-/// the one thing here that changes anything, and it changes it in the client,
-/// not in this app: `<cli> mcp login <name>` opens the client's own browser
-/// flow, and this session only captures the redacted last lines to show as a
-/// result. No token is ever stored or logged, and nothing runs without a click.
+/// Runs managed clients' connection-list commands through the injected runner.
+/// Explicit re-authentication starts the client's browser flow. Only redacted
+/// output is retained; this session never stores or logs tokens.
 @MainActor @Observable
 final class WorkspaceHealthSession {
     /// Per-client results from the last check, in managed-client order. A
@@ -84,6 +78,13 @@ final class WorkspaceHealthSession {
 
     /// How many listed connections are in a state worth looking at.
     var attentionCount: Int { entries.filter { $0.status.needsAttention }.count }
+
+    /// How many listed connections need the person: signed out, failing, or
+    /// waiting for approval. A status the app could not read is left out:
+    /// Codex reports every connection that way, and a state nobody can act on
+    /// is not a call to act. The sidebar's Apps badge and Home's "need
+    /// attention" line count this.
+    var needsYouCount: Int { entries.filter { $0.status.needsYou }.count }
 
     /// The entries a bulk re-authentication would sign in to: those whose one
     /// honest offer is a login this app can run. This is the same predicate the
@@ -182,6 +183,12 @@ final class WorkspaceHealthSession {
         login.commandText(client: entry.client, serverID: entry.name)
     }
 
+    /// The same command for a server named before any check has listed it,
+    /// so a confirmation can show what a sign-in would run before it runs.
+    func loginCommandText(client: ClientKind, serverID: String) -> String? {
+        login.commandText(client: client, serverID: serverID)
+    }
+
     // MARK: - Private
 
     /// Runs one login, records the row's result, and reports whether it
@@ -194,7 +201,9 @@ final class WorkspaceHealthSession {
         authorizationURLs[entry.id] = nil
         let entryID = entry.id
         let openURL = openURL
-        let result = await login.logIn(client: entry.client, serverID: entry.name) { url in
+        // The tool holds the callback until it ends; it never keeps the
+        // session alive.
+        let result = await login.logIn(client: entry.client, serverID: entry.name) { [weak self] url in
             // The tool printed where to sign in; open it and remember it so the
             // row can show and reopen it while the tool waits for the callback.
             Task { @MainActor [weak self] in self?.authorizationURLs[entryID] = url }
@@ -205,5 +214,17 @@ final class WorkspaceHealthSession {
             ? .finished(message: result.message)
             : .failed(message: result.message)
         return result.succeeded
+    }
+}
+
+extension ConnectionHealthStatus {
+    /// Whether this state needs the person to do something: sign in again,
+    /// fix a connection that fails, or approve one. Unread states are not
+    /// counted, unlike `needsAttention`.
+    var needsYou: Bool {
+        switch self {
+        case .needsAuthentication, .failed, .pendingApproval: true
+        case .connected, .disabled, .notConfigured, .unknown: false
+        }
     }
 }

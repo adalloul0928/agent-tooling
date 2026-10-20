@@ -3,11 +3,12 @@ import AgentToolingCore
 /// How many skills, plugins and connections something holds, in the Library's
 /// own nouns and in the order its tabs list them.
 ///
-/// An app's holdings are counted on its Apps tile and page, in the setup
-/// wizard and Checkup, and on another Mac's sheet. Each of those joined the
-/// three counts by hand, two of them in a different order, so one Claude Code
-/// read "17 skills · 8 connections · 5 plugins" on its tile and "17 skills · 5
-/// plugins · 8 connections" in the wizard. This is the one order.
+/// An app's holdings are counted on its Apps tile and page, on the setup
+/// stage, on Checkup, and on another Mac's sheet. Each of those once joined
+/// the three counts by hand, two of them in a different order, so one Claude
+/// Code read "17 skills · 8 connections · 5 plugins" on its tile and "17
+/// skills · 5 plugins · 8 connections" in the old setup wizard. This is the
+/// one order.
 struct LibraryCounts: Equatable {
     let skills: Int
     let plugins: Int
@@ -45,15 +46,29 @@ extension LibraryCounts {
     }
 }
 
+extension WorkspaceLibraryReadModel {
+    /// What the library holds, in a sentence: "It holds 11 tools. 3 of them
+    /// come inside plugins." Setup says it when the library is first read,
+    /// and again on Done.
+    var holdingsSentence: String {
+        let nested = nestedToolCount
+        let holds = "It holds \(CountNoun("tool").phrase(toolCount))."
+        guard nested > 0 else { return holds }
+        return nested == 1
+            ? "\(holds) One of them comes inside a plugin."
+            : "\(holds) \(nested) of them come inside plugins."
+    }
+}
+
 extension WorkspaceLibraryReadModelRow {
     /// What a plugin bundles, by kind, in the Library's nouns and order:
     /// "Includes 2 skills · 1 connection". Nil when it bundles nothing.
     ///
-    /// The install sheet, a project's Plugins tab and onboarding each counted
-    /// the same children their own way, "3 bundled items", "3 tools" and this
-    /// breakdown, and "tools" is also what a connection's own tools are
-    /// called. Anything bundled that is none of the Library's three kinds is
-    /// still counted, as an item.
+    /// The install sheet, a project's Plugins tab and the old onboarding each
+    /// counted the same children their own way, "3 bundled items", "3 tools"
+    /// and this breakdown, and "tools" is also what a connection's own tools
+    /// are called. Anything bundled that is none of the Library's three kinds
+    /// is still counted, as an item.
     var includedSummary: String? {
         guard !includedChildren.isEmpty else { return nil }
         let kinds = includedChildren.map(\.kind)

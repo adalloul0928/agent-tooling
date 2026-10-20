@@ -112,17 +112,14 @@ struct WorkspaceSkillTargetCaptureTests {
         }
     }
 
-    @Test func missingAndDuplicateObservationsThrowWhileUnsupportedAndMissingProjectSkip() async throws {
+    /// A surface with no observation at all is skipped as not checked yet;
+    /// CaptureNotCheckedTests pins that.
+    @Test func duplicateObservationsThrowWhileUnsupportedAndMissingProjectSkip() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let deviceID = Self.object("00000000-0000-0000-0000-000000000040")
-        // A surface with no observation at all is a structural problem the
-        // caller cannot recover from, so it still throws.
-        await #expect(throws: WorkspaceSkillTargetCaptureError.missingObservation(.codexCLI)) {
-            _ = try await WorkspaceSkillTargetCapture.capture(
-                homeURL: fixture.home, deviceID: deviceID,
-                selectors: [.init(surface: .codexCLI, scope: .user)], observations: [])
-        }
+        // Two observations of one surface are a structural problem the caller
+        // cannot recover from, so they still throw.
         await #expect(throws: WorkspaceSkillTargetCaptureError.ambiguousObservation(.codexCLI)) {
             _ = try await WorkspaceSkillTargetCapture.capture(
                 homeURL: fixture.home, deviceID: deviceID,

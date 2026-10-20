@@ -51,7 +51,17 @@ extension WorkspaceLaunch.Workspace {
 extension EnvironmentValues {
     /// How a detail pane opens a skill in Terminal. A test replaces the whole
     /// factory, so no render can open a window.
-    @Entry var skillTrialOpening: (WorkspaceLaunch.Workspace) -> any SkillTrialOpening = {
-        LiveSkillTrialOpening(homeRoot: $0.homeRoot, scriptsDirectory: $0.skillTrialScriptsDirectory)
+    var skillTrialOpening: (WorkspaceLaunch.Workspace) -> any SkillTrialOpening {
+        get { self[SkillTrialOpeningKey.self] }
+        set { self[SkillTrialOpeningKey.self] = newValue }
+    }
+}
+
+/// The key is written out because the value is a closure: from the macOS 27
+/// SDK on, `@Entry` warns on every closure value, since a closure cannot be
+/// compared. This is what `@Entry` made before, under every SDK.
+private struct SkillTrialOpeningKey: EnvironmentKey {
+    static var defaultValue: (WorkspaceLaunch.Workspace) -> any SkillTrialOpening {
+        { LiveSkillTrialOpening(homeRoot: $0.homeRoot, scriptsDirectory: $0.skillTrialScriptsDirectory) }
     }
 }

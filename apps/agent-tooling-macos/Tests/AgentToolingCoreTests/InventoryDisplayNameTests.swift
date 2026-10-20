@@ -20,10 +20,10 @@ struct InventoryDisplayNameTests {
     }
 
     @Test func casingAnAuthorChoseInsideAWordSurvives() throws {
-        let inventory = try inventory(forSkillFolder: "pumpd-iOS-buildKit")
+        let inventory = try inventory(forSkillFolder: "sample-app-iOS-buildKit")
         let skill = try #require(inventory.skills.first)
 
-        #expect(skill.displayName == "Pumpd iOS BuildKit")
+        #expect(skill.displayName == "Sample App iOS BuildKit")
     }
 
     @Test func ordinaryLowercaseIdentifiersStillReadAsTitles() throws {

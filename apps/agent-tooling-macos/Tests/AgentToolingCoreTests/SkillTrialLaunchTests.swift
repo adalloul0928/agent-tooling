@@ -59,7 +59,7 @@ struct SkillTrialLaunchTests {
         let body = TerminalCommandScript.render(
             title: "Try it",
             workingDirectory: URL(filePath: "/Users/ex ample/it's here", directoryHint: .isDirectory),
-            executable: "/Users/ex ample/.toolbox/bin/claude",
+            executable: "/Users/ex ample/.local/bin/claude",
             arguments: ["/release-review"])
 
         #expect(body.hasPrefix("#!/bin/zsh\n"))
@@ -68,7 +68,7 @@ struct SkillTrialLaunchTests {
         // it every part is quoted again.
         #expect(
             body.contains(
-                "exec \"${SHELL:-/bin/zsh}\" -l -i -c 'exec '\\''/Users/ex ample/.toolbox/bin/claude'\\'' '\\''/release-review'\\'''"))
+                "exec \"${SHELL:-/bin/zsh}\" -l -i -c 'exec '\\''/Users/ex ample/.local/bin/claude'\\'' '\\''/release-review'\\'''"))
         #expect(!body.contains("\n\n\n"))
 
         let direct = TerminalCommandScript.render(
@@ -87,7 +87,10 @@ struct SkillTrialLaunchTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let script = try TerminalCommandScript.write(body, named: "quote-check", in: root)
 
-        let output = try await ProcessCommandRunner(timeout: .seconds(5)).run(
+        // Only a hang should run out of this time: at the start of a parallel
+        // run, a command that ends at once can wait seconds for its task to
+        // resume.
+        let output = try await ProcessCommandRunner(timeout: .seconds(30)).run(
             executable: script.path(percentEncoded: false), arguments: [], currentDirectory: nil)
 
         #expect(output.status == 0)

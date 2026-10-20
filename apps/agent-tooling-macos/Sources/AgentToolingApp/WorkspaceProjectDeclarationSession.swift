@@ -2,18 +2,9 @@ import AgentToolingCore
 import Foundation
 import Observation
 
-/// Writing a project's own declaration and lock into its folder.
-///
-/// Two files and nothing else. The declaration says what this project asks for;
-/// the lock pins what that resolved to, so a later checkout reproduces the same
-/// bytes. Both are meant to be committed, so neither carries a path from this
-/// Mac, a device identity, an observation time or a credential.
-///
-/// Only items whose content this workspace actually pinned reach the lock. An
-/// item the workspace holds without an immutable upstream revision appears in
-/// the declaration — it is genuinely something this project asks for — and is
-/// named as unlocked, because writing a lock line that cannot restore the same
-/// bytes would be the one thing a lock must not do.
+/// Writes a portable project declaration and lock without device paths, IDs,
+/// timestamps, or credentials. Only reproducible, pinned content enters the
+/// lock; other requested items remain declared and are reported as unlocked.
 @MainActor @Observable
 final class WorkspaceProjectDeclarationSession {
     struct Preview: Sendable {

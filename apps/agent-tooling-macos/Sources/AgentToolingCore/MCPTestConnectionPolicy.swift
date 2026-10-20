@@ -30,41 +30,15 @@ public enum MCPTestTarget: Equatable, Sendable {
     }
 }
 
-/// The complete, self-contained boundary for a *live test connection*.
-///
-/// This is deliberately **not** ``OperationCommandPolicy``. That policy is an
-/// allowlist for reviewed operations: a fixed set of client CLIs whose exact
-/// argument shapes Agent Tooling authored. A test connection is a different
-/// thing — it starts a program the person's own MCP definition names, which is
-/// third-party code — so widening the operation allowlist to let it through
-/// would have quietly turned a closed allowlist into an open one.
-///
-/// The boundary this type enforces instead:
-///
-/// 1. **Only on an explicit, per-server action.** Nothing here runs on
-///    appearance, on selection, on refresh, or as part of a sync. The caller
-///    must have shown ``MCPTestTarget/displayCommand`` and taken a confirmation
-///    for that exact server first.
-/// 2. **Only a definition Agent Tooling manages.** A server merely *discovered*
-///    in a client's configuration records where it was seen, not how to start
-///    it, so it is refused rather than guessed at.
-/// 3. **A named program, never a wrapper.** The executable must resolve to a
-///    real, non-setuid file on this Mac using the fixed `PATH` every child
-///    this app starts gets, never the app's inherited one. Shells,
-///    privilege elevators, and run-another-program wrappers are refused,
-///    because the console's safety story is that the displayed line is the
-///    program that runs. There is no `/usr/bin/env` fallback.
-/// 4. **No secrets, ever.** A stdio child gets a freshly built environment —
-///    `PATH`, `HOME`, `TMPDIR`, `LANG`, `USER`, `LOGNAME` and a marker — and
-///    never the app's inherited environment. An HTTP request carries no
-///    `Authorization` header, no cookies, and no stored credentials.
-/// 5. **Plaintext only to this Mac.** `http://` is accepted for loopback hosts
-///    and refused for anything else; a real remote endpoint must be `https`.
-/// 6. **Bounded and stoppable.** Every stage has a timeout, every message and
-///    result has a byte cap, the session has a hard lifetime, and cancelling
-///    terminates the child process group.
-/// 7. **An observation, not a verdict.** Nothing this produces is written into
-///    a server's recorded state.
+/// Live-test boundary, separate from the reviewed-operation command allowlist.
+/// Callers must display the exact target and obtain a per-server confirmation.
+/// Only managed definitions qualify; selection, refresh and sync never connect.
+/// Stdio requires a runnable, non-setuid file on the shared fixed PATH. Shells,
+/// privilege elevators and execution wrappers are refused, with no env fallback.
+/// Children receive only a fresh allowlisted environment. HTTP carries no
+/// credentials or cookies; plaintext endpoints must be loopback.
+/// Time, size and session limits apply, and cancellation stops the process group.
+/// Test observations never alter the server's recorded state.
 public enum MCPTestConnectionPolicy {
     // MARK: Bounds
 
@@ -191,10 +165,7 @@ public enum MCPTestConnectionPolicy {
             throw MCPLiveTestError.executableNotPermitted(requestedName)
         }
         let environment = childEnvironment(homeURL: homeURL)
-        // The program starts from the path it was found at, not the file a link
-        // there leads to, the way every other child this app starts does: a
-        // shim dispatches on the name it was started by, and every tool in
-        // Amazon Toolbox's `~/.toolbox/bin` is a link to one shared dispatcher.
+        // Preserve the installed symlink path for dispatchers that inspect argv[0].
         guard
             let installed = ProcessCommandRunner.launchExecutableURL(
                 for: executable,

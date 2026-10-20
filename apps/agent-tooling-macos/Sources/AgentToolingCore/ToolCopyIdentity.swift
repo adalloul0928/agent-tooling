@@ -1,14 +1,8 @@
 import CryptoKit
 import Foundation
 
-/// When two entries in the library are the same tool to a client.
-///
-/// The library records one row per place a tool was found, so a skill that
-/// three plugins re-ship and a package manager also copies into Kiro is five
-/// rows. A client resolves a skill by the name it declares, without the plugin
-/// namespace in front of it, so that name is what makes those rows one skill.
-/// Whether the copies are byte-for-byte the same is a second, separate claim,
-/// answered by `definitionDigest`.
+/// Groups discovered copies by callable skill name. Content equality is
+/// evaluated separately through `definitionDigest`.
 public enum ToolCopyIdentity {
     /// The declared name without the `plugin:` namespace, as written.
     public static func bareName(_ declaredName: String?) -> String? {
@@ -30,18 +24,9 @@ public enum ToolCopyIdentity {
         return folded.isEmpty ? nil : folded
     }
 
-    /// A digest of a skill folder that two copies share when they would
-    /// behave the same.
-    ///
-    /// Package managers stamp each build into the definition's `metadata:`
-    /// block (a build version and commit), so the same skill shipped by two
-    /// packages differs only there. That block is dropped from SKILL.md before
-    /// hashing; every other byte of every visible file counts, and so does each
-    /// file's relative path. Hidden files are skipped: they are the manager's
-    /// own markers, not part of the skill.
-    ///
-    /// Nil when the folder cannot be read within the bounds, which callers
-    /// treat as "not compared", never as "the same".
+    /// Hashes visible file paths and content after removing SKILL.md packaging
+    /// metadata. Hidden metadata files are skipped. Unreadable or oversized
+    /// folders return nil, which means unverified rather than equal.
     public static func definitionDigest(
         ofSkillAt root: URL,
         fileManager: FileManager = .default,
@@ -114,21 +99,9 @@ public enum ToolCopyIdentity {
         return lines.joined(separator: "\n")
     }
 
-    /// One skill per re-shipped copy, for anything that reasons about skills
-    /// rather than about where each copy sits.
-    ///
-    /// Recent work cannot tell copies apart — a client records that it used
-    /// `agent-sop-author`, not which plugin's copy it loaded — so judging each
-    /// copy separately splits one skill's evidence five ways and recommends it
-    /// five times. Copies are entries with the same callable `name` (which the
-    /// library's projection sets) and the same description. Two plugins that
-    /// each ship a *different* skill called `review` describe them differently,
-    /// so those stay apart and a reference qualified by plugin still reaches
-    /// the right one.
-    ///
-    /// The kept entry is the one this library maintains when there is one,
-    /// then the one with the most to say about itself; triggers and the apps
-    /// the others were asked for in are folded into it.
+    /// Groups matching callable names and descriptions so usage evidence is not
+    /// split across copies. Keeps the library-owned or most descriptive entry,
+    /// merging triggers and client assignments. Different descriptions stay apart.
     public static func collapsingCopies(_ skills: [Skill]) -> [Skill] {
         // By name first, then by description within a name. A copy whose
         // description is unknown joins the name's largest described cluster:

@@ -54,6 +54,31 @@ prompt on standard input, and parses one JSON document held to
 ignored the schema is still constrained. The run is refused if the command does
 not match a known shape.
 
+## When it runs
+
+Every run is this Mac's choice (`DeviceWorkspacePreferences.assistantRuns`,
+see [Launchpad setup](launchpad-setup-v1.md#consent-d16-d27)): the daily deep
+dive and the local insights pass are separate switches, recorded at Let your
+assistant help or in Settings › General. A workspace made before the choice
+existed keeps the runs it always had (the deep dive on, local insights off)
+until one is recorded; a new setup and a join start with both off.
+
+- **On open,** `WorkspaceInsightsSession.runScheduledInsightsIfDue(consent:
+  managedClients:current:)` runs the scheduled scan when the saved report is
+  stale and the consent allows it, and returns once the deep dive it started
+  has answered (`waitForDeepDive`). It runs in its own lane beside updates and
+  sync, then the weekly checkup review follows it, so the two never hold the
+  assistant at once. A run already going, the launch's own or a person's, is
+  waited for, and nothing new starts.
+- **Turning a run off** stops it: `cancelScheduledRun(unlessAllowedBy:)` stops
+  the scheduled scan the new choice no longer allows, and the deep dive asks
+  the choice again before its summaries leave the Mac.
+- **Stopping a scan** cancels the read itself, not only the handle on it, so
+  every caller waiting on the scan returns at once; a stopped scan's result
+  is never shown or saved.
+- **A checkup's summaries** come from `digestsForReview(clients:)`: fresh
+  digests of the apps this Mac manages, read then and kept nowhere.
+
 ## Safety boundary
 
 The keyword pass sends nothing off the Mac. Databases are opened

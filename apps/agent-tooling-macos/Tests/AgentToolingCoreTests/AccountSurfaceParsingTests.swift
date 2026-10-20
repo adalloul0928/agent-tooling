@@ -43,7 +43,7 @@ struct AccountSurfaceParsingTests {
         #expect(signIn.method == .thirdParty)
         #expect(signIn.provider == "bedrock")
         #expect(signIn.email == nil)
-        #expect(signIn.summary(for: .claude) == "Amazon Bedrock")
+        #expect(signIn.summary(for: .claude) == "Bedrock")
         #expect(!signIn.method.reachesAccount)
     }
 
@@ -305,12 +305,12 @@ struct AccountSurfaceParsingTests {
         #expect(signIn.summary(for: .chatGPT) == "ChatGPT · Pro")
     }
 
-    /// The answer Codex 0.162.1 gave on a Mac that runs it on Bedrock.
     @Test func everyOtherCodexSignInIsNotTheAccount() throws {
-        let bedrock = try Self.json(
-            #"{"account":{"type":"amazonBedrock","usesCodexManagedCredentials":false},"requiresOpenaiAuth":false,"workspaceRouting":null}"#)
-        #expect(CodexAccountParsing.signIn(fromAccountRead: bedrock)?.method == .thirdParty)
-        #expect(CodexAccountParsing.signIn(fromAccountRead: bedrock)?.summary(for: .chatGPT) == "Amazon Bedrock")
+        let custom = try Self.json(
+            #"{"account":{"type":"customProvider","usesCodexManagedCredentials":false},"requiresOpenaiAuth":false,"workspaceRouting":null}"#
+        )
+        #expect(CodexAccountParsing.signIn(fromAccountRead: custom)?.method == .thirdParty)
+        #expect(CodexAccountParsing.signIn(fromAccountRead: custom)?.summary(for: .chatGPT) == "customProvider")
         #expect(
             CodexAccountParsing.signIn(fromAccountRead: try Self.json(#"{"account":{"type":"apiKey"},"requiresOpenaiAuth":true}"#))?.method
                 == .apiKey)

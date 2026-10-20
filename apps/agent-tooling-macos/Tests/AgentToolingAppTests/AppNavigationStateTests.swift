@@ -95,16 +95,22 @@ struct AppNavigationStateTests {
         #expect(AppSection.appSettings.workspaceTabs.contains(.health))
     }
 
-    @Test("Brand icons are available as a compiled catalog or source assets")
+    @Test("Client icons draw native symbols in both appearances")
     @MainActor
-    func brandIconsAreAvailableAcrossSwiftToolchains() {
-        if ClientBrandAssets.hasCompiledCatalog {
-            return
-        }
-
+    func clientIconsAreDrawable() throws {
         for client in ClientKind.allCases {
-            #expect(ClientBrandAssets.image(for: client, colorScheme: .light) != nil)
-            #expect(ClientBrandAssets.image(for: client, colorScheme: .dark) != nil)
+            let symbol = try #require(NSImage(systemSymbolName: ClientBrandIcon.symbol(for: client), accessibilityDescription: nil))
+            #expect(symbol.size.width > 0)
+            #expect(symbol.size.height > 0)
+            for appearance in [ColorScheme.light, .dark] {
+                let renderer = ImageRenderer(
+                    content: ClientBrandIcon(client: client, size: Size.identityIconLarge)
+                        .environment(\.colorScheme, appearance)
+                )
+                let pixels = try #require(renderer.cgImage)
+                #expect(pixels.width == Int(Size.identityIconLarge))
+                #expect(pixels.height == Int(Size.identityIconLarge))
+            }
         }
     }
 

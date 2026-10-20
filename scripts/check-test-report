@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Reject incomplete or unsuccessful Swift test reports, including early exit zero."""
+
+import argparse
+from pathlib import Path
+import sys
+import xml.etree.ElementTree as ET
+
+
+def validate_report(path: Path) -> int:
+    root = ET.parse(path).getroot()
+    if root.tag not in {"testsuite", "testsuites"}:
+        raise ValueError("expected a JUnit test report")
+    cases = list(root.iter("testcase"))
+    if not cases or all(case.find("skipped") is not None for case in cases):
+        raise ValueError("the report contains no executed tests")
+    for suite in (element for element in root.iter() if element.tag in {"testsuite", "testsuites"}):
+        if int(suite.get("errors", "0")) or int(suite.get("failures", "0")):
+            raise ValueError("the report contains failed tests")
+        suite_cases = list(suite.iter("testcase"))
+        skipped = sum(case.find("skipped") is not None for case in suite_cases)
+        # Swift excludes skipped cases from tests; other JUnit producers include them.
+        counts = {
+            "tests": {len(suite_cases), len(suite_cases) - skipped},
+            "skipped": {skipped},
+        }
+        for attribute, valid_counts in counts.items():
+            if attribute in suite.attrib and int(suite.attrib[attribute]) not in valid_counts:
+                raise ValueError(f"the reported {attribute} count does not match the test cases")
+    if list(root.iter("failure")) or list(root.iter("error")):
+        raise ValueError("the report contains failed tests")
+    return len(cases)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("report", type=Path)
+    args = parser.parse_args()
+    try:
+        count = validate_report(args.report)
+    except (OSError, ET.ParseError, ValueError) as error:
+        print(f"Test report rejected: {error}", file=sys.stderr)
+        return 1
+    print(f"Complete test report verified. Test cases: {count}.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -85,17 +85,8 @@ final class WorkspaceActivitySession {
         return receipts.first { $0.id == id } ?? (try? store.operationReceipt(id))
     }
 
-    /// One list for the screen: the agent journal, plus one row for every
-    /// operation receipt no journal entry already speaks for.
-    ///
-    /// The journal and the operation receipts are two records of the same Mac's
-    /// work — an agent's tool calls on one side, this app's own install/scan
-    /// plans on the other — and Activity has to show both or it says "no
-    /// activity" while Apps → Recent changes lists an install that just ran. A
-    /// journal entry that already links a receipt (`operationReceiptID`) is that
-    /// receipt's row already, so its receipt is not synthesized again; every
-    /// other receipt becomes one synthesized row. The result is sorted newest
-    /// first, the order the screen groups by day.
+    /// Combines the agent journal with receipts not already linked by a journal
+    /// entry's `operationReceiptID`, sorted newest first. Each receipt appears once.
     var mergedActivities: [ActivityReceipt] {
         let referenced = Set(activities.compactMap(\.operationReceiptID))
         let synthesized =

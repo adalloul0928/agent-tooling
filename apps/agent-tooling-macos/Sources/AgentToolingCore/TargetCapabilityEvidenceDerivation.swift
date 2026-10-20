@@ -23,28 +23,11 @@ public struct NativePluginInstallSupport: Sendable {
 }
 
 extension TargetCapabilityEvidence {
-    /// What this Mac's own scan says each installed client can be asked to
-    /// carry.
-    ///
-    /// Capability evidence is the one thing standing between a saved assignment
-    /// and a plan, and until this existed nothing in the shipping app ever wrote
-    /// any: the resolver looked for a record that only tests had ever created,
-    /// found none, and excluded every destination. This turns the scan that
-    /// already runs into exactly the records that check is looking for.
-    ///
-    /// Nothing here probes anything new. Each record restates something already
-    /// observed — the client answered its own `--version`, the adapter declares
-    /// what it can be asked for — or something already written down, namely the
-    /// commands the install register holds and the shapes the two command
-    /// planners can express. A client that did not answer, or answered without a
-    /// version, produces no record at all: the resolver's exclusion for missing
-    /// evidence is the honest outcome there, and inventing a record would turn
-    /// "nobody knows" into an install claim.
-    ///
-    /// One record per `(surface, component, transport)` and no more. The
-    /// resolver and both planners require exactly one match and treat two as a
-    /// contradiction, so a second record for one key would block the thing it
-    /// was meant to allow.
+    /// Derives install capability evidence from existing scan results, adapter
+    /// capabilities and the verified command register. Performs no new probes.
+    /// A missing version or unanswered probe yields no evidence. Each
+    /// `(surface, component, transport)` key has exactly one record; duplicates
+    /// are contradictions that planners must reject.
     public static func derive(
         from observations: [TargetObservation],
         installRegister: NativePluginInstallSupport = .register,

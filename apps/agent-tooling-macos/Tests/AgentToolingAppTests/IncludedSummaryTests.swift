@@ -5,7 +5,7 @@ import Testing
 
 /// What a plugin bundles, as each screen says it. The install sheet said
 /// "Includes 3 bundled items", a project's Plugins tab "Includes 3 tools", and
-/// onboarding "Includes 2 skills · 1 connection", all for one plugin.
+/// the old onboarding "Includes 2 skills · 1 connection", all for one plugin.
 @Suite("Included summary")
 @MainActor
 struct IncludedSummaryTests {

@@ -18,21 +18,9 @@ private struct LibraryDestinationStyle: ButtonStyle {
     }
 }
 
-/// Home: what this Mac has, what needs a look, and the one path between them.
-///
-/// Every number on this screen was produced by another screen. Home reads the
-/// library, the report Insights kept, the catalog Discover last reached, the
-/// review queue and the last check of this Mac's apps, and it composes them —
-/// it does not go and get any of them itself, and it never states a verdict a
-/// screen behind it would not state.
-///
-/// Two things that look like claims here are not. A recommendation is a stored
-/// Insights finding, never a personal suggestion Home made up. An update is a
-/// catalog's own word about the package a row came from, and before any catalog
-/// has been asked this screen says nothing about updates at all.
-///
-/// Nothing on this screen writes to an app. The two actions it offers are a
-/// read-only check and preparing a plan somebody still has to approve.
+/// Home summarizes existing library, Insights, catalog, review and scan state.
+/// It performs no independent fetching or client writes. Recommendations and
+/// update claims come from stored results; actions check state or prepare plans.
 struct OverviewView: View {
     let workspace: WorkspaceLaunch.Workspace
     /// What the catalogs published, so a plugin row can be compared with the
@@ -46,7 +34,9 @@ struct OverviewView: View {
     @Environment(AppNavigationState.self) private var navigation
     @Environment(\.workspaceNavigate) private var navigate
     @Environment(\.availableClients) private var enabledClients
-    @AppStorage("onboarding.skipped.v2") private var onboardingSkipped = false
+    /// The window's minute ticker, so Home's relative times re-tick, and a
+    /// fixed moment when a render sets one.
+    @Environment(\.snapshotNow) private var snapshotNow
 
     /// The last few applied plans this Mac recorded, read once off the body. See
     /// `recentChangesCard`.
@@ -82,7 +72,14 @@ struct OverviewView: View {
             GeometryReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: Space.xl) {
-                        if showsOnboarding { onboardingCard }
+                        // The one-time notice for a workspace made before the
+                        // assistant's runs were a choice, then setup's own
+                        // card: each takes no room at all where Home shows
+                        // none, so a Home with neither draws as it always did.
+                        if AssistantRunsNotice.shows(for: workspace.device) {
+                            AssistantRunsNotice(workspace: workspace)
+                        }
+                        FinishSetupCard(workspace: workspace)
                         // Two columns where they fit; one column where they don't.
                         // A narrow window stacks the same cards instead of
                         // squeezing them past legibility.
@@ -125,19 +122,6 @@ struct OverviewView: View {
         // behind every section, so Home doubling it would only dim the glass.
     }
 
-    // MARK: - Getting started
-
-    /// The same rule the Library uses to decide whether to stand its own
-    /// getting-started screen in front of itself: a workspace that holds things
-    /// but has never been asked to put any of them anywhere. Home only points at
-    /// it, so there is one place to get started rather than two.
-    private var showsOnboarding: Bool {
-        guard !onboardingSkipped, workspace.library.access == .writable, let library = libraryModel else {
-            return false
-        }
-        return !library.rows.isEmpty && library.rows.allSatisfy { $0.requestedAssignments.isEmpty }
-    }
-
     /// The left column of the wide layout, and the top of the stacked one.
     private func reviewColumn(
         attention: [OverviewAttention],
@@ -168,27 +152,6 @@ struct OverviewView: View {
             }
             .frame(maxHeight: .infinity, alignment: .top)
         }
-    }
-
-    private var onboardingCard: some View {
-        HStack(spacing: Space.xl) {
-            Image(systemName: "tray.and.arrow.down")
-                .font(.system(size: Size.heroSymbol, weight: .regular))
-                .foregroundStyle(.secondary)
-                .frame(width: Size.tileLarge)
-            VStack(alignment: .leading, spacing: Space.xs) {
-                Text("Bring your existing setup into Agent Tooling")
-                    .font(AgentFont.titleLarge)
-                Text("Choose the skills, plugins, and connections you want to manage or track.")
-                    .font(AgentFont.body).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: Space.xl)
-            Button("Set up your library") { navigate(.skills) }
-                .primaryActionStyle().controlSize(.large)
-                .disabled(workspace.library.isBusy)
-        }
-        .padding(Space.xxl)
-        .standardPanel()
     }
 
     // MARK: - Recommended for you
@@ -266,13 +229,13 @@ struct OverviewView: View {
     private var libraryCard: some View {
         BentoCard(
             symbol: "books.vertical",
-            title: inventory.map { "Library · \(distinctSkillCount + $0.plugins.count + $0.mcpServers.count)" } ?? "Library",
+            title: inventory.map { "Library · \(distinctSkillCount + $0.plugins.count + libraryConnectionCount)" } ?? "Library",
             action: ("Open", { navigate(.skills) })
         ) {
             HStack(alignment: .top, spacing: Space.md) {
                 libraryKindCell("Skills", count: distinctSkillCount, kind: .skill, section: .skills)
                 libraryKindCell("Plugins", count: inventory?.plugins.count ?? 0, kind: .plugin, section: .plugins)
-                libraryKindCell("Connections", count: inventory?.mcpServers.count ?? 0, kind: .mcpServer, section: .mcpServers)
+                libraryKindCell("Connections", count: libraryConnectionCount, kind: .mcpServer, section: .mcpServers)
             }
             .padding(.horizontal, Space.lg)
             .padding(.vertical, Space.xl)
@@ -305,7 +268,7 @@ struct OverviewView: View {
     /// not, there is nothing to review, and offering the button anyway would
     /// send a person to an empty review.
     private var hasChangesWaiting: Bool {
-        !(workspace.deployment.plan?.items.isEmpty ?? true)
+        !workspace.deployment.pendingItems.isEmpty
     }
 
     /// The steps a prepared plan is holding. A plan that has been applied has
@@ -313,7 +276,7 @@ struct OverviewView: View {
     /// A removal is one of those changes, so a plan holding one is not called
     /// an install.
     private var readyMiniCard: some View {
-        let waiting = workspace.deployment.plan?.items ?? []
+        let waiting = workspace.deployment.pendingItems
         let title = PlanReviewLabels.readyTitle(hasRemoval: waiting.contains(where: \.isRemoval))
         return BentoCard(symbol: "arrow.down.circle", title: title, fillsHeight: true) {
             VStack(alignment: .leading, spacing: Space.sm) {
@@ -372,7 +335,7 @@ struct OverviewView: View {
                                     .lineLimit(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            Text(SnapshotTime.compact(receipt.createdAt))
+                            Text(SnapshotTime.compact(receipt.createdAt, now: snapshotNow ?? .now))
                                 .font(AgentFont.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -596,10 +559,13 @@ struct OverviewView: View {
     }
 
     /// What the Waiting for your review card can promise about installing,
-    /// given the kinds that install on their own.
+    /// given the kinds that install on their own. A connection's update never
+    /// installs from here, whatever its policy says (its policy decides only
+    /// what arrives from other Macs), so connections are never named.
     static func updatesFooter(automatic: [ToolingItemKind]) -> String {
-        guard !automatic.isEmpty else { return "Nothing installs until you approve it here." }
-        return "Updates to \(automaticNames(automatic)) install on their own (\(updatesSettingsPath)). Everything else waits here."
+        let installing = automatic.filter { $0 != .mcpServer }
+        guard !installing.isEmpty else { return "Nothing installs until you approve it here." }
+        return "Updates to \(automaticNames(installing)) install on their own (\(updatesSettingsPath)). Everything else waits here."
     }
 
     /// One update Home can show: the row, the verdict, and whether the button
@@ -641,8 +607,9 @@ struct OverviewView: View {
         }
         // Connections the last health check found broken. Nothing is checked
         // from here: a count appears only once somebody ran a check, so Home
-        // never reports a problem it has not seen.
-        let health = workspace.health.attentionCount
+        // never reports a problem it has not seen. A status the check could
+        // not read is not one: Codex reports every connection that way.
+        let health = workspace.health.needsYouCount
         let connections: [OverviewAttention] =
             health == 0
             ? []
@@ -721,8 +688,14 @@ struct OverviewView: View {
                     VStack(alignment: .leading, spacing: Space.xxs) {
                         Text(open == 0 ? "Nothing needs attention" : "\(CountNoun("thing").phrase(open)) to look at")
                             .font(AgentFont.bodyMedium)
-                        Text("Checked \(SnapshotTime.compact(checkup.completedAt))" + (setup.isStale ? " · a new checkup is due" : ""))
-                            .font(AgentFont.caption).foregroundStyle(.secondary)
+                        // "Due" promises a review the launch will start, so it
+                        // shows only while this Mac allows the weekly one.
+                        Text(
+                            "Checked \(SnapshotTime.compact(checkup.completedAt, now: snapshotNow ?? .now))"
+                                + (setup.isReviewDue(consent: workspace.device.effectiveAssistantRuns)
+                                    ? " · a new checkup is due" : "")
+                        )
+                        .font(AgentFont.caption).foregroundStyle(.secondary)
                     }
                 } else {
                     Image(systemName: "wand.and.stars").font(.system(size: Size.symbol)).foregroundStyle(.secondary).frame(
@@ -826,12 +799,21 @@ struct OverviewView: View {
         libraryModel.map(VersionedInventoryProjection.inventory)
     }
 
+    /// The library's connections, as Library › Connections lists them:
+    /// Agent Tooling's own is bound to each Mac, not a library entry, so it
+    /// is not counted here.
+    private var libraryConnectionCount: Int {
+        let own = Set(
+            (libraryModel?.rows ?? []).filter(\.isOwnConnection).map { $0.artifactID.rawValue.uuidString.lowercased() })
+        return (inventory?.mcpServers ?? []).count { !own.contains($0.id) }
+    }
+
     private var lastScanText: String {
         guard let date = workspace.device.observations.map(\.lastScannedAt).max() else { return "Not checked yet" }
         // The same phrasing the sidebar and Apps screen use for this very date,
         // so one moment does not read as "9m ago" in one place and "43 minutes
         // ago" in another.
-        return "Checked \(SnapshotTime.compact(date))"
+        return "Checked \(SnapshotTime.compact(date, now: snapshotNow ?? .now))"
     }
 
     /// These are stored Insights findings; Home never fabricates a personal
@@ -846,7 +828,8 @@ struct OverviewView: View {
     /// toolbar's, the card's, and a held arrival's. One title, counted from the
     /// prepared plan, so the same action never reads two ways on one screen.
     private var reviewTitle: String {
-        ActionTitles.reviewChanges(count: workspace.deployment.plan?.items.count)
+        // A step left alone is never counted as waiting (D6).
+        ActionTitles.reviewChanges(count: workspace.deployment.plan == nil ? nil : workspace.deployment.pendingCount)
     }
 
     /// Works out what would change, on the screen that can approve it. Preparing

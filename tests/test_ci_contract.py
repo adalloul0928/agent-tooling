@@ -38,18 +38,22 @@ class CIContractTests(unittest.TestCase):
         self.assertIn("permissions:\n      contents: write", release)
         self.assertIn("ref: ${{ needs.authorize.outputs.release_commit }}", release)
         self.assertIn("secrets.MACOS_CERTIFICATE_P12_BASE64", release)
-        self.assertIn("EXPECTED_SIGNING_TEAM_ID: 434X69L4Z5", release)
-        self.assertIn("com.arendalloul.agent-tooling.cli", release)
-        self.assertIn("com.arendalloul.agent-tooling.mcp", release)
+        self.assertIn("MACOS_SIGNING_TEAM_ID", release)
+        self.assertIn("dev.agenttooling.app.cli", release)
+        self.assertIn("dev.agenttooling.app.mcp", release)
+        self.assertIn("./scripts/check-public-content", authorize)
 
     def test_macos_release_runbook_separates_commit_and_tag_authority(self) -> None:
         runbook = (REPOSITORY_ROOT / "docs/macos-app-release.md").read_text()
 
-        self.assertIn("Branch ancestry authorizes the source", runbook)
-        self.assertIn("does **not** authorize the separate tag object", runbook)
         self.assertIn("MACOS_RELEASE_ALLOWED_ACTORS", runbook)
-        self.assertIn("environment secrets", runbook)
-        self.assertIn("prevents tag updates and deletion", runbook)
+        self.assertIn("MACOS_SIGNING_TEAM_ID", runbook)
+        self.assertIn("macos-release", runbook)
+
+    def test_macos_release_verifies_distribution_before_publication(self) -> None:
+        workflow = (REPOSITORY_ROOT / ".github/workflows/release-macos-app.yml").read_text()
+        for prerequisite in ("--verify-resources", "verify-dmg.sh", "notarytool submit", "stapler validate", "spctl --assess"):
+            self.assertLess(workflow.index(prerequisite), workflow.index("gh release create"))
 
 
 if __name__ == "__main__":

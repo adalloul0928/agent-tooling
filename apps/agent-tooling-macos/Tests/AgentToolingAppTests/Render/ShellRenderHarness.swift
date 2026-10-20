@@ -69,11 +69,17 @@ enum RenderAppearance {
     }
 }
 
+/// `awayFromPointer` puts the window in the corner of the pointer's screen
+/// farthest from the pointer, for a capture that hover would change: the
+/// window otherwise opens at the screen's origin, and a pointer resting there
+/// lights whatever is under it. Keep such a capture small, so the far corner
+/// never reaches the pointer.
 @MainActor
 func rasterize(
     _ view: some View,
     size: CGSize = shellWindowSize,
     appearance: RenderAppearance = .light,
+    awayFromPointer: Bool = false,
     _ location: SourceLocation = #_sourceLocation
 ) throws -> NSBitmapImageRep {
     let host = NSHostingView(rootView: AnyView(view.frame(width: size.width, height: size.height)))
@@ -84,6 +90,7 @@ func rasterize(
     let window = NSWindow(
         contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    if awayFromPointer { window.setFrameOrigin(originAwayFromPointer(for: size)) }
     // Dark mode has to reach both the window the glass settles against and the
     // host the SwiftUI tree reads its colour scheme from, or half the frame
     // comes back in the wrong face.
@@ -105,6 +112,18 @@ func rasterize(
     host.cacheDisplay(in: host.bounds, to: bitmap)
     window.orderOut(nil)
     return bitmap
+}
+
+/// The origin, in screen coordinates, that puts a window of `size` in the
+/// corner of the pointer's screen farthest from the pointer.
+@MainActor
+private func originAwayFromPointer(for size: CGSize) -> CGPoint {
+    let pointer = NSEvent.mouseLocation
+    guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) ?? NSScreen.main else { return .zero }
+    let frame = screen.frame
+    let x = pointer.x - frame.minX > frame.width / 2 ? frame.minX : frame.maxX - size.width
+    let y = pointer.y - frame.minY > frame.height / 2 ? frame.minY : frame.maxY - size.height
+    return CGPoint(x: x, y: y)
 }
 
 /// Samples on a coarse grid; enough to tell text and controls from an empty
@@ -176,15 +195,10 @@ struct StubAccountReader: AccountSurfaceReading {
     }
 }
 
-/// The store is real and lives in a temporary folder, and the sessions come from
-/// the app's own launch wiring, so a screen that outgrows what launch hands it
-/// fails here rather than only on a real Mac.
-///
-/// Every service that reaches outside the app is scripted here rather than in a
-/// test's own environment, because launch is where the app itself settles them:
-/// the catalog answers from memory, the scan is a canned report and the review
-/// queue is a list. A test that wants different answers hands them to this
-/// initializer, and no screen can reach past what it was given.
+/// Uses a real temporary store and production launch wiring. External
+/// services are scripted at launch: catalog, scanner and review queue.
+/// Tests supply alternate responses through the initializer so views stay
+/// isolated from the host's environment.
 @MainActor struct ShellRenderFixture {
     static let plugin = ArtifactID()
     static let child = ArtifactID()
@@ -205,7 +219,9 @@ struct StubAccountReader: AccountSurfaceReading {
         requestQueue: any PendingRequestQueuing = StubPendingRequestQueue(),
         setupServices: any SetupServicing = StubSetupServices(),
         accountReader: any AccountSurfaceReading = StubAccountReader(),
-        readsLibrary: Bool = true
+        readsLibrary: Bool = true,
+        setupProgressStore: any SetupProgressStoring = StubSetupProgressStore(),
+        assistantRuns: AssistantRunConsent? = nil
     ) async throws {
         root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
             .appending(path: "shell-render-\(UUID())", directoryHint: .isDirectory)
@@ -257,7 +273,11 @@ struct StubAccountReader: AccountSurfaceReading {
                 presets: [
                     .init(id: Self.presetID, name: "Starter", revision: 1, memberArtifactIDs: [Self.skill])
                 ]))
-        let device = DeviceWorkspaceState(workspaceID: document.workspaceID)
+        // A workspace made before setup recorded anything: no setup record
+        // (legacy) and no assistant choice (today's runs), unless a test asks
+        // for a new setup's.
+        var device = DeviceWorkspaceState(workspaceID: document.workspaceID)
+        if let assistantRuns { device.applicationState?.preferences.assistantRuns = assistantRuns }
         store = try WorkspaceRevisionStore(
             containerRoot: container, workspaceID: document.workspaceID, deviceID: device.deviceID)
         try store.initialize(document: document, device: device)
@@ -267,7 +287,8 @@ struct StubAccountReader: AccountSurfaceReading {
             store: store, homeRoot: home, isFirstRun: true, deviceObserver: deviceObserver,
             marketplaceProviders: { _ in marketplaceProviders },
             insightsServices: { _ in insightsServices }, requestQueue: requestQueue,
-            setupServices: { _ in setupServices }, accountReader: { _ in accountReader })
+            setupServices: { _ in setupServices }, accountReader: { _ in accountReader },
+            setupProgressStore: { _ in setupProgressStore }, registerToolRoots: { _ in })
         // A test of the cold launch itself wants the library still unread.
         if readsLibrary { await workspace.library.refresh() }
     }

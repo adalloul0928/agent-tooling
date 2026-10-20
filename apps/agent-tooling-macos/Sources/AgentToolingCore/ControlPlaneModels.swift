@@ -159,7 +159,7 @@ public struct ObservedSkillMetadata: Codable, Hashable, Sendable {
 /// Another tool that put a skill folder where a client reads it, and the
 /// package it says the folder came from.
 public struct ObservedExternalManager: Codable, Hashable, Sendable {
-    /// The tool, as people call it: "AIM".
+    /// Display name of the managing tool.
     public var tool: String
     /// The package the tool placed it from, when its record names one.
     public var package: String?
@@ -169,7 +169,7 @@ public struct ObservedExternalManager: Codable, Hashable, Sendable {
         self.package = package
     }
 
-    /// "AIM · DalloulPersonalAI", or just "AIM".
+    /// Manager and optional package label.
     public var label: String { [tool, package].compactMap { $0 }.joined(separator: " · ") }
 }
 

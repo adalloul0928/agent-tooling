@@ -1,3 +1,4 @@
+import AgentToolingCore
 import SwiftUI
 
 /// The Apps family's Health tab: what each managed client's last connection
@@ -10,7 +11,12 @@ struct HealthSection: View {
     let workspace: WorkspaceLaunch.Workspace
 
     var body: some View {
-        HealthView(session: workspace.health, device: workspace.device)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        HealthView(
+            session: workspace.health, device: workspace.device,
+            ownConnectionApps: workspace.library.state.map {
+                AgentToolingConnection.apps(on: workspace.store.deviceID, in: $0.snapshot.document)
+            } ?? []
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

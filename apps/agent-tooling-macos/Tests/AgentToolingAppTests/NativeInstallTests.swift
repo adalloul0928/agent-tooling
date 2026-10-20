@@ -63,8 +63,13 @@ struct NativeInstallTests {
         #expect(reviewed.reasonNothingRuns(for: item) == nil)
         #expect(reviewed.stepsWithoutCommand == 0)
 
-        await fixture.workspace.deployment.apply()
+        let outcome = await fixture.workspace.deployment.applyReviewed(
+            plan, basedOn: try #require(fixture.workspace.deployment.planRevision))
 
+        guard case .applied = outcome else {
+            Issue.record("The reviewed plan did not run: \(outcome)")
+            return
+        }
         #expect(fixture.workspace.deployment.errorMessage == nil)
         let results = fixture.workspace.deployment.results
         #expect(results.map(\.succeeded) == [1], "\(results.map(\.outputs))")

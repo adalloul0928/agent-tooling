@@ -167,6 +167,19 @@ enum InsightsDeepDivePrompt {
     static let maximumDigests = 120
     static let maximumPromptBytes = 180 * 1_024
 
+    /// The apps the digests come from, in the app order: the scheduled run
+    /// reads only the apps this Mac manages, so the prompt names only those.
+    static func appsNamed(in digests: [ConversationDigest]) -> String {
+        let present = Set(digests.map(\.client))
+        let names = ClientKind.allCases.filter(present.contains).map(\.rawValue)
+        switch names.count {
+        case 0: return "AI coding assistants"
+        case 1: return names[0]
+        case 2: return names.joined(separator: " and ")
+        default: return names.dropLast().joined(separator: ", ") + ", and " + names[names.count - 1]
+        }
+    }
+
     /// The whole prompt: the task, the skills the person already has, and the
     /// digests. Digests are added newest first until the byte budget is spent,
     /// so a heavy month is summarized from its most recent work rather than
@@ -177,7 +190,7 @@ enum InsightsDeepDivePrompt {
         var header = """
             You are reviewing how one person has been using their AI coding assistants over the last \(max(1, Int(now.timeIntervalSince(windowStart) / 86_400))) days, to find work they keep doing by hand that a reusable Agent Skill would capture, skills they already have but are not using when they should, and skills that should be improved.
 
-            An Agent Skill is a SKILL.md file with instructions the assistant loads when a task matches its description. The person uses Claude Code, Codex, and Kiro CLI. Below are digests of their recent conversations: the first few things they asked (redacted), the tools and skills that answered, and the project. Read them as evidence of real, repeated needs. Do not invent work that is not there, do not quote the digests back, and prefer fewer, well-grounded conclusions over many weak ones. Every recommendation must be supported by at least two conversations. Some digests are probes rather than work — one-word tests, "ping", "whoami", "say pong", dry runs of a tool — and should be ignored entirely, not counted or mentioned. For a create_skill recommendation, write draft_instruction as the brief a skill author would need: what the skill does, when it should trigger, what it should produce, and constraints. For use_existing_skill or improve_skill, set existing_skill to the skill's name exactly as listed below.
+            An Agent Skill is a SKILL.md file with instructions the assistant loads when a task matches its description. The person uses \(appsNamed(in: digests)). Below are digests of their recent conversations: the first few things they asked (redacted), the tools and skills that answered, and the project. Read them as evidence of real, repeated needs. Do not invent work that is not there, do not quote the digests back, and prefer fewer, well-grounded conclusions over many weak ones. Every recommendation must be supported by at least two conversations. Some digests are probes rather than work — one-word tests, "ping", "whoami", "say pong", dry runs of a tool — and should be ignored entirely, not counted or mentioned. For a create_skill recommendation, write draft_instruction as the brief a skill author would need: what the skill does, when it should trigger, what it should produce, and constraints. For use_existing_skill or improve_skill, set existing_skill to the skill's name exactly as listed below.
 
             Answer only with the JSON the schema describes.
 

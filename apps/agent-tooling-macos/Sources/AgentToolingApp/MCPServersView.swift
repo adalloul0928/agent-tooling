@@ -329,7 +329,10 @@ struct MCPServersView: View {
             VersionedInventoryProjection.inventory(library).mcpServers.map { ($0.id, $0) },
             uniquingKeysWith: { first, _ in first })
         var result: [MCPConnectionEntry] = []
-        for row in library.rows {
+        // Agent Tooling's own connection is bound to each Mac, not a library
+        // entry: it shows where it acts, in each app's connections, and is
+        // changed from setup's Let your apps ask.
+        for row in library.rows where !row.isOwnConnection {
             switch row.kind {
             case .mcpServer:
                 let id = row.artifactID.rawValue.uuidString.lowercased()

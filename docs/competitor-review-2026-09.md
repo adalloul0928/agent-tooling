@@ -47,7 +47,7 @@ Published screenshots support a judgment about hierarchy and discoverability, no
 | Insights | Optional local-history analysis and aggregate recommendations | Partial observation, not a complete usage or quality measurement |
 | Hooks, agents, general settings | Component kinds and some inspection foundations | Dedicated editors and full effective-configuration resolution remain roadmap work |
 
-Local evidence: [onboarding](../apps/agent-tooling-macos/Sources/AgentToolingCore/AppModel+Onboarding.swift), [source bindings](../apps/agent-tooling-macos/Sources/AgentToolingCore/SkillRepositoryModels.swift), [change review](../apps/agent-tooling-macos/Sources/AgentToolingCore/OperationPlanSafetyReview.swift), [encrypted exchange](../apps/agent-tooling-macos/Sources/AgentToolingCore/EncryptedSyncService.swift), [MCP runtime adapter](../apps/agent-tooling-macos/Sources/AgentToolingCore/MCPRuntime.swift), [live MCP testing](../apps/agent-tooling-macos/Sources/AgentToolingCore/MCPLiveTestSession.swift), [integration command boundaries](../apps/agent-tooling-macos/Sources/AgentToolingMCP/ToolCatalog.swift).
+Local evidence: `onboarding`, [source bindings](../apps/agent-tooling-macos/Sources/AgentToolingCore/SkillRepositoryModels.swift), [change review](../apps/agent-tooling-macos/Sources/AgentToolingCore/OperationPlanSafetyReview.swift), `encrypted exchange`, [MCP runtime adapter](../apps/agent-tooling-macos/Sources/AgentToolingCore/MCPRuntime.swift), [live MCP testing](../apps/agent-tooling-macos/Sources/AgentToolingCore/MCPLiveTestSession.swift), [integration command boundaries](../apps/agent-tooling-macos/Sources/AgentToolingMCP/ToolCatalog.swift).
 
 ## MCP runtime specialists
 

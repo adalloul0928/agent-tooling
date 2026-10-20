@@ -55,6 +55,51 @@ public struct WorkspaceAssignmentBatchCommand: Codable, Equatable, Sendable {
         return command
     }
 
+    /// Builds explicit item/destination pairs. Existing requests are returned in
+    /// `alreadyRequested`; matching withdrawn contributions are retained and the
+    /// rest removed. Missing withdrawals are ignored. Additions are manual.
+    /// Throws `.emptyBatch` for no change and `.duplicateSelection` for repeated
+    /// pairs. The library session exposes this through `reviewPlacements`.
+    static func place(
+        document: PortableWorkspaceDocument, placements: [WorkspacePlacement], withdrawing: [WorkspaceObjectID] = [],
+        idempotencyKey: WorkspaceObjectID = WorkspaceObjectID()
+    ) throws -> (command: Self, alreadyRequested: [WorkspacePlacement]) {
+        try document.validateStructure()
+        let changes = try placementChanges(document: document, placements: placements, withdrawing: withdrawing)
+        let command = Self(
+            expectedRevisionID: document.revision.id, idempotencyKey: idempotencyKey, additions: changes.additions,
+            removalIDs: changes.removalIDs)
+        _ = try command.preview(document: document)
+        return (command, changes.alreadyRequested)
+    }
+
+    /// What `place` would add and remove, and what it would pass over as
+    /// already asked for, without checking the batch itself.
+    static func placementChanges(
+        document: PortableWorkspaceDocument, placements: [WorkspacePlacement], withdrawing: [WorkspaceObjectID]
+    ) throws -> (additions: [AssignmentContribution], removalIDs: [WorkspaceObjectID], alreadyRequested: [WorkspacePlacement]) {
+        let wanted = placements.map(\.canonical)
+        guard wanted.count <= 10_000, Set(wanted).count == wanted.count else {
+            throw WorkspaceAssignmentCommandError.duplicateSelection
+        }
+        let withdrawable = Set(withdrawing)
+        let own = document.assignments.filter { withdrawable.contains($0.id) }
+        let others = document.assignments.filter { !withdrawable.contains($0.id) }
+        var kept = Set<WorkspaceObjectID>()
+        var additions: [AssignmentContribution] = []
+        var alreadyRequested: [WorkspacePlacement] = []
+        for placement in wanted {
+            if others.contains(where: placement.isAsked(by:)) {
+                alreadyRequested.append(placement)
+            } else if let mine = own.first(where: { placement.isAsked(by: $0) && !kept.contains($0.id) }) {
+                kept.insert(mine.id)
+            } else {
+                additions.append(.init(artifactID: placement.artifactID, destination: placement.destination, reason: .manual))
+            }
+        }
+        return (additions, own.map(\.id).filter { !kept.contains($0) }.sorted(), alreadyRequested)
+    }
+
     public static func applyPresetOnce(
         document: PortableWorkspaceDocument, presetID: ArtifactID, destinations: [PortableDestination],
         desiredEnabled: Bool? = nil, idempotencyKey: WorkspaceObjectID = WorkspaceObjectID()
@@ -182,6 +227,44 @@ public struct WorkspaceAssignmentBatchCommand: Codable, Equatable, Sendable {
         return artifactIDs.sorted().flatMap { id in
             destinations.map { .init(artifactID: id, destination: $0, reason: reason, desiredEnabled: desiredEnabled) }
         }
+    }
+}
+
+/// One item asked for at one destination: a cell of setup's placement grid,
+/// and the unit `WorkspaceAssignmentBatchCommand.place` records.
+public struct WorkspacePlacement: Hashable, Sendable {
+    public let artifactID: ArtifactID
+    public let destination: PortableDestination
+
+    public init(artifactID: ArtifactID, destination: PortableDestination) {
+        self.artifactID = artifactID
+        self.destination = destination
+    }
+
+    /// What `contribution` asks for, whatever its reason.
+    init(asking contribution: AssignmentContribution) {
+        self.init(artifactID: contribution.artifactID, destination: contribution.destination)
+        self = canonical
+    }
+
+    /// Whether `contribution` already asks for this placement: the same item
+    /// at the same destination, its Macs named in any order, whatever its
+    /// reason, and whether or not it reaches this Mac. `place` passes such a
+    /// placement over, and a batch would refuse a second manual request for
+    /// it, so setup's what-if plan never adds one either. Every contribution
+    /// of a valid document asks for its placement: `validateStructure`
+    /// refuses one whose `desiredPresence` is false.
+    public func isAsked(by contribution: AssignmentContribution) -> Bool {
+        WorkspacePlacement(asking: contribution) == canonical
+    }
+
+    /// The same placement with its device lists in order, so two that name
+    /// the same Macs compare equal.
+    var canonical: WorkspacePlacement {
+        var destination = destination
+        destination.deviceIDs?.sort()
+        destination.excludedDeviceIDs?.sort()
+        return WorkspacePlacement(artifactID: artifactID, destination: destination)
     }
 }
 

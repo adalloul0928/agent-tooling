@@ -105,6 +105,36 @@ public struct UpdatePolicy: Codable, Hashable, Sendable {
     }
 }
 
+/// Which of the assistant's own runs this Mac allows. Each switch is separate,
+/// because each says something different about what is read and whether it
+/// leaves this Mac.
+public struct AssistantRunConsent: Codable, Hashable, Sendable {
+    /// The weekly checkup review: the signed-in assistant reads the checkup,
+    /// the apps' configuration folders and redacted conversation summaries.
+    /// Leaves this Mac.
+    public var weeklyReview: Bool
+    /// The daily deep dive: redacted summaries of recent history sent to the
+    /// assistant. Leaves this Mac.
+    public var dailyDeepDive: Bool
+    /// The local keyword scan of the same history, which keeps counts only.
+    /// Stays on this Mac.
+    public var localInsights: Bool
+
+    public init(weeklyReview: Bool, dailyDeepDive: Bool, localInsights: Bool) {
+        self.weeklyReview = weeklyReview
+        self.dailyDeepDive = dailyDeepDive
+        self.localInsights = localInsights
+    }
+
+    /// Nothing runs on its own. What a new setup records until somebody turns
+    /// a run on.
+    public static let off = AssistantRunConsent(weeklyReview: false, dailyDeepDive: false, localInsights: false)
+
+    /// What a workspace made before this choice existed has been doing: the
+    /// weekly review and the daily deep dive, and no local scan.
+    public static let existingBehaviour = AssistantRunConsent(weeklyReview: true, dailyDeepDive: true, localInsights: false)
+}
+
 public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
     public var automaticallyCheckHealth: Bool
     public var enabledClients: [ClientKind]
@@ -128,6 +158,13 @@ public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
     /// checkout, or agent configuration at the top). Device-local, like the
     /// folder bindings: paths on this Mac mean nothing on another.
     public var projectScanRoots: [String]?
+    /// Which of the assistant's own runs this Mac allows. `nil` in a store
+    /// made before the choice existed, which keeps doing what it did; a new
+    /// setup records an explicit value.
+    public var assistantRuns: AssistantRunConsent?
+    /// Whether project discovery also reads the folder names in Claude Code's
+    /// history. `nil` in a store made before the choice existed, read as on.
+    public var findsProjectsFromClaudeHistory: Bool?
 
     public init(
         automaticallyCheckHealth: Bool = true,
@@ -136,7 +173,9 @@ public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
         customToolDirectories: [String]? = nil,
         updatePolicy: UpdatePolicy? = nil,
         lastUpdateCheck: Date? = nil,
-        projectScanRoots: [String]? = nil
+        projectScanRoots: [String]? = nil,
+        assistantRuns: AssistantRunConsent? = nil,
+        findsProjectsFromClaudeHistory: Bool? = nil
     ) {
         self.automaticallyCheckHealth = automaticallyCheckHealth
         self.enabledClients = enabledClients.sorted { $0.rawValue < $1.rawValue }
@@ -145,10 +184,16 @@ public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
         self.updatePolicy = updatePolicy
         self.lastUpdateCheck = lastUpdateCheck
         self.projectScanRoots = projectScanRoots
+        self.assistantRuns = assistantRuns
+        self.findsProjectsFromClaudeHistory = findsProjectsFromClaudeHistory
     }
 
     /// The policy in force: what was chosen, else the default.
     public var effectiveUpdatePolicy: UpdatePolicy { updatePolicy ?? UpdatePolicy() }
+
+    /// The runs in force: what was chosen, else what a workspace made before
+    /// the choice existed has always done.
+    public var effectiveAssistantRuns: AssistantRunConsent { assistantRuns ?? .existingBehaviour }
 
     public init(_ value: WorkspacePreferences) {
         self.init(automaticallyCheckHealth: value.automaticallyCheckHealth, enabledClients: Array(value.enabledClients))
@@ -159,21 +204,11 @@ public struct DeviceWorkspacePreferences: Codable, Hashable, Sendable {
     }
 }
 
-/// Which clients this Mac shows and manages, from what was chosen and what was
-/// observed. One rule, stated once, so every reader agrees:
-///
-/// 1. An explicit choice — the `chosenClients` record — wins, exactly as made.
-///    The older `enabledClients` field deliberately does not count: builds
-///    before the choice existed persisted it as a default-of-all, and after a
-///    new client ships, that stale default is indistinguishable from somebody
-///    deliberately excluding the newcomer. A default must never be read back
-///    as a decision nobody made.
-/// 2. Otherwise the clients whose tool the last scan could actually run are the
-///    ones shown. Leftover configuration files do not count as set up: a
-///    client that cannot be spoken to is not hooked up, however many files it
-///    once wrote.
-/// 3. Before any scan, or when a scan could run nothing at all, every client is
-///    shown — hiding all of them would leave nothing to set up.
+/// Explicit `chosenClients` takes precedence. Legacy `enabledClients` may be
+/// a saved default and cannot establish an explicit choice.
+/// Otherwise show clients with runnable commands in the latest scan; config
+/// files alone do not qualify. Before a scan, or if none are runnable, show
+/// every client so setup remains accessible.
 public enum ClientVisibilityPolicy {
     public static func effectiveEnabledClients(
         preferences: DeviceWorkspacePreferences?,

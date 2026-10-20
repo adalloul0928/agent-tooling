@@ -12,7 +12,15 @@ import SwiftUI
 struct AppShellView: View {
     let workspace: WorkspaceLaunch.Workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
+    /// True while the setup stage is open over this shell: a sync a write
+    /// would start waits until it closes, then one pass runs.
+    @Environment(\.stagePresented) private var stagePresented
+    /// How the shell was opened, for the launch work to read once.
+    @Environment(\.shellLaunchHints) private var shellLaunchHints
+    /// Opens the setup stage: the palette's Set up this Mac…, and a setup
+    /// link the shell takes from the queue.
+    @Environment(\.openSetup) private var openSetup
+    @AppStorage(AppPreferenceKey.sidebarCollapsed) private var sidebarCollapsed = false
     @State private var navigation: AppNavigationState
     @State private var selection: AppSection
     @State private var paletteVisible = false
@@ -65,6 +73,9 @@ struct AppShellView: View {
                 // the middle of the window.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .allowsHitTesting(!paletteVisible)
+                // Ticks Home's Finish setting up rows as they come true,
+                // naming the screen on show; it draws nothing.
+                .background { FinishSetupTracker(workspace: workspace, section: selection) }
             // No background of its own. The one glass backdrop behind the
             // whole split view is the ground for the sidebar and the
             // content alike — a tint here is exactly what made them differ.
@@ -120,41 +131,49 @@ struct AppShellView: View {
         // Checking this Mac's apps is a scan, so it starts after the window is
         // up and off this actor. Nothing on screen waits for it.
         .task {
-            // Read the library once for every section, and — only when this Mac
-            // is set to check its apps on open — check them alongside it. Both
-            // run off this actor; neither blocks the shell. The manual Check
-            // apps button is unaffected by this choice.
-            async let library: Void = workspace.library.refresh()
-            if workspace.device.automaticallyCheckHealth {
-                async let device: Void = workspace.device.refresh()
-                _ = await (library, device)
-            } else {
-                await library
-            }
-            // The daily deep dive. The library has been read by now, so the
-            // scan has skills to compare against; it runs in the background
-            // and the Insights screen shows its answer when it arrives.
-            await workspace.insights.runScheduledDeepDiveIfStale(
-                options: InsightScanOptions(clients: Set(workspace.device.managedClients)),
-                managedClients: workspace.device.managedClients)
-            // The weekly checkup, after the deep dive so the two do not both
-            // hold the assistant at once. Audit first, fast; review behind it.
-            await workspace.setup.runScheduledCheckupIfStale()
-            // Updates, on the cadence Settings chose. Kinds set to install
-            // automatically are installed here; the rest wait on Home.
-            await workspace.updates.checkIfDue()
-            // Other Macs. A pass on open, then whenever the library changes
-            // here, each time asking the scheduler whether now is a moment.
-            await syncPass()
+            // What the launch may start is decided once, from where setup
+            // stands, this Mac's choices and how the shell opened: nothing
+            // while a first run is still on the stage, no second check right
+            // after the stage's own, no network catalog before the person saw
+            // when to look for updates, and no assistant run they did not
+            // allow (`LaunchWorkPolicy`).
+            let policy = LaunchWorkPolicy.decide(
+                status: workspace.setupProgress.status, preferences: workspace.device.preferences,
+                hints: shellLaunchHints, checkedThisLaunch: workspace.device.hasCheckedThisLaunch)
+            // The library and the check first, then the audit; then updates
+            // and other Macs in one lane and the assistant in the other, so a
+            // review that takes minutes never holds up a sync. The deep dive
+            // is waited for before the weekly review starts, so the two never
+            // hold the assistant at once.
+            await policy.run(on: workspace, syncPass: { await syncPass() })
         }
         .onChange(of: workspace.library.lastReceipt?.committedRevisionID) { _, _ in
             // A write landed. Share it, after the burst of writes a single
-            // action can make has settled.
+            // action can make has settled; while the setup stage is open over
+            // the shell, its own review is the only one running, so the pass
+            // waits until the stage closes.
             syncAfterWrite?.cancel()
-            syncAfterWrite = Task {
-                try? await Task.sleep(for: .seconds(2))
-                guard !Task.isCancelled else { return }
-                await syncPass()
+            guard !stagePresented else {
+                syncAfterWriteSettles = false
+                syncWaitsForStage = true
+                return
+            }
+            scheduleSyncAfterWrite()
+        }
+        .onChange(of: stagePresented) { _, presented in
+            if presented {
+                // A pass a write started that is still settling when the
+                // stage opens waits for the stage as well.
+                guard syncAfterWriteSettles else { return }
+                syncAfterWrite?.cancel()
+                syncAfterWriteSettles = false
+                syncWaitsForStage = true
+            } else {
+                // The stage closed with writes to share: one pass for all of
+                // them.
+                guard syncWaitsForStage else { return }
+                syncWaitsForStage = false
+                scheduleSyncAfterWrite()
             }
         }
         .onAppear(perform: applyExternalNavigation)
@@ -168,6 +187,25 @@ struct AppShellView: View {
     }
 
     @State private var syncAfterWrite: Task<Void, Never>?
+    /// The pass a write started is still waiting for the writes to settle,
+    /// and has not begun.
+    @State private var syncAfterWriteSettles = false
+    /// A write landed while the setup stage was open over the shell, and its
+    /// sync has not run yet.
+    @State private var syncWaitsForStage = false
+
+    /// One sync pass, once the burst of writes a single action can make has
+    /// settled.
+    private func scheduleSyncAfterWrite() {
+        syncAfterWrite?.cancel()
+        syncAfterWriteSettles = true
+        syncAfterWrite = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            syncAfterWriteSettles = false
+            await syncPass()
+        }
+    }
 
     /// One scheduled sync pass, then whatever arrived gets installed by
     /// policy. The scheduler decides whether a pass runs at all; this only
@@ -175,19 +213,9 @@ struct AppShellView: View {
     private func syncPass() async {
         guard let sync = workspace.sync else { return }
         sync.load()
-        if sync.statusProvider == nil {
-            sync.statusProvider = {
-                [
-                    weak device = workspace.device, weak library = workspace.library, weak deployment = workspace.deployment,
-                    weak accounts = workspace.accounts
-                ] in
-                await MainActor.run {
-                    guard let device, let library, let deployment else { return nil }
-                    return PublishedDeviceStatus.current(
-                        device: device, library: library, deployment: deployment, accounts: accounts)
-                }
-            }
-        }
+        // What this Mac's publishes carry about it, installed by whichever
+        // pass runs first: this one, or the setup stage's.
+        workspace.installSyncStatusProvider()
         let before = sync.lastArrival
         _ = await sync.runScheduledPass()
         if let arrival = sync.lastArrival, arrival != before {
@@ -218,14 +246,21 @@ struct AppShellView: View {
     }
 
     private func applyExternalNavigation() {
+        // A setup link opens the stage at Your apps, over whatever this window
+        // shows, and is taken off the queue first, so it opens it once.
+        if let entry = navigation.requestedSetup {
+            navigation.consumeSetupRequest()
+            openSetup(entry)
+        }
         guard let requested = navigation.requestedSection else { return }
         selection = requested
         navigation.consumeRequestedSection(requested)
     }
 
     /// A palette result runs the screen's own action. Nothing here writes to a
-    /// client: the two actions it can start are a read-only scan and preparing a
-    /// plan somebody still has to approve.
+    /// client: what it can start is a read-only scan, preparing a plan
+    /// somebody still has to approve, or the setup stage, which writes only
+    /// what is reviewed there.
     private func activate(_ outcome: CommandPaletteOutcome) {
         switch outcome {
         case .navigate(let section):
@@ -248,6 +283,8 @@ struct AppShellView: View {
         case .reviewSync:
             navigation.showAllClients()
             navigation.openScreenRequest(.reviewChanges)
+        case .setUpThisMac:
+            openSetup(.rerun)
         }
     }
 }

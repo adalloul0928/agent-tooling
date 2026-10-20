@@ -246,6 +246,7 @@ struct AttentionBanner<Action: View>: View {
     let title: String
     let message: String
     @ViewBuilder let action: Action
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(title: String, message: String, @ViewBuilder action: () -> Action = { EmptyView() }) {
         self.title = title
@@ -267,8 +268,9 @@ struct AttentionBanner<Action: View>: View {
         .padding(.vertical, Space.lg)
         .background(AgentTheme.warning.opacity(Opacity.bannerWash), in: RoundedRectangle.card)
         // Banners come and go with state; arriving with a transition keeps the
-        // content below from teleporting by a banner's height.
-        .transition(.move(edge: .top).combined(with: .opacity))
+        // content below from teleporting by a banner's height. Under Reduce
+        // Motion it only fades.
+        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
         .overlay {
             RoundedRectangle.card
                 .strokeBorder(AgentTheme.warning.opacity(Opacity.bannerStroke), lineWidth: Hairline.width)

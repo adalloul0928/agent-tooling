@@ -6,16 +6,9 @@ import Testing
 @testable import AgentToolingApp
 @testable import AgentToolingCore
 
-/// Draws one pane in both appearances, checks neither is a blank frame, and —
-/// only when `MCP_LAYOUT_CAPTURE` names a folder — writes the PNGs there.
-///
-/// The panes behind a selection cannot be reached by launching the app with a
-/// section argument, so this is how somebody looks at them. Two things are
-/// supplied that the shell would otherwise supply: the detail column's own
-/// background, without which light text lands on an unpainted bitmap, and an
-/// explicit colour scheme, because a bare hosting view has no window to take
-/// one from. A pane legible in only one of them fails here rather than in front
-/// of somebody.
+/// Renders both appearances and rejects blank frames. Supplies the detail
+/// background and explicit color scheme normally inherited from a window.
+/// Writes PNGs only when MCP_LAYOUT_CAPTURE specifies an output folder.
 @MainActor
 func captureMCPPane(
     _ view: some View, named name: String, _ location: SourceLocation = #_sourceLocation
