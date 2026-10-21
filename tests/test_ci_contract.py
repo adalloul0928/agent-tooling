@@ -1,6 +1,8 @@
 from pathlib import Path
+import os
 import re
 import shlex
+import subprocess
 import unittest
 
 
@@ -8,6 +10,11 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CIContractTests(unittest.TestCase):
+    def macos_validation_jobs(self) -> dict[str, str]:
+        workflow = (REPOSITORY_ROOT / ".github/workflows/macos-app.yml").read_text()
+        jobs = workflow.split("\njobs:\n", maxsplit=1)[1]
+        return dict(re.findall(r"(?ms)^  ([\w-]+):\n(.*?)(?=^  [\w-]+:\n|\Z)", jobs))
+
     def test_auto_merge_waits_for_the_aggregate_validation_workflow(self) -> None:
         validation = (REPOSITORY_ROOT / ".github/workflows/validate.yml").read_text()
         auto_merge = (REPOSITORY_ROOT / ".github/workflows/guarded-auto-merge.yml").read_text()
@@ -23,6 +30,58 @@ class CIContractTests(unittest.TestCase):
         self.assertIn("swift test --disable-sandbox --sanitize=thread", workflow)
         self.assertIn("swift build --configuration release -Xswiftc -warnings-as-errors", workflow)
         self.assertIn("codesign --verify --deep --strict", workflow)
+
+    def test_macos_validation_jobs_run_independently_before_the_required_gate(self) -> None:
+        jobs = self.macos_validation_jobs()
+        lanes = {"debug", "thread", "release", "package"}
+        self.assertEqual(set(jobs), lanes | {"build"})
+        for lane in lanes:
+            with self.subTest(lane=lane):
+                self.assertRegex(jobs[lane], r"(?m)^    runs-on: macos-26$")
+                self.assertNotRegex(jobs[lane], r"(?m)^    (?:needs|if|continue-on-error):")
+                self.assertNotIn("continue-on-error:", jobs[lane])
+
+        gate = jobs["build"]
+        self.assertIn("    name: Test and package\n", gate)
+        self.assertRegex(gate, r"(?m)^    runs-on: ubuntu-latest$")
+        needs = re.search(r"(?m)^    needs: \[([^\]]+)\]$", gate)
+        self.assertIsNotNone(needs, "The required gate must wait for every macOS job")
+        self.assertEqual({job.strip() for job in needs.group(1).split(",")}, lanes)
+        condition = re.search(r"(?m)^    if: (.+)$", gate)
+        self.assertIsNotNone(condition, "The required gate must run even when a dependency fails")
+        self.assertEqual(condition.group(1).removeprefix("${{").removesuffix("}}").strip(), "always()")
+        self.assertNotIn("continue-on-error:", gate)
+
+    def test_macos_required_gate_rejects_every_non_success_result(self) -> None:
+        gate = self.macos_validation_jobs()["build"]
+        results = dict(re.findall(r"(?m)^ +([A-Z_]+): \$\{\{ needs\.([\w-]+)\.result \}\}$", gate))
+        self.assertEqual(set(results.values()), {"debug", "thread", "release", "package"})
+        self.assertEqual(len(results), 4)
+        runs = list(re.finditer(r"(?m)^( +)run: \|\n", gate))
+        self.assertEqual(len(runs), 1, "Exercise the required gate's actual shell script")
+        run = runs[0]
+        indentation = len(run.group(1)) + 2
+        script_lines = []
+        for line in gate[run.end():].splitlines():
+            if line.strip() and not line.startswith(" " * indentation):
+                break
+            script_lines.append(line[indentation:])
+        script = "\n".join(script_lines)
+        self.assertTrue(script.strip())
+
+        def gate_result(overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
+            environment = {**os.environ, **{name: "success" for name in results}, **overrides}
+            return subprocess.run(
+                ["bash", "--noprofile", "--norc", "-e", "-c", script],
+                env=environment, capture_output=True, text=True, timeout=10,
+            )
+
+        passed = gate_result({})
+        self.assertEqual(passed.returncode, 0, passed.stderr)
+        for name, lane in results.items():
+            for result in ("failure", "cancelled", "skipped", "neutral", ""):
+                with self.subTest(lane=lane, result=result):
+                    self.assertNotEqual(gate_result({name: result}).returncode, 0)
 
     def test_swift_testing_reports_are_validated_at_the_requested_path(self) -> None:
         for name, expected_runs in (("macos-app.yml", 6), ("release-macos-app.yml", 2)):
