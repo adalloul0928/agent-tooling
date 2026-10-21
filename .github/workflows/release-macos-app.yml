@@ -120,8 +120,6 @@ jobs:
     name: Sign, notarize, and publish
     needs: authorize
     runs-on: macos-26
-    # Tests, a strict release build, packaging and the notarization wait share
-    # this budget with no build cache, so it gets validation's headroom.
     timeout-minutes: 60
     environment: macos-release
     permissions:

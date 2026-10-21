@@ -84,6 +84,9 @@ To run the Swift tests from the same directory:
 swift test --disable-sandbox --no-parallel
 ```
 
+See the [validation guide](apps/agent-tooling-macos/README.md#validation) for
+the CI checks, including Thread Sanitizer and release builds.
+
 ## Contribute
 
 Report bugs and request features in [GitHub Issues](https://github.com/adalloul0928/agent-tooling/issues).

@@ -145,9 +145,8 @@ swift test --disable-sandbox --no-parallel
 swift format lint --strict -r Sources Tests Package.swift
 ```
 
-CI also builds release with warnings treated as errors. Shared test helpers live
-in `Tests/AgentToolingTestSupport`; reuse them for temporary workspaces, scripted
-clients, and rendering tests.
+Shared test helpers live in `Tests/AgentToolingTestSupport`; reuse them for
+temporary workspaces, scripted clients, and rendering tests.
 
 UI sizes, typography, colors, and motion come from `DesignTokens.swift` and
 `Theme.swift`. Use `.wrapsLines()` for multiline text and the shared collection
@@ -168,6 +167,29 @@ AGENT_TOOLING_BENCHMARK=1 AGENT_TOOLING_BENCHMARK_LABEL=release \
 Timings that include a fixed run-loop settling period are not input latency.
 See the [documentation index](../../docs/README.md) for storage, migration,
 installation, sync, and security contracts.
+
+## Validation
+
+The [macOS workflow](../../.github/workflows/macos-app.yml) runs four jobs in
+parallel on separate runners:
+
+| Job | Checks |
+|---|---|
+| Debug tests | Core, MCP, and UI tests in the debug configuration |
+| Thread Sanitizer tests | The same suites with runtime checks for data races |
+| Release tests | The same suites in the release configuration |
+| Package app | Release build with warnings as errors, CLI contract, app signatures and resources, and development DMG |
+
+Each test job runs Core/MCP and UI suites separately, with parallel test
+execution disabled. All six runs produce checked XML reports. The final
+**Test and package** check always runs and passes only after all four jobs
+succeed. A failed, cancelled, or skipped job fails the gate.
+
+[Repository validation](../../.github/workflows/validate.yml) also checks
+public content, secrets, workflows, shell scripts, documentation, and the
+Raycast extension. Run `./scripts/validate-static` from the repository root
+for the local public-content and contract checks. CI DMGs are for testing;
+public downloads use the [signed release workflow](../../docs/macos-app-release.md).
 
 ## Documentation screenshots
 

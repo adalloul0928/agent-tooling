@@ -266,6 +266,15 @@ offers Show Setup. A second Set up this Mac… while the stage is open brings
 it forward and never replaces the walk on screen. `agent-tooling://setup` is
 a route, not a section, so the MCP server neither lists nor builds it.
 
+Hand-off opens the main window before closing setup.
+With motion enabled, setup fades first. Each presentation has its own ID:
+completion and close callbacks from an earlier presentation are ignored, and
+reopened setup is visible even when SwiftUI retains the window's root view.
+
+Once the workspace is ready, **Review Changes…** in the main menu or menu-bar
+item brings the main window forward, reopening it if necessary. It opens Apps
+and prepares a plan; applying that plan still requires review.
+
 ## Home's card
 
 `FinishSetupChecklist` is a pure function of `FinishSetupFacts` (one snapshot
