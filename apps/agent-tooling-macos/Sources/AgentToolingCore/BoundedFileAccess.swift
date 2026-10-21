@@ -114,10 +114,14 @@ enum BoundedFileAccess {
                 guard inspectedEntries <= maximumEntries else { break }
                 let directValues = try? child.resourceValues(forKeys: [.isSymbolicLinkKey])
                 let resolvedChild = child.resolvingSymlinksInPath().standardizedFileURL
+                let isLink = directValues?.isSymbolicLink == true
+                // A link is looked at where it leads. One that leads outside
+                // the folder walked is a look somewhere else, which a trace
+                // is told of, whatever is there.
+                if isLink, !contains(resolvedChild, within: resolvedRoot) { ScanTrace.read(resolvedChild) }
                 guard isDirectory(resolvedChild) else { continue }
                 result.append(resolvedChild)
 
-                let isLink = directValues?.isSymbolicLink == true
                 let linkedSkill = isLink && isRegularFile(resolvedChild.appending(path: "SKILL.md"))
                 let canTraverseLink = !isLink || contains(resolvedChild, within: resolvedRoot)
                 guard !linkedSkill,

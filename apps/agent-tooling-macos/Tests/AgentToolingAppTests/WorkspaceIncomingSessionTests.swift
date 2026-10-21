@@ -118,13 +118,6 @@ struct WorkspaceIncomingSessionTests {
 /// The surfaces the multi-Mac work added draw.
 @Suite("Multi-Mac surfaces") @MainActor
 struct MultiMacSurfaceRenderTests {
-    @Test func theFirstLaunchChooserDraws() throws {
-        try expectDrawn(FirstLaunchChooser(start: {}, join: { _, _ in }, isBusy: false, error: nil).frame(width: 900, height: 600))
-        try expectDrawn(
-            FirstLaunchChooser(start: {}, join: { _, _ in }, isBusy: true, error: "That repository holds no workspace yet.").frame(
-                width: 900, height: 600))
-    }
-
     @Test func thePickerOffersEveryMacWhenOtherMacsAreRegistered() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }

@@ -41,10 +41,10 @@ struct ProjectDiscoveryTests {
         let index = home.appending(path: ".claude/projects", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: index, withIntermediateDirectories: true)
 
-        // `pumpd` and `pumpd-app` are siblings; a naive split on "-" would
+        // `sample-app` and `sample-app-mobile` are siblings; a naive split on "-" would
         // resolve the second entry to the first folder.
-        _ = try makeProject(named: "pumpd", under: root, files: ["CLAUDE.md": "#"])
-        let longer = try makeProject(named: "pumpd-app", under: root, files: ["CLAUDE.md": "#"])
+        _ = try makeProject(named: "sample-app", under: root, files: ["CLAUDE.md": "#"])
+        let longer = try makeProject(named: "sample-app-mobile", under: root, files: ["CLAUDE.md": "#"])
         try makeIndexDirectory(for: longer, in: index)
 
         let roots = ProjectDiscovery.sessionIndexRoots(homeURL: home).map(ProjectPath.canonical)

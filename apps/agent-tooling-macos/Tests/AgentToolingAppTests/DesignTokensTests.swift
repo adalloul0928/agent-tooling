@@ -53,12 +53,12 @@ struct DesignTokensTests {
         let literal = try #require(
             fittingSize(
                 of: Color.clear.frame(
-                    minWidth: SheetSize.setupWizardMinimum.width, idealWidth: SheetSize.setupWizardIdeal.width,
-                    minHeight: SheetSize.setupWizardMinimum.height, idealHeight: SheetSize.setupWizardIdeal.height)))
+                    minWidth: SheetSize.inspectorMinimum.width, idealWidth: SheetSize.inspectorIdeal.width,
+                    minHeight: SheetSize.inspectorMinimum.height, idealHeight: SheetSize.inspectorIdeal.height)))
         let helper = try #require(
-            fittingSize(of: Color.clear.sheetSize(minimum: SheetSize.setupWizardMinimum, ideal: SheetSize.setupWizardIdeal)))
+            fittingSize(of: Color.clear.sheetSize(minimum: SheetSize.inspectorMinimum, ideal: SheetSize.inspectorIdeal)))
         #expect(helper == literal)
-        #expect(helper == SheetSize.setupWizardIdeal)
+        #expect(helper == SheetSize.inspectorIdeal)
     }
 
     @Test("A split's shares divide its whole width")

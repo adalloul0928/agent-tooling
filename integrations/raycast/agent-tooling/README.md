@@ -1,112 +1,92 @@
 # Agent Tooling for Raycast
 
-This macOS-only Raycast extension is a keyboard-first companion for the Agent Tooling desktop app. It searches the local library, checks client health, opens tooling insights, prepares sync review, and submits skill-creation requests for Codex or Claude Code to draft. The desktop app remains the only component allowed to install packages or change client configuration.
+Search your Agent Tooling library, check client setup, and open reviews from
+Raycast. The desktop app handles installation and client configuration changes.
 
-## Requirements
-
-- Raycast on macOS
-- A Developer ID signed Agent Tooling app with bundle identifier
-  `com.arendalloul.agent-tooling` and Team ID `434X69L4Z5`
-- The packaged helper at `Agent Tooling.app/Contents/Helpers/agent-tooling`
-
-The extension discovers the app by bundle identifier, resolves the canonical app
-and helper paths, and verifies their pinned designated identities before launch.
-The app and helper must have the same Developer ID authority. An unsigned helper
-override is rejected by published builds; developers must run the extension in
-Raycast development mode and explicitly enable **Allow Development Helper**.
+This companion is available as source. A Raycast Store release requires a
+registered publisher account and the signing identity of the released macOS
+app. The checked-in publisher name is a placeholder, and packaged-app execution
+is disabled until the extension's signing identity is configured at build time.
 
 ## Commands
 
-- **Search Agent Tooling** searches skills, MCP servers, and plugins and opens the matching app destination.
-- **Create Skill Draft** sends an instruction over stdin to the Skill Creator workflow, drafted by the assistant chosen under **Assistant**: Codex, the default, or Claude Code. It opens an opaque request identifier in the app for review. Install destinations are a separate choice: picking Claude Code, Codex, or Gemini there does not ask that app to write the draft, and Gemini is never an assistant.
-- **Check Setup** runs the read-only doctor and accepts both healthy exit code `0` and attention exit code `2`.
-- **Review Tooling Insights** opens the app's Insights screen to scan recent Codex or Claude Code work, review skill usage and quality findings, and consider skill, MCP server, or plugin recommendations. The scan and every install review remain in the desktop app.
-- **Review Sync** opens the app's Sync screen. The desktop app performs scanning, preview, approval, and execution.
-- **Open Agent Tooling** opens or focuses the app's single main window.
+| Command                 | Action                                                             |
+| ----------------------- | ------------------------------------------------------------------ |
+| Search Agent Tooling    | Search skills, MCP servers, and plugins; open a result in the app. |
+| Create Skill Draft      | Ask Codex or Claude Code to draft a skill for review.              |
+| Check Setup             | Run the read-only client health check.                             |
+| Review Tooling Insights | Open Insights in the app.                                          |
+| Review Sync             | Open the app's sync review.                                        |
+| Open Agent Tooling      | Open or focus the app.                                             |
 
-Assign global hotkeys in Raycast Settings after importing the extension.
+Assign hotkeys in Raycast Settings after importing the extension.
 
-## Local development
+## Development
 
-1. Sign in to the Raycast developer CLI with `npx ray login`.
-2. Replace the `author` field in `package.json` with the handle shown by `npx ray profile`.
-3. Install the locked dependencies with `npm ci`.
-4. Run `npm run dev` to import the extension and watch for changes.
-5. To exercise a locally built helper, enable **Allow Development Helper** and
-   select its path. Disable the preference again before testing the packaged app.
-6. Run `npm run check` before publishing.
+Requires Raycast on macOS and Node.js 22.22.2 or later.
 
-The checked-in author is the intended product handle. Raycast's manifest validator will reject it until that Raycast account exists or the field is changed to the signed-in developer's handle.
+```sh
+npm ci
+npm run verify-source
+npm run dev
+```
+
+For a local app build, enable **Allow Development Helper** in the extension's
+preferences and select `Agent Tooling.app/Contents/Helpers/agent-tooling`.
+Both the preference and Raycast development mode are required. Published builds
+reject this override.
+
+Raycast's full manifest validation also requires a developer account. Sign in
+with `npx ray login`, then replace `author` in `package.json` with the handle
+reported by `npx ray profile`. `npm run verify-source` runs local type, source,
+test, and build checks; `npm run check` also runs Raycast's manifest validator.
+
+## Configure a release
+
+Use the same Team ID as the signed desktop release:
+
+```sh
+MACOS_SIGNING_TEAM_ID=YOURTEAMID npm run configure:release
+npm run check
+```
+
+The configuration command writes a fixed Team ID into
+`src/lib/signing-team.ts` before compilation. The installed extension does not
+read a Team ID from the environment or user preferences. Missing or malformed
+configuration fails closed. Keep publisher-specific configuration out of the
+shared source; restore the empty Team ID after preparing the release.
+
+Before publishing, verify the extension with the notarized app installed in
+Applications. The app must use `dev.agenttooling.app`, its CLI helper must use
+`dev.agenttooling.app.cli`, and both must be signed by the configured team.
+Publishing to the Raycast Store is a separate step.
+`npm run publish` checks that the team and publisher are configured before
+opening the publishing flow.
 
 ## CLI contract
 
-All responses are UTF-8 JSON no larger than 1 MiB. Versioned responses use `schemaVersion: 1`.
+Responses are UTF-8 JSON, capped at 1 MiB, with `schemaVersion: 1`.
 
-Search:
-
-```console
+```sh
 agent-tooling search --query QUERY --json
-```
-
-```json
-{
-  "schemaVersion": 1,
-  "results": [
-    {
-      "id": "skill-forge",
-      "kind": "skill",
-      "name": "Skill Forge",
-      "description": "Creates portable skills",
-      "source": "developer-workflows",
-      "scope": "global",
-      "targets": ["codex"],
-      "status": "installed"
-    }
-  ],
-  "totalResults": 1,
-  "truncated": false
-}
-```
-
-Search returns at most 100 deterministic results. When more components match, `truncated` is `true` and Raycast asks the user to narrow the query instead of accepting an unbounded response.
-
-Create a skill draft:
-
-```console
 agent-tooling request create-skill --provider codex --scope global \
   --targets codex --instruction-stdin --json
 ```
 
-`--provider` is `codex` or `claude`, the assistant chosen in the form; the extension sends `codex` unless Claude Code is picked. The instruction is supplied on stdin—not in argv, logs, or a deep link. A project-scoped request also passes `--project PATH`.
+Search returns at most 100 results and sets `truncated` when more match. Skill
+instructions travel over stdin. The request response contains an opaque ID and
+`pending-review` state; the desktop app handles generation and review. The
+provider is `codex` or `claude`; installation targets are chosen separately.
+`doctor` accepts exit codes `0` (healthy) and `2` (needs attention).
 
-The skill-creation request returns:
+## Process safety
 
-```json
-{
-  "schemaVersion": 1,
-  "request": {
-    "id": "a82c55d2-5454-4bde-8b91-32b934667871",
-    "state": "pending-review"
-  }
-}
-```
+- The app and CLI helper must satisfy exact bundle IDs, the configured Team ID,
+  Apple's Developer ID certificate requirements, and the same signing authority.
+- The canonical helper path must stay inside the app bundle.
+- Processes use executable paths and argument arrays with `shell: false`.
+- Output and runtime are bounded. Skill instructions are redacted from errors.
+- Deep links contain navigation state or an opaque request ID.
+- The extension does not read credentials or install packages in the background.
 
-The helper stores only a bounded pending request. It must not create a package or mutate client state while the UI is running. Agent Tooling resolves the opaque request and performs generation, review, planning, and approved execution through its single operation engine.
-
-## Security model
-
-- Child processes use an executable plus argument array with `shell: false`.
-- The canonical helper realpath must remain inside the canonical app realpath.
-- The app and helper must satisfy pinned Developer ID requirements: exact code
-  identifiers, Team ID `434X69L4Z5`, Apple Developer ID certificate markers,
-  and the same leaf signing authority.
-- An unsigned helper override requires both Raycast development mode and an
-  explicit preference; a published extension cannot use it.
-- Output, runtime, and error size are bounded; timed-out process groups are terminated.
-- Skill instructions travel over stdin and are explicitly redacted from failures.
-- Deep links contain navigation state or an opaque UUID only.
-- The Insights shortcut contains no chat content, search terms, or analysis data; it opens `agent-tooling://insights` and leaves scanning controls in the app.
-- The extension does not access the Keychain, provider tokens, or package credentials.
-- Raycast background work never installs, syncs, or generates content.
-
-Publishing is a separate, explicit action. The extension is licensed under MIT as required by the public Raycast Store; the desktop app may use a different license.
+The extension is licensed under [MIT](LICENSE).

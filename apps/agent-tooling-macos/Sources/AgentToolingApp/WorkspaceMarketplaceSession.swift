@@ -2,31 +2,11 @@ import AgentToolingCore
 import Foundation
 import Observation
 
-/// What the catalogs published, what this Mac has kept from them, and where
-/// both came from.
-///
-/// There is one of these per launch. `WorkspaceLaunch` builds it from the
-/// catalogs this build was handed and gives the same one to Discover and to
-/// Home, so asking a registry once is what the whole app has asked it and no
-/// screen can reach a catalog of its own. Every provider reaches something
-/// outside this app — a registry over the network, a client's own CLI, a folder
-/// on disk — and a test that hands `WorkspaceLaunch` one catalog that answers
-/// from memory has replaced all of them: there is no second door left open.
-///
-/// Three rules shape everything here.
-///
-/// Reading a catalog is not observing this Mac. A listing arrives claiming to
-/// know whether it is installed; this build has observed no such thing, so the
-/// claim is dropped on the way in and installation is answered from the
-/// library, which is a record this app can defend.
-///
-/// Nothing is written to a client. The session fetches, sorts and keeps; the
-/// only write it ever makes is to this Mac's own record of what the catalogs
-/// last said, so a launch with no network still has something to show.
-///
-/// A catalog that fails is named. A refresh that reaches three providers and
-/// loses one keeps the two that answered and says which one did not, because
-/// silently returning fewer packages reads as a catalog that shrank.
+/// Shared catalog state for Discover and Home. All providers are injected at
+/// launch, so tests can replace every network, CLI and disk source.
+/// Catalog claims never establish local installation; the library supplies it.
+/// Refreshes cache results locally and report individual provider failures.
+/// This session never writes client configuration.
 @MainActor @Observable
 final class WorkspaceMarketplaceSession {
     /// One entry per package a catalog published, most recent refresh wins.
@@ -361,7 +341,7 @@ final class WorkspaceMarketplaceSession {
                     message: "This workspace could not be read. Nothing was added.")
                 return
             }
-            let command = try ManagedMCPServerIntakeCommand(expectedRevisionID: head, draft: draft)
+            let command = try ManagedMCPServerIntakeCommand(expectedRevisionID: head, draft: draft).refusingReservedName()
             _ = try await service.intakeManagedMCPServer(command)
             adoption = .init(
                 packageID: package.id,
@@ -409,18 +389,9 @@ final class WorkspaceMarketplaceSession {
 
     // MARK: - Reading
 
-    /// Everything the workspace itself can answer, with no network and no scan.
-    ///
-    /// Sources are two halves of one record: the portable half carries the name
-    /// and kind that travel between Macs, and this Mac's half carries where the
-    /// folder actually is and what the last look at it found.
-    ///
-    /// The catalogs every build knows about join them. They are reference rows
-    /// rather than records — nobody added them and nobody can remove them — but
-    /// leaving them out made a workspace that had recorded nothing look like a
-    /// Mac with no catalogs at all, when in fact three of them are the ones this
-    /// app reads on every refresh. A recorded source of the same kind is the
-    /// authority and replaces its reference row.
+    /// Combines portable source records, device-local bindings and built-in
+    /// catalog references without network access. Recorded sources override
+    /// built-in rows of the same kind.
     private func reload() {
         guard let snapshot = try? store.snapshot() else { return }
         let deviceSources = Dictionary(
@@ -504,6 +475,16 @@ final class WorkspaceMarketplaceSession {
     /// are. No catalog is asked anything: what changed is where this app will
     /// look, and a date claiming a fresh answer would be an invention.
     func reloadSources() { reload() }
+
+    /// The tools Start your library offers: the bundled starter shelf, filled
+    /// in from what a catalog said when one was read, the page this Mac kept
+    /// or a refresh in this launch. It re-reads this Mac's own record and the
+    /// library, so `libraryMatch(for:)` answers for every listing, and it asks
+    /// no catalog anything: no provider, no app's tool, no network.
+    func starterShelf() -> [MarketplacePackage] {
+        reload()
+        return StarterShelf.packages(retained: packages)
+    }
 
     private func fetch(_ query: MarketplaceQuery) async {
         guard !isRefreshing else { return }

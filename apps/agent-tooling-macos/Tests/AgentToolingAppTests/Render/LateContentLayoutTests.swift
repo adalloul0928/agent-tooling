@@ -15,8 +15,6 @@ import Testing
 @Suite("Content arriving after layout", .serialized)
 @MainActor
 struct LateContentLayoutTests {
-    private static let windowSize = CGSize(width: 1_440, height: 860)
-
     private func drift(_ count: Int) -> [InstalledPackageDrift] {
         (0..<count).map { index in
             InstalledPackageDrift(
@@ -25,35 +23,10 @@ struct LateContentLayoutTests {
         }
     }
 
-    /// AppKit may constrain the requested size to the display. The settled
-    /// content height is the bound that both the window and hosted view must
-    /// keep when `change` introduces more content.
     private func heightAfterChange(
         _ view: some View, change: () async -> Void
     ) async throws -> (hostHeight: CGFloat, windowHeight: CGFloat) {
-        let window = NSWindow(
-            contentRect: CGRect(origin: .zero, size: Self.windowSize),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.titlebarAppearsTransparent = true
-        let host = NSHostingView(rootView: AnyView(view))
-        window.contentView = host
-        window.orderFrontRegardless()
-        defer { window.orderOut(nil) }
-        Self.spin(0.3)
-        host.layoutSubtreeIfNeeded()
-        let windowHeight = window.contentRect(forFrameRect: window.frame).height
-        try #require(windowHeight > 0, "the window has no content area")
-        #expect(host.frame.height == windowHeight, "the screen did not fit the window before the change")
-        await change()
-        Self.spin(0.5)
-        host.layoutSubtreeIfNeeded()
-        #expect(window.contentRect(forFrameRect: window.frame).height == windowHeight, "the late content resized the window")
-        return (host.frame.height, windowHeight)
-    }
-
-    @MainActor private static func spin(_ seconds: Double) {
-        RunLoop.main.run(until: Date().addingTimeInterval(seconds))
+        try await LateContentHarness.heightAfterChange(view, change: change)
     }
 
     @Test func aDriftNoticeArrivingLateKeepsActivityInTheWindow() async throws {

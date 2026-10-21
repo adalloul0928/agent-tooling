@@ -18,20 +18,10 @@ struct WorkspaceAssignmentSheetRenderTests {
             WorkspaceAssignmentSheet(session: fixture.workspace.library, artifactIDs: [ShellRenderFixture.skill]))
     }
 
-    /// The apps a person ticked before this sheet ever opened — the Codex
-    /// creator's "Use after review", for one — must not make the sheet that
-    /// opens next any less drawable than the one that starts blank.
-    ///
-    /// assertion: preselecting a client makes `canReview` true from the first
-    /// layout pass, which turns on the footer's `GlassEffectContainer` button
-    /// rather than leaving it disabled. Isolated from everything else in this
-    /// file — a bare `GlassEffectContainer` around one `.glassProminent`
-    /// button, `.disabled(false)`, nothing else on screen — that alone is
-    /// enough to make `rasterize`'s `cacheDisplay` capture come back as one
-    /// flat colour, and it takes an unrelated sibling view down with it.
-    /// Disabled, the same container captures fine. Nothing here is about
-    /// `initialClients`'s own correctness: the identical repro has no
-    /// `WorkspaceAssignmentSheet`, no `ShellRenderFixture`, and no library
+    /// Preselection enables the footer's glass button on the first layout.
+    /// An enabled GlassEffectContainer can make cacheDisplay return a flat
+    /// frame, including sibling views; its disabled form captures correctly.
+    /// This guards rendering with initial selections, not selection logic.
     @Test func theSheetDrawsWithClientsPreselected() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }

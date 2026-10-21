@@ -153,13 +153,14 @@ struct CodexAppServerSessionTests {
     @Test func aServerThatStopsIsReported() async throws {
         let server = ScriptedAppServer(silent: ["account/read"])
         let session = CodexAppServerSession(transport: server, requestTimeout: .seconds(5))
-        Task {
+        let stopping = Task {
             try await Task.sleep(for: .milliseconds(20))
             await server.stop()
         }
         await #expect(throws: CodexAppServerError.stopped("scripted")) {
             _ = try await session.request("account/read")
         }
+        try await stopping.value
     }
 
     /// A server that never answers is cut off at the deadline and closed, so
@@ -254,7 +255,7 @@ struct CodexAccountReaderTests {
     @Test func noAppsAreAskedForWithoutAChatGPTSignIn() async throws {
         let server = ScriptedAppServer(
             answers: try Self.answers(
-                account: #"{"account":{"type":"amazonBedrock"},"requiresOpenaiAuth":false}"#))
+                account: #"{"account":{"type":"customProvider"},"requiresOpenaiAuth":false}"#))
         let observation = await Self.reader(server).read(contents: true)
         #expect(observation.signIn?.method == .thirdParty)
         #expect(observation.items.isEmpty)

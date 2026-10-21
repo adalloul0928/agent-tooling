@@ -123,11 +123,29 @@ extension EnvironmentValues {
     /// How the creator reaches a client, given the folder its drafts may be
     /// staged in. A test replaces the whole factory, so no render can start a
     /// process.
-    @Entry var skillDrafting: (URL) -> any SkillDrafting = { LiveSkillDrafting(stagingRoot: $0) }
+    var skillDrafting: (URL) -> any SkillDrafting {
+        get { self[SkillDraftingKey.self] }
+        set { self[SkillDraftingKey.self] = newValue }
+    }
     /// How the creator installs a missing skill creator. Replaced by tests for
     /// the same reason.
-    @Entry var skillCreatorInstalling: (WorkspaceLaunch.Workspace) -> any SkillCreatorInstalling = {
-        LiveSkillCreatorInstalling(store: $0.store, homeRoot: $0.homeRoot)
+    var skillCreatorInstalling: (WorkspaceLaunch.Workspace) -> any SkillCreatorInstalling {
+        get { self[SkillCreatorInstallingKey.self] }
+        set { self[SkillCreatorInstallingKey.self] = newValue }
+    }
+}
+
+// The keys are written out because the values are closures: from the macOS
+// 27 SDK on, `@Entry` warns on every closure value, since a closure cannot be
+// compared. These are what `@Entry` made before, under every SDK.
+
+private struct SkillDraftingKey: EnvironmentKey {
+    static var defaultValue: (URL) -> any SkillDrafting { { LiveSkillDrafting(stagingRoot: $0) } }
+}
+
+private struct SkillCreatorInstallingKey: EnvironmentKey {
+    static var defaultValue: (WorkspaceLaunch.Workspace) -> any SkillCreatorInstalling {
+        { LiveSkillCreatorInstalling(store: $0.store, homeRoot: $0.homeRoot) }
     }
 }
 

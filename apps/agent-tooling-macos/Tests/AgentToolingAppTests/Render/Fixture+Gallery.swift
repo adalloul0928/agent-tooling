@@ -5,22 +5,11 @@ import Testing
 @testable import AgentToolingApp
 @testable import AgentToolingCore
 
-/// The enrichment the gallery adds on top of the shared fixture: a library with
-/// an assignment so the Skills and Plugins screens are past their onboarding
-/// gate, a scanned device so the sidebar and Apps carry verdicts, and the
-/// settings, marketplace, projects and insights sessions refreshed so their
-/// screens draw rows rather than loading or empty states.
-///
-/// It only touches sessions the default fixture already wires with answering
-/// stubs. Screens that need a differently-built fixture — Checkup with a kept
-/// audit and Accounts with read contents — are built with the gallery helpers
-/// below (`galleryCheckupServices`, `galleryAccountReader`) and refreshed with
-/// `readAccountsForGallery`. Health reads its listing through a real command
-/// runner the launch wiring does not let a test replace, so its scripted
-/// listing is drawn by `GalleryMoreSurfacesTests` from a `HealthView` built
-/// with a scripted session rather than through the shell.
+/// Populates gallery screens through injected stubs. Checkup and Accounts use
+/// their dedicated readers. Health is rendered separately with a scripted
+/// session because shell launch wiring uses a real command runner.
 extension ShellRenderFixture {
-    /// Puts the library past onboarding and leaves a request in it, so Skills,
+    /// Saves an assignment and leaves a request in the library, so Skills,
     /// Plugins and Connections all have real rows.
     func populateForGallery() async {
         await assignStandaloneSkill()

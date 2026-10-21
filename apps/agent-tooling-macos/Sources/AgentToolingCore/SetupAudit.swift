@@ -188,6 +188,52 @@ public struct SetupAuditReport: Codable, Hashable, Sendable {
     public var highestSeverity: SetupFinding.Severity? { findings.map(\.severity).max() }
 }
 
+/// One server as an app's own configuration registers it for the person,
+/// wherever they work: not one a plugin brings, and not one that only a
+/// project's settings name.
+public struct UserScopeMCPRegistration: Equatable, Sendable {
+    /// The command the app starts it with, or nil when the entry names none
+    /// (an address rather than a command).
+    public let command: String?
+    /// Nil means an argument list was present but could not be read safely.
+    public let arguments: [String]?
+    /// Whether the app has it on: true unless the entry says otherwise.
+    public let isEnabled: Bool
+
+    public init(command: String?, arguments: [String]? = [], isEnabled: Bool = true) {
+        self.command = command
+        self.arguments = arguments
+        self.isEnabled = isEnabled
+    }
+}
+
+extension TargetObservation {
+    /// The servers this app holds for the person, by name: each one this
+    /// app's last check found from somewhere other than a plugin that its own
+    /// configuration files register for the whole account, read from those
+    /// files as the audit reads them. A plugin's server of the same name, or
+    /// one only a project's settings name (Claude Code's `projects` in
+    /// `~/.claude.json`), is not among them.
+    public func userScopeMCPRegistrations() -> [String: UserScopeMCPRegistration] {
+        SetupAuditor.userScopeServers(configurationPaths: configurationPaths).filter { listsOutsidePlugins($0.key) }
+    }
+
+    /// One of them, by name, or nil when this app holds none under it. The
+    /// files are read only when the last check found the server outside a
+    /// plugin.
+    public func userScopeMCPRegistration(ofServer name: String) -> UserScopeMCPRegistration? {
+        guard listsOutsidePlugins(name) else { return nil }
+        return SetupAuditor.userScopeServers(configurationPaths: configurationPaths)[name]
+    }
+
+    /// Whether the last check found the server `name` somewhere other than in
+    /// a plugin, whose sources are plugin identifiers (`name@marketplace`).
+    private func listsOutsidePlugins(_ name: String) -> Bool {
+        if let metadata = mcpMetadata[name] { return metadata.allSources.contains { !$0.contains("@") } }
+        return discoveredMCPServers.contains(name)
+    }
+}
+
 // MARK: - The auditor
 
 /// Turns what the device check saw, plus a bounded look at the folders it
@@ -197,7 +243,22 @@ public struct SetupAuditor: Sendable {
         /// Declared names of skills the library holds with an authority other
         /// than tracked-only: the ones this app manages.
         public var managedSkillNames: Set<String>
-        public init(managedSkillNames: Set<String>) { self.managedSkillNames = managedSkillNames }
+        /// Declared names of connections the library manages, Agent Tooling's
+        /// own among them. One placed in several apps is one definition, not a
+        /// server configured separately in each.
+        public var managedConnectionNames: Set<String>
+        /// The apps this Mac has Agent Tooling's own connection set up for.
+        /// There it is how the app reaches the library, not one of the app's
+        /// holdings, so the app's count of connections leaves it out.
+        public var ownConnectionApps: Set<ClientKind>
+
+        public init(
+            managedSkillNames: Set<String>, managedConnectionNames: Set<String> = [], ownConnectionApps: Set<ClientKind> = []
+        ) {
+            self.managedSkillNames = managedSkillNames
+            self.managedConnectionNames = managedConnectionNames
+            self.ownConnectionApps = ownConnectionApps
+        }
     }
 
     private let homeURL: URL
@@ -213,8 +274,9 @@ public struct SetupAuditor: Sendable {
     /// Where a bare command is looked for when the login shell has not been
     /// asked: the folders every child this app starts searches, version
     /// managers' shims included, so a server counted reachable here is one a
-    /// live test of it can start.
-    static func defaultSearchPath(homeURL: URL) -> [URL] {
+    /// live test of it can start. Public because the setup stage's audit,
+    /// which asks no login shell, adds the folders it found tools in to it.
+    public static func defaultSearchPath(homeURL: URL) -> [URL] {
         ProcessCommandRunner.searchDirectories(homeURL: homeURL)
     }
 
@@ -243,9 +305,10 @@ public struct SetupAuditor: Sendable {
                         evidence: [], actions: [.checkClient(client: client)]))
                 continue
             }
+            let ownConnection = library.ownConnectionApps.contains(client) ? AgentToolingConnection.declaredName : nil
             counts[client] = .init(
                 skills: observation.discoveredSkills.count, plugins: observation.discoveredPlugins.count,
-                mcpServers: observation.discoveredMCPServers.count)
+                mcpServers: observation.discoveredMCPServers.count { $0 != ownConnection })
             if !observation.commandAvailable {
                 findings.append(
                     SetupFinding(
@@ -266,8 +329,9 @@ public struct SetupAuditor: Sendable {
         }
 
         // A server each client was given by hand is one thing configured
-        // several times; the library can hold it once.
-        for (server, owners) in mcpOwners where owners.count > 1 {
+        // several times; the library can hold it once. One the library already
+        // manages is that one definition, placed in each app.
+        for (server, owners) in mcpOwners where owners.count > 1 && !library.managedConnectionNames.contains(server) {
             findings.append(
                 SetupFinding(
                     kind: .mcpServerRepeatedAcrossClients, severity: .info, client: nil, subject: server,
@@ -431,11 +495,8 @@ public struct SetupAuditor: Sendable {
                             "\(client.rawValue) records this plugin as installed at a folder that does not exist, so its skills and servers do not load.",
                         evidence: [redact(plugin.source)], actions: [.reinstallPlugin(pluginID: id, client: client)]))
             }
-            // Sibling version folders beside the one in use. Only where the
-            // install path is a version folder inside a plugin cache
-            // (`…/cache/<marketplace>/<plugin>/<version>`): a plugin kept flat
-            // by name, as AIM keeps Codex's, has siblings that are other
-            // plugins, not old versions.
+            // Only versioned cache siblings are stale versions. In a flat
+            // installation directory, siblings can be unrelated plugins.
             let versionsRoot = install.deletingLastPathComponent()
             let isVersionedCache =
                 versionsRoot.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent == "cache"
@@ -536,7 +597,7 @@ public struct SetupAuditor: Sendable {
                     evidence: sources.map(redact),
                     actions: configured.isEmpty ? [] : [.inspectMCPServer(name: server, client: client)]))
         }
-        let commands = configuredCommands(configurationPaths: observation.configurationPaths)
+        let commands = Self.configuredCommands(configurationPaths: observation.configurationPaths)
         for (server, metadata) in observation.mcpMetadata.sorted(by: { $0.key < $1.key }) where metadata.transport == "stdio" {
             guard let command = commands[server] else { continue }
             if !commandIsReachable(command) {
@@ -583,7 +644,10 @@ public struct SetupAuditor: Sendable {
     /// The `command` of every stdio server in the client's own configuration
     /// files. Reads the same files the check read; understands the two
     /// formats the clients use (JSON `mcpServers`, TOML `[mcp_servers.x]`).
-    func configuredCommands(configurationPaths: [String]) -> [String: String] {
+    ///
+    /// Static and shared, so the audit and the check of Agent Tooling's own
+    /// connection read a registration's command the same way.
+    static func configuredCommands(configurationPaths: [String]) -> [String: String] {
         var commands: [String: String] = [:]
         for path in configurationPaths {
             guard
@@ -600,8 +664,7 @@ public struct SetupAuditor: Sendable {
                     } else if trimmed.hasPrefix("["), trimmed.hasSuffix("]") {
                         current = nil
                     } else if let current, trimmed.hasPrefix("command"), let equals = trimmed.firstIndex(of: "=") {
-                        commands[current] = trimmed[trimmed.index(after: equals)...].trimmingCharacters(
-                            in: CharacterSet(charactersIn: " \""))
+                        commands[current] = tomlValue(trimmed[trimmed.index(after: equals)...])
                     }
                 }
             } else if let data = text.data(using: .utf8), let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -621,6 +684,235 @@ public struct SetupAuditor: Sendable {
             }
         }
         return commands
+    }
+
+    /// The same, from an auditor.
+    func configuredCommands(configurationPaths: [String]) -> [String: String] {
+        Self.configuredCommands(configurationPaths: configurationPaths)
+    }
+
+    /// The servers the client's own configuration files register for the
+    /// person: a JSON file's top-level `mcpServers` (never a project's entry
+    /// inside it, which holds for that project alone) and TOML
+    /// `[mcp_servers.<name>]` tables, each with the command it starts when it
+    /// names one. The first file to name a server is the one that counts, as
+    /// in `configuredCommands`.
+    static func userScopeServers(configurationPaths: [String]) -> [String: UserScopeMCPRegistration] {
+        var servers: [String: UserScopeMCPRegistration] = [:]
+        for path in configurationPaths {
+            guard
+                let text = try? BoundedFileAccess.readUTF8(
+                    at: URL(filePath: path), maximumBytes: BoundedFileAccess.maximumConfigurationBytes)
+            else { continue }
+            let found = path.hasSuffix(".toml") ? tomlUserScopeServers(text) : jsonUserScopeServers(text)
+            servers.merge(found) { current, _ in current }
+        }
+        return servers
+    }
+
+    private static func jsonUserScopeServers(_ text: String) -> [String: UserScopeMCPRegistration] {
+        guard let data = text.data(using: .utf8), let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        var servers: [String: UserScopeMCPRegistration] = [:]
+        for key in ["mcpServers", "mcp_servers"] {
+            for (name, value) in root[key] as? [String: Any] ?? [:] where servers[name] == nil {
+                let entry = value as? [String: Any]
+                servers[name] = UserScopeMCPRegistration(
+                    command: entry?["command"] as? String,
+                    arguments: entry?["args"] == nil ? [] : entry?["args"] as? [String],
+                    isEnabled: entry?["enabled"] as? Bool ?? !(entry?["disabled"] as? Bool ?? false))
+            }
+        }
+        return servers
+    }
+
+    private static func tomlUserScopeServers(_ text: String) -> [String: UserScopeMCPRegistration] {
+        var names: [String] = []
+        var commands: [String: String] = [:]
+        var arguments: [String: [String]] = [:]
+        var hasArguments = Set<String>()
+        var unknownArguments = Set<String>()
+        var switchedOff = Set<String>()
+        var current: String?
+        for line in tomlStatements(text) {
+            if TOMLTableScanner.isArrayTableHeader(line) {
+                let header = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let path = TOMLTableScanner.headerPath(String(header.dropFirst().dropLast())),
+                    path.count >= 3, ["mcp_servers", "mcp"].contains(path[0]), path[2] == "args"
+                {
+                    unknownArguments.insert(path[1])
+                    if !names.contains(path[1]) { names.append(path[1]) }
+                }
+                current = nil
+                continue
+            }
+            if let path = TOMLTableScanner.headerPath(line) {
+                if path.count >= 3, ["mcp_servers", "mcp"].contains(path[0]), path[2] == "args" {
+                    unknownArguments.insert(path[1])
+                    if !names.contains(path[1]) { names.append(path[1]) }
+                }
+                current = path.count == 2 && ["mcp_servers", "mcp"].contains(path[0]) && !path[1].isEmpty ? path[1] : nil
+                if let current, !names.contains(current) { names.append(current) }
+                continue
+            }
+            guard let current, let equals = line.firstIndex(of: "=") else { continue }
+            let value = line[line.index(after: equals)...]
+            guard let key = TOMLTableScanner.dottedKey(String(line[..<equals])) else { continue }
+            if key.first == "args", key.count != 1 {
+                unknownArguments.insert(current)
+                continue
+            }
+            guard key.count == 1 else { continue }
+            switch key[0] {
+            case "command": commands[current] = tomlValue(value)
+            case "args":
+                if !hasArguments.insert(current).inserted { unknownArguments.insert(current) }
+                arguments[current] = tomlArguments(value)
+                if arguments[current] == nil { unknownArguments.insert(current) }
+            case "enabled" where value.trimmingCharacters(in: .whitespaces).hasPrefix("false"): switchedOff.insert(current)
+            default: break
+            }
+        }
+        return Dictionary(
+            names.map {
+                (
+                    $0,
+                    UserScopeMCPRegistration(
+                        command: commands[$0],
+                        arguments: unknownArguments.contains($0) ? nil : (hasArguments.contains($0) ? arguments[$0] : []),
+                        isEnabled: !switchedOff.contains($0))
+                )
+            },
+            uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Keeps multiline values together so their contents cannot become keys or
+    /// table headers. This only separates statements; unsupported values stay unknown.
+    private static func tomlStatements(_ text: String) -> [String] {
+        let characters = Array(text)
+        var statements: [String] = []
+        var content = ""
+        var quote: Character?
+        var multiline = false
+        var escaped = false
+        var comment = false
+        var depth = 0
+        var index = 0
+        while index < characters.count {
+            let character = characters[index]
+            if comment {
+                if character != "\n" {
+                    index += 1
+                    continue
+                }
+                comment = false
+            }
+            if let delimiter = quote {
+                content.append(character)
+                if escaped {
+                    escaped = false
+                } else if delimiter == "\"", character == "\\" {
+                    escaped = true
+                } else if character == delimiter {
+                    if multiline {
+                        var end = index
+                        while end < characters.count, characters[end] == delimiter { end += 1 }
+                        if end - index >= 3 {
+                            content += String(characters[(index + 1)..<end])
+                            index = end - 1
+                            quote = nil
+                            multiline = false
+                        }
+                    } else {
+                        quote = nil
+                    }
+                }
+            } else if character == "#" {
+                comment = true
+            } else if character == "\"" || character == "'" {
+                quote = character
+                multiline =
+                    index + 2 < characters.count
+                    && characters[index + 1] == character && characters[index + 2] == character
+                content.append(character)
+                if multiline {
+                    content.append(character)
+                    content.append(character)
+                    index += 2
+                }
+            } else {
+                content.append(character)
+                if character == "[" || character == "{" { depth += 1 }
+                if character == "]" || character == "}" { depth -= 1 }
+                if character == "\n", depth == 0 {
+                    statements.append(content.trimmingCharacters(in: .whitespacesAndNewlines))
+                    content = ""
+                }
+            }
+            index += 1
+        }
+        if !content.isEmpty { statements.append(content.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        return statements
+    }
+
+    /// Reads the single-line string arrays written by the clients. Other TOML
+    /// forms remain unknown, so they cannot prove a registration is safe to remove.
+    private static func tomlArguments(_ raw: Substring) -> [String]? {
+        guard !raw.contains("\n") else { return nil }
+        var quoted = false
+        var escaped = false
+        var content = ""
+        for character in raw {
+            if !quoted, character == "#" { break }
+            content.append(character)
+            if escaped {
+                escaped = false
+            } else if quoted, character == "\\" {
+                escaped = true
+            } else if character == "\"" {
+                quoted.toggle()
+            }
+        }
+        return try? JSONDecoder().decode([String].self, from: Data(content.utf8))
+    }
+
+    /// A TOML value as the string it spells: a basic string with its escapes
+    /// read (`\"`, `\\`, `\uXXXX`, and the `\/` a JSON writer leaves), a
+    /// literal string as written, and anything else trimmed of quotes as
+    /// before. Whatever follows the closing quote, a comment say, is not part
+    /// of it.
+    static func tomlValue(_ raw: Substring) -> String {
+        let value = raw.trimmingCharacters(in: .whitespaces)
+        if value.hasPrefix("'") {
+            let body = value.dropFirst()
+            return String(body.prefix { $0 != "'" })
+        }
+        guard value.hasPrefix("\"") else { return value.trimmingCharacters(in: CharacterSet(charactersIn: " \"")) }
+        var result = ""
+        var characters = value.dropFirst().makeIterator()
+        while let character = characters.next() {
+            switch character {
+            case "\"":
+                return result
+            case "\\":
+                guard let escaped = characters.next() else { return result }
+                switch escaped {
+                case "n": result.append("\n")
+                case "t": result.append("\t")
+                case "r": result.append("\r")
+                case "b": result.append("\u{08}")
+                case "f": result.append("\u{0C}")
+                case "u", "U":
+                    let digits = String((0..<(escaped == "u" ? 4 : 8)).compactMap { _ in characters.next() })
+                    if let scalar = UInt32(digits, radix: 16).flatMap(Unicode.Scalar.init) { result.unicodeScalars.append(scalar) }
+                default: result.append(escaped)
+                }
+            default:
+                result.append(character)
+            }
+        }
+        return result
     }
 
     func commandIsReachable(_ command: String) -> Bool {

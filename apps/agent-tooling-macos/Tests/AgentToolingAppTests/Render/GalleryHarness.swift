@@ -5,19 +5,10 @@ import Testing
 
 @testable import AgentToolingApp
 
-/// The opt-in gallery that renders every screen and popup to PNG so a reviewer
-/// can look at all of it at once.
-///
-/// None of this runs under a normal `swift test`: a gallery suite is enabled
-/// only when `AGENT_TOOLING_SCREEN_GALLERY` names an output folder, so the
-/// files, the slow run-loop turns and the window chrome stay out of the way of
-/// the fast blank-frame checks the other render suites make.
-///
-/// The machinery here is additive to `ShellRenderHarness.swift`: the gallery
-/// rasterizes through the same `rasterize(…)` every section test uses (now with
-/// a size and an appearance), writes the bitmap as a PNG, and appends one row to
-/// a shared index. The index is written once, when the process exits, because a
-/// `.serialized` suite cannot know which test is last.
+/// Optional PNG gallery, enabled by AGENT_TOOLING_SCREEN_GALLERY. Reuses
+/// ShellRenderHarness rasterization with explicit size and appearance.
+/// Writes a shared index at process exit because serialized suites cannot
+/// identify the final test.
 
 /// Where the gallery writes, or nil when the gallery is switched off. A test
 /// suite gates on this through `.enabled(if: GalleryOutput.isOn)`.
@@ -38,6 +29,15 @@ enum GalleryOutput {
 enum GallerySize {
     static let standard = CGSize(width: 1_440, height: 900)
     static let minimum = CGSize(width: 1_180, height: 760)
+    /// The setup stage's own window.
+    static let stage = WindowSize.stage
+}
+
+/// The window a capture is drawn in: the shell's, with its toolbar, or the
+/// setup stage's, a titled window with no toolbar and its zoom button off.
+enum GalleryWindowChrome {
+    case shell
+    case stage
 }
 
 /// One row of the index: enough for a reviewer to find the file, know what they
@@ -76,7 +76,7 @@ final class GalleryIndex: @unchecked Sendable {
         "Projects",
         "Activity", "History",
         "Settings", "Sync",
-        "First run and wizards",
+        "Launchpad",
         "Command palette",
     ]
 
@@ -205,94 +205,228 @@ func galleryShellSnapshot(
     state: String,
     size: CGSize = GallerySize.standard,
     appearance: RenderAppearance = .light,
-    source: String
+    source: String,
+    note: String? = nil
 ) throws {
     guard let folder = GalleryOutput.folder else { return }
-    // The shell's sidebar sits on a behind-window material that composites over
-    // the desktop on a real Mac. Off-screen there is no desktop, so the band
-    // comes back white. Standing the shell on the app's own opaque content
-    // ground plus its canvas wash reproduces what a person sees — a sidebar in
-    // the same tinted canvas as the rest — rather than a white gap. This is a
-    // backing behind the shell, not a change to it.
-    let grounded = ZStack {
+    let (bitmap, captured) = try GalleryWindow(shellGround(view), size: size, appearance: appearance, chrome: .shell).capture()
+    try writeGalleryPNG(
+        bitmap, folder: folder, area: area, screen: screen, state: state,
+        size: size, appearance: appearance, source: source, note: joinedNote(note, captured))
+}
+
+/// `galleryShellSnapshot`, captured once `isSettled` holds for the window's
+/// content as VoiceOver reads it. Between looks the main actor is let go, so
+/// what a view starts in a task (a read off the main actor, then a change of
+/// its own state) lands before the capture; a capture made while the test
+/// holds the main actor never sees it. Fails when it has not held after a
+/// few seconds, so a state that never draws cannot pass as one that did.
+@MainActor
+func galleryShellSnapshot(
+    _ view: some View,
+    area: String,
+    screen: String,
+    state: String,
+    size: CGSize = GallerySize.standard,
+    appearance: RenderAppearance = .light,
+    source: String,
+    note: String? = nil,
+    until isSettled: @MainActor (AccessibilityProbe) -> Bool
+) async throws {
+    guard let folder = GalleryOutput.folder else { return }
+    let window = try GalleryWindow(shellGround(view), size: size, appearance: appearance, chrome: .shell)
+    try await window.settle(until: isSettled, what: "\(screen) · \(state)")
+    let (bitmap, captured) = try window.capture()
+    try writeGalleryPNG(
+        bitmap, folder: folder, area: area, screen: screen, state: state,
+        size: size, appearance: appearance, source: source, note: joinedNote(note, captured))
+}
+
+/// A capture's own note, then what its capture could not draw.
+private func joinedNote(_ own: String?, _ captured: String?) -> String? {
+    let notes = [own, captured].compactMap(\.self)
+    return notes.isEmpty ? nil : notes.joined(separator: "; ")
+}
+
+/// The shell on the app's own opaque content ground and its canvas wash. The
+/// sidebar's behind-window material has no desktop to blur off screen; this
+/// backing is the canvas a person sees beside it, not a change to the shell.
+/// The sidebar column itself still comes back white in both appearances,
+/// with nothing of its own drawn in it (the index's note says so).
+@MainActor
+private func shellGround(_ view: some View) -> some View {
+    ZStack {
         AgentTheme.contentBackground
         AgentTheme.canvasGradient
         view
     }
     .ignoresSafeArea()
-    let (bitmap, note) = try rasterizeTitledWindow(grounded, size: size, appearance: appearance)
+}
+
+/// Captures setup in its configured native window, including title bar and
+/// traffic lights. Uses an opaque ground-colour backing because behind-window
+/// material does not composite off-screen; the gallery index records this limit.
+@MainActor
+func galleryStageSnapshot(
+    _ view: some View,
+    screen: String,
+    state: String,
+    appearance: RenderAppearance = .light,
+    source: String
+) throws {
+    guard let folder = GalleryOutput.folder else { return }
+    let grounded = ZStack {
+        AgentTheme.stageGroundOpaque
+        view
+    }
+    .background(WindowConfigurator(role: .setup))
+    .ignoresSafeArea()
+    let (bitmap, note) = try rasterizeTitledWindow(grounded, size: GallerySize.stage, appearance: appearance, chrome: .stage)
+    let stageNote =
+        "stage ground drawn on an opaque backing; its behind-window material does not composite off-screen, "
+        + "and an off-screen window is never key, so the accent primary and glass buttons draw as an inactive window's"
     try writeGalleryPNG(
-        bitmap, folder: folder, area: area, screen: screen, state: state,
-        size: size, appearance: appearance, source: source, note: note)
+        bitmap, folder: folder, area: "Launchpad", screen: screen, state: state, size: GallerySize.stage,
+        appearance: appearance, source: source, note: note.map { "\(stageNote); \($0)" } ?? stageNote)
 }
 
 /// Lays a screen out in a titled, full-size-content window with a toolbar, the
 /// way the app shows it, and captures the whole frame view so the title bar is
-/// in the image. Returns a note when only the content could be captured.
+/// in the image. Returns a note when only the content could be captured. The
+/// stage's chrome has no toolbar and does not resize; its zoom button is
+/// turned off by the stage's own `WindowConfigurator`, which the stage's
+/// capture carries.
 @MainActor
 func rasterizeTitledWindow(
     _ view: some View,
     size: CGSize = GallerySize.standard,
-    appearance: RenderAppearance = .light
+    appearance: RenderAppearance = .light,
+    chrome: GalleryWindowChrome = .shell
 ) throws -> (bitmap: NSBitmapImageRep, note: String?) {
-    let host = NSHostingView(rootView: AnyView(view.frame(width: size.width, height: size.height)))
-    host.frame = CGRect(origin: .zero, size: size)
-    let window = NSWindow(
-        contentRect: host.frame,
-        styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-        backing: .buffered, defer: false)
-    window.titlebarAppearsTransparent = true
-    window.titleVisibility = .hidden
-    window.toolbar = NSToolbar(identifier: "gallery")
-    window.toolbarStyle = .unifiedCompact
-    window.isReleasedWhenClosed = false
-    if let nsAppearance = appearance.nsAppearance {
-        window.appearance = nsAppearance
-        host.appearance = nsAppearance
-    }
-    // The shell's backdrop is a behind-window material. Off-screen there is no
-    // desktop behind it to sample, so the sidebar band comes back clear unless
-    // the window gives the material a solid ground to composite over. A real
-    // window has the desktop; here the window background colour stands in, so
-    // the sidebar draws its glass rather than a white gap. The colour resolves
-    // to the right face from the window's own appearance.
-    window.isOpaque = true
-    window.backgroundColor = .windowBackgroundColor
-    window.contentView = host
-    window.orderFrontRegardless()
-    // A titled window with a toolbar needs more than one turn to settle its
-    // chrome and let the glass controls composite; the palette layout test uses
-    // the same 0.4s wait against the same window shape.
-    RunLoop.current.run(until: Date().addingTimeInterval(0.4))
-    host.layoutSubtreeIfNeeded()
+    try GalleryWindow(view, size: size, appearance: appearance, chrome: chrome).capture()
+}
 
-    // The frame view is the whole window, so capturing it keeps the title bar
-    // and the toolbar in the image along with the detail. One material cannot
-    // follow: the sidebar column's glass is composited by the window server,
-    // not by the view's own layer, so a layer cache reads that band back as the
-    // window's ground rather than the blurred glass a person sees on a Mac. The
-    // ground is the app's own canvas (set below), not a white gap, and the
-    // index records the limitation. Everything else — title bar, toolbar, and
-    // every pixel of the screen's own content — is captured faithfully.
-    let sidebarNote =
-        "sidebar column drawn on the app canvas; its behind-window glass does not composite in an off-screen capture"
-    if let frameView = window.contentView?.superview,
-        frameView.bounds.width > 0, frameView.bounds.height > 0,
-        let frame = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds)
-    {
-        frameView.cacheDisplay(in: frameView.bounds, to: frame)
-        window.orderOut(nil)
-        if distinctColours(in: frame) > 4 {
-            return (frame, sidebarNote)
+/// A screen in a titled, full-size-content window on screen, laid out and
+/// settled, until it is captured.
+@MainActor
+private final class GalleryWindow {
+    private let window: NSWindow
+    private let host: NSHostingView<AnyView>
+    private let size: CGSize
+    private let chrome: GalleryWindowChrome
+
+    /// At most this many looks, a short turn of the run loop apart, before a
+    /// settling capture gives up: about five seconds.
+    private static let looks = 100
+    private static let lookTurn: TimeInterval = 0.05
+
+    init(_ view: some View, size: CGSize, appearance: RenderAppearance, chrome: GalleryWindowChrome) throws {
+        self.size = size
+        self.chrome = chrome
+        host = NSHostingView(rootView: AnyView(view.frame(width: size.width, height: size.height)))
+        host.frame = CGRect(origin: .zero, size: size)
+        window = NSWindow(
+            contentRect: host.frame,
+            styleMask: chrome == .stage
+                ? [.titled, .closable, .miniaturizable, .fullSizeContentView]
+                : [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered, defer: false)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        switch chrome {
+        case .shell:
+            window.toolbar = NSToolbar(identifier: "gallery")
+            window.toolbarStyle = .unifiedCompact
+        case .stage:
+            // The stage sizes its window itself (below), so the hosted content
+            // must not ask the window for a content area of its own size.
+            host.sizingOptions = []
+        }
+        window.isReleasedWhenClosed = false
+        if let nsAppearance = appearance.nsAppearance {
+            window.appearance = nsAppearance
+            host.appearance = nsAppearance
+        }
+        // The shell's backdrop is a behind-window material. Off-screen there
+        // is no desktop behind it to sample; the window's opaque background
+        // colour is the ground it has instead. (The sidebar column still comes
+        // back white: see `shellGround`.)
+        window.isOpaque = true
+        window.backgroundColor = .windowBackgroundColor
+        window.contentView = host
+        if chrome == .stage {
+            // The stage's window is exactly its size, its content under the title
+            // bar. Made from a content rectangle, a titled window adds the title
+            // bar's height on top, which would leave a strip under the footer that
+            // the real stage does not have.
+            window.setFrame(CGRect(origin: .zero, size: size), display: false)
+        }
+        window.orderFrontRegardless()
+        // A titled window with a toolbar needs more than one turn to settle its
+        // chrome and let the glass controls composite; the palette layout test uses
+        // the same 0.4s wait against the same window shape.
+        RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+        host.layoutSubtreeIfNeeded()
+        if chrome == .stage {
+            // The capture's chrome is the stage's own: its configurator ran.
+            try #require(window.identifier == AppWindow.setup.identifier, "the stage's window configuration did not run")
+            #expect(window.standardWindowButton(.zoomButton)?.isEnabled == false, "the stage's zoom button is on")
+            #expect(window.collectionBehavior.contains(.fullScreenNone), "the stage can go full screen")
+            #expect(window.tabbingMode == .disallowed, "the stage takes tabs")
         }
     }
 
-    let bitmap = try #require(
-        host.bitmapImageRepForCachingDisplay(in: host.bounds),
-        "the screen produced no drawable area")
-    host.cacheDisplay(in: host.bounds, to: bitmap)
-    window.orderOut(nil)
-    return (bitmap, "title bar did not draw off-screen; content captured")
+    /// Looks again until `isSettled` holds, letting the main actor go between
+    /// looks so a view's own tasks can land.
+    func settle(until isSettled: @MainActor (AccessibilityProbe) -> Bool, what: String) async throws {
+        let probe = AccessibilityProbe(reading: window)
+        var looked = 0
+        while !isSettled(probe), looked < Self.looks {
+            await Task.yield()
+            turn()
+            looked += 1
+        }
+        let settled = isSettled(probe)
+        if !settled { window.orderOut(nil) }
+        try #require(settled, "\(what) never drew what its capture waits for")
+    }
+
+    private func turn() {
+        RunLoop.current.run(until: Date().addingTimeInterval(Self.lookTurn))
+        host.layoutSubtreeIfNeeded()
+    }
+
+    /// Captures the window and takes it off screen.
+    func capture() throws -> (bitmap: NSBitmapImageRep, note: String?) {
+        // Include the title bar and toolbar. Behind-window glass cannot
+        // composite off-screen; the shell uses its canvas there instead.
+        let sidebarNote: String? =
+            chrome == .shell
+            ? "sidebar column drawn on the app canvas; its behind-window glass does not composite in an off-screen capture"
+            : nil
+        if let frameView = window.contentView?.superview,
+            frameView.bounds.width > 0, frameView.bounds.height > 0,
+            let frame = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds)
+        {
+            frameView.cacheDisplay(in: frameView.bounds, to: frame)
+            window.orderOut(nil)
+            if chrome == .stage {
+                // Crops against the mockups' 860 × 640 stage line up only if the
+                // capture is that size too.
+                try #require(frame.size == size, "the stage captured at \(frame.size), not \(size)")
+            }
+            if distinctColours(in: frame) > 4 {
+                return (frame, sidebarNote)
+            }
+        }
+
+        let bitmap = try #require(
+            host.bitmapImageRepForCachingDisplay(in: host.bounds),
+            "the screen produced no drawable area")
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        window.orderOut(nil)
+        return (bitmap, "title bar did not draw off-screen; content captured")
+    }
 }
 
 /// Writes a bitmap as a PNG under `<area>/<file>.png` and records its index row.

@@ -16,7 +16,8 @@ enum ActionTitles {
 
     /// The label for a button that opens the review sheet. The trailing
     /// ellipsis marks it as opening a sheet rather than acting at once, the
-    /// convention this app already follows for "Set up…" and "Add connection…".
+    /// convention this app already follows for "Set up this Mac…" and "Add
+    /// connection…".
     ///
     /// Pass the plan's change count when there is a plan so the button can say
     /// how much is waiting; pass `nil` when none has been prepared yet. A plan
@@ -63,6 +64,35 @@ enum ActionTitles {
 
     /// The menu-bar item while that read runs.
     static let checkingAppsMenu = "Checking Apps…"
+
+    /// Opening the setup stage again on a Mac that has its library: the app
+    /// menu's "Set Up This Mac…", and "Set up this Mac…" in the palette, on
+    /// Apps and in Settings. The stage opens at Your apps and nothing changes
+    /// until it is reviewed, so it ends in an ellipsis.
+    static func setUpThisMacCommand(_ placement: CommandPlacement) -> String {
+        switch placement {
+        case .menu: "Set Up This Mac…"
+        case .palette: "Set up this Mac…"
+        }
+    }
+
+    /// The menu-bar item's one way back to the stage while setup owns the
+    /// app. It brings a window forward, so it takes no ellipsis.
+    static let showSetup = "Show Setup"
+
+    /// The menu-bar item's way to the main window, open or closed.
+    static let openAgentTooling = "Open Agent Tooling"
+
+    /// The menu-bar item's Review Changes… while a plan is being prepared.
+    static let preparingChangesMenu = "Preparing Changes…"
+
+    /// The menu-bar item's second try at opening the library.
+    static let tryAgainMenu = "Try Again"
+
+    /// Quitting the app: the menu-bar item's last item, and the setup stage's
+    /// unreadable screen, where nothing is left to do but quit. It reads as
+    /// the app menu's own Quit item does.
+    static let quitAgentTooling = "Quit Agent Tooling"
 
     /// The button that opens the skill creator on a draft. It names the
     /// assistant that writes the draft, because the creator runs that one and

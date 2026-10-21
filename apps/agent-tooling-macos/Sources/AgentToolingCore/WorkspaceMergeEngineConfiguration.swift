@@ -1,14 +1,8 @@
 import Foundation
 
-/// The parts of a merge that this packet made writable: the catalog list inside
-/// the configuration supplement, the check that two Macs did not each record
-/// the same app package as a separate library item, and the two checks that
-/// name what happens when both Macs act on one item's upstream link.
-///
-/// It lives beside the engine rather than inside it so that four commands being
-/// built at once do not queue behind one file. The rules are the engine's own:
-/// ancestry decides removal, a value moved on both sides is the person's
-/// decision, and nothing is chosen by recency.
+/// Merges catalog configuration and detects native-route and upstream-link
+/// collisions. Uses ancestry for removals and reports concurrent edits for
+/// resolution; recency never selects a winner.
 extension WorkspaceMergeEngine {
     /// True when at least one collision was reported.
     static func reportNativeRouteCollisions(artifacts: [ArtifactRecord], report: Report) -> Bool {
@@ -33,15 +27,10 @@ extension WorkspaceMergeEngine {
         return reported
     }
 
-    /// A subscription is a statement about one item: the item's authority names
-    /// it, and its lock approves the bytes that item holds. Two Macs that each
-    /// linked the same item wrote two subscriptions for it, and the merged
-    /// authority — kept local, like every other contested value — names one.
-    ///
-    /// The unnamed one is set aside instead of being carried into a document
-    /// that cannot be validated. Nothing is lost by that: the Mac that wrote it
-    /// still holds its own revision, and the conflict names the item so the
-    /// person can drop one side there. Returns the subscriptions that survive.
+    /// Retains only subscriptions named by their artifact's merged authority.
+    /// Concurrent links can leave an extra subscription that would invalidate
+    /// the document. Report that collision and omit the extra record; its
+    /// originating revision remains available for resolution.
     static func reportSubscriptionOwnerCollisions(
         artifacts: [ArtifactRecord],
         subscriptions: [UpstreamSubscription],
@@ -70,16 +59,10 @@ extension WorkspaceMergeEngine {
         }
     }
 
-    /// One Mac linked an item while the other edited it. Each side moved one
-    /// fact only, so the ordinary rules take the new authority *and* the new
-    /// bytes, and the lock is left approving a version nobody holds — which
-    /// would deploy content nobody reviewed.
-    ///
-    /// The approved digest is put back, because it is the one value already
-    /// present in the inputs and it keeps the record honest about where the
-    /// content came from. The conflict says what happened, and nothing is
-    /// applied while it stands: resolving it keeps either the followed version
-    /// or the edit, and choosing the edit takes the subscription with it.
+    /// Detects a concurrent upstream link and content edit. Restore the
+    /// subscription's approved digest and report a blocking conflict so an
+    /// unreviewed version cannot deploy. Resolution chooses the followed
+    /// version or preserves the edit while removing its subscription.
     static func reportSubscriptionContentMismatches(
         artifacts: inout [ArtifactRecord],
         subscriptions: [UpstreamSubscription],

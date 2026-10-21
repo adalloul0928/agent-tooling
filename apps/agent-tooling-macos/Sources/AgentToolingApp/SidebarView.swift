@@ -10,7 +10,7 @@ struct SidebarView: View {
     let workspace: WorkspaceLaunch.Workspace
     @Environment(AppNavigationState.self) private var navigation
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage("appearance") private var appearance = "System"
+    @AppStorage(AppPreferenceKey.appearance) private var appearance = AppAppearance.system.rawValue
     /// Whether Apps shows the apps on this Mac beneath it. Remembered across
     /// launches; the Apps row itself is always there.
     @AppStorage("sidebar.appsExpanded") private var appsExpanded = true
@@ -58,6 +58,9 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+            // Home's Finish setting up card, hidden with rows left, is
+            // brought back from here: "Finish setting up · 4 left".
+            FinishSetupSidebarChip(workspace: workspace) { openSection(.overview) }
             if let line = workspace.sync?.statusLine {
                 Hairline()
                 HStack(spacing: Space.sm) {
@@ -139,7 +142,7 @@ struct SidebarView: View {
         }
         // Apps carries both kinds of attention it can act on: clients the
         // check could not reach and connections the health check found broken.
-        .badge(section == .syncCenter ? workspace.device.attentionCount + workspace.health.attentionCount : 0)
+        .badge(section == .syncCenter ? Self.appsBadge(device: workspace.device, health: workspace.health) : 0)
         .tag(SidebarItem.section(section))
         .contentShape(Rectangle())
         // Selecting an already-highlighted parent still returns to its
@@ -156,6 +159,13 @@ struct SidebarView: View {
             navigation.showAllClients()
         }
         selection = section
+    }
+
+    /// What the Apps row's badge counts: apps the last check could not reach,
+    /// and connections that need the person. A connection whose status could
+    /// not be read is not counted: Codex reports every connection that way.
+    static func appsBadge(device: WorkspaceDeviceSession, health: WorkspaceHealthSession) -> Int {
+        device.attentionCount + health.needsYouCount
     }
 
     /// One search over every named object and action in the app.
@@ -179,7 +189,7 @@ struct SidebarView: View {
 
     private var appearanceButton: some View {
         Button {
-            appearance = colorScheme == .dark ? "Light" : "Dark"
+            appearance = (colorScheme == .dark ? AppAppearance.light : .dark).rawValue
         } label: {
             Image(systemName: colorScheme == .dark ? "sun.max" : "moon")
         }

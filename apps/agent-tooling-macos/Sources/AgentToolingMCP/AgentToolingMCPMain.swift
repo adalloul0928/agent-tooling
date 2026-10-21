@@ -8,7 +8,7 @@ import Foundation
 /// It takes no arguments. That is deliberate: the CLI helper accepts `--home`
 /// and `--workspace` so tests can point it at a scratch directory, and either
 /// flag reachable from an MCP client would be a path-confinement bypass — a
-/// caller could aim the server at a workspace it wrote itself and then read or
+/// caller could point the server at a workspace it wrote itself and then read or
 /// queue against state no person had ever seen. This binary resolves the one
 /// real workspace and refuses everything else on the command line.
 @main

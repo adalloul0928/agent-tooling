@@ -111,6 +111,55 @@ hold every revision from the join onward.
 A Mac that already has a workspace cannot join another; it would have two
 sources of truth. The app says so and offers nothing destructive.
 
+### Before joining: the preflight
+
+`GitRemotePreflight.run(remote:branch:deviceName:expectingWorkspace:thisDevice:
+runner:scratch:progress:)` is what the setup stage's Join (J01) and Your other
+Macs (S17) run as an address is typed. Address and branch problems return
+before anything runs. Then, in a scratch folder removed on return: `xcode-select
+-p` before Git ever runs, `git --version` (check 1, *Git is installed*), `git
+ls-remote` for the branch (check 2, *the host answered*: it separates an empty
+repository from one that cannot be reached), a shallow fetch of its head
+(check 3, *holds a library*), and the library's record read before anything is
+decoded (check 4, *this build can read it*). The result names the library's
+tool count (Agent Tooling's own connection left out), the other Macs, the
+numbered name this Mac would get ("Juniper 2") and their statuses. Failures
+are a typed `GitRemoteProblem` worded for the person, each ending "Nothing was
+changed." except the two that help with the field, `invalidAddress` and
+`invalidBranch`. A typo, a failed sign-in, no network and a timeout are never
+read as an empty repository; `noSuchBranch` is a branch the repository lacks,
+and `emptyRemote` a repository with no branch at all.
+
+### The join's phases
+
+`WorkspaceJoin.join(...)` reports its steps as J01 lists them (`Step`):
+reaching the repository (a fresh `<support>/sync-checkout`, cloned and
+fetched; a stale one is set aside, to the Trash by default), reading the
+library, checking this Mac's apps (the `observe` closure: each chosen app's
+first read, and the sign-in reads beside it), registering and sharing.
+
+It runs in two phases. Until this Mac's store is created a Stop ends it,
+keeping nothing but the checkout. From the store on it finishes or fails as a
+whole, in this order: the store (this Mac's choices as its device
+preferences: the chosen apps, every assistant run off, projects not found
+from Claude Code's history), the sync enrollment beside it,
+`afterStoreCreated` (the setup stage writes its record there, so a launch that
+finds no library can finish the join), this Mac's registration under the name
+shown (numbered when another Mac has it), the first sync, and the locator
+record last. A failure in that phase is `WorkspaceJoinError.lateFailure`.
+`WorkspaceJoin.finish(containerRoot:workspaceID:homeURL:...)` completes what
+it left, reading the repository from the enrollment; joining the same library
+again does too, keeping the registered name. The result carries the
+`registeredName` and the other Macs' published statuses.
+
+### Connecting the first Mac
+
+The setup stage's Your other Macs connects through
+`WorkspaceSyncSession.connectAndShare`: the preflight, the enrollment in
+`<support>/sync-checkout`, this Mac registered under the typed name before
+anything is published, then the first publish. If the publish fails, the
+enrollment it wrote is removed; the registration stays.
+
 ## Scope: which Macs an assignment is for
 
 `PortableDestination` carries `deviceIDs` and `excludedDeviceIDs`:
@@ -146,7 +195,9 @@ by the same rule: `UpdatePolicy` per kind — install automatically, or ask. Aft
 each pass the app plans only what is new and unsatisfied here; kinds set to
 automatic are installed through the ordinary direct path (same classifier, same
 executor, same receipts); the rest wait on Home under "From your other Macs".
-A deliberately limited Mac is never nagged about items that do not apply to it.
+A deliberately limited Mac is never nagged about items that do not apply to it,
+and nothing this Mac's own setup placed is ever listed as from another Mac
+(`WorkspaceSetupProgressSession.ownPlacements`).
 
 Arriving intent is never evidence that a file changed. Everything still goes
 through this Mac's own plan.

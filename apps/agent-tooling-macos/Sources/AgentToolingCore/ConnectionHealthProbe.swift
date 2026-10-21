@@ -101,6 +101,17 @@ public struct ConnectionHealthProbe: Sendable {
         }
     }
 
+    /// The list command a check runs for `client`, as a person would type it:
+    /// "claude mcp list", "codex mcp list --json", "kiro-cli mcp list". Nil for
+    /// a client with no listing this app reads (Gemini today). Built from the
+    /// same arguments `probe` runs, so a screen that names the check before it
+    /// runs names exactly what runs.
+    public static func listCommandText(for client: ClientKind) -> String? {
+        ConnectionHealthListing.arguments(for: client).map {
+            ([MCPClientCommand.executable(for: client)] + $0).joined(separator: " ")
+        }
+    }
+
     /// Probes several clients, in the order given. Sequential rather than
     /// concurrent: these are cheap local reads, and one answer per client keeps
     /// the output bounded by the runner's own per-command limits.

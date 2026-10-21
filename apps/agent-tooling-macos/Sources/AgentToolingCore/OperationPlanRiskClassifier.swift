@@ -1,22 +1,10 @@
 import Foundation
 
-/// Decides whether a plan can run from the button that made it, or has to be
-/// shown first.
-///
-/// Every plan still travels the same path — plan, safety review, approval
-/// digest, staged execution, receipt. What this decides is only whether a
-/// person has to look at the plan before it runs. A plan is shown when it
-/// would do something they could not have guessed from the button they
-/// pressed: touch files this app did not put there, remove anything, rewrite
-/// a connection an app already has, do a lot at once, or carry content a scan
-/// flagged. Everything else — putting a tool where nothing is, replacing a
-/// copy this app installed and still holds the previous bytes of, adding a
-/// connection an app does not have yet, or handing a package to the app's own
-/// installer — is what the button said it would do, and runs.
-///
-/// The classifier is pure and reads only the plan plus facts the planner was
-/// already given. It never looks at the disk; the executor's own checks remain
-/// the last word on every write.
+/// Decides whether an action needs an explicit plan preview. Unowned files,
+/// removals, connection rewrites, bulk changes and flagged content require it.
+/// All plans still pass safety review, approval-digest validation, staged
+/// execution and receipts. Classification uses planner facts, never disk reads;
+/// the executor rechecks every write.
 public enum OperationPlanRiskClassifier {
     /// How many items a plan may carry and still be "what the button said".
     /// Past this a person wants the summary even when every item is safe.
@@ -161,7 +149,9 @@ public enum OperationPlanRiskClassifier {
                 } else if context.editedInstalls.contains(key) {
                     edited += 1
                 }
-            case .removeContent:
+            case .removeContent, .removeManagedConnection:
+                // Taking something out of an app is never what an install
+                // button said, a connection any more than a copy.
                 removals += 1
             case .installNativePackage:
                 // The app's own installer does the work, with the app's own
@@ -181,7 +171,10 @@ public enum OperationPlanRiskClassifier {
         if removals > 0 { reasons.append(.removesContent(count: removals)) }
         if reconfigured > 0 { reasons.append(.reconfiguresConnection(count: reconfigured)) }
         if context.requestedByAgent { reasons.append(.requestedByAgent) }
-        if !plan.exclusions.isEmpty { reasons.append(.exclusions(count: plan.exclusions.count)) }
+        // An app that already holds exactly what was asked for has nothing to
+        // show: Has it is never a reason to look first.
+        let excluded = plan.exclusions.count { $0.reason != .alreadyPresent }
+        if excluded > 0 { reasons.append(.exclusions(count: excluded)) }
         if plan.items.count > directItemLimit { reasons.append(.bulk(count: plan.items.count)) }
 
         return reasons.isEmpty ? .direct : .needsReview(reasons.sorted())

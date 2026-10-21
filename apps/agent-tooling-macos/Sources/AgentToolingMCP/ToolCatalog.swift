@@ -87,13 +87,17 @@ enum ToolSchema {
         ])
     }
 
+    /// The coding agents a request may name, one per app Agent Tooling
+    /// works with, in the app order.
+    static let targetNames = ["codex", "claude-code", "gemini", "kiro-cli"]
+
     static var targets: JSONValue {
         .object([
             "type": .string("array"),
             "description": .string("Which coding agents the request covers."),
-            "items": .object(["type": .string("string"), "enum": .array(["codex", "claude-code", "gemini"].map(JSONValue.string))]),
+            "items": .object(["type": .string("string"), "enum": .array(targetNames.map(JSONValue.string))]),
             "minItems": .number(1),
-            "maxItems": .number(3),
+            "maxItems": .number(Double(targetNames.count)),
             "uniqueItems": .bool(true),
         ])
     }

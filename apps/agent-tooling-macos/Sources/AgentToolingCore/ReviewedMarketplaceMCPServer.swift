@@ -1,24 +1,10 @@
 import Foundation
 
-/// The one reviewed way to reach an MCP server a registry listing published,
-/// recovered from the listing itself.
-///
-/// The registry provider only ever writes native install routes for a listing
-/// it could review end to end: an `https` streamable-http endpoint that carries
-/// no headers or variables, or a stdio `npx -y <pkg>@<version>` command with no
-/// environment and a pinned version. When a listing needs credentials, a
-/// header, a variable, or an unpinned version, the provider writes no routes at
-/// all — so the presence of a route is itself the signal that the destination
-/// is safe to record without asking anyone for a secret.
-///
-/// This reads that reviewed destination back out of the routes so Discover can
-/// record the server through the very same managed-MCP intake the Paste sheet
-/// uses, rather than through the native-plugin adoption path that only ever
-/// accepted `claude:`/`codex:` catalog identifiers. The endpoint and command
-/// are recovered from Claude Code's route, whose argument shape is the plain
-/// `mcp add --transport <t> --scope <s> <id> <endpoint-or---command>` form, and
-/// are handed straight to `MCPDefinitionValidator` so a recovered destination
-/// that somehow does not validate is refused here rather than recorded.
+/// Recovers MCP destinations from reviewed registry install routes. Routes
+/// permit credential-free HTTPS or pinned `npx -y <pkg>@<version>` commands.
+/// Listings requiring headers, variables, credentials or unpinned packages
+/// have no route. Recovered Claude `mcp add` arguments pass through
+/// `MCPDefinitionValidator` before the managed-MCP intake can record them.
 public enum ReviewedMarketplaceMCPServer {
     /// What the listing needs before it can be reached, and whether this app can
     /// supply it without a person entering anything.

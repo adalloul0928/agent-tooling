@@ -1,26 +1,8 @@
 import Foundation
 
-/// The official Claude plugins marketplace, read directly from its published
-/// catalog file rather than through Claude Code's own CLI.
-///
-/// Discover's Claude listings normally come from `claude plugin list
-/// --available --json`. When that command cannot run — an isolated HOME, a
-/// Toolbox shim in place of the real binary, or Claude simply not installed —
-/// the CLI catalog is silent and Discover has nothing browsable to show. This
-/// provider answers the same catalog from the machine-readable file the
-/// marketplace repository publishes, so the browse experience survives the CLI
-/// being unavailable.
-///
-/// It is deliberately shaped so the CLI stays the authority where it can speak:
-/// every listing here is emitted with the same `claude:<name>@claude-plugins-official`
-/// identifier the CLI parser produces, so `NativeCatalogPackageIdentity.recognize`
-/// accepts it, the existing "Add to Library for Claude Code" path installs it
-/// through Claude's own plugin command, and the deduplicating merge folds a CLI
-/// row and a file row for the same plugin into one. This provider never claims
-/// a listing is installed — installation is a fact about this Mac that only the
-/// library and a scan can establish — and it reads the catalog over HTTPS with
-/// the same byte limits, timeout, and bounded-string validation the MCP
-/// registry provider uses. No web page is scraped.
+/// Reads the public Claude marketplace when its CLI is unavailable. Matching
+/// identifiers let the marketplace merge CLI install state with catalog details.
+/// Downloads use the same bounds and validation as the MCP registry provider.
 public struct ClaudePluginsOfficialCatalogProvider: MarketplaceProvider {
     public let id = "claude.plugins-official"
     public let displayName = "claude-plugins-official"

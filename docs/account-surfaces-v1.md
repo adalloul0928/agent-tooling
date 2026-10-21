@@ -1,11 +1,8 @@
 # Account surfaces v1
 
-Status: implemented and fixture-tested. Not verified against a live
-subscription sign-in: the Mac it was built on signs both clients in through
-Amazon Bedrock, so only the "not signed in with the subscription" path has run
-against real clients. The response shapes come from Claude Code 2.1.300 (its
-own binary) and Codex 0.162.1 (`codex app-server`), and every settings key the
-app writes is quoted from the vendor's reference.
+Status: implemented and fixture-tested. Live subscription sign-in has not
+been verified. Response fixtures cover Claude Code 2.1.300 and Codex 0.162.1
+(`codex app-server`); local settings edits follow the documented client keys.
 
 ## What this covers
 
@@ -71,7 +68,7 @@ Every command runs the client's own executable and is admitted by
 |---|---|
 | `claude.ai` | the subscription, with its plan and organization |
 | `oauth_token`, `api_key`, `api_key_helper` | a token, an API key (with its source), a key helper |
-| `third_party` | the provider, for example Amazon Bedrock |
+| `third_party` | the reported third-party provider |
 | `none`, or `loggedIn` false | signed out |
 
 Only a `claude.ai` sign-in reaches the account. Account skills and plugins
@@ -90,7 +87,7 @@ sync to the terminal from Claude Code 2.1.273.
 A synced plugin is "Loads in Claude Code" when it has an install path and is
 enabled, "Off in Claude Code" when `enabled` is false, "Did not load" when it
 reports errors, and "Not loaded" when its install path is empty. The last
-covers a copy another plugin shadows; see [Publishing](#publishing-this-repositorys-plugins-to-claudeai).
+covers a copy another plugin shadows; see [Account plugin precedence](#account-plugin-precedence).
 
 ### Codex
 
@@ -112,8 +109,8 @@ byte is written:
 | `app/list` | `cursor`, `limit: 100`, `forceRefetch: false`, up to 10 pages | contents, ChatGPT sign-in only |
 | `app/installed` | `forceRefresh: false` | contents, ChatGPT sign-in only |
 
-`account.type` `chatgpt` is the subscription, `apiKey` an API key, and
-`amazonBedrock` or any other type a third-party provider. No account with
+`account.type` `chatgpt` is the subscription and `apiKey` an API key. Other
+account types are shown as third-party providers. No account with
 `requiresOpenaiAuth` true is signed out. Only apps marked `isAccessible` become
 items; the rest are counted as the directory. Configuration changes never go
 through app-server: `config/value/write` and `config/batchWrite` are refused by
@@ -133,7 +130,7 @@ variables that are set. It never reads a value.
 | Variable | Account | Effect |
 |---|---|---|
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_PROFILE` | claude.ai | replaces the subscription sign-in |
-| `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_USE_FOUNDRY` | claude.ai | sends requests to another provider |
+| Provider-selection environment variables | claude.ai | sends requests to another provider |
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | claude.ai | stops account skill and plugin sync, even when set to `0` or `false` |
 | `ENABLE_CLAUDEAI_MCP_SERVERS`, only when `false` or `0` | claude.ai | turns account connectors off |
 | `CLAUDE_CONFIG_DIR` | claude.ai | moves the settings folder this app edits |
@@ -317,29 +314,12 @@ The app treats these as the account's:
 - **Library**: Skills, Plugins and Connections each show what the accounts add.
 - **Checkup** and **Home**: the findings above.
 
-## Publishing this repository's plugins to claude.ai
+## Account plugin precedence
 
-1. On claude.ai or in the Claude desktop app, open **Customize › Plugins ›
-   Add › Add marketplace** and enter this repository. A private GitHub
-   repository needs your GitHub account connected and the Claude GitHub App
-   given access to it.
-2. Turn on **Sync automatically** for the marketplace, so each merge to `main`
-   reaches the account.
-3. Add only the user-scoped plugins: `personal`, `developer-workflows`,
-   `mobile-development` and `pumpd-automations`. Leave `cyrus-workflows`,
-   `pumpd-workflows` and `wet-in-seattle` off the account; they are assigned to
-   projects, and an account plugin loads in every project.
-4. Claude Code downloads each one as `<name>@synced` at its next session start;
-   `/reload-plugins` loads it into a running session.
-
-Codex keeps its local marketplace install. In Claude Code, a local plugin with
-the same name takes precedence: Claude Code 2.1.300 reports `"<name>" from
-claude.ai not loaded — "<local>" on this machine has the same name and takes
-precedence`, and suggests running `claude plugin enable <name>@synced` and then
-disabling or removing the local copy to use the account's. Keeping both is
-harmless: Claude Code runs the local copy, and the account's copy serves chat,
-Cowork and the desktop app. The Accounts tab's publishing card lists which of
-the library's `agent-tooling` plugins the account carries.
+A plugin synchronized from a hosted account can share a name with a local
+plugin. The client's own precedence rules decide which copy loads; Agent
+Tooling displays the reported status. Change installation and account sync in
+the owning client. Installing a local plugin does not publish it to an account.
 
 ## Not covered
 

@@ -78,17 +78,12 @@ public enum AccountPreferencePlanner {
         plan(preferences: preferences, observation: observation, configuration: .success(configurationText))
     }
 
-    /// Decides what to change on this Mac for one provider. Pure: it reads
-    /// nothing and writes nothing.
+    /// Pure planner for one provider's local preferences.
     ///
-    /// - Parameter configuration: the file this app edits, as it was read: its
-    ///   text, nil when there is no file, or the error that kept a file that is
-    ///   there from being read, such as one over the size limit. Edits are
-    ///   rehearsed against the text, so a file the editor would refuse is
-    ///   reported here rather than as a failed step. A file that could not be
-    ///   read is never planned against as though it were empty, because the
-    ///   engine would refuse the edit too: every choice that needs one is held,
-    ///   with the error's own words as the reason.
+    /// - Parameter configuration: Existing file text, nil for a missing file,
+    ///   or its read error. Rehearses edits to catch unsupported file shapes.
+    ///   Read failures hold every choice requiring an edit; they must never
+    ///   be treated as an empty configuration.
     public static func plan(
         preferences: AccountPreferences, observation: AccountObservation, configuration: Result<String?, any Error>
     ) -> AccountPreferencePlan {
@@ -247,16 +242,9 @@ public enum AccountPreferencePlanner {
     }
 }
 
-/// Finds the ways a `config.toml` can already define a key that the line
-/// editor would not see, so it is never asked to make a second definition.
-///
-/// The editor works by table header: it replaces `key = …` under `[table]`,
-/// or adds the header and the key. TOML can also define the same key with a
-/// dotted key elsewhere (`apps.github.enabled = false` at the top), inside an
-/// inline table (`apps = { github = { enabled = false } }`), under an array of
-/// tables, or with quoting the editor does not match. Writing a second
-/// definition beside any of those makes the file invalid, and Codex would
-/// refuse to start, so each is reported instead.
+/// Detects TOML definitions the table-based line editor cannot safely replace:
+/// dotted keys, inline tables, arrays of tables and unsupported quoting.
+/// Refusing these shapes prevents duplicate keys that would stop Codex starting.
 enum CodexConfigurationShape {
     static func obstacle(in text: String, keyPath: [String]) -> String? {
         guard let key = keyPath.last, keyPath.count >= 2 else { return nil }

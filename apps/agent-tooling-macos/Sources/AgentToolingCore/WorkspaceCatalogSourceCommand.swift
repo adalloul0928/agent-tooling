@@ -48,28 +48,11 @@ public struct LocalCatalogSourceFolders: CatalogSourceFolderProbing {
     }
 }
 
-/// Adds a catalog to the list this workspace records, or takes one off it.
-///
-/// A catalog source is two halves of one record. The portable half — its name,
-/// its kind, and a credential-free address when it has one — travels between
-/// Macs. This Mac's half holds where the folder actually is, because an
-/// absolute path is a fact about one machine and the contract keeps those out
-/// of portable bytes.
-///
-/// A record and its identity-map allocation move together, always: the document
-/// refuses a source without an allocation and refuses an allocation whose
-/// object is gone, so `WorkspaceCatalogSourceIdentity` is the only place either
-/// is minted or withdrawn.
-///
-/// Removal writes **no tombstone**. A tombstone exists to stop something that
-/// scans this Mac from silently resurrecting what a person deleted, and nothing
-/// scans catalog sources: they are here because somebody typed one in, and
-/// typing the same one in again is both intended and harmless. Deletion is
-/// decided by ancestry in the merge instead, exactly as preset membership
-/// already is.
-///
-/// Nothing here reads a catalog, fetches a package or installs anything. It
-/// records where somebody said to look.
+/// Adds or removes catalog metadata without fetching or installing packages.
+/// Portable records hold names, kinds and credential-free addresses; local
+/// folder paths stay in device bindings. Records and identity allocations move
+/// together through `WorkspaceCatalogSourceIdentity`.
+/// Removal uses merge ancestry, not tombstones: no scanner can recreate sources.
 public struct WorkspaceCatalogSourceCommand: Sendable {
     public enum Change: Sendable, Equatable {
         case add(WorkspaceCatalogSourceRecord, localLocation: String?)

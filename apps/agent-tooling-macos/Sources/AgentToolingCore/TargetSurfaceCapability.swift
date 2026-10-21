@@ -1,21 +1,8 @@
 import Foundation
 
-/// The single place that decides which surface a planner will act on.
-///
-/// Each planner used to carry its own hand-written `switch selector.surface`
-/// that mapped a surface to a client, and those five switches drifted: a client
-/// added to `ClientKind` and to some adapters was still unknown to the planners,
-/// so a whole capture would abort on the one surface they did not name. A
-/// predicate stated once here, derived from facts the rest of the app already
-/// holds, cannot disagree with itself.
-///
-/// The rules are deliberately about what this Mac can express, not about which
-/// clients exist. Skills are a file copy, so any CLI with a native skill folder
-/// qualifies. A managed connection is a command, so only clients whose command
-/// shapes are written down qualify. A native package install is also a command,
-/// and a narrower one: only clients whose install command is recorded qualify.
-/// Non-CLI surfaces (desktop, cloud, IDE) route nowhere on this Mac and are
-/// refused for every component.
+/// Shared planner capability lookup. CLI surfaces with native skill folders
+/// support copies. MCP and plugin installs additionally require verified
+/// command shapes. Desktop, cloud and IDE surfaces have no local install route.
 public enum TargetSurfaceCapability {
     /// A surface's client, but only when that surface is a command-line one
     /// this app installs into. The desktop, cloud and IDE surfaces share a

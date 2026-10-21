@@ -173,19 +173,9 @@ struct LiveInsightsServices: InsightsServicing {
     }
 }
 
-/// What this Mac's own recent work suggests, and nothing it does about it.
-///
-/// The scan is read-only in both directions: it reads chat history that already
-/// exists and it installs nothing. Every action a report offers opens a screen;
-/// none of them writes anywhere.
-///
-/// There is one of these per launch, built by `WorkspaceLaunch` and handed to
-/// both screens that read a report, so a scan started on Insights is the scan
-/// Home reports and neither screen has its own idea of what was last found.
-///
-/// Scanning never blocks the screen. The work runs off this actor, a scan can
-/// be stopped before it replaces what is on screen, and a stopped or superseded
-/// scan is dropped rather than saved.
+/// Shared read-only Insights state for Home and Insights. Background scans read
+/// existing chat history; report actions navigate without writing. Cancelled or
+/// superseded scans cannot replace or persist the current report.
 @MainActor @Observable
 final class WorkspaceInsightsSession {
     /// The last report on screen: this session's scan, or the one this Mac kept
@@ -215,6 +205,14 @@ final class WorkspaceInsightsSession {
     /// Which scan the state on screen belongs to. A scan that is not the
     /// current one has been stopped or replaced, and its answer is dropped.
     @ObservationIgnored private var generation: UInt64 = 0
+    /// The scan the launch started on its own, while it is the current one,
+    /// and whether it hands its summaries to the assistant: turning the run
+    /// it is off stops it, and never a scan a person started.
+    @ObservationIgnored private var scheduledScan: (generation: UInt64, divesDeep: Bool)?
+    /// The launch's own run, from its keyword pass to its deep dive's
+    /// answer, while it runs: a main window opened again in the same launch
+    /// waits for it rather than running beside it.
+    @ObservationIgnored private var scheduledRun: Task<Void, Never>?
 
     /// One bounded read of the kept report, so opening the app shows the last
     /// scan rather than an empty screen somebody has to scan again to fill.
@@ -246,14 +244,71 @@ final class WorkspaceInsightsSession {
         return Date.now.timeIntervalSince(last) > Self.deepDiveStaleAfter
     }
 
-    /// The daily run. Called when the app opens; it does nothing when a deep
-    /// dive is fresh, a scan is already running, or no managed client can run
-    /// one. Everything runs off the main actor and the screen keeps drawing.
-    func runScheduledDeepDiveIfStale(options: InsightScanOptions, managedClients: [ClientKind]) async {
-        guard isDeepDiveStale, !isScanning, !isDeepDiving,
-            let client = Self.deepDiveClient(managed: managedClients)
-        else { return }
-        await scan(options: options, deepDiveWith: client)
+    /// Whether the kept report is older than a day, or there is none: when
+    /// the local scan, run on its own, is due again.
+    var isReportStale: Bool {
+        guard let generated = report?.generatedAt else { return true }
+        return Date.now.timeIntervalSince(generated) > Self.deepDiveStaleAfter
+    }
+
+    /// Runs due insights for managed clients under the current consent. Deep dives
+    /// send keyword summaries to the assistant; local-only scans send nothing.
+    /// `current` is rechecked before sending summaries. Existing scans or deep dives
+    /// are awaited so the following weekly review cannot overlap them. A cancelled
+    /// launch starts no new work; legacy consent preserves prior behavior.
+    func runScheduledInsightsIfDue(
+        consent: AssistantRunConsent, managedClients: [ClientKind], current: (@MainActor () -> AssistantRunConsent)? = nil
+    ) async {
+        if let running = scheduledRun {
+            await running.value
+            return
+        }
+        if isScanning || isDeepDiving {
+            _ = await scanTask?.value
+            await waitForDeepDive()
+            return
+        }
+        guard !Task.isCancelled else { return }
+        let options = InsightScanOptions(clients: Set(managedClients))
+        let work: @MainActor () async -> Void
+        if consent.dailyDeepDive, isDeepDiveStale, let client = Self.deepDiveClient(managed: managedClients) {
+            work = {
+                await self.run(
+                    options: options, deepDiveWith: client, scheduled: true,
+                    divesIf: { (current?() ?? consent).dailyDeepDive })
+                await self.waitForDeepDive()
+            }
+        } else if consent.localInsights, isReportStale, !options.clients.isDisjoint(with: AssistantRunLimits.historyClients) {
+            work = { await self.run(options: options, deepDiveWith: nil, scheduled: true) }
+        } else {
+            return
+        }
+        // Its own task, so a second launch lane can wait on the whole run.
+        // Like the deep dive it ends in, it is not stopped by the window that
+        // started it closing; turning it off does (`cancelScheduledRun`).
+        let task = Task { await work() }
+        scheduledRun = task
+        await task.value
+        if scheduledRun == task { scheduledRun = nil }
+    }
+
+    /// Returns once the deep dive running now has answered, failed or been
+    /// stopped; at once when none is running.
+    func waitForDeepDive() async {
+        // Taken before waiting: the dive clears its own handle as it ends.
+        let running = deepDiveTask
+        await running?.value
+    }
+
+    /// Stops the run the launch started, while it is still the one running,
+    /// unless `consent` allows it: a deep dive once the daily deep dive is
+    /// off, a keyword scan on its own once local insights is. Left out,
+    /// `consent` allows nothing, so the run stops whatever it is. A scan or
+    /// deep dive a person started on Insights is left alone.
+    func cancelScheduledRun(unlessAllowedBy consent: AssistantRunConsent = .off) {
+        guard let scheduledScan, scheduledScan.generation == generation else { return }
+        guard !(scheduledScan.divesDeep ? consent.dailyDeepDive : consent.localInsights) else { return }
+        cancelScan()
     }
 
     /// Reviews recent work against the skills this workspace holds.
@@ -264,12 +319,33 @@ final class WorkspaceInsightsSession {
     ///
     /// Returns when the fast pass has finished, been stopped, or been replaced.
     func scan(options: InsightScanOptions, deepDiveWith deepDiveClient: ClientKind? = nil) async {
+        await run(options: options, deepDiveWith: deepDiveClient, scheduled: false)
+    }
+
+    /// A scan, started by a person or by the launch (`scheduled`). The deep
+    /// dive starts only while `divesIf` says it may, asked once the fast pass
+    /// has landed.
+    private func run(
+        options: InsightScanOptions, deepDiveWith deepDiveClient: ClientKind?, scheduled: Bool,
+        divesIf allowsDive: @MainActor () -> Bool = { true }
+    ) async {
         guard !isScanning else { return }
         guard let state = library.state else {
             errorMessage =
                 "This workspace's library has not been read yet, so there is nothing to compare recent work against."
             return
         }
+        // The scan is under way from here, through reading the library's own
+        // content, so stopping it (or turning a scheduled run off) holds from
+        // the first moment, and a second scan does not start beside it.
+        generation &+= 1
+        let token = generation
+        scheduledScan = scheduled ? (token, deepDiveClient != nil) : nil
+        isScanning = true
+        errorMessage = nil
+        deepDiveTask?.cancel()
+        deepDiveTask = nil
+        isDeepDiving = false
         // The versioned library, in the shape the surviving scan already speaks.
         let projected = VersionedInventoryProjection.inventory(state.library).skills
         // The projection can only report requested intent, so a library-authored
@@ -278,6 +354,7 @@ final class WorkspaceInsightsSession {
         // judge what the SKILL.md actually says instead of the placeholders.
         let requests = Self.libraryContentRequests(state.library)
         let facts = requests.isEmpty ? [:] : await services.libraryContent(for: requests)
+        guard token == generation else { return }
         // Collapsed here as well as in the scan, so the deep dive is handed
         // the same one-per-skill list the fast pass judged.
         let skills = ToolCopyIdentity.collapsingCopies(
@@ -291,17 +368,20 @@ final class WorkspaceInsightsSession {
                 enriched.filesKnown = true
                 return enriched
             })
-        generation &+= 1
-        let token = generation
-        isScanning = true
-        errorMessage = nil
-        deepDiveTask?.cancel()
-        deepDiveTask = nil
-        isDeepDiving = false
         let task = Task { [services, homeRoot] in
             await services.scanWithDigests(options: options, skills: skills, homeURL: homeRoot)
         }
-        scanTask = Task { await task.value.report }
+        // Stopping the scan cancels the read itself, not only this handle on
+        // it: a task that awaits another does not pass its cancellation on,
+        // so without the handler a stopped scan ran to its end, and every
+        // caller waiting on it waited too.
+        scanTask = Task {
+            await withTaskCancellationHandler {
+                await task.value.report
+            } onCancel: {
+                task.cancel()
+            }
+        }
         let scanned = await task.value
         // A scan somebody stopped, or one a newer scan replaced, is no longer
         // this Mac's answer: it is dropped rather than written over what the
@@ -316,7 +396,7 @@ final class WorkspaceInsightsSession {
         report = fresh
         lastScannedAt = fresh.generatedAt
         keep(fresh)
-        guard let deepDiveClient else { return }
+        guard let deepDiveClient, allowsDive() else { return }
         startDeepDive(client: deepDiveClient, digests: scanned.digests, skills: skills, windowStart: fresh.windowStart, token: token)
     }
 
@@ -352,12 +432,13 @@ final class WorkspaceInsightsSession {
         }
     }
 
-    /// Fresh digests of recent work for a setup review, read now and kept
-    /// nowhere. Empty when the library is unread or nothing is managed.
-    func digestsForReview() async -> [ConversationDigest] {
+    /// Fresh digests of recent work in `clients` for a setup review, read now
+    /// and kept nowhere. The review passes the apps this Mac manages, so a
+    /// summary never comes from an app it does not. Empty when the library is
+    /// unread or none of `clients` has history to read.
+    func digestsForReview(clients: Set<ClientKind>) async -> [ConversationDigest] {
         guard let state = library.state else { return [] }
-        let clients = Set(InsightScanOptions().clients)
-        guard !clients.isEmpty else { return [] }
+        guard !clients.isDisjoint(with: AssistantRunLimits.historyClients) else { return [] }
         let skills = ToolCopyIdentity.collapsingCopies(VersionedInventoryProjection.inventory(state.library).skills)
         return await services.scanWithDigests(options: InsightScanOptions(clients: clients), skills: skills, homeURL: homeRoot).digests
     }
@@ -375,7 +456,7 @@ final class WorkspaceInsightsSession {
     /// The reading itself is a local pass that does not stop halfway; what this
     /// guarantees is that its result is never saved or shown.
     func cancelScan() {
-        guard scanTask != nil || deepDiveTask != nil else { return }
+        guard isScanning || scanTask != nil || deepDiveTask != nil else { return }
         generation &+= 1
         scanTask?.cancel()
         scanTask = nil

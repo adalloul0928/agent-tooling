@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import SwiftUI
 import Testing
@@ -9,11 +10,9 @@ import Testing
 /// than to the harness every screen uses.
 
 extension ShellRenderFixture {
-    /// Saves one assignment for the standalone skill.
-    ///
-    /// It puts the screen past its onboarding gate, which only stands while
-    /// nothing in the library has been assigned at all, and it gives the list a
-    /// row whose verdict says a place was asked for.
+    /// Saves one assignment for the standalone skill, through the same review
+    /// `WorkspaceAssignmentSheet` saves with, so the list has a row whose
+    /// verdict says a place was asked for. Nothing here writes a row directly.
     func assignStandaloneSkill(to surface: TargetSurface = .claudeCode) async {
         await workspace.library.reviewAssignments(
             artifactIDs: [Self.skill],
@@ -22,25 +21,23 @@ extension ShellRenderFixture {
     }
 
     /// Isolated preferences, so a test never reads or writes this Mac's own.
-    /// The Skills screen keeps its filters, grouping and the onboarding choice
-    /// in app storage, and a test that shared them would depend on whatever the
-    /// last run left behind.
-    static func preferences(
-        onboardingSkipped: Bool = true, _ location: SourceLocation = #_sourceLocation
-    ) throws -> RenderPreferences {
-        let suite = "skills-render-\(UUID())"
-        let defaults = try #require(UserDefaults(suiteName: suite), sourceLocation: location)
-        defaults.set(onboardingSkipped, forKey: "onboarding.skipped.v2")
-        return RenderPreferences(suite: suite, defaults: defaults)
+    /// The Skills screen keeps its filters and grouping in app storage, and a
+    /// test that shared them would depend on whatever the last run left
+    /// behind. Their file lives in a scratch folder, never in
+    /// `~/Library/Preferences` (`ScratchDefaults`).
+    static func preferences() throws -> RenderPreferences {
+        RenderPreferences(scratch: try ScratchDefaults("skills-render"))
     }
 }
 
-/// One test's app storage, and the way to take it away again.
+/// One test's app storage, and the way to take it away again, file and all.
 struct RenderPreferences {
-    let suite: String
-    let defaults: UserDefaults
+    let scratch: ScratchDefaults
 
-    func remove() { defaults.removePersistentDomain(forName: suite) }
+    var suite: String { scratch.suite }
+    var defaults: UserDefaults { scratch.defaults }
+
+    func remove() { scratch.remove() }
 }
 
 /// One skill's stored files, scripted.

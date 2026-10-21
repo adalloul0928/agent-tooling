@@ -11,6 +11,12 @@ public enum ExternalAppRoute: Equatable, Sendable {
     /// reads the request's payload and talks to the assistant it names;
     /// nothing is saved until the person reviews the draft and chooses to.
     case createSkill(UUID)
+    /// Opens the setup stage again at Your apps, on a Mac that already has
+    /// its library: the app's Set up this Mac…. Nothing is read or changed
+    /// until the person walks the stage and reviews what it would do. It is
+    /// not a section, so a link to a screen, as the MCP server builds them,
+    /// is never one to it.
+    case setup
 
     public init?(url: URL) {
         guard url.scheme?.lowercased() == "agent-tooling",
@@ -33,6 +39,8 @@ public enum ExternalAppRoute: Equatable, Sendable {
         case ("skills", let values) where values.count == 2 && values[0] == "create":
             guard let id = UUID(uuidString: values[1]) else { return nil }
             self = .createSkill(id)
+        case ("setup", let values) where values.isEmpty:
+            self = .setup
         case (_, let values) where values.isEmpty:
             guard let section = ExternalAppSection(rawValue: host) else { return nil }
             self = .section(section)

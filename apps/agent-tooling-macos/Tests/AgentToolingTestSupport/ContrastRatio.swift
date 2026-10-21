@@ -12,6 +12,32 @@ public enum ContrastRatio {
         return (max(one, other) + 0.05) / (min(one, other) + 0.05)
     }
 
+    /// The ratio between `first` and `second` as they are drawn over
+    /// `ground`: `second` (a surface, a wash) is laid over the ground, then
+    /// `first` (the text or mark on it) over that, so a translucent layer is
+    /// measured against what is really under it rather than against white.
+    /// Nil when any of them has no sRGB form.
+    public static func between(_ first: NSColor, _ second: NSColor, over ground: NSColor) -> Double? {
+        guard let surface = composited(second, over: ground), let front = composited(first, over: surface) else { return nil }
+        return between(front, surface)
+    }
+
+    /// `colour` laid over `ground` and flattened, as a translucent colour is
+    /// drawn: each channel mixed by the colour's alpha in sRGB. A translucent
+    /// ground is first laid over white. Nil when either has no sRGB form.
+    public static func composited(_ colour: NSColor, over ground: NSColor) -> NSColor? {
+        guard let top = colour.usingColorSpace(.sRGB), let base = ground.usingColorSpace(.sRGB) else { return nil }
+        func mix(_ over: CGFloat, _ under: CGFloat, _ alpha: CGFloat) -> CGFloat { over * alpha + under * (1 - alpha) }
+        let baseAlpha = base.alphaComponent
+        let red = mix(base.redComponent, 1, baseAlpha)
+        let green = mix(base.greenComponent, 1, baseAlpha)
+        let blue = mix(base.blueComponent, 1, baseAlpha)
+        let alpha = top.alphaComponent
+        return NSColor(
+            srgbRed: mix(top.redComponent, red, alpha), green: mix(top.greenComponent, green, alpha),
+            blue: mix(top.blueComponent, blue, alpha), alpha: 1)
+    }
+
     /// WCAG relative luminance, or nil when the colour has no sRGB form.
     public static func luminance(of colour: NSColor) -> Double? {
         guard let rgb = colour.usingColorSpace(.sRGB) else { return nil }

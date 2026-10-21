@@ -1,5 +1,15 @@
 import Foundation
 
+/// One moment in a plan's run, as `OperationExecutor.execute(_:onStep:)`
+/// reports it: a step beginning, or a step's end. A step that never ran ends
+/// without beginning.
+public enum OperationStepEvent: Equatable, Sendable {
+    /// The step with this identifier began.
+    case started(UUID)
+    /// A step ended, with what it did.
+    case finished(OperationStepResult)
+}
+
 public actor OperationExecutor {
     private let store: any ManagedOperationStore
     private let runner: any CommandRunning
@@ -39,43 +49,48 @@ public actor OperationExecutor {
         )
     }
 
-    /// Executes a plan built by an adapter. Steps intentionally continue after
-    /// a failure so multi-agent installs retain useful partial success.
-    public func execute(_ plan: OperationPlan) async -> OperationReceipt {
+    /// Executes adapter plans, retaining partial success after failures. Awaits
+    /// `onStep` events in order; skipped steps end without starting. Cancellation
+    /// stops between steps so an active copy or registration finishes atomically.
+    /// The receipt is always written.
+    public func execute(
+        _ plan: OperationPlan, onStep: (@Sendable (OperationStepEvent) async -> Void)? = nil
+    ) async -> OperationReceipt {
         installAuthority = store.installAuthority()
         var results: [OperationStepResult] = []
         for (index, step) in plan.steps.enumerated() {
             let startedAt = Date.now
-            do {
-                try Task.checkCancellation()
-                let result = try await execute(step)
-                results.append(
-                    OperationStepResult(
-                        stepID: step.id,
-                        status: result.status,
-                        output: Self.persistableOutput(result.output),
-                        startedAt: startedAt,
-                        finishedAt: .now
-                    )
-                )
-            } catch is CancellationError {
+            guard !Task.isCancelled else {
                 results.append(
                     OperationStepResult(
                         stepID: step.id, status: .skipped, output: "Cancelled before this step ran.", startedAt: startedAt, finishedAt: .now
                     ))
                 appendSkippedSteps(plan.steps.dropFirst(index + 1), reason: "Skipped because the operation was cancelled.", to: &results)
+                for skipped in results[index...] { await onStep?(.finished(skipped)) }
                 break
+            }
+            await onStep?(.started(step.id))
+            let result: OperationStepResult
+            do {
+                // Its own task, which a stopped plan does not cancel, so the
+                // step finishes; the check above stops the plan before the next.
+                let outcome = try await Task { try await self.execute(step) }.value
+                result = OperationStepResult(
+                    stepID: step.id, status: outcome.status, output: Self.persistableOutput(outcome.output), startedAt: startedAt,
+                    finishedAt: .now)
             } catch {
-                results.append(
-                    OperationStepResult(
-                        stepID: step.id, status: .failed, output: Self.persistableOutput(error.localizedDescription), startedAt: startedAt,
-                        finishedAt: .now))
-                if step.shouldStopOnFailure {
-                    appendSkippedSteps(
-                        plan.steps.dropFirst(index + 1), reason: "Skipped because a required preflight or integrity check failed.",
-                        to: &results)
-                    break
-                }
+                result = OperationStepResult(
+                    stepID: step.id, status: .failed, output: Self.persistableOutput(error.localizedDescription), startedAt: startedAt,
+                    finishedAt: .now)
+            }
+            results.append(result)
+            await onStep?(.finished(result))
+            if result.status == .failed, step.shouldStopOnFailure {
+                appendSkippedSteps(
+                    plan.steps.dropFirst(index + 1), reason: "Skipped because a required preflight or integrity check failed.",
+                    to: &results)
+                for skipped in results[(index + 1)...] { await onStep?(.finished(skipped)) }
+                break
             }
         }
         let state: HealthState

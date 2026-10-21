@@ -26,7 +26,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes jq ripgrep shellcheck
-          python -m pip install --disable-pip-version-check skills-ref==0.1.1
 
       - name: Install pinned workflow linter
         run: |
@@ -44,7 +43,7 @@ jobs:
       - name: Lint workflows and shell scripts
         run: |
           actionlint
-          rg -l '^#!/usr/bin/env bash$' scripts plugins apps/agent-tooling-macos/scripts \
+          rg -l '^#!/usr/bin/env bash$' scripts apps/agent-tooling-macos/scripts \
             | sort -u \
             | xargs shellcheck -x
 
@@ -62,20 +61,6 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  ios-session-lanes:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
-        with:
-          node-version: "22.20.0"
-
-      - name: Test iOS session lanes
-        run: node --test plugins/mobile-development/skills/ios-session-lanes/tests/ios-session-lane.test.mjs
 
   documentation:
     runs-on: ubuntu-latest

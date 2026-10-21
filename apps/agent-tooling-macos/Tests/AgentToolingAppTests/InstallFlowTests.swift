@@ -25,7 +25,7 @@ struct InstallFlowTests {
     @Test func theSavedAssignmentSheetOffersToInstall() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        await fixture.assignForOnboarding()
+        await fixture.assignStandaloneSkill()
         #expect(fixture.workspace.library.lastReceipt != nil)
         let navigation = AppNavigationState()
         try expectDrawn(
@@ -116,7 +116,7 @@ struct InstallFlowTests {
     @Test func askingTwiceIsRefusedAsAlreadyAskedFor() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        await fixture.assignForOnboarding()
+        await fixture.assignStandaloneSkill()
         await fixture.workspace.library.reviewAssignments(
             artifactIDs: [ShellRenderFixture.skill],
             destinations: [.init(surface: .claudeCode, scope: .user)])

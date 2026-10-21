@@ -20,11 +20,18 @@ struct HomeSection: View {
         // other, so opening Home cannot make it wait on a database or a socket.
         // Reading the kept report is not one of them: that happened when the
         // workspace opened, and starting a scan stays a decision made on
-        // Insights.
+        // Insights. The catalogs are asked over the network only where the
+        // launch work may ask them (`LaunchWorkPolicy`); otherwise Home shows
+        // what this Mac already holds of them.
         .task {
             async let queued: Void = workspace.requests.refresh()
-            async let catalogs: Void = workspace.marketplace.refresh()
-            _ = await (queued, catalogs)
+            if LaunchWorkPolicy.allowsNetworkCatalogs(status: workspace.setupProgress.status) {
+                async let catalogs: Void = workspace.marketplace.refresh()
+                _ = await (queued, catalogs)
+            } else {
+                workspace.marketplace.reloadSources()
+                await queued
+            }
         }
     }
 }

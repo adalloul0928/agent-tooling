@@ -232,7 +232,7 @@ struct AccountAuditTests {
         #expect(finding.kind == .accountSignIn)
         #expect(finding.client == .claude)
         #expect(finding.severity == .medium)
-        #expect(finding.detail.contains("Amazon Bedrock"))
+        #expect(finding.detail.contains("Bedrock"))
         #expect(finding.actions == [.openAccounts(provider: .claude)])
         #expect(!finding.actions.contains { $0.changesFiles })
     }

@@ -3,10 +3,11 @@ import { constants as fsConstants } from "node:fs";
 import { access, lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 import { isPathInside } from "./paths";
+import { AGENT_TOOLING_TEAM_ID } from "./signing-team";
 
-export const AGENT_TOOLING_BUNDLE_ID = "com.arendalloul.agent-tooling";
-export const AGENT_TOOLING_HELPER_ID = "com.arendalloul.agent-tooling.cli";
-export const AGENT_TOOLING_TEAM_ID = "434X69L4Z5";
+export { AGENT_TOOLING_TEAM_ID } from "./signing-team";
+export const AGENT_TOOLING_BUNDLE_ID = "dev.agenttooling.app";
+export const AGENT_TOOLING_HELPER_ID = "dev.agenttooling.app.cli";
 export const AGENT_TOOLING_HELPER_RELATIVE_PATH = path.join(
   "Contents",
   "Helpers",
@@ -43,6 +44,7 @@ export class InstallationSecurityError extends Error {
 }
 
 export function developerIDRequirement(identifier: string): string {
+  requireSigningTeam();
   if (!/^[A-Za-z0-9][A-Za-z0-9.-]+$/.test(identifier)) {
     throw new InstallationSecurityError("Invalid code-signing identifier.");
   }
@@ -191,6 +193,7 @@ function assertExpectedIdentity(
   identity: CodeIdentity,
   expectedIdentifier: string,
 ): void {
+  requireSigningTeam();
   if (
     identity.identifier !== expectedIdentifier ||
     identity.teamIdentifier !== AGENT_TOOLING_TEAM_ID ||
@@ -198,6 +201,14 @@ function assertExpectedIdentity(
   ) {
     throw new InstallationSecurityError(
       "The Agent Tooling code signature does not match the pinned identity.",
+    );
+  }
+}
+
+function requireSigningTeam(): void {
+  if (!/^[A-Z0-9]{10}$/.test(AGENT_TOOLING_TEAM_ID)) {
+    throw new InstallationSecurityError(
+      "This extension build has no configured signing identity. Use a configured release or enable the development helper in Raycast development mode.",
     );
   }
 }

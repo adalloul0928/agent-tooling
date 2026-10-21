@@ -1,18 +1,9 @@
 import AgentToolingCore
 import Foundation
 
-/// One install, from the button that asked for it to the receipt.
-///
-/// The picker chooses the apps; this runs the pipeline behind one click:
-/// save the assignments, plan what that means for this Mac, decide whether a
-/// person has to look (`OperationPlanRiskClassifier`), and either apply at
-/// once or hand the plan over for review. Every stage is the same one the Apps
-/// screen's Review changes runs; the only thing this decides is whether the
-/// sheet appears.
-///
-/// Undo withdraws the assignments this install added and applies the removal
-/// the planner then offers for them. It undoes only what this install did: an
-/// app that already had the item before keeps it.
+/// Saves assignments, plans deployment, classifies risk, and applies or requests
+/// review through the existing Apps pipeline. Undo withdraws only assignments
+/// and installations added by this operation; prior installs remain intact.
 @MainActor @Observable
 final class WorkspaceInstallSession {
     enum Phase: Equatable {
@@ -80,6 +71,10 @@ final class WorkspaceInstallSession {
     /// unrelated withdrawal — is not swept up by scoping removals by artifact.
     private var installedKeys: Set<WorkspaceDeploymentInstallKey> = []
     private var targetArtifactIDs: Set<ArtifactID> = []
+    /// The library revision the plan was read at: it installs only while the
+    /// library is still there, so an approval given after another write is
+    /// refused rather than run against a library the plan was not read from.
+    private var planRevision: WorkspaceObjectID?
 
     init(
         library: WorkspaceLibrarySession, deployment: WorkspaceDeploymentSession,
@@ -157,9 +152,11 @@ final class WorkspaceInstallSession {
             fail("This Mac's apps could not be checked. The assignments are saved; install from the Apps screen.")
             return
         }
-        if scoped.items.isEmpty, scoped.exclusions.isEmpty {
-            // Already there everywhere it was asked for. The assignment is
-            // saved, which is all there was to do; nothing was written.
+        planRevision = deployment.planRevision
+        if scoped.items.isEmpty, scoped.exclusions.allSatisfy({ $0.reason == .alreadyPresent }) {
+            // Already there everywhere it was asked for (Has it is not a
+            // step). The assignment is saved, which is all there was to do;
+            // nothing was written.
             phase = .finished(.init(installed: [], failed: [:], skipped: [], canUndo: false, alreadyPresent: true))
             return
         }
@@ -181,42 +178,71 @@ final class WorkspaceInstallSession {
         await apply(reviewPlan)
     }
 
+    /// Runs exactly the steps of `plan` that may run, and reads the outcome
+    /// from each step: an app counts as installed only when every one of its
+    /// steps ran and succeeded, so a step with no command to run it never
+    /// makes its app read as installed.
     private func apply(_ plan: WorkspaceDeploymentPlan) async {
         phase = .installing
         let held = Set(heldBack.map(WorkspaceDeploymentSession.installKey))
         let running = plan.items.filter { !held.contains(WorkspaceDeploymentSession.installKey($0)) }
+        let ends = StepEnds()
         if !running.isEmpty {
-            await deployment.apply(only: targetArtifactIDs, excluding: held)
-            if let message = deployment.errorMessage {
+            guard let revision = planRevision else {
+                fail(deployment.errorMessage ?? "This Mac's apps could not be checked. Nothing was changed.")
+                return
+            }
+            let reviewed = WorkspaceDeploymentPlan(
+                items: running, exclusions: [], requirements: plan.requirements, resolvedTargets: plan.resolvedTargets)
+            switch await deployment.applyReviewed(reviewed, basedOn: revision, onStep: { ends.take($1, for: $0) }) {
+            case .applied:
+                break
+            case .stale:
+                fail(LaunchpadCopy.Review.changedWhileOpen)
+                return
+            case .notRun(let message):
                 fail(message)
                 return
             }
+            // The apps whose own tool ran are checked again first, so the plan
+            // read next sees what the install left there (D29). A copy needs
+            // no check: the plan measures the folder itself.
+            let asked = running.filter { item in
+                switch item.action {
+                case .installNativePackage, .configureManagedConnection, .removeManagedConnection:
+                    ends.ran(WorkspaceDeploymentSession.installKey(item))
+                case .installContent, .updateContent, .removeContent: false
+                }
+            }
+            await device.refresh(only: Set(asked.compactMap(\.surface.client)))
+            // Re-read, so what is shown next reflects what actually happened.
+            await deployment.prepare()
         }
-        // One operation is one app, so an app's outcome is the outcome of the
-        // operations that named its surface.
         var installed = Set<ClientKind>()
         var failed: [ClientKind: String] = [:]
-        for client in Set(running.compactMap(\.surface.client)) {
-            let results = deployment.results.filter { $0.surfaces.contains { $0.client == client } }
-            if let failure = results.first(where: { $0.failed > 0 }) {
-                failed[client] = failure.outputs.first ?? "Failed."
-            } else {
+        var notRun: [WorkspaceDeploymentItem] = []
+        for item in running {
+            guard let client = item.surface.client else { continue }
+            switch ends.end(of: WorkspaceDeploymentSession.installKey(item)) {
+            case .succeeded:
                 installed.insert(client)
+            case .failed(let output):
+                if failed[client] == nil { failed[client] = output.isEmpty ? "Failed." : output }
+            case .started, .notRun, nil:
+                notRun.append(item)
             }
         }
+        // An app with any step that did not succeed is not installed.
+        installed.subtract(failed.keys)
+        installed.subtract(notRun.compactMap(\.surface.client))
         // Remember the exact place-and-thing that actually landed, so Undo
-        // removes only those: a step that was attempted but whose surface
-        // reported a failure did not write, and is left out.
-        let failedSurfaces = Set(
-            deployment.results.filter { $0.failed > 0 }.flatMap(\.surfaces))
+        // removes only those: a step that failed or never ran did not write.
         installedKeys = Set(
-            running.filter { !failedSurfaces.contains($0.surface) }
-                .map(WorkspaceDeploymentSession.installKey))
+            running.map(WorkspaceDeploymentSession.installKey).filter { ends.end(of: $0) == .succeeded })
         let skipped =
-            plan.exclusions.map(\.detail)
-            + heldBack.map {
-                "\($0.surface.displayName) already has \($0.displayName) from somewhere else; it was left alone."
-            }
+            plan.exclusions.filter { $0.reason != .alreadyPresent }.map(\.detail)
+            + heldBack.map { "\($0.appName) already has \($0.displayName) from somewhere else; it was left alone." }
+            + notRun.map { "\($0.appName) could not be asked to install \($0.displayName) on this Mac." }
         phase = .finished(
             .init(
                 installed: Array(installed), failed: failed, skipped: skipped,
@@ -261,11 +287,34 @@ final class WorkspaceInstallSession {
         addedContributionIDs = []
         installedKeys = []
         targetArtifactIDs = []
+        planRevision = nil
         if library.review != nil, !library.isBusy { library.discardReview() }
     }
 
     private func fail(_ message: String) {
         errorMessage = message
         phase = .choosing
+    }
+}
+
+/// How each step of an install ended, as the deployment session reports it.
+@MainActor
+private final class StepEnds {
+    private var ends: [WorkspaceDeploymentInstallKey: ReviewedStepProgress] = [:]
+
+    func take(_ progress: ReviewedStepProgress, for key: WorkspaceDeploymentInstallKey) {
+        ends[key] = progress
+    }
+
+    func end(of key: WorkspaceDeploymentInstallKey) -> ReviewedStepProgress? {
+        ends[key]
+    }
+
+    /// Whether the step ran, whatever came of it.
+    func ran(_ key: WorkspaceDeploymentInstallKey) -> Bool {
+        switch ends[key] {
+        case .succeeded, .failed: true
+        case .started, .notRun, nil: false
+        }
     }
 }

@@ -3,6 +3,34 @@ import CryptoKit
 import Foundation
 import Observation
 
+/// How setup's Connect and share ended.
+enum SyncConnectOutcome: Equatable, Sendable {
+    /// Connected, and this Mac's library was published to the repository for
+    /// the first time.
+    case shared
+    /// Connected to a repository that already held this library, and in step
+    /// with it after the first pass. What that pass did is the session's
+    /// `lastOutcome`.
+    case upToDate
+    /// Stopped while the repository was being checked: nothing was kept.
+    case stopped
+    /// The repository could not be used, for this reason. Nothing was
+    /// connected and nothing was published.
+    case failed(GitRemoteProblem)
+    /// Something on this Mac did not save, in this sentence. Nothing was
+    /// connected.
+    case notSaved(String)
+}
+
+/// Where Connect and share is: checking the repository, which a Stop ends
+/// with nothing kept; then connecting this Mac to it and publishing, which
+/// finish as a whole once begun.
+enum SyncConnectPhase: Equatable, Sendable {
+    case checking
+    case connecting
+    case publishing
+}
+
 /// Connects this Mac to a shared workspace repository and runs one sync pass at
 /// a time. Every result is reported as observed: a pass that ends in conflicts
 /// changed nothing, and a pass that succeeded moved shared intent, never a
@@ -51,13 +79,20 @@ final class WorkspaceSyncSession {
     }
     private(set) var lastArrival: Arrival?
 
+    /// The checkout Agent Tooling keeps for this Mac's own connection, which
+    /// setup's Connect and share and its Join both use, so nobody chooses a
+    /// folder for it. No enrollment uses it until a connection is made, so a
+    /// stale one an earlier attempt left is set aside before a fresh clone.
+    let appOwnedCheckout: URL
+
     init(
         store: WorkspaceRevisionStore,
         enrollmentStore: WorkspaceSyncEnrollmentStore,
         workspaceID: WorkspaceObjectID,
         writerID: WorkspaceObjectID,
         keyStore: WorkspaceFolderKeyStore? = nil,
-        contentStore: CentralPackageContentStore? = nil
+        contentStore: CentralPackageContentStore? = nil,
+        appOwnedCheckout: URL? = nil
     ) {
         self.store = store
         self.enrollmentStore = enrollmentStore
@@ -65,8 +100,22 @@ final class WorkspaceSyncSession {
         self.writerID = writerID
         self.keyStore = keyStore
         self.contentStore = contentStore
+        self.appOwnedCheckout =
+            appOwnedCheckout ?? Self.appOwnedCheckout(forContainer: store.databaseURL.deletingLastPathComponent())
         service = WorkspaceApplicationService(store: store, writerID: writerID, contentStore: contentStore)
         refreshDevices()
+    }
+
+    /// `<support>/sync-checkout`: the checkout beside a support folder's
+    /// workspaces, which joining and connecting from setup share.
+    nonisolated static func appOwnedCheckout(supportRoot: URL) -> URL {
+        supportRoot.standardizedFileURL.appending(path: "sync-checkout", directoryHint: .isDirectory)
+    }
+
+    /// The same checkout, from the folder a workspace's store lives in
+    /// (`<support>/workspaces-v1/<id>`).
+    nonisolated static func appOwnedCheckout(forContainer container: URL) -> URL {
+        appOwnedCheckout(supportRoot: container.standardizedFileURL.deletingLastPathComponent().deletingLastPathComponent())
     }
 
     var deviceID: WorkspaceObjectID { store.deviceID }
@@ -135,9 +184,134 @@ final class WorkspaceSyncSession {
             errorMessage = "Enter a repository address without a user name or password in it."
         } catch WorkspaceSyncEnrollmentError.invalidCheckout, GitWorkspaceTransportError.invalidCheckout {
             errorMessage = "Choose a folder on this Mac to hold the workspace repository."
+        } catch GitWorkspaceTransportError.remote(let problem) {
+            // The transport says what was wrong with the remote: a host that
+            // did not answer, a sign-in that did not open it, a typo.
+            errorMessage = problem.errorDescription
+        } catch let error as GitWorkspaceTransportError {
+            errorMessage = Self.passFailureMessage(error)
         } catch {
             errorMessage = "That repository could not be prepared on this Mac. Check the address and your access."
         }
+    }
+
+    /// Checks the remote in scratch storage, connects an app-owned checkout, registers
+    /// this Mac, and publishes. Rejects other libraries and unrelated files.
+    /// Cancellation before connection keeps nothing; later work finishes atomically.
+    /// A failed publish rolls back the connection, and duplicate live device names
+    /// receive a numeric suffix.
+    func connectAndShare(
+        remote: String,
+        branch: String = "main",
+        deviceName: String,
+        runner: any CommandRunning = ProcessCommandRunner(timeout: .seconds(120)),
+        scratch: URL = FileManager.default.temporaryDirectory,
+        discardStaleCheckout: @escaping @Sendable (URL) throws -> Void = GitWorkspaceTransport.moveToTrash,
+        progress: @escaping @MainActor (SyncConnectPhase) -> Void = { _ in }
+    ) async -> SyncConnectOutcome {
+        guard !isBusy, enrollment == nil else { return .notSaved(Self.alreadyConnecting) }
+        isBusy = true
+        errorMessage = nil
+        defer {
+            isBusy = false
+            refreshDevices()
+        }
+        let address = remote.trimmingCharacters(in: .whitespacesAndNewlines)
+        progress(.checking)
+        let checked: Result<GitRemotePreflightResult, GitRemoteProblem>
+        do {
+            checked = try await GitRemotePreflight.run(
+                remote: address, branch: branch, deviceName: deviceName, expectingWorkspace: workspaceID,
+                thisDevice: store.deviceID, runner: runner, scratch: scratch)
+        } catch {
+            return .stopped
+        }
+        let preflight: GitRemotePreflightResult
+        switch checked {
+        case .failure(let problem): return .failed(problem)
+        case .success(let result): preflight = result
+        }
+        // A task of its own is not cancelled with the caller's, so a Stop or
+        // a quit that arrives from here waits for the connection instead of
+        // leaving half of one.
+        let connecting = Task {
+            await self.connectChecked(
+                address: address, branch: branch, name: preflight.suggestedName, runner: runner,
+                discardStaleCheckout: discardStaleCheckout, progress: progress)
+        }
+        return await connecting.value
+    }
+
+    /// Everything after the check: the checkout, the enrollment, this Mac's
+    /// registration, then the first pass.
+    private func connectChecked(
+        address: String, branch: String, name: String, runner: any CommandRunning,
+        discardStaleCheckout: @escaping @Sendable (URL) throws -> Void, progress: @MainActor (SyncConnectPhase) -> Void
+    ) async -> SyncConnectOutcome {
+        progress(.connecting)
+        do {
+            try GitWorkspaceTransport.prepareFreshCheckout(at: appOwnedCheckout, discard: discardStaleCheckout)
+            let record = try WorkspaceSyncEnrollment(
+                workspaceID: workspaceID, remote: address, checkoutPath: appOwnedCheckout.standardizedFileURL.path,
+                branch: branch)
+            let enrolled = try await GitWorkspaceTransport.enroll(
+                remote: record.remote, checkout: appOwnedCheckout, branch: branch, runner: runner)
+            try enrollmentStore.write(record)
+            transport = enrolled
+            enrollment = record
+        } catch {
+            return Self.connectFailure(error)
+        }
+        do {
+            try await registerThisMac(named: name)
+        } catch {
+            takeBackConnection()
+            return Self.connectFailure(error)
+        }
+        progress(.publishing)
+        if let failure = await pass(now: .now) {
+            takeBackConnection()
+            return Self.connectFailure(failure)
+        }
+        if case .published = lastOutcome { return .shared }
+        return .upToDate
+    }
+
+    /// Forgets a connection Connect and share made and could not finish. The
+    /// repository was not changed by it; the checkout stays until the next
+    /// try sets it aside.
+    private func takeBackConnection() {
+        try? enrollmentStore.remove()
+        transport = nil
+        enrollment = nil
+        lastOutcome = nil
+    }
+
+    /// What Connect and share says about `error`.
+    private static func connectFailure(_ error: any Error) -> SyncConnectOutcome {
+        switch error {
+        case GitWorkspaceTransportError.remote(let problem): .failed(problem)
+        default: .notSaved(passFailureMessage(error))
+        }
+    }
+
+    /// Connect and share pressed while this Mac already connects or is
+    /// connected.
+    private static let alreadyConnecting = "This Mac is already connected to a repository. Nothing was changed."
+
+    /// Registers this Mac under `name`, or renames it when it is registered
+    /// already, so the first publish names it as it was typed. A name another
+    /// living Mac uses is refused with the registry's own words.
+    func registerThisMac(named name: String) async throws {
+        let wanted = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        refreshDevices()
+        if let registered = thisDevice, !registered.isRetired {
+            guard registered.name != wanted else { return }
+            _ = try await service.updateDeviceAtCurrentHead(store.deviceID, .rename(wanted))
+        } else {
+            _ = try await service.registerDeviceAtCurrentHead(store.deviceID, name: wanted)
+        }
+        refreshDevices()
     }
 
     /// Connects a folder a file-sync service already keeps in step.
@@ -296,14 +470,22 @@ final class WorkspaceSyncSession {
     }
 
     func sync(now: Date = .now) async {
-        guard !isBusy, let enrollment else { return }
+        guard !isBusy, enrollment != nil else { return }
         isBusy = true
-        errorMessage = nil
-        lastAttempt = now
         defer {
             isBusy = false
             refreshDevices()  // the pass may have brought other Macs' registry edits
         }
+        await pass(now: now)
+    }
+
+    /// One pass, under whoever holds the session busy: a sync, or Connect and
+    /// share's first publish. Returns what it failed with, if it failed.
+    @discardableResult
+    private func pass(now: Date) async -> (any Error)? {
+        guard let enrollment else { return nil }
+        errorMessage = nil
+        lastAttempt = now
         do {
             let transport = try transport ?? makeTransport(for: enrollment)
             self.transport = transport
@@ -330,9 +512,11 @@ final class WorkspaceSyncSession {
             // questions. Only an unreachable repository is a failure to back
             // off from.
             consecutiveFailures = 0
+            return nil
         } catch {
             consecutiveFailures += 1
             errorMessage = Self.passFailureMessage(error)
+            return error
         }
     }
 

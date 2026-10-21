@@ -45,20 +45,10 @@ public enum NativePackageAdoptionError: LocalizedError, Equatable, Sendable {
     }
 }
 
-/// Turns one catalog listing into one library item.
-///
-/// This is the missing step between "this catalog publishes a package" and
-/// "this package is an item in my library that I can assign and then install".
-/// It writes exactly one `ArtifactRecord`, and that record claims provenance
-/// and nothing else: no assignment, no content digest, no device state, no
-/// identity-map entry, and no client file. Adding a package to the library and
-/// asking for it somewhere are two different acts, and installing is a third.
-///
-/// The initializer takes the whole `MarketplacePackage` rather than a
-/// client/identifier pair so a caller cannot assemble an identity the catalog
-/// parser never produced: `NativeCatalogPackageIdentity.recognize` is the only
-/// way in. Building the command is where a listing is refused; applying it is
-/// where the library is.
+/// Adds one catalog-validated ArtifactRecord containing provenance only.
+/// Assignments, content, device state, identity mappings and client files are
+/// unchanged. Requires MarketplacePackage so callers cannot construct an
+/// identity outside NativeCatalogPackageIdentity.recognize.
 public struct NativePackageAdoptionCommand: Codable, Sendable, Equatable {
     public let expectedRevisionID: WorkspaceObjectID
     public let idempotencyKey: WorkspaceObjectID

@@ -33,19 +33,10 @@ enum CodexAppServerError: LocalizedError, Equatable, Sendable {
     }
 }
 
-/// A short conversation with Codex's app server that can only read.
-///
-/// `codex app-server` speaks JSON-RPC over standard input and output, and its
-/// method list includes writes: configuration edits, plugin installs, model
-/// turns. This session sends only the methods named in `allowedMethods`, and
-/// refuses any other before a byte is written, so the guarantee that the
-/// account view reads and never changes anything lives here rather than in
-/// every caller. Configuration changes go through the reviewed operation
-/// engine instead, which backs a file up before touching it.
-///
-/// Verified against Codex 0.162.1: responses carry no `jsonrpc` field, the
-/// server writes notifications between responses, and it exits when its
-/// standard input closes, so the input stays open until the last answer.
+/// Read-only JSON-RPC session with codex app-server. Rejects methods outside
+/// allowedMethods before writing to stdin; mutations use the reviewed engine.
+/// Codex 0.162.1 omits jsonrpc and interleaves notifications with responses.
+/// Keep stdin open until the last response because closing it ends the server.
 public actor CodexAppServerSession {
     public static let allowedMethods: Set<String> = ["initialize", "account/read", "config/read", "app/list", "app/installed"]
     public static let allowedNotifications: Set<String> = ["initialized"]
@@ -164,12 +155,15 @@ public actor CodexAppServerSession {
 /// The real transport: a child process with newline framing, bounded the
 /// same way the MCP test console bounds a server it starts.
 final class CodexAppServerProcessTransport: CodexAppServerTransport, @unchecked Sendable {
+    /// What Codex is started with: its app server, and nothing else.
+    static let arguments = ["app-server"]
+
     private let process: MCPStdioProcess
 
     init(executable: URL, homeURL: URL) throws {
         do {
             process = try MCPStdioProcess(
-                executableURL: executable, arguments: ["app-server"],
+                executableURL: executable, arguments: Self.arguments,
                 environment: ProcessCommandRunner.childEnvironment(
                     inheriting: ProcessInfo.processInfo.environment, homeURL: homeURL),
                 maximumMessageBytes: MCPTestConnectionPolicy.maximumMessageBytes)

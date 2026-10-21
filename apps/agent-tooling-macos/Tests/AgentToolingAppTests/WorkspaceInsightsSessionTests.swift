@@ -96,7 +96,7 @@ struct WorkspaceInsightsSessionTests {
             deepDive: .success(ShellRenderFixture.insightsDeepDive()))
         let freshSession = fixture.insightsSession(freshServices)
 
-        await freshSession.runScheduledDeepDiveIfStale(options: .init(clients: [.claude]), managedClients: [.claude, .codex])
+        await freshSession.runScheduledInsightsIfDue(consent: .existingBehaviour, managedClients: [.claude, .codex])
 
         #expect(freshServices.scanCount == 0, "an hour-old deep dive is not redone")
         #expect(freshServices.deepDiveCalls.isEmpty)
@@ -108,15 +108,15 @@ struct WorkspaceInsightsSessionTests {
             deepDive: .success(ShellRenderFixture.insightsDeepDive()))
         let staleSession = fixture.insightsSession(staleServices)
 
-        await staleSession.runScheduledDeepDiveIfStale(options: .init(clients: [.claude]), managedClients: [.codex, .claude])
-        while staleSession.isDeepDiving { await Task.yield() }
+        await staleSession.runScheduledInsightsIfDue(consent: .existingBehaviour, managedClients: [.codex, .claude])
+        #expect(!staleSession.isDeepDiving, "the daily run returns once the dive has answered")
 
         #expect(staleServices.scanCount == 1)
         #expect(staleServices.deepDiveCalls.first?.client == .claude, "Claude Code is preferred when this Mac has it")
 
         // A Mac managing only Kiro has no assistant to run one in.
         let kiroOnly = fixture.insightsSession(StubInsightsServices(answer: ShellRenderFixture.insightsReport()))
-        await kiroOnly.runScheduledDeepDiveIfStale(options: .init(clients: [.kiro]), managedClients: [.kiro])
+        await kiroOnly.runScheduledInsightsIfDue(consent: .existingBehaviour, managedClients: [.kiro])
         #expect(kiroOnly.report == nil)
         #expect(WorkspaceInsightsSession.deepDiveClient(managed: [.kiro, .codex]) == .codex)
     }
@@ -124,18 +124,26 @@ struct WorkspaceInsightsSessionTests {
     @Test func stoppingAScanAlsoStopsTheDeepDive() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
+        // A hold far longer than the bound below, so a stop that did not
+        // reach the read fails the bound, while a parallel run's queue on the
+        // main actor still has room.
         let services = StubInsightsServices(
-            answer: ShellRenderFixture.insightsReport(), holdFor: .seconds(30), digests: [Self.digest("a")],
+            answer: ShellRenderFixture.insightsReport(), holdFor: .seconds(240), digests: [Self.digest("a")],
             deepDive: .success(ShellRenderFixture.insightsDeepDive()))
         let session = fixture.insightsSession(services)
 
         let scanning = Task { await session.scan(options: .init(clients: [.claude]), deepDiveWith: .claude) }
         while !session.isScanning { await Task.yield() }
+        let stopped = ContinuousClock.now
         session.cancelScan()
         await scanning.value
 
         #expect(session.isDeepDiving == false)
         #expect(session.report == nil)
+        // The stop reached the read itself: the scan returned long before
+        // the stub's hold would have ended it.
+        #expect(ContinuousClock.now - stopped < .seconds(90))
+        #expect(services.deepDiveCalls.isEmpty)
     }
 
     private static func digest(_ id: String) -> ConversationDigest {

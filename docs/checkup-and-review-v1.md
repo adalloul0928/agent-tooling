@@ -46,7 +46,12 @@ The pipeline is audit then review then one reviewed action at a time:
    deterministic: broken skill links, missing plugin installs, duplicate skills
    in a client, unmanaged skills, unreachable MCP commands, stale plugin caches,
    unavailable tools, never-checked clients, skills without a `SKILL.md`, and
-   servers configured several times. It reads only; it runs the same way every
+   servers configured several times. A server an app reports through its own
+   listing (Codex's `mcp list`) that its configuration also holds is that one
+   definition, set up by hand, so it counts toward "configured separately in N
+   apps"; a server the library manages, Agent Tooling's own connection among
+   them, never does, and that connection is left out of the per-app counts in
+   the apps this Mac set it up for. It reads only; it runs the same way every
    time. `AccountAuditor` adds the account findings from a light read of each
    client's sign-in: not signed in with the subscription, a shell variable that
    replaces the sign-in, shared account choices not followed, account
@@ -58,12 +63,37 @@ The pipeline is audit then review then one reviewed action at a time:
    runs one assistant command with the prompt on standard input, and parses one
    JSON document held to `responseSchema`. On parse, a recommendation naming a
    finding or an action index that does not exist is dropped, not guessed.
-   Purpose is `setup`, `checkup`, or `clientReview`; only `clientReview` is
-   allowed the web.
+   Purpose is `checkup` or `clientReview`; only `clientReview` is allowed the
+   web. Conversation summaries go with a checkup only while this Mac allows
+   the weekly review, asked again once they are read, at most
+   `SetupReviewPrompt.maximumDigests` (40).
 3. `CheckupTriage` buckets the result. A row's primary button runs its actions,
    or opens a screen, or dismisses. Each file-changing action runs through the
    app's reviewed operation path and is backed up or moved to the trash, never
    deleted.
+
+## When it runs
+
+- **On open.** The shell's launch work runs the audit
+  (`WorkspaceSetupSession.runScheduledAudit(allowsScan:)`) unless it opened
+  straight from the setup stage, which has just audited, and it may check the
+  apps first only when Check my apps on open is on. See
+  [Launchpad setup](launchpad-setup-v1.md#what-the-shell-may-start).
+- **On the setup stage.** `audit(scansIfUnchecked: false, asksLoginShell:
+  false, readsAccounts: false, extraFolders:)`: no scan, no login shell and no
+  sign-in read, so it reads nothing the person was not shown; bare commands
+  are looked for in the fixed folders every child searches plus the tool
+  folders the stage found. It runs after the read is committed, after a join,
+  after an install's re-check, and as Done appears when the library, the
+  check or the sign-ins moved. A difference from another Mac's accounts is
+  never counted there.
+- **The weekly review.** `runScheduledReviewIfDue(consent:)` runs when this
+  Mac allows the weekly review, an assistant can run it, the last review is
+  more than a week old and the last attempt more than a day old
+  (`isReviewDue(consent:now:)`), so a failed review is tried again a day
+  later. Once started it runs to its answer; turning the review off stops it
+  (`cancelScheduledReview`). The audit and the review keep separate
+  generations, so a new audit never drops a review under way.
 
 ## Safety boundary
 
@@ -71,11 +101,35 @@ The audit never changes a client's file and never runs a client's command; it
 reads configuration and the skill folders listed in
 `SetupAuditor.standaloneSkillRoots`. The review command is a fixed shape
 (`SetupReviewCommandShapes`): Claude Code in `-p` plan mode with Read scoped to
-the assistant config folders (`.claude`, `.codex`, `.agents`, `.kiro`,
-`.gemini`, `.aim`) and Bash, Edit, Write, and Task disallowed; Codex in
-`exec --ephemeral --sandbox read-only` with plugins, hooks, and apps disabled.
-The web (`WebSearch`/`WebFetch`, Codex `--search`) is added only for a client
-review. Each command is checked by `OperationCommandPolicy` before launch; a
+the assistant config folders in the app order (`.codex`, `.agents`, `.claude`,
+`.gemini`, and `.kiro`), each
+rule anchored at the file system's root (`Read(//…/**)`), and Bash, Edit,
+Write, and Task disallowed; Codex in `exec --ephemeral --sandbox read-only`
+with plugins, hooks, and apps disabled. Glob and Grep are not allowed bare:
+they reach the folders through the Read rules. Deny rules, which Claude Code
+applies before any allow rule, withhold every store of what was said, typed,
+pasted, dictated or attached inside those folders (`withheldFolders` and
+`withheldFiles`: `.claude/projects`, `.codex/sessions` and the rest), and the
+apps' sign-in and secret files, settings backups, shell captures and logs
+(`secretFolders`, `secretFiles`: `.codex/auth.json`, `.gemini/oauth_creds.json`,
+`.claude/ide`, `.kiro/crew` and the rest), plus any `.env*`, `*.key`, `*.pem`,
+`*.p12`, `*secret*`, `*credential*` or `.vault` under each readable folder
+(`secretPatterns`). The prompt names both lists; for Codex, whose read-only
+sandbox reaches the whole disk, the prompt is the only guard. Claude Code runs
+in the staged request folder and both run with `HOME` set to this Mac's home
+folder.
+Codex also loads its installed CLI configuration. Disabling plugins and apps
+does not disable independently configured MCP servers; the read-only sandbox
+restricts shell commands, not those servers. These reviews therefore require
+trust in that CLI configuration.
+
+The web is added only for a client review: Claude Code gets `WebSearch` and
+`WebFetch` scoped to the apps' documentation hosts (`documentationHosts`);
+Codex gets `--search`. The host allowlist applies only to Claude Code's
+`WebFetch`; web searches are not host-limited. Agent Tooling fetches the
+release notes itself. The shape carries
+one argument per rule, so `OperationCommandPolicy` lets this exact shape alone
+past its 64-argument bound. Each command is checked by `OperationCommandPolicy` before launch; a
 command that does not validate raises `commandRefused` and does not run. On
 apply, `installPlugin` and `disableMCPServer` identifiers are validated by
 `OperationCommandPolicy.isSafePluginIdentifier` / `isSafeMCPIdentifier`;

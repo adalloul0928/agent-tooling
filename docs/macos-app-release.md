@@ -1,119 +1,135 @@
-# Releasing Agent Tooling for macOS
+# macOS releases
 
-The release workflow builds an Apple Silicon app on GitHub Actions, signs it
-with Developer ID, notarizes a DMG with Apple, staples the notarization ticket,
-generates a SHA-256 checksum, and publishes both files to GitHub Releases.
+Agent Tooling ships as a DMG for **Apple Silicon Macs running macOS 26 or
+later**. Users drag the app into Applications. Xcode, Swift, and a repository
+checkout are not required.
 
-The source repository may remain private. In that case, only GitHub users with
-repository access can download its release assets. A public product can use the
-same signed DMG from a public binary-only repository or a separate download
-site without making this source repository public.
+The release workflow signs the app and its helpers with Developer ID, checks
+the packaged resources, verifies the mounted DMG, submits it to Apple for
+notarization, and staples the ticket. GitHub Releases receives the DMG, a
+SHA-256 checksum, an SPDX manifest, and build attestations.
 
-## One-time Apple setup
+The app includes the repository's [MIT license](../LICENSE) at
+`Contents/Resources/LICENSE.txt`. Yams and LibYAML notices remain in the app's
+resource bundle. The SPDX manifest identifies Agent Tooling's license as MIT
+and lists these dependencies separately.
+
+## First release status
+
+A signed public release has not been published yet. The release environment,
+Apple credentials, and repository variables below must be configured first.
+CI artifacts and local development DMGs are ad-hoc signed and are intended for
+testing. They are not notarized public downloads.
+
+## Configure signing
 
 1. Join the Apple Developer Program and create a **Developer ID Application**
-   certificate for direct distribution. The Raycast integration pins the
-   current signing Team ID, `434X69L4Z5`; changing teams requires a reviewed
-   source update before packaging a release.
-2. Export the certificate and private key from Keychain Access as a password-
-   protected `.p12` file.
-3. In App Store Connect, create an API key that can submit software to Apple's
-   notary service. Download its `.p8` file and record the key ID and issuer ID.
-4. Do not commit the `.p12`, `.p8`, passwords, or their Base64 values.
-
-## Required GitHub release controls
-
-Create a GitHub Actions environment named **`macos-release`** before the first
-release. Configure all of the following outside the repository:
-
-1. Add required reviewers who are allowed to approve a signed release, prevent
-   self-review, and restrict the environment to tags matching
-   `agent-tooling-app-v*`.
-2. Protect the repository's default branch (normally `main`) so changes reach
-   it only through the approved review and validation path.
-3. Add a repository ruleset for `agent-tooling-app-v*` that restricts tag
-   creation to release managers and prevents tag updates and deletion. The
-   workflow rejects lightweight tags, but GitHub's ruleset is what protects who
-   may create, replace, or delete the annotated tag object.
-4. Create the repository Actions variable **`MACOS_RELEASE_ALLOWED_ACTORS`** as
-   a comma-separated list of exact GitHub login names permitted to push a
-   release tag. Both the original workflow actor and a rerun's triggering actor
-   must be in this list.
-
-The workflow first runs a secret-free authorization job. It peels the annotated
-tag to a commit and requires that commit to be an ancestor of the freshly
-fetched default branch. Only then can the `macos-release` environment approval
-unlock the signing/notarization job. Branch ancestry authorizes the source
-commit; it does **not** authorize the separate tag object or its creator. The
-actor allowlist, immutable tag ruleset, and environment review cover that
-separate authority boundary.
-
-## Required GitHub Actions secrets
-
-Configure these as **environment secrets** on `macos-release`, not as general
-repository secrets:
+   certificate. Export its certificate and private key as a password-protected
+   `.p12` file.
+2. Create an App Store Connect API key with access to the notary service. Keep
+   its `.p8` file, key ID, and issuer ID outside this repository.
+3. Create a GitHub Actions environment named **`macos-release`**. Require
+   approval from a release reviewer, prevent self-review, and restrict it to
+   tags matching `agent-tooling-app-v*`.
+4. Set the repository Actions variable **`MACOS_SIGNING_TEAM_ID`** to the certificate's
+   ten-character Team ID. The workflow rejects any different signing team.
+5. Add these secrets to **`macos-release`**, not to the repository-wide secret
+   store:
 
 | Secret | Value |
 | --- | --- |
 | `MACOS_CERTIFICATE_P12_BASE64` | Base64-encoded Developer ID `.p12` |
-| `MACOS_CERTIFICATE_PASSWORD` | Password used when exporting the `.p12` |
+| `MACOS_CERTIFICATE_PASSWORD` | Password protecting the `.p12` |
 | `APPLE_NOTARY_KEY_BASE64` | Base64-encoded App Store Connect `.p8` |
-| `APPLE_NOTARY_KEY_ID` | App Store Connect API key ID |
-| `APPLE_NOTARY_ISSUER_ID` | App Store Connect issuer ID |
+| `APPLE_NOTARY_KEY_ID` | API key ID |
+| `APPLE_NOTARY_ISSUER_ID` | API issuer ID |
 
-The files can be encoded locally without printing them into shell history:
+From a checkout, the GitHub CLI can set an encoded file without printing it:
 
 ```sh
-base64 -i DeveloperIDApplication.p12 | pbcopy
-gh secret set MACOS_CERTIFICATE_P12_BASE64 --env macos-release --repo adalloul0928/agent-tooling
-
-base64 -i AuthKey_KEY_ID.p8 | pbcopy
-gh secret set APPLE_NOTARY_KEY_BASE64 --env macos-release --repo adalloul0928/agent-tooling
+base64 -i DeveloperIDApplication.p12 | gh secret set MACOS_CERTIFICATE_P12_BASE64 --env macos-release
+base64 -i AuthKey.p8 | gh secret set APPLE_NOTARY_KEY_BASE64 --env macos-release
+gh secret set MACOS_CERTIFICATE_PASSWORD --env macos-release
+gh secret set APPLE_NOTARY_KEY_ID --env macos-release
+gh secret set APPLE_NOTARY_ISSUER_ID --env macos-release
 ```
 
-Paste the clipboard value when `gh` prompts. Set the remaining secrets with the
-same `gh secret set NAME --env macos-release --repo
-adalloul0928/agent-tooling` form. After verifying the environment copies,
-remove any repository-scoped copies of these five secrets; otherwise a workflow
-revision that does not declare `macos-release` could still receive them.
+The app identifier is `dev.agenttooling.app`; the helper identifiers append
+`.cli` and `.mcp`. Developer ID certificates expose the certificate holder's
+name and Team ID as public signature metadata.
 
-## Publish a release
+## Restrict release access
 
-An approved annotated tag is the final release request. App tags are namespaced
-so they do not collide with the repository's plugin history. Start from an
-up-to-date protected default branch, and do not use a lightweight tag:
+- Protect `main` with pull request review and required validation.
+- Protect `agent-tooling-app-v*` tags with a ruleset that restricts creation to
+  release managers and prevents updates and deletion.
+- Set the repository variable **`MACOS_RELEASE_ALLOWED_ACTORS`** to a
+  comma-separated list of GitHub logins permitted to publish a release.
+  Both the original actor and anyone rerunning the workflow must be listed.
+
+A release requires an annotated tag whose commit is in the default branch's
+history. The workflow checks the tag, actor, and public source before requesting
+access to the release environment. It checks the tag again before signing.
+
+## Publish
+
+After the release changes have merged and validation passes, create an
+annotated tag from the intended commit on `main`:
 
 ```sh
 git tag -a agent-tooling-app-v0.1.0 -m "Agent Tooling 0.1.0"
 git push origin agent-tooling-app-v0.1.0
 ```
 
-The tag triggers `.github/workflows/release-macos-app.yml`. The release is not
-given access to environment secrets unless the tag actor is allowlisted, the
-annotated tag still identifies the authorized tag object, its peeled commit is
-on the protected default-branch history, and the environment review is
-approved. It is not published unless tests, Developer ID verification,
-notarization, stapling, and Gatekeeper assessment all pass.
+Approve the `macos-release` environment deployment in Actions. Publication
+happens only after tests, signature verification, notarization, stapling, and
+Gatekeeper assessment pass.
 
-## Install from a private release
+Each release includes the same filenames:
 
-Authorized GitHub users can download the newest DMG from the repository's
-Releases page or with the GitHub CLI:
+- `Agent-Tooling-arm64.dmg`
+- `Agent-Tooling-arm64.dmg.sha256`
+- `Agent-Tooling-arm64.dmg.spdx.json`
+
+The stable DMG filename supports GitHub's
+`releases/latest/download/Agent-Tooling-arm64.dmg` URL. Link to the repository's
+Releases page until the first release is available.
+
+## Install or update
+
+Download the DMG from GitHub Releases, open it, drag **Agent Tooling** into
+**Applications**, eject the disk image, and open the app. To update, quit the
+app and replace the copy in Applications. The library is stored separately in
+Application Support.
+
+From a checkout, you can also download and check the latest release:
 
 ```sh
-gh release download --repo adalloul0928/agent-tooling --pattern '*.dmg'
-open Agent-Tooling-*-arm64.dmg
+gh release download --pattern 'Agent-Tooling-arm64.dmg*'
+shasum -a 256 --check Agent-Tooling-arm64.dmg.sha256
+open Agent-Tooling-arm64.dmg
 ```
 
-Open the DMG and drag **Agent Tooling** into **Applications**. Xcode, Swift, and
-a local repository clone are not required on the destination Mac.
+The first channel uses manual updates. A Homebrew cask can follow once a
+signed release has been installed successfully on another Mac.
 
-## Scope of the first release channel
+## Build a development DMG
 
-- Apple Silicon only
-- macOS 26 or newer
-- Direct Developer ID distribution
-- Manual updates through GitHub Releases
+From `apps/agent-tooling-macos`:
 
-Automatic updates and a Homebrew Cask should be added after the signed alpha
-has been installed and exercised successfully on a second Mac.
+```sh
+./scripts/package-app.sh "$PWD/.build/Agent Tooling.app"
+./scripts/create-dmg.sh "$PWD/.build/Agent Tooling.app" "$PWD/.build/Agent-Tooling-development.dmg"
+./scripts/verify-dmg.sh "$PWD/.build/Agent-Tooling-development.dmg"
+```
+
+`create-dmg.sh` verifies the source app and mounts the resulting disk image to
+check the copy inside it. It generates the Finder background and icon layout
+for the app's version, including the Applications shortcut and installation
+instructions. The generator requires the macOS Swift toolchain; installing the
+finished DMG does not.
+
+These commands use ad-hoc signatures unless a signing
+identity is supplied. Packaging remaps compiler paths, removes debug metadata,
+and rejects executables that still contain the builder's home or checkout path.
+Distribute public builds through the release workflow.

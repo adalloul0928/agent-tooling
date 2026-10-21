@@ -160,14 +160,8 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
             environment: environment,
             currentDirectory: currentDirectory
         ) {
-            // Foundation's Process launch path does not consistently find a
-            // PATH-installed tool when the app itself was launched outside a
-            // login shell, so the tool is found here and launched by absolute
-            // path. The path is the installed one, not the file it links to:
-            // a shim such as Amazon Toolbox's dispatches on the name it was
-            // invoked by, and a launch through the resolved target would lose
-            // that name. What the link leads to has already been checked to
-            // be a runnable file.
+            // Resolve PATH explicitly for GUI launches. Preserve the installed
+            // symlink path because dispatchers may select their tool by argv[0].
             process.executableURL = launchExecutable
             process.arguments = arguments
         } else {
@@ -301,23 +295,9 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         return environment
     }
 
-    /// The fixed search path handed to every child this app launches, and the
-    /// one list of folders this app looks in for a command by name. The audit
-    /// counts a server's command reachable when it is in one of them and the
-    /// client-tool locator checks every one, so a command either of them finds
-    /// is a command a child can start: a server under test, a real client
-    /// command, or a tool installed through Volta or pnpm, all alike.
-    ///
-    /// When two folders hold the same name the earlier one wins, so a folder
-    /// is only ever added at the end: putting it ahead of another would change
-    /// which file a name that already resolves runs. After the system folders
-    /// come Amazon Toolbox's shims, a common npm global prefix, AIM's MCP
-    /// servers, the mise and asdf shims, and the person's own `~/bin`.
-    ///
-    /// `home` must already be a plain path with no trailing slash, so the
-    /// entries never contain `//`.
+    /// Shared command search roots in precedence order. `home` has no trailing slash.
     static func searchPath(home: String) -> [String] {
-        [
+        let folders = [
             "\(home)/.local/bin",
             "\(home)/.cargo/bin",
             "\(home)/.volta/bin",
@@ -329,13 +309,12 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
             "/bin",
             "/usr/sbin",
             "/sbin",
-            "\(home)/.toolbox/bin",
             "\(home)/.npm-global/bin",
-            "\(home)/.aim/mcp-servers",
             "\(home)/.local/share/mise/shims",
             "\(home)/.asdf/shims",
             "\(home)/bin",
         ]
+        return folders
     }
 
     /// The same folders, in the same order, as directory URLs: for a caller
@@ -589,12 +568,14 @@ enum ProcessTree {
     }
 }
 
-enum ProcessCommandRunnerError: LocalizedError, Sendable {
+/// Why a command did not return an output. Public so a test double can stand
+/// in for the runner exactly, a timeout included.
+public enum ProcessCommandRunnerError: LocalizedError, Equatable, Sendable {
     case timedOut(String)
     case missingResult(String)
     case standardInputTooLarge(String, Int)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .timedOut(let command): "\(command) did not finish within the allowed time and was stopped."
         case .missingResult(let command): "\(command) ended without returning a result."

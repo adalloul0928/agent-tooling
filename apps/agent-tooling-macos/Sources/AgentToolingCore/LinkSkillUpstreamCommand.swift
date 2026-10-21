@@ -48,19 +48,10 @@ public enum LinkSkillUpstreamRefusal: LocalizedError, Equatable, Sendable {
     }
 }
 
-/// Turns a skill this library holds as the person's own into one that follows a
-/// published repository.
-///
-/// It is a statement about where the *next* version comes from, never a new
-/// version: no content is published, and the artifact's `contentDigest` does not
-/// move. That is only representable because the library's bytes already are the
-/// publisher's bytes — `centralUpstream` means the approved central tree
-/// supplies deployments, so a lock describing bytes this library does not hold
-/// would make every later update diff against a fiction. A skill with local
-/// edits is therefore refused, and nothing is done to those edits.
-///
-/// Portable review payload only: the command carries no file bytes and no path
-/// on this Mac. Apply supplies the immutable preparation it was built from.
+/// Links a locally owned skill to an upstream repository without changing its
+/// content digest. Local bytes must already match the publisher's approved
+/// bytes, so skills with local edits are refused. The portable review payload
+/// contains no file bytes or local paths; apply receives the reviewed preparation.
 public struct LinkSkillUpstreamCommand: Codable, Equatable, Sendable {
     public let expectedRevisionID: WorkspaceObjectID
     public let idempotencyKey: WorkspaceObjectID

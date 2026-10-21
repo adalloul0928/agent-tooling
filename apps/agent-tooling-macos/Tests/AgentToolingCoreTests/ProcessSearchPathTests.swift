@@ -30,15 +30,13 @@ struct ProcessSearchPathTests {
                 "/usr/sbin",
                 "/sbin",
             ])
-        for folder in [".toolbox/bin", ".npm-global/bin", ".aim/mcp-servers", ".local/share/mise/shims", ".asdf/shims", "bin"] {
+        for folder in [".npm-global/bin", ".local/share/mise/shims", ".asdf/shims", "bin"] {
             #expect(path.dropFirst(11).contains("/Users/example/\(folder)"), "\(folder)")
         }
         #expect(Set(path).count == path.count, "no folder is listed twice")
     }
 
-    /// The finding this pins: the audit looked in `~/.toolbox/bin`, `~/bin`
-    /// and the version managers' shims, and a live test did not, so a server
-    /// Checkup called reachable failed its test as not found.
+    /// Audit and live tests must agree on command availability.
     @Test func everyFolderTheAuditSearchesIsOneALiveTestSearches() throws {
         let home = try TemporaryFolder("process-search-path").url
         defer { try? FileManager.default.removeItem(at: home) }
@@ -46,7 +44,7 @@ struct ProcessSearchPathTests {
         let folders = SetupAuditor.defaultSearchPath(homeURL: home).filter {
             $0.path(percentEncoded: false).hasPrefix(homePath)
         }
-        #expect(folders.count == 11)
+        #expect(folders.count == 9)
 
         for (index, folder) in folders.enumerated() {
             let name = "fixture-server-\(index)"
@@ -60,9 +58,7 @@ struct ProcessSearchPathTests {
         }
     }
 
-    /// The locator checks exactly the folders a child searches. Only its
-    /// order is its own: the six it always checked come first, in that
-    /// order, so a tool it found before is the tool it finds now.
+    /// The locator shares command roots but retains its install precedence.
     @Test func theLocatorChecksTheFoldersAChildSearchesWithItsOwnFirst() {
         let home = URL(filePath: "/Users/example", directoryHint: .isDirectory)
         let roots = ClientExecutableLocator.fixedRoots(homeURL: home).map { ProcessCommandRunner.plainPath(of: $0) }
@@ -71,14 +67,13 @@ struct ProcessSearchPathTests {
         #expect(roots.count == shared.count)
         #expect(Set(roots) == Set(shared))
         #expect(
-            Array(roots.prefix(6)) == [
+            Array(roots.prefix(5)) == [
                 "/opt/homebrew/bin",
                 "/usr/local/bin",
-                "/Users/example/.toolbox/bin",
                 "/Users/example/.local/bin",
                 "/Users/example/.bun/bin",
                 "/Users/example/.npm-global/bin",
             ])
-        #expect(Array(roots.dropFirst(6)) == shared.filter { !roots.prefix(6).contains($0) })
+        #expect(Array(roots.dropFirst(5)) == shared.filter { !roots.prefix(5).contains($0) })
     }
 }

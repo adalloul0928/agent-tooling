@@ -867,19 +867,9 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         try validateIdentity(database)
     }
 
-    /// What this device did, and what an agent has asked it to do.
-    ///
-    /// These are device-local operational records, not portable intent: a
-    /// receipt describes something that happened on this Mac, and a queued
-    /// request is waiting for this person. Neither belongs in the portable
-    /// document, which is why `DeviceWorkspaceState` reserved `receiptIDs` and
-    /// `pendingPlanIDs` for them from the start. This is where their bodies
-    /// live.
-    ///
-    /// Receipts are append-only and immutable for the same reason revisions
-    /// are: a record of what happened is worth nothing if it can be edited
-    /// afterwards. The queue and the journal are mutable — a request is
-    /// answered and a journal is trimmed.
+    /// Device-local receipts, requests and journal entries stay outside the
+    /// portable document. Receipts are immutable and append-only; requests
+    /// can be answered and the journal trimmed.
     private func createOperationalSchema(_ database: OpaquePointer) throws {
         try execute(
             """
@@ -904,6 +894,82 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         else {
             throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice
         }
+    }
+
+    /// Reads the original device identity of a store for `workspaceID`. Opens writable
+    /// for SQLite WAL-index creation and crash-journal recovery, but only queries data.
+    /// An absent or schema-empty database returns nil; malformed or wrong-workspace
+    /// stores are rejected to prevent replacement. Interrupted joins reopen using
+    /// this identity, preserving the store's device binding.
+    static func recordedIdentity(
+        containerRoot: URL, workspaceID: WorkspaceObjectID
+    ) throws -> (workspaceID: WorkspaceObjectID, deviceID: WorkspaceObjectID)? {
+        let directory: URL
+        do {
+            directory = try prepareDirectory(containerRoot: containerRoot, workspaceID: workspaceID, create: false)
+        } catch WorkspaceRevisionStoreError.databaseUnavailable {
+            return nil
+        }
+        let file = directory.appending(path: "revisions.sqlite")
+        guard FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) else { return nil }
+        for suffix in ["", "-wal", "-shm"] {
+            try checkRegularFileIfPresent(URL(fileURLWithPath: file.path + suffix))
+        }
+        guard let realDirectory = realpath(directory.path, nil) else { throw WorkspaceRevisionStoreError.unsafeStorePath }
+        let path = String(cString: realDirectory) + "/revisions.sqlite"
+        free(realDirectory)
+        var handle: OpaquePointer?
+        let status = sqlite3_open_v2(path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX | SQLITE_OPEN_NOFOLLOW, nil)
+        defer { if let handle { sqlite3_close(handle) } }
+        guard status == SQLITE_OK, let handle else { throw WorkspaceRevisionStoreError.databaseUnavailable }
+        guard sqlite3_busy_timeout(handle, 5_000) == SQLITE_OK,
+            sqlite3_exec(handle, "PRAGMA query_only = ON", nil, nil, nil) == SQLITE_OK
+        else { throw WorkspaceRevisionStoreError.databaseUnavailable }
+        // Why the database did not answer: a file that is not a database, or
+        // one without a store's tables, is not a store; anything else is the
+        // database being out of reach for now.
+        func failure() -> WorkspaceRevisionStoreError {
+            switch sqlite3_errcode(handle) {
+            case SQLITE_NOTADB, SQLITE_ERROR: .unsupportedStoreFormat
+            case SQLITE_CORRUPT: .corruptState
+            default: .databaseUnavailable
+            }
+        }
+        // One number the database answers with.
+        func number(_ sql: String) throws -> Int64 {
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else { throw failure() }
+            defer { sqlite3_finalize(statement) }
+            guard sqlite3_step(statement) == SQLITE_ROW else { throw failure() }
+            return sqlite3_column_int64(statement, 0)
+        }
+        let application = try number("PRAGMA application_id")
+        if application == 0, try number("PRAGMA user_version") == 0 {
+            guard try number("SELECT COUNT(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'") == 0 else {
+                throw WorkspaceRevisionStoreError.unsupportedStoreFormat
+            }
+            return nil
+        }
+        guard application == Int64(Self.databaseApplicationID) else { throw WorkspaceRevisionStoreError.unsupportedStoreFormat }
+        var statement: OpaquePointer?
+        guard
+            sqlite3_prepare_v2(handle, "SELECT workspace_id, device_id FROM store_identity WHERE id = 1", -1, &statement, nil)
+                == SQLITE_OK, let statement
+        else {
+            throw failure()
+        }
+        defer { sqlite3_finalize(statement) }
+        let step = sqlite3_step(statement)
+        guard step == SQLITE_ROW || step == SQLITE_DONE else { throw failure() }
+        guard step == SQLITE_ROW,
+            let workspace = sqlite3_column_text(statement, 0), let device = sqlite3_column_text(statement, 1),
+            let recordedWorkspace = UUID(uuidString: String(cString: workspace)),
+            let recordedDevice = UUID(uuidString: String(cString: device))
+        else {
+            throw WorkspaceRevisionStoreError.corruptState
+        }
+        guard WorkspaceObjectID(recordedWorkspace) == workspaceID else { throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice }
+        return (WorkspaceObjectID(recordedWorkspace), WorkspaceObjectID(recordedDevice))
     }
 
     private enum SQLValue {

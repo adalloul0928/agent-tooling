@@ -94,9 +94,10 @@ struct SkillAdoptionTests {
             try await fixture.service.adoptTrackedSkill(
                 .init(expectedRevisionID: fixture.head(), artifactID: fixture.personalID, prepared: prepared), prepared: prepared)
         }
-        // A folder declaring a different name than the record: not this skill.
+        // A folder declaring a different name than the record: not this skill,
+        // refused by both names.
         let other = try await WorkspaceSkillPreparation.capturePersonal(directory: fixture.skillFolder(named: "other"))
-        await #expect(throws: WorkspaceSkillCommandError.reviewMismatch) {
+        await #expect(throws: WorkspaceSkillCommandError.declaredNameMismatch(recorded: "docx", found: "other")) {
             try await fixture.service.adoptTrackedSkill(
                 .init(expectedRevisionID: fixture.head(), artifactID: fixture.trackedID, prepared: other), prepared: other)
         }

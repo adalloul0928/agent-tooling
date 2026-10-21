@@ -1,19 +1,8 @@
 import Foundation
 
-/// Creates a versioned workspace from what is actually installed on this Mac.
-///
-/// This is how a workspace begins when there is nothing to begin from. It scans
-/// the clients, records what it finds, and writes the first revision. It is not
-/// a migration: nothing is read from another store, and nothing is claimed to be
-/// owned by this app.
-///
-/// Everything discovered is recorded the way a scan can honestly support it. A
-/// package a client installed is `nativeOwned` with the route it was found
-/// under, because that client owns it and will keep owning it. Everything else
-/// is `trackedOnly`: this workspace knows the item exists and where it is, and
-/// claims no authority over its content. Nothing becomes `centralPersonal` from
-/// a scan — taking ownership of somebody's files is a decision they make, not
-/// one a first launch makes for them.
+/// Creates the first workspace revision from installed clients. Native
+/// packages remain nativeOwned; other discoveries are trackedOnly. Scanning
+/// records existing ownership and never assigns centralPersonal ownership.
 enum WorkspaceFirstRun {
     struct Result: Sendable {
         let document: PortableWorkspaceDocument
@@ -24,12 +13,18 @@ enum WorkspaceFirstRun {
     }
 
     /// Builds the first revision from a completed scan. Pure: it writes nothing.
+    ///
+    /// `preferences`, when given, are this Mac's choices made before the
+    /// workspace existed — which apps it manages, the tool folders it found,
+    /// the assistant's runs — and replace the defaults in the device record,
+    /// so revision 1 already holds them.
     static func prepare(
         observations: [TargetObservation],
         inventory: ScannedInventory,
         workspaceID: WorkspaceObjectID = WorkspaceObjectID(),
         deviceID: WorkspaceObjectID = WorkspaceObjectID(),
-        writerID: WorkspaceObjectID = WorkspaceObjectID()
+        writerID: WorkspaceObjectID = WorkspaceObjectID(),
+        preferences: DeviceWorkspacePreferences? = nil
     ) throws -> Result {
         var artifacts: [ArtifactRecord] = []
         var packageIDs: [String: ArtifactID] = [:]
@@ -125,6 +120,7 @@ enum WorkspaceFirstRun {
         // then refuse to plan it, because the check that admits a destination
         // would have nothing to read.
         device.capabilityEvidence = TargetCapabilityEvidence.derive(from: observations)
+        if let preferences { device.applicationState?.preferences = preferences }
         try document.validateStructure()
         try device.validateStructure(against: document)
 
@@ -146,11 +142,12 @@ enum WorkspaceFirstRun {
         homeURL: URL,
         runner: any CommandRunning,
         registry: ClientAdapterRegistry = ClientAdapterRegistry(),
-        clients: Set<ClientKind> = Set(ClientKind.allCases)
+        clients: Set<ClientKind> = Set(ClientKind.allCases),
+        preferences: DeviceWorkspacePreferences? = nil
     ) async throws -> (store: WorkspaceRevisionStore, result: Result) {
         let observations = await registry.scanAll(homeURL: homeURL, runner: runner, clients: clients)
         let inventory = InventoryCompiler.compile(observations: observations, homeURL: homeURL)
-        let prepared = try prepare(observations: observations, inventory: inventory)
+        let prepared = try prepare(observations: observations, inventory: inventory, preferences: preferences)
         let store = try WorkspaceRevisionStore(
             containerRoot: containerRoot, workspaceID: prepared.document.workspaceID,
             deviceID: prepared.device.deviceID)

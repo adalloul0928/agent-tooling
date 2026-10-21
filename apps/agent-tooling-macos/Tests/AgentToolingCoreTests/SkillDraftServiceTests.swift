@@ -973,15 +973,13 @@ struct SkillDraftServiceTests {
         #expect(remaining.isEmpty)
     }
 
-    /// Amazon Toolbox installs `claude` as a link to one dispatcher that works
-    /// out which tool to be from the name it was launched by. Launching the
-    /// resolved target would hand it its own name and nothing to dispatch.
+    /// A dispatcher must receive its symlink name through argv[0].
     @Test func processRunnerLaunchesAShimByItsInstalledNameNotItsTarget() async throws {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "ProcessRunnerShimTests-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: root) }
         let bin = root.appending(path: "bin", directoryHint: .isDirectory)
-        let dispatcher = root.appending(path: "toolbox/toolbox-exec", directoryHint: .notDirectory)
+        let dispatcher = root.appending(path: "example-runner/dispatch", directoryHint: .notDirectory)
         let shim = bin.appending(path: "claude", directoryHint: .notDirectory)
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: dispatcher.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -993,7 +991,10 @@ struct SkillDraftServiceTests {
             for: "claude", environment: ["PATH": bin.path(percentEncoded: false)], currentDirectory: nil)
         #expect(launched?.path(percentEncoded: false) == shim.path(percentEncoded: false))
 
-        let output = try await ProcessCommandRunner(timeout: .seconds(3)).run(
+        // Only a hang should run out of this time: at the start of a parallel
+        // run, a command that ends at once can wait seconds for its task to
+        // resume.
+        let output = try await ProcessCommandRunner(timeout: .seconds(30)).run(
             executable: shim.path(percentEncoded: false), arguments: [], currentDirectory: nil)
         #expect(output.status == 0)
         #expect(output.standardOutput.hasSuffix("/bin/claude"), "the shim was launched as \(output.standardOutput)")
@@ -1049,7 +1050,8 @@ struct SkillDraftServiceTests {
     }
 
     @Test func processRunnerWritesBoundedStandardInputWithoutAShell() async throws {
-        let runner = ProcessCommandRunner(timeout: .seconds(3))
+        // A hang guard, as in the shim test above.
+        let runner = ProcessCommandRunner(timeout: .seconds(30))
         let input = Data("skill instruction from stdin\n".utf8)
         let result = try await runner.run(
             executable: "/bin/cat",

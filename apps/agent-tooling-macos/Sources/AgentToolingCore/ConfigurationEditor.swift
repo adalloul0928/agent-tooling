@@ -51,23 +51,10 @@ public struct ConfigurationEditReceipt: Hashable, Sendable {
     public let effectiveValue: ConfigurationValue
 }
 
-/// Writes one setting into one native file, and verifies afterwards that the
-/// change actually won.
-///
-/// Everything else in the file survives: unknown keys, key order and formatting
-/// choices this build does not understand are preserved, because those are the
-/// person's, not ours. A file that changed since it was reviewed is never
-/// overwritten. A backup is written first, and the file is re-read and resolved
-/// again afterwards — a write that does not produce the intended effective
-/// value is reported rather than being called success.
-///
-/// Only JSON layers are supported. Codex's TOML keeps comments and formatting
-/// this build cannot reproduce faithfully, so editing it here would risk
-/// rewriting someone's file to satisfy a parser.
-///
-/// The file is read the way every client configuration file is: bounded by
-/// the limit they all share, and refused before it is loaded when it is over
-/// it, with the error that names the file and the limit.
+/// Edits one JSON setting while preserving unknown keys, order and formatting.
+/// Refuses files changed since review, backs up before writing, then rereads
+/// the effective setting to verify the result. Reads use shared size limits.
+/// TOML editing is unsupported because its formatting cannot be preserved.
 public struct ConfigurationEditor: Sendable {
     public init() {}
 

@@ -31,14 +31,14 @@ at version `6.2.2`, revision `a27b21e0c81c5bf42049b897a62aaf387e80f279`.
 This is an installed Swift package dependency, not competitor-source reuse.
 The resolved checkout's `LICENSE` was inspected during implementation and is
 [MIT, copyright JP Simard](https://github.com/jpsim/Yams/blob/a27b21e0c81c5bf42049b897a62aaf387e80f279/LICENSE).
-Retain its copyright and permission notice with distributed copies; packaging
-notice verification remains a release check.
+The app bundles its copyright and permission notice, along with the
+[LibYAML MIT notice](https://github.com/yaml/libyaml/blob/840b65c/License) for
+Yams’ included C parser, in `Resources/ThirdPartyNotices.txt`. Packaging verifies that this notice is present.
+Client and tool icons use native SF Symbols; copied vendor artwork is not
+distributed.
 
 ## Evidence boundary
 
 The pinned revisions and license links above come from
 [competitor-review-2026-09.md](competitor-review-2026-09.md#source-reuse-and-inspected-revisions).
-The intended reuse boundaries come from
-[implementation-plan-2026-09.md](implementation-plan-2026-09.md#what-to-reuse-from-each-project)
-and its Agent Plugins section. Re-check the exact upstream file and license
-before any source import.
+Re-check the exact upstream file and license before any source import.

@@ -2,17 +2,8 @@ import AgentToolingCore
 import AppKit
 import SwiftUI
 
-/// Adding a catalog to Discover's list, and taking one off it.
-///
-/// A catalog source is where this app looks, not what it holds. Adding one
-/// reads nothing, fetches nothing and installs nothing: the next refresh looks
-/// at the folder, every listing it finds still has to be added to the library,
-/// and every install still goes through the app that owns it.
-///
-/// Removing one is the same act in reverse. Discover stops listing what the
-/// catalog publishes; nothing that was ever installed from it is touched, and
-/// nothing stops the same folder being added again — no record is kept saying a
-/// person once said no.
+/// Adds or removes catalog sources used by Discover. Changes take effect on
+/// refresh and do not install or remove library items or client packages.
 @MainActor @Observable
 final class WorkspaceCatalogSourceSession {
     private(set) var isBusy = false

@@ -123,6 +123,74 @@ evidence requirements.
 A project deployment needs its folder on this Mac; without one it is refused
 rather than routed somewhere plausible.
 
+## Reviewed applies
+
+A review (the setup stage's panel, and the shared review sheet) installs
+exactly the plan it showed:
+
+- `WorkspaceDeploymentSession.applyReviewed(_ plan:, basedOn revision:,
+  onStep:) -> ReviewedApplyOutcome` returns `.applied(DeploymentOutcome)`,
+  `.stale` when the store's head moved since the plan was read (the caller
+  passes the revision it read the plan at), or `.notRun(reason)`. It does not
+  plan again: its caller re-checks the apps whose own tool ran
+  (`device.refresh(only:)`, merged by surface), then prepares, then audits.
+- One serial work queue is shared by `prepare`, `apply(only:)`,
+  `applyDirect`, `applyReviewed` and linking, so a review never runs beside
+  another write to the same plan.
+- Operations are built in the app order: copied content, then plugins, then
+  connections, each step mapped to its install key so the review can draw it
+  running and done.
+- `OperationExecutor.execute(_:onStep:)` reports each step as it starts and
+  ends (`OperationStepEvent.started(UUID)`, `.finished(OperationStepResult)`),
+  awaited in order. A step that has begun always finishes; a stopped plan
+  stops between steps, and its receipts are written.
+- Held-back steps (`heldBack(in:)`) are drawn in place as left alone and never
+  counted: not in a review's title, not in `pendingItems` or `pendingCount`.
+  A step whose command cannot be built reads "Will not run · <reason>". A
+  destination already as approved (`.alreadyPresent`) is never a review
+  reason.
+
+### Replacing a registration (D30)
+
+A managed connection an app already registers under its name is matched by
+command (`WorkspaceDeploymentObservation.connectionMatches`): `nil` for an
+address binding, `false` for a stdio binding the app starts some other way.
+A mismatch is configured again as a replacement only when Agent Tooling can
+prove it made that registration: a succeeded "Set up <name>" step in a
+`.configureMCP` receipt for that app (`provenConnections(in:)`). The
+replacement is modelled in the command plan (`preArguments`, with the old
+command in `replacedCommand`) and runs as its own plan, "Replace <name> in
+<App>": "Remove the old <name>", which stops the plan if it fails, then "Set up
+<name>". Kiro CLI's add takes `--force` instead. A registration Agent Tooling
+cannot prove it made is left alone and gets no command at all.
+
+### Taking Agent Tooling's own connection out (D10)
+
+Agent Tooling's own connection comes out of an app the person unticks on Let
+your apps ask (a revisit or a rerun), and nowhere else is it planned. The
+planner emits `.removeManagedConnection` for it at an app's user-scope
+destination on this Mac only when all three hold:
+
+- no contribution of the connection that reaches this Mac asks for it there,
+  read from the contributions themselves, so an app whose request cannot be
+  resolved right now (no version) still asks;
+- the app registers it for the person and starts it with this Mac's binding
+  (`connectionMatches == true`), so one pointed somewhere else since stays;
+- `provenConnections` shows Agent Tooling set it up in that app.
+
+The session observes the own connection in every checked app that lists it,
+asked for or not (`reportedManagedConnections`), and reads the receipts before
+planning whenever such a removal is possible. The step runs the app's own
+`mcp remove` at user scope (Kiro CLI too, by `--name`), in an operation of its
+own after the app's adds: "Remove 1 connection from <App>", step "Remove
+<name>". `provenConnections(in:)` reads receipts oldest first, and a later
+succeeded "Remove <name>" ends the proof an earlier "Set up <name>" gave, so a
+registration somebody makes under the name afterwards is theirs. A scoped plan
+leaves removals out unless asked (`plan(for:includingRemovalsOf:)`); Let your
+apps ask's review names the connection there, and the shared review sheet
+lists every removal. The risk classifier counts it as a removal, and the
+review says Apply rather than Install.
+
 ## The Install surface
 
 An **Install** destination shows what would change in this Mac's apps, what
@@ -155,7 +223,6 @@ those, not only the places currently asked for.
 
 ## Not yet implemented
 
-Nothing calls the native-plugin or managed-MCP command bridges from this path
-yet, and no packaged pilot or native consumption test has run. Installing a file
-is not the same as an agent finding and using it; that check remains a separate
-gate.
+No packaged pilot or native consumption test has run. Installing a file is not
+the same as an agent finding and using it; that check remains a separate gate.
+No step removes any managed connection but Agent Tooling's own from an app.

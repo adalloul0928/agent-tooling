@@ -13,24 +13,11 @@ public enum WorkspaceProjectDeclarationError: Error, Equatable, Sendable {
     case foreignFile(path: String)
 }
 
-/// What a project asks for, and what that resolved to.
-///
-/// Two files, on purpose. The **declaration** says what this project wants — by
-/// name, kind and where it comes from — and is what a person edits. The **lock**
-/// pins what those resolved to, by immutable revision and content digest, and is
-/// what makes a later checkout reproduce the same bytes.
-///
-/// A branch or a tag in a lock would defeat it: those name something that moves,
-/// so a lock entry without an immutable revision is refused rather than written.
-///
-/// Both are additive. Agent Tooling writes these two files and nothing else, and
-/// refuses to overwrite anything at those paths it did not write itself. Other
-/// tools' lock files are read elsewhere and never rewritten here.
-///
-/// Neither file carries an absolute path, an observation timestamp, a device
-/// identity or a credential. They are meant to be committed and to diff cleanly,
-/// which is also why every list is sorted and the encoding is deterministic:
-/// the same inputs produce byte-identical output.
+/// Portable project declaration and deterministic resolution lock.
+/// The declaration names requested tools; the lock pins immutable revisions
+/// and content digests. Mutable branch/tag references are rejected.
+/// Writes preserve unowned files and exclude absolute paths, device identities,
+/// observation timestamps and credentials. Sorted output is byte reproducible.
 public struct WorkspaceProjectDeclaration: Codable, Hashable, Sendable {
     public static let formatVersion = 1
     /// Names this app's own file, so a reader can tell it apart from another

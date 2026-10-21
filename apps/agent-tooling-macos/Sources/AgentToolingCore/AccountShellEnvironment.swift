@@ -1,15 +1,10 @@
 import Foundation
 
-/// A variable a person's login shell exports that changes what a client does
-/// in a terminal session.
-///
-/// The app runs every client with an environment of its own, so what a
-/// command run from here reports is what a terminal reports only when the
-/// shell exports none of these. Each case is documented by its vendor:
-/// https://code.claude.com/docs/en/mcp ("Connectors from claude.ai are fetched
-/// only when your active authentication method is a claude.ai subscription
-/// login"), https://code.claude.com/docs/en/skills ("Where synced skills
-/// load"), and https://learn.chatgpt.com/docs/config-file/environment-variables.
+/// Login-shell variables that can make terminal clients differ from clients
+/// launched with the app's environment. Vendor documentation:
+/// https://code.claude.com/docs/en/mcp
+/// https://code.claude.com/docs/en/skills
+/// https://learn.chatgpt.com/docs/config-file/environment-variables.
 public enum AccountShellOverride: String, Codable, CaseIterable, Hashable, Sendable {
     case anthropicAPIKey = "ANTHROPIC_API_KEY"
     case anthropicAuthToken = "ANTHROPIC_AUTH_TOKEN"
@@ -88,10 +83,14 @@ enum AccountShellEnvironmentProbe {
             + "[[ ${ENABLE_CLAUDEAI_MCP_SERVERS:-} == (false|0) ]] && print -r -- \"\(marker)ENABLE_CLAUDEAI_MCP_SERVERS\"; true"
     }()
 
+    /// The shell asked: the one macOS starts Terminal with by default.
+    static let shell = URL(filePath: "/bin/zsh")
+
     static let arguments: [String] = ["-l", "-i", "-c", script]
 
     static func read(runner: any CommandRunning) async -> [AccountShellOverride]? {
-        guard let output = try? await runner.run(executable: "/bin/zsh", arguments: arguments, currentDirectory: nil),
+        guard
+            let output = try? await runner.run(executable: shell.path(percentEncoded: false), arguments: arguments, currentDirectory: nil),
             output.status == 0
         else { return nil }
         return parse(output.standardOutput)

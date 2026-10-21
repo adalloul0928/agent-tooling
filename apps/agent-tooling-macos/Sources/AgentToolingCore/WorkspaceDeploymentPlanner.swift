@@ -10,19 +10,25 @@ public struct WorkspaceDeploymentObservation: Hashable, Sendable {
     public let isEnabled: Bool?
     /// The content this destination currently holds, when it could be measured.
     public let contentDigest: ContentDigest?
+    /// For a connection the app already has under its name: whether the app
+    /// starts it the way this Mac's binding says. Nil when that could not be
+    /// read, which is not taken as a difference.
+    public let connectionMatches: Bool?
 
     public init(
         artifactID: ArtifactID,
         physicalDestinationID: WorkspaceObjectID,
         isPresent: Bool,
         isEnabled: Bool? = nil,
-        contentDigest: ContentDigest? = nil
+        contentDigest: ContentDigest? = nil,
+        connectionMatches: Bool? = nil
     ) {
         self.artifactID = artifactID
         self.physicalDestinationID = physicalDestinationID
         self.isPresent = isPresent
         self.isEnabled = isEnabled
         self.contentDigest = contentDigest
+        self.connectionMatches = connectionMatches
     }
 }
 
@@ -39,6 +45,21 @@ public enum WorkspaceDeploymentAction: Hashable, Sendable {
     case configureManagedConnection(transport: MCPTransport, replacesExisting: Bool = false)
     /// Remove a copy this app installed that is no longer requested here.
     case removeContent(installed: ContentDigest)
+    /// Take Agent Tooling's own connection out of an app this Mac no longer
+    /// asks to have it (D10): a receipt proves Agent Tooling set it up in
+    /// that app, and the app still starts it the way this Mac's binding
+    /// says. A registration under the name that Agent Tooling cannot prove
+    /// it made, or one that starts something else now, is never removed.
+    case removeManagedConnection
+
+    /// Whether the step takes something out of an app rather than putting
+    /// something in.
+    public var isRemoval: Bool {
+        switch self {
+        case .removeContent, .removeManagedConnection: true
+        case .installContent, .updateContent, .installNativePackage, .configureManagedConnection: false
+        }
+    }
 }
 
 public enum WorkspaceDeploymentExclusionReason: String, Hashable, Sendable, CaseIterable {
@@ -149,7 +170,14 @@ public enum WorkspaceDeploymentPlanner {
         /// of these is excluded by name with `.noDestination` and that detail,
         /// rather than falling through to a generic "needs review" once the
         /// resolver cannot find a target for it.
-        unavailableDestinations: [ResolvedAssignmentSelector: String] = [:]
+        unavailableDestinations: [ResolvedAssignmentSelector: String] = [:],
+        /// The connections a receipt proves Agent Tooling set up and has not
+        /// taken out since, by app surface
+        /// (`WorkspaceDeploymentOperations.provenConnections(in:)`). Agent
+        /// Tooling's own connection is offered for removal only where these
+        /// say it was set up; nothing else is ever removed from an app's
+        /// connections.
+        provenConnections: [TargetSurface: Set<String>] = [:]
     ) -> WorkspaceDeploymentPlan {
         var items: [WorkspaceDeploymentItem] = []
         var exclusions: [WorkspaceDeploymentExclusion] = []
@@ -294,7 +322,13 @@ public enum WorkspaceDeploymentPlanner {
                         "This connection has no local setup on this Mac yet.")
                     continue
                 }
-                if let current, current.isPresent, current.isEnabled == requirement.desiredEnabled {
+                // Present, started the way this Mac's binding says, and on or
+                // off as asked (nothing asked is satisfied either way): there
+                // is nothing to do. Present but started some other way is a
+                // replacement the review shows as one.
+                if let current, current.isPresent, current.connectionMatches != false,
+                    requirement.desiredEnabled == nil || current.isEnabled == requirement.desiredEnabled
+                {
                     exclude(
                         .alreadyPresent, artifact.identity.id, requirement.physicalDestinationID,
                         "This connection is already set up here as requested.")
@@ -346,9 +380,45 @@ public enum WorkspaceDeploymentPlanner {
                     logicalProjectID: target.selector.logicalProjectID,
                     action: .removeContent(installed: digest), desiredEnabled: nil, reasons: []))
         }
+        items += ownConnectionRemovals(
+            document: document, device: device, targets: targetsByID, observed: observed, proven: provenConnections)
         return .init(
             items: items, exclusions: exclusions.sorted(by: order),
             requirements: resolution.requirements, resolvedTargets: targets)
+    }
+
+    /// Offers removal only when no contribution requests this connection at the
+    /// app's user scope, the live registration matches this Mac's binding, and a
+    /// receipt proves ownership without a later removal. Read contributions directly
+    /// so unresolved requests still count. Leave every other registration untouched.
+    static func ownConnectionRemovals(
+        document: PortableWorkspaceDocument, device: DeviceWorkspaceState,
+        targets: [WorkspaceObjectID: ResolvedAssignmentTarget], observed: [ObservationKey: WorkspaceDeploymentObservation],
+        proven: [TargetSurface: Set<String>]
+    ) -> [WorkspaceDeploymentItem] {
+        guard let own = AgentToolingConnection.ownConnection(in: document) else { return [] }
+        let askedFor = Set(
+            document.assignments
+                .filter {
+                    $0.artifactID == own.identity.id && $0.desiredPresence
+                        && $0.destination.applies(to: device.deviceID, registry: document.deviceRegistry)
+                }
+                .map { ResolvedAssignmentSelector(destination: $0.destination) })
+        let present = observed.values
+            .filter { $0.artifactID == own.identity.id && $0.isPresent && $0.connectionMatches == true }
+            .sorted { $0.physicalDestinationID.rawValue.uuidString < $1.physicalDestinationID.rawValue.uuidString }
+        return present.compactMap { observation -> WorkspaceDeploymentItem? in
+            guard let target = targets[observation.physicalDestinationID],
+                target.selector.scope == .user, target.selector.logicalProjectID == nil,
+                !askedFor.contains(target.selector),
+                TargetSurfaceCapability.managedMCPClient(for: target.selector.surface) != nil,
+                proven[target.selector.surface]?.contains(AgentToolingConnection.declaredName) == true
+            else { return nil }
+            return WorkspaceDeploymentItem(
+                artifactID: own.identity.id, displayName: own.identity.displayName,
+                physicalDestinationID: observation.physicalDestinationID, surface: target.selector.surface, scope: .user,
+                logicalProjectID: nil, action: .removeManagedConnection, desiredEnabled: nil, reasons: [])
+        }
     }
 }
 

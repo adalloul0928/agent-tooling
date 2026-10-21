@@ -29,29 +29,36 @@ struct SkillsSectionRenderTests {
         #expect(service.writeCount == 0)
     }
 
-    /// A library nothing has been assigned in still opens onto getting started,
-    /// and it is still only this section that it stands in front of.
-    @Test func theShellDrawsOnboardingBeforeAnythingIsAssigned() async throws {
+    /// A library nothing has been assigned in opens straight onto its rows:
+    /// setting a Mac up is the setup stage's work, in its own window. A Mac
+    /// that never put the old getting-started screen away still keeps that
+    /// choice in its app storage, and it stands nothing in front of Skills or
+    /// Plugins.
+    @Test func aLibraryWithNothingAssignedOpensStraightOntoItsRows() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        let preferences = try ShellRenderFixture.preferences(onboardingSkipped: false)
+        let preferences = try ShellRenderFixture.preferences()
         defer { preferences.remove() }
+        preferences.defaults.set(false, forKey: "onboarding.skipped.v2")
+        let rows = try #require(fixture.workspace.library.state?.library.rows)
+        #expect(rows.allSatisfy { $0.requestedAssignments.isEmpty })
 
-        try expectDrawn(
-            renderShell(.skills, fixture: fixture)
-                .environment(\.skillContentService, StubSkillContentService())
-                .defaultAppStorage(preferences.defaults))
-        try expectDrawn(
-            renderShell(.plugins, fixture: fixture)
-                .defaultAppStorage(preferences.defaults))
+        let skills = renderShell(.skills, fixture: fixture)
+            .environment(\.skillContentService, StubSkillContentService())
+            .defaultAppStorage(preferences.defaults)
+        try expectDrawn(skills)
+        // The library's own list: its rows, and making a skill of its own.
+        #expect(Self.offers(skills, ["Standalone Skill", "New skill…"]))
+        let plugins = renderShell(.plugins, fixture: fixture).defaultAppStorage(preferences.defaults)
+        try expectDrawn(plugins)
+        #expect(Self.offers(plugins, ["1 plugin", "Search plugins"]))
     }
 
-    /// One saved assignment is enough to put the gate away, and the screen
-    /// behind it draws the row that was assigned.
+    /// A saved assignment is drawn on the row it was saved for.
     @Test func theScreenDrawsOnceSomethingIsAssigned() async throws {
         let fixture = try await ShellRenderFixture()
         defer { fixture.remove() }
-        let preferences = try ShellRenderFixture.preferences(onboardingSkipped: false)
+        let preferences = try ShellRenderFixture.preferences()
         defer { preferences.remove() }
         await fixture.assignStandaloneSkill()
 
@@ -63,6 +70,14 @@ struct SkillsSectionRenderTests {
             renderShell(.skills, fixture: fixture)
                 .environment(\.skillContentService, StubSkillContentService())
                 .defaultAppStorage(preferences.defaults))
+    }
+
+    /// Whether `view`, in a window, offers an element called, or showing,
+    /// each of `texts`.
+    private static func offers(_ view: some View, _ texts: [String]) -> Bool {
+        let probe = AccessibilityProbe(view)
+        defer { probe.close() }
+        return texts.allSatisfy(probe.contains)
     }
 
     /// A device check speaks in the name a skill declared, never its display

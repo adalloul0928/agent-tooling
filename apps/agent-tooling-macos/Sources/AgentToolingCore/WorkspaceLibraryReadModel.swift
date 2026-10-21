@@ -12,11 +12,16 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
     /// and so are folded into a row instead of being one.
     public var nestedToolCount: Int { rows.reduce(0) { $0 + $1.childCount } }
 
-    /// Every tool the library holds. `rows.count` is the number of entries a
-    /// list can show, which is a smaller number whenever plugins carry skills
-    /// or servers of their own; anything reporting a library size to a person
-    /// wants this one.
-    public var toolCount: Int { rows.count + nestedToolCount }
+    /// The entries a person's library lists: every row but Agent Tooling's
+    /// own connection, which is bound to each Mac rather than carried by the
+    /// library ("13 tools in your library (9 entries)").
+    public var entryCount: Int { rows.count { !$0.isOwnConnection } }
+
+    /// Every tool the library holds, Agent Tooling's own connection left out.
+    /// `entryCount` is the number of entries a list can show, which is a
+    /// smaller number whenever plugins carry skills or servers of their own;
+    /// anything reporting a library size to a person wants this one.
+    public var toolCount: Int { entryCount + nestedToolCount }
 
     private let searchableRows: [ArtifactID: String]
     /// Precomputed so a project view never scans every row's assignments.
@@ -39,6 +44,7 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
         let observations = Self.observedDescriptions(snapshot.device.inventoryState)
         let connections = Self.connections(
             definitions: snapshot.document.mcpDefinitions, bindings: snapshot.device.mcpBindings)
+        let ownConnection = AgentToolingConnection.ownConnection(in: snapshot.document)?.identity.id
 
         let rootArtifacts = snapshot.document.artifacts.filter {
             $0.identity.parentPackageID == nil && Self.isLibraryArtifact($0.identity.kind)
@@ -89,7 +95,8 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
                 assignableReasons: authority == .trackedOnly ? [] : [.manual, .preset],
                 nativeRoutes: Self.routes(artifact.nativeRoutes),
                 connection: connections[artifact.identity.id],
-                contentDigest: artifact.contentDigest
+                contentDigest: artifact.contentDigest,
+                isOwnConnection: artifact.identity.id == ownConnection
             )
         }.sorted(by: Self.order)
         let presets: [WorkspaceLibraryPresetReadModel] = snapshot.document.presets.map {
@@ -235,16 +242,10 @@ public struct WorkspaceLibraryReadModel: Sendable, Equatable {
             .sorted { $0.client == $1.client ? $0.externalPluginID < $1.externalPluginID : $0.client.rawValue < $1.client.rawValue }
     }
 
-    /// How a recorded connection is reached, joined from the two halves that
-    /// hold it: the portable definition every Mac shares and this Mac's own
-    /// binding. A connection with no definition gets no entry, which is what a
-    /// server this workspace merely observed should look like.
-    ///
-    /// Nothing secret can arrive here. A portable definition may hold only a
-    /// credential-free HTTPS address, and a device binding may hold only an
-    /// address or an argument vector that has already been refused if it
-    /// carries anything credential-shaped, plus the *names* of the credentials
-    /// the server needs. Both are validated before the workspace accepts them.
+    /// Joins portable MCP definitions with this device's bindings; observed
+    /// servers without definitions are omitted. Both inputs are validated at
+    /// intake: HTTPS addresses and argument vectors must be credential-free,
+    /// and credential references contain names only.
     private static func connections(
         definitions: [PortableMCPDefinitionRecord]?, bindings: [DeviceMCPDefinitionBinding]?
     ) -> [ArtifactID: WorkspaceLibraryMCPConnection] {
@@ -472,6 +473,9 @@ public struct WorkspaceLibraryReadModelRow: Sendable, Equatable, Identifiable {
     /// pins one. It is the key the insights scan uses to read the real SKILL.md
     /// for a library-authored skill; nil means nothing was captured to read.
     public let contentDigest: ContentDigest?
+    /// This row is Agent Tooling's own connection: bound to each Mac, shown
+    /// where it acts, and left out of the library's lists and counts.
+    public let isOwnConnection: Bool
 
     public init(
         artifactID: ArtifactID,
@@ -489,7 +493,8 @@ public struct WorkspaceLibraryReadModelRow: Sendable, Equatable, Identifiable {
         assignableReasons: [WorkspaceLibraryAssignableReason],
         nativeRoutes: [WorkspaceLibraryNativeRoute],
         connection: WorkspaceLibraryMCPConnection? = nil,
-        contentDigest: ContentDigest? = nil
+        contentDigest: ContentDigest? = nil,
+        isOwnConnection: Bool = false
     ) {
         self.artifactID = artifactID
         self.displayName = displayName
@@ -507,6 +512,7 @@ public struct WorkspaceLibraryReadModelRow: Sendable, Equatable, Identifiable {
         self.nativeRoutes = nativeRoutes
         self.connection = connection
         self.contentDigest = contentDigest
+        self.isOwnConnection = isOwnConnection
     }
 }
 

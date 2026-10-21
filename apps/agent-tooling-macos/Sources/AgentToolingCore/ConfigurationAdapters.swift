@@ -1,22 +1,16 @@
 import Foundation
 
-/// A dotted release, compared numerically so "0.9" sorts below "0.134".
+/// Compares dotted versions numerically. Uses the first digit- or v-digit-prefixed
+/// token, stopping numeric components at a suffix; a line without a number is
+/// unversioned. Observations retain raw output for matching capability evidence.
 struct ClientVersion: Comparable, Sendable {
     let components: [Int]
 
     init?(_ text: String?) {
-        guard let text else { return nil }
-        let trimmed = text.hasPrefix("v") ? String(text.dropFirst()) : text
-        let parts = trimmed.split(separator: ".", omittingEmptySubsequences: false)
-        guard !parts.isEmpty else { return nil }
-        var values: [Int] = []
-        for part in parts {
-            let digits = part.prefix { $0.isNumber }
-            guard !digits.isEmpty, let value = Int(digits) else { break }
-            values.append(value)
-        }
-        guard !values.isEmpty else { return nil }
-        components = values
+        guard let number = ClientVersionText.number(in: text),
+            let components = ClientVersionText.numericComponents(of: number)
+        else { return nil }
+        self.components = components
     }
 
     static func < (lhs: Self, rhs: Self) -> Bool {

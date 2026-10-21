@@ -97,6 +97,32 @@ public final class WorkspaceLibrarySession {
         }
     }
 
+    /// Reviews explicit placements (`WorkspaceAssignmentBatchCommand.place`)
+    /// for `applyReviewedAssignments` to save, withdrawing `withdrawing`
+    /// where no placement still matches it.
+    ///
+    /// It awaits a read first, and then whatever else is still under way, so
+    /// it is never skipped because the session was busy: a stage that saves
+    /// while the shell reads must not move on with nothing saved. When every
+    /// placement is already asked for and nothing is withdrawn there is
+    /// nothing to save: `review` stays nil and no error is set.
+    public func reviewPlacements(_ placements: [WorkspacePlacement], withdrawing: [WorkspaceObjectID] = []) async {
+        await refresh()
+        while isBusy {
+            await withCheckedContinuation { waiters.append($0) }
+            if Task.isCancelled { return }
+        }
+        await prepare { snapshot in
+            do {
+                return try WorkspaceAssignmentBatchCommand.place(
+                    document: snapshot.document, placements: placements, withdrawing: withdrawing
+                ).command
+            } catch WorkspaceAssignmentCommandError.emptyBatch {
+                return nil
+            }
+        }
+    }
+
     public func reviewPreset(presetID: ArtifactID, destinations: [PortableDestination]) async {
         await prepare { snapshot in
             try .applyPresetOnce(document: snapshot.document, presetID: presetID, destinations: destinations)
@@ -105,7 +131,7 @@ public final class WorkspaceLibrarySession {
 
     public func reviewRemoval(contributionIDs: [WorkspaceObjectID]) async {
         await prepare { snapshot in
-            .init(expectedRevisionID: snapshot.document.revision.id, removalIDs: contributionIDs)
+            WorkspaceAssignmentBatchCommand(expectedRevisionID: snapshot.document.revision.id, removalIDs: contributionIDs)
         }
     }
 
@@ -155,7 +181,9 @@ public final class WorkspaceLibrarySession {
         }
     }
 
-    private func prepare(_ makeCommand: (WorkspaceApplicationSnapshot) throws -> WorkspaceAssignmentBatchCommand) async {
+    /// Builds and previews a command against a fresh read. A builder that
+    /// returns nil has nothing to review, which is not an error.
+    private func prepare(_ makeCommand: (WorkspaceApplicationSnapshot) throws -> WorkspaceAssignmentBatchCommand?) async {
         guard !isBusy else { return }
         isBusy = true
         defer { settle() }
@@ -169,7 +197,7 @@ public final class WorkspaceLibrarySession {
             let next = try await service.libraryState()
             try Task.checkCancellation()
             try accept(next)
-            let command = try makeCommand(next.snapshot)
+            guard let command = try makeCommand(next.snapshot) else { return }
             let preview = try await service.previewAssignmentBatch(command)
             try Task.checkCancellation()
             review = .init(command: command, preview: preview)

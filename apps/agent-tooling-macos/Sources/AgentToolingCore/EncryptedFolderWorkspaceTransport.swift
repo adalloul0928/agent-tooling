@@ -15,24 +15,12 @@ public enum EncryptedFolderTransportError: Error, Equatable, Sendable {
     case remoteAdvanced(remoteHead: String)
 }
 
-/// Carries portable workspace revisions through a folder, encrypted.
-///
-/// The folder is meant to be one a file-sync service already keeps in step —
-/// iCloud Drive, Dropbox, a network share. What lands there is a sealed box and
-/// a small plaintext header holding the format version and the salt; the
-/// document itself, including every name in the person's library, is never
-/// written in the clear. The service moving the folder cannot read it.
-///
-/// What this is not: it is not protection from someone who can read this Mac.
-/// The key lives in a file beside the workspace database, readable by the
-/// account that owns it — see `WorkspaceFolderKeyStore`. The threat it answers
-/// is the sync service and anyone else who can see the folder's contents, which
-/// is exactly the threat a plain shared folder has and a private Git repository
-/// mostly does not.
-///
-/// Publishing is compare-and-set on a content digest of what is there, so two
-/// Macs writing at once produce a refusal and a merge rather than one silently
-/// winning.
+/// Publishes encrypted workspace revisions through an existing sync folder.
+/// Only the format version and salt are plaintext. The device key is stored
+/// beside the database, so encryption protects against the sync service, not
+/// another process able to read the user's files.
+/// Content-digest compare-and-set prevents concurrent writes from overwriting
+/// each other; conflicts require a merge.
 public actor EncryptedFolderWorkspaceTransport {
     public static let documentFileName = "workspace.sealed"
     public static let formatVersion = 1

@@ -41,20 +41,39 @@ public struct AccountSurfaceProbe: AccountSurfaceReading {
     }
 
     /// Reads the providers asked for, in provider order. A provider whose
-    /// client this Mac does not manage is not asked.
+    /// client this Mac does not manage is not asked, and with no provider
+    /// nothing runs at all: the login shell runs `~/.zshrc`, and an answer
+    /// nothing would use is not a reason to start it.
     public func read(_ providers: [AccountProvider], depth: Depth, now: Date = .now) async -> [AccountObservation] {
-        var overrides: [AccountShellOverride]?
-        if let shellRunner { overrides = await AccountShellEnvironmentProbe.read(runner: shellRunner) }
-        let contents = depth == .contents
+        let wanted = Set(providers).sorted()
+        guard !wanted.isEmpty else { return [] }
+        let overrides = await readShellOverrides()
         var observations: [AccountObservation] = []
-        for provider in Set(providers).sorted() {
-            switch provider {
-            case .claude:
-                observations.append(await claude.read(contents: contents, shellOverrides: overrides ?? [], now: now))
-            case .chatGPT:
-                observations.append(await codex.read(contents: contents, shellOverrides: overrides ?? [], now: now))
-            }
+        for provider in wanted {
+            observations.append(await read(provider, depth: depth, shellOverrides: overrides, now: now))
         }
         return observations
+    }
+
+    /// Asks the login shell, once, which overriding variables it exports.
+    /// Nil when this probe has no shell runner or the shell did not answer.
+    /// A caller reading providers one at a time asks this first and hands the
+    /// answer to each, so the shell starts once however many are read.
+    public func readShellOverrides() async -> [AccountShellOverride]? {
+        guard let shellRunner else { return nil }
+        return await AccountShellEnvironmentProbe.read(runner: shellRunner)
+    }
+
+    /// Reads one provider, told what the login shell exports. It starts no
+    /// shell of its own, so a read that is cancelled or skipped costs only
+    /// its own client's commands.
+    public func read(
+        _ provider: AccountProvider, depth: Depth, shellOverrides: [AccountShellOverride]?, now: Date = .now
+    ) async -> AccountObservation {
+        let contents = depth == .contents
+        switch provider {
+        case .claude: return await claude.read(contents: contents, shellOverrides: shellOverrides ?? [], now: now)
+        case .chatGPT: return await codex.read(contents: contents, shellOverrides: shellOverrides ?? [], now: now)
+        }
     }
 }

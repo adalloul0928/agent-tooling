@@ -1,21 +1,18 @@
 import SwiftUI
 
-/// The Library's skills tab, and the only place onboarding is allowed to stand
-/// in front of a screen.
+/// The Library's skills tab: the skills list, and under it the line saying
+/// what the accounts add that the library does not hold.
 ///
-/// Getting started is a thing you do to your library, so it belongs here rather
-/// than over the window: every other section stays reachable while it is up, and
-/// choosing tools or skipping puts it away for good.
+/// Nothing stands in front of it. Setting a Mac up is the setup stage's work,
+/// in a window of its own, so the library opens straight onto its rows on a
+/// Mac that has assigned nothing yet, as on any other.
 struct SkillsSection: View {
     let workspace: WorkspaceLaunch.Workspace
     @Environment(\.skillContentService) private var skillContentService
-    @AppStorage("onboarding.skipped.v2") private var onboardingSkipped = false
     @State private var content: SkillContentSession?
 
     var body: some View {
-        if showsOnboarding {
-            OnboardingWizard(workspace: workspace) { onboardingSkipped = true }
-        } else if let content {
+        if let content {
             VStack(spacing: 0) {
                 SkillsView(workspace: workspace, content: content)
                 AccountContentsStrip(session: workspace.accounts, kinds: [.skill])
@@ -32,13 +29,5 @@ struct SkillsSection: View {
                     content: skillContentService)
             }
         }
-    }
-
-    /// Only for a writable workspace that holds items and has no assignments at
-    /// all. A read-only preview and an already-used workspace go straight in.
-    private var showsOnboarding: Bool {
-        OnboardingPresentationPolicy.shouldPresent(
-            skipped: onboardingSkipped, access: workspace.library.access,
-            rows: workspace.library.state?.library.rows)
     }
 }

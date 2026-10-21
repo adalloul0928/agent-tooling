@@ -2,18 +2,9 @@ import AgentToolingCore
 import AppKit
 import SwiftUI
 
-/// Paste what another tool gave you — an `mcp add` command, a client's JSON
-/// block, a bare server URL, or a SKILL.md — and see exactly what was
-/// understood before anything is saved. Every field stays editable.
-///
-/// Both shapes land in the library through the workspace's own commands: a
-/// SKILL.md through skill intake, a server definition through connection
-/// intake. Neither is an installation. Saving a connection writes down how it
-/// is reached; choosing which apps use it is a separate reviewed step, and
-/// putting it in one is another.
-///
-/// The same sheet opens with nothing pasted, for somebody who would rather type
-/// a connection in than paste one.
+/// Parses an MCP command, JSON configuration, server URL, or SKILL.md into an
+/// editable preview. Save uses workspace intake commands; installation remains
+/// a separate reviewed operation. Empty input supports manual connection entry.
 struct PasteImportSheet: View {
     enum Mode: Sendable { case paste, newConnection }
 
@@ -38,13 +29,20 @@ struct PasteImportSheet: View {
     /// show the parsed and parse-error layouts the sheet otherwise reaches only
     /// from text a person types. Nil on every normal path.
     private let previewText: String?
+    /// Told what the sheet saved, as it saves it: the new item and its name.
+    /// The setup stage records exactly that as something its setup added.
+    private let onSaved: (ArtifactID, String) -> Void
 
     /// The sheet as the app presents it: nothing seeded, text comes from the
-    /// person.
-    init(workspace: WorkspaceLaunch.Workspace, mode: Mode = .paste) {
+    /// person. `onSaved` hears each skill or connection it saves.
+    init(
+        workspace: WorkspaceLaunch.Workspace, mode: Mode = .paste,
+        onSaved: @escaping (ArtifactID, String) -> Void = { _, _ in }
+    ) {
         self.workspace = workspace
         self.mode = mode
         self.previewText = nil
+        self.onSaved = onSaved
     }
 
     /// A preview-only initializer that seeds the paste field and interprets it
@@ -54,6 +52,7 @@ struct PasteImportSheet: View {
         self.workspace = workspace
         self.mode = mode
         self.previewText = previewText
+        self.onSaved = { _, _ in }
         _text = State(initialValue: previewText)
     }
 
@@ -385,8 +384,11 @@ struct PasteImportSheet: View {
         guard !rawName.isEmpty else {
             return mode == .newConnection ? "Name this connection." : "The paste named no connection."
         }
-        guard (try? WorkspaceLibrary.normalizedIdentifier(rawName)) != nil else {
+        guard let identifier = try? WorkspaceLibrary.normalizedIdentifier(rawName) else {
             return ManagedMCPServerIntakeError.invalidConnectionName(rawName).errorDescription
+        }
+        guard !ManagedMCPServerIntakeCommand.isReservedName(identifier) else {
+            return ManagedMCPServerIntakeError.reservedName(identifier).errorDescription
         }
         do {
             _ = try MCPDefinitionValidator.validate(serverDraft.endpoint, transport: serverDraft.transport)
@@ -496,10 +498,12 @@ struct PasteImportSheet: View {
                 return
             }
             let command = try ManagedMCPServerIntakeCommand(
-                expectedRevisionID: head, draft: serverDraft, credentialRequirementNames: credentialNames)
+                expectedRevisionID: head, draft: serverDraft, credentialRequirementNames: credentialNames
+            ).refusingReservedName()
             _ = try await workspace.service.intakeManagedMCPServer(command)
             await workspace.library.refresh()
             savedServerName = command.displayName
+            onSaved(command.artifactID, command.displayName)
         } catch {
             // Every refusal here already carries the words a person needs:
             // the definition validator's for a malformed or credential-bearing
@@ -516,32 +520,46 @@ struct PasteImportSheet: View {
         isSaving = true
         failure = nil
         defer { isSaving = false }
-        let draft = skillDraft
-        let displayName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            let identifier = try WorkspaceLibrary.normalizedIdentifier(displayName)
-            let scratch = FileManager.default.temporaryDirectory
-                .appending(path: "paste-skill-\(UUID().uuidString)", directoryHint: .isDirectory)
-            defer { try? FileManager.default.removeItem(at: scratch) }
-            try FileManager.default.createDirectory(
-                at: scratch, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            try Self.skillMarkdown(identifier: identifier, displayName: displayName, draft: draft)
-                .write(
-                    to: scratch.appending(path: "SKILL.md", directoryHint: .notDirectory),
-                    atomically: true, encoding: .utf8)
-            let prepared = try await WorkspaceSkillPreparation.capturePersonal(directory: scratch)
-            guard let head = try await workspace.service.snapshot()?.document.revision.id else {
+            guard let saved = try await Self.saveSkill(skillDraft, in: workspace) else {
                 failure = "This workspace could not be read. Nothing was saved."
                 return
             }
-            _ = try await workspace.service.intakeStandaloneSkill(
-                .init(expectedRevisionID: head, displayName: displayName, prepared: prepared),
-                prepared: prepared)
-            await workspace.library.refresh()
-            savedSkillName = displayName
+            savedSkillName = saved.name
+            onSaved(saved.artifactID, saved.name)
         } catch {
             failure = Self.message(for: error)
         }
+    }
+
+    /// One thing the sheet saved: its record in the library, and its name.
+    struct Saved: Equatable {
+        let artifactID: ArtifactID
+        let name: String
+    }
+
+    /// Create skill's save, on its own: `draft`'s frontmatter written into a
+    /// scratch folder, captured, and admitted to `workspace`'s library in one
+    /// revision, which is then read back. Nil when the workspace could not be
+    /// read, so nothing was saved.
+    static func saveSkill(_ draft: SkillDraft, in workspace: WorkspaceLaunch.Workspace) async throws -> Saved? {
+        let displayName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let identifier = try WorkspaceLibrary.normalizedIdentifier(displayName)
+        let scratch = FileManager.default.temporaryDirectory
+            .appending(path: "paste-skill-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        try FileManager.default.createDirectory(
+            at: scratch, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try skillMarkdown(identifier: identifier, displayName: displayName, draft: draft)
+            .write(
+                to: scratch.appending(path: "SKILL.md", directoryHint: .notDirectory),
+                atomically: true, encoding: .utf8)
+        let prepared = try await WorkspaceSkillPreparation.capturePersonal(directory: scratch)
+        guard let head = try await workspace.service.snapshot()?.document.revision.id else { return nil }
+        let command = StandaloneSkillIntakeCommand(expectedRevisionID: head, displayName: displayName, prepared: prepared)
+        _ = try await workspace.service.intakeStandaloneSkill(command, prepared: prepared)
+        await workspace.library.refresh()
+        return Saved(artifactID: command.artifactID, name: displayName)
     }
 
     /// The same shape a created skill has always had: frontmatter the clients

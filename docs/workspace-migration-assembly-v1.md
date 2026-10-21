@@ -1,9 +1,7 @@
 # Workspace migration assembly v1
 
-Status: an in-memory, validated candidate is implemented locally. Test evidence
-is recorded in [the progress ledger](implementation-progress-2026-09.md).
-This is not a migration-ready declaration and does not write
-a store, fetch a source, or change a live workspace.
+Status: historical migration contract. The in-memory assembly validates a
+candidate without writing a store, fetching a source, or changing a workspace.
 
 ## Candidate boundary
 

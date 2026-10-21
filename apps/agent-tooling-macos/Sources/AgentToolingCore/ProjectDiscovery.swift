@@ -407,7 +407,7 @@ struct ProjectPathResolver {
 
 private extension String {
     /// A path component matches when its encoded form ends exactly on a
-    /// separator, so `pumpd` never swallows the start of `pumpd-app`.
+    /// separator, so `sample-app` never swallows the start of `sample-app-mobile`.
     func isPrefixComponent(of encoded: Substring) -> Bool {
         guard encoded.hasPrefix(self) else { return false }
         let rest = encoded.dropFirst(count)
@@ -434,6 +434,41 @@ public struct ProjectDiscoveryOptions: Hashable, Sendable {
 }
 
 public enum ProjectDiscovery {
+    /// Where Claude Code keeps its session index: `~/.claude/projects`, one
+    /// folder for each folder it ran in.
+    static func sessionIndexURL(homeURL: URL) -> URL {
+        homeURL.appending(path: ".claude/projects", directoryHint: .isDirectory)
+    }
+
+    /// Lists valid directory names in Claude Code's session index without resolving
+    /// them to project paths. Resolution could prompt for protected-folder access
+    /// during setup; Projects performs it later. Skips symlinks, files and names
+    /// without Claude Code's leading hyphen.
+    public static func sessionIndexEntryNames(
+        homeURL: URL,
+        fileManager: FileManager = .default,
+        options: ProjectDiscoveryOptions = ProjectDiscoveryOptions()
+    ) -> [String] {
+        let indexURL = sessionIndexURL(homeURL: homeURL)
+        defer { ScanTrace.read(indexURL) }
+        guard
+            let entries = try? fileManager.contentsOfDirectory(
+                at: indexURL, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey], options: [])
+        else { return [] }
+        var names: [String] = []
+        for entry in entries.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            guard names.count < options.maximumSessionIndexEntries else { break }
+            let name = entry.lastPathComponent
+            guard name.hasPrefix("-"), name.count <= 1_024 else { continue }
+            // Read from the listing without following a link, so a link
+            // into a protected folder is not looked through.
+            let values = try? entry.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard values?.isDirectory == true, values?.isSymbolicLink != true else { continue }
+            names.append(name)
+        }
+        return names
+    }
+
     /// Reads Claude Code's own session index. Regular files, dangling entries,
     /// and names that do not resolve to a directory on this Mac are ignored.
     public static func sessionIndexRoots(
@@ -441,7 +476,7 @@ public enum ProjectDiscovery {
         fileManager: FileManager = .default,
         options: ProjectDiscoveryOptions = ProjectDiscoveryOptions()
     ) -> [URL] {
-        let indexURL = homeURL.appending(path: ".claude/projects", directoryHint: .isDirectory)
+        let indexURL = sessionIndexURL(homeURL: homeURL)
         let indexPath = indexURL.path(percentEncoded: false)
         guard let names = try? fileManager.contentsOfDirectory(atPath: indexPath) else { return [] }
 

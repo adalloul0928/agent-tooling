@@ -1,20 +1,8 @@
 import Foundation
 
-/// Whether a native package a catalog lists is already an item in this library,
-/// and which one.
-///
-/// Discover asks this to decide what its button says, and the command that adds
-/// a listing asks the same question to decide whether there is anything to add.
-/// They must never disagree, so the question is answered in one place and has
-/// exactly four answers.
-///
-/// Only two of them are identity. A route and a client's plugin alias are facts
-/// this app wrote down about one package in one client's namespace; an equal
-/// declared name is not. The workspace contract is explicit that equal names are
-/// insufficient identity evidence, and two publishers shipping a "docs" package
-/// is exactly the case that rule exists for — so a name match is reported as the
-/// ambiguity it is, for a person to settle, rather than quietly merged or
-/// quietly duplicated. A display name is never consulted at all.
+/// Shared package-adoption identity check for Discover and command handling.
+/// Native routes and client aliases establish identity. Equal declared names
+/// remain ambiguous; display names are never identity evidence.
 public enum NativePackageAdoption {
     /// The identity evidence that matched.
     public enum MatchReason: String, Hashable, Sendable {

@@ -69,6 +69,15 @@ struct SkillCopySummary: Equatable {
         versions > 1 ? CountNoun("version").phrase(versions) : CountNoun("copy", plural: "copies").phrase(copies)
     }
 
+    /// The chip on a compact row, where the copies and whether they differ
+    /// share one capsule: "2 copies · 2 versions", or "2 copies · same
+    /// content" when every copy the last check compared is alike. Your
+    /// library's list on the setup stage (S06) shows it.
+    var compactLabel: String {
+        let count = CountNoun("copy", plural: "copies").phrase(copies)
+        return versions > 1 ? "\(count) · \(CountNoun("version").phrase(versions))" : "\(count) · same content"
+    }
+
     var explanation: String {
         versions > 1
             ? "\(copies) copies of this skill, and they are not all the same: \(versions) different versions. An app uses the copy it has. Open it to see which is where."
@@ -227,9 +236,7 @@ enum SkillManagement: Equatable {
     case yoursUnplaced
     /// Came with a plugin. The plugin is what an app installs or removes.
     case byPlugin
-    /// Found in an app's folder, put there by another tool that keeps it in
-    /// step (AIM copies its skills into Kiro's folder this way). That tool
-    /// owns it: a change made here would be undone at its next sync.
+    /// Managed by another tool; local changes may be overwritten by its sync.
     case byTool(ObservedExternalManager)
     /// Found in an app's folder; this app did not put it there and holds no
     /// copy, so it can show and try it, not place, edit, or update it.

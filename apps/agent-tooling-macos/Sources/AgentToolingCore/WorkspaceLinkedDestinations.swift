@@ -12,25 +12,10 @@ public enum WorkspaceLinkedDestinationError: Error, Equatable, Sendable {
     case duplicatePath
 }
 
-/// Where a destination actually writes on this Mac, when the person pointed it
-/// somewhere other than the default.
-///
-/// A linked destination does not add a new kind of place to install to; it
-/// redirects one the workspace already describes. The portable side still says
-/// "Codex, user scope" and stays the same on every Mac. Only this device knows
-/// it resolves to a folder on an external volume, which is why the binding is
-/// device state and never portable bytes.
-///
-/// Two rules make it safe to point at a folder that is not ours:
-///
-/// - A path registered as a destination cannot also be a source root. A source
-///   root is where authored bytes come from and a destination is where reviewed
-///   bytes go; one folder being both is how a deployment quietly becomes an
-///   edit to someone's repository.
-/// - `noClobberApplyOnce` writes only into a place that holds nothing of ours.
-///   Anything already at that path is left exactly as it is and reported, not
-///   replaced — this app did not put it there and has no basis for deciding it
-///   is disposable.
+/// Device-local override for an existing portable destination.
+/// Destination folders cannot overlap source roots, which would turn deployment
+/// into a source edit. `noClobberApplyOnce` refuses occupied paths and preserves
+/// their contents.
 public enum WorkspaceLinkedDestinations {
     /// Registers a folder for one destination on this device.
     public static func register(

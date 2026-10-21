@@ -8,18 +8,10 @@ public enum WorkspaceFolderKeyError: Error, Equatable, Sendable {
     case invalidRecoveryPhrase
 }
 
-/// The key that opens an encrypted sync folder, and the phrase that carries it
-/// to another Mac.
-///
-/// The key is random, not derived from anything a person typed: a passphrase
-/// people would actually remember is a poor key, and this build has no password
-/// hashing worth trusting for one. Setting up a second Mac means moving the key
-/// itself, shown once as a recovery phrase.
-///
-/// It is stored beside the workspace database, readable only by the account
-/// that owns it. That is what makes this "the sync service cannot read your
-/// library", not "nobody with your Mac can". The distinction is the whole
-/// security claim and the app states it rather than implying more.
+/// Stores a random sync-folder key and encodes it as a transferable recovery
+/// phrase. User passwords are never used to derive keys. The key lives beside
+/// the workspace database with owner-only permissions: encryption protects
+/// against the sync service, not someone with access to the local account.
 public struct WorkspaceFolderKeyStore: Sendable {
     public static let formatVersion = 1
     /// Crockford's base32: the ten digits and the letters except i, l, o and

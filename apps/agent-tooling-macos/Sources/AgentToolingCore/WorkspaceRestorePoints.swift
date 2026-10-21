@@ -105,19 +105,10 @@ public enum WorkspaceRestorePoints {
             assignmentDifference: past.assignments.count - current.document.assignments.count)
     }
 
-    /// Commits the historical content as a new revision on top of the current
-    /// head. Tombstones from the current state are carried forward.
-    ///
-    /// Carrying them forward is what keeps a restore from quietly undoing a
-    /// deletion another Mac made and shared: a tombstone is how that deletion
-    /// travelled here, and returning to an older state is not a decision to
-    /// reverse it. `preview` names those items so the choice is visible.
-    ///
-    /// `expectedRevisionID` is the head the person's preview was computed
-    /// against, and it is theirs to state rather than something this reads back
-    /// from the store: a repeat of the same request has to describe the same
-    /// request, or a retry after a lost answer would be treated as a new one
-    /// and restore twice.
+    /// Restores historical content as a new revision, preserving current
+    /// tombstones so shared deletions remain effective. Preview lists them.
+    /// The caller supplies its preview's expectedRevisionID; retaining that
+    /// value on retries preserves idempotency after a lost response.
     @discardableResult
     public static func restore(
         _ revisionID: WorkspaceObjectID,

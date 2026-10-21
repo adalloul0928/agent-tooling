@@ -1,32 +1,29 @@
-# Agent Tooling Atlas
+# Agent Tooling product guide
 
-The single maintained product and architecture site for Agent Tooling. It
-explains the local-first macOS application, Claude Code, Codex, and Gemini
-targets, portable Agent Plugin packages, MCP servers, profiles, sync, and the
-boundary between local configuration and hosted account state.
+A static Next.js site describing the public macOS app. It has no backend,
+authentication, analytics, or runtime data dependencies. System fonts keep the
+build independent of a font service.
 
-## Local development
+## Development
 
-```bash
+Requires Node.js 22.13 or later.
+
+```sh
 npm ci
 npm run dev
 ```
 
-## Validation
+## Validate and export
 
-```bash
-npm ci
+```sh
 npm audit --audit-level=high
 npm test
 npm run lint
 ```
 
-The [Next ESLint compatibility package](tools/next-root-dir-glob/README.md)
-replaces one vulnerable glob dependency while preserving Next's lint rules.
+`npm test` builds the static export in `out/` and checks its rendered content.
+`npm start` serves that export locally on port 3000.
 
-The guide is intentionally self-contained. It uses no persistent storage,
-authentication, external data, runtime server, or runtime secrets. It is a
-static Next.js export, which keeps the documentation supply chain smaller than
-the former Cloudflare/vinext starter. The retired
-`docs/current-tooling` starter was removed because it duplicated this app and
-carried unused D1, Drizzle, and authentication scaffolding.
+The [Next ESLint compatibility package](tools/next-root-dir-glob/README.md)
+replaces a vulnerable transitive glob dependency while preserving Next's lint
+rules.

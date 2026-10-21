@@ -170,6 +170,7 @@ public enum InventoryCompiler {
             guard let observed = observation.skillMetadata[id] else { continue }
             let root = URL(fileURLWithPath: observed.path)
             let skillFile = root.appending(path: "SKILL.md")
+            defer { ScanTrace.read(root) }
             let content = (try? BoundedFileAccess.readUTF8(at: skillFile)) ?? ""
             let fallbackName = id.split(separator: ":").last.map(String.init) ?? id
             let frontmatter = try? SkillFrontmatter.parse(content)
@@ -186,7 +187,9 @@ public enum InventoryCompiler {
             homeURL.appending(path: ".gemini/skills/\(id)"),
             homeURL.appending(path: ".gemini/extensions/\(id)/skills/\(id)"),
         ]
-        for root in roots where fileManager.fileExists(atPath: root.path(percentEncoded: false)) {
+        for root in roots {
+            defer { ScanTrace.read(root) }
+            guard fileManager.fileExists(atPath: root.path(percentEncoded: false)) else { continue }
             let skillFile = root.appending(path: "SKILL.md")
             let content = (try? BoundedFileAccess.readUTF8(at: skillFile)) ?? ""
             let frontmatter = try? SkillFrontmatter.parse(content)
@@ -228,32 +231,34 @@ public enum InventoryCompiler {
 
 }
 
+/// Scans declared client locations and reports reads to `ScanTrace`, including
+/// missing paths, tool-reported plugin folders and resolved symlink targets.
+/// This drives consent progress and trace-parity tests. Executable discovery
+/// happens earlier on the apps screen and is outside this trace.
 enum LocalTargetScan {
     static func perform(
         surface: TargetSurface,
         homeURL: URL,
-        executable: String,
-        configurationURLs: [URL],
-        skillRoots: [URL],
-        pluginRoots: [URL],
+        locations: ClientReadLocations,
         capabilities: TargetCapabilities,
-        runner: any CommandRunning
+        runner: any CommandRunning,
+        locate: (ClientKind, URL) -> URL? = ClientAdapterRegistry.liveLocate
     ) async -> TargetObservation {
         let fileManager = FileManager.default
+        let name = ClientExecutableLocator.executableName(for: locations.client)
         // The tool is probed where the locator actually found it. A bare name
         // would go through the PATH this app inherited, which is not the
         // shell's — exactly how an installed tool reads as "unavailable".
-        let resolvedExecutable =
-            surface.client
-            .flatMap { ClientExecutableLocator.locate($0, homeURL: homeURL)?.path(percentEncoded: false) }
-            ?? executable
-        async let commandProbe = probe(executable: resolvedExecutable, runner: runner)
-        async let nativeInventory = nativeInventory(
-            client: surface.client, executable: resolvedExecutable, runner: runner)
-        let existingConfig = configurationURLs.filter { fileManager.fileExists(atPath: $0.path(percentEncoded: false)) }
+        let resolvedExecutable = locate(locations.client, homeURL)?.path(percentEncoded: false) ?? name
+        async let commandProbe = probe(executable: resolvedExecutable, locations: locations, runner: runner)
+        async let nativeInventory = nativeInventory(locations: locations, executable: resolvedExecutable, runner: runner)
+        var existingConfig: [URL] = []
         var configurationDocuments: [String] = []
         var notes: [String] = []
-        for configURL in existingConfig {
+        for configURL in locations.configurationFiles {
+            defer { ScanTrace.read(configURL) }
+            guard fileManager.fileExists(atPath: configURL.path(percentEncoded: false)) else { continue }
+            existingConfig.append(configURL)
             do {
                 configurationDocuments.append(
                     try BoundedFileAccess.readUTF8(at: configURL, maximumBytes: BoundedFileAccess.maximumConfigurationBytes))
@@ -264,7 +269,7 @@ enum LocalTargetScan {
         let probe = await commandProbe
         let native = await nativeInventory
         var skillMetadata: [String: ObservedSkillMetadata] = [:]
-        for root in skillRoots {
+        for root in locations.skillRoots {
             // Claude Code keeps the skills it downloads from a claude.ai
             // account in `~/.claude/skills/synced`. They are the account's,
             // not loose skills on this Mac, so they never enter the inventory
@@ -274,12 +279,6 @@ enum LocalTargetScan {
             skillMetadata.merge(records) { current, _ in current }
         }
         skillMetadata.merge(native.skillMetadata) { _, native in native }
-        // A standalone folder another tool placed is that tool's, not loose.
-        let managers = ExternalSkillManagerIndex.load(homeURL: homeURL, fileManager: fileManager)
-        for (id, metadata) in skillMetadata where metadata.providerPluginID == nil {
-            skillMetadata[id]?.externalManager = managers.manager(
-                forSkillAt: URL(fileURLWithPath: metadata.path))
-        }
 
         var pluginMetadata = native.pluginMetadata
         let configuredPlugins = configurationDocuments.flatMap(pluginNames(from:))
@@ -287,8 +286,9 @@ enum LocalTargetScan {
             pluginMetadata[id] = ObservedPluginMetadata(
                 name: displayName(forPluginID: id), source: "\(surface.displayName) configuration", scope: "This Mac", enabled: true)
         }
-        if surface.client == .gemini {
-            for id in pluginRoots.flatMap({ childDirectories(under: $0, fileManager: fileManager) }) where pluginMetadata[id] == nil {
+        if locations.client == .gemini {
+            for id in locations.pluginRoots.flatMap({ childDirectories(under: $0, fileManager: fileManager) })
+            where pluginMetadata[id] == nil {
                 pluginMetadata[id] = ObservedPluginMetadata(
                     name: displayName(forPluginID: id), source: "Gemini extension directory", scope: "This Mac", enabled: true)
             }
@@ -300,27 +300,40 @@ enum LocalTargetScan {
         }
         // A plugin's server beside one the client was configured with by
         // hand is two definitions, and both are kept. The client's own
-        // listing of its configuration is not: it is the same definition.
+        // listing of its configuration is not: it is the same definition,
+        // so it keeps one source, and that source stays the configuration
+        // that defines it. The listing's details are kept (it knows the
+        // transport and whether the server is on), but naming the listing as
+        // the source would hide that the server was configured by hand, and
+        // Checkup counts a server set up by hand in two apps from that.
         mcpMetadata.merge(native.mcpMetadata) { configured, native in
-            native.source.contains("@") ? native.adding(source: configured.source) : native
+            guard !native.source.contains("@") else { return native.adding(source: configured.source) }
+            var listed = native
+            listed.source = configured.source
+            return listed
         }
-        let installed =
-            probe.available || !existingConfig.isEmpty
-            || skillRoots.contains {
-                fileManager.fileExists(atPath: $0.path(percentEncoded: false))
-            }
-            || pluginRoots.contains {
-                fileManager.fileExists(atPath: $0.path(percentEncoded: false))
-            }
-        if !probe.available {
-            let name = surface.client.map(ClientExecutableLocator.executableName(for:)) ?? executable
+        // Every declared folder is checked, rather than stopping at the first
+        // that is there, so the read touches each one its manifest lists.
+        let presentRoots = (locations.skillRoots + locations.pluginRoots).filter { root in
+            defer { ScanTrace.read(root) }
+            return fileManager.fileExists(atPath: root.path(percentEncoded: false))
+        }
+        let installed = probe.available || !existingConfig.isEmpty || !presentRoots.isEmpty
+        if probe.timedOut {
+            // The tool started and did not finish in the time it was given:
+            // it is here, and what it is was never said. Never "not
+            // available", which is a different finding a later plan treats
+            // differently.
+            notes.append(
+                "The \(name) CLI did not answer --version in the time allowed, "
+                    + "so its version is unknown and Agent Tooling cannot confirm what it accepts.")
+        } else if !probe.available {
             notes.append("The \(name) CLI was not available in any known install location; configuration was scanned from disk only.")
         } else if let status = probe.unansweredExitStatus {
             // The tool is present but did not answer --version, so its version is
             // unknown. Say so plainly: a later plan cannot confirm what an
             // unknown version accepts, which is different from the app not
             // supporting the request.
-            let name = surface.client.map(ClientExecutableLocator.executableName(for:)) ?? executable
             notes.append(
                 "The \(name) CLI is present but did not answer --version (exit \(status)), "
                     + "so its version is unknown and Agent Tooling cannot confirm what it accepts.")
@@ -353,39 +366,67 @@ enum LocalTargetScan {
 
     /// Keyed on the client, never on the executable string: the executable is
     /// the locator's absolute path, and matching it against bare names is how
-    /// a located tool silently loses its native inventory.
+    /// a located tool silently loses its native inventory. Only a listing the
+    /// declaration holds is run.
     private static func nativeInventory(
-        client: ClientKind?, executable: String, runner: any CommandRunning
+        locations: ClientReadLocations, executable: String, runner: any CommandRunning
     ) async -> NativeInventory {
         let fileManager = FileManager.default
-        switch client {
+        switch locations.client {
         case .claude:
+            guard locations.runs(ClientReadLocations.pluginListArguments) else { return NativeInventory() }
             guard
-                let output = try? await runner.run(executable: executable, arguments: ["plugin", "list", "--json"], currentDirectory: nil),
+                let output = try? await runner.run(
+                    executable: executable, arguments: ClientReadLocations.pluginListArguments, currentDirectory: nil),
                 output.status == 0
             else {
                 return NativeInventory(notes: ["Claude's native plugin inventory was unavailable; disk configuration was used instead."])
             }
             return claudeInventory(from: output.standardOutput, fileManager: fileManager)
         case .codex:
-            async let pluginOutput = runner.run(
-                executable: executable, arguments: ["plugin", "list", "--json"], currentDirectory: nil)
-            async let mcpOutput = runner.run(executable: executable, arguments: ["mcp", "list", "--json"], currentDirectory: nil)
+            async let pluginOutput = listing(ClientReadLocations.pluginListArguments, locations: locations, executable, runner)
+            async let mcpOutput = listing(ClientReadLocations.mcpListArguments, locations: locations, executable, runner)
             var inventory = NativeInventory()
-            if let output = try? await pluginOutput, output.status == 0 {
+            switch await pluginOutput {
+            case .answered(let output):
                 inventory = codexPluginInventory(from: output.standardOutput, fileManager: fileManager)
-            } else {
+            case .unavailable:
                 inventory.notes.append("Codex's native plugin inventory was unavailable; config.toml was used instead.")
+            case .notDeclared:
+                break
             }
-            if let output = try? await mcpOutput, output.status == 0 {
+            switch await mcpOutput {
+            case .answered(let output):
                 inventory.mcpMetadata.merge(codexMCPInventory(from: output.standardOutput)) { _, native in native }
-            } else {
+            case .unavailable:
                 inventory.notes.append("Codex's native MCP inventory was unavailable; config.toml was used instead.")
+            case .notDeclared:
+                break
             }
             return inventory
-        default:
+        case .gemini, .kiro:
             return NativeInventory()
         }
+    }
+
+    /// How a listing went.
+    private enum Listing {
+        /// The tool answered with status 0.
+        case answered(CommandOutput)
+        /// It ran and failed, or could not be run.
+        case unavailable
+        /// The declaration does not hold it, so it was not run.
+        case notDeclared
+    }
+
+    private static func listing(
+        _ arguments: [String], locations: ClientReadLocations, _ executable: String, _ runner: any CommandRunning
+    ) async -> Listing {
+        guard locations.runs(arguments) else { return .notDeclared }
+        guard let output = try? await runner.run(executable: executable, arguments: arguments, currentDirectory: nil),
+            output.status == 0
+        else { return .unavailable }
+        return .answered(output)
     }
 
     private static func claudeInventory(from text: String, fileManager: FileManager) -> NativeInventory {
@@ -480,9 +521,14 @@ enum LocalTargetScan {
         return result
     }
 
+    /// The skills under `root`, walked as `BoundedFileAccess` walks: a link
+    /// is followed to what it leads to, and the walk tells the trace of each
+    /// one that leads outside `root`, because what is there is read where it
+    /// is. The trace hears of `root` itself, as given, once the walk is done.
     private static func skillRecords(
         under root: URL, namespace: String? = nil, source: String, providerPluginID: String? = nil, fileManager: FileManager
     ) -> [String: ObservedSkillMetadata] {
+        defer { ScanTrace.read(root) }
         var records: [String: ObservedSkillMetadata] = [:]
         for url in BoundedFileAccess.descendantDirectories(under: root, fileManager: fileManager) {
             guard BoundedFileAccess.isRegularFile(url.appending(path: "SKILL.md")) else { continue }
@@ -503,18 +549,26 @@ enum LocalTargetScan {
         /// Present only for the "present but did not answer" case, so a note can
         /// say the version is unknown rather than the tool being unsupported.
         var unansweredExitStatus: Int32?
+        /// True when `--version` started and was stopped for running past its
+        /// time: the tool is here and its version is unknown.
+        var timedOut = false
     }
 
-    private static func probe(executable: String, runner: any CommandRunning) async -> CommandProbe {
-        guard let output = try? await runner.run(executable: executable, arguments: ["--version"], currentDirectory: nil),
-            output.status != 126,
-            output.status != 127
-        else {
-            return CommandProbe(available: false, version: nil, unansweredExitStatus: nil)
+    private static func probe(executable: String, locations: ClientReadLocations, runner: any CommandRunning) async -> CommandProbe {
+        let unavailable = CommandProbe(available: false, version: nil, unansweredExitStatus: nil)
+        guard locations.runs(ClientReadLocations.versionArguments) else { return unavailable }
+        let output: CommandOutput
+        do {
+            output = try await runner.run(executable: executable, arguments: ClientReadLocations.versionArguments, currentDirectory: nil)
+        } catch ProcessCommandRunnerError.timedOut {
+            return CommandProbe(available: true, version: nil, unansweredExitStatus: nil, timedOut: true)
+        } catch {
+            // It could not be started, or the read was stopped. A read that
+            // was stopped is never kept, so what this says then is moot.
+            return unavailable
         }
-        let value = (output.standardOutput.isEmpty ? output.standardError : output.standardOutput)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let version = output.status == 0 && !value.isEmpty ? value.components(separatedBy: "\n").first : nil
+        guard output.status != 126, output.status != 127 else { return unavailable }
+        let version = versionLine(from: output)
         // The tool ran (it was not missing, 126 and 127 already returned above),
         // but a non-zero exit or empty output left the version unknown. Keep it
         // available with no version, and record the exit status so the caller
@@ -523,7 +577,19 @@ enum LocalTargetScan {
         return CommandProbe(available: true, version: version, unansweredExitStatus: unanswered)
     }
 
+    /// The line `--version` printed, as an observation records it: the first
+    /// line of standard output, or of standard error when standard output is
+    /// empty, and only from a run that exited 0. The first read reports this
+    /// same line, so a tile and the observation it commits cannot differ.
+    static func versionLine(from output: CommandOutput) -> String? {
+        guard output.status == 0 else { return nil }
+        let value = (output.standardOutput.isEmpty ? output.standardError : output.standardOutput)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value.components(separatedBy: "\n").first
+    }
+
     private static func childDirectories(under root: URL, fileManager: FileManager) -> [String] {
+        defer { ScanTrace.read(root) }
         guard
             let contents = try? fileManager.contentsOfDirectory(
                 at: root,

@@ -1,20 +1,13 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
 @testable import AgentToolingApp
 
-/// The system-drawn surfaces the gallery does not screenshot — alerts,
-/// confirmation dialogs, open panels and menus, each drawn by macOS rather
-/// than by a view the harness can host. They are recorded in the index with
-/// their exact text from the source, so the gallery still accounts for every
-/// surface.
-///
-/// The open and save panels are `GalleryPanelRecord.all`, which
-/// `GalleryPanelRecordTests` checks against the source on every run; each
-/// panel's line is read from the source here, as it is recorded. The dialogs
-/// and menus are written out below and kept by hand.
-///
-/// Enabled only when `AGENT_TOOLING_SCREEN_GALLERY` names an output folder.
+/// Indexes system-drawn surfaces that the gallery cannot host: alerts,
+/// dialogs, panels and menus. Panel records are checked against source;
+/// dialog and menu text is maintained here. Enabled only when
+/// AGENT_TOOLING_SCREEN_GALLERY specifies an output folder.
 @Suite("Gallery · Unrenderable surfaces", .serialized, .enabled(if: GalleryOutput.isOn))
 @MainActor
 struct GalleryUnrenderableTests {
@@ -55,12 +48,43 @@ struct GalleryUnrenderableTests {
                 "The sidebar's device switcher and each row's context and assignment menus are AppKit menus drawn by the system; their items are the same actions the panels and sheets above present.",
             source: "Sources/AgentToolingApp/AssignmentDeviceScopeMenu.swift")
 
+        // The setup stage's own system-drawn surfaces, their words read from
+        // the copy the screens show, so the index cannot drift from them.
+        let helper = LaunchpadCopy.Helper.self
+        let moveScreen = "Launchpad/Screens/LaunchpadMoveScreen.swift"
+        index.addUnrenderable(
+            control: "Alert (S00, an older copy in Applications)",
+            text: "\(helper.replaceQuestion) · \(helper.replaceDetail) · [\(helper.cancel)] [\(helper.replaceAndReopen)]",
+            source: try Self.source(moveScreen, line: "LaunchpadCopy.Helper.replaceQuestion"))
+        let placeScreen = "Launchpad/Screens/LaunchpadPlaceScreen.swift"
+        index.addUnrenderable(
+            control: "Menu (S10, One project)",
+            text:
+                "\(LaunchpadCopy.Place.chooseProject) · one item for each tracked project, by its name; the grid is worked out for the one chosen",
+            source: try Self.source(placeScreen, line: "Menu(copy.chooseProject)"))
+
         // The menu bar extra is a system menu-style scene, so its items are
-        // listed with their exact text rather than screenshot.
+        // listed for each phase of the launch, with their exact text, rather
+        // than screenshot.
+        let phases: [(String, AppLaunchState.Phase)] = [
+            ("While setup owns the app", .setup), ("While the library opens", .opening),
+            ("When it could not open", .failed("")), ("Once it is open", .ready),
+        ]
+        let menus = phases.map { name, phase in
+            "\(name): "
+                + AppLaunchState.menuBarItems(for: phase).filter { $0 != .divider }.map(\.title).joined(separator: " · ")
+        }
         index.addUnrenderable(
             control: "Menu bar item",
-            text: "Open Agent Tooling · Check Apps (Checking Apps… while busy) · "
-                + "Review Changes… (Preparing Changes… while busy) · Quit Agent Tooling",
-            source: "Sources/AgentToolingApp/AgentToolingApp.swift:185")
+            text: menus.joined(separator: " — ") + " (Checking Apps… and Preparing Changes… while busy)",
+            source: "Sources/AgentToolingApp/Launchpad/AppWindowRoots.swift")
+    }
+
+    /// `Sources/AgentToolingApp/<file>:<line>`, at the first line of `file`
+    /// that holds `anchor`.
+    private static func source(_ file: String, line anchor: String) throws -> String {
+        let source = try #require(try PackageSourceFile.all(in: "AgentToolingApp").first { $0.path == file }, "no \(file)")
+        let index = try #require(source.lines.firstIndex { $0.contains(anchor) }, "\(file) no longer holds \(anchor)")
+        return "Sources/AgentToolingApp/\(file):\(index + 1)"
     }
 }

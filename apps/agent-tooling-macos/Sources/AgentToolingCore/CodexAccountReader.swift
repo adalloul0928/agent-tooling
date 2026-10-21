@@ -29,8 +29,6 @@ enum CodexAccountParsing {
                 plan: ClaudeAccountParsing.bounded(account["planType"]?.stringValue))
         case "apiKey":
             return AccountSignIn(method: .apiKey)
-        case "amazonBedrock":
-            return AccountSignIn(method: .thirdParty, provider: "amazonBedrock")
         default:
             return AccountSignIn(method: type.isEmpty ? .unknown : .thirdParty, provider: ClaudeAccountParsing.bounded(type))
         }

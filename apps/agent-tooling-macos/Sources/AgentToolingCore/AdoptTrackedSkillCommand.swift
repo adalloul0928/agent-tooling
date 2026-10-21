@@ -25,6 +25,17 @@ public struct AdoptTrackedSkillCommand: Codable, Equatable, Sendable {
     func inputDigest() throws -> String { try skillCommandDigest(self, operation: "adopt") }
 
     func apply(to document: inout PortableWorkspaceDocument, declaredName: String) throws -> [ArtifactID] {
+        try Self.adopt(artifactID, content: content, declaredName: declaredName, in: &document)
+    }
+
+    /// The adoption itself, on its own so a batch of additions makes several
+    /// in one revision: the tracked-only standalone skill `artifactID` becomes
+    /// a personal one holding `content`, which its SKILL.md says is
+    /// `declaredName`.
+    static func adopt(
+        _ artifactID: ArtifactID, content: StandaloneSkillContentReview, declaredName: String,
+        in document: inout PortableWorkspaceDocument
+    ) throws -> [ArtifactID] {
         guard let index = document.artifacts.firstIndex(where: { $0.identity.id == artifactID }) else {
             throw WorkspaceRevisionStoreError.missingArtifact
         }
@@ -37,9 +48,10 @@ public struct AdoptTrackedSkillCommand: Codable, Equatable, Sendable {
         }
         guard content.upstream == nil else { throw WorkspaceSkillCommandError.reviewMismatch }
         // The files on disk must be the skill the record is for. A folder that
-        // declares another name is not this skill, and is refused.
+        // declares another name is not this skill, and is refused by both
+        // names, so the person can rename one to match.
         if let recorded = artifact.declaredName, recorded != declaredName {
-            throw WorkspaceSkillCommandError.reviewMismatch
+            throw WorkspaceSkillCommandError.declaredNameMismatch(recorded: recorded, found: declaredName)
         }
         document.artifacts[index].authority = .centralPersonal
         document.artifacts[index].declaredName = declaredName

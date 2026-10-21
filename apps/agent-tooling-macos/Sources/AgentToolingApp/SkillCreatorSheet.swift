@@ -2,18 +2,9 @@ import AgentToolingCore
 import AppKit
 import SwiftUI
 
-/// Creating a skill in conversation with Claude Code or Codex, review first.
-///
-/// The conversation is on the left and the draft folder's files on the right,
-/// re-read after every turn. Each turn is one fixed command the operation
-/// policy admits, the assistant may write only inside the isolated draft
-/// folder, and the managed library changes only when this sheet has shown the
-/// exact files and the person chooses to save them.
-///
-/// The two panes, their option form, and the file-review selection live in
-/// their own files (`+Conversation`, `+Draft`, `+Options`). The state they
-/// read still belongs here and is handed down as bindings and values, so this
-/// sheet keeps deciding when a turn starts and stops and which draft is live.
+/// Coordinates assistant turns and draft review. Commands are policy-checked
+/// and may write only inside the draft folder. The library changes only after
+/// the user reviews and saves the files. Child panes receive this sheet's state.
 struct SkillCreatorSheet: View {
     @Environment(\.dismiss) private var dismiss
 

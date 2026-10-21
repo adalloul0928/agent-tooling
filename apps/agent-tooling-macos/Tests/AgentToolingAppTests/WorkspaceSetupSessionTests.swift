@@ -74,13 +74,14 @@ struct WorkspaceSetupSessionTests {
         #expect(session.checkup?.openFindings.contains { $0.id == finding.id } == true)
     }
 
-    @Test func theWeeklyRunHappensOnlyWhenTheLastCheckupIsStale() async throws {
+    @Test func theWeeklyRunHappensOnlyWhenTheLastReviewIsStale() async throws {
         var fresh = ShellRenderFixture.setupCheckup(home: URL(filePath: "/Users/example"))
-        fresh.completedAt = .now.addingTimeInterval(-3_600)
+        fresh.review?.generatedAt = .now.addingTimeInterval(-3_600)
         let freshServices = StubSetupServices(restored: fresh, review: .success(ShellRenderFixture.setupReview(over: fresh.audit)))
         let freshFixture = try await ShellRenderFixture(setupServices: freshServices)
         defer { freshFixture.remove() }
-        await freshFixture.workspace.setup.runScheduledCheckupIfStale()
+        await freshFixture.workspace.setup.runScheduledAudit(allowsScan: true)
+        await freshFixture.workspace.setup.runScheduledReviewIfDue(consent: .existingBehaviour)
         #expect(freshServices.reviewCalls.isEmpty, "an hour-old review is not redone")
         #expect(
             freshFixture.workspace.setup.checkup?.audit.generatedAt ?? .distantPast > fresh.audit.generatedAt,
@@ -88,14 +89,15 @@ struct WorkspaceSetupSessionTests {
         #expect(freshFixture.workspace.setup.checkup?.review != nil, "and keeps the review it had")
 
         var stale = ShellRenderFixture.setupCheckup(home: URL(filePath: "/Users/example"))
-        stale.completedAt = .now.addingTimeInterval(-8 * 24 * 3_600)
+        stale.review?.generatedAt = .now.addingTimeInterval(-8 * 24 * 3_600)
         let staleServices = StubSetupServices(restored: stale, review: .success(ShellRenderFixture.setupReview(over: stale.audit)))
         let staleFixture = try await ShellRenderFixture(setupServices: staleServices)
         defer { staleFixture.remove() }
-        await staleFixture.workspace.setup.runScheduledCheckupIfStale()
+        await staleFixture.workspace.setup.runScheduledAudit(allowsScan: true)
+        await staleFixture.workspace.setup.runScheduledReviewIfDue(consent: .existingBehaviour)
         #expect(staleServices.reviewCalls.count == 1)
         #expect(staleServices.reviewCalls.first?.purpose == .checkup)
-        #expect(staleFixture.workspace.setup.isStale == false)
+        #expect(staleFixture.workspace.setup.isReviewDue(consent: .existingBehaviour) == false)
     }
 
     @Test func applyingRemovesABrokenLinkAndReAudits() async throws {

@@ -3,16 +3,9 @@ import AppKit
 import Foundation
 import Observation
 
-/// The Accounts tab's state: what each hosted account puts in front of this
-/// Mac's clients, the choices every Mac shares about it, and the reviewed plan
-/// that makes this Mac follow those choices.
-///
-/// Three things are kept apart. Reading runs each client's own read-only
-/// commands and changes nothing. Saving a choice writes the portable document,
-/// which every Mac syncs, and changes no client. Applying is the one thing that
-/// touches a client: it edits that client's own settings file through the
-/// operation engine, after the person has seen the exact edits, and backs the
-/// file up first.
+/// Keeps account observations, portable preferences, and client edits separate.
+/// Reading uses native read-only commands. Saving records shared preferences;
+/// applying edits client settings through a reviewed, backed-up operation.
 @MainActor @Observable
 final class WorkspaceAccountsSession {
     private(set) var observations: [AccountProvider: AccountObservation] = [:]
@@ -187,6 +180,16 @@ final class WorkspaceAccountsSession {
             return
         }
         await read(missing, depth: depth)
+    }
+
+    /// Takes in sign-in reads made before this workspace existed: the setup
+    /// stage's, made while it read the apps. Each replaces what is known for
+    /// its own provider, and counts as read, so the next light read does not
+    /// run the same commands again. Providers not given are left as they are.
+    func seed(_ seeded: [AccountObservation]) async {
+        guard !seeded.isEmpty else { return }
+        for observation in seeded { observations[observation.provider] = observation }
+        await replan()
     }
 
     /// Reads the contents of each account that has none yet: the tab's first

@@ -1,19 +1,11 @@
 import AgentToolingCore
 import Foundation
 
-/// The project folders on this Mac, and what the workspace makes of them.
-///
-/// A scan looks where Claude Code has run (its own session index) and in the
-/// folders this Mac was told to look in, reads each folder's agent
-/// configuration and Git remote, and joins that with the workspace's projects:
-/// a folder is one the workspace already tracks here, a checkout of a project
-/// that has no folder here yet, or new. Nothing is written by a scan.
-///
-/// Two things write. *Track* makes a folder a project: a new shared project
-/// named after the folder and carrying its repository, bound to the folder on
-/// this Mac. *Attach* gives an existing project this folder; when the folder's
-/// repository is one the project did not know, the project learns it, so the
-/// next Mac recognises its clone without being told.
+/// Read-only discovery joins client session paths and configured scan roots
+/// with workspace projects using configuration and Git remote identity.
+/// Client history is read only when this Mac enables project discovery from it.
+/// Track creates a project and local binding; Attach binds an existing project
+/// and records a newly observed repository identity.
 @MainActor @Observable
 final class WorkspaceProjectDiscoverySession {
     typealias Match = ProjectRepositoryMatcher.Match
@@ -102,10 +94,14 @@ final class WorkspaceProjectDiscoverySession {
         let bound = bindings.map(\.rootPath)
         let clients = Set(device.managedClients)
         let options = options
+        // Nil was recorded before the choice existed, and means on.
+        let readsSessionIndex = device.findsProjectsFromClaudeHistory ?? true
         // File reads, off the actor; every folder is read with bounded
         // accessors and no command runs.
         let discovered = await Task.detached(priority: .utility) {
-            Self.discover(homeURL: home, scanRoots: roots, boundPaths: bound, clients: clients, options: options)
+            Self.discover(
+                homeURL: home, scanRoots: roots, boundPaths: bound, clients: clients, options: options,
+                readsSessionIndex: readsSessionIndex)
         }.value
         matches = ProjectRepositoryMatcher.classify(discovered: discovered, projects: projects, bindings: bindings)
         lastScan = .now
@@ -113,10 +109,11 @@ final class WorkspaceProjectDiscoverySession {
 
     /// Where projects come from, in order: folders bound to a project (always
     /// inspected, so the detail can show what is in them), Claude Code's
-    /// session index, and the chosen scan roots' children.
+    /// session index when `readsSessionIndex`, and the chosen scan roots'
+    /// children.
     nonisolated static func discover(
         homeURL: URL, scanRoots: [String], boundPaths: [String], clients: Set<ClientKind>,
-        options: ProjectDiscoveryOptions, fileManager: FileManager = .default
+        options: ProjectDiscoveryOptions, readsSessionIndex: Bool = true, fileManager: FileManager = .default
     ) -> [DiscoveredProject] {
         var origins: [String: Set<ProjectDiscoveryOrigin>] = [:]
         var order: [String] = []
@@ -126,8 +123,10 @@ final class WorkspaceProjectDiscoverySession {
             origins[key, default: []].insert(origin)
         }
         for path in boundPaths { add(URL(fileURLWithPath: path, isDirectory: true), .pinned) }
-        for root in ProjectDiscovery.sessionIndexRoots(homeURL: homeURL, fileManager: fileManager, options: options) {
-            add(root, .sessionIndex)
+        if readsSessionIndex {
+            for root in ProjectDiscovery.sessionIndexRoots(homeURL: homeURL, fileManager: fileManager, options: options) {
+                add(root, .sessionIndex)
+            }
         }
         for root in scanRoots {
             for found in ProjectDiscovery.scannedRoots(

@@ -4,7 +4,7 @@
   "title": "Agent Tooling",
   "description": "Search, inspect, and safely prepare changes for Agent Tooling.",
   "icon": "extension-icon.png",
-  "author": "arendalloul",
+  "author": "agent-tooling",
   "license": "MIT",
   "categories": [
     "Developer Tools",
@@ -90,15 +90,17 @@
     "node": ">=22.22.2"
   },
   "scripts": {
+    "configure:release": "node scripts/configure-release.mjs",
+    "check:release": "node scripts/configure-release.mjs --check",
     "build": "ray build -e dist",
     "dev": "ray develop",
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",
-    "lint:source": "eslint src tests && prettier --check src tests README.md package.json tsconfig.json vitest.config.mts eslint.config.mjs",
+    "lint:source": "eslint src tests scripts && prettier --check src tests scripts README.md package.json tsconfig.json vitest.config.mts eslint.config.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "verify-source": "npm run typecheck && npm run lint:source && npm run test && npm run build",
     "check": "npm run lint && npm run test && npm run build",
-    "publish": "ray publish"
+    "publish": "npm run check:release && ray publish"
   }
 }

@@ -1,24 +1,8 @@
 import Foundation
 
-/// The versioned workspace's own items, in the shape the read-only integration
-/// surface already speaks.
-///
-/// This exists so that once a person moves their library to the versioned
-/// store, the read-only surfaces answer from the library they actually have.
-/// Before it, those surfaces kept answering from the retained legacy database
-/// and an agent would be told about items that had moved and never told about
-/// the ones that arrived — which is worse than an error, because it looks like
-/// an answer.
-///
-/// One rule shapes every field here: a versioned workspace records what a
-/// person *asked for*, and the legacy inventory recorded what a scan *found*.
-/// Those are not the same claim, so nothing in this projection reports a
-/// requested destination as an installed one. Every projected client state is
-/// `pending`, and its `isInstalled` is left `nil` — presence is *unknown* here,
-/// not *absent*. Only the Install step, or a later scan enrichment, can turn
-/// that unknown into a measured yes or no. Reporting `false` would be a claim
-/// this projection cannot honestly make, and it makes downstream health checks
-/// fire "not installed" findings against a skill nobody ever checked.
+/// Projects the versioned workspace into the read-only integration model.
+/// Assignments express intent, not observed installation. Client states remain
+/// `pending` with `isInstalled == nil` until a scan supplies presence evidence.
 public enum VersionedInventoryProjection {
     public struct Inventory: Sendable, Equatable {
         public var skills: [Skill]

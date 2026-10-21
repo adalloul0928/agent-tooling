@@ -11,8 +11,8 @@ struct MCPDefinitionSourcesTests {
         var claude = ShellRenderFixture.observation(.claudeCode, installed: true, commandAvailable: true)
         claude.mcpMetadata = [
             "builder-mcp": .init(
-                transport: "stdio", authentication: "", source: "WootAICapabilities-all@aim",
-                additionalSources: ["AtlasAICapabilities-all@aim", "Claude Code configuration"])
+                transport: "stdio", authentication: "", source: "ExampleTools-all@example",
+                additionalSources: ["AdditionalTools-all@example", "Claude Code configuration"])
         ]
         var codex = ShellRenderFixture.observation(.codexCLI, installed: true, commandAvailable: true)
         codex.mcpMetadata = ["builder-mcp": .init(transport: "stdio", authentication: "", source: "Codex native MCP inventory")]
@@ -22,7 +22,7 @@ struct MCPDefinitionSourcesTests {
         #expect(found.map(\.client) == [.claude, .codex], "an app without it is not listed")
         #expect(found.first?.sources.count == 3)
         #expect(MCPDefinitionSources.found(named: nil, in: [claude]).isEmpty, "no declared name, no guess")
-        #expect(MCPDefinitionSources.label("WootAICapabilities-all@aim") == "WootAICapabilities All · Aim")
+        #expect(MCPDefinitionSources.label("ExampleTools-all@example") == "ExampleTools All · Example")
         #expect(MCPDefinitionSources.label("Claude Code configuration") == "Claude Code configuration")
     }
 }

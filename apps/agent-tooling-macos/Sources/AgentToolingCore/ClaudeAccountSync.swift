@@ -1,20 +1,10 @@
 import Foundation
 
-/// What Claude Code reserves for content it downloads from a claude.ai account.
-///
-/// A terminal session signed in with a claude.ai subscription downloads the
-/// account's skills into `~/.claude/skills/synced/` and loads the account's
-/// plugins as `<name>@synced`. Both are the account's, not this Mac's: Claude
-/// Code overwrites or removes them on its next sync, and an edit made to them
-/// here never reaches claude.ai. This app therefore never inventories them as
-/// local tools, never offers to adopt, move, or remove them, and never builds
-/// an install, update, or removal command for a reserved origin.
-///
-/// Verified against https://code.claude.com/docs/en/skills ("Reserved name
-/// `synced`", "Where synced skills load") and
-/// https://code.claude.com/docs/en/plugins/loading ("Plugins synced from
-/// claude.ai": the origin names `inline`, `skills-dir` and `synced` are
-/// reserved, so no marketplace can use them), and against Claude Code 2.1.300.
+/// Protects account-synced skills and plugins from local inventory and writes.
+/// Claude owns `~/.claude/skills/synced/` and reserved plugin origins, so local
+/// changes would be overwritten and would not update the hosted account.
+/// Sources: https://code.claude.com/docs/en/skills and
+/// https://code.claude.com/docs/en/plugins/loading (Claude Code 2.1.300).
 public enum ClaudeAccountSync {
     /// The folder under a Claude skills location that Claude Code keeps for
     /// downloaded account skills. Claude Code skips a skill authored at this
@@ -55,15 +45,31 @@ public enum ClaudeAccountSync {
     /// case-insensitive volume does: this is a check that keeps the app's
     /// hands off, so any spelling of the folder is still the account's.
     public static func isInsideSyncedSkills(_ url: URL, homeURL: URL) -> Bool {
-        // The inventory reports skills at their resolved paths, so a `~/.claude`
-        // that is itself a link is compared both as named and as resolved.
-        let skillsRoot = homeURL.appending(path: ".claude/skills", directoryHint: .isDirectory)
-        let skillsRoots = [skillsRoot.standardizedFileURL, skillsRoot.resolvingSymlinksInPath().standardizedFileURL]
-        let syncedFolders = Set(skillsRoots.map { $0.appending(path: syncedSkillsFolderName).path(percentEncoded: false) })
         let spellings = [url.standardizedFileURL, url.resolvingSymlinksInPath().standardizedFileURL]
         let candidates = Set(spellings.map { $0.path(percentEncoded: false) })
+        // Only a path with a component that may be spelled `synced` can be
+        // inside the folder. Any other is answered here, without a look at
+        // `~/.claude`, so a scan of another app's skills never looks there.
+        guard candidates.contains(where: hasSyncedComponent) else { return false }
+        // The inventory reports skills at their resolved paths, so a `~/.claude`
+        // that is itself a link is compared both as named and as resolved.
+        // Following it is a look at `~/.claude/skills`, which a trace is told of.
+        let skillsRoot = homeURL.appending(path: ".claude/skills", directoryHint: .isDirectory)
+        defer { ScanTrace.read(skillsRoot) }
+        let skillsRoots = [skillsRoot.standardizedFileURL, skillsRoot.resolvingSymlinksInPath().standardizedFileURL]
+        let syncedFolders = Set(skillsRoots.map { $0.appending(path: syncedSkillsFolderName).path(percentEncoded: false) })
         return syncedFolders.contains { folder in
             candidates.contains { PathContainment.mightBeContained(normalizedChild: $0, inNormalizedRoot: folder) }
+        }
+    }
+
+    /// Whether one of the path's components may name the synced folder, as
+    /// `PathContainment.mightBeContained` compares names. The path is split
+    /// at every separator scalar, as that comparison does, so a name that
+    /// begins with a combining mark still starts its own component.
+    private static func hasSyncedComponent(_ path: String) -> Bool {
+        path.unicodeScalars.split(separator: "/").contains {
+            PathContainment.mightBeSamePath(String($0), syncedSkillsFolderName)
         }
     }
 

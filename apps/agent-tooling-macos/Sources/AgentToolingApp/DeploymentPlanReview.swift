@@ -10,6 +10,11 @@ import Foundation
 struct DeploymentPlanReview: Sendable {
     private let contentRisks: [WorkspaceDeploymentInstallKey: ContentRiskReport]
     private let commands: [WorkspaceDeploymentInstallKey: String]
+    /// The commands that run before a step's own, in order: the removal of
+    /// the registration a connection replaces (D30).
+    private let commandsFirst: [WorkspaceDeploymentInstallKey: [String]]
+    /// What each replaced registration started, when it could be read.
+    private let replaced: [WorkspaceDeploymentInstallKey: String]
     /// Steps that would ask an app to run a command, for which no command
     /// could be built, and why. They are still listed, marked as not running,
     /// so the count on the Install button is the count of things that happen.
@@ -18,10 +23,14 @@ struct DeploymentPlanReview: Sendable {
     init(
         contentRisks: [WorkspaceDeploymentInstallKey: ContentRiskReport] = [:],
         commands: [WorkspaceDeploymentInstallKey: String] = [:],
+        commandsFirst: [WorkspaceDeploymentInstallKey: [String]] = [:],
+        replaced: [WorkspaceDeploymentInstallKey: String] = [:],
         withoutCommand: [WorkspaceDeploymentInstallKey: String] = [:]
     ) {
         self.contentRisks = contentRisks
         self.commands = commands
+        self.commandsFirst = commandsFirst
+        self.replaced = replaced
         self.withoutCommand = withoutCommand
     }
 
@@ -31,6 +40,24 @@ struct DeploymentPlanReview: Sendable {
 
     func command(for item: WorkspaceDeploymentItem) -> String? {
         commands[key(item)]
+    }
+
+    /// Every command the step runs, in the order it runs them: a replacement's
+    /// removal, then its add. Empty for a step that runs none.
+    func commandLines(for item: WorkspaceDeploymentItem) -> [String] {
+        guard let command = commands[key(item)] else { return [] }
+        return (commandsFirst[key(item)] ?? []) + [command]
+    }
+
+    /// What the registration this step replaces started, when the step
+    /// replaces one and its app's configuration says.
+    func replacedCommand(for item: WorkspaceDeploymentItem) -> String? {
+        replaced[key(item)]
+    }
+
+    /// Whether this step replaces a registration its app already holds.
+    func replacesRegistration(_ item: WorkspaceDeploymentItem) -> Bool {
+        commandsFirst[key(item)] != nil
     }
 
     /// Why this step will do nothing when Install is pressed, if it will not.
@@ -89,11 +116,16 @@ struct DeploymentPlanReview: Sendable {
 /// moves or deletes anything, and no command is run to find out what a command
 /// would be.
 enum DeploymentPlanReviewer {
+    /// `locate` finds each app's tool, as the install that follows finds it,
+    /// and `provenConnections` are the connections a receipt shows Agent
+    /// Tooling set up, which decide whether a registration is replaced (D30).
     static func review(
         plan: WorkspaceDeploymentPlan,
         snapshot: WorkspaceApplicationSnapshot,
         contentStore: CentralPackageContentStore,
-        homeRoot: URL
+        homeRoot: URL,
+        locate: (ClientKind, URL) -> URL? = { ClientExecutableLocator.locate($0, homeURL: $1) },
+        provenConnections: [TargetSurface: Set<String>] = [:]
     ) async -> DeploymentPlanReview {
         var scanned: [ContentDigest: ContentRiskReport] = [:]
         var contentRisks: [WorkspaceDeploymentInstallKey: ContentRiskReport] = [:]
@@ -104,7 +136,7 @@ enum DeploymentPlanReviewer {
             case .updateContent(_, let value): digest = value
             // Removing takes away the copy this app installed; there is no
             // incoming content to read.
-            case .removeContent, .installNativePackage, .configureManagedConnection: continue
+            case .removeContent, .installNativePackage, .configureManagedConnection, .removeManagedConnection: continue
             }
             let key = WorkspaceDeploymentInstallKey(
                 artifactID: item.artifactID, physicalDestinationID: item.physicalDestinationID)
@@ -132,27 +164,29 @@ enum DeploymentPlanReviewer {
         // The same command builder the install itself uses, called with the
         // same plan and snapshot, so what is shown is what would run.
         let planned = WorkspaceDeploymentSession.commandPlans(
-            plan: plan, snapshot: snapshot, homeRoot: homeRoot)
+            plan: plan, snapshot: snapshot, homeRoot: homeRoot, locate: locate, provenConnections: provenConnections)
         var commands: [WorkspaceDeploymentInstallKey: String] = [:]
+        var commandsFirst: [WorkspaceDeploymentInstallKey: [String]] = [:]
+        var replaced: [WorkspaceDeploymentInstallKey: String] = [:]
         for step in planned.plugins {
             commands[
                 .init(artifactID: step.artifactID, physicalDestinationID: step.physicalDestinationID)
             ] = rendered(step.executableURL, step.arguments)
         }
         for step in planned.connections {
-            commands[
-                .init(artifactID: step.artifactID, physicalDestinationID: step.physicalDestinationID)
-            ] = rendered(step.executableURL, step.arguments)
+            let key = WorkspaceDeploymentInstallKey(artifactID: step.artifactID, physicalDestinationID: step.physicalDestinationID)
+            commands[key] = rendered(step.executableURL, step.arguments)
+            if let first = step.preArguments { commandsFirst[key] = [rendered(step.executableURL, first)] }
+            if let old = step.replacedCommand { replaced[key] = old }
         }
         return DeploymentPlanReview(
-            contentRisks: contentRisks, commands: commands, withoutCommand: planned.withoutCommand)
+            contentRisks: contentRisks, commands: commands, commandsFirst: commandsFirst, replaced: replaced,
+            withoutCommand: planned.withoutCommand)
     }
 
     /// One command, in the words a shell would read, for looking at only.
     private static func rendered(_ executable: URL, _ arguments: [String]) -> String {
-        ([executable.lastPathComponent] + arguments)
-            .map { $0.contains(where: \.isWhitespace) ? "\"\($0)\"" : $0 }
-            .joined(separator: " ")
+        CommandLineDisplay.rendered(executable: executable, arguments: arguments)
     }
 
     /// Scans the exact bytes the library holds, without writing them anywhere

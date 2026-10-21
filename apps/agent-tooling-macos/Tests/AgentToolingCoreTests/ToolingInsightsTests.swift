@@ -405,7 +405,7 @@ struct ToolingInsightsTests {
     @Test func aSavedReportOffersEachLocalSkillOnce() {
         func use(_ id: String) -> ToolRecommendation {
             ToolRecommendation(
-                id: "local-skill:\(id)", kind: .useExistingSkill, title: "Use Thermo Nuclear Code Quality Review", summary: "",
+                id: "local-skill:\(id)", kind: .useExistingSkill, title: "Use Code Quality Review", summary: "",
                 rationale: "", confidence: .medium, supportingConversationCount: 2, skillID: id)
         }
         let custom = ToolRecommendation(

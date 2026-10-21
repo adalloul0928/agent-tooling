@@ -15,18 +15,9 @@ extension EnvironmentValues {
     @Entry var operationReceiptReader: any OperationReceiptReading = LiveOperationReceiptReader()
 }
 
-/// Apps: what this Mac's clients look like, what would change in them, and the
-/// one reviewed step that changes anything.
-///
-/// Two claims are kept apart everywhere on this screen. What somebody asked for
-/// lives in the library and is never drawn as an installation; what a client
-/// actually holds comes from the last read-only check and is the only thing a
-/// tile counts.
-///
-/// One row of tiles is the whole cast: each app this Mac manages, once. Picking
-/// a tile narrows the lists under it to that app and nothing else changes: no
-/// second toolbar, no other page. Times are the moment something happened, not
-/// a clock running against it.
+/// Shows observed client installations alongside proposed changes.
+/// Counts come from read-only observations, not library assignments.
+/// Selecting an app filters the lists; mutations require the reviewed plan.
 struct SyncCenterView: View {
     let workspace: WorkspaceLaunch.Workspace
     let requests: WorkspaceRequestSession
@@ -41,7 +32,6 @@ struct SyncCenterView: View {
     @Environment(\.workspaceNavigate) private var navigate
     @Environment(\.operationReceiptReader) private var receiptReader
     @State private var showingClientSelection = false
-    @State private var showingSetup = false
     @State private var expandedReviewRows: Set<String> = []
     @State private var isChoosingDestination = false
     @State private var receipts: [OperationReceipt] = []
@@ -61,9 +51,8 @@ struct SyncCenterView: View {
                         .popover(isPresented: $showingClientSelection) {
                             ManagedClientsPopover(device: workspace.device).frame(width: Size.managedClientsPopover)
                         }
-                    Button("Set up…", systemImage: "wand.and.stars") { showingSetup = true }
+                    SetUpThisMacButton()
                         .buttonStyle(.glass)
-                        .help("Audit this Mac, have your assistant read the results, and walk through what to change.")
                 }
                 Button {
                     Task { await workspace.device.refresh() }
@@ -131,8 +120,10 @@ struct SyncCenterView: View {
                         appTiles
                     }
 
-                    if let plan = workspace.deployment.plan {
-                        let items = scoped(plan.items)
+                    if workspace.deployment.plan != nil {
+                        // What is ready to install: a step left alone is never
+                        // counted as waiting (D6).
+                        let items = scoped(workspace.deployment.pendingItems)
                         if !items.isEmpty { changesCard(items) }
                     }
 
@@ -153,9 +144,6 @@ struct SyncCenterView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $isChoosingDestination) {
             WorkspaceLinkDestinationSheet(session: workspace.deployment, clients: enabledClients)
-        }
-        .sheet(isPresented: $showingSetup) {
-            SetupWizardSheet(workspace: workspace, session: workspace.setup, onClose: { showingSetup = false })
         }
         .task {
             // The shell opens the workspace without reading its library, so a
@@ -187,11 +175,11 @@ struct SyncCenterView: View {
     /// else: what is waiting, or that nothing is, and when this Mac last looked.
     private var statusLine: String {
         if workspace.device.observations.isEmpty { return "Check your apps to see what they hold" }
-        guard let plan = workspace.deployment.plan else {
+        guard workspace.deployment.plan != nil else {
             if workspace.deployment.isBusy { return "Working out what would change…" }
             return lastChecked.map { "Checked \(SnapshotTime.compact($0))" } ?? "Checked"
         }
-        let waiting = scoped(plan.items)
+        let waiting = scoped(workspace.deployment.pendingItems)
         if !waiting.isEmpty {
             return PlanReviewLabels.readyLine(count: waiting.count, hasRemoval: waiting.contains(where: \.isRemoval))
         }
@@ -206,19 +194,23 @@ struct SyncCenterView: View {
     }
 
     private var reviewTitle: String {
-        Self.reviewTitle(for: workspace.deployment.plan, scopedTo: client)
+        let deployment = workspace.deployment
+        return Self.reviewTitle(
+            for: deployment.plan, scopedTo: client,
+            leavingOut: Set(deployment.plan.map(deployment.heldBack(in:))?.map(WorkspaceDeploymentSession.installKey) ?? []))
     }
 
-    /// The title of both buttons that open the plan review: the toolbar's and
-    /// the changes card's. Both open one sheet, and it applies the whole plan,
-    /// so the title counts the whole plan. On a page narrowed to one app whose
-    /// plan also holds other apps' changes it says "all", so that count is not
-    /// read as this app's; the line under the title and the changes card
-    /// still count this app's alone.
-    static func reviewTitle(for plan: WorkspaceDeploymentPlan?, scopedTo client: ClientKind?) -> String {
+    /// Titles both review buttons from the whole runnable plan, excluding held-back
+    /// steps. A client-filtered page says "all" when the review includes other apps;
+    /// its local detail counts remain scoped to the selected client.
+    static func reviewTitle(
+        for plan: WorkspaceDeploymentPlan?, scopedTo client: ClientKind?,
+        leavingOut heldBack: Set<WorkspaceDeploymentInstallKey> = []
+    ) -> String {
         guard let plan else { return ActionTitles.reviewChanges(count: nil) }
-        let whole = plan.items.count
-        guard client != nil, scoped(plan.items, to: client).count < whole else {
+        let items = plan.items.filter { !heldBack.contains(WorkspaceDeploymentSession.installKey($0)) }
+        let whole = items.count
+        guard client != nil, scoped(items, to: client).count < whole else {
             return ActionTitles.reviewChanges(count: whole)
         }
         return ActionTitles.reviewAllChanges(count: whole)
@@ -248,7 +240,7 @@ struct SyncCenterView: View {
                             verdict: workspace.device.verdict(for: app),
                             version: version(for: app),
                             held: held(for: app),
-                            waiting: (workspace.deployment.plan?.items ?? []).filter { $0.surface.client == app },
+                            waiting: workspace.deployment.pendingItems.filter { $0.surface.client == app },
                             selected: client == app
                         ) {
                             if client == app { onShowAllClients() } else { navigation.openClient(app) }
@@ -614,10 +606,17 @@ struct SyncCenterView: View {
     private func held(for app: ClientKind) -> AppTile.Held? {
         let mine = workspace.device.observations.filter { $0.surface.client == app }
         guard !mine.isEmpty else { return nil }
+        // Agent Tooling's own connection, where this Mac set it up, is not
+        // one of the app's holdings: it is how the app reaches this library.
+        // One somebody made by hand under that name is theirs, and counts.
+        let own =
+            workspace.library.state.map {
+                AgentToolingConnection.apps(on: workspace.store.deviceID, in: $0.snapshot.document).contains(app)
+            } ?? false
         return AppTile.Held(
             skills: Set(mine.flatMap(\.discoveredSkills)).count,
             plugins: Set(mine.flatMap(\.discoveredPlugins)).count,
-            connections: Set(mine.flatMap(\.discoveredMCPServers)).count)
+            connections: Set(mine.flatMap(\.discoveredMCPServers)).subtracting(own ? [AgentToolingConnection.declaredName] : []).count)
     }
 
     private func version(for app: ClientKind) -> String? {

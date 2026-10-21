@@ -32,6 +32,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Check public source
+        run: ./scripts/check-public-content
+
       - name: Require an authorized annotated tag on the default branch
         id: authorize
         env:
@@ -117,7 +120,9 @@ jobs:
     name: Sign, notarize, and publish
     needs: authorize
     runs-on: macos-26
-    timeout-minutes: 45
+    # Tests, a strict release build, packaging and the notarization wait share
+    # this budget with no build cache, so it gets validation's headroom.
+    timeout-minutes: 60
     environment: macos-release
     permissions:
       contents: write
@@ -128,8 +133,8 @@ jobs:
       RELEASE_VERSION: ${{ needs.authorize.outputs.release_version }}
       RELEASE_COMMIT: ${{ needs.authorize.outputs.release_commit }}
       RELEASE_TAG_OBJECT: ${{ needs.authorize.outputs.release_tag_object }}
-      DMG_NAME: Agent-Tooling-${{ needs.authorize.outputs.release_version }}-arm64.dmg
-      EXPECTED_SIGNING_TEAM_ID: 434X69L4Z5
+      DMG_NAME: Agent-Tooling-arm64.dmg
+      EXPECTED_SIGNING_TEAM_ID: ${{ vars.MACOS_SIGNING_TEAM_ID }}
     defaults:
       run:
         working-directory: apps/agent-tooling-macos
@@ -149,6 +154,13 @@ jobs:
           test "$(git rev-parse "${tag_ref}^{tag}")" = "$RELEASE_TAG_OBJECT"
           test "$(git rev-parse "${tag_ref}^{commit}")" = "$RELEASE_COMMIT"
           test "$(git rev-parse "HEAD^{commit}")" = "$RELEASE_COMMIT"
+
+      - name: Require signing configuration
+        run: |
+          if [[ ! "$EXPECTED_SIGNING_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]; then
+            echo "Set MACOS_SIGNING_TEAM_ID to the Developer ID certificate's ten-character team ID" >&2
+            exit 78
+          fi
 
       - name: Require release credentials
         env:
@@ -199,7 +211,7 @@ jobs:
       - name: Validate source and release scripts
         run: |
           swift format lint --strict -r Sources Tests Package.swift
-          bash -n scripts/package-app.sh scripts/create-dmg.sh
+          bash -n scripts/package-app.sh scripts/create-dmg.sh scripts/verify-dmg.sh
           shellcheck_version=0.11.0
           shellcheck_archive="shellcheck-v${shellcheck_version}.darwin.aarch64.tar.xz"
           curl --fail --location --proto '=https' --tlsv1.2 \
@@ -209,12 +221,17 @@ jobs:
             '56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79' \
             "$RUNNER_TEMP/$shellcheck_archive" | shasum -a 256 --check
           tar -xJf "$RUNNER_TEMP/$shellcheck_archive" -C "$RUNNER_TEMP"
-          "$RUNNER_TEMP/shellcheck-v${shellcheck_version}/shellcheck" -x scripts/package-app.sh scripts/create-dmg.sh
+          "$RUNNER_TEMP/shellcheck-v${shellcheck_version}/shellcheck" -x scripts/package-app.sh scripts/create-dmg.sh scripts/verify-dmg.sh
           plutil -lint Resources/Info.plist
 
+      # All suites use Swift Testing; disabling XCTest keeps XML at the requested path.
       - name: Run tests and strict release build
         run: |
-          swift test --disable-sandbox
+          test "$(uname -m)" = arm64
+          swift test --disable-sandbox --no-parallel --skip '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/release-gate-core.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/release-gate-core.xml"
+          swift test --disable-sandbox --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/release-gate-ui.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/release-gate-ui.xml"
           swift build --configuration release -Xswiftc -warnings-as-errors
 
       - name: Build and sign release app
@@ -228,6 +245,7 @@ jobs:
       - name: Verify Developer ID signature
         run: |
           app="$RUNNER_TEMP/Agent Tooling.app"
+          cmp ../../LICENSE "$app/Contents/Resources/LICENSE.txt"
           "$app/Contents/MacOS/AgentTooling" --verify-resources
           helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling"
           mcp_helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling-mcp"
@@ -239,16 +257,16 @@ jobs:
           codesign --verify --strict --verbose=2 "$mcp_helper"
           codesign --verify --deep --strict --verbose=2 "$app"
           developer_id_requirement='anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "'"$EXPECTED_SIGNING_TEAM_ID"'"'
-          codesign --verify --strict -R "=identifier \"com.arendalloul.agent-tooling\" and $developer_id_requirement" "$app"
-          codesign --verify --strict -R "=identifier \"com.arendalloul.agent-tooling.cli\" and $developer_id_requirement" "$helper"
-          codesign --verify --strict -R "=identifier \"com.arendalloul.agent-tooling.mcp\" and $developer_id_requirement" "$mcp_helper"
+          codesign --verify --strict -R "=identifier \"dev.agenttooling.app\" and $developer_id_requirement" "$app"
+          codesign --verify --strict -R "=identifier \"dev.agenttooling.app.cli\" and $developer_id_requirement" "$helper"
+          codesign --verify --strict -R "=identifier \"dev.agenttooling.app.mcp\" and $developer_id_requirement" "$mcp_helper"
           codesign -dv --verbose=4 "$app" 2>&1 | tee "$RUNNER_TEMP/app-codesign-details.txt"
           codesign -dv --verbose=4 "$helper" 2>&1 | tee "$RUNNER_TEMP/helper-codesign-details.txt"
           codesign -dv --verbose=4 "$mcp_helper" 2>&1 | tee "$RUNNER_TEMP/mcp-helper-codesign-details.txt"
           grep -q "flags=.*runtime" "$RUNNER_TEMP/app-codesign-details.txt"
-          grep -Fxq "Identifier=com.arendalloul.agent-tooling" "$RUNNER_TEMP/app-codesign-details.txt"
-          grep -Fxq "Identifier=com.arendalloul.agent-tooling.cli" "$RUNNER_TEMP/helper-codesign-details.txt"
-          grep -Fxq "Identifier=com.arendalloul.agent-tooling.mcp" "$RUNNER_TEMP/mcp-helper-codesign-details.txt"
+          grep -Fxq "Identifier=dev.agenttooling.app" "$RUNNER_TEMP/app-codesign-details.txt"
+          grep -Fxq "Identifier=dev.agenttooling.app.cli" "$RUNNER_TEMP/helper-codesign-details.txt"
+          grep -Fxq "Identifier=dev.agenttooling.app.mcp" "$RUNNER_TEMP/mcp-helper-codesign-details.txt"
           grep -Fxq "TeamIdentifier=$EXPECTED_SIGNING_TEAM_ID" "$RUNNER_TEMP/app-codesign-details.txt"
           grep -Fxq "TeamIdentifier=$EXPECTED_SIGNING_TEAM_ID" "$RUNNER_TEMP/helper-codesign-details.txt"
           grep -Fxq "TeamIdentifier=$EXPECTED_SIGNING_TEAM_ID" "$RUNNER_TEMP/mcp-helper-codesign-details.txt"
@@ -277,6 +295,7 @@ jobs:
           xcrun stapler staple "$RUNNER_TEMP/$DMG_NAME"
           xcrun stapler validate "$RUNNER_TEMP/$DMG_NAME"
           spctl --assess --type open --context context:primary-signature --verbose=4 "$RUNNER_TEMP/$DMG_NAME"
+          ./scripts/verify-dmg.sh "$RUNNER_TEMP/$DMG_NAME"
 
       - name: Create checksum and release notes
         run: |
@@ -290,7 +309,7 @@ jobs:
           cat > "$RUNNER_TEMP/release-notes.md" <<EOF
           ## Agent Tooling $RELEASE_VERSION
 
-          Native macOS control center for Codex, Claude Code, and Gemini CLI tooling.
+          Manage skills, plugins, and MCP servers for Codex, Claude Code, Gemini CLI, and Kiro.
 
           Source commit: \`$RELEASE_COMMIT\`
 
@@ -298,7 +317,13 @@ jobs:
 
           **Requirements:** Apple Silicon Mac running macOS 26 or newer.
 
-          Download the DMG, open it, and drag **Agent Tooling** into **Applications**. The app is Developer ID signed and notarized by Apple.
+          Download **$DMG_NAME**, open it, and drag **Agent Tooling** into **Applications**. Eject the disk image, then open the app from Applications. No Xcode or Swift installation is needed.
+
+          The app is Developer ID signed and notarized by Apple. Updates are installed the same way; replace the app in Applications when prompted. Your library is stored separately.
+
+          The accompanying SHA-256 checksum and SPDX manifest describe this download.
+
+          Agent Tooling is licensed under MIT. The app includes its license and third-party notices.
           EOF
 
       - name: Attest release provenance
@@ -335,6 +360,7 @@ jobs:
             "$RUNNER_TEMP/$DMG_NAME.spdx.json" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
+            --latest \
             --title "Agent Tooling $RELEASE_VERSION" \
             --notes-file "$RUNNER_TEMP/release-notes.md"
 

@@ -15,15 +15,9 @@ protocol DeviceStateRecording: Sendable {
     ) async throws -> DeviceWorkspaceState
 }
 
-/// Device writes that read the head in the same call that commits.
-///
-/// Reading the head in one call and committing in another leaves a gap that
-/// any other write on the service can land in, which then rejects this one as
-/// stale. Read and committed together, nothing else on this service can come
-/// between them. A writer on another actor or in another process still can, in
-/// that instant; each change here is applied to the store's own copy inside the
-/// transaction, never to one read earlier, so committing it on the newer head
-/// is the same change, and it is tried again a few times rather than reported.
+/// Reads the head and commits each device change in one service call.
+/// Cross-actor/process conflicts retry against the store's current copy inside
+/// the transaction, preserving changes committed by other writers.
 extension WorkspaceApplicationService: DeviceStateRecording {
     func recordDeviceChange(
         _ change: @escaping @Sendable (inout DeviceWorkspaceState) throws -> Void

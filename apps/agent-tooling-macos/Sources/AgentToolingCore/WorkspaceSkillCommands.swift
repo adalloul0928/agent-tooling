@@ -4,6 +4,10 @@ import Foundation
 public enum WorkspaceSkillCommandError: Error, Equatable, Sendable {
     case contentStoreUnavailable, reviewMismatch, unsupportedAuthority, missingContent
     case identityCollision, sourceIdentityConflict, upstreamAlreadyManaged, upstreamBindingChanged
+    /// The folder's SKILL.md declares another name than the record it was
+    /// offered for, so it is not that skill: "frontend-ui", not
+    /// "frontend-design".
+    case declaredNameMismatch(recorded: String, found: String)
 }
 
 /// Allocate these once when reviewing intake, or reuse an existing source ID for

@@ -33,21 +33,9 @@ struct LivePendingRequestQueue: PendingRequestQueuing {
     }
 }
 
-/// What a local integration asked Agent Tooling to do, and what happens when
-/// somebody says yes.
-///
-/// There is one of these per launch, built by `WorkspaceLaunch` and read by
-/// both Home and Apps, so a request decided on one screen is gone from the
-/// other without either going back to the store to find out.
-///
-/// Every row here is untrusted local input. Nothing in the queue has changed a
-/// client, and accepting one still changes no client: it turns a wish into
-/// assignment intent this Mac holds, which somebody then installs as the
-/// separate, reviewed step this screen is built around.
-///
-/// Accepting never creates a library item. A request naming something that is
-/// not in the library resolves to nothing to assign, so it is refused and put
-/// back rather than admitted as a new tool nobody wrote down.
+/// Shared review queue for local integration requests. Entries are untrusted.
+/// Acceptance creates assignment intent for an existing library item; it never
+/// installs tools or creates items. Installation remains a separate review.
 @MainActor @Observable
 final class WorkspaceRequestSession {
     /// What accepting a request produced, in the caller's terms.

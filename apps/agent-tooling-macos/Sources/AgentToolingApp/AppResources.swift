@@ -1,54 +1,56 @@
-import AgentToolingCore
-import AppKit
-import SwiftUI
+import Foundation
 
-/// SwiftPM's native accessor looks beside the executable's main bundle and in
-/// the build directory. A packaged macOS app keeps its resources in
-/// Contents/Resources, so resolve that location before using the build fallback.
+/// Resource paths are resolved at runtime so binaries contain no build-machine path.
 enum AppResources {
-    static let bundle: Bundle = packagedBundle(in: .main) ?? .module
+    private final class BundleToken: NSObject {}
+    private static let resourceBundleName = "AgentTooling_AgentToolingApp.bundle"
+
+    static let bundle: Bundle =
+        packagedBundle(in: .main)
+        ?? developmentBundle(executableURL: Bundle.main.executableURL, codeBundleURL: Bundle(for: BundleToken.self).bundleURL)
+        ?? .main
 
     static func packagedBundle(in application: Bundle) -> Bundle? {
         guard let url = application.url(forResource: "AgentTooling_AgentToolingApp", withExtension: "bundle") else { return nil }
         return Bundle(url: url)
     }
 
-    /// Invoked by the finished app in CI, before opening a workspace. Checking
-    /// the resolved location prevents a copy left in the build directory from
-    /// making a broken distributable pass.
+    static func developmentBundle(executableURL: URL?, codeBundleURL: URL) -> Bundle? {
+        let directories = [
+            executableURL?.deletingLastPathComponent(),
+            codeBundleURL,
+            codeBundleURL.deletingLastPathComponent(),
+        ].compactMap { $0 }
+        return directories.lazy.compactMap { directory in
+            Bundle(url: directory.appending(path: resourceBundleName, directoryHint: .isDirectory))
+        }.first
+    }
+
     @MainActor
     static func verifyPackagedResources() throws {
         guard let packaged = packagedBundle(in: .main),
             bundle.bundleURL.resolvingSymlinksInPath() == packaged.bundleURL.resolvingSymlinksInPath()
         else { throw VerificationError.missing("the app's resource bundle") }
 
-        for client in ClientKind.allCases {
-            if ClientBrandAssets.hasCompiledCatalog {
-                let name = ClientBrandAssets.assetName(for: client)
-                guard bundle.image(forResource: NSImage.Name(name)) != nil else { throw VerificationError.missing(name) }
-            } else {
-                for appearance in [ColorScheme.light, .dark] {
-                    guard ClientBrandAssets.image(for: client, colorScheme: appearance) != nil else {
-                        throw VerificationError.missing("\(client.rawValue) artwork")
-                    }
-                }
-            }
-        }
+        try verifyNotices(in: bundle)
+        try verifyStarterShelf()
+    }
 
-        guard let manifestURL = bundle.url(forResource: "ToolIconSources", withExtension: "json") else {
-            throw VerificationError.missing("the package artwork manifest")
-        }
-        struct Manifest: Decodable {
-            let assets: [ToolIdentityAssets.Asset]
-        }
-        let manifest = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestURL))
-        guard !manifest.assets.isEmpty else { throw VerificationError.missing("package artwork") }
-        for asset in manifest.assets {
-            for appearance in [ColorScheme.light, .dark] {
-                guard ToolIdentityAssets.image(for: asset, colorScheme: appearance) != nil else {
-                    throw VerificationError.missing(asset.asset)
-                }
-            }
+    static func verifyNotices(in resourceBundle: Bundle) throws {
+        guard let url = resourceBundle.url(forResource: "ThirdPartyNotices", withExtension: "txt"),
+            let notices = try? String(contentsOf: url, encoding: .utf8),
+            !notices.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { throw VerificationError.missing("third-party notices") }
+    }
+
+    /// Validate bundled public listings without contacting their catalogs.
+    @MainActor
+    static func verifyStarterShelf() throws {
+        let entries: [StarterShelf.Entry]
+        do { entries = try StarterShelf.entries() } catch { throw VerificationError.missing("the starter shelf") }
+        guard !entries.isEmpty else { throw VerificationError.missing("the starter shelf") }
+        for entry in entries {
+            guard StarterShelf.package(for: entry, retained: nil) != nil else { throw VerificationError.missing(entry.name) }
         }
     }
 

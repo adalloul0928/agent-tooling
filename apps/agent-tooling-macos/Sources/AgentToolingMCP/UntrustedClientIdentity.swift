@@ -1,19 +1,9 @@
 import AgentToolingCore
 import Foundation
 
-/// The `clientInfo` a caller sends in `initialize`.
-///
-/// **This is display text and nothing else.** It is self-reported by whatever
-/// process opened the pipe, it is never verified, and any local program can
-/// claim to be Claude Code. It exists so the review screen can say "Claude Code
-/// is asking to add X" instead of "something is asking to add X" — a label that
-/// helps a person recognize what they were doing, not a fact the code may act
-/// on.
-///
-/// Nothing in this target may branch on this value: not a permission, not a
-/// rate limit, not a queue bound, not a redaction decision. Treating it as
-/// authorization would mean an attacker chooses their own privileges by picking
-/// a name.
+/// Unverified clientInfo from initialize, used only as review-screen text.
+/// Any local process can impersonate a client. Never use this value for
+/// permissions, rate limits, queue bounds, redaction or any policy decision.
 struct UntrustedClientIdentity: Hashable, Sendable {
     static let unknown = UntrustedClientIdentity(name: "Unidentified MCP client", version: nil)
     static let maximumNameCharacters = 96

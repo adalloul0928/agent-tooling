@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -82,7 +83,7 @@ struct LocalTargetScanResolutionTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: codex.path)
 
         // A shim that runs (so not 126/127) but exits non-zero for --version —
-        // e.g. a Toolbox stub under a redirected HOME.
+        // For example, a launcher stub under a redirected HOME.
         struct UnansweringRunner: CommandRunning {
             func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput {
                 if arguments == ["--version"] {
@@ -100,5 +101,45 @@ struct LocalTargetScanResolutionTests {
             observation.notes.contains {
                 $0.contains("did not answer --version (exit 3)") && $0.contains("version is unknown")
             }, "\(observation.notes)")
+    }
+
+    /// A `--version` stopped for running past its time is a slow tool, not a
+    /// missing one: the app reads as found with its version unknown, says
+    /// why, and the rest of its read still lands.
+    @Test func aTimedOutVersionReadsFoundWithAnUnknownVersion() async throws {
+        let world = try ClientHomeFixture(.juniper)
+        defer { world.remove() }
+        var replies = world.replies
+        replies["claude"]?[["--version"]] = .timeOut
+        let claude = try #require(world.registry.adapter(for: .claude))
+
+        let observation = await claude.scan(homeURL: world.url, runner: ScriptedCommandRunner(byTool: replies))
+
+        #expect(observation.installed)
+        #expect(observation.commandAvailable)
+        #expect(observation.version == nil)
+        #expect(
+            observation.notes.contains {
+                $0 == "The claude CLI did not answer --version in the time allowed, "
+                    + "so its version is unknown and Agent Tooling cannot confirm what it accepts."
+            }, "\(observation.notes)")
+        #expect(!observation.notes.contains { $0.contains("not available in any known install location") })
+        #expect(Set(observation.discoveredPlugins) == ["github@claude-plugins-official", "sentry@claude-plugins-official"])
+    }
+
+    /// A timed-out listing is the listing missing, as before: the scan falls
+    /// back to what is on disk and says so.
+    @Test func aTimedOutListingFallsBackToTheFilesOnDisk() async throws {
+        let world = try ClientHomeFixture(.juniper)
+        defer { world.remove() }
+        var replies = world.replies
+        replies["codex"]?[["plugin", "list", "--json"]] = .timeOut
+        let codex = try #require(world.registry.adapter(for: .codex))
+
+        let observation = await codex.scan(homeURL: world.url, runner: ScriptedCommandRunner(byTool: replies))
+
+        #expect(observation.version == "codex-cli 0.164.0")
+        #expect(observation.notes.contains("Codex's native plugin inventory was unavailable; config.toml was used instead."))
+        #expect(observation.discoveredMCPServers == ["playwright"])
     }
 }

@@ -19,6 +19,9 @@ enum CommandPaletteOutcome: Equatable {
     /// Prepare one plan for everything out of step, and show it. Preparing is
     /// not applying; the Apps screen still asks before anything is written.
     case reviewSync
+    /// Open the setup stage again at Your apps. Nothing is read or changed
+    /// until the person walks it, and nothing is written until its review.
+    case setUpThisMac
 }
 
 /// A screen-specific request the shell hands to a screen it owns, so a palette
@@ -89,7 +92,7 @@ struct CommandPaletteItem: Identifiable, PaletteSearchable {
     var help: String {
         switch outcome {
         case .navigate: "Go to \(title)"
-        case .checkApps, .checkConnectionHealth, .reviewSync: subtitle
+        case .checkApps, .checkConnectionHealth, .reviewSync, .setUpThisMac: subtitle
         case .screenRequest(let request) where request.itemID == nil: subtitle
         case .openClient, .openSkill, .screenRequest: "Open \(title) in \(contextLabel)"
         }
@@ -110,12 +113,44 @@ enum CommandPaletteCatalog {
             + receipts(workspace)
     }
 
+    /// The rows the palette shows for `query`, best first: the matcher's
+    /// ranking, with one exception. Set up this Mac… ranks above the other
+    /// actions only so that typing "setup" reaches it before Check apps,
+    /// which keeps "setup" among its old names. An empty palette still opens
+    /// on Check apps, highlighted, so ↩ there reads this Mac's apps as it
+    /// always has; Set up this Mac… waits after the other actions.
+    static func results(_ items: [CommandPaletteItem], query: String) -> [CommandPaletteItem] {
+        var ranked = CommandPaletteMatcher.rank(items, query: query)
+        guard query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            let index = ranked.firstIndex(where: { $0.outcome == .setUpThisMac })
+        else { return ranked }
+        let setUp = ranked.remove(at: index)
+        let actionIDs = Set(actions().map(\.id))
+        let afterActions = ranked.lastIndex { actionIDs.contains($0.id) }.map { $0 + 1 } ?? 0
+        ranked.insert(setUp, at: afterActions)
+        return ranked
+    }
+
     /// The palette is part of the window, so its entries are sentence case;
     /// the same commands keep title case in the menus. An entry that opens a
     /// sheet ends in an ellipsis, as its button on the screen does. A name an
     /// entry used to have stays among its keywords, so typing it still lands.
     private static func actions() -> [CommandPaletteItem] {
         [
+            // The setup stage again, as the app menu, Apps and Settings name
+            // it. Above the other actions, so "setup" reaches it before Check
+            // apps, which keeps "setup" among its old names; an empty palette
+            // still opens on Check apps (`results(_:query:)`).
+            CommandPaletteItem(
+                id: "action.setUpThisMac",
+                title: ActionTitles.setUpThisMacCommand(.palette),
+                subtitle: LaunchpadCopy.Reentry.paletteSubtitle,
+                contextLabel: "Action",
+                kind: nil,
+                symbol: SetUpThisMacButton.symbol,
+                keywords: ["setup", "set up", "onboarding", "agents", "run setup again", "first run"],
+                priority: 110,
+                outcome: .setUpThisMac),
             // The Apps toolbar's refresh, by its name and its symbol there.
             // "Setup" and the stethoscope are Checkup's, which this is not.
             CommandPaletteItem(
@@ -208,8 +243,10 @@ enum CommandPaletteCatalog {
     }
 
     /// One entry per library row, opening the screen that row belongs to.
+    /// Agent Tooling's own connection is no library entry and no screen lists
+    /// it, so it has none.
     private static func rows(_ rows: [WorkspaceLibraryReadModelRow]) -> [CommandPaletteItem] {
-        rows.compactMap { row in
+        rows.filter { !$0.isOwnConnection }.compactMap { row in
             let identifier = row.artifactID.rawValue.uuidString.lowercased()
             switch row.kind {
             case .skill:
@@ -324,7 +361,7 @@ struct CommandPaletteView: View {
     @State private var highlightedByPointer = false
     @FocusState private var searchFocused: Bool
 
-    private var results: [CommandPaletteItem] { CommandPaletteMatcher.rank(items, query: query) }
+    private var results: [CommandPaletteItem] { CommandPaletteCatalog.results(items, query: query) }
 
     var body: some View {
         VStack(spacing: 0) {

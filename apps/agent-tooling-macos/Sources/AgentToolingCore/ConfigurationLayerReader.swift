@@ -5,19 +5,9 @@ public enum ConfigurationLayerReadError: Error, Equatable, Sendable {
     case unreadable
 }
 
-/// Reads native configuration files into layers the resolver can explain.
-///
-/// It only reads. Files are never rewritten, reformatted or normalized, and a
-/// file this build cannot parse is reported as unreadable rather than treated
-/// as empty — an empty layer and a broken one mean very different things.
-///
-/// Keys the build does not interpret are collected as unrecognized so they stay
-/// visible. Values are read shallowly: nested structures become opaque text
-/// rather than being flattened into claims about their contents.
-///
-/// Each file is read the way every client configuration file is: bounded by
-/// the limit they all share, and refused before it is loaded when it is over
-/// it, with the error that names the file and the limit.
+/// Reads size-bounded native configuration files without modifying them.
+/// Parse failures remain unreadable layers rather than empty ones. Unknown
+/// keys stay visible, and nested values remain opaque text.
 public struct ConfigurationLayerReader: Sendable {
     public init() {}
 

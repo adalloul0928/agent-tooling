@@ -40,6 +40,20 @@ public enum NativeSkillDestination {
         return root.appending(path: relativeDirectory, directoryHint: .isDirectory)
     }
 
+    /// The apps whose skill folder `client` also reads, besides its own, in
+    /// the home folder: Gemini CLI reads Codex's `~/.agents/skills`
+    /// (`GeminiCLIAdapter.readLocations`). Nothing here says it reads a
+    /// project's `.agents/skills`, so a project placement is its own. Setup's
+    /// placement grid reads it: Gemini CLI's skill cells follow Codex's, and
+    /// nothing records a second copy for Gemini CLI of what it already reads
+    /// through Codex's folder.
+    public static func alsoReads(_ client: ClientKind) -> [ClientKind] {
+        switch client {
+        case .gemini: [.codex]
+        case .claude, .codex, .kiro: []
+        }
+    }
+
     public static func skillURL(
         client: ClientKind,
         skillID: String,

@@ -170,15 +170,10 @@ actor MCPRegistryCatalog: CatalogSourceReporting {
     func lastReport() -> MarketplaceSourceReport { report }
 }
 
-/// The skills.sh registry, named as the Sources row it answers for.
-///
-/// The registry itself answers search terms only — it has no public browse
-/// endpoint. To give Discover something browsable without a search term, this
-/// wrapper fans an unqueried refresh out over a fixed, shipped vocabulary of
-/// common skill topics, merges and dedupes the answers, and caps the result.
-/// The seed terms are a constant in code, never derived from anyone's data. A
-/// real search term bypasses the seeds entirely and asks the registry once, the
-/// way it always has. Only a queried or seeded answer dates the row.
+/// Supplies browsable skills.sh results using fixed public search seeds because
+/// the registry has no browse endpoint. Results are merged, deduplicated, and
+/// capped. An explicit query bypasses the seeds and makes one request; only a
+/// queried or seeded response updates the source timestamp.
 actor SkillsShCatalog: CatalogSourceReporting {
     nonisolated var id: String { asking.id }
     nonisolated var displayName: String { asking.displayName }
@@ -322,22 +317,8 @@ actor NativeClientCatalog: CatalogSourceReporting {
     func lastReport() -> MarketplaceSourceReport { report }
 }
 
-/// The Claude plugins marketplace, read from both angles at once: Claude Code's
-/// own CLI, and the official catalog file the marketplace repository publishes.
-///
-/// These two describe the same row, so one provider reads both and speaks for
-/// `.claudeMarketplace` once rather than racing another provider to annotate
-/// it. The listings are folded together by `MarketplaceService`'s own merge —
-/// a CLI row that knows a plugin is installed and its install count is combined
-/// with the file row that knows the plugin's category and homepage, so a person
-/// sees one card carrying both halves.
-///
-/// The row's wording follows what actually happened. When the CLI answered, its
-/// count leads. When the CLI could not be asked — an isolated HOME, a Toolbox
-/// shim, Claude not installed — but the file did answer, the row says the
-/// browsable listings came from the official catalog on GitHub and names, in
-/// plain words, why Claude Code itself could not be asked. Only when both fail
-/// does the row read as a failure.
+/// Combines Claude CLI install state with the public marketplace catalog.
+/// Reports a source failure only when both listings are unavailable.
 actor ClaudeMarketplaceCatalog: CatalogSourceReporting {
     nonisolated let id = "device.claude-marketplace"
     nonisolated let displayName = "Claude marketplaces"

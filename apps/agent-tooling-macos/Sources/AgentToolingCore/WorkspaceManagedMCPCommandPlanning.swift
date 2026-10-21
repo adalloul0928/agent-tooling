@@ -29,6 +29,20 @@ public struct WorkspaceManagedMCPCommandPlan: Equatable, Sendable {
     public let executable: String
     public let arguments: [String]
     public let workingDirectoryPath: String?
+    /// When the step replaces a registration the app already has under this
+    /// name, the arguments of the command that removes it, run first with the
+    /// same tool: an app refuses to add a name it already holds. Nil for a
+    /// plain add, and for Kiro CLI, whose add takes `--force` instead. The
+    /// review shows this command above the add, and the operations builder
+    /// runs both from this one value, so what is shown is what runs.
+    public let preArguments: [String]?
+    /// What the replaced registration starts, as the app's own configuration
+    /// records it, when that could be read: the old path the review names.
+    public let replacedCommand: String?
+    /// Whether `arguments` take the connection out of the app rather than
+    /// add it: Agent Tooling's own connection, removed where this Mac no
+    /// longer asks for it (D10).
+    let isRemoval: Bool
 
     public init(
         artifactID: ArtifactID,
@@ -39,7 +53,10 @@ public struct WorkspaceManagedMCPCommandPlan: Equatable, Sendable {
         executableURL: URL,
         executable: String,
         arguments: [String],
-        workingDirectoryPath: String?
+        workingDirectoryPath: String?,
+        preArguments: [String]? = nil,
+        replacedCommand: String? = nil,
+        isRemoval: Bool = false
     ) {
         self.artifactID = artifactID
         self.physicalDestinationID = physicalDestinationID
@@ -50,10 +67,16 @@ public struct WorkspaceManagedMCPCommandPlan: Equatable, Sendable {
         self.executable = executable
         self.arguments = arguments
         self.workingDirectoryPath = workingDirectoryPath
+        self.preArguments = preArguments
+        self.replacedCommand = replacedCommand
+        self.isRemoval = isRemoval
     }
 }
 
 public enum WorkspaceManagedMCPCommandPlanning {
+    /// `replacing` says the app already has a registration under this name
+    /// and the step changes it (the planner's `replacesExisting`): the plan
+    /// then removes it first (D30), and `replacedCommand` is what it started.
     public static func plan(
         document: PortableWorkspaceDocument,
         device: DeviceWorkspaceState,
@@ -62,7 +85,9 @@ public enum WorkspaceManagedMCPCommandPlanning {
         target: ResolvedAssignmentTarget,
         capability: TargetCapabilityEvidence,
         nativeServerIdentifier: String,
-        executableURL: URL
+        executableURL: URL,
+        replacing: Bool = false,
+        replacedCommand: String? = nil
     ) throws -> WorkspaceManagedMCPCommandPlan {
         do {
             try document.validateStructure()
@@ -223,7 +248,56 @@ public enum WorkspaceManagedMCPCommandPlanning {
                 destination: destination,
                 client: client,
                 scope: target.selector.scope),
-            workingDirectoryPath: workingDirectory)
+            workingDirectoryPath: workingDirectory,
+            preArguments: replacing
+                ? removalBeforeAdd(serverID: nativeServerIdentifier, client: client, scope: target.selector.scope) : nil,
+            replacedCommand: replacing ? replacedCommand : nil)
+    }
+
+    /// The command that takes the connection `nativeServerIdentifier` out of
+    /// the app at `surface`, for the person (`scope` must be the user's own):
+    /// the step a planned `.removeManagedConnection` runs. The app's own
+    /// tool must be the file the locator found for that app, and the name a
+    /// safe identifier, as for an add; nothing about the connection's
+    /// definition is needed, since nothing is started. Every app removes by
+    /// name, Kiro CLI included.
+    public static func removal(
+        artifactID: ArtifactID, physicalDestinationID: WorkspaceObjectID, surface: TargetSurface, scope: ToolingScope,
+        nativeServerIdentifier: String, executableURL: URL
+    ) throws -> WorkspaceManagedMCPCommandPlan {
+        guard let client = TargetSurfaceCapability.managedMCPClient(for: surface) else {
+            throw WorkspaceManagedMCPCommandPlanningError.unsupportedSurface(surface)
+        }
+        let expectedExecutable = MCPClientCommand.executable(for: client)
+        guard NativeSkillDestination.isValidRoot(executableURL), executableURL.lastPathComponent == expectedExecutable else {
+            throw WorkspaceManagedMCPCommandPlanningError.invalidCLIURL
+        }
+        guard OperationCommandPolicy.isSafeMCPIdentifier(nativeServerIdentifier) else {
+            throw WorkspaceManagedMCPCommandPlanningError.invalidNativeServerIdentifier
+        }
+        guard scope == .user else { throw WorkspaceManagedMCPCommandPlanningError.unsupportedScope(scope, client) }
+        return .init(
+            artifactID: artifactID, physicalDestinationID: physicalDestinationID, surface: surface, scope: scope,
+            nativeServerIdentifier: nativeServerIdentifier, executableURL: executableURL, executable: expectedExecutable,
+            arguments: MCPClientCommand.removeArguments(serverID: nativeServerIdentifier, client: client, scope: scope),
+            workingDirectoryPath: nil, isRemoval: true)
+    }
+
+    /// The removal a replacement runs before its add: every app but Kiro CLI
+    /// refuses to add a name it already holds, and Kiro CLI's add replaces
+    /// with `--force`, so it needs none.
+    static func removalBeforeAdd(serverID: String, client: ClientKind, scope: ToolingScope) -> [String]? {
+        client == .kiro ? nil : MCPClientCommand.removeArguments(serverID: serverID, client: client, scope: scope)
+    }
+
+    /// What the stdio server `name` starts in `observation`'s app, as the
+    /// app's own configuration files register it for the person, or nil when
+    /// none does: the old path a replacement names in its review, the
+    /// registration its removal takes out. A project's entry of the same name
+    /// is not that registration. Reads those files only, as the check of
+    /// Agent Tooling's own connection reads them.
+    public static func registeredCommand(named name: String, in observation: TargetObservation) -> String? {
+        SetupAuditor.userScopeServers(configurationPaths: observation.configurationPaths)[name]?.command
     }
 
     private static func workingDirectory(

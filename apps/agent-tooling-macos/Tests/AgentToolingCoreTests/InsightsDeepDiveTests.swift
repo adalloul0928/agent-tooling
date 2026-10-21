@@ -11,15 +11,15 @@ struct InsightsDeepDiveTests {
 
     @Test func aDigestKeepsTheFirstAsksTheToolsAndTheProjectNameAndNothingSecret() throws {
         var builder = ConversationDigestBuilder(conversationID: "c1", client: .claude)
-        builder.workingDirectory = "/Users/example/ws/WootOrderHistory"
+        builder.workingDirectory = "/Users/example/ws/OrderHistory"
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         let syntheticToken = ["sk-live", "abcdef123456789"].joined(separator: "-")
         builder.noteUserMessage(
-            "Fix the failing brazil build in /Users/example/ws/WootOrderHistory, token=\(syntheticToken)", at: start)
+            "Fix the failing build build in /Users/example/ws/OrderHistory, token=\(syntheticToken)", at: start)
         builder.noteTool("Bash", at: start.addingTimeInterval(10))
         builder.noteTool("Bash", at: start.addingTimeInterval(20))
         builder.noteTool("Skill", at: start.addingTimeInterval(30))
-        builder.noteSkill("brazil", at: start.addingTimeInterval(30))
+        builder.noteSkill("build", at: start.addingTimeInterval(30))
         for index in 0..<6 {
             builder.noteUserMessage("follow-up \(index)", at: start.addingTimeInterval(Double(100 + index)))
         }
@@ -27,15 +27,15 @@ struct InsightsDeepDiveTests {
         let digest = try #require(builder.digest)
 
         #expect(digest.client == .claude)
-        #expect(digest.workingDirectory == "WootOrderHistory", "the project is named, not located")
+        #expect(digest.workingDirectory == "OrderHistory", "the project is named, not located")
         #expect(digest.userMessageCount == 7)
         // The first ask, then the most recent few: capped, with the middle gone.
         #expect(digest.userMessages.count == ConversationDigestBuilder.maximumUserMessages)
-        #expect(digest.userMessages.first?.hasPrefix("Fix the failing brazil build in [local-path]") == true)
+        #expect(digest.userMessages.first?.hasPrefix("Fix the failing build build in [local-path]") == true)
         #expect(digest.userMessages.last == "follow-up 5")
         #expect(!digest.userMessages.joined().contains(syntheticToken), "a secret survived redaction")
         #expect(digest.toolsUsed == ["Bash", "Skill"], "tools are listed once each")
-        #expect(digest.skillsUsed == ["brazil"])
+        #expect(digest.skillsUsed == ["build"])
         #expect(digest.startedAt == start)
         #expect(digest.endedAt == start.addingTimeInterval(105))
     }
@@ -64,18 +64,17 @@ struct InsightsDeepDiveTests {
         let now = Date.now
         let stamp = Int(now.timeIntervalSince1970) - 3_600
         let id = "0a0b0c0d-1111-2222-3333-444444444444"
-        try
-            #"{"session_id":"\#(id)","cwd":"/Users/example/ws/WootFeatureFlags","title":"Ship the flags","created_at":"2026-09-30T17:37:07Z"}"#
+        try #"{"session_id":"\#(id)","cwd":"/Users/example/ws/FeatureFlags","title":"Ship the flags","created_at":"2026-09-30T17:37:07Z"}"#
             .write(to: sessions.appending(path: "\(id).json"), atomically: true, encoding: .utf8)
         let lines = [
-            #"{"version":"v1","kind":"Prompt","data":{"message_id":"m1","content":[{"kind":"text","data":"/woot-wbr run the Tech WBR for last week"}],"meta":{"timestamp":\#(stamp)}}}"#,
+            #"{"version":"v1","kind":"Prompt","data":{"message_id":"m1","content":[{"kind":"text","data":"/example-wbr run the Tech WBR for last week"}],"meta":{"timestamp":\#(stamp)}}}"#,
             #"{"version":"v1","kind":"AssistantMessage","data":{"message_id":"m2","content":[{"kind":"tool_use","data":{"name":"shell","id":"t1","args":{}}}],"meta":{"timestamp":\#(stamp + 5)}}}"#,
             #"{"version":"v1","kind":"ToolResults","data":{"message_id":"m3","content":[],"meta":{"timestamp":\#(stamp + 6)}}}"#,
             #"{"version":"v1","kind":"Prompt","data":{"message_id":"m4","content":[{"kind":"text","data":"now email it to the team"}],"meta":{"timestamp":\#(stamp + 60)}}}"#,
         ]
         try lines.joined(separator: "\n").write(to: sessions.appending(path: "\(id).jsonl"), atomically: true, encoding: .utf8)
         let skill = Skill(
-            id: "woot-wbr", name: "woot-wbr", displayName: "Woot WBR", summary: "Weekly report", bundle: "standalone",
+            id: "example-wbr", name: "example-wbr", displayName: "Example WBR", summary: "Weekly report", bundle: "standalone",
             scope: "This Mac", owned: false, triggers: [], negativeTrigger: "", files: ["SKILL.md"], clients: [], validationCount: 0)
 
         let artifact = LocalConversationScanner().scan(
@@ -87,13 +86,13 @@ struct InsightsDeepDiveTests {
         #expect(coverage.conversationsScanned == 1)
         let digest = try #require(artifact.digests.first)
         #expect(digest.title == "Ship the flags")
-        #expect(digest.workingDirectory == "WootFeatureFlags")
-        #expect(digest.userMessages == ["/woot-wbr run the Tech WBR for last week", "now email it to the team"])
+        #expect(digest.workingDirectory == "FeatureFlags")
+        #expect(digest.userMessages == ["/example-wbr run the Tech WBR for last week", "now email it to the team"])
         #expect(digest.toolsUsed == ["shell"])
-        #expect(digest.skillsUsed == ["woot-wbr"])
+        #expect(digest.skillsUsed == ["example-wbr"])
         // The slash command is exact evidence that the skill was used.
         let evidence = try #require(artifact.evidence.first)
-        #expect(evidence.skillID == "woot-wbr")
+        #expect(evidence.skillID == "example-wbr")
         #expect(evidence.precision == .exact)
         #expect(evidence.provenance == .kiroSlashCommand)
         #expect(evidence.client == .kiro)
@@ -193,10 +192,10 @@ struct InsightsDeepDiveTests {
     // MARK: - Reading the answer
 
     private static let answer = """
-        {"summary":"You spend most weeks fixing Brazil builds and drafting CRs by hand.",
-         "themes":[{"title":"Brazil build repair","detail":"Eleven sessions start from a failed brazil-build.","conversation_count":11,"clients":["claude","kiro"]}],
+        {"summary":"You spend most weeks fixing Build builds and drafting CRs by hand.",
+         "themes":[{"title":"Build build repair","detail":"Eleven sessions start from a failed build-build.","conversation_count":11,"clients":["claude","kiro"]}],
          "recommendations":[
-           {"kind":"create_skill","title":"Brazil build triage","summary":"Diagnose a failed brazil-build from its log.","rationale":"Repeated across 11 sessions.","confidence":"high","conversation_count":11,"draft_instruction":"Create a skill that reads a brazil-build log and names the failing step."},
+           {"kind":"create_skill","title":"Build build triage","summary":"Diagnose a failed build-build from its log.","rationale":"Repeated across 11 sessions.","confidence":"high","conversation_count":11,"draft_instruction":"Create a skill that reads a build-build log and names the failing step."},
            {"kind":"use_existing_skill","title":"Use crux-code-reviews","summary":"You write CR descriptions by hand.","rationale":"Six sessions.","confidence":"medium","conversation_count":6,"existing_skill":"crux-code-reviews"},
            {"kind":"nonsense","title":"x","summary":"y","rationale":"z","confidence":"high","conversation_count":1}
          ]}

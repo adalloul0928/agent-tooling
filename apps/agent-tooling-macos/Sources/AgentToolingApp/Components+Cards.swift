@@ -82,9 +82,49 @@ struct PageToolbar<Actions: View>: View {
 
 extension EnvironmentValues {
     @Entry var workspaceSelection: AppSection? = nil
-    @Entry var workspaceNavigate: (AppSection) -> Void = { _ in }
+    /// Moves the shell to a section. The shell sets it; anywhere it is not
+    /// set it does nothing.
+    var workspaceNavigate: (AppSection) -> Void {
+        get { self[WorkspaceNavigateKey.self] }
+        set { self[WorkspaceNavigateKey.self] = newValue }
+    }
     @Entry var connectionCategory: Binding<String>? = nil
     @Entry var availableClients: [ClientKind] = ClientKind.allCases
+    /// Opens the setup stage at an entry: Set up this Mac…, Home's Resume and
+    /// revisit rows. The app sets it from its launch state; anywhere it is not
+    /// set (a preview, a render test) it does nothing.
+    var openSetup: (SetupEntry) -> Void {
+        get { self[OpenSetupKey.self] }
+        set { self[OpenSetupKey.self] = newValue }
+    }
+    /// True while the setup stage is open over a live shell. The shell holds
+    /// its write-triggered sync and incoming review until it closes, so the
+    /// stage's own review is the only one running.
+    @Entry var stagePresented = false
+    /// What the shell's launch work needs to know about how it was opened.
+    @Entry var shellLaunchHints = ShellLaunchHints()
+}
+
+// The entries that hold a closure have their keys written out. From the
+// macOS 27 SDK on, `@Entry` warns on every closure value, since a closure
+// cannot be compared; a key written by hand is what `@Entry` made before,
+// so these behave as they always have, under every SDK.
+
+private struct WorkspaceNavigateKey: EnvironmentKey {
+    static var defaultValue: (AppSection) -> Void { { _ in } }
+}
+
+private struct OpenSetupKey: EnvironmentKey {
+    static var defaultValue: (SetupEntry) -> Void { { _ in } }
+}
+
+/// How the shell was opened, for its launch work to read once.
+struct ShellLaunchHints: Equatable, Sendable {
+    /// The shell opened straight from the setup stage's hand-off, and the
+    /// walk handing off read this Mac's apps and audited them in this launch,
+    /// so neither runs again now. False after a walk that read nothing: one
+    /// carried on from an earlier launch, or Finish joining.
+    var justHandedOff = false
 }
 
 /// One search field treatment across the library. Native text editing and

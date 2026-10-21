@@ -21,7 +21,11 @@ struct OperationCommandPolicy: Sendable {
 
     func validate(executable: String, arguments: [String]) throws {
         let command = try commandName(for: executable)
-        guard arguments.count <= 64,
+        // Every command keeps to 64 arguments but one: the setup review's,
+        // a fixed shape compared whole, which carries each of its deny rules
+        // as an argument of its own (`SetupReviewCommandShapes`).
+        let bound = command == "claude" && SetupReviewCommandShapes.isClaudeShape(arguments, homeURL: homeURL) ? 256 : 64
+        guard arguments.count <= bound,
             arguments.allSatisfy({
                 $0.count <= 8_192 && !$0.contains("\0") && !$0.contains("\n") && !$0.contains("\r")
             })
@@ -76,6 +80,16 @@ struct OperationCommandPolicy: Sendable {
             }
     }
 
+    /// The name Claude Code lists a connection a plugin brought under:
+    /// `plugin:<plugin>:<server>`, exactly three parts, the first the word
+    /// `plugin` and the other two each a safe identifier. Only the sign-in
+    /// takes this form; every other command still needs a plain name.
+    static func isPluginScopedMCPIdentifier(_ value: String) -> Bool {
+        let parts = value.split(separator: ":", omittingEmptySubsequences: false)
+        return parts.count == 3 && parts[0] == "plugin"
+            && isSafeMCPIdentifier(String(parts[1])) && isSafeMCPIdentifier(String(parts[2]))
+    }
+
     private func validateClaude(_ arguments: [String]) throws {
         // The skill creator: Claude Code in print mode, answering one prompt
         // from standard input inside a staged request folder. The whole
@@ -109,6 +123,18 @@ struct OperationCommandPolicy: Sendable {
             arguments[0] == "mcp",
             arguments[1] == "login",
             Self.isSafeMCPIdentifier(arguments[2]),
+            arguments[3] == "--no-browser"
+        {
+            return
+        }
+        // The sign-in for a connection a plugin brought, under the
+        // plugin-scoped name Claude Code lists it by. Only this one shape:
+        // the browser stays closed, and Agent Tooling opens the page Claude
+        // Code prints.
+        if arguments.count == 4,
+            arguments[0] == "mcp",
+            arguments[1] == "login",
+            Self.isPluginScopedMCPIdentifier(arguments[2]),
             arguments[3] == "--no-browser"
         {
             return

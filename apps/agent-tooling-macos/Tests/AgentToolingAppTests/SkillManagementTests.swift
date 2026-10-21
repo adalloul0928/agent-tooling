@@ -81,8 +81,12 @@ struct SkillManagementTests {
 struct HoverSuppressionTests {
     @Test func aHoverHighlightStaysOffWhileSuppressed() throws {
         let content = Text("Row").padding(20).frame(width: 200, height: 60)
-        let plain = try rasterize(content.hoverHighlight().padding(8))
-        let suppressed = try rasterize(content.hoverHighlight().padding(8).environment(\.hoverSuppressed, true))
+        // Each capture's window is just the row's size, in the corner of the
+        // screen farthest from the real pointer, so no pointer is over it.
+        let size = CGSize(width: 216, height: 76)
+        let plain = try rasterize(content.hoverHighlight().padding(8), size: size, awayFromPointer: true)
+        let suppressed = try rasterize(
+            content.hoverHighlight().padding(8).environment(\.hoverSuppressed, true), size: size, awayFromPointer: true)
         // Without a pointer neither is highlighted; the two must draw the same,
         // which proves the flag changes nothing but the highlight itself.
         #expect(plain.tiffRepresentation == suppressed.tiffRepresentation)

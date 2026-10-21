@@ -47,16 +47,21 @@ struct SetupCheckup: Codable, Equatable, Sendable {
     var dismissedRecommendationIDs: Set<String>
     /// When the last full checkup (audit and review) finished.
     var completedAt: Date
+    /// When the launch last started the weekly review, whether or not it
+    /// finished: a review that failed is tried again a day later, not a week.
+    /// Absent from a checkup kept before the retry existed.
+    var reviewAttemptedAt: Date?
 
     init(
         audit: SetupAuditReport, review: SetupReview? = nil, dismissedFindingIDs: Set<String> = [],
-        dismissedRecommendationIDs: Set<String> = [], completedAt: Date = .now
+        dismissedRecommendationIDs: Set<String> = [], completedAt: Date = .now, reviewAttemptedAt: Date? = nil
     ) {
         self.audit = audit
         self.review = review
         self.dismissedFindingIDs = dismissedFindingIDs
         self.dismissedRecommendationIDs = dismissedRecommendationIDs
         self.completedAt = completedAt
+        self.reviewAttemptedAt = reviewAttemptedAt
     }
 
     var openFindings: [SetupFinding] { audit.findings.filter { !dismissedFindingIDs.contains($0.id) } }
@@ -132,17 +137,16 @@ struct LiveSetupServices: SetupServicing {
     }
 }
 
-/// The setup loop: audit this Mac, have the person's assistant read the audit,
-/// and carry out what they choose, one reviewed action at a time.
-///
-/// Three rhythms share this one session. First-time setup runs it inside the
-/// wizard; the weekly checkup runs it when the app opens and the last one is
-/// old; a client review runs it for one app with the web allowed. None of them
-/// changes anything until `apply` is called for one action.
+/// Audits configuration, requests assistant reviews, and applies reviewed actions.
+/// Setup can audit without scans, login-shell probes, or account reads. Audit and
+/// review generations are independent, so a new audit cannot discard a review;
+/// its result joins the current checkup when it arrives.
 @MainActor @Observable
 final class WorkspaceSetupSession {
     private(set) var checkup: SetupCheckup?
     private(set) var isAuditing = false
+    /// The callers waiting for the audit under way to end.
+    @ObservationIgnored private var auditWaiters: [CheckedContinuation<Void, Never>] = []
     private(set) var isReviewing = false
     private(set) var isApplying = false
     private(set) var errorMessage: String?
@@ -157,17 +161,29 @@ final class WorkspaceSetupSession {
     private(set) var reviewingClient: ClientKind?
     private(set) var clientReviewMessage: String?
 
+    /// How old the last review may be before the weekly one is due.
     static let checkupStaleAfter: TimeInterval = 7 * 24 * 60 * 60
+    /// How long after a review was last started the launch tries again, when
+    /// that one did not finish.
+    static let reviewRetryAfter: TimeInterval = 24 * 60 * 60
 
-    @ObservationIgnored private let service: WorkspaceApplicationService
-    @ObservationIgnored private let library: WorkspaceLibrarySession
+    // Internal, not private, so this session's extensions in their own
+    // files (adoption, the library's facts) work from the same parts.
+    @ObservationIgnored let service: WorkspaceApplicationService
+    @ObservationIgnored let library: WorkspaceLibrarySession
     @ObservationIgnored private let device: WorkspaceDeviceSession
     @ObservationIgnored private let insights: WorkspaceInsightsSession
     @ObservationIgnored private let store: WorkspaceRevisionStore
-    @ObservationIgnored private let homeRoot: URL
+    @ObservationIgnored let homeRoot: URL
     @ObservationIgnored private let services: any SetupServicing
     @ObservationIgnored private let accounts: WorkspaceAccountsSession?
-    @ObservationIgnored private var generation: UInt64 = 0
+    /// Which audit, and which review, the state on screen belongs to. Each
+    /// stops only its own: a newer audit leaves a review running.
+    @ObservationIgnored private var auditGeneration: UInt64 = 0
+    @ObservationIgnored private var reviewGeneration: UInt64 = 0
+    /// The weekly review the launch started, while it runs, so turning the
+    /// review off stops it.
+    @ObservationIgnored private var scheduledReview: Task<Void, Never>?
 
     init(
         service: WorkspaceApplicationService, library: WorkspaceLibrarySession, device: WorkspaceDeviceSession,
@@ -188,9 +204,17 @@ final class WorkspaceSetupSession {
 
     var isBusy: Bool { isAuditing || isReviewing || isApplying }
 
-    var isStale: Bool {
-        guard let completedAt = checkup?.completedAt else { return true }
-        return Date.now.timeIntervalSince(completedAt) > Self.checkupStaleAfter
+    /// Whether the launch should start the weekly review now: this Mac allows
+    /// it, an assistant can run it, there is an audit to read, the last
+    /// review is more than a week old (or there has been none: the first one
+    /// runs when Home first opens), and no review was started in the last
+    /// day.
+    func isReviewDue(consent: AssistantRunConsent, now: Date = .now) -> Bool {
+        guard consent.weeklyReview, reviewClient != nil, let checkup else { return false }
+        let reviewed = checkup.review?.generatedAt ?? .distantPast
+        let attempted = checkup.reviewAttemptedAt ?? .distantPast
+        return now.timeIntervalSince(reviewed) > Self.checkupStaleAfter
+            && now.timeIntervalSince(attempted) > Self.reviewRetryAfter
     }
 
     /// The assistant that reads the audit: Claude Code when this Mac has it,
@@ -201,38 +225,52 @@ final class WorkspaceSetupSession {
 
     // MARK: Audit
 
-    /// Reads what the last check saw and turns it into findings. Fast, local,
-    /// and repeatable; runs a check first when there has never been one.
-    func audit() async {
-        guard !isAuditing else { return }
-        generation &+= 1
-        let token = generation
+    /// Builds findings from the last check. Optional scans, login-shell probes, and
+    /// account reads are all disabled during setup; `extraFolders` augments fixed
+    /// search locations. Returns false while another audit runs; callers can await
+    /// `waitUntilAuditEnds` before retrying.
+    @discardableResult
+    func audit(
+        scansIfUnchecked: Bool = true, asksLoginShell: Bool = true, readsAccounts: Bool = true, extraFolders: [URL] = []
+    ) async -> Bool {
+        guard !isAuditing else { return false }
+        auditGeneration &+= 1
+        let token = auditGeneration
         isAuditing = true
         // An audit reports nothing of its own that could fail except keeping
         // the result, so it leaves any message an apply just set in place.
-        defer { if token == generation { isAuditing = false } }
-        if device.observations.isEmpty { await device.refresh() }
+        defer {
+            if token == auditGeneration {
+                isAuditing = false
+                let waiting = auditWaiters
+                auditWaiters = []
+                for waiter in waiting { waiter.resume() }
+            }
+        }
+        if scansIfUnchecked, device.observations.isEmpty { await device.refresh() }
         let observations = device.observations
         let managed = device.managedClients
-        let managedNames = Set(
-            (library.state?.snapshot.document.artifacts ?? [])
-                .filter { $0.identity.kind == .skill && $0.authority != .trackedOnly }
-                .compactMap(\.declaredName))
+        let facts = libraryFacts()
         let homeRoot = self.homeRoot
         let services = self.services
         let local = await Task.detached(priority: .userInitiated) {
-            let searchPath = await services.searchPath(homeURL: homeRoot)
+            let searchPath: [URL]? =
+                asksLoginShell
+                ? (await services.searchPath(homeURL: homeRoot)) + extraFolders
+                : (extraFolders.isEmpty ? nil : SetupAuditor.defaultSearchPath(homeURL: homeRoot) + extraFolders)
             return SetupAuditor(homeURL: homeRoot, searchPath: searchPath)
-                .audit(observations: observations, managed: managed, library: .init(managedSkillNames: managedNames))
+                .audit(observations: observations, managed: managed, library: facts)
         }.value
-        guard token == generation else { return }
+        guard token == auditGeneration else { return true }
         // How each client signs in to its hosted account, read lightly the
         // first time and reused after, joins the same report, so one Checkup
         // says everything this Mac has to look at.
         var report = local
         if let accounts {
-            await accounts.readIfNeverRead(depth: .signInOnly)
-            guard token == generation else { return }
+            if readsAccounts {
+                await accounts.readIfNeverRead(depth: .signInOnly)
+                guard token == auditGeneration else { return true }
+            }
             report = SetupAuditReport(
                 generatedAt: local.generatedAt, clients: local.clients,
                 findings: local.findings + accounts.findings, counts: local.counts)
@@ -244,56 +282,128 @@ final class WorkspaceSetupSession {
         next.dismissedFindingIDs = next.dismissedFindingIDs.intersection(report.findings.map(\.id))
         checkup = next
         keep()
+        return true
+    }
+
+    /// Returns once no audit is under way: at once when none is.
+    func waitUntilAuditEnds() async {
+        while isAuditing {
+            await withCheckedContinuation { auditWaiters.append($0) }
+        }
     }
 
     // MARK: Review
 
     /// Hands the current audit to the assistant. The audit stays on screen
-    /// while it reads; its answer joins the checkup when it lands.
+    /// while it reads; its answer joins the checkup current when it lands,
+    /// even if an audit ran meanwhile, less what it says about findings that
+    /// audit no longer has.
+    ///
+    /// Up to `SetupReviewPrompt.maximumDigests` redacted conversation
+    /// summaries from the apps this Mac manages go with it, and only while
+    /// this Mac allows the weekly review, asked again once they are read:
+    /// asking for a review by hand sends the audit and the configuration
+    /// folders, and no summaries, otherwise.
     func review(purpose: SetupReviewPrompt.Purpose, focus: ClientKind? = nil, releaseNotes: [String] = []) async {
         guard !isReviewing, let audit = checkup?.audit else { return }
         guard let client = reviewClient else {
-            reviewMessage = "A review needs Claude Code or Codex; this Mac is not managing either."
+            reviewMessage = AssistantRunCopy.noAssistant
             return
         }
-        generation &+= 1
-        let token = generation
+        reviewGeneration &+= 1
+        let token = reviewGeneration
         isReviewing = true
         reviewMessage = nil
-        defer { if token == generation { isReviewing = false } }
+        defer { if token == reviewGeneration { isReviewing = false } }
         let versions = Dictionary(
             device.observations.compactMap { observation -> (ClientKind, String)? in
                 guard let client = observation.surface.client, let version = observation.version else { return nil }
                 return (client, version)
             }, uniquingKeysWith: { first, _ in first })
-        let digests = insights.report == nil ? [] : (await insights.digestsForReview())
+        var digests =
+            device.effectiveAssistantRuns.weeklyReview
+            ? await insights.digestsForReview(clients: Set(device.managedClients)) : []
+        guard token == reviewGeneration else { return }
+        // The weekly review turned off while the summaries were read: none
+        // of them go.
+        if !device.effectiveAssistantRuns.weeklyReview { digests = [] }
         do {
-            let review = try await services.review(
+            var review = try await services.review(
                 client: client, purpose: purpose, audit: audit, digests: digests, focus: focus, clientVersions: versions,
                 releaseNotes: releaseNotes)
-            guard token == generation else { return }
+            guard token == reviewGeneration else { return }
             var next = checkup ?? SetupCheckup(audit: audit)
+            review.recommendations = Self.recommendations(review.recommendations, over: next.audit)
             next.review = review
             next.dismissedRecommendationIDs = next.dismissedRecommendationIDs.intersection(review.recommendations.map(\.id))
             next.completedAt = .now
             checkup = next
             keep()
         } catch {
-            guard token == generation else { return }
+            guard token == reviewGeneration else { return }
             reviewMessage = (error as? any LocalizedError)?.errorDescription ?? "\(client.rawValue) could not finish the review."
         }
     }
 
-    /// The run on open. The audit is a second's work and reads only what the
-    /// last check saw, so it runs every time and the list is always current;
-    /// the assistant's review is the slow part and runs when the last one is
-    /// more than a week old.
-    func runScheduledCheckupIfStale() async {
-        guard !isBusy else { return }
-        let wasStale = isStale
-        await audit()
-        guard wasStale, reviewClient != nil else { return }
-        await review(purpose: .checkup)
+    /// The recommendations of a review that still stand over `audit`: one
+    /// that names findings, every one of which `audit` no longer has, was
+    /// about something since fixed or gone, so it is left out rather than
+    /// offered as a fix. One that names no finding (something the assistant
+    /// read for itself, or its view) stands.
+    nonisolated static func recommendations(
+        _ recommendations: [SetupRecommendation], over audit: SetupAuditReport
+    ) -> [SetupRecommendation] {
+        let current = Set(audit.findings.map(\.id))
+        return recommendations.filter { recommendation in
+            var named = Set(recommendation.findingIDs)
+            if case .audit(let id) = recommendation.provenance { named.insert(id) }
+            return named.isEmpty || !named.isDisjoint(with: current)
+        }
+    }
+
+    /// The audit on open: a second's work over what the last check saw, so
+    /// the list is current. It scans first only when `allowsScan` (Check my
+    /// apps each time Agent Tooling opens) and nothing has been checked yet;
+    /// with neither a check nor leave to scan, the kept checkup stays as it
+    /// is rather than becoming an audit of nothing.
+    func runScheduledAudit(allowsScan: Bool) async {
+        guard !isAuditing, !isApplying else { return }
+        if !allowsScan, device.observations.isEmpty { return }
+        await audit(scansIfUnchecked: allowsScan)
+    }
+
+    /// The weekly review on open, when this Mac allows it and it is due
+    /// (`isReviewDue`). The attempt is kept before it starts, so one that
+    /// fails is tried again a day later. It returns when the review has
+    /// answered, failed or been stopped (`cancelScheduledReview`).
+    ///
+    /// Once started, the review runs to its answer the way the deep dive
+    /// always has: the main window that started it closing does not stop
+    /// it, turning the review off does. A launch already stopped (its window
+    /// closed while the deep dive ran) starts none, so the next launch finds
+    /// it still due.
+    func runScheduledReviewIfDue(consent: AssistantRunConsent) async {
+        guard !Task.isCancelled, !isReviewing, scheduledReview == nil, isReviewDue(consent: consent), var next = checkup else {
+            return
+        }
+        next.reviewAttemptedAt = .now
+        checkup = next
+        keep()
+        let task = Task { await self.review(purpose: .checkup) }
+        scheduledReview = task
+        await task.value
+        if scheduledReview == task { scheduledReview = nil }
+    }
+
+    /// Stops the weekly review the launch started, if it is still running:
+    /// its command is stopped and its answer, if one comes, is dropped. A
+    /// review asked for by hand is left alone.
+    func cancelScheduledReview() {
+        guard let task = scheduledReview else { return }
+        scheduledReview = nil
+        task.cancel()
+        reviewGeneration &+= 1
+        isReviewing = false
     }
 
     // MARK: Reviewing one app
@@ -306,7 +416,7 @@ final class WorkspaceSetupSession {
     func reviewClient(_ client: ClientKind) async {
         guard reviewingClient == nil else { return }
         guard let assistant = reviewClient else {
-            clientReviewMessage = "A review needs Claude Code or Codex; this Mac is not managing either."
+            clientReviewMessage = AssistantRunCopy.noAssistant
             return
         }
         reviewingClient = client
@@ -406,7 +516,7 @@ final class WorkspaceSetupSession {
     /// went through and quotes the first failure.
     func applyAll(_ actions: [SetupAction], settings: [(ClientKind, String, String)] = []) async {
         let work: [() async throws -> String] =
-            actions.map { action in { try await self.perform(action) } }
+            work(for: actions)
             + settings.map { setting in { try await self.setSetting(client: setting.0, key: setting.1, value: setting.2) } }
         guard !isApplying, !work.isEmpty else { return }
         isApplying = true
@@ -441,7 +551,7 @@ final class WorkspaceSetupSession {
 
     /// One action, in a sentence about what it did. Opening a screen is not
     /// an action here; the view does that.
-    private func perform(_ action: SetupAction) async throws -> String {
+    func perform(_ action: SetupAction) async throws -> String {
         switch action {
         case .adoptSkill(let path, _):
             return try await adopt(path: path)
@@ -549,20 +659,6 @@ final class WorkspaceSetupSession {
         let receipt = await OperationExecutor(store: store, homeURL: homeRoot).execute(plan)
         if let failed = receipt.results.first(where: { $0.status == .failed }) { throw SetupApplyError.stepFailed(failed.output) }
         return receipt.results.map(\.output).joined(separator: " ")
-    }
-
-    private func adopt(path: String) async throws -> String {
-        let prepared = try await WorkspaceSkillPreparation.capturePersonal(directory: URL(filePath: path, directoryHint: .isDirectory))
-        guard let snapshot = library.state?.snapshot else { throw SetupApplyError.libraryUnread }
-        guard
-            let artifact = snapshot.document.artifacts.first(where: {
-                $0.identity.kind == .skill && $0.authority == .trackedOnly && $0.declaredName == prepared.frontmatter.name
-            })
-        else { throw SetupApplyError.notTracked(prepared.frontmatter.name) }
-        _ = try await service.adoptTrackedSkill(
-            .init(expectedRevisionID: snapshot.document.revision.id, artifactID: artifact.identity.id, prepared: prepared),
-            prepared: prepared)
-        return "\(prepared.frontmatter.name) is in the library now. Install it from its details."
     }
 
     private func remove(path: String, client: ClientKind) async throws -> String {

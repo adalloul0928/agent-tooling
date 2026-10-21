@@ -1,16 +1,10 @@
 import Foundation
 import os
 
-/// Finds a client's command-line tool on this Mac.
-///
-/// Only places that actually hold a runnable file count. A path that is not
-/// there is not returned as a guess, because the caller's next step is to put
-/// that path into a command a person is asked to approve, and an approval for a
-/// command that cannot run is worse than no offer at all.
-///
-/// `PATH` is not searched. It is inherited from whatever launched the app, which
-/// on macOS is usually not the shell environment a person thinks they have, so a
-/// hit there would be neither reproducible nor explainable.
+/// Finds runnable client tools in known installation folders and explicitly
+/// registered directories. Excludes inherited PATH because a macOS app's
+/// launch environment may differ from the user's shell. Only existing,
+/// runnable candidates may appear in a reviewed command.
 public enum ClientExecutableLocator {
     /// Folders somebody explicitly recorded as holding client tools, applied to
     /// every lookup in this process. Registered from the device's own record at
@@ -39,25 +33,13 @@ public enum ClientExecutableLocator {
         return roots.map { $0.appending(path: name).standardizedFileURL }
     }
 
-    /// The fixed roots, in the order they are checked. They are the folders on
-    /// the search path every child process gets, so a tool a child could start
-    /// by name is a tool found here; only the order is the locator's own.
-    ///
-    /// Six come first, in the order they always have, so a tool found before is
-    /// the tool found now; every other folder follows in the search path's own
-    /// order. `~/.toolbox/bin` is Amazon Toolbox's shim directory: internal
-    /// builds of these clients install there as symlinks to a dispatcher, which
-    /// the runnability check follows like any other link. It is checked before
-    /// the per-user install folders because a Mac that has it usually also has
-    /// an older native install beside it, and the managed shim is the one the
-    /// person's shell runs and the one that carries their sign-in.
+    /// Standard install folders, followed by the remaining shared search roots.
     static func fixedRoots(homeURL: URL) -> [URL] {
         let home = ProcessCommandRunner.plainPath(of: homeURL)
         let shared = ProcessCommandRunner.searchPath(home: home)
         let first = [
             "/opt/homebrew/bin",
             "/usr/local/bin",
-            "\(home)/.toolbox/bin",
             "\(home)/.local/bin",
             "\(home)/.bun/bin",
             "\(home)/.npm-global/bin",
@@ -75,16 +57,10 @@ public enum ClientExecutableLocator {
         }
     }
 
-    /// The first candidate whose file is runnable, or `nil`.
-    ///
-    /// A link is followed to test what it leads to, because that is the file
-    /// that will run. The path returned is the candidate itself, by the tool's
-    /// own name, because the file behind it need not carry that name at all:
-    /// Claude Code's installer keeps the binary as
-    /// `~/.local/share/claude/versions/2.1.268` and points `~/.local/bin/claude`
-    /// at it, renaming the file on every update, and the ChatGPT app's `codex`
-    /// lives inside its bundle. The launch path follows the link again at the
-    /// moment of running, and the executor's policy accepts exactly this path.
+    /// Returns the first runnable candidate, preserving its symlink path.
+    /// Resolving the target checks executability; retaining the command's name
+    /// preserves argv[0] behavior and a stable path across versioned installs.
+    /// The executor accepts this same path and follows the link at launch.
     public static func locate(
         _ client: ClientKind,
         homeURL: URL,
@@ -94,10 +70,11 @@ public enum ClientExecutableLocator {
     }
 
     /// `locate`, looking only in the folders `searching` keeps, in the same
-    /// order. For tests: the fixed roots start with folders every process on
-    /// the Mac shares, such as `/opt/homebrew/bin`, and a test must not find a
-    /// tool that the Mac running it happens to have installed there.
-    static func locate(
+    /// order and by the same checks. For tests and their shared fixtures: the
+    /// fixed roots start with folders every process on the Mac shares, such as
+    /// `/opt/homebrew/bin`, and a test must not find a tool that the Mac
+    /// running it happens to have installed there.
+    public static func locate(
         _ client: ClientKind,
         homeURL: URL,
         fileManager: FileManager = .default,

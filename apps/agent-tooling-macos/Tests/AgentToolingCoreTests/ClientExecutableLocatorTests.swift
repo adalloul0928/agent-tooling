@@ -66,15 +66,13 @@ struct ClientExecutableLocatorTests {
         #expect(found?.path == fixture.binary(named: "claude").path)
     }
 
-    /// Amazon Toolbox installs internal builds as `~/.toolbox/bin/<tool>`
-    /// symlinks to one shared dispatcher. The shim is the tool's own path and
-    /// the dispatcher is what has to be runnable.
-    @Test func aToolboxShimIsFoundAndOfferedByItsOwnName() throws {
+    /// A runnable dispatcher is located through its installed symlink.
+    @Test func aLocalShimIsFoundAndOfferedByItsOwnName() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let dispatcher = fixture.home.appending(path: ".toolbox/tools/toolbox/1.1.0/toolbox-exec")
+        let dispatcher = fixture.home.appending(path: ".local/share/example-runner/1.0/dispatch")
         try fixture.installRunnableFile(at: dispatcher)
-        let shim = fixture.home.appending(path: ".toolbox/bin/codex")
+        let shim = fixture.home.appending(path: ".local/bin/codex")
         try FileManager.default.createDirectory(
             at: shim.deletingLastPathComponent(), withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(at: shim, withDestinationURL: dispatcher)
@@ -84,21 +82,19 @@ struct ClientExecutableLocatorTests {
         #expect(found?.path == shim.path)
     }
 
-    /// A Mac with Toolbox usually also has an older native install beside it.
-    /// The managed shim is the one the person's shell runs and the one that
-    /// carries their sign-in, so it is the one offered.
-    @Test func aToolboxShimIsPreferredToANativeInstallBesideIt() throws {
+    /// A lower-priority shim must not override the local installation.
+    @Test func aLocalInstallIsPreferredToALowerPriorityShim() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
         try fixture.installTool(named: "claude", executable: true)
-        let dispatcher = fixture.home.appending(path: ".toolbox/tools/toolbox/1.1.0/toolbox-exec")
+        let dispatcher = fixture.home.appending(path: ".local/share/example-runner/1.0/dispatch")
         try fixture.installRunnableFile(at: dispatcher)
-        let shim = fixture.home.appending(path: ".toolbox/bin/claude")
+        let shim = fixture.home.appending(path: ".bun/bin/claude")
         try FileManager.default.createDirectory(
             at: shim.deletingLastPathComponent(), withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(at: shim, withDestinationURL: dispatcher)
 
-        #expect(fixture.locate(.claude)?.path == shim.path)
+        #expect(fixture.locate(.claude)?.path == fixture.binary(named: "claude").path)
     }
 
     /// Every folder a child process searches is checked, so a tool a child
@@ -164,8 +160,8 @@ struct ClientExecutableLocatorTests {
         let roots = ClientExecutableLocator.fixedRoots(homeURL: URL(fileURLWithPath: "/Users/me", isDirectory: true))
 
         #expect(
-            roots.prefix(6).map(\.path) == [
-                "/opt/homebrew/bin", "/usr/local/bin", "/Users/me/.toolbox/bin", "/Users/me/.local/bin",
+            roots.prefix(5).map(\.path) == [
+                "/opt/homebrew/bin", "/usr/local/bin", "/Users/me/.local/bin",
                 "/Users/me/.bun/bin", "/Users/me/.npm-global/bin",
             ])
     }

@@ -1,6 +1,10 @@
 import Foundation
 
-public enum GitWorkspaceTransportError: Error, Equatable, Sendable {
+/// Why a step of carrying revisions through Git failed.
+///
+/// No description closes with "Nothing was changed.": a sync pass adds that
+/// itself, once, to whatever it reports.
+public enum GitWorkspaceTransportError: Error, Equatable, Sendable, LocalizedError {
     case invalidCheckout
     case invalidRemote
     case commandFailed
@@ -15,6 +19,31 @@ public enum GitWorkspaceTransportError: Error, Equatable, Sendable {
     /// A content tree in the repository does not hash to the digest it is
     /// filed under. It is refused; nothing is imported from it.
     case contentMismatch(ContentDigest)
+    /// The checkout folder already holds a clone of a different repository.
+    /// It is not replaced here: a folder somebody chose is theirs.
+    case checkoutHasAnotherRemote
+    /// Talking to the remote failed, for the reason Git's own message gave:
+    /// it could not be reached, the sign-in did not open it, it is not there,
+    /// it took too long, it refused the push, or it holds a library from a
+    /// newer Agent Tooling.
+    case remote(GitRemoteProblem)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidCheckout: "The repository’s folder on this Mac could not be used."
+        case .invalidRemote: "Enter a repository address without a user name or password in it."
+        case .commandFailed: "Git could not finish working with the repository’s folder on this Mac."
+        case .outputLimitExceeded: "Git answered with more than Agent Tooling reads at once."
+        case .invalidDocument: "The library in the repository could not be read."
+        case .documentTooLarge: "The library is larger than one repository file can carry."
+        case .remoteAdvanced: "Another Mac published while this one was working. Sync again to finish."
+        case .unrelatedWorkingTreeChanges: "The repository’s folder on this Mac holds files Agent Tooling did not write."
+        case .notEnrolled: "This Mac is not connected to a repository."
+        case .contentMismatch: "A skill’s files in the repository do not match their record, so they were not taken in."
+        case .checkoutHasAnotherRemote: "That folder already holds a copy of another repository. Choose an empty folder."
+        case .remote(let problem): problem.sentence
+        }
+    }
 }
 
 /// A remote workspace head, as observed. A missing head means an empty
@@ -59,12 +88,17 @@ public actor GitWorkspaceTransport {
     public static let documentFileName = "workspace.json"
     public static let contentDirectoryName = "content"
     public static let statusDirectoryName = "status"
+    /// The one Git this app runs: the Command Line Tools' shim, which runs
+    /// the selected developer folder's Git.
+    static let gitExecutable = "/usr/bin/git"
     public nonisolated var carriesContent: Bool { true }
     private static let outputLimit = 1 << 20
     private static let documentLimit = 32 << 20
     private static let statusLimit = 256 << 10
     private static let maximumDeviceStatuses = 256
-    private static let prefix = [
+    /// Every Git command starts with these: no locks taken for reads, no
+    /// pager, no file-system monitor, no hooks.
+    static let prefix = [
         "--no-optional-locks", "--no-pager", "-c", "core.fsmonitor=false",
         "-c", "core.hooksPath=/dev/null",
         // Paths come back as written, so a non-ASCII or space-bearing name is
@@ -98,6 +132,11 @@ public actor GitWorkspaceTransport {
 
     /// Prepares a dedicated checkout for a workspace repository. The remote is
     /// the person's own private repository; nothing else is touched.
+    ///
+    /// A folder that already holds a clone of another repository is refused
+    /// with `checkoutHasAnotherRemote`. Agent Tooling's own checkout is
+    /// emptied first with `prepareFreshCheckout(at:discard:)` instead, when no
+    /// enrollment uses it.
     public static func enroll(
         remote: String,
         checkout: URL,
@@ -110,10 +149,50 @@ public actor GitWorkspaceTransport {
         return transport
     }
 
+    /// Prepares an unenrolled application-owned checkout for a fresh clone. Moves
+    /// stale contents aside through `discard` (Trash by default), moving symlinks
+    /// themselves without touching their targets. Empty or absent folders stay.
+    /// Never call for an enrolled checkout or a user-selected Settings folder.
+    public static func prepareFreshCheckout(
+        at checkout: URL,
+        discard: @Sendable (URL) throws -> Void = moveToTrash
+    ) throws {
+        guard checkout.isFileURL, checkout.path.hasPrefix("/"), !checkout.path.contains("\0"),
+            checkout.standardizedFileURL.path == checkout.path
+        else {
+            throw GitWorkspaceTransportError.invalidCheckout
+        }
+        let manager = FileManager.default
+        let path = checkout.path(percentEncoded: false)
+        if (try? manager.destinationOfSymbolicLink(atPath: path)) == nil {
+            var isDirectory: ObjCBool = false
+            guard manager.fileExists(atPath: path, isDirectory: &isDirectory) else { return }
+            if isDirectory.boolValue, (try? manager.contentsOfDirectory(atPath: path))?.isEmpty == true { return }
+        }
+        do { try discard(checkout) } catch { throw GitWorkspaceTransportError.invalidCheckout }
+    }
+
+    /// Moves `item` to the Trash, or, on a volume that has none, beside
+    /// itself under a dated hidden name. Nothing is deleted either way.
+    public static func moveToTrash(_ item: URL) throws {
+        let manager = FileManager.default
+        do {
+            try manager.trashItem(at: item, resultingItemURL: nil)
+        } catch {
+            let stamp = ISO8601DateFormatter().string(from: .now).replacingOccurrences(of: ":", with: "")
+            let aside = item.deletingLastPathComponent()
+                .appending(path: ".\(item.lastPathComponent)-replaced-\(stamp)-\(UUID().uuidString.prefix(8).lowercased())")
+            try manager.moveItem(at: item, to: aside)
+        }
+    }
+
     /// The remote's current head and the document it holds, or `nil` head for a
     /// repository with no commits yet.
+    ///
+    /// A repository that cannot be read is reported as itself, not as an empty
+    /// one: only a branch the remote does not have reads as no head.
     public func remoteState() async throws -> GitWorkspaceRemoteState {
-        try await git(["fetch", "--quiet", "--no-tags", "origin", branch], allowing: [0, 128])
+        try await fetchBranch()
         let head = try await revision("refs/remotes/origin/\(branch)")
         guard let head else { return .init(head: nil, document: nil) }
         let blob = try await git(["show", "\(head):\(Self.documentFileName)"], allowing: [0, 128])
@@ -165,7 +244,7 @@ public actor GitWorkspaceTransport {
     /// that does not hash to its own name is refused, never trusted.
     public func content(for digest: ContentDigest) async throws -> CapturedPackageTree? {
         guard Self.isDigestPathComponent(digest.value) else { return nil }
-        try await git(["fetch", "--quiet", "--no-tags", "origin", branch], allowing: [0, 128])
+        try await fetchBranch()
         guard let head = try await revision("refs/remotes/origin/\(branch)") else { return nil }
         let relative = Self.contentPath(for: digest)
         let probe = try await git(["ls-tree", "--name-only", head, "--", relative], allowing: [0, 128])
@@ -245,13 +324,32 @@ public actor GitWorkspaceTransport {
         let message = "Workspace revision \(document.revision.id.rawValue.uuidString.lowercased())"
         let identity = try await commitIdentityArguments()
         let commit = try await git(identity + ["commit", "--quiet", "--only", "--message", message, "--"] + paths, allowing: [0, 1])
-        guard commit.status == 0 else { throw GitWorkspaceTransportError.commandFailed }
+        if commit.status != 0 {
+            // Nothing to commit: an earlier attempt already committed exactly
+            // these files and its push did not go through. That commit is the
+            // one to push, so a retry after a refused push reaches the remote
+            // again instead of failing here.
+            let unchanged = try await git(["diff", "--quiet", "HEAD", "--"] + paths, allowing: [0, 1, 128])
+            guard unchanged.status == 0 else { throw GitWorkspaceTransportError.commandFailed }
+        }
         guard let created = try await revision("HEAD") else {
             throw GitWorkspaceTransportError.commandFailed
         }
-        let push = try await git(["push", "origin", "HEAD:refs/heads/\(branch)"], allowing: [0, 1, 128])
+        let push = try await remoteGit(["push", "origin", "HEAD:refs/heads/\(branch)"])
         guard push.status == 0 else {
+            // A push the remote refused for moving on is a merge to make; one
+            // it refused outright, or could not take at all, is said as such.
+            if !GitRemoteFailure.isRejectedBecauseRemoteMoved(push.standardError),
+                let problem = GitRemoteFailure.problem(
+                    standardError: push.standardError, host: await originHost(), pushing: true)
+            {
+                throw GitWorkspaceTransportError.remote(problem)
+            }
             let current = try await remoteState().head
+            guard current != observed else {
+                // Rejected, yet the remote is where it was: it refused this push.
+                throw GitWorkspaceTransportError.remote(.pushRefused(host: await originHost()))
+            }
             throw GitWorkspaceTransportError.remoteAdvanced(remoteHead: current ?? "")
         }
         return .init(commit: created, previousHead: observed, revisionID: document.revision.id)
@@ -267,15 +365,101 @@ extension GitWorkspaceTransport {
         let existing = try await git(["remote", "get-url", "origin"], allowing: [0, 2, 128])
         if existing.status == 0 {
             guard Self.singleLine(existing.standardOutput) == remote else {
-                throw GitWorkspaceTransportError.invalidRemote
+                throw GitWorkspaceTransportError.checkoutHasAnotherRemote
             }
         } else {
             try await git(["remote", "add", "origin", remote])
         }
-        try await git(["fetch", "--quiet", "--no-tags", "origin", branch], allowing: [0, 128])
+        try await fetchBranch()
         if let head = try await revision("refs/remotes/origin/\(branch)") {
             try await resetToRemote(head: head)
         }
+    }
+
+    /// Fetches the branch from `origin`. A branch the remote does not have is
+    /// not a failure, because an empty repository answers that way; every
+    /// other failure is classified from what Git said, so a typo, a sign-in
+    /// that does not open the repository and no network are told apart rather
+    /// than all reading as empty.
+    func fetchBranch() async throws {
+        let fetch = try await remoteGit(["fetch", "--quiet", "--no-tags", "origin", branch])
+        guard fetch.status != 0, !GitRemoteFailure.isMissingRemoteBranch(fetch.standardError) else { return }
+        let host = await originHost()
+        throw GitWorkspaceTransportError.remote(
+            GitRemoteFailure.problem(standardError: fetch.standardError, host: host) ?? .notFound(host: host))
+    }
+
+    /// The host `origin` names, for a message. Read from the checkout's own
+    /// configuration, and only once something went wrong.
+    func originHost() async -> String? {
+        guard let output = try? await git(["remote", "get-url", "origin"], allowing: [0, 2, 128]), output.status == 0,
+            let address = Self.singleLine(output.standardOutput)
+        else { return nil }
+        return GitRemoteAddress.host(of: address)
+    }
+
+    /// The head `remote` advertises for this branch, or `nil` when it has no
+    /// such branch: the one answer that tells an empty repository from one
+    /// that cannot be reached, because `ls-remote` succeeds on the first and
+    /// fails on the second. `host` names the remote in a failure.
+    func advertisedHead(of remote: String, host: String?) async throws -> String? {
+        let reference = "refs/heads/\(branch)"
+        let listing = try await remoteGit(["ls-remote", "--heads", "--", remote, reference], host: host)
+        guard listing.status == 0 else {
+            throw GitWorkspaceTransportError.remote(
+                GitRemoteFailure.problem(standardError: listing.standardError, host: host) ?? .notFound(host: host))
+        }
+        for line in listing.standardOutput.split(separator: "\n") {
+            let fields = line.split(separator: "\t")
+            guard fields.count == 2, fields[1] == reference else { continue }
+            let head = String(fields[0])
+            guard Self.isObjectName(head) else { continue }
+            return head
+        }
+        return nil
+    }
+
+    /// Whether `remote` has any branch at all, which tells a repository with
+    /// nothing in it from one where the branch asked for is a typo. `remote`
+    /// is an address, or `origin` for this checkout's own; `host` names it in
+    /// a failure. So many branches that the listing outgrows what is read at
+    /// once is still an answer: it has some.
+    func listsAnyBranch(on remote: String, host: String?) async throws -> Bool {
+        let listing: CommandOutput
+        do {
+            listing = try await remoteGit(["ls-remote", "--heads", "--", remote], host: host)
+        } catch GitWorkspaceTransportError.outputLimitExceeded {
+            return true
+        }
+        guard listing.status == 0 else {
+            throw GitWorkspaceTransportError.remote(
+                GitRemoteFailure.problem(standardError: listing.standardError, host: host) ?? .notFound(host: host))
+        }
+        return listing.standardOutput.split(separator: "\n").contains { line in
+            let fields = line.split(separator: "\t")
+            return fields.count == 2 && fields[1].hasPrefix("refs/heads/") && Self.isObjectName(String(fields[0]))
+        }
+    }
+
+    /// Fetches only the branch's newest commit from `remote` into this
+    /// checkout, which has no `origin`: enough to read the library at its
+    /// head without its history. `nil` when the remote has no such branch.
+    func shallowFetch(from remote: String, host: String?) async throws -> String? {
+        let fetch = try await remoteGit(
+            ["fetch", "--quiet", "--no-tags", "--depth", "1", "--", remote, "refs/heads/\(branch)"], host: host)
+        guard fetch.status == 0 else {
+            guard !GitRemoteFailure.isMissingRemoteBranch(fetch.standardError) else { return nil }
+            throw GitWorkspaceTransportError.remote(
+                GitRemoteFailure.problem(standardError: fetch.standardError, host: host) ?? .notFound(host: host))
+        }
+        return try await revision("FETCH_HEAD")
+    }
+
+    /// The text of `workspace.json` at `head`, or `nil` when the commit holds
+    /// no such file.
+    func documentText(at head: String) async throws -> String? {
+        let blob = try await git(["show", "\(head):\(Self.documentFileName)"], allowing: [0, 128])
+        return blob.status == 0 ? blob.standardOutput : nil
     }
 
     func resetToRemote(head: String?) async throws {
@@ -336,25 +520,67 @@ extension GitWorkspaceTransport {
 
     func revision(_ reference: String) async throws -> String? {
         let output = try await git(["rev-parse", "--verify", "--quiet", reference], allowing: [0, 1, 128])
-        guard output.status == 0, let value = Self.singleLine(output.standardOutput),
-            value.count == 40 || value.count == 64,
-            value.allSatisfy({ $0.isHexDigit && ($0.isNumber || $0.isLowercase) })
+        guard output.status == 0, let value = Self.singleLine(output.standardOutput), Self.isObjectName(value)
         else { return nil }
         return value
     }
 
+    /// A full commit name, SHA-1 or SHA-256, in Git's lowercase hex.
+    nonisolated static func isObjectName(_ value: String) -> Bool {
+        (value.count == 40 || value.count == 64) && value.allSatisfy { $0.isHexDigit && ($0.isNumber || $0.isLowercase) }
+    }
+
+    /// A local Git command: one that does not talk to the remote. Any status
+    /// it was not allowed to end with, and a runner that gave up waiting, is
+    /// `commandFailed`.
     @discardableResult
     func git(_ arguments: [String], allowing statuses: Set<Int32> = [0]) async throws -> CommandOutput {
+        let output: CommandOutput
+        do { output = try await runGit(arguments) } catch ProcessCommandRunnerError.timedOut {
+            throw GitWorkspaceTransportError.commandFailed
+        }
+        guard statuses.contains(output.status) else { throw GitWorkspaceTransportError.commandFailed }
+        return output
+    }
+
+    /// A Git command that talks to `origin`, with whatever status it ended
+    /// with, so the caller can read what went wrong. A runner that gave up
+    /// waiting is reported as the remote's slowness.
+    func remoteGit(_ arguments: [String]) async throws -> CommandOutput {
+        do {
+            return try await runGit(arguments)
+        } catch ProcessCommandRunnerError.timedOut {
+            throw GitWorkspaceTransportError.remote(.timedOut(host: await originHost()))
+        }
+    }
+
+    /// The same, for a command that names the remote itself; `host` is the
+    /// one a report of its slowness names.
+    func remoteGit(_ arguments: [String], host: String?) async throws -> CommandOutput {
+        do {
+            return try await runGit(arguments)
+        } catch ProcessCommandRunnerError.timedOut {
+            throw GitWorkspaceTransportError.remote(.timedOut(host: host))
+        }
+    }
+
+    /// One Git command through the hardened invocation, whatever status it
+    /// ends with. A runner that gave up waiting is passed on as such, for the
+    /// caller to classify; every other runner failure is `commandFailed`,
+    /// because Git's own message can carry absolute paths and remote URLs.
+    private func runGit(_ arguments: [String]) async throws -> CommandOutput {
         try Task.checkCancellation()
         let output: CommandOutput
         do {
             output = try await runner.run(
-                executable: "/usr/bin/git", arguments: Self.prefix + arguments,
+                executable: Self.gitExecutable, arguments: Self.prefix + arguments,
                 currentDirectory: checkout)
         } catch is CancellationError {
             throw CancellationError()
+        } catch ProcessCommandRunnerError.timedOut(let executable) {
+            try Task.checkCancellation()
+            throw ProcessCommandRunnerError.timedOut(executable)
         } catch {
-            // Git's stderr can carry absolute paths and remote URLs.
             try Task.checkCancellation()
             throw GitWorkspaceTransportError.commandFailed
         }
@@ -364,7 +590,6 @@ extension GitWorkspaceTransport {
         else {
             throw GitWorkspaceTransportError.outputLimitExceeded
         }
-        guard statuses.contains(output.status) else { throw GitWorkspaceTransportError.commandFailed }
         return output
     }
 
@@ -375,9 +600,19 @@ extension GitWorkspaceTransport {
         return bytes
     }
 
+    /// Reads a published document. Its format is read on its own first, so a
+    /// library from a newer Agent Tooling is reported as that rather than as a
+    /// document this build cannot read, and a `workspace.json` that is some
+    /// other JSON is no library at all, as the preflight says of it.
     static func decode(_ text: String) throws -> PortableWorkspaceDocument {
         guard text.utf8.count <= documentLimit else { throw GitWorkspaceTransportError.documentTooLarge }
-        do { return try WorkspaceDocumentCoding.decode(Data(text.utf8)) } catch { throw GitWorkspaceTransportError.invalidDocument }
+        let bytes = Data(text.utf8)
+        switch RemoteDocumentFormat.classify(bytes) {
+        case .library(let format) where format.isNewer: throw GitWorkspaceTransportError.remote(.newerFormat)
+        case .notALibrary: throw GitWorkspaceTransportError.remote(.notALibrary)
+        case .library, .damaged: break
+        }
+        do { return try WorkspaceDocumentCoding.decode(bytes) } catch { throw GitWorkspaceTransportError.invalidDocument }
     }
 
     static func singleLine(_ text: String) -> String? {
@@ -398,7 +633,9 @@ extension GitWorkspaceTransport {
     }
 
     /// Only an explicit remote the person supplied, with no credentials in the
-    /// URL. Portable state never carries a token.
+    /// URL: no user or password, and nothing after the path, where a token
+    /// hides as easily (`?access_token=…`, `#…`). Portable state never
+    /// carries a token.
     nonisolated static func isValidRemote(_ remote: String) -> Bool {
         guard !remote.isEmpty, remote.count <= 2_048, !remote.hasPrefix("-"),
             !remote.contains("\0"),
@@ -408,6 +645,7 @@ extension GitWorkspaceTransport {
         guard let components = URLComponents(string: remote), let scheme = components.scheme?.lowercased()
         else { return false }
         guard ["https", "ssh", "file"].contains(scheme) else { return false }
-        return components.user == nil && components.password == nil
+        return components.user == nil && components.password == nil && components.percentEncodedQuery == nil
+            && components.percentEncodedFragment == nil
     }
 }

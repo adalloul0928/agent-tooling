@@ -69,6 +69,22 @@ Every response passes through `ResponseRedaction` before leaving the process, so
 a home directory or secret cannot reach an agent transcript even if a field were
 selected by mistake.
 
+Agent Tooling's own connection, the setup stage's Let your apps ask, is this
+server registered in an app as `agent-tooling` (`AgentToolingConnection`): a
+command bound to each Mac, the helper inside the app's bundle in Applications
+(`Contents/Helpers/agent-tooling-mcp`), with no credentials. It is how an app
+reaches the library, not one of the library's own connections, so it is left
+out of Library › Connections, every library count and each app's holdings.
+Its look-up and ask tools are the two lists the stage shows (nine and five).
+To take it out of an app again, untick the app on Let your apps ask and
+review: the review runs the app's own `mcp remove`, for a registration a
+receipt shows Agent Tooling made
+([deployment](workspace-deployment-v1.md#taking-agent-toolings-own-connection-out-d10)).
+
+`open_review_screen` links to sections only (`ExternalAppSection`). The
+setup stage's `agent-tooling://setup` is a route of its own
+(`ExternalAppRoute.setup`), so the server neither lists nor builds it.
+
 ## What the UI shows
 
 The server has no screen of its own. Its deep links open the Apps review surface
@@ -87,7 +103,8 @@ review. The in-app MCP test console exercises it.
 
 ## Not covered
 
-The server reports the app's last persisted scan rather than scanning live. It
-targets Codex, Claude Code, and Gemini CLI in its request `targets`. The
+The server reports the app's last persisted scan rather than scanning live. A
+request's `targets` name `codex`, `claude-code`, `gemini` and `kiro-cli`
+(`ToolSchema.targetNames`), at most one of each (`maxItems` is the count). The
 request-to-apply handoff is the app's reviewed path, which this doc does not
 cover.

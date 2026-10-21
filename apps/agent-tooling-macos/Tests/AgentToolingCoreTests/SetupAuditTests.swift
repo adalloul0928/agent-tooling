@@ -17,7 +17,7 @@ struct SetupAuditTests {
             root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
                 .appending(path: "SetupAuditTests-\(UUID().uuidString)", directoryHint: .isDirectory)
             claudeSkills = root.appending(path: ".claude/skills", directoryHint: .isDirectory)
-            pluginCache = root.appending(path: ".claude/plugins/cache/aim/Example-all", directoryHint: .isDirectory)
+            pluginCache = root.appending(path: ".claude/plugins/cache/example/Example-all", directoryHint: .isDirectory)
             let fm = FileManager.default
             try fm.createDirectory(at: claudeSkills, withIntermediateDirectories: true)
             // A real skill, a broken link, a folder with no definition, and a
@@ -68,24 +68,24 @@ struct SetupAuditTests {
         /// What the device check would have said about this home.
         func observations() -> [TargetObservation] {
             let currentPlugin = pluginCache.appending(path: "1.0.200").path(percentEncoded: false)
-            let missingPlugin = root.appending(path: ".claude/plugins/cache/aim/Vanished-all/1.0.1").path(percentEncoded: false)
+            let missingPlugin = root.appending(path: ".claude/plugins/cache/example/Vanished-all/1.0.1").path(percentEncoded: false)
             let claude = TargetObservation(
                 surface: .claudeCode, installed: true, commandAvailable: true, version: "2.1.285",
                 configurationPaths: [root.appending(path: ".claude.json").path(percentEncoded: false)],
                 discoveredSkills: ["docx", "Example-all:docx"],
-                discoveredPlugins: ["Example-all@aim", "Vanished-all@aim"],
+                discoveredPlugins: ["Example-all@example", "Vanished-all@example"],
                 discoveredMCPServers: ["present", "vanished"],
                 skillMetadata: [
                     "docx": .init(
                         path: claudeSkills.appending(path: "docx").path(percentEncoded: false), source: "Standalone Claude Code skill"),
                     "Example-all:docx": .init(
-                        path: pluginCache.appending(path: "1.0.200/skills/docx").path(percentEncoded: false), source: "Example-all@aim",
-                        providerPluginID: "Example-all@aim"),
+                        path: pluginCache.appending(path: "1.0.200/skills/docx").path(percentEncoded: false), source: "Example-all@example",
+                        providerPluginID: "Example-all@example"),
                 ],
                 pluginMetadata: [
-                    "Example-all@aim": .init(
+                    "Example-all@example": .init(
                         name: "Example All", source: currentPlugin, scope: "User", enabled: true, skillIDs: ["Example-all:docx"]),
-                    "Vanished-all@aim": .init(name: "Vanished All", source: missingPlugin, scope: "User", enabled: true),
+                    "Vanished-all@example": .init(name: "Vanished All", source: missingPlugin, scope: "User", enabled: true),
                 ],
                 mcpMetadata: [
                     "present": .init(transport: "stdio", authentication: "Not inferred", source: "Claude Code configuration"),
@@ -134,12 +134,15 @@ struct SetupAuditTests {
         let unmanaged = try one(.unmanagedSkill, "docx")
         #expect(unmanaged.actions.first == .adoptSkill(path: home.path(".claude/skills/docx"), client: .claude))
 
-        let missing = try one(.missingPluginInstall, "Vanished-all@aim")
+        let missing = try one(.missingPluginInstall, "Vanished-all@example")
         #expect(missing.severity == .high)
-        #expect(missing.actions == [.reinstallPlugin(pluginID: "Vanished-all@aim", client: .claude)])
+        #expect(missing.actions == [.reinstallPlugin(pluginID: "Vanished-all@example", client: .claude)])
 
-        let stale = try one(.stalePluginCache, "Example-all@aim")
-        #expect(stale.evidence == ["~/.claude/plugins/cache/aim/Example-all/1.0.100", "~/.claude/plugins/cache/aim/Example-all/1.0.150"])
+        let stale = try one(.stalePluginCache, "Example-all@example")
+        #expect(
+            stale.evidence == [
+                "~/.claude/plugins/cache/example/Example-all/1.0.100", "~/.claude/plugins/cache/example/Example-all/1.0.150",
+            ])
         #expect(stale.title.contains("2 old versions"))
 
         let command = try one(.unreachableMCPCommand, "vanished")
@@ -161,22 +164,22 @@ struct SetupAuditTests {
         #expect(report.findings.first?.severity == .high, "worst first")
     }
 
-    /// AIM keeps Codex's plugins flat by name; their siblings are other
+    /// Example Manager keeps Codex's plugins flat by name; their siblings are other
     /// plugins, not old versions, and must not be offered for removal.
     @Test func aPluginKeptFlatByNameHasNoStaleVersions() throws {
         let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
             .appending(path: "SetupAuditTests-flat-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: root) }
-        let plugins = root.appending(path: ".aim/plugins/codex", directoryHint: .isDirectory)
-        for name in ["Core", "Pipeline", "Atlas"] {
+        let plugins = root.appending(path: ".config/example-manager/plugins/codex", directoryHint: .isDirectory)
+        for name in ["Core", "Pipeline", "Additional"] {
             try FileManager.default.createDirectory(at: plugins.appending(path: name), withIntermediateDirectories: true)
         }
         let observation = TargetObservation(
             surface: .codexCLI, installed: true, commandAvailable: true, version: "0.159",
-            configurationPaths: [], discoveredSkills: [], discoveredPlugins: ["Core@aim"], discoveredMCPServers: [],
+            configurationPaths: [], discoveredSkills: [], discoveredPlugins: ["Core@example"], discoveredMCPServers: [],
             skillMetadata: [:],
             pluginMetadata: [
-                "Core@aim": .init(
+                "Core@example": .init(
                     name: "Core", source: plugins.appending(path: "Core").path(percentEncoded: false), scope: "User", enabled: true)
             ],
             mcpMetadata: [:], capabilities: Home.capabilities, notes: [])
@@ -195,32 +198,34 @@ struct SetupAuditTests {
         let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
             .appending(path: "SetupAuditTests-mkt-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: root) }
-        let marketplace = root.appending(path: ".aim/cc-plugins", directoryHint: .isDirectory)
+        let marketplace = root.appending(path: ".config/example-manager/catalog", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(
-            at: marketplace.appending(path: "Woot-all/.claude-plugin"), withIntermediateDirectories: true)
-        try "{}".write(to: marketplace.appending(path: "Woot-all/.claude-plugin/plugin.json"), atomically: true, encoding: .utf8)
+            at: marketplace.appending(path: "Example-all/.claude-plugin"), withIntermediateDirectories: true)
+        try "{}".write(to: marketplace.appending(path: "Example-all/.claude-plugin/plugin.json"), atomically: true, encoding: .utf8)
         try FileManager.default.createDirectory(at: root.appending(path: ".claude"), withIntermediateDirectories: true)
         let settings = root.appending(path: ".claude/settings.json")
-        try #"{"extraKnownMarketplaces":{"aim":{"source":{"source":"directory","path":"\#(marketplace.path(percentEncoded: false))"}}}}"#
+        try
+            #"{"extraKnownMarketplaces":{"example":{"source":{"source":"directory","path":"\#(marketplace.path(percentEncoded: false))"}}}}"#
             .write(to: settings, atomically: true, encoding: .utf8)
         let observation = TargetObservation(
             surface: .claudeCode, installed: true, commandAvailable: true, version: "2",
             configurationPaths: [settings.path(percentEncoded: false)], discoveredSkills: [],
-            discoveredPlugins: ["Woot-all@aim", "Gone-all@aim"],
+            discoveredPlugins: ["Example-all@example", "Gone-all@example"],
             discoveredMCPServers: [], skillMetadata: [:],
             pluginMetadata: [
-                "Woot-all@aim": .init(
-                    name: "Woot", source: root.appending(path: ".claude/plugins/cache/aim/Woot-all/1.0.1").path(percentEncoded: false),
+                "Example-all@example": .init(
+                    name: "Example",
+                    source: root.appending(path: ".claude/plugins/cache/example/Example-all/1.0.1").path(percentEncoded: false),
                     scope: "User", enabled: true),
-                "Gone-all@aim": .init(
-                    name: "Gone", source: root.appending(path: ".claude/plugins/cache/aim/Gone-all/1.0.1").path(percentEncoded: false),
+                "Gone-all@example": .init(
+                    name: "Gone", source: root.appending(path: ".claude/plugins/cache/example/Gone-all/1.0.1").path(percentEncoded: false),
                     scope: "User", enabled: true),
             ],
             mcpMetadata: [:], capabilities: Home.capabilities, notes: [])
         let report = SetupAuditor(homeURL: root).audit(
             observations: [observation], managed: [.claude], library: .init(managedSkillNames: []))
         let missing = report.findings.filter { $0.kind == .missingPluginInstall }.map(\.subject)
-        #expect(missing == ["Gone-all@aim"], "the one whose folder is in the marketplace directory is not missing")
+        #expect(missing == ["Gone-all@example"], "the one whose folder is in the marketplace directory is not missing")
     }
 
     @Test func aManagedSkillIsNotReportedAsUnmanaged() throws {
@@ -232,34 +237,33 @@ struct SetupAuditTests {
         #expect(report.findings.contains { $0.kind == .duplicateSkillInClient })
     }
 
-    /// AIM copies its skills into Kiro's folder. Those copies are AIM's:
-    /// not loose, not offered for adoption, and not offered for removal.
+    /// Recorded external ownership prevents adoption or removal of the copy.
     @Test func aCopyAnotherToolPlacedIsNeitherUnmanagedNorRemovable() throws {
         let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-            .appending(path: "SetupAuditTests-aim-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appending(path: "SetupAuditTests-manager-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: root) }
-        let aim = ObservedExternalManager(tool: "AIM", package: "core-skills")
+        let manager = ObservedExternalManager(tool: "Example Manager", package: "core-skills")
         let digest = String(repeating: "a", count: 64)
         let observation = TargetObservation(
             surface: .claudeCode, installed: true, commandAvailable: true, version: "2",
-            configurationPaths: [], discoveredSkills: ["brazil", "Core:brazil"], discoveredPlugins: [], discoveredMCPServers: [],
+            configurationPaths: [], discoveredSkills: ["build", "Core:build"], discoveredPlugins: [], discoveredMCPServers: [],
             skillMetadata: [
-                "brazil": .init(
-                    path: root.appending(path: ".claude/skills/brazil").path(percentEncoded: false), source: "s",
-                    definitionDigest: digest, externalManager: aim),
-                "Core:brazil": .init(
-                    path: root.appending(path: "plugins/Core/skills/brazil").path(percentEncoded: false), source: "Core@aim",
-                    providerPluginID: "Core@aim", definitionDigest: digest),
+                "build": .init(
+                    path: root.appending(path: ".claude/skills/build").path(percentEncoded: false), source: "s",
+                    definitionDigest: digest, externalManager: manager),
+                "Core:build": .init(
+                    path: root.appending(path: "plugins/Core/skills/build").path(percentEncoded: false), source: "Core@example",
+                    providerPluginID: "Core@example", definitionDigest: digest),
             ],
             pluginMetadata: [:], mcpMetadata: [:], capabilities: Home.capabilities, notes: [])
         let report = SetupAuditor(homeURL: root).audit(
             observations: [observation], managed: [.claude], library: .init(managedSkillNames: []))
         #expect(!report.findings.contains { $0.kind == .unmanagedSkill })
         let duplicate = try #require(report.findings.first { $0.kind == .duplicateSkillInClient })
-        #expect(duplicate.actions.isEmpty, "removing AIM's copy would be undone at its next sync")
+        #expect(duplicate.actions.isEmpty, "removing Example Manager's copy would be undone at its next sync")
         #expect(duplicate.severity == .low, "identical copies cannot behave differently")
         #expect(duplicate.detail.contains("identical"))
-        #expect(duplicate.detail.contains("AIM · core-skills"))
+        #expect(duplicate.detail.contains("Example Manager · core-skills"))
     }
 
     @Test func copiesWithDifferentContentAreSaidToDiffer() throws {
@@ -271,16 +275,18 @@ struct SetupAuditTests {
             configurationPaths: [], discoveredSkills: ["A:sop", "B:sop"], discoveredPlugins: [], discoveredMCPServers: [],
             skillMetadata: [
                 "A:sop": .init(
-                    path: "/p/A/sop", source: "A@aim", providerPluginID: "A@aim", definitionDigest: String(repeating: "a", count: 64)),
+                    path: "/p/A/sop", source: "A@example", providerPluginID: "A@example",
+                    definitionDigest: String(repeating: "a", count: 64)),
                 "B:sop": .init(
-                    path: "/p/B/sop", source: "B@aim", providerPluginID: "B@aim", definitionDigest: String(repeating: "b", count: 64)),
+                    path: "/p/B/sop", source: "B@example", providerPluginID: "B@example",
+                    definitionDigest: String(repeating: "b", count: 64)),
             ],
             pluginMetadata: [:], mcpMetadata: [:], capabilities: Home.capabilities, notes: [])
         let report = SetupAuditor(homeURL: root).audit(
             observations: [observation], managed: [.claude], library: .init(managedSkillNames: []))
         let duplicate = try #require(report.findings.first { $0.kind == .duplicateSkillInClient })
         #expect(duplicate.severity == .medium)
-        #expect(duplicate.detail.contains("A@aim, B@aim"))
+        #expect(duplicate.detail.contains("A@example, B@example"))
         #expect(duplicate.detail.contains("differ"))
     }
 
@@ -297,9 +303,10 @@ struct SetupAuditTests {
             skillMetadata: [:], pluginMetadata: [:],
             mcpMetadata: [
                 "builder": .init(
-                    transport: "stdio", authentication: "", source: "Woot-all@aim",
-                    additionalSources: ["Atlas-all@aim", "Claude Code configuration"]),
-                "jira": .init(transport: "stdio", authentication: "", source: "Woot-all@aim", additionalSources: ["Atlas-all@aim"]),
+                    transport: "stdio", authentication: "", source: "Example-all@example",
+                    additionalSources: ["Additional-all@example", "Claude Code configuration"]),
+                "jira": .init(
+                    transport: "stdio", authentication: "", source: "Example-all@example", additionalSources: ["Additional-all@example"]),
             ],
             capabilities: Home.capabilities, notes: [])
         let codex = TargetObservation(
@@ -324,25 +331,26 @@ struct SetupAuditTests {
         let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
             .appending(path: "SetupAuditTests-overlap-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: root) }
-        let shared = ["brazil", "crux", "wiki-edit"]
+        let shared = ["build", "crux", "wiki-edit"]
         let observation = TargetObservation(
             surface: .claudeCode, installed: true, commandAvailable: true, version: "2",
-            configurationPaths: [], discoveredSkills: [], discoveredPlugins: ["Core@aim", "Woot@aim", "Other@aim"],
+            configurationPaths: [], discoveredSkills: [], discoveredPlugins: ["Core@example", "Example@example", "Other@example"],
             discoveredMCPServers: [],
             skillMetadata: [:],
             pluginMetadata: [
-                "Core@aim": .init(name: "Core", source: "Core", scope: "User", enabled: true, skillIDs: shared.map { "Core:\($0)" }),
-                "Woot@aim": .init(
-                    name: "Woot", source: "Woot", scope: "User", enabled: true, skillIDs: (shared + ["mcm", "oncall"]).map { "Woot:\($0)" }),
-                "Other@aim": .init(
-                    name: "Other", source: "Other", scope: "User", enabled: true, skillIDs: ["Other:brazil", "Other:x", "Other:y"]),
+                "Core@example": .init(name: "Core", source: "Core", scope: "User", enabled: true, skillIDs: shared.map { "Core:\($0)" }),
+                "Example@example": .init(
+                    name: "Example", source: "Example", scope: "User", enabled: true,
+                    skillIDs: (shared + ["mcm", "oncall"]).map { "Example:\($0)" }),
+                "Other@example": .init(
+                    name: "Other", source: "Other", scope: "User", enabled: true, skillIDs: ["Other:build", "Other:x", "Other:y"]),
             ],
             mcpMetadata: [:], capabilities: Home.capabilities, notes: [])
         let report = SetupAuditor(homeURL: root).audit(
             observations: [observation], managed: [.claude], library: .init(managedSkillNames: []))
         let overlaps = report.findings.filter { $0.kind == .pluginSkillsOverlap }
-        #expect(overlaps.map(\.subject) == ["Core@aim|Woot@aim"], "one shared skill is not an overlap")
-        #expect(overlaps.first?.title == "Every skill in Core also comes with Woot")
+        #expect(overlaps.map(\.subject) == ["Core@example|Example@example"], "one shared skill is not an overlap")
+        #expect(overlaps.first?.title == "Every skill in Core also comes with Example")
         #expect(overlaps.first?.evidence == shared)
         #expect(overlaps.first?.actions.isEmpty == true)
     }
