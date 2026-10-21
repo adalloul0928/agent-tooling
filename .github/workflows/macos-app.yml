@@ -12,12 +12,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Test and package
+  debug:
+    name: Debug tests
     runs-on: macos-26
-    # Debug and sanitizer validation took 41 minutes on an uncached runner;
-    # allow time for release tests, CLI validation, and packaging as well.
-    timeout-minutes: 90
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: apps/agent-tooling-macos
@@ -62,6 +60,25 @@ jobs:
           swift test --disable-sandbox --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/debug-ui.xml"
           ../../scripts/check-test-report "$RUNNER_TEMP/debug-ui.xml"
 
+  thread:
+    name: Thread Sanitizer tests
+    runs-on: macos-26
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: apps/agent-tooling-macos
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
       - name: Run Core and MCP tests with Thread Sanitizer
         run: |
           swift test --disable-sandbox --sanitize=thread --no-parallel --skip '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/thread-core.xml"
@@ -72,9 +89,24 @@ jobs:
           swift test --disable-sandbox --sanitize=thread --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/thread-ui.xml"
           ../../scripts/check-test-report "$RUNNER_TEMP/thread-ui.xml"
 
-      - name: Build release with warnings as errors
+  release:
+    name: Release tests
+    runs-on: macos-26
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/agent-tooling-macos
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Report toolchain
         run: |
-          swift build --configuration release -Xswiftc -warnings-as-errors
+          xcodebuild -version
+          swift --version
 
       - name: Run Core and MCP release tests
         run: |
@@ -85,6 +117,29 @@ jobs:
         run: |
           swift test --disable-sandbox --configuration release --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/release-ui.xml"
           ../../scripts/check-test-report "$RUNNER_TEMP/release-ui.xml"
+
+  package:
+    name: Package app
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/agent-tooling-macos
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Build release with warnings as errors
+        run: |
+          swift build --configuration release -Xswiftc -warnings-as-errors
 
       - name: Smoke test Raycast CLI contract
         run: |
@@ -189,3 +244,22 @@ jobs:
           path: ${{ runner.temp }}/Agent-Tooling-ci-arm64.dmg
           if-no-files-found: error
           retention-days: 14
+
+  build:
+    name: Test and package
+    if: ${{ always() }}
+    needs: [debug, thread, release, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all macOS checks to pass
+        env:
+          DEBUG_RESULT: ${{ needs.debug.result }}
+          THREAD_RESULT: ${{ needs.thread.result }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        run: |
+          test "$DEBUG_RESULT" = success
+          test "$THREAD_RESULT" = success
+          test "$RELEASE_RESULT" = success
+          test "$PACKAGE_RESULT" = success
