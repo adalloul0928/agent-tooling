@@ -1,0 +1,767 @@
+import Foundation
+
+public struct ScannedInventory: Sendable {
+    public var skills: [Skill]
+    public var mcpServers: [MCPServer]
+    public var plugins: [Plugin]
+
+}
+
+public enum InventoryCompiler {
+    public static func compile(observations: [TargetObservation], homeURL: URL, fileManager: FileManager = .default) -> ScannedInventory {
+        var byClient: [ClientKind: [TargetObservation]] = [:]
+        for observation in observations {
+            if let client = observation.surface.client { byClient[client, default: []].append(observation) }
+        }
+        let allSkillIDs = Set(observations.flatMap(\.discoveredSkills))
+        let allMCPIDs = Set(observations.flatMap(\.discoveredMCPServers))
+        let allPluginIDs = Set(observations.flatMap(\.discoveredPlugins))
+
+        let skills = allSkillIDs.sorted().map { id in
+            let metadata = skillMetadata(id: id, observations: observations, homeURL: homeURL, fileManager: fileManager)
+            return Skill(
+                id: id,
+                name: id,
+                displayName: metadata.displayName,
+                summary: metadata.summary,
+                bundle: metadata.bundle,
+                scope: "This Mac",
+                owned: metadata.isManaged,
+                triggers: [],
+                negativeTrigger: "",
+                files: metadata.files,
+                clients: ClientKind.allCases.map { client in
+                    state(for: id, in: byClient[client] ?? [], type: .skill, client: client)
+                },
+                validationCount: 0,
+                // The file list came from scanning the installed skill's own
+                // folder on this Mac, so its inventory is known.
+                filesKnown: true
+            )
+        }
+
+        let mcpServers = allMCPIDs.sorted().map { id in
+            let metadata = observations.compactMap { $0.mcpMetadata[id] }.first
+            return MCPServer(
+                id: id,
+                name: displayName(for: id),
+                summary: metadata.map { "Discovered from \($0.source). Authentication and live tool health remain separate checks." }
+                    ?? "Discovered in local agent configuration. Authentication and live tool health are checked separately.",
+                endpoint: metadata?.source ?? "Local configuration",
+                transport: metadata?.transport.lowercased().contains("http") == true ? .http : .stdio,
+                authentication: metadata?.authentication ?? "Not inferred",
+                scope: "This Mac",
+                clients: ClientKind.allCases.map { client in
+                    state(for: id, in: byClient[client] ?? [], type: .mcpServer, client: client)
+                }
+            )
+        }
+
+        let plugins = allPluginIDs.sorted().map { id in
+            let metadata = observations.compactMap { $0.pluginMetadata[id] }.first
+            let targets = ClientKind.allCases.map { client in
+                state(for: id, in: byClient[client] ?? [], type: .plugin, client: client)
+            }
+            return Plugin(
+                id: id,
+                name: metadata?.name ?? displayName(for: id),
+                summary: metadata.map {
+                    $0.source.hasPrefix("/") ? "Installed from a local plugin source." : "Installed through \($0.source)."
+                } ?? "Discovered from local \(id) plugin or extension metadata.",
+                source: metadata?.source ?? "Observed local client state",
+                scope: metadata?.scope ?? "This Mac",
+                revision: metadata?.revision ?? "Unknown",
+                skills: metadata?.skillIDs ?? [],
+                profiles: [],
+                clients: targets,
+                installed: true
+            )
+        }
+        return ScannedInventory(skills: skills, mcpServers: mcpServers, plugins: plugins)
+    }
+
+    private enum InventoryItem { case skill, mcpServer, plugin }
+
+    private static func state(for id: String, in observations: [TargetObservation], type: InventoryItem, client: ClientKind) -> ClientState
+    {
+        guard !observations.isEmpty else {
+            return ClientState(client: client, state: .unavailable, detail: "Client not found", isInstalled: false)
+        }
+        let ordered = observations.sorted { $0.surface.displayName < $1.surface.displayName }
+        let discoveries = ordered.filter { observation in
+            switch type {
+            case .skill: observation.discoveredSkills.contains(id)
+            case .mcpServer: observation.discoveredMCPServers.contains(id)
+            case .plugin: observation.discoveredPlugins.contains(id)
+            }
+        }
+        if let observation = discoveries.first(where: { candidate in
+            guard candidate.isCommandAvailable else { return false }
+            switch type {
+            case .skill: return true
+            case .mcpServer: return candidate.mcpMetadata[id]?.enabled != false
+            case .plugin: return candidate.pluginMetadata[id]?.enabled != false
+            }
+        }) {
+            switch type {
+            case .plugin:
+                return ClientState(
+                    client: client, state: .healthy, detail: "Installed and enabled",
+                    revision: observation.pluginMetadata[id]?.revision ?? observation.version, isInstalled: true)
+            case .mcpServer:
+                return ClientState(client: client, state: .healthy, detail: "Configured", revision: observation.version, isInstalled: true)
+            case .skill:
+                return ClientState(client: client, state: .healthy, detail: "Available", revision: observation.version, isInstalled: true)
+            }
+        }
+        if let observation = discoveries.first {
+            let commandUnavailableDetail: String
+            switch type {
+            case .skill: commandUnavailableDetail = "Files found; CLI unavailable"
+            case .mcpServer: commandUnavailableDetail = "Configured; CLI unavailable"
+            case .plugin: commandUnavailableDetail = "Plugin data found; CLI unavailable"
+            }
+            if !observation.isCommandAvailable {
+                return ClientState(
+                    client: client, state: .pending, detail: commandUnavailableDetail, revision: observation.version, isInstalled: true)
+            }
+            switch type {
+            case .plugin:
+                if let metadata = observation.pluginMetadata[id], !metadata.enabled {
+                    return ClientState(
+                        client: client, state: .pending, detail: "Installed but disabled",
+                        revision: metadata.revision ?? observation.version, isInstalled: true)
+                }
+                return ClientState(
+                    client: client, state: .healthy, detail: "Installed and enabled",
+                    revision: observation.pluginMetadata[id]?.revision ?? observation.version, isInstalled: true)
+            case .mcpServer:
+                if let metadata = observation.mcpMetadata[id], !metadata.enabled {
+                    return ClientState(
+                        client: client, state: .pending, detail: "Configured but disabled", revision: observation.version, isInstalled: true
+                    )
+                }
+                return ClientState(client: client, state: .healthy, detail: "Configured", revision: observation.version, isInstalled: true)
+            case .skill:
+                return ClientState(client: client, state: .healthy, detail: "Available", revision: observation.version, isInstalled: true)
+            }
+        }
+        if ordered.contains(where: \.isCommandAvailable) {
+            return ClientState(
+                client: client, state: .pending, detail: "Not installed", revision: ordered.compactMap(\.version).first, isInstalled: false)
+        }
+        if let observation = ordered.first(where: \.installed) {
+            return ClientState(
+                client: client,
+                state: .unavailable,
+                detail: "Configuration found; CLI unavailable",
+                revision: observation.version,
+                isInstalled: false
+            )
+        }
+        return ClientState(
+            client: client, state: .unavailable, detail: "CLI not found", revision: ordered.compactMap(\.version).first, isInstalled: false)
+    }
+
+    private static func skillMetadata(id: String, observations: [TargetObservation], homeURL: URL, fileManager: FileManager) -> (
+        displayName: String, summary: String, bundle: String, files: [String], isManaged: Bool
+    ) {
+        for observation in observations {
+            guard let observed = observation.skillMetadata[id] else { continue }
+            let root = URL(fileURLWithPath: observed.path)
+            let skillFile = root.appending(path: "SKILL.md")
+            defer { ScanTrace.read(root) }
+            let content = (try? BoundedFileAccess.readUTF8(at: skillFile)) ?? ""
+            let fallbackName = id.split(separator: ":").last.map(String.init) ?? id
+            let frontmatter = try? SkillFrontmatter.parse(content)
+            let name = boundedText(frontmatter?.name, maximum: 4_096, required: true) ?? fallbackName
+            let summary = boundedText(frontmatter?.description, maximum: 65_536) ?? "Portable agent skill"
+            return (
+                displayName(for: name), summary, observed.providerPluginID ?? observed.source, childFiles(root, fileManager: fileManager),
+                false
+            )
+        }
+        let roots = [
+            homeURL.appending(path: ".claude/skills/\(id)"),
+            homeURL.appending(path: ".agents/skills/\(id)"),
+            homeURL.appending(path: ".gemini/skills/\(id)"),
+            homeURL.appending(path: ".gemini/extensions/\(id)/skills/\(id)"),
+        ]
+        for root in roots {
+            defer { ScanTrace.read(root) }
+            guard fileManager.fileExists(atPath: root.path(percentEncoded: false)) else { continue }
+            let skillFile = root.appending(path: "SKILL.md")
+            let content = (try? BoundedFileAccess.readUTF8(at: skillFile)) ?? ""
+            let frontmatter = try? SkillFrontmatter.parse(content)
+            let name = boundedText(frontmatter?.name, maximum: 4_096, required: true) ?? id
+            let summary = boundedText(frontmatter?.description, maximum: 65_536) ?? "Portable agent skill"
+            let files = childFiles(root, fileManager: fileManager)
+            return (displayName(for: name), summary, "Local installation", files, false)
+        }
+        return (displayName(for: id), "Portable agent skill", "Local installation", ["SKILL.md"], false)
+    }
+
+    private static func childFiles(_ root: URL, fileManager: FileManager) -> [String] {
+        let files = BoundedFileAccess.relativeRegularFiles(under: root, fileManager: fileManager)
+        let safeFiles = files.filter {
+            $0.count <= 8_192 && !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        }
+        return (safeFiles.isEmpty ? ["SKILL.md"] : safeFiles).sorted { lhs, rhs in
+            if lhs == "SKILL.md" { return true }
+            if rhs == "SKILL.md" { return false }
+            return lhs < rhs
+        }
+    }
+
+    private static func displayName(for value: String) -> String { ToolDisplayName.derived(from: value) }
+
+    private static func boundedText(_ value: String?, maximum: Int, required: Bool = false) -> String? {
+        guard let value else { return nil }
+        let redacted = SensitiveValueRedactor.redact(value)
+        guard redacted.count <= maximum,
+            !required || !redacted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            !redacted.unicodeScalars.contains(where: isUnsafeControlCharacter)
+        else { return nil }
+        return redacted
+    }
+
+    private static func isUnsafeControlCharacter(_ scalar: UnicodeScalar) -> Bool {
+        scalar.value < 0x20 && ![0x09, 0x0A, 0x0D].contains(scalar.value)
+    }
+
+}
+
+/// Scans declared client locations and reports reads to `ScanTrace`, including
+/// missing paths, tool-reported plugin folders and resolved symlink targets.
+/// This drives consent progress and trace-parity tests. Executable discovery
+/// happens earlier on the apps screen and is outside this trace.
+enum LocalTargetScan {
+    static func perform(
+        surface: TargetSurface,
+        homeURL: URL,
+        locations: ClientReadLocations,
+        capabilities: TargetCapabilities,
+        runner: any CommandRunning,
+        locate: (ClientKind, URL) -> URL? = ClientAdapterRegistry.liveLocate
+    ) async -> TargetObservation {
+        let fileManager = FileManager.default
+        let name = ClientExecutableLocator.executableName(for: locations.client)
+        // The tool is probed where the locator actually found it. A bare name
+        // would go through the PATH this app inherited, which is not the
+        // shell's — exactly how an installed tool reads as "unavailable".
+        let resolvedExecutable = locate(locations.client, homeURL)?.path(percentEncoded: false) ?? name
+        async let commandProbe = probe(executable: resolvedExecutable, locations: locations, runner: runner)
+        async let nativeInventory = nativeInventory(locations: locations, executable: resolvedExecutable, runner: runner)
+        var existingConfig: [URL] = []
+        var configurationDocuments: [String] = []
+        var notes: [String] = []
+        for configURL in locations.configurationFiles {
+            defer { ScanTrace.read(configURL) }
+            guard fileManager.fileExists(atPath: configURL.path(percentEncoded: false)) else { continue }
+            existingConfig.append(configURL)
+            do {
+                configurationDocuments.append(
+                    try BoundedFileAccess.readUTF8(at: configURL, maximumBytes: BoundedFileAccess.maximumConfigurationBytes))
+            } catch {
+                notes.append("Skipped \(configURL.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+        let probe = await commandProbe
+        let native = await nativeInventory
+        var skillMetadata: [String: ObservedSkillMetadata] = [:]
+        for root in locations.skillRoots {
+            // Claude Code keeps the skills it downloads from a claude.ai
+            // account in `~/.claude/skills/synced`. They are the account's,
+            // not loose skills on this Mac, so they never enter the inventory
+            // (and from there the library, the audit, or a removal).
+            let records = skillRecords(under: root, source: "Standalone \(surface.displayName) skill", fileManager: fileManager)
+                .filter { !ClaudeAccountSync.isInsideSyncedSkills(URL(fileURLWithPath: $0.value.path), homeURL: homeURL) }
+            skillMetadata.merge(records) { current, _ in current }
+        }
+        skillMetadata.merge(native.skillMetadata) { _, native in native }
+
+        var pluginMetadata = native.pluginMetadata
+        let configuredPlugins = configurationDocuments.flatMap(pluginNames(from:))
+        for id in configuredPlugins where pluginMetadata[id] == nil {
+            pluginMetadata[id] = ObservedPluginMetadata(
+                name: displayName(forPluginID: id), source: "\(surface.displayName) configuration", scope: "This Mac", enabled: true)
+        }
+        if locations.client == .gemini {
+            for id in locations.pluginRoots.flatMap({ childDirectories(under: $0, fileManager: fileManager) })
+            where pluginMetadata[id] == nil {
+                pluginMetadata[id] = ObservedPluginMetadata(
+                    name: displayName(forPluginID: id), source: "Gemini extension directory", scope: "This Mac", enabled: true)
+            }
+        }
+
+        var mcpMetadata: [String: ObservedMCPMetadata] = [:]
+        for document in configurationDocuments {
+            mcpMetadata.merge(mcpRecords(from: document, source: "\(surface.displayName) configuration")) { current, _ in current }
+        }
+        // A plugin's server beside one the client was configured with by
+        // hand is two definitions, and both are kept. The client's own
+        // listing of its configuration is not: it is the same definition,
+        // so it keeps one source, and that source stays the configuration
+        // that defines it. The listing's details are kept (it knows the
+        // transport and whether the server is on), but naming the listing as
+        // the source would hide that the server was configured by hand, and
+        // Checkup counts a server set up by hand in two apps from that.
+        mcpMetadata.merge(native.mcpMetadata) { configured, native in
+            guard !native.source.contains("@") else { return native.adding(source: configured.source) }
+            var listed = native
+            listed.source = configured.source
+            return listed
+        }
+        // Every declared folder is checked, rather than stopping at the first
+        // that is there, so the read touches each one its manifest lists.
+        let presentRoots = (locations.skillRoots + locations.pluginRoots).filter { root in
+            defer { ScanTrace.read(root) }
+            return fileManager.fileExists(atPath: root.path(percentEncoded: false))
+        }
+        let installed = probe.available || !existingConfig.isEmpty || !presentRoots.isEmpty
+        if probe.timedOut {
+            // The tool started and did not finish in the time it was given:
+            // it is here, and what it is was never said. Never "not
+            // available", which is a different finding a later plan treats
+            // differently.
+            notes.append(
+                "The \(name) CLI did not answer --version in the time allowed, "
+                    + "so its version is unknown and Agent Tooling cannot confirm what it accepts.")
+        } else if !probe.available {
+            notes.append("The \(name) CLI was not available in any known install location; configuration was scanned from disk only.")
+        } else if let status = probe.unansweredExitStatus {
+            // The tool is present but did not answer --version, so its version is
+            // unknown. Say so plainly: a later plan cannot confirm what an
+            // unknown version accepts, which is different from the app not
+            // supporting the request.
+            notes.append(
+                "The \(name) CLI is present but did not answer --version (exit \(status)), "
+                    + "so its version is unknown and Agent Tooling cannot confirm what it accepts.")
+        }
+        notes.append(contentsOf: native.notes)
+        if surface.isCloud { notes.append("Cloud state is not inferred from local configuration.") }
+        return TargetObservation(
+            surface: surface,
+            installed: installed,
+            commandAvailable: probe.available,
+            version: probe.version,
+            configurationPaths: existingConfig.map { $0.path(percentEncoded: false) },
+            discoveredSkills: skillMetadata.keys.sorted(),
+            discoveredPlugins: pluginMetadata.keys.sorted(),
+            discoveredMCPServers: mcpMetadata.keys.sorted(),
+            skillMetadata: skillMetadata,
+            pluginMetadata: pluginMetadata,
+            mcpMetadata: mcpMetadata,
+            capabilities: capabilities,
+            notes: notes
+        )
+    }
+
+    private struct NativeInventory {
+        var skillMetadata: [String: ObservedSkillMetadata] = [:]
+        var pluginMetadata: [String: ObservedPluginMetadata] = [:]
+        var mcpMetadata: [String: ObservedMCPMetadata] = [:]
+        var notes: [String] = []
+    }
+
+    /// Keyed on the client, never on the executable string: the executable is
+    /// the locator's absolute path, and matching it against bare names is how
+    /// a located tool silently loses its native inventory. Only a listing the
+    /// declaration holds is run.
+    private static func nativeInventory(
+        locations: ClientReadLocations, executable: String, runner: any CommandRunning
+    ) async -> NativeInventory {
+        let fileManager = FileManager.default
+        switch locations.client {
+        case .claude:
+            guard locations.runs(ClientReadLocations.pluginListArguments) else { return NativeInventory() }
+            guard
+                let output = try? await runner.run(
+                    executable: executable, arguments: ClientReadLocations.pluginListArguments, currentDirectory: nil),
+                output.status == 0
+            else {
+                return NativeInventory(notes: ["Claude's native plugin inventory was unavailable; disk configuration was used instead."])
+            }
+            return claudeInventory(from: output.standardOutput, fileManager: fileManager)
+        case .codex:
+            async let pluginOutput = listing(ClientReadLocations.pluginListArguments, locations: locations, executable, runner)
+            async let mcpOutput = listing(ClientReadLocations.mcpListArguments, locations: locations, executable, runner)
+            var inventory = NativeInventory()
+            switch await pluginOutput {
+            case .answered(let output):
+                inventory = codexPluginInventory(from: output.standardOutput, fileManager: fileManager)
+            case .unavailable:
+                inventory.notes.append("Codex's native plugin inventory was unavailable; config.toml was used instead.")
+            case .notDeclared:
+                break
+            }
+            switch await mcpOutput {
+            case .answered(let output):
+                inventory.mcpMetadata.merge(codexMCPInventory(from: output.standardOutput)) { _, native in native }
+            case .unavailable:
+                inventory.notes.append("Codex's native MCP inventory was unavailable; config.toml was used instead.")
+            case .notDeclared:
+                break
+            }
+            return inventory
+        case .gemini, .kiro:
+            return NativeInventory()
+        }
+    }
+
+    /// How a listing went.
+    private enum Listing {
+        /// The tool answered with status 0.
+        case answered(CommandOutput)
+        /// It ran and failed, or could not be run.
+        case unavailable
+        /// The declaration does not hold it, so it was not run.
+        case notDeclared
+    }
+
+    private static func listing(
+        _ arguments: [String], locations: ClientReadLocations, _ executable: String, _ runner: any CommandRunning
+    ) async -> Listing {
+        guard locations.runs(arguments) else { return .notDeclared }
+        guard let output = try? await runner.run(executable: executable, arguments: arguments, currentDirectory: nil),
+            output.status == 0
+        else { return .unavailable }
+        return .answered(output)
+    }
+
+    private static func claudeInventory(from text: String, fileManager: FileManager) -> NativeInventory {
+        guard let data = text.data(using: .utf8), let entries = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return NativeInventory()
+        }
+        var inventory = NativeInventory()
+        for entry in entries.prefix(BoundedFileAccess.maximumDirectoryEntries) {
+            guard let id = boundedIdentifier(entry["id"] as? String) else { continue }
+            // `<name>@synced` is a plugin the claude.ai account supplies. It
+            // is read on the Accounts screen, never recorded as a package this
+            // Mac installed, so nothing here can offer to reinstall or remove it.
+            if ClaudeAccountSync.isSyncedPluginID(id) { continue }
+            let name = displayName(forPluginID: id)
+            let source = boundedText(entry["installPath"] as? String, maximum: 8_192) ?? "Claude plugin inventory"
+            let scope = boundedText((entry["scope"] as? String)?.capitalized, maximum: 4_096) ?? "This Mac"
+            let enabled = entry["enabled"] as? Bool ?? true
+            let revision = boundedText(entry["version"] as? String, maximum: 4_096)
+            let namespace = id.split(separator: "@").first.map(String.init) ?? id
+            let skills =
+                source.hasPrefix("/")
+                ? skillRecords(
+                    under: URL(fileURLWithPath: source), namespace: namespace, source: id, providerPluginID: id, fileManager: fileManager)
+                : [:]
+            inventory.skillMetadata.merge(skills) { current, _ in current }
+            var mcpIDs: [String] = []
+            if let servers = entry["mcpServers"] as? [String: Any] {
+                for (rawServerID, value) in servers.prefix(BoundedFileAccess.maximumDirectoryEntries) {
+                    guard let serverID = boundedIdentifier(rawServerID) else { continue }
+                    mcpIDs.append(serverID)
+                    // Several plugins can each bring a server by one name;
+                    // the first keeps the record and the rest are listed on it.
+                    if let earlier = inventory.mcpMetadata[serverID] {
+                        inventory.mcpMetadata[serverID] = earlier.adding(source: id)
+                    } else {
+                        inventory.mcpMetadata[serverID] = mcpMetadata(from: value, source: id)
+                    }
+                }
+            }
+            inventory.pluginMetadata[id] = ObservedPluginMetadata(
+                name: name, source: source, scope: scope, revision: revision, enabled: enabled, skillIDs: skills.keys.sorted(),
+                mcpServerIDs: mcpIDs.sorted())
+        }
+        return inventory
+    }
+
+    private static func codexPluginInventory(from text: String, fileManager: FileManager) -> NativeInventory {
+        guard let data = text.data(using: .utf8), let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let entries = root["installed"] as? [[String: Any]]
+        else { return NativeInventory() }
+        var inventory = NativeInventory()
+        for entry in entries.prefix(BoundedFileAccess.maximumDirectoryEntries) {
+            guard let id = boundedIdentifier(entry["pluginId"] as? String) else { continue }
+            let rawName =
+                boundedText(entry["name"] as? String, maximum: 4_096, required: true)
+                ?? id.split(separator: "@").first.map(String.init)
+                ?? id
+            let sourceObject = entry["source"] as? [String: Any]
+            let source =
+                boundedText(sourceObject?["path"] as? String, maximum: 8_192)
+                ?? boundedText(sourceObject?["package"] as? String, maximum: 8_192)
+                ?? "Codex plugin inventory"
+            let enabled = entry["enabled"] as? Bool ?? true
+            let revision = boundedText(entry["version"] as? String, maximum: 4_096)
+            let skills =
+                source.hasPrefix("/")
+                ? skillRecords(
+                    under: URL(fileURLWithPath: source), namespace: rawName, source: id, providerPluginID: id, fileManager: fileManager)
+                : [:]
+            inventory.skillMetadata.merge(skills) { current, _ in current }
+            inventory.pluginMetadata[id] = ObservedPluginMetadata(
+                name: displayName(forPluginID: rawName), source: source, scope: "This Mac", revision: revision, enabled: enabled,
+                skillIDs: skills.keys.sorted())
+        }
+        return inventory
+    }
+
+    private static func codexMCPInventory(from text: String) -> [String: ObservedMCPMetadata] {
+        guard let data = text.data(using: .utf8), let entries = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return [:]
+        }
+        var result: [String: ObservedMCPMetadata] = [:]
+        for entry in entries.prefix(BoundedFileAccess.maximumDirectoryEntries) {
+            guard let id = boundedIdentifier(entry["name"] as? String) else { continue }
+            let transport = boundedText((entry["transport"] as? [String: Any])?["type"] as? String, maximum: 4_096) ?? "stdio"
+            let auth = boundedText(entry["auth_status"] as? String, maximum: 4_096) ?? "Not inferred"
+            let enabled = entry["enabled"] as? Bool ?? true
+            result[id] = ObservedMCPMetadata(
+                transport: transport, authentication: auth.replacingOccurrences(of: "_", with: " ").capitalized,
+                source: "Codex native MCP inventory", enabled: enabled)
+        }
+        return result
+    }
+
+    /// The skills under `root`, walked as `BoundedFileAccess` walks: a link
+    /// is followed to what it leads to, and the walk tells the trace of each
+    /// one that leads outside `root`, because what is there is read where it
+    /// is. The trace hears of `root` itself, as given, once the walk is done.
+    private static func skillRecords(
+        under root: URL, namespace: String? = nil, source: String, providerPluginID: String? = nil, fileManager: FileManager
+    ) -> [String: ObservedSkillMetadata] {
+        defer { ScanTrace.read(root) }
+        var records: [String: ObservedSkillMetadata] = [:]
+        for url in BoundedFileAccess.descendantDirectories(under: root, fileManager: fileManager) {
+            guard BoundedFileAccess.isRegularFile(url.appending(path: "SKILL.md")) else { continue }
+            let id = namespace.map { "\($0):\(url.lastPathComponent)" } ?? url.lastPathComponent
+            guard boundedIdentifier(id) != nil else { continue }
+            records[id] = ObservedSkillMetadata(
+                path: url.path(percentEncoded: false), source: source, providerPluginID: providerPluginID,
+                definitionDigest: ToolCopyIdentity.definitionDigest(ofSkillAt: url, fileManager: fileManager))
+        }
+        return records
+    }
+
+    private struct CommandProbe {
+        var available: Bool
+        var version: String?
+        /// The exit status of `--version` when the tool ran but did not report
+        /// a version. `nil` means either it answered cleanly or was not found.
+        /// Present only for the "present but did not answer" case, so a note can
+        /// say the version is unknown rather than the tool being unsupported.
+        var unansweredExitStatus: Int32?
+        /// True when `--version` started and was stopped for running past its
+        /// time: the tool is here and its version is unknown.
+        var timedOut = false
+    }
+
+    private static func probe(executable: String, locations: ClientReadLocations, runner: any CommandRunning) async -> CommandProbe {
+        let unavailable = CommandProbe(available: false, version: nil, unansweredExitStatus: nil)
+        guard locations.runs(ClientReadLocations.versionArguments) else { return unavailable }
+        let output: CommandOutput
+        do {
+            output = try await runner.run(executable: executable, arguments: ClientReadLocations.versionArguments, currentDirectory: nil)
+        } catch ProcessCommandRunnerError.timedOut {
+            return CommandProbe(available: true, version: nil, unansweredExitStatus: nil, timedOut: true)
+        } catch {
+            // It could not be started, or the read was stopped. A read that
+            // was stopped is never kept, so what this says then is moot.
+            return unavailable
+        }
+        guard output.status != 126, output.status != 127 else { return unavailable }
+        let version = versionLine(from: output)
+        // The tool ran (it was not missing, 126 and 127 already returned above),
+        // but a non-zero exit or empty output left the version unknown. Keep it
+        // available with no version, and record the exit status so the caller
+        // can say the version is unknown rather than that the tool is missing.
+        let unanswered: Int32? = version == nil ? output.status : nil
+        return CommandProbe(available: true, version: version, unansweredExitStatus: unanswered)
+    }
+
+    /// The line `--version` printed, as an observation records it: the first
+    /// line of standard output, or of standard error when standard output is
+    /// empty, and only from a run that exited 0. The first read reports this
+    /// same line, so a tile and the observation it commits cannot differ.
+    static func versionLine(from output: CommandOutput) -> String? {
+        guard output.status == 0 else { return nil }
+        let value = (output.standardOutput.isEmpty ? output.standardError : output.standardOutput)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value.components(separatedBy: "\n").first
+    }
+
+    private static func childDirectories(under root: URL, fileManager: FileManager) -> [String] {
+        defer { ScanTrace.read(root) }
+        guard
+            let contents = try? fileManager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+                options: [.skipsHiddenFiles]
+            )
+        else { return [] }
+        return contents.compactMap { url in
+            guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
+                values.isDirectory == true,
+                values.isSymbolicLink != true
+            else { return nil }
+            return url.lastPathComponent
+        }
+    }
+
+    private static func pluginNames(from configuration: String) -> [String] {
+        var names: Set<String> = []
+        if let data = configuration.data(using: .utf8), let root = try? JSONSerialization.jsonObject(with: data) {
+            collectEnabledPluginNames(in: root, into: &names)
+        }
+        for path in TOMLTableScanner.tablePaths(in: configuration) {
+            guard path.count == 2,
+                path[0] == "plugins",
+                !path[1].isEmpty
+            else { continue }
+            names.insert(path[1])
+        }
+        return names.sorted()
+    }
+
+    private static func collectEnabledPluginNames(in object: Any, into names: inout Set<String>) {
+        var remainingNodes = 10_000
+        collectEnabledPluginNames(in: object, depth: 0, remainingNodes: &remainingNodes, into: &names)
+    }
+
+    private static func collectEnabledPluginNames(in object: Any, depth: Int, remainingNodes: inout Int, into names: inout Set<String>) {
+        guard depth <= 32, remainingNodes > 0 else { return }
+        remainingNodes -= 1
+        if let dictionary = object as? [String: Any] {
+            if let plugins = dictionary["enabledPlugins"] as? [String: Any] {
+                names.formUnion(plugins.keys.prefix(BoundedFileAccess.maximumDirectoryEntries).compactMap(boundedIdentifier))
+            }
+            for value in dictionary.values {
+                collectEnabledPluginNames(in: value, depth: depth + 1, remainingNodes: &remainingNodes, into: &names)
+            }
+        } else if let array = object as? [Any] {
+            for value in array { collectEnabledPluginNames(in: value, depth: depth + 1, remainingNodes: &remainingNodes, into: &names) }
+        }
+    }
+
+    private static func mcpRecords(from configuration: String, source: String) -> [String: ObservedMCPMetadata] {
+        var records: [String: ObservedMCPMetadata] = [:]
+        if let data = configuration.data(using: .utf8),
+            let root = try? JSONSerialization.jsonObject(with: data)
+        {
+            collectJSONMCPRecords(in: root, source: source, into: &records)
+        }
+        for path in TOMLTableScanner.tablePaths(in: configuration) {
+            guard path.count == 2,
+                ["mcp", "mcp_servers"].contains(path[0]), !path[1].isEmpty
+            else { continue }
+            records[path[1]] = ObservedMCPMetadata(transport: "stdio", authentication: "Not inferred", source: source)
+        }
+        return records
+    }
+
+    private static func collectJSONMCPRecords(in object: Any, source: String, into records: inout [String: ObservedMCPMetadata]) {
+        var remainingNodes = 10_000
+        collectJSONMCPRecords(in: object, source: source, depth: 0, remainingNodes: &remainingNodes, into: &records)
+    }
+
+    private static func collectJSONMCPRecords(
+        in object: Any, source: String, depth: Int, remainingNodes: inout Int, into records: inout [String: ObservedMCPMetadata]
+    ) {
+        guard depth <= 32, remainingNodes > 0 else { return }
+        remainingNodes -= 1
+        if let dictionary = object as? [String: Any] {
+            for key in ["mcpServers", "mcp_servers"] {
+                if let servers = dictionary[key] as? [String: Any] {
+                    for (rawID, value) in servers.prefix(BoundedFileAccess.maximumDirectoryEntries) {
+                        guard let id = boundedIdentifier(rawID) else { continue }
+                        records[id] = mcpMetadata(from: value, source: source)
+                    }
+                }
+            }
+            for value in dictionary.values {
+                collectJSONMCPRecords(in: value, source: source, depth: depth + 1, remainingNodes: &remainingNodes, into: &records)
+            }
+        } else if let array = object as? [Any] {
+            for value in array {
+                collectJSONMCPRecords(in: value, source: source, depth: depth + 1, remainingNodes: &remainingNodes, into: &records)
+            }
+        }
+    }
+
+    private static func boundedIdentifier(_ value: String?) -> String? {
+        guard let value,
+            !value.isEmpty,
+            value.count <= 256,
+            !value.hasPrefix("-"),
+            !value.contains("/"),
+            !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        else { return nil }
+        return value
+    }
+
+    private static func boundedText(_ value: String?, maximum: Int, required: Bool = false) -> String? {
+        guard let value else { return nil }
+        let redacted = SensitiveValueRedactor.redact(value)
+        guard redacted.count <= maximum,
+            !required || !redacted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            !redacted.unicodeScalars.contains(where: isUnsafeControlCharacter)
+        else { return nil }
+        return redacted
+    }
+
+    private static func isUnsafeControlCharacter(_ scalar: UnicodeScalar) -> Bool {
+        scalar.value < 0x20 && ![0x09, 0x0A, 0x0D].contains(scalar.value)
+    }
+
+    private static func mcpMetadata(from value: Any, source: String) -> ObservedMCPMetadata {
+        let dictionary = value as? [String: Any]
+        let declaredType = boundedText(dictionary?["type"] as? String, maximum: 4_096)
+        let transport = declaredType ?? (dictionary?["url"] == nil ? "stdio" : "streamable_http")
+        let authentication =
+            boundedText(dictionary?["auth_status"] as? String, maximum: 4_096)
+            ?? (dictionary?["url"] == nil ? "Not inferred" : "Account or OAuth")
+        return ObservedMCPMetadata(
+            transport: transport, authentication: authentication, source: source,
+            enabled: dictionary?["enabled"] as? Bool ?? !(dictionary?["disabled"] as? Bool ?? false))
+    }
+
+    private static func displayName(forPluginID id: String) -> String {
+        ToolDisplayName.derived(from: id.split(separator: "@").first.map(String.init) ?? id)
+    }
+}
+
+/// The one place an identifier becomes something to read.
+///
+/// Skills and plugins are discovered under two different scanners, and each
+/// used to carry its own copy of this, which is how they drifted apart.
+enum ToolDisplayName {
+    static func derived(from value: String) -> String {
+        value.split(whereSeparator: { $0 == "-" || $0 == "_" }).map(preferredToken).joined(separator: " ")
+    }
+
+    private static func preferredToken(_ token: Substring) -> String {
+        switch token.lowercased() {
+        case "mcp": return "MCP"
+        case "cli": return "CLI"
+        case "api": return "API"
+        case "ios": return "iOS"
+        case "pdf": return "PDF"
+        case "github": return "GitHub"
+        case "oauth": return "OAuth"
+        case "repl": return "REPL"
+        case "heroui": return "HeroUI"
+        default: return leadingCapital(token)
+        }
+    }
+
+    /// Raise the first character and leave the rest of the token alone.
+    ///
+    /// `String.capitalized` starts a new word at every digit-to-letter
+    /// boundary, so an opaque identifier such as
+    /// `68de829bf7648191acd70a907364c67c` came back as
+    /// `68De829Bf7648191Acd70A907364C67C` — a name the vendor never used and
+    /// that no search for the real identifier matches. It also flattens casing
+    /// an author chose deliberately. Neither is ours to invent.
+    private static func leadingCapital(_ token: Substring) -> String {
+        guard let first = token.first else { return "" }
+        return first.uppercased() + token.dropFirst()
+    }
+}

@@ -1,0 +1,158 @@
+import Foundation
+
+/// Projects the versioned workspace into the read-only integration model.
+/// Assignments express intent, not observed installation. Client states remain
+/// `pending` with `isInstalled == nil` until a scan supplies presence evidence.
+public enum VersionedInventoryProjection {
+    public struct Inventory: Sendable, Equatable {
+        public var skills: [Skill]
+        public var mcpServers: [MCPServer]
+        public var plugins: [Plugin]
+    }
+
+    /// Projects one versioned workspace. `library` is the same read model the
+    /// app's own Library view is built from, so the two cannot disagree about
+    /// what exists or who owns it.
+    public static func inventory(_ library: WorkspaceLibraryReadModel) -> Inventory {
+        var skills: [Skill] = []
+        var servers: [MCPServer] = []
+        var plugins: [Plugin] = []
+        for row in library.rows {
+            switch row.kind {
+            case .skill:
+                skills.append(skill(row))
+            case .mcpServer:
+                servers.append(server(row))
+            case .nativePlugin, .package:
+                plugins.append(plugin(row))
+                // A package's members are things a person can search for by
+                // name, so they are listed rather than hidden inside it.
+                for child in row.includedChildren where child.kind == .skill {
+                    skills.append(skill(child, parentLabel: row.displayName))
+                }
+                for child in row.includedChildren where child.kind == .mcpServer {
+                    servers.append(server(child))
+                }
+            case .preset, .logicalProject:
+                continue
+            }
+        }
+        return .init(skills: skills, mcpServers: servers, plugins: plugins)
+    }
+
+    // MARK: - Records
+
+    // A skill's `name` is the one a client calls it by — the declared name
+    // without a plugin's namespace — so recent work that names a skill can be
+    // matched to it, and copies of one skill share it. A skill with nothing
+    // declared keeps its display name.
+    private static func skill(_ row: WorkspaceLibraryReadModelRow) -> Skill {
+        .init(
+            id: row.artifactID.rawValue.uuidString.lowercased(),
+            name: ToolCopyIdentity.bareName(row.declaredName) ?? row.displayName,
+            displayName: row.displayName, summary: row.observedDescription ?? "",
+            bundle: row.sourceLabel ?? "", scope: scope(row.requestedAssignments),
+            owned: owns(row.ownership), triggers: [], negativeTrigger: "", files: [],
+            clients: states(row.requestedAssignments), validationCount: 0)
+    }
+
+    private static func skill(_ item: WorkspaceLibraryIncludedItem, parentLabel: String) -> Skill {
+        .init(
+            id: item.artifactID.rawValue.uuidString.lowercased(),
+            name: ToolCopyIdentity.bareName(item.declaredName) ?? item.displayName,
+            displayName: item.displayName, summary: item.observedDescription ?? "",
+            bundle: parentLabel, scope: scope(item.requestedAssignments),
+            owned: owns(item.ownership), triggers: [], negativeTrigger: "", files: [],
+            clients: states(item.requestedAssignments), validationCount: 0)
+    }
+
+    private static func server(_ row: WorkspaceLibraryReadModelRow) -> MCPServer {
+        // Only a connection this workspace holds a definition for has an
+        // address to report. For everything else the endpoint stays empty: a
+        // server the workspace merely observed lives in this Mac's own client
+        // files, and a placeholder would read as a real address.
+        let connection = row.connection
+        return .init(
+            id: row.artifactID.rawValue.uuidString.lowercased(), name: row.displayName,
+            summary: row.observedDescription ?? "", endpoint: connection?.endpoint ?? "",
+            transport: connection?.transport ?? .stdio,
+            authentication: authentication(connection), scope: scope(row.requestedAssignments),
+            projectRoot: connection?.workspaceRootPath,
+            clients: states(row.requestedAssignments),
+            secretNames: connection?.credentialRequirementNames ?? [],
+            definitionOrigin: owns(row.ownership) ? .managed : .observed)
+    }
+
+    private static func server(_ item: WorkspaceLibraryIncludedItem) -> MCPServer {
+        let connection = item.connection
+        return .init(
+            id: item.artifactID.rawValue.uuidString.lowercased(), name: item.displayName,
+            summary: item.observedDescription ?? "", endpoint: connection?.endpoint ?? "",
+            transport: connection?.transport ?? .stdio,
+            authentication: authentication(connection), scope: scope(item.requestedAssignments),
+            projectRoot: connection?.workspaceRootPath,
+            clients: states(item.requestedAssignments),
+            secretNames: connection?.credentialRequirementNames ?? [],
+            definitionOrigin: owns(item.ownership) ? .managed : .observed)
+    }
+
+    /// What setting the connection up needs, in the words the older surfaces
+    /// already use. It says what is required, never that it is satisfied.
+    private static func authentication(_ connection: WorkspaceLibraryMCPConnection?) -> String {
+        guard let connection else { return "" }
+        switch connection.authenticationRequirement {
+        case .none: return ""
+        case .oauth: return "OAuth"
+        case .apiKey: return "API key"
+        case .doppler: return "Doppler"
+        case .environment: return "Environment"
+        }
+    }
+
+    private static func plugin(_ row: WorkspaceLibraryReadModelRow) -> Plugin {
+        .init(
+            id: row.artifactID.rawValue.uuidString.lowercased(), name: row.displayName,
+            summary: row.observedDescription ?? "",
+            source: row.sourceLabel ?? row.nativeRoutes.first?.externalPluginID ?? "",
+            scope: scope(row.requestedAssignments),
+            // The workspace pins content by digest, not by a version string a
+            // person would recognise, so no revision is claimed.
+            revision: "",
+            skills: row.includedChildren.filter { $0.kind == .skill }.map(\.displayName),
+            profiles: [], clients: states(row.requestedAssignments),
+            // Requested, not measured. Only the Install step knows what is
+            // actually on this Mac, and it is not consulted here.
+            installed: false)
+    }
+
+    // MARK: - Shared reading
+
+    private static func owns(_ ownership: WorkspaceLibraryOwnership) -> Bool {
+        switch ownership {
+        case .centralPersonal, .centralUpstream: true
+        case .nativeOwned, .attachedAuthoring, .trackedOnly: false
+        }
+    }
+
+    private static func scope(_ assignments: [WorkspaceLibraryRequestedAssignment]) -> String {
+        assignments.contains { $0.destination.scope == .user } ? "user" : "project"
+    }
+
+    /// One entry per client a destination was requested for, never more.
+    private static func states(_ assignments: [WorkspaceLibraryRequestedAssignment]) -> [ClientState] {
+        var byClient: [ClientKind: Int] = [:]
+        for assignment in assignments where assignment.desiredPresence {
+            guard let client = assignment.destination.surface.client else { continue }
+            byClient[client, default: 0] += 1
+        }
+        return byClient.keys.sorted { $0.rawValue < $1.rawValue }.map { client in
+            let count = byClient[client] ?? 0
+            return ClientState(
+                client: client, state: .pending,
+                detail: count == 1
+                    ? "Asked for in one place. Not checked against this Mac."
+                    : "Asked for in \(count) places. Not checked against this Mac.",
+                isInstalled: nil)
+        }
+    }
+}

@@ -1,0 +1,326 @@
+import Foundation
+import Testing
+
+@testable import AgentToolingCore
+
+private func managedServer(endpoint: String, transport: MCPTransport) -> MCPServer {
+    MCPServer(
+        id: "fixture",
+        name: "Fixture",
+        summary: "Managed by Agent Tooling",
+        endpoint: endpoint,
+        transport: transport,
+        authentication: "None",
+        scope: "This Mac",
+        clients: [],
+        definitionOrigin: .managed
+    )
+}
+
+private struct TemporaryTree {
+    let root: URL
+
+    init() throws {
+        root = FileManager.default.temporaryDirectory
+            .appending(path: "mcp-policy-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    }
+
+    func makeExecutable(named name: String) throws -> URL {
+        let url = root.appending(path: name, directoryHint: .notDirectory)
+        try Data("#!/bin/echo\n".utf8).write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path(percentEncoded: false))
+        return url
+    }
+
+    func remove() {
+        try? FileManager.default.removeItem(at: root)
+    }
+}
+
+struct MCPTestConnectionPolicyTests {
+    // MARK: What is refused before anything runs
+
+    @Test func aDiscoveredDefinitionIsNeverGuessedIntoACommand() {
+        let observed = MCPServer(
+            id: "observed",
+            name: "Observed",
+            summary: "Discovered from ~/.claude.json.",
+            endpoint: "~/.claude.json",
+            transport: .stdio,
+            authentication: "Not inferred",
+            scope: "This Mac",
+            clients: [],
+            definitionOrigin: .observed
+        )
+
+        #expect(throws: MCPLiveTestError.self) { try MCPTestConnectionPolicy.resolve(server: observed) }
+    }
+
+    @Test func shellsAndPrivilegeWrappersAreRefusedSoTheShownLineIsTheProgramThatRuns() throws {
+        let tree = try TemporaryTree()
+        defer { tree.remove() }
+
+        for wrapper in ["sh", "bash", "zsh", "env", "sudo", "xargs", "osascript", "nohup", "ssh", "arch"] {
+            let server = managedServer(endpoint: "/bin/\(wrapper) -c 'node server.js'", transport: .stdio)
+            #expect(
+                throws: MCPLiveTestError.executableNotPermitted(wrapper),
+                "\(wrapper) must be refused"
+            ) {
+                try MCPTestConnectionPolicy.resolve(server: server, homeURL: tree.root)
+            }
+        }
+    }
+
+    @Test func aSymlinkIntoAShellIsRefusedAfterResolutionNotBeforeIt() throws {
+        let tree = try TemporaryTree()
+        defer { tree.remove() }
+        let disguised = tree.root.appending(path: "mcp-server", directoryHint: .notDirectory)
+        try FileManager.default.createSymbolicLink(at: disguised, withDestinationURL: URL(fileURLWithPath: "/bin/sh"))
+        let server = managedServer(endpoint: disguised.path(percentEncoded: false), transport: .stdio)
+
+        #expect(throws: MCPLiveTestError.executableNotPermitted("sh")) {
+            try MCPTestConnectionPolicy.resolve(server: server, homeURL: tree.root)
+        }
+    }
+
+    @Test func aMissingProgramFailsRatherThanFallingBackToAShell() throws {
+        let tree = try TemporaryTree()
+        defer { tree.remove() }
+        let server = managedServer(
+            endpoint: tree.root.appending(path: "not-installed").path(percentEncoded: false),
+            transport: .stdio
+        )
+
+        #expect(throws: MCPLiveTestError.self) { try MCPTestConnectionPolicy.resolve(server: server, homeURL: tree.root) }
+    }
+
+    @Test func anInlineSecretInTheCommandNeverReachesTheTestConnection() throws {
+        let tree = try TemporaryTree()
+        defer { tree.remove() }
+        let executable = try tree.makeExecutable(named: "mcp-fixture")
+        let server = managedServer(
+            endpoint: "\(executable.path(percentEncoded: false)) --api-key sk-EXAMPLE-NOT-A-REAL-KEY",
+            transport: .stdio
+        )
+
+        #expect(throws: MCPDefinitionValidationError.inlineSecret) {
+            try MCPTestConnectionPolicy.resolve(server: server, homeURL: tree.root)
+        }
+    }
+
+    // MARK: What is allowed
+
+    @Test func aNamedProgramResolvesToTheExactFileThatWillRun() throws {
+        let tree = try TemporaryTree()
+        defer { tree.remove() }
+        let executable = try tree.makeExecutable(named: "mcp-fixture")
+        let server = managedServer(endpoint: "\(executable.path(percentEncoded: false)) --stdio", transport: .stdio)
+
+        let target = try MCPTestConnectionPolicy.resolve(server: server, homeURL: tree.root)
+
+        guard case .stdio(let resolved, let arguments) = target else {
+            Issue.record("Expected a stdio target")
+            return
+        }
+        #expect(resolved.lastPathComponent == "mcp-fixture")
+        #expect(arguments == ["--stdio"])
+        #expect(target.isProcessLaunch)
+        #expect(target.displayCommand.hasSuffix("mcp-fixture --stdio"))
+    }
+
+    @Test func plaintextHTTPIsAllowedOnlyToThisMac() throws {
+        let secure = managedServer(endpoint: "https://mcp.example.com/rpc", transport: .http)
+        let loopback = managedServer(endpoint: "http://127.0.0.1:8931/mcp", transport: .http)
+        let remotePlaintext = managedServer(endpoint: "http://mcp.example.com/rpc", transport: .http)
+
+        let secureTarget = try MCPTestConnectionPolicy.resolve(server: secure)
+        let loopbackTarget = try MCPTestConnectionPolicy.resolve(server: loopback)
+
+        #expect(secureTarget == .http(url: URL(string: "https://mcp.example.com/rpc") ?? URL(fileURLWithPath: "/")))
+        #expect(loopbackTarget == .http(url: URL(string: "http://127.0.0.1:8931/mcp") ?? URL(fileURLWithPath: "/")))
+        #expect(secureTarget.isProcessLaunch == false)
+        #expect(secureTarget.displayCommand == "POST https://mcp.example.com/rpc")
+        #expect(throws: MCPLiveTestError.self) { try MCPTestConnectionPolicy.resolve(server: remotePlaintext) }
+    }
+
+    @Test func loopbackDetectionCoversTheNamesAMCPServerActuallyUses() {
+        for host in ["localhost", "127.0.0.1", "::1", "[::1]", "api.localhost"] {
+            #expect(MCPTestConnectionPolicy.isLoopbackHost(host), "\(host) is this Mac")
+        }
+        for host in ["example.com", "127.0.0.1.example.com", "localhost.example.com"] {
+            #expect(!MCPTestConnectionPolicy.isLoopbackHost(host), "\(host) is not this Mac")
+        }
+    }
+
+    // MARK: The environment handed to a tested server
+
+    @Test func theChildEnvironmentIsBuiltFromNothingSoNoExportedSecretRidesAlong() {
+        let environment = MCPTestConnectionPolicy.childEnvironment(
+            homeURL: URL(fileURLWithPath: "/Users/example"),
+            temporaryDirectory: URL(fileURLWithPath: "/tmp/example")
+        )
+
+        // Built on the shared child-environment builder, so it carries the same
+        // keys a real client command gets (TERM and LC_CTYPE included) plus the
+        // test marker.
+        #expect(
+            Set(environment.keys)
+                == ["PATH", "HOME", "TMPDIR", "LANG", "LC_CTYPE", "TERM", "USER", "LOGNAME", "MCP_TEST_CONNECTION"]
+        )
+        #expect(environment["HOME"] == "/Users/example")
+        #expect(environment["PATH"]?.contains("/Users/example/.local/bin") == true)
+        #expect(environment["MCP_TEST_CONNECTION"] == "agent-tooling")
+        // Whatever the app itself was launched with must not be visible here.
+        for key in ProcessInfo.processInfo.environment.keys where !environment.keys.contains(key) {
+            #expect(environment[key] == nil)
+        }
+    }
+
+    @Test func theTestChildPathMatchesTheRunnersAndFindsVoltaAndPnpmTools() {
+        let home = URL(fileURLWithPath: "/Users/example")
+        let environment = MCPTestConnectionPolicy.childEnvironment(homeURL: home)
+
+        // The one list: a server under test is found the same way a real
+        // client command is, including tools installed through Volta or pnpm.
+        #expect(environment["PATH"] == ProcessCommandRunner.searchPath(home: "/Users/example").joined(separator: ":"))
+        #expect(environment["PATH"]?.contains("/Users/example/.volta/bin") == true)
+        #expect(environment["PATH"]?.contains("/Users/example/Library/pnpm") == true)
+    }
+
+    /// Audit and live-test resolution must preserve the same installed symlink.
+    @Test func aLocalServerCheckupFindsResolvesAndStartsByItsOwnName() throws {
+        let tree = try TemporaryTree()
+        defer { tree.remove() }
+        let dispatcher = try tree.makeExecutable(named: "example-dispatch")
+        let bin = tree.root.appending(path: ".local/bin", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let shim = bin.appending(path: "fixture-shim-mcp", directoryHint: .notDirectory)
+        try FileManager.default.createSymbolicLink(at: shim, withDestinationURL: dispatcher)
+
+        #expect(SetupAuditor(homeURL: tree.root).commandIsReachable("fixture-shim-mcp"))
+        let target = try MCPTestConnectionPolicy.resolveStdio(["fixture-shim-mcp", "--stdio"], homeURL: tree.root)
+
+        guard case .stdio(let executableURL, let arguments) = target else {
+            Issue.record("Expected a stdio target")
+            return
+        }
+        #expect(executableURL.path(percentEncoded: false) == shim.path(percentEncoded: false))
+        #expect(arguments == ["--stdio"])
+        #expect(target.displayCommand.hasSuffix(".local/bin/fixture-shim-mcp --stdio"))
+    }
+
+    @Test func aSecretInTheParentNeverReachesATestChild() {
+        // childEnvironment ignores the process environment entirely, so even a
+        // secret exported into this test process cannot ride along.
+        setenv("AGENT_TOOLING_TEST_SECRET", "do-not-leak", 1)
+        defer { unsetenv("AGENT_TOOLING_TEST_SECRET") }
+
+        let environment = MCPTestConnectionPolicy.childEnvironment(homeURL: URL(fileURLWithPath: "/Users/example"))
+
+        #expect(environment["AGENT_TOOLING_TEST_SECRET"] == nil)
+        #expect(!environment.values.contains("do-not-leak"))
+    }
+
+    @Test func aTrailingSlashHomeDoesNotLeaveDoubledSeparators() {
+        // A directory URL keeps its trailing slash; the policy must strip it so
+        // HOME does not end in "/" and PATH entries do not contain "//".
+        let environment = MCPTestConnectionPolicy.childEnvironment(
+            homeURL: URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        )
+
+        #expect(environment["HOME"] == "/Users/example")
+        #expect(environment["PATH"]?.contains("//") == false)
+    }
+
+    @Test func theConsentSummaryNamesWhatIsAboutToHappen() throws {
+        let tree = try TemporaryTree()
+        defer { tree.remove() }
+        let executable = try tree.makeExecutable(named: "mcp-fixture")
+        let stdio = try MCPTestConnectionPolicy.resolveStdio(
+            [executable.path(percentEncoded: false)],
+            homeURL: tree.root
+        )
+        let http = try MCPTestConnectionPolicy.resolveHTTP("https://mcp.example.com/rpc")
+
+        #expect(MCPTestConnectionPolicy.consentSummary(for: stdio, serverName: "Fixture").contains("start this program"))
+        #expect(MCPTestConnectionPolicy.consentSummary(for: http, serverName: "Fixture").contains("mcp.example.com"))
+    }
+
+    @Test func anHTTP307RedirectIsRefusedInsteadOfFollowingItsLocation() async throws {
+        let channel = MCPHTTPTestChannel(
+            testingURL: try #require(URL(string: "https://approved.example/mcp")),
+            protocolClasses: [RedirectingMCPURLProtocol.self]
+        )
+        do {
+            _ = try await channel.send(request: Data("{}".utf8), id: 1)
+            Issue.record("Expected the redirect to be refused")
+        } catch let error as MCPLiveTestError {
+            #expect(error.localizedDescription.lowercased().contains("redirect"))
+        } catch {
+            Issue.record("Expected MCPLiveTestError, got \(error)")
+        }
+        await channel.shutdown()
+    }
+
+    @Test func aResponseAttributedToAnotherOriginIsRefused() async throws {
+        let channel = MCPHTTPTestChannel(
+            testingURL: try #require(URL(string: "https://approved.example/mcp")),
+            protocolClasses: [MismatchedOriginMCPURLProtocol.self]
+        )
+        do {
+            _ = try await channel.send(request: Data("{}".utf8), id: 1)
+            Issue.record("Expected the mismatched response URL to be refused")
+        } catch let error as MCPLiveTestError {
+            #expect(error.localizedDescription.contains("different endpoint"))
+        } catch {
+            Issue.record("Expected MCPLiveTestError, got \(error)")
+        }
+        await channel.shutdown()
+    }
+}
+
+private final class RedirectingMCPURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with _: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard
+            let requestURL = request.url,
+            let response = HTTPURLResponse(
+                url: requestURL,
+                statusCode: 307,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Location": "http://127.0.0.1:65535/private"]
+            )
+        else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+private final class MismatchedOriginMCPURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with _: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard
+            let responseURL = URL(string: "https://different.example/mcp"),
+            let response = HTTPURLResponse(
+                url: responseURL,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+            )
+        else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(#"{"jsonrpc":"2.0","id":1,"result":{}}"#.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}

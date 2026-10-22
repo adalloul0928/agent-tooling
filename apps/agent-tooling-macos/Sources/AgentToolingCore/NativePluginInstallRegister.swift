@@ -1,0 +1,96 @@
+import Foundation
+
+/// Client package commands with their documented source and verified release.
+/// Execution still requires user review, executor-policy checks and a runnable
+/// client binary. Catalog records cannot supply arbitrary commands.
+public struct NativePluginInstallCommand: Hashable, Sendable {
+    public let client: ClientKind
+    public let executable: String
+    public let installArguments: [String]
+    public let removeArguments: [String]
+    /// The command that moves an installed package to what its marketplace
+    /// publishes now. `nil` where none has been read from the tool's own help:
+    /// that client's packages are updated in that client, not from here.
+    public var updateArguments: [String]? = nil
+    /// The client release this was checked against, and where it was read.
+    public let verifiedAgainstVersion: String
+    public let source: String
+
+    public init(
+        client: ClientKind, executable: String, installArguments: [String], removeArguments: [String],
+        updateArguments: [String]? = nil, verifiedAgainstVersion: String, source: String
+    ) {
+        self.client = client
+        self.executable = executable
+        self.installArguments = installArguments
+        self.removeArguments = removeArguments
+        self.updateArguments = updateArguments
+        self.verifiedAgainstVersion = verifiedAgainstVersion
+        self.source = source
+    }
+}
+
+public enum NativePluginInstallRegister {
+    /// Verified on 2026-09-09 against the tools installed on this Mac, by
+    /// reading each one's own `--help` output rather than trusting a page that
+    /// may describe a different release.
+    /// `nil` for a client with no recorded command. Gemini has none: nothing
+    /// here has read one, and writing a plausible one would be the invention
+    /// this register exists to avoid.
+    public static func command(
+        for client: ClientKind, externalPluginID: String
+    ) -> NativePluginInstallCommand? {
+        guard OperationCommandPolicy.isSafePluginIdentifier(externalPluginID) else { return nil }
+        // `@synced`, `@inline` and `@skills-dir` are origins no marketplace
+        // can use, so a marketplace install, update, or removal of one has no
+        // honest meaning. The account's plugins are changed on claude.ai.
+        if client == .claude, ClaudeAccountSync.hasReservedOrigin(externalPluginID) { return nil }
+        switch client {
+        case .claude:
+            return .init(
+                client: .claude, executable: "claude",
+                installArguments: ["plugin", "install", externalPluginID, "--scope", "user"],
+                removeArguments: ["plugin", "uninstall", externalPluginID, "--scope", "user"],
+                updateArguments: ["plugin", "update", externalPluginID, "--scope", "user"],
+                verifiedAgainstVersion: "2.1.263",
+                source: "claude plugin install --help; https://code.claude.com/docs/en/discover-plugins")
+        case .codex:
+            return .init(
+                client: .codex, executable: "codex",
+                installArguments: ["plugin", "add", externalPluginID],
+                removeArguments: ["plugin", "remove", externalPluginID],
+                verifiedAgainstVersion: "0.153.4",
+                source: "codex plugin add --help; https://developers.openai.com/codex/concepts/customization")
+        case .gemini:
+            return nil
+        case .kiro:
+            // No supported Kiro plugin installation command.
+            return nil
+        }
+    }
+
+    /// Whether this register holds a package-install command for a client.
+    ///
+    /// This is the single fact the three planners and the evidence derivation
+    /// ask when deciding whether a native package install is expressible: a
+    /// client with no recorded command here can never have a plan built for
+    /// one, so none of them may claim it can. Asked with a well-formed probe
+    /// identifier so a client that has a command is recognised regardless of
+    /// which package is being considered; no command is built and none is run.
+    public static func supportsClient(_ client: ClientKind) -> Bool {
+        command(for: client, externalPluginID: "agent-tooling-probe") != nil
+    }
+
+    /// The same command as a `NativeInstall`, which is the shape the command
+    /// bridge already checks against.
+    public static func reviewedInstall(
+        for client: ClientKind, externalPluginID: String
+    ) -> NativeInstall? {
+        guard let command = command(for: client, externalPluginID: externalPluginID) else { return nil }
+        return .init(
+            client: command.client, executable: command.executable,
+            arguments: command.installArguments,
+            removalArguments: command.removeArguments, scope: .user,
+            detail: "Recorded for \(command.client.rawValue) \(command.verifiedAgainstVersion).")
+    }
+}

@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+  --background: #faf9f6;
+  --foreground: #222822;
+  --muted: #626b63;
+  --line: #d8ded6;
+  --surface: #f0f3ed;
+  --accent: #275b43;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 0.2em; }
+a:hover { text-decoration: underline; }
+a:focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; }
+p { margin: 0; }
+h1, h2, h3 { line-height: 1.15; text-wrap: balance; }
+h1 { margin: 20px 0 28px; font-size: clamp(2.8rem, 7vw, 5.7rem); font-weight: 650; letter-spacing: -0.055em; }
+h2 { margin: 10px 0 0; font-size: clamp(1.8rem, 3.5vw, 2.7rem); font-weight: 600; letter-spacing: -0.035em; }
+h3 { margin: 18px 0 12px; font-size: 1.2rem; font-weight: 650; }
+main, .site-header, footer { width: min(1120px, calc(100% - 64px)); margin-inline: auto; }
+.site-header, nav, footer, footer > div { display: flex; align-items: center; gap: 28px; }
+.site-header { justify-content: space-between; min-height: 94px; border-bottom: 1px solid var(--line); }
+.site-header a, footer a { text-decoration: none; }
+.wordmark { color: var(--foreground); font-size: 1.15rem; font-weight: 700; letter-spacing: -0.025em; }
+nav { flex-wrap: wrap; font-size: 0.9rem; }
+.hero { padding: 105px 0 96px; max-width: 880px; }
+.eyebrow { color: var(--accent); font-size: 0.78rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
+.lead { max-width: 680px; color: var(--muted); font-size: 1.2rem; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+.button { padding: 11px 22px; border: 1px solid var(--accent); border-radius: 9px; background: var(--accent); color: var(--background); font-weight: 600; text-decoration: none; }
+.button.secondary { color: var(--accent); background: transparent; }
+.release-note { margin-top: 17px; color: var(--muted); font-size: 0.84rem; }
+main > section:not(.hero) { padding: 65px 0; border-top: 1px solid var(--line); }
+.section-heading { max-width: 620px; margin-bottom: 36px; }
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; margin: 0; padding: 0; list-style: none; }
+.steps p, .feature-notes p, .client-card p, .privacy-copy p { color: var(--muted); }
+.step-number { color: var(--accent); font-size: 0.8rem; font-family: ui-monospace, monospace; }
+.feature-notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 45px; padding-top: 24px; border-top: 1px solid var(--line); }
+.client-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.client-card { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.client-card h3 { margin-top: 0; }
+.support-note { max-width: 800px; margin-top: 24px; color: var(--muted); font-size: 0.9rem; }
+.privacy { display: grid; grid-template-columns: 1fr 1fr; gap: 65px; }
+.privacy-copy p + p { margin-top: 18px; }
+.privacy-copy > a { display: inline-block; margin-top: 20px; font-weight: 600; }
+footer { justify-content: space-between; padding: 30px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }
+.skip-link { position: absolute; top: 8px; left: 8px; padding: 12px; transform: translateY(-150%); background: var(--background); }
+.skip-link:focus { transform: translateY(0); }
+
+@media (max-width: 900px) {
+  .steps, .client-grid { grid-template-columns: repeat(2, 1fr); }
+  .site-header { align-items: flex-start; flex-direction: column; gap: 16px; padding: 24px 0; }
+  .hero { padding: 70px 0; }
+  .privacy { gap: 30px; }
+}
+
+@media (max-width: 600px) {
+  main, .site-header, footer { width: calc(100% - 40px); }
+  nav { gap: 16px; }
+  .steps, .client-grid, .feature-notes, .privacy { grid-template-columns: 1fr; }
+  main > section:not(.hero) { padding: 42px 0; }
+  footer { align-items: flex-start; flex-direction: column; gap: 14px; }
+  footer > div { flex-wrap: wrap; gap: 18px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #151b18;
+    --foreground: #e6ede8;
+    --muted: #afbab2;
+    --line: #344139;
+    --surface: #202c25;
+    --accent: #a3d6b4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}

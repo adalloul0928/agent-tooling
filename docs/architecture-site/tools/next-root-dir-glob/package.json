@@ -1,0 +1,14 @@
+{
+  "name": "@agent-tooling/next-root-dir-glob",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "description": "Narrow fast-glob compatibility for the Next ESLint plugin root directory lookup",
+  "main": "index.mjs",
+  "exports": "./index.mjs",
+  "dependencies": {
+    "glob": "13.0.6",
+    "glob-parent": "6.0.2",
+    "picomatch": "2.3.2"
+  }
+}

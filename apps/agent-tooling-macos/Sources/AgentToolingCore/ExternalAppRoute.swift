@@ -1,0 +1,66 @@
+import Foundation
+
+/// Navigation-only routes accepted from local integrations such as Raycast.
+/// A route may reveal a pending request, but it can never approve or execute
+/// an operation.
+public enum ExternalAppRoute: Equatable, Sendable {
+    case section(ExternalAppSection)
+    case skill(String)
+    case pendingRequest(UUID)
+    /// Opens the skill creator on a queued creation request. The creator
+    /// reads the request's payload and talks to the assistant it names;
+    /// nothing is saved until the person reviews the draft and chooses to.
+    case createSkill(UUID)
+    /// Opens the setup stage again at Your apps, on a Mac that already has
+    /// its library: the app's Set up this Mac…. Nothing is read or changed
+    /// until the person walks the stage and reviews what it would do. It is
+    /// not a section, so a link to a screen, as the MCP server builds them,
+    /// is never one to it.
+    case setup
+
+    public init?(url: URL) {
+        guard url.scheme?.lowercased() == "agent-tooling",
+            url.user == nil,
+            url.password == nil,
+            url.port == nil,
+            url.query == nil,
+            url.fragment == nil,
+            let host = url.host(percentEncoded: false)?.lowercased()
+        else { return nil }
+
+        let components = url.pathComponents.filter { $0 != "/" }
+        switch (host, components) {
+        case ("requests", let values) where values.count == 1:
+            guard let id = UUID(uuidString: values[0]) else { return nil }
+            self = .pendingRequest(id)
+        case ("skills", let values) where values.count == 1:
+            guard let id = try? WorkspaceLibrary.normalizedIdentifier(values[0]), id == values[0] else { return nil }
+            self = .skill(id)
+        case ("skills", let values) where values.count == 2 && values[0] == "create":
+            guard let id = UUID(uuidString: values[1]) else { return nil }
+            self = .createSkill(id)
+        case ("setup", let values) where values.isEmpty:
+            self = .setup
+        case (_, let values) where values.isEmpty:
+            guard let section = ExternalAppSection(rawValue: host) else { return nil }
+            self = .section(section)
+        default:
+            return nil
+        }
+    }
+}
+
+public enum ExternalAppSection: String, CaseIterable, Sendable {
+    case overview
+    case marketplace
+    case skills
+    case insights
+    case mcpServers = "mcp-servers"
+    case plugins
+    case configurations
+    case sync
+    case activity
+    case accounts
+    case settings
+    case checkup
+}

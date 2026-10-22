@@ -1,0 +1,21 @@
+{
+  "createdAt": "2026-08-30T12:00:00Z",
+  "id": "11111111-2222-3333-4444-555555555555",
+  "kind": "doctor",
+  "requiresConfirmation": true,
+  "scope": "user",
+  "steps": [
+    {
+      "arguments": [],
+      "detail": "Confirm the target state outside Agent Tooling.",
+      "id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      "isReversible": true,
+      "kind": "manual",
+      "requiresUserAction": true,
+      "title": "Manual verification"
+    }
+  ],
+  "summary": "A fixture plan used to verify review and apply behavior.",
+  "targetSurfaces": ["codexCLI"],
+  "title": "Verify fixture plan"
+}

@@ -1,0 +1,106 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "agent-tooling",
+  "title": "Agent Tooling",
+  "description": "Search, inspect, and safely prepare changes for Agent Tooling.",
+  "icon": "extension-icon.png",
+  "author": "agent-tooling",
+  "license": "MIT",
+  "categories": [
+    "Developer Tools",
+    "Productivity"
+  ],
+  "platforms": [
+    "macOS"
+  ],
+  "commands": [
+    {
+      "name": "search-agent-tooling",
+      "title": "Search Agent Tooling",
+      "subtitle": "Agent Tooling",
+      "description": "Search installed skills, MCP servers, and plugins.",
+      "mode": "view"
+    },
+    {
+      "name": "create-skill-draft",
+      "title": "Create Skill Draft",
+      "subtitle": "Agent Tooling",
+      "description": "Create a skill draft with Codex or Claude Code for review in Agent Tooling.",
+      "mode": "view"
+    },
+    {
+      "name": "check-setup",
+      "title": "Check Setup",
+      "subtitle": "Agent Tooling",
+      "description": "Check the local Codex, Claude Code, and Gemini setup.",
+      "mode": "no-view"
+    },
+    {
+      "name": "review-sync",
+      "title": "Review Sync",
+      "subtitle": "Agent Tooling",
+      "description": "Open the sync review in Agent Tooling.",
+      "mode": "no-view"
+    },
+    {
+      "name": "review-tooling-insights",
+      "title": "Review Tooling Insights",
+      "subtitle": "Agent Tooling",
+      "description": "Review skill usage, improvement findings, and tooling recommendations.",
+      "mode": "no-view"
+    },
+    {
+      "name": "open-agent-tooling",
+      "title": "Open Agent Tooling",
+      "subtitle": "Agent Tooling",
+      "description": "Open the Agent Tooling desktop app.",
+      "mode": "no-view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "allowDevelopmentHelperOverride",
+      "type": "checkbox",
+      "required": false,
+      "default": false,
+      "title": "Allow Development Helper",
+      "description": "Allow an unsigned CLI helper override only while this extension is running in Raycast development mode."
+    },
+    {
+      "name": "cliPath",
+      "type": "file",
+      "required": false,
+      "title": "CLI Helper Override",
+      "description": "Optional development-only path. It is rejected outside Raycast development mode or unless Allow Development Helper is enabled."
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^2.1.2"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "eslint": "^10.9.1",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "scripts": {
+    "configure:release": "node scripts/configure-release.mjs",
+    "check:release": "node scripts/configure-release.mjs --check",
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "lint:source": "eslint src tests scripts && prettier --check src tests scripts README.md package.json tsconfig.json vitest.config.mts eslint.config.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "verify-source": "npm run typecheck && npm run lint:source && npm run test && npm run build",
+    "check": "npm run lint && npm run test && npm run build",
+    "publish": "npm run check:release && ray publish"
+  }
+}

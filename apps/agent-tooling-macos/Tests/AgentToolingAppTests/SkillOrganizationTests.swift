@@ -1,0 +1,313 @@
+import Foundation
+import Testing
+
+@testable import AgentToolingApp
+@testable import AgentToolingCore
+
+@Suite("Skill ownership classification")
+struct SkillOrganizationTests {
+    /// The App filter offers one entry per client the registry knows. A client
+    /// left out of it cannot be filtered to, and reads as if the app did not
+    /// manage it — which is how Kiro went missing from the menu.
+    @Test func theAppFilterOffersEveryClient() {
+        let offered = Set(SkillClientFilter.allCases.compactMap(\.client))
+        #expect(offered == Set(ClientKind.allCases))
+        #expect(SkillClientFilter.allCases.first?.client == nil, "the first choice is every app")
+        for client in ClientKind.allCases {
+            let filter = SkillClientFilter.allCases.first { $0.client == client }
+            #expect(filter?.rawValue == client.rawValue)
+            #expect(filter?.matches([client]) == true)
+            #expect(filter?.matches([]) == false)
+        }
+    }
+
+    @Test func standaloneSkillsDoNotShareOwnership() {
+        #expect(
+            SkillOrganization.ownershipKey(skillID: "custom", pluginID: nil)
+                != SkillOrganization.ownershipKey(skillID: "downloaded", pluginID: nil))
+    }
+
+    @Test func pluginSkillsShareAnExplicitSourceClassification() {
+        #expect(
+            SkillOrganization.ownershipKey(skillID: "one", pluginID: "workflows@personal")
+                == SkillOrganization.ownershipKey(skillID: "two", pluginID: "workflows@personal"))
+        #expect(
+            SkillOrganization.ownershipKey(skillID: "one", pluginID: "workflows@personal")
+                != SkillOrganization.ownershipKey(skillID: "one", pluginID: "workflows@vendor"))
+    }
+}
+
+@Suite("Automatic skill provenance")
+struct AutomaticSkillProvenanceTests {
+    @Test func independentPublishersAreRecognizedWithoutAdoption() {
+        #expect(owner("react-native@callstack-agent-skills") == "thirdParty")
+        #expect(owner("simview@toolingtools") == "thirdParty")
+    }
+
+    @Test func marketplaceNamesDoNotEstablishPersonalOwnership() {
+        for id in ["example-workflows@agent-tooling", "claude:example-workflows@agent-tooling", "example@personal"] {
+            #expect(owner(id) == "unknown")
+            #expect(!SkillScope.mine.matches(owner: owner(id)))
+            #expect(SkillOrganization.classify(maintainedHere: true, pluginID: id, override: nil).owner == "mine")
+            #expect(SkillOrganization.classify(maintainedHere: false, pluginID: id, override: "mine").owner == "mine")
+        }
+    }
+
+    @Test func directlySuppliedSkillsHaveTheirOwnCategory() {
+        for id in [
+            "documents@openai-bundled", "pdf@openai-primary-runtime", "codex:imagegen@openai-bundled",
+            "document-skills@anthropic-agent-skills", "example-skills@anthropic-agent-skills",
+            "frontend-design@claude-plugins-official",
+        ] {
+            #expect(owner(id) == "provider")
+            #expect(SkillScope.provider.matches(owner: owner(id)))
+            #expect(!SkillScope.thirdParty.matches(owner: owner(id)))
+        }
+    }
+
+    @Test func officialMarketplaceDoesNotEstablishVendorAuthorship() {
+        for id in [
+            "third-party-api@claude-plugins-official", "frontend-design@another-marketplace",
+            "github@openai-curated-remote", "unrecognized@anthropic-agent-skills", "x@not-openai-bundled",
+            "documents@openai-bundled@other", "https://example.com/documents@openai-bundled",
+        ] {
+            #expect(owner(id) == "unknown")
+            #expect(!SkillScope.provider.matches(owner: owner(id)))
+            #expect(!SkillScope.thirdParty.matches(owner: owner(id)))
+            #expect(SkillScope.all.matches(owner: owner(id)))
+        }
+    }
+
+    @Test func manualOverridesAndManagedCopiesKeepTheirMeaning() {
+        #expect(
+            SkillOrganization.classify(maintainedHere: false, pluginID: "personal@agent-tooling", override: "thirdParty").owner
+                == "thirdParty")
+        #expect(SkillOrganization.classify(maintainedHere: false, pluginID: "pdf@openai-bundled", override: "mine").owner == "mine")
+        #expect(SkillOrganization.classify(maintainedHere: false, pluginID: "pdf@openai-bundled", override: "unknown").owner == "unknown")
+        #expect(SkillOrganization.classify(maintainedHere: true, pluginID: "pdf@openai-bundled", override: nil).owner == "mine")
+        #expect(SkillOrganization.classify(maintainedHere: false, pluginID: nil, override: nil).owner == "unknown")
+        #expect(owner("personal@unrecognized") == "unknown")
+    }
+
+    private func owner(_ pluginID: String) -> String {
+        SkillOrganization.classify(maintainedHere: false, pluginID: pluginID, override: nil).owner
+    }
+}
+
+@Suite("Skill list presentation")
+struct SkillListPresentationTests {
+    @Test func pluginAndMarketplaceHaveSeparateHumanLabels() {
+        let origin = SkillPresentation(pluginID: "example-workflows@agent-tooling")
+        #expect(origin.pluginID == "example-workflows@agent-tooling")
+        #expect(origin.pluginName == "Example Workflows")
+        #expect(origin.marketplaceID == "agent-tooling")
+        #expect(origin.marketplaceName == "Agent Tooling")
+        #expect(origin.compactDescription == "Example Workflows · Agent Tooling")
+        #expect(origin.compactDescription?.contains("@") == false)
+        #expect(SkillPresentation(pluginID: nil).pluginName == nil)
+        #expect(SkillPresentation(pluginID: nil).marketplaceName == nil)
+    }
+
+    @Test func declaredDisplayNameIsPreservedWithoutRepeatingTheCatalogSuffix() {
+        #expect(SkillPresentation(pluginID: "ios-tools@agent-tooling", pluginDisplayName: "iOS Tools").pluginName == "iOS Tools")
+        #expect(
+            SkillPresentation(pluginID: "example-workflows@agent-tooling", pluginDisplayName: "Example Workflows@Agent Tooling")
+                .pluginName
+                == "Example Workflows")
+    }
+
+    @Test func marketplaceAndPluginFiltersAreIndependentAndIntersect() {
+        let developer = SkillPresentation(pluginID: "example-workflows@agent-tooling")
+        let personal = SkillPresentation(pluginID: "personal@agent-tooling")
+        let external = SkillPresentation(pluginID: "example-workflows@another-marketplace")
+        #expect(developer.matches(marketplace: "agent-tooling", plugin: ""))
+        #expect(personal.matches(marketplace: "agent-tooling", plugin: ""))
+        #expect(!external.matches(marketplace: "agent-tooling", plugin: ""))
+        #expect(developer.matches(marketplace: "", plugin: "example-workflows@agent-tooling"))
+        #expect(!external.matches(marketplace: "", plugin: "example-workflows@agent-tooling"))
+        #expect(!developer.matches(marketplace: "another-marketplace", plugin: "example-workflows@agent-tooling"))
+        #expect(!SkillPresentation(pluginID: nil).matches(marketplace: "agent-tooling", plugin: ""))
+    }
+
+    @Test func legacyDefaultBecomesFlatAndNewChoicesSurviveRestoration() {
+        #expect(SkillGrouping.migratedValue("Source") == .none)
+        #expect(SkillGrouping.migratedValue("") == .none)
+        for choice in SkillGrouping.allCases {
+            #expect(SkillGrouping.migratedValue(choice.rawValue) == choice)
+        }
+    }
+
+    @Test func flatListIsAlphabeticalAndDoesNotExposeGroupHeaders() {
+        let groups = SkillListPresentation.groups(skills: fixture, grouping: .none, presentation: origin)
+        #expect(groups.count == 1)
+        #expect(groups.first?.title == "")
+        #expect(groups.first?.skills.map(\.displayName) == ["Alpha", "Beta", "Gamma", "Standalone"])
+    }
+
+    @Test func pluginGroupsKeepSameNamedPluginsFromDifferentMarketplacesDistinct() {
+        let groups = SkillListPresentation.groups(skills: fixture, grouping: .plugin, presentation: origin)
+        let matching = groups.filter { $0.title == "Workflow" }
+        #expect(matching.count == 2)
+        #expect(Set(matching.map(\.id)).count == 2)
+        #expect(Set(matching.compactMap(\.subtitle)) == ["Agent Tooling", "Other"])
+        #expect(groups.contains { $0.title == "Standalone" && $0.skills.map(\.displayName) == ["Standalone"] })
+    }
+
+    @Test func marketplaceGroupsCombinePackagesAndMaintenanceRemainsSeparate() {
+        let marketplaces = SkillListPresentation.groups(skills: fixture, grouping: .marketplace, presentation: origin)
+        #expect(marketplaces.first { $0.title == "Agent Tooling" }?.skills.map(\.displayName) == ["Alpha", "Beta"])
+        #expect(marketplaces.first { $0.title == "No marketplace" }?.skills.map(\.displayName) == ["Standalone"])
+        let maintenance = SkillListPresentation.groups(skills: fixture, grouping: .maintenance, presentation: origin)
+        #expect(maintenance.first { $0.title == "Maintained here" }?.skills.map(\.displayName) == ["Standalone"])
+        #expect(maintenance.first { $0.title == "Maintained elsewhere" }?.skills.count == 3)
+    }
+
+    private var fixture: [SkillEntry] {
+        [("Gamma", "workflow@other"), ("Standalone", ""), ("Beta", "personal@agent-tooling"), ("Alpha", "workflow@agent-tooling")]
+            .map { name, plugin in
+                SkillEntry(
+                    id: ArtifactID(), displayName: name, declaredName: name.lowercased(), summary: "",
+                    ownership: plugin.isEmpty ? .centralPersonal : .nativeOwned, authority: nil, contentDigest: nil,
+                    parentID: plugin.isEmpty ? nil : ArtifactID(), parentPluginLabel: nil,
+                    providerPluginID: plugin.isEmpty ? nil : plugin, sourceLabel: nil,
+                    requestedAssignments: [], isAssignable: true, assignmentExplanation: nil)
+            }
+    }
+
+    private func origin(_ skill: SkillEntry) -> SkillPresentation {
+        SkillPresentation(pluginID: skill.providerPluginID)
+    }
+}
+
+/// The index reads the library, and reads nothing into it.
+@Suite("Skill inventory index")
+@MainActor
+struct SkillInventoryIndexTests {
+    @Test func pluginMembersAreListedAndInheritTheirPackagesAuthority() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let state = try #require(fixture.workspace.library.state)
+        let index = SkillInventoryIndex(
+            library: state.library, snapshot: state.snapshot, observations: [], ownershipJSON: "{}")
+
+        #expect(index.skills.map(\.displayName) == ["Bundled Skill", "Standalone Skill"])
+        let bundled = try #require(index.skills.first { $0.displayName == "Bundled Skill" })
+        #expect(bundled.parentPluginLabel == "Example Plugin")
+        #expect(bundled.installation == "Plugin")
+        #expect(!bundled.isMaintainedHere)
+        let standalone = try #require(index.skills.first { $0.displayName == "Standalone Skill" })
+        #expect(standalone.installation == "Standalone")
+        #expect(standalone.isMaintainedHere)
+        // The fixture's personal skill holds no content object, so nothing may
+        // offer to show or replace bytes this workspace does not have.
+        #expect(!standalone.hasCentralContent)
+    }
+
+    /// A row is joined to a scan by the name it declares. A skill that declares
+    /// nothing is joined to nothing, so it never wears another one's marks and
+    /// never claims a place on this Mac it was not found in.
+    @Test func marksFollowTheDeclaredNameAndNothingElse() throws {
+        let named = ArtifactID()
+        let anonymous = ArtifactID()
+        let snapshot = try Self.snapshot(artifacts: [
+            .init(
+                identity: .init(id: named, kind: .skill, displayName: "Release Readiness"),
+                authority: .trackedOnly, declaredName: "release-readiness"),
+            .init(
+                identity: .init(id: anonymous, kind: .skill, displayName: "Release Readiness"),
+                authority: .trackedOnly),
+        ])
+        var scripted = ShellRenderFixture.observation(.claudeCode, installed: true, commandAvailable: true)
+        scripted.discoveredSkills = ["release-readiness"]
+        scripted.skillMetadata = [
+            "release-readiness": .init(path: "/tmp/skills/release-readiness", source: "Standalone skill")
+        ]
+
+        let index = try SkillInventoryIndex(
+            library: WorkspaceLibraryReadModel(snapshot: snapshot), snapshot: snapshot,
+            observations: [scripted], ownershipJSON: "{}")
+        #expect(index.observedClients[named] == [.claude])
+        #expect(index.observedClients[anonymous] == nil)
+        #expect(index.observedPaths[named] == "/tmp/skills/release-readiness")
+    }
+
+    /// The scan and the request are two claims, and the index keeps them apart:
+    /// a place somebody asked for is never reported as a place it was found.
+    @Test func askingForASkillDoesNotMarkItAsFound() throws {
+        let skill = ArtifactID()
+        var snapshot = try Self.snapshot(artifacts: [
+            .init(
+                identity: .init(id: skill, kind: .skill, displayName: "Release Readiness"),
+                authority: .centralPersonal, declaredName: "release-readiness")
+        ])
+        var document = snapshot.document
+        document.assignments = [
+            .init(artifactID: skill, destination: .init(surface: .claudeCode, scope: .user), reason: .manual)
+        ]
+        snapshot = .init(document: try WorkspaceDocumentCoding.seal(document), device: snapshot.device)
+
+        let index = try SkillInventoryIndex(
+            library: WorkspaceLibraryReadModel(snapshot: snapshot), snapshot: snapshot,
+            observations: [], ownershipJSON: "{}")
+        let row = try #require(index.skills.first)
+        #expect(row.requestedClients == [.claude])
+        #expect(index.observedClients[skill] == nil)
+    }
+
+    /// Group copies by skill while preserving content differences and ownership.
+    @Test func copiesOfOneSkillAreOneRowWithTheirDifferencesKept() throws {
+        let scenario = try SkillCopiesScenario()
+        let index = scenario.index
+        let (exampleSkill, coreSkill, loose) = (scenario.exampleSkill, scenario.coreSkill, scenario.loose)
+        let entry = try #require(index.skills.first { $0.id == loose })
+        let copies = index.copies(of: entry)
+        #expect(copies.map(\.id).first == exampleSkill, "the copy found in the most apps leads")
+        #expect(Set(copies.map(\.id)) == [exampleSkill, coreSkill, loose])
+        #expect(index.distinctCount == 1)
+        #expect(index.versions(among: copies).map(\.count) == [2, 1], "two match, Example Manager's Kiro copy differs")
+        #expect(index.management(of: entry) == .byTool(.init(tool: "Example Manager", package: "core-skills")))
+        #expect(index.management(of: entry).label == "Example Manager")
+
+        let flat = SkillListPresentation.groups(
+            skills: index.skills, grouping: .none, presentation: index.presentation(for:), copies: index.copies(of:))
+        #expect(flat.flatMap(\.skills).map(\.id) == [exampleSkill], "one row")
+        #expect(flat.first?.members(of: copies[0]).count == 3)
+        let byPlugin = SkillListPresentation.groups(
+            skills: index.skills, grouping: .plugin, presentation: index.presentation(for:), copies: index.copies(of:))
+        #expect(byPlugin.flatMap(\.skills).count == 3, "grouped by plugin, each plugin still shows its own copy")
+        #expect(SkillCopySummary(copies: 3, versions: 2)?.label == "2 versions")
+        #expect(SkillCopySummary(copies: 3, versions: 1)?.label == "3 copies")
+        #expect(SkillCopySummary(copies: 1, versions: 1) == nil)
+    }
+
+    private static func snapshot(artifacts: [ArtifactRecord]) throws -> WorkspaceApplicationSnapshot {
+        let workspaceID = WorkspaceObjectID()
+        let document = try WorkspaceDocumentCoding.seal(
+            .init(workspaceID: workspaceID, revision: .init(writerID: WorkspaceObjectID()), artifacts: artifacts))
+        return .init(document: document, device: DeviceWorkspaceState(workspaceID: workspaceID))
+    }
+
+    @Test func aSavedClassificationOverridesTheAutomaticOne() async throws {
+        let fixture = try await ShellRenderFixture()
+        defer { fixture.remove() }
+        let state = try #require(fixture.workspace.library.state)
+        let plain = SkillInventoryIndex(
+            library: state.library, snapshot: state.snapshot, observations: [], ownershipJSON: "{}")
+        let bundled = try #require(plain.skills.first { $0.displayName == "Bundled Skill" })
+        #expect(plain.owner(of: bundled) == "unknown")
+
+        let key = plain.ownershipKey(for: bundled)
+        let overridden = SkillInventoryIndex(
+            library: state.library, snapshot: state.snapshot, observations: [],
+            ownershipJSON: #"{"\#(key)":"thirdParty"}"#)
+        let same = try #require(overridden.skills.first { $0.displayName == "Bundled Skill" })
+        #expect(overridden.owner(of: same) == "thirdParty")
+    }
+
+    @Test func anUnreadWorkspaceIndexesToNothing() {
+        let index = SkillInventoryIndex(library: nil, snapshot: nil, observations: [], ownershipJSON: "{}")
+        #expect(index.skills.isEmpty)
+        #expect(index.marketplaces.isEmpty)
+        #expect(index.mineCount == 0)
+    }
+}

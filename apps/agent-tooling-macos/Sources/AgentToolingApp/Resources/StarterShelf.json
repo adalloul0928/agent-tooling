@@ -1,0 +1,40 @@
+{
+  "entries": [
+    {
+      "packageID": "claude:supabase@claude-plugins-official",
+      "client": "Claude Code",
+      "kind": "plugin",
+      "name": "Supabase",
+      "publisher": "Supabase",
+      "summary": "Supabase database, auth and storage from Claude Code.",
+      "source": "Claude Code’s catalog"
+    },
+    {
+      "packageID": "claude:vercel@claude-plugins-official",
+      "client": "Claude Code",
+      "kind": "plugin",
+      "name": "Vercel",
+      "publisher": "Vercel",
+      "summary": "Deploy and inspect Vercel projects.",
+      "source": "Claude Code’s catalog"
+    },
+    {
+      "packageID": "codex:github@openai-curated",
+      "client": "Codex",
+      "kind": "plugin",
+      "name": "GitHub for Codex",
+      "publisher": "GitHub",
+      "summary": "GitHub issues and pull requests in Codex.",
+      "source": "Codex’s catalog · separate from Claude Code’s GitHub"
+    },
+    {
+      "packageID": "skills-sh:anthropics/skills/mcp-builder",
+      "kind": "skill",
+      "name": "MCP Builder",
+      "publisher": "anthropics",
+      "summary": "Guides building an MCP server.",
+      "source": "skills.sh · anthropics/skills",
+      "skillsRepository": "anthropics/skills"
+    }
+  ]
+}

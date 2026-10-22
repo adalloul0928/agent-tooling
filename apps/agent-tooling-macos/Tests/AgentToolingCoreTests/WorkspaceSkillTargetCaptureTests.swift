@@ -1,0 +1,324 @@
+import AgentToolingTestSupport
+import Darwin
+import Foundation
+import Testing
+
+@testable import AgentToolingCore
+
+struct WorkspaceSkillTargetCaptureTests {
+    @Test func aliasedClientDirectoriesSharePhysicalIdentityAndResolverCoalesces() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let shared = fixture.container.appending(path: "shared-skills")
+        try FileManager.default.createDirectory(at: shared, withIntermediateDirectories: false)
+        for parent in [".claude", ".agents"] {
+            let root = fixture.home.appending(path: parent)
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+            try FileManager.default.createSymbolicLink(
+                at: root.appending(path: "skills"), withDestinationURL: shared)
+        }
+        let deviceID = Self.object("00000000-0000-0000-0000-000000000010")
+        let captured = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: deviceID,
+            selectors: [.init(surface: .claudeCode, scope: .user), .init(surface: .codexCLI, scope: .user)],
+            observations: Self.observations(surfaces: [.claudeCode, .codexCLI])
+        ).targets
+        let canonicalShared = try Self.canonicalExistingDirectory(shared).path
+        #expect(captured.map(\.canonicalDirectory.path) == [canonicalShared, canonicalShared])
+        #expect(Set(captured.map(\.target.physicalDestinationID)).count == 1)
+
+        let skillID = Self.artifactID("00000000-0000-0000-0000-000000000011")
+        let digest = ContentDigest(value: String(repeating: "a", count: 64))
+        let contributions = captured.enumerated().map { index, item in
+            AssignmentContribution(
+                id: Self.object(
+                    index == 0
+                        ? "00000000-0000-0000-0000-000000000012"
+                        : "00000000-0000-0000-0000-000000000013"),
+                artifactID: skillID,
+                destination: .init(surface: item.target.selector.surface, scope: .user),
+                reason: .manual)
+        }
+        let resolution = WorkspaceAssignmentResolver.resolve(
+            artifacts: [
+                .init(
+                    identity: .init(id: skillID, kind: .skill, displayName: "Skill"),
+                    authority: .centralPersonal, contentDigest: digest)
+            ],
+            contributions: contributions, currentDeviceID: deviceID,
+            targets: captured.map(\.target),
+            capabilityEvidence: Self.capabilities(surfaces: [.claudeCode, .codexCLI]),
+            contentEvidence: [.init(artifactID: skillID, digest: digest)])
+        #expect(resolution.issues.isEmpty)
+        #expect(resolution.requirements.count == 1)
+        #expect(resolution.requirements.first?.contributions.count == 2)
+    }
+
+    @Test func physicalIdentityIncludesDeviceID() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let selector = [ResolvedAssignmentSelector(surface: .codexCLI, scope: .user)]
+        let first = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home,
+            deviceID: Self.object("00000000-0000-0000-0000-000000000020"),
+            selectors: selector, observations: Self.observations(surfaces: [.codexCLI])
+        ).targets
+        let second = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home,
+            deviceID: Self.object("00000000-0000-0000-0000-000000000021"),
+            selectors: selector, observations: Self.observations(surfaces: [.codexCLI])
+        ).targets
+        #expect(first[0].canonicalDirectory == second[0].canonicalDirectory)
+        #expect(first[0].target.physicalDestinationID != second[0].target.physicalDestinationID)
+    }
+
+    @Test func missingDestinationDirectoriesAreObservedWithoutCreation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let captured = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: Self.object("00000000-0000-0000-0000-000000000030"),
+            selectors: Self.selectors(scope: .user), observations: Self.observations()
+        ).targets
+        #expect(captured.count == 3)
+        let canonicalHome = try Self.canonicalExistingDirectory(fixture.home)
+        for item in captured {
+            #expect(!FileManager.default.fileExists(atPath: item.plannedDirectory.path))
+            let clientFolder = item.plannedDirectory.deletingLastPathComponent().lastPathComponent
+            #expect(item.canonicalDirectory.path == canonicalHome.appending(path: "\(clientFolder)/skills").path)
+        }
+    }
+
+    @Test func nonDirectoryAndDanglingDestinationLinksFailClosed() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let claude = fixture.home.appending(path: ".claude")
+        try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: false)
+        try Data("file".utf8).write(to: claude.appending(path: "skills"))
+        await #expect(throws: WorkspaceSkillTargetCaptureError.unreadableDirectory) {
+            _ = try await WorkspaceSkillTargetCapture.capture(
+                homeURL: fixture.home, deviceID: Self.object("00000000-0000-0000-0000-000000000031"),
+                selectors: [.init(surface: .claudeCode, scope: .user)],
+                observations: Self.observations(surfaces: [.claudeCode]))
+        }
+        try FileManager.default.removeItem(at: claude.appending(path: "skills"))
+        try FileManager.default.createSymbolicLink(
+            at: claude.appending(path: "skills"),
+            withDestinationURL: fixture.container.appending(path: "absent"))
+        await #expect(throws: WorkspaceSkillTargetCaptureError.unreadableDirectory) {
+            _ = try await WorkspaceSkillTargetCapture.capture(
+                homeURL: fixture.home, deviceID: Self.object("00000000-0000-0000-0000-000000000031"),
+                selectors: [.init(surface: .claudeCode, scope: .user)],
+                observations: Self.observations(surfaces: [.claudeCode]))
+        }
+    }
+
+    /// A surface with no observation at all is skipped as not checked yet;
+    /// CaptureNotCheckedTests pins that.
+    @Test func duplicateObservationsThrowWhileUnsupportedAndMissingProjectSkip() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let deviceID = Self.object("00000000-0000-0000-0000-000000000040")
+        // Two observations of one surface are a structural problem the caller
+        // cannot recover from, so they still throw.
+        await #expect(throws: WorkspaceSkillTargetCaptureError.ambiguousObservation(.codexCLI)) {
+            _ = try await WorkspaceSkillTargetCapture.capture(
+                homeURL: fixture.home, deviceID: deviceID,
+                selectors: [.init(surface: .codexCLI, scope: .user)],
+                observations: Self.observations(surfaces: [.codexCLI, .codexCLI]))
+        }
+        // An unsupported surface is skipped, not fatal: the result carries no
+        // target and names the skip, so every other client still resolves.
+        let unsupported = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: deviceID,
+            selectors: [.init(surface: .codexDesktop, scope: .user)], observations: [])
+        #expect(unsupported.targets.isEmpty)
+        #expect(unsupported.skipped.map(\.reason) == [.unsupportedSurface(.codexDesktop)])
+
+        // A project with no folder on this Mac is skipped too, and the rest of
+        // the capture still runs.
+        let missingProject = Self.artifactID("00000000-0000-0000-0000-000000000041")
+        let noRoot = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: deviceID,
+            selectors: [
+                .init(surface: .codexCLI, scope: .project, logicalProjectID: missingProject),
+                .init(surface: .codexCLI, scope: .user),
+            ],
+            observations: Self.observations(surfaces: [.codexCLI]))
+        #expect(noRoot.targets.map(\.target.selector.scope) == [.user])
+        #expect(noRoot.skipped.map(\.reason) == [.missingProject(missingProject)])
+    }
+
+    @Test func aClientThatIsNotInstalledIsSkippedAndTheRestStillCapture() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        // Codex is installed; Claude Code is not. The uninstalled one is skipped
+        // and the installed one still resolves — the Kiro-on-this-Mac bug was
+        // exactly this taking every client down together.
+        let result = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: Self.object("00000000-0000-0000-0000-000000000045"),
+            selectors: [
+                .init(surface: .claudeCode, scope: .user),
+                .init(surface: .codexCLI, scope: .user),
+            ],
+            observations: [
+                Self.observation(.claudeCode, installed: false),
+                Self.observation(.codexCLI),
+            ])
+        #expect(result.targets.map(\.target.selector.surface) == [.codexCLI])
+        #expect(result.skipped.map(\.reason) == [.unavailableClient(.claudeCode)])
+    }
+
+    @Test func aKiroSkillDestinationIsCaptured() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        // The reported bug: a Kiro selector aborted the whole capture. It must
+        // now resolve to a real destination like any other CLI, since Kiro has
+        // a native skill folder.
+        let captured = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: Self.object("00000000-0000-0000-0000-000000000046"),
+            selectors: [.init(surface: .kiroCLI, scope: .user)],
+            observations: [Self.observation(.kiroCLI)]
+        ).targets
+        #expect(captured.count == 1)
+        let canonicalHome = try Self.canonicalExistingDirectory(fixture.home)
+        #expect(captured.first?.canonicalDirectory.path == canonicalHome.appending(path: ".kiro/skills").path)
+        #expect(captured.first?.target.selector.surface == .kiroCLI)
+    }
+
+    @Test func capturedRouteDoesNotManufactureCapabilityAndNilVersionBlocks() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let deviceID = Self.object("00000000-0000-0000-0000-000000000050")
+        let artifact = Self.artifactID("00000000-0000-0000-0000-000000000051")
+        let target = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: deviceID,
+            selectors: [.init(surface: .codexCLI, scope: .user)],
+            observations: [Self.observation(.codexCLI, version: nil)]
+        ).targets
+        let contribution = AssignmentContribution(
+            artifactID: artifact, destination: .init(surface: .codexCLI, scope: .user), reason: .manual)
+        let resolution = WorkspaceAssignmentResolver.resolve(
+            artifacts: [
+                .init(
+                    identity: .init(id: artifact, kind: .skill, displayName: "Skill"),
+                    authority: .centralPersonal)
+            ],
+            contributions: [contribution], currentDeviceID: deviceID,
+            targets: target.map(\.target), capabilityEvidence: [])
+        #expect(resolution.requirements.isEmpty)
+        // A well-formed target whose client never said its version is refused
+        // for that reason, not as a malformed target.
+        #expect(resolution.issues.map(\.kind) == [.unknownClientVersion])
+
+        let versioned = try await WorkspaceSkillTargetCapture.capture(
+            homeURL: fixture.home, deviceID: deviceID,
+            selectors: [.init(surface: .codexCLI, scope: .user)],
+            observations: Self.observations(surfaces: [.codexCLI])
+        ).targets
+        let missingCapability = WorkspaceAssignmentResolver.resolve(
+            artifacts: [
+                .init(
+                    identity: .init(id: artifact, kind: .skill, displayName: "Skill"),
+                    authority: .centralPersonal)
+            ],
+            contributions: [contribution], currentDeviceID: deviceID,
+            targets: versioned.map(\.target), capabilityEvidence: [])
+        #expect(missingCapability.requirements.isEmpty)
+        #expect(missingCapability.issues.map(\.kind) == [.missingCapabilityEvidence])
+    }
+
+    @Test func cancellationDoesNotReturnCapturedEvidence() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let roots = (0..<512).map { index in
+            DeviceProjectRootBinding(
+                projectID: Self.indexedArtifact(index), rootPath: fixture.project.path)
+        }
+        let selectors = roots.map {
+            ResolvedAssignmentSelector(surface: .codexCLI, scope: .project, logicalProjectID: $0.projectID)
+        }
+        let home = fixture.home
+        let task = Task {
+            try await WorkspaceSkillTargetCapture.capture(
+                homeURL: home,
+                deviceID: Self.object("00000000-0000-0000-0000-000000000060"),
+                selectors: selectors, projectRoots: roots,
+                observations: Self.observations(surfaces: [.codexCLI]))
+        }
+        task.cancel()
+        await #expect(throws: CancellationError.self) { _ = try await task.value }
+    }
+
+    private struct Fixture {
+        let container: URL
+        let home: URL
+        let project: URL
+
+        init() throws {
+            container = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+                .appending(path: "skill-target-capture-\(UUID().uuidString)")
+            home = container.appending(path: "home")
+            project = container.appending(path: "project")
+            try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: project, withIntermediateDirectories: false)
+        }
+
+        func remove() { try? FileManager.default.removeItem(at: container) }
+    }
+
+    private static func selectors(
+        scope: ToolingScope, projectID: ArtifactID? = nil
+    ) -> [ResolvedAssignmentSelector] {
+        [.claudeCode, .codexCLI, .geminiCLI].map {
+            .init(surface: $0, scope: scope, logicalProjectID: projectID)
+        }
+    }
+
+    private static func observations(
+        surfaces: [TargetSurface] = [.claudeCode, .codexCLI, .geminiCLI]
+    ) -> [TargetObservation] {
+        surfaces.map { observation($0) }
+    }
+
+    private static func observation(
+        _ surface: TargetSurface, version: String? = "1.0", installed: Bool = true
+    ) -> TargetObservation {
+        .init(surface: surface, installed: installed, version: version, capabilities: emptyCapabilities)
+    }
+
+    private static var emptyCapabilities: TargetCapabilities {
+        .init(
+            supportsPluginInstall: false, supportsProjectScope: false,
+            supportsLocalMarketplace: false, supportsMCPAuthentication: false,
+            supportsConnectorDiscovery: false, requiresNewSession: false,
+            requiresRestart: false, supportsMachineReadableOutput: false)
+    }
+
+    private static func capabilities(surfaces: [TargetSurface]) -> [TargetCapabilityEvidence] {
+        surfaces.map {
+            .init(
+                surface: $0, installedClientVersion: "1.0",
+                adapterContractVersion: WorkspaceSkillTargetCapture.adapterContractVersion,
+                component: .skill, scopes: [.user], support: .supported,
+                observedAt: Date(timeIntervalSince1970: 0))
+        }
+    }
+
+    private static func object(_ value: String) -> WorkspaceObjectID {
+        WorkspaceObjectID(fixtureUUID(value))
+    }
+
+    private static func artifactID(_ value: String) -> ArtifactID {
+        ArtifactID(fixtureUUID(value))
+    }
+
+    private static func indexedArtifact(_ value: Int) -> ArtifactID {
+        artifactID(String(format: "00000000-0000-0000-0000-%012x", value + 1))
+    }
+
+    private static func canonicalExistingDirectory(_ url: URL) throws -> URL {
+        let pointer = try #require(realpath(url.path, nil))
+        defer { free(pointer) }
+        return URL(fileURLWithPath: String(cString: pointer), isDirectory: true)
+    }
+}

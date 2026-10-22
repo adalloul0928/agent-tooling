@@ -1,0 +1,692 @@
+import AgentToolingCore
+import AppKit
+import SwiftUI
+
+/// Parses an MCP command, JSON configuration, server URL, or SKILL.md into an
+/// editable preview. Save uses workspace intake commands; installation remains
+/// a separate reviewed operation. Empty input supports manual connection entry.
+struct PasteImportSheet: View {
+    enum Mode: Sendable { case paste, newConnection }
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.availableClients) private var availableClients
+    let workspace: WorkspaceLaunch.Workspace
+    var mode: Mode = .paste
+
+    @State private var text = ""
+    @State private var shape: PastedShape?
+    @State private var servers: [PastedMCPServerDraft] = []
+    @State private var importNotes: [String] = []
+    @State private var selectedServer = 0
+    @State private var serverDraft = MCPDraft()
+    @State private var skill: PastedSkillImport?
+    @State private var skillDraft = SkillDraft()
+    @State private var failure: String?
+    @State private var isSaving = false
+    @State private var savedSkillName: String?
+    @State private var savedServerName: String?
+    /// A preview seed: text to interpret on appear, so a gallery or preview can
+    /// show the parsed and parse-error layouts the sheet otherwise reaches only
+    /// from text a person types. Nil on every normal path.
+    private let previewText: String?
+    /// Told what the sheet saved, as it saves it: the new item and its name.
+    /// The setup stage records exactly that as something its setup added.
+    private let onSaved: (ArtifactID, String) -> Void
+
+    /// The sheet as the app presents it: nothing seeded, text comes from the
+    /// person. `onSaved` hears each skill or connection it saves.
+    init(
+        workspace: WorkspaceLaunch.Workspace, mode: Mode = .paste,
+        onSaved: @escaping (ArtifactID, String) -> Void = { _, _ in }
+    ) {
+        self.workspace = workspace
+        self.mode = mode
+        self.previewText = nil
+        self.onSaved = onSaved
+    }
+
+    /// A preview-only initializer that seeds the paste field and interprets it
+    /// on appear, so the parsed-definition and parse-error layouts can be shown
+    /// without a person typing. Internal, used by the screen gallery.
+    init(workspace: WorkspaceLaunch.Workspace, mode: Mode = .paste, previewText: String) {
+        self.workspace = workspace
+        self.mode = mode
+        self.previewText = previewText
+        self.onSaved = { _, _ in }
+        _text = State(initialValue: previewText)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Hairline()
+            content
+            Hairline()
+            footer
+        }
+        .onAppear {
+            skillDraft.selectedTargets.formIntersection(Set(availableClients))
+            if let previewText { read(previewText) } else { startNewConnectionIfNeeded() }
+        }
+        .sheetSize(SheetSize.large)
+        .background(AgentTheme.contentBackground)
+    }
+
+    /// An empty draft, so the same review form is the one somebody types a
+    /// connection into. Nothing is read from the clipboard on this path.
+    private func startNewConnectionIfNeeded() {
+        guard mode == .newConnection, servers.isEmpty, savedServerName == nil else { return }
+        servers = [PastedMCPServerDraft(draft: MCPDraft())]
+        serverDraft = MCPDraft()
+        selectedServer = 0
+    }
+
+    // MARK: - Chrome
+
+    private var header: some View {
+        HStack(spacing: Space.lg) {
+            KindTile(kind: shape == .skillMarkdown ? .skill : .mcpServer, size: Size.tileLarge)
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(mode == .newConnection ? "Add a connection" : "Paste to import")
+                    .font(AgentFont.title)
+                Text(subtitle).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
+            if let shape {
+                Text(shape.displayName)
+                    .font(AgentFont.captionMedium)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, Space.md)
+                    .frame(height: Size.pillHeight)
+                    .background(Capsule().fill(AgentTheme.fillHover))
+            }
+        }
+        .padding(Space.xxxl)
+    }
+
+    private var subtitle: String {
+        if savedSkillName != nil || savedServerName != nil { return "Saved to your library" }
+        if shape == .skillMarkdown { return "Check the skill this frontmatter describes" }
+        if shape != nil { return "Check what was read before it is saved" }
+        if mode == .newConnection { return "Write down how this connection is reached" }
+        return "An mcp add command, a JSON block, a server URL, or a SKILL.md"
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let savedSkillName {
+            EmptyStateView(
+                symbol: "checkmark.circle",
+                title: "\(savedSkillName) is in your library",
+                message:
+                    "The skill was created in the managed library. Install, on the skill, picks the apps and writes it; "
+                    + "anything that would change files you did not put there is shown first.")
+        } else if let savedServerName {
+            EmptyStateView(
+                symbol: "checkmark.circle",
+                title: "\(savedServerName) is in your library",
+                message:
+                    "The connection was recorded. Nothing was started, signed in to, or contacted. Install, on the "
+                    + "connection, picks the apps and writes it.")
+        } else if shape == .skillMarkdown {
+            skillReview
+        } else if !servers.isEmpty {
+            serverReview
+        } else {
+            inputStep
+        }
+    }
+
+    private var footer: some View {
+        HStack {
+            if shape != nil, !isSaved {
+                Button("Start over") { reset() }
+                    .secondaryActionStyle()
+            }
+            Spacer()
+            if isSaving { ProgressView().controlSize(.small) }
+            if !isSaved {
+                Button("Cancel") { dismiss() }
+                    .secondaryActionStyle()
+                    .keyboardShortcut(.cancelAction)
+                Button(primaryTitle) { performPrimaryAction() }
+                    .primaryActionStyle()
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(isPrimaryDisabled)
+                    .help(primaryHelp)
+            } else {
+                Button("Done") { dismiss() }
+                    .primaryActionStyle()
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(Space.xl)
+    }
+
+    private var primaryTitle: String {
+        if shape == .skillMarkdown { return "Create skill" }
+        if !servers.isEmpty { return "Add connection" }
+        return "Read paste"
+    }
+
+    private var primaryHelp: String {
+        guard !servers.isEmpty else { return "" }
+        if !canWrite { return Self.readOnlyExplanation }
+        return serverError ?? Self.serverIntakeExplanation
+    }
+
+    private var isPrimaryDisabled: Bool {
+        if isSaving { return true }
+        if shape == .skillMarkdown { return !skillIsComplete || !canWrite }
+        if !servers.isEmpty { return serverError != nil || !canWrite }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func performPrimaryAction() {
+        if shape == .skillMarkdown {
+            Task { await createSkill() }
+        } else if !servers.isEmpty {
+            Task { await addServer() }
+        } else {
+            read(text)
+        }
+    }
+
+    private var canWrite: Bool { workspace.library.access == .writable }
+
+    private var isSaved: Bool { savedSkillName != nil || savedServerName != nil }
+
+    /// What saving a connection does, and — just as importantly — what it does
+    /// not. The button is live now, so this is the promise it keeps.
+    static let serverIntakeExplanation =
+        "Saving records how this connection is reached. Nothing is started, signed in to, or contacted, and it is "
+        + "not put in an app: choosing where it is used is a separate reviewed step."
+
+    static let readOnlyExplanation =
+        "This workspace is open for review, so nothing can be saved into it."
+
+    // MARK: - Input
+
+    private var inputStep: some View {
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text(
+                "Paste one definition. Nothing is run: the text is read as data, bounded, and shown back to you "
+                    + "before anything is saved."
+            )
+            .font(AgentFont.body)
+            .foregroundStyle(.secondary)
+            .wrapsLines()
+
+            TextEditor(text: $text)
+                .font(AgentFont.mono)
+                .scrollContentBackground(.hidden)
+                .padding(Space.md)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .standardPanel()
+                .accessibilityLabel("Pasted definition")
+
+            HStack(spacing: Space.md) {
+                Button {
+                    readClipboard()
+                } label: {
+                    Label("Paste from clipboard", systemImage: "doc.on.clipboard")
+                }
+                .secondaryActionStyle()
+                Spacer()
+                Text("Examples: an mcp add command, {\"mcpServers\": …}, https://…, or a SKILL.md")
+                    .font(AgentFont.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+
+            if let failure {
+                Label(failure, systemImage: "exclamationmark.triangle")
+                    .font(AgentFont.caption)
+                    .foregroundStyle(.red)
+                    .wrapsLines()
+            }
+        }
+        .padding(Space.xxxl)
+    }
+
+    // MARK: - Server review
+
+    private var serverReview: some View {
+        Form {
+            Section {
+                Label(Self.serverIntakeExplanation, systemImage: "tray.and.arrow.down")
+                    .font(AgentFont.body)
+                    .foregroundStyle(.secondary)
+                if let placementClause {
+                    Label(placementClause, systemImage: "arrow.triangle.2.circlepath")
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !canWrite {
+                    Label(Self.readOnlyExplanation, systemImage: "lock")
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if servers.count > 1 {
+                Section("Connections read") {
+                    Picker("Show", selection: $selectedServer) {
+                        ForEach(Array(servers.enumerated()), id: \.offset) { index, server in
+                            Text(server.draft.name).tag(index)
+                        }
+                    }
+                    .accessibilityLabel("Connection to show")
+                    Text("\(CountNoun.connection.phrase(servers.count)) were read.")
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !currentNotes.isEmpty {
+                Section("What was understood") {
+                    ForEach(currentNotes, id: \.self) { note in
+                        Label(note, systemImage: "text.magnifyingglass")
+                            .font(AgentFont.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Section("Connection") {
+                TextField("Name", text: $serverDraft.name)
+                    .accessibilityLabel("Connection name")
+                Picker("Transport", selection: $serverDraft.transport) {
+                    ForEach(MCPTransport.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                TextField("Endpoint or command", text: $serverDraft.endpoint)
+                    .font(AgentFont.monoBody)
+                    .accessibilityLabel("Endpoint or command")
+                Picker("Authentication", selection: $serverDraft.authentication) {
+                    ForEach(["OAuth", "API key", "Doppler", "None"], id: \.self) { Text($0).tag($0) }
+                }
+                Picker("Scope", selection: $serverDraft.scope) {
+                    ForEach([ToolingScope.user, .project, .localProject, .workspace]) { scope in
+                        Text(scope.displayName).tag(scope)
+                    }
+                }
+                if serverDraft.scope != .user {
+                    HStack {
+                        TextField("Project folder", text: $serverDraft.projectRoot, prompt: Text("Choose an existing folder"))
+                            .accessibilityLabel("Project folder")
+                        Button("Choose…") { chooseProjectFolder() }
+                    }
+                }
+                if !credentialNames.isEmpty {
+                    LabeledContent("Credential names", value: credentialNames.joined(separator: ", "))
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Credential names recorded")
+                }
+                Button {
+                    copyDefinition()
+                } label: {
+                    Label(
+                        mode == .newConnection ? "Copy this definition" : "Copy what was read",
+                        systemImage: "doc.on.doc")
+                }
+            }
+
+            if let message = serverError ?? failure {
+                Section {
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onChange(of: selectedServer) { _, index in
+            guard servers.indices.contains(index) else { return }
+            serverDraft = servers[index].draft
+        }
+    }
+
+    private var currentNotes: [String] {
+        let notes = servers.indices.contains(selectedServer) ? servers[selectedServer].notes : []
+        return importNotes + notes
+    }
+
+    /// The environment and header names the paste kept. Values were dropped on
+    /// the way in; only these names are ever recorded. The parse hands them
+    /// over sorted and without repeats, so nothing is tidied again here.
+    private var credentialNames: [String] {
+        guard servers.indices.contains(selectedServer) else { return [] }
+        return servers[selectedServer].secretNames
+    }
+
+    /// Which half of the workspace this connection lands in, decided by the
+    /// same command that will record it rather than restated here.
+    private var placementClause: String? {
+        guard serverError == nil,
+            let command = try? ManagedMCPServerIntakeCommand(
+                expectedRevisionID: WorkspaceObjectID(), draft: serverDraft,
+                credentialRequirementNames: credentialNames)
+        else { return nil }
+        switch command.connection {
+        case .remoteHTTPS:
+            return "This address is the same everywhere, so your other Macs get it too."
+        case .deviceBound:
+            return "This address is resolved on each Mac, so it stays on this one. Another Mac sees the "
+                + "connection and sets up its own."
+        }
+    }
+
+    /// What is wrong with the definition as read, whether or not it could be
+    /// saved. A person checking a paste still deserves to be told.
+    private var serverError: String? {
+        let rawName = serverDraft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawName.isEmpty else {
+            return mode == .newConnection ? "Name this connection." : "The paste named no connection."
+        }
+        guard let identifier = try? WorkspaceLibrary.normalizedIdentifier(rawName) else {
+            return ManagedMCPServerIntakeError.invalidConnectionName(rawName).errorDescription
+        }
+        guard !ManagedMCPServerIntakeCommand.isReservedName(identifier) else {
+            return ManagedMCPServerIntakeError.reservedName(identifier).errorDescription
+        }
+        do {
+            _ = try MCPDefinitionValidator.validate(serverDraft.endpoint, transport: serverDraft.transport)
+        } catch {
+            return error.localizedDescription
+        }
+        if serverDraft.scope != .user {
+            do {
+                _ = try ConfigurationValidator.normalizedScopedRoot(
+                    scope: serverDraft.scope, value: serverDraft.projectRoot, noun: "connection")
+            } catch {
+                return error.localizedDescription
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Skill review
+
+    private var skillReview: some View {
+        Form {
+            Section("What was understood") {
+                ForEach(skill?.notes ?? [], id: \.self) { note in
+                    Label(note, systemImage: "text.magnifyingglass")
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(skill?.missingFields ?? [], id: \.self) { missing in
+                    Label("\(missing) was not in the paste. Add it below.", systemImage: "pencil.line")
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Skill") {
+                TextField("Name", text: $skillDraft.name)
+                    .accessibilityLabel("Skill name")
+                TextField("Purpose", text: $skillDraft.purpose, axis: .vertical)
+                    .lineLimit(2...5)
+                    .accessibilityLabel("Purpose")
+            }
+
+            Section("Triggers") {
+                ForEach(0..<3, id: \.self) { index in
+                    TextField("Trigger \(index + 1)", text: triggerBinding(index))
+                        .accessibilityLabel("Trigger \(index + 1)")
+                }
+                TextField("When not to use it", text: $skillDraft.negativeTrigger)
+                    .accessibilityLabel("Negative trigger")
+            }
+
+            Section("Where it goes") {
+                Text(
+                    "The skill goes into your library first. Install, on the skill, then picks the apps and writes it."
+                )
+                .font(AgentFont.caption)
+                .foregroundStyle(.secondary)
+                if !canWrite {
+                    Label(
+                        "This workspace is open for review, so nothing can be saved into it.",
+                        systemImage: "lock"
+                    )
+                    .font(AgentFont.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            if let failure {
+                Section {
+                    Label(failure, systemImage: "exclamationmark.triangle")
+                        .font(AgentFont.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var skillIsComplete: Bool {
+        !skillDraft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !skillDraft.purpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func triggerBinding(_ index: Int) -> Binding<String> {
+        Binding(
+            get: { skillDraft.triggers.indices.contains(index) ? skillDraft.triggers[index] : "" },
+            set: { value in
+                while skillDraft.triggers.count <= index { skillDraft.triggers.append("") }
+                skillDraft.triggers[index] = value
+            }
+        )
+    }
+
+    // MARK: - Saving
+
+    /// Records the reviewed connection: the artifact, the shared definition and
+    /// this Mac's own binding, in one transaction. Nothing is started and no
+    /// client file is touched — this is a declaration.
+    private func addServer() async {
+        guard canWrite, !isSaving, servers.indices.contains(selectedServer) else { return }
+        isSaving = true
+        failure = nil
+        defer { isSaving = false }
+        do {
+            guard let head = try await workspace.service.snapshot()?.document.revision.id else {
+                failure = "This workspace could not be read. Nothing was saved."
+                return
+            }
+            let command = try ManagedMCPServerIntakeCommand(
+                expectedRevisionID: head, draft: serverDraft, credentialRequirementNames: credentialNames
+            ).refusingReservedName()
+            _ = try await workspace.service.intakeManagedMCPServer(command)
+            await workspace.library.refresh()
+            savedServerName = command.displayName
+            onSaved(command.artifactID, command.displayName)
+        } catch {
+            // Every refusal here already carries the words a person needs:
+            // the definition validator's for a malformed or credential-bearing
+            // destination, and the command's for a name already in the library.
+            failure = error.localizedDescription
+        }
+    }
+
+    /// Writes the reviewed frontmatter into a scratch folder, captures it as
+    /// immutable content, and admits it. The scratch folder is removed either
+    /// way; nothing outside the workspace is touched.
+    private func createSkill() async {
+        guard canWrite, !isSaving else { return }
+        isSaving = true
+        failure = nil
+        defer { isSaving = false }
+        do {
+            guard let saved = try await Self.saveSkill(skillDraft, in: workspace) else {
+                failure = "This workspace could not be read. Nothing was saved."
+                return
+            }
+            savedSkillName = saved.name
+            onSaved(saved.artifactID, saved.name)
+        } catch {
+            failure = Self.message(for: error)
+        }
+    }
+
+    /// One thing the sheet saved: its record in the library, and its name.
+    struct Saved: Equatable {
+        let artifactID: ArtifactID
+        let name: String
+    }
+
+    /// Create skill's save, on its own: `draft`'s frontmatter written into a
+    /// scratch folder, captured, and admitted to `workspace`'s library in one
+    /// revision, which is then read back. Nil when the workspace could not be
+    /// read, so nothing was saved.
+    static func saveSkill(_ draft: SkillDraft, in workspace: WorkspaceLaunch.Workspace) async throws -> Saved? {
+        let displayName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let identifier = try WorkspaceLibrary.normalizedIdentifier(displayName)
+        let scratch = FileManager.default.temporaryDirectory
+            .appending(path: "paste-skill-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        try FileManager.default.createDirectory(
+            at: scratch, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try skillMarkdown(identifier: identifier, displayName: displayName, draft: draft)
+            .write(
+                to: scratch.appending(path: "SKILL.md", directoryHint: .notDirectory),
+                atomically: true, encoding: .utf8)
+        let prepared = try await WorkspaceSkillPreparation.capturePersonal(directory: scratch)
+        guard let head = try await workspace.service.snapshot()?.document.revision.id else { return nil }
+        let command = StandaloneSkillIntakeCommand(expectedRevisionID: head, displayName: displayName, prepared: prepared)
+        _ = try await workspace.service.intakeStandaloneSkill(command, prepared: prepared)
+        await workspace.library.refresh()
+        return Saved(artifactID: command.artifactID, name: displayName)
+    }
+
+    /// The same shape a created skill has always had: frontmatter the clients
+    /// read, then the sections a person fills in.
+    static func skillMarkdown(identifier: String, displayName: String, draft: SkillDraft) -> String {
+        let triggerLines = draft.triggers
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { "- \($0)" }
+            .joined(separator: "\n")
+        let negative = draft.negativeTrigger.trimmingCharacters(in: .whitespacesAndNewlines)
+        return """
+            ---
+            name: \(identifier)
+            description: \(yamlQuoted(draft.purpose.trimmingCharacters(in: .whitespacesAndNewlines)))
+            ---
+
+            # \(displayName)
+
+            ## When to use this skill
+
+            \(triggerLines.isEmpty ? "Use this skill when the user asks for this reusable workflow." : triggerLines)
+
+            ## When not to use this skill
+
+            \(negative.isEmpty ? "Do not use it for work another skill already covers." : negative)
+
+            ## Workflow
+
+            1. Confirm the goal and the applicable scope.
+            2. Inspect the relevant local state before making a change.
+            3. Complete the requested workflow and report the verifiable result.
+            """
+    }
+
+    private static func yamlQuoted(_ value: String) -> String {
+        let escaped = value.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: " ")
+        return "\"\(escaped)\""
+    }
+
+    private static func message(for error: any Error) -> String {
+        switch error {
+        case WorkspaceSkillPreparationError.invalidSkillDefinition:
+            return "The name and purpose could not be written as valid skill frontmatter. Try a simpler name."
+        case is WorkspaceIdentifierError:
+            return "That name cannot become a skill identifier. Use letters, numbers and dashes."
+        default:
+            return "The skill could not be created: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Reading
+
+    private func readClipboard() {
+        guard let value = NSPasteboard.general.string(forType: .string) else {
+            failure = "The clipboard holds no text to read."
+            return
+        }
+        text = value
+        read(value)
+    }
+
+    private func read(_ value: String) {
+        do {
+            switch try PastedDefinitionParser.parse(value) {
+            case .mcp(let result):
+                shape = result.shape
+                servers = result.servers
+                importNotes = result.notes
+                selectedServer = 0
+                serverDraft = result.servers.first?.draft ?? MCPDraft()
+                skill = nil
+                failure = nil
+            case .skill(let result):
+                shape = .skillMarkdown
+                skill = result
+                skillDraft = result.draft
+                skillDraft.selectedTargets.formIntersection(Set(availableClients))
+                servers = []
+                importNotes = result.notes
+                failure = nil
+            }
+        } catch {
+            failure = error.localizedDescription
+            shape = nil
+            servers = []
+            skill = nil
+        }
+    }
+
+    private func reset() {
+        shape = nil
+        servers = []
+        skill = nil
+        importNotes = []
+        failure = nil
+        selectedServer = 0
+        startNewConnectionIfNeeded()
+    }
+
+    private func copyDefinition() {
+        let transport = serverDraft.transport.rawValue
+        let summary = """
+            name: \(serverDraft.name)
+            transport: \(transport)
+            endpoint: \(serverDraft.endpoint)
+            authentication: \(serverDraft.authentication)
+            scope: \(serverDraft.scope.displayName)
+            """
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(summary, forType: .string)
+    }
+
+    private func chooseProjectFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose this connection's project folder"
+        panel.prompt = "Choose"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        if !serverDraft.projectRoot.isEmpty {
+            panel.directoryURL = URL(fileURLWithPath: serverDraft.projectRoot, isDirectory: true)
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        serverDraft.projectRoot = url.standardizedFileURL.path(percentEncoded: false)
+    }
+}

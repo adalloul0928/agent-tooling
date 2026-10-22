@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+"$REPO_ROOT/scripts/check-public-content"
+python3 -m unittest discover -s "$REPO_ROOT/tests" -p 'test_*.py'
+while IFS= read -r script; do
+  bash -n "$script"
+done < <(rg -l '^#!/(usr/bin/env bash|bin/bash)$' "$REPO_ROOT/scripts" "$REPO_ROOT/apps/agent-tooling-macos/scripts")
+printf 'Static validation passed.\n'

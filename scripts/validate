@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+"$REPO_ROOT/scripts/validate-static"
+cd "$REPO_ROOT/apps/agent-tooling-macos"
+swift format lint --strict -r Sources Tests Package.swift
+swift test --disable-sandbox
+swift build --configuration release -Xswiftc -warnings-as-errors

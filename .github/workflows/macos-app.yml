@@ -1,0 +1,265 @@
+name: Validate macOS app
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  debug:
+    name: Debug tests
+    runs-on: macos-26
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: apps/agent-tooling-macos
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Validate source and release scripts
+        run: |
+          swift format lint --strict -r Sources Tests Package.swift
+          bash -n scripts/package-app.sh scripts/create-dmg.sh scripts/verify-dmg.sh
+          shellcheck_version=0.11.0
+          shellcheck_archive="shellcheck-v${shellcheck_version}.darwin.aarch64.tar.xz"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/$shellcheck_archive" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${shellcheck_version}/$shellcheck_archive"
+          printf '%s  %s\n' \
+            '56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79' \
+            "$RUNNER_TEMP/$shellcheck_archive" | shasum -a 256 --check
+          tar -xJf "$RUNNER_TEMP/$shellcheck_archive" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/shellcheck-v${shellcheck_version}/shellcheck" -x scripts/package-app.sh scripts/create-dmg.sh scripts/verify-dmg.sh
+          # Validate rendering for a release version other than the bundled artwork.
+          swift scripts/render-dmg-layout.swift picture 0.0.0 "$RUNNER_TEMP/dmg-picture-check"
+          plutil -lint Resources/Info.plist
+
+      # All suites use Swift Testing; disabling XCTest keeps XML at the requested path.
+      - name: Run Core and MCP tests
+        run: |
+          swift test --disable-sandbox --no-parallel --skip '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/debug-core.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/debug-core.xml"
+
+      - name: Run UI tests
+        run: |
+          swift test --disable-sandbox --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/debug-ui.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/debug-ui.xml"
+
+  thread:
+    name: Thread Sanitizer tests
+    runs-on: macos-26
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: apps/agent-tooling-macos
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Run Core and MCP tests with Thread Sanitizer
+        run: |
+          swift test --disable-sandbox --sanitize=thread --no-parallel --skip '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/thread-core.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/thread-core.xml"
+
+      - name: Run UI tests with Thread Sanitizer
+        run: |
+          swift test --disable-sandbox --sanitize=thread --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/thread-ui.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/thread-ui.xml"
+
+  release:
+    name: Release tests
+    runs-on: macos-26
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/agent-tooling-macos
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Run Core and MCP release tests
+        run: |
+          swift test --disable-sandbox --configuration release --no-parallel --skip '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/release-core.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/release-core.xml"
+
+      - name: Run UI release tests
+        run: |
+          swift test --disable-sandbox --configuration release --skip-build --no-parallel --filter '^AgentToolingAppTests\.' --disable-xctest --xunit-output "$RUNNER_TEMP/release-ui.xml"
+          ../../scripts/check-test-report "$RUNNER_TEMP/release-ui.xml"
+
+  package:
+    name: Package app
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/agent-tooling-macos
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Build release with warnings as errors
+        run: |
+          swift build --configuration release -Xswiftc -warnings-as-errors
+
+      - name: Smoke test Raycast CLI contract
+        run: |
+          cli=$(swift build --configuration release --show-bin-path)/agent-tooling
+          workspace="$RUNNER_TEMP/raycast-cli-workspace"
+          # Seed an isolated workspace for the CLI.
+          fixture=$(mktemp -d "$RUNNER_TEMP/raycast-cli-fixture.XXXXXX")
+          mkdir -p "$workspace" "$fixture/Sources/SeedWorkspace"
+          cat > "$fixture/Package.swift" <<SWIFT
+          // swift-tools-version: 6.2
+          import PackageDescription
+
+          let package = Package(
+              name: "RaycastCLIFixture",
+              platforms: [.macOS(.v26)],
+              dependencies: [.package(path: "$PWD")],
+              targets: [
+                  .executableTarget(
+                      name: "SeedWorkspace",
+                      dependencies: [.product(name: "AgentToolingCore", package: "agent-tooling-macos")])
+              ])
+          SWIFT
+          cat > "$fixture/Sources/SeedWorkspace/main.swift" <<'SWIFT'
+          import AgentToolingCore
+          import Foundation
+
+          let root = URL(fileURLWithPath: CommandLine.arguments[1]).standardizedFileURL
+          let home = root.appending(path: "home", directoryHint: .isDirectory)
+          try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+          _ = try await WorkspaceLocator(root: root).openOrCreate(
+              homeURL: home, runner: ProcessCommandRunner(homeURL: home),
+              registry: ClientAdapterRegistry(adapters: []))
+          SWIFT
+          swift run --disable-sandbox --configuration release --package-path "$fixture" SeedWorkspace "$workspace"
+          printf '%s' 'Create a reusable release-readiness review skill.' \
+            | "$cli" request create-skill \
+                --provider codex \
+                --scope global \
+                --targets codex \
+                --instruction-stdin \
+                --workspace "$workspace" \
+                --json \
+            > "$RUNNER_TEMP/create-skill-response.json"
+          "$cli" search --query release --workspace "$workspace" --json \
+            > "$RUNNER_TEMP/search-response.json"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          created = json.loads((root / "create-skill-response.json").read_text())
+          searched = json.loads((root / "search-response.json").read_text())
+          assert created["schemaVersion"] == 1
+          assert created["request"]["state"] == "pending-review"
+          assert searched == {
+              "schemaVersion": 1,
+              "results": [],
+              "totalResults": 0,
+              "truncated": False,
+          }
+          PY
+
+      - name: Build release app
+        env:
+          AGENT_TOOLING_CONFIGURATION: release
+          AGENT_TOOLING_VERSION: 0.1.0
+          AGENT_TOOLING_BUILD_NUMBER: ${{ github.run_number }}
+        run: ./scripts/package-app.sh "$RUNNER_TEMP/Agent Tooling.app"
+
+      - name: Verify app bundle
+        run: |
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/Agent Tooling.app"
+          "$RUNNER_TEMP/Agent Tooling.app/Contents/MacOS/AgentTooling" --verify-resources
+          helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling"
+          test -x "$helper"
+          file "$helper"
+          codesign --verify --strict --verbose=2 "$helper"
+          # Setup registers this path with the agents, which then launch the
+          # server on their own, so it must be signed and start by itself.
+          mcp_helper="$RUNNER_TEMP/Agent Tooling.app/Contents/Helpers/agent-tooling-mcp"
+          test -x "$mcp_helper"
+          file "$mcp_helper"
+          codesign --verify --strict --verbose=2 "$mcp_helper"
+          "$mcp_helper" --version
+          resource_bundle="$RUNNER_TEMP/Agent Tooling.app/Contents/Resources/AgentTooling_AgentToolingApp.bundle"
+          resources="$resource_bundle"
+          if [[ -d "$resource_bundle/Contents/Resources" ]]; then
+            resources="$resource_bundle/Contents/Resources"
+          fi
+          test -s "$resources/ThirdPartyNotices.txt"
+          cmp ../../LICENSE "$RUNNER_TEMP/Agent Tooling.app/Contents/Resources/LICENSE.txt"
+          file "$RUNNER_TEMP/Agent Tooling.app/Contents/MacOS/AgentTooling"
+
+      - name: Create unsigned CI disk image
+        run: ./scripts/create-dmg.sh "$RUNNER_TEMP/Agent Tooling.app" "$RUNNER_TEMP/Agent-Tooling-ci-arm64.dmg"
+
+      - name: Upload disk image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Agent-Tooling-macOS-arm64
+          path: ${{ runner.temp }}/Agent-Tooling-ci-arm64.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  build:
+    name: Test and package
+    if: ${{ always() }}
+    needs: [debug, thread, release, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all macOS checks to pass
+        env:
+          DEBUG_RESULT: ${{ needs.debug.result }}
+          THREAD_RESULT: ${{ needs.thread.result }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        run: |
+          test "$DEBUG_RESULT" = success
+          test "$THREAD_RESULT" = success
+          test "$RELEASE_RESULT" = success
+          test "$PACKAGE_RESULT" = success

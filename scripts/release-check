@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+"$REPO_ROOT/scripts/validate-static"
+if [[ -n "$(git -C "$REPO_ROOT" status --porcelain=v1)" ]]; then
+  printf 'Release checks require a clean working tree.\n' >&2
+  exit 65
+fi
+printf 'Source checks passed for %s. Signing and notarization run in the release workflow.\n' \
+  "$(git -C "$REPO_ROOT" rev-parse HEAD)"
