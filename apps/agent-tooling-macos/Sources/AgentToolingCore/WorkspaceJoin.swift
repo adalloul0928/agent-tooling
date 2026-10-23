@@ -123,6 +123,7 @@ public enum WorkspaceJoin {
         let remoteState = try await readingRemote { try await transport.remoteState() }
         guard remoteState.head != nil else { throw try await missingBranch(branch, on: transport) }
         guard let document = remoteState.document else { throw WorkspaceJoinError.remote(.notALibrary) }
+        _ = try WorkspaceRevisionArchive(document: document, ancestors: remoteState.ancestors)
         progress(.readingLibrary, .finished)
 
         // This Mac, as a first run sees it, but under the shared workspace id.
@@ -153,7 +154,8 @@ public enum WorkspaceJoin {
             do {
                 let writerID = WorkspaceObjectID()
                 let store = try await storeForJoin(
-                    document: document, device: device, devicePreferences: devicePreferences, containerRoot: containerRoot,
+                    document: document, ancestors: remoteState.ancestors, device: device,
+                    devicePreferences: devicePreferences, containerRoot: containerRoot,
                     writerID: writerID)
                 return try await complete(
                     store: store, transport: transport, enrollment: joining, writerID: writerID, deviceName: deviceName,
@@ -231,7 +233,7 @@ public enum WorkspaceJoin {
                 guard document.workspaceID == workspaceID else { throw WorkspaceJoinError.remote(.differentLibrary) }
                 var device = DeviceWorkspaceState(workspaceID: workspaceID, deviceID: recorded.deviceID)
                 device.applicationState?.preferences = devicePreferences ?? Self.seededPreferences
-                try store.initializeFromRemote(document: document, device: device)
+                try store.initializeFromRemote(document: document, device: device, ancestors: remoteState.ancestors)
                 progress(.readingLibrary, .finished)
             }
 
@@ -278,7 +280,8 @@ extension WorkspaceJoin {
     /// the earlier attempt's: the apps observed, what they can do, and
     /// `devicePreferences` when given. Otherwise a new one is created.
     private static func storeForJoin(
-        document: PortableWorkspaceDocument, device: DeviceWorkspaceState, devicePreferences: DeviceWorkspacePreferences?,
+        document: PortableWorkspaceDocument, ancestors: [PortableWorkspaceDocument],
+        device: DeviceWorkspaceState, devicePreferences: DeviceWorkspacePreferences?,
         containerRoot: URL, writerID: WorkspaceObjectID
     ) async throws -> WorkspaceRevisionStore {
         let workspaceID = document.workspaceID
@@ -286,16 +289,17 @@ extension WorkspaceJoin {
         else {
             let store = try WorkspaceRevisionStore(containerRoot: containerRoot, workspaceID: workspaceID, deviceID: device.deviceID)
             guard try store.snapshot() == nil else { throw WorkspaceRevisionStoreError.alreadyInitialized }
-            try store.initializeFromRemote(document: document, device: device)
+            try store.initializeFromRemote(document: document, device: device, ancestors: ancestors)
             return store
         }
         let store = try WorkspaceRevisionStore(containerRoot: containerRoot, workspaceID: workspaceID, deviceID: recorded.deviceID)
         guard let snapshot = try store.snapshot() else {
             var resumed = device
             resumed.deviceID = recorded.deviceID
-            try store.initializeFromRemote(document: document, device: resumed)
+            try store.initializeFromRemote(document: document, device: resumed, ancestors: ancestors)
             return store
         }
+        try store.importRemoteRevisions(document, ancestors: ancestors)
         let observations = device.observations
         let evidence = device.capabilityEvidence
         _ = try await WorkspaceApplicationService(store: store, writerID: writerID).commitDeviceChange(

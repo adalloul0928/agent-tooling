@@ -31,7 +31,9 @@ struct PresetsSectionRenderTests {
         try expectDrawn(
             PresetsView(
                 session: presets, library: fixture.workspace.library, export: fixture.workspace.export,
-                initialSelection: ShellRenderFixture.presetID))
+                initialSelection: ShellRenderFixture.presetID
+            )
+            .environment(AppNavigationState()))
     }
 
     /// Following a preset that has changes to catch up with draws the
@@ -52,6 +54,8 @@ struct PresetsSectionRenderTests {
         try expectDrawn(
             PresetsView(
                 session: presets, library: fixture.workspace.library, export: fixture.workspace.export,
-                initialSelection: ShellRenderFixture.presetID))
+                initialSelection: ShellRenderFixture.presetID
+            )
+            .environment(AppNavigationState()))
     }
 }

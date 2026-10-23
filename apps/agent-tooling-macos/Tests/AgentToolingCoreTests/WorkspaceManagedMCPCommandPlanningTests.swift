@@ -5,6 +5,34 @@ import Testing
 @testable import AgentToolingCore
 
 struct WorkspaceManagedMCPCommandPlanningTests {
+    @Test(arguments: [false, true])
+    func projectCommandsKeepTheirWorkingDirectoryThroughExecution(replacing: Bool) async throws {
+        let home = try FixtureHome("managed-mcp-project")
+        defer { home.remove() }
+        let project = home.root.appending(path: "project")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let fixture = try Fixture(surface: .claudeCode, scope: .project, projectRoot: project.path)
+        let tool = try home.installTool(.claude)
+        let command = try fixture.plan(executableURL: tool, replacing: replacing)
+        let store = try WorkspaceRevisionStore(
+            containerRoot: home.root.appending(path: "workspace"),
+            workspaceID: fixture.document.workspaceID, deviceID: fixture.device.deviceID)
+        try store.initialize(document: fixture.document, device: fixture.device)
+        let expectedArguments = command.preArguments.map { [$0, command.arguments] } ?? [command.arguments]
+        let runner = WorkingDirectoryRunner(outputs: Dictionary(uniqueKeysWithValues: expectedArguments.map { ($0, "Completed") }))
+        let operation = try #require(WorkspaceDeploymentOperations.operations(managedConnections: [command]).first)
+        #expect(operation.steps.map(\.currentDirectoryPath) == expectedArguments.map { _ in project.path })
+        #expect(operation.steps.map(\.projectRootPath) == expectedArguments.map { _ in project.path })
+
+        let receipt = await OperationExecutor(store: store, runner: runner, homeURL: home.url).execute(operation)
+
+        #expect(receipt.results.allSatisfy { $0.status == .succeeded }, "\(receipt.results.map(\.output))")
+        #expect(await runner.commands.calls == expectedArguments)
+        let directories = await runner.directories
+        #expect(directories.count == expectedArguments.count)
+        #expect(directories.allSatisfy { $0?.resolvingSymlinksInPath() == project.resolvingSymlinksInPath() })
+    }
+
     @Test(arguments: [TargetSurface.claudeCode, .codexCLI, .geminiCLI])
     func userHTTPCommandsExactlyMatchTheNativeCommandContract(_ surface: TargetSurface) throws {
         let fixture = try Fixture(surface: surface)
@@ -248,6 +276,18 @@ struct WorkspaceManagedMCPCommandPlanningTests {
         }
     }
 
+    private actor WorkingDirectoryRunner: CommandRunning {
+        let commands: ScriptedCommandRunner
+        private(set) var directories: [URL?] = []
+
+        init(outputs: [[String]: String]) { commands = ScriptedCommandRunner(standardOutput: outputs) }
+
+        func run(executable: String, arguments: [String], currentDirectory: URL?) async throws -> CommandOutput {
+            directories.append(currentDirectory)
+            return try await commands.run(executable: executable, arguments: arguments, currentDirectory: currentDirectory)
+        }
+    }
+
     private struct Fixture {
         static let artifactID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000101"))
         static let projectID = ArtifactID(fixtureUUID("00000000-0000-0000-0000-000000000102"))
@@ -357,7 +397,8 @@ struct WorkspaceManagedMCPCommandPlanningTests {
 
         func plan(
             serverID: String? = nil,
-            executableURL: URL? = nil
+            executableURL: URL? = nil,
+            replacing: Bool = false
         ) throws -> WorkspaceManagedMCPCommandPlan {
             try WorkspaceManagedMCPCommandPlanning.plan(
                 document: document,
@@ -367,7 +408,8 @@ struct WorkspaceManagedMCPCommandPlanningTests {
                 target: target,
                 capability: capability,
                 nativeServerIdentifier: serverID ?? self.serverID,
-                executableURL: executableURL ?? self.executableURL)
+                executableURL: executableURL ?? self.executableURL,
+                replacing: replacing)
         }
 
         private enum FixtureError: Error { case couldNotResolve }

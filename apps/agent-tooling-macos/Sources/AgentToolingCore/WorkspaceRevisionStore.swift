@@ -127,23 +127,87 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         }
     }
 
-    /// Starts this store from a revision another Mac published, as the first
-    /// revision it holds. The joining Mac's history begins at that head, which
-    /// is enough: merges need the newest common ancestor, and both Macs hold
-    /// every revision from here on. Parents the remote revision names are not
-    /// required to be present; ancestry walks stop at what this store has.
-    public func initializeFromRemote(document: PortableWorkspaceDocument, device: DeviceWorkspaceState) throws {
-        let documentBytes = try WorkspaceDocumentCoding.encode(document)
+    /// Bootstraps a joined workspace without discarding the remote head's parents.
+    public func initializeFromRemote(
+        document: PortableWorkspaceDocument, device: DeviceWorkspaceState, ancestors: [PortableWorkspaceDocument] = []
+    ) throws {
+        let archive = try WorkspaceRevisionArchive(document: document, ancestors: ancestors)
+        guard document.workspaceID == workspaceID, device.workspaceID == workspaceID,
+            device.deviceID == deviceID
+        else { throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice }
         try device.validateStructure(against: document)
         let deviceBytes = try WorkspaceDocumentCoding.encodeDeviceState(device)
-        guard document.workspaceID == workspaceID, device.workspaceID == workspaceID, device.deviceID == deviceID else {
-            throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice
-        }
         try transaction(write: true) { database in
             guard try readSnapshot(database) == nil else { throw WorkspaceRevisionStoreError.alreadyInitialized }
-            try insertRevision(document, bytes: documentBytes, database)
+            for value in archive.documents {
+                try insertRevision(value, bytes: WorkspaceDocumentCoding.encode(value), database)
+            }
             try run("INSERT INTO device_state(id, payload) VALUES(1, ?)", [.data(deviceBytes)], database)
-            try run("INSERT INTO workspace_head(id, revision_id) VALUES(1, ?)", [.text(document.revision.id.storageKey)], database)
+            try run(
+                "INSERT INTO workspace_head(id, revision_id) VALUES(1, ?)",
+                [.text(document.revision.id.storageKey)], database)
+        }
+    }
+
+    /// A complete immutable graph for publishing, in parent-before-child order.
+    public func revisionHistory(from revisionID: WorkspaceObjectID) throws -> [PortableWorkspaceDocument] {
+        try transaction(write: false) { database in
+            try revisionHistory(from: revisionID, database: database)
+        }
+    }
+
+    /// Validates the complete graph before inserting anything. Existing revision
+    /// identities must retain exactly the same contents.
+    public func importRemoteRevisions(
+        _ document: PortableWorkspaceDocument,
+        ancestors: [PortableWorkspaceDocument]
+    ) throws {
+        guard document.workspaceID == workspaceID else { throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice }
+        try transaction(write: true) { database in
+            guard let local = try readSnapshot(database) else { throw WorkspaceRevisionStoreError.notInitialized }
+            guard ancestors.count <= Self.ancestryLimit else { throw WorkspaceRevisionStoreError.archiveLimitExceeded }
+            var available: [WorkspaceObjectID: PortableWorkspaceDocument] = [:]
+            for value in ancestors + [document] {
+                guard value.workspaceID == workspaceID else { throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice }
+                _ = try WorkspaceDocumentCoding.encode(value)
+                if let existing = available[value.revision.id], existing != value {
+                    throw WorkspaceRevisionStoreError.corruptState
+                }
+                available[value.revision.id] = value
+            }
+            // Old clients stored heads without unpublished parents. Incoming
+            // history may repair those holes, so combine both sources before
+            // requiring either head's ancestry to be complete.
+            var seen = Set<WorkspaceObjectID>()
+            var pending = [local.document.revision.id, document.revision.id]
+            while let id = pending.popLast() {
+                guard seen.insert(id).inserted else { continue }
+                guard seen.count <= Self.ancestryLimit * 2 else { throw WorkspaceRevisionStoreError.archiveLimitExceeded }
+                if let bytes = try blob("SELECT payload FROM revisions WHERE id = ?", [.text(id.storageKey)], database) {
+                    let stored = try decodeDocument(bytes)
+                    guard stored.workspaceID == workspaceID, stored.revision.id == id,
+                        available[id] == nil || available[id] == stored
+                    else { throw WorkspaceRevisionStoreError.corruptState }
+                    available[id] = stored
+                }
+                guard let value = available[id] else { throw WorkspaceRevisionStoreError.missingAncestry }
+                pending += value.revision.parentIDs
+            }
+            let candidates = Array(available.values)
+            let remoteArchive = try WorkspaceRevisionArchive(document: document, ancestors: candidates)
+            let localArchive = try WorkspaceRevisionArchive(document: local.document, ancestors: candidates)
+            var inserted = Set<WorkspaceObjectID>()
+            for value in remoteArchive.documents + localArchive.documents where inserted.insert(value.revision.id).inserted {
+                let bytes = try WorkspaceDocumentCoding.encode(value)
+                if let existing = try blob(
+                    "SELECT payload FROM revisions WHERE id = ?",
+                    [.text(value.revision.id.storageKey)], database)
+                {
+                    guard existing == bytes else { throw WorkspaceRevisionStoreError.corruptState }
+                } else {
+                    try insertRevision(value, bytes: bytes, database)
+                }
+            }
         }
     }
 
@@ -429,22 +493,21 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
         let bytes = try WorkspaceDocumentCoding.encode(document)
         try transaction(write: true) { database in
             guard try readSnapshot(database) != nil else { throw WorkspaceRevisionStoreError.notInitialized }
-            guard
-                try blob(
-                    "SELECT payload FROM revisions WHERE id = ?",
-                    [.text(document.revision.id.storageKey)], database) == nil
-            else {
-                // History is immutable; an already-known revision is complete.
+            if let known = try blob(
+                "SELECT payload FROM revisions WHERE id = ?",
+                [.text(document.revision.id.storageKey)], database)
+            {
+                guard try decodeDocument(known) == document else { throw WorkspaceRevisionStoreError.corruptState }
                 return
             }
             try insertRevision(document, bytes: bytes, database)
         }
     }
 
-    /// The newest revision this store holds that both the current head and the
-    /// supplied remote revision descend from. `nil` means the two histories
-    /// share nothing here, which is not evidence that either side deleted
-    /// anything.
+    /// A shared revision that is not an ancestor of another shared revision.
+    /// Incomparable best ancestors use revision-ID order so both devices choose
+    /// the same base. Incomplete history fails; `nil` means complete histories
+    /// share nothing, which is not evidence that either side deleted anything.
     public func commonAncestor(withRemote remote: PortableWorkspaceDocument) throws -> PortableWorkspaceDocument? {
         guard remote.workspaceID == workspaceID else {
             throw WorkspaceRevisionStoreError.wrongWorkspaceOrDevice
@@ -453,33 +516,51 @@ public final class WorkspaceRevisionStore: @unchecked Sendable {
             guard let current = try readSnapshot(database) else {
                 throw WorkspaceRevisionStoreError.notInitialized
             }
-            let local = try ancestry(of: [current.document.revision.id], database)
-            var visited = Set<WorkspaceObjectID>()
-            var queue = remote.revision.parentIDs
-            if local.contains(remote.revision.id) { return remote }
-            var depth = 0
-            while !queue.isEmpty, depth < Self.ancestryLimit {
-                depth += 1
-                var next: [WorkspaceObjectID] = []
-                for id in queue where visited.insert(id).inserted {
-                    if local.contains(id),
-                        let payload = try blob(
-                            "SELECT payload FROM revisions WHERE id = ?",
-                            [.text(id.storageKey)], database)
-                    {
-                        return try decodeDocument(payload)
-                    }
-                    if let payload = try blob(
-                        "SELECT payload FROM revisions WHERE id = ?",
-                        [.text(id.storageKey)], database)
-                    {
-                        next += try decodeDocument(payload).revision.parentIDs
-                    }
-                }
-                queue = next
-            }
-            return nil
+            let local = try revisionHistory(from: current.document.revision.id, database: database)
+            let incoming = try revisionHistory(from: remote.revision.id, suppliedHead: remote, database: database)
+            let localIDs = Set(local.map(\.revision.id))
+            let shared = incoming.filter { localIDs.contains($0.revision.id) }
+            // Complete ancestry is closed under parents: every parent of a
+            // shared revision is shared too. Removing those parents removes all
+            // older candidates, regardless of path length or UUID ordering.
+            let superseded = Set(shared.flatMap(\.revision.parentIDs))
+            return shared.filter { !superseded.contains($0.revision.id) }
+                .min { $0.revision.id < $1.revision.id }
         }
+    }
+
+    private func revisionHistory(
+        from revisionID: WorkspaceObjectID,
+        suppliedHead: PortableWorkspaceDocument? = nil,
+        database: OpaquePointer
+    ) throws -> [PortableWorkspaceDocument] {
+        var documents: [PortableWorkspaceDocument] = []
+        var seen = Set<WorkspaceObjectID>()
+        var pending: Set<WorkspaceObjectID> = [revisionID]
+        while let id = pending.popFirst() {
+            seen.insert(id)
+            let value: PortableWorkspaceDocument
+            if let bytes = try blob("SELECT payload FROM revisions WHERE id = ?", [.text(id.storageKey)], database) {
+                value = try decodeDocument(bytes)
+                if id == revisionID, let suppliedHead, suppliedHead != value {
+                    throw WorkspaceRevisionStoreError.corruptState
+                }
+            } else if id == revisionID, let suppliedHead {
+                value = suppliedHead
+            } else {
+                throw WorkspaceRevisionStoreError.missingAncestry
+            }
+            guard value.workspaceID == workspaceID, value.revision.id == id else {
+                throw WorkspaceRevisionStoreError.corruptState
+            }
+            documents.append(value)
+            pending.formUnion(value.revision.parentIDs.filter { !seen.contains($0) })
+            guard seen.count + pending.count <= Self.ancestryLimit else {
+                throw WorkspaceRevisionStoreError.archiveLimitExceeded
+            }
+        }
+        guard let head = documents.first else { throw WorkspaceRevisionStoreError.missingAncestry }
+        return try WorkspaceRevisionArchive(document: head, ancestors: Array(documents.dropFirst())).documents
     }
 
     /// Moves the head onto a revision already recorded here that descends from
@@ -1093,6 +1174,7 @@ public enum WorkspaceRevisionStoreError: Error, Equatable, LocalizedError {
     case readOnly
     case databaseUnavailable, unsafeStorePath, unsupportedStoreFormat, wrongWorkspaceOrDevice
     case alreadyInitialized, notInitialized, missingAncestry, corruptState, recordTooLarge, missingArtifact
+    case archiveLimitExceeded
     case staleRevision(current: WorkspaceObjectID)
     case idempotencyKeyReused
     case sqlite(code: Int32)
@@ -1106,7 +1188,10 @@ public enum WorkspaceRevisionStoreError: Error, Equatable, LocalizedError {
         case .wrongWorkspaceOrDevice: "The workspace or device identity does not match this store."
         case .alreadyInitialized: "A workspace already exists here. Its state was preserved."
         case .notInitialized: "Create or migrate the workspace before editing it."
-        case .missingAncestry: "The initial workspace revision refers to history that was not imported."
+        case .missingAncestry:
+            "The workspace history is incomplete. Update Agent Tooling on the Mac that owns the missing history and sync there first."
+        case .archiveLimitExceeded:
+            "The sync archive exceeds the supported limit of 4,096 revisions or 32 MiB. This pass stopped without replacing either library. Keep the existing libraries and contact support before changing their history."
         case .corruptState: "The workspace records are incomplete or inconsistent."
         case .recordTooLarge: "The workspace record exceeds the supported size."
         case .missingArtifact: "This item is no longer in the workspace."

@@ -292,12 +292,15 @@ public actor OperationExecutor {
             let destination = try copyDestination(
                 destinationPath, projectRootPath: step.projectRootPath, linkedUpdate: step.destinationFingerprint != nil)
             try requireProvenOwnership(of: destination, expectedFingerprint: step.destinationFingerprint)
+            let reviewedFingerprint = try await reviewedDestinationFingerprint(
+                at: destination, digest: step.reviewedDestinationDigest)
             let removals = removedEntryCount(replacing: destination, with: source)
             try replaceDirectory(
                 at: destination,
                 withCopyOf: source,
                 expectedFingerprint: sourceFingerprint,
                 destinationFingerprint: step.destinationFingerprint,
+                reviewedDestinationFingerprint: reviewedFingerprint,
                 projectRootPath: step.projectRootPath,
                 planStepID: step.id
             )
@@ -326,29 +329,43 @@ public actor OperationExecutor {
 
         case .removeManagedDirectory:
             guard let destinationPath = step.destinationPath,
-                let expected = step.destinationFingerprint
+                step.reviewedDestinationDigest != nil || step.destinationFingerprint != nil
             else { throw OperationEngineError.malformedStep(step.title) }
             let destination = try copyDestination(
                 destinationPath, projectRootPath: step.projectRootPath, linkedUpdate: true)
             // Removal is only ever offered for something this app installed,
             // and only while it still matches what was approved. A folder
             // someone edited is left alone and reported instead.
-            try requireProvenOwnership(of: destination, expectedFingerprint: expected)
+            try requireProvenOwnership(of: destination, expectedFingerprint: step.destinationFingerprint)
             var isDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: destination.path, isDirectory: &isDirectory),
                 isDirectory.boolValue
             else {
                 return (.skipped, "Nothing to remove at \(destination.path(percentEncoded: false)).")
             }
+            let reviewedFingerprint = try await reviewedDestinationFingerprint(
+                at: destination, digest: step.reviewedDestinationDigest)
+            guard let expected = reviewedFingerprint ?? step.destinationFingerprint else {
+                throw OperationEngineError.malformedStep(step.title)
+            }
             let current = try DirectoryFingerprint.sha256(of: destination)
             guard current == expected else {
                 return (.skipped, "This folder no longer matches what was approved, so it was left alone.")
             }
-            do { try fileManager.removeItem(at: destination) } catch {
+            let recovery = try rollbackLocation(for: destination, planStepID: step.id)
+            _ = try copyDestination(destinationPath, projectRootPath: step.projectRootPath, linkedUpdate: true)
+            try requireProvenOwnership(of: destination, expectedFingerprint: step.destinationFingerprint)
+            try requireReviewedDestination(destination, fingerprint: expected)
+            do { try fileManager.moveItem(at: destination, to: recovery) } catch {
                 throw OperationEngineError.unsafeDestination(destination.path(percentEncoded: false))
             }
             let note = forgetManagedInstall(destination: destination)
-            return (.succeeded, "Removed \(destination.path(percentEncoded: false)).\(note)")
+            return (
+                .succeeded,
+                "Removed \(destination.path(percentEncoded: false)).\(note) "
+                    + "Recovery folder: \(recovery.path(percentEncoded: false)). "
+                    + "To restore it, move that folder back to \(destination.path(percentEncoded: false)) when the destination is empty."
+            )
 
         case .removeUnmanagedSkillCopy:
             guard let destinationPath = step.destinationPath else { throw OperationEngineError.malformedStep(step.title) }
@@ -463,6 +480,32 @@ public actor OperationExecutor {
     }
 
     // MARK: - Destination ownership
+
+    /// Matches the review's portable digest while also binding every byte to
+    /// the synchronous check immediately before the filesystem mutation.
+    private func reviewedDestinationFingerprint(at destination: URL, digest: ContentDigest?) async throws -> String? {
+        guard let digest else { return nil }
+        do {
+            let before = try DirectoryFingerprint.sha256(of: destination)
+            let captured = try await PackageTreeCapture().capture(directory: destination)
+            let after = try DirectoryFingerprint.sha256(of: destination)
+            guard captured.digest == digest, before == after else {
+                throw OperationEngineError.destinationChangedAfterReview(destination.path(percentEncoded: false))
+            }
+            return after
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw OperationEngineError.destinationChangedAfterReview(destination.path(percentEncoded: false))
+        }
+    }
+
+    private func requireReviewedDestination(_ destination: URL, fingerprint: String?) throws {
+        guard let fingerprint else { return }
+        guard try DirectoryFingerprint.sha256(of: destination) == fingerprint else {
+            throw OperationEngineError.destinationChangedAfterReview(destination.path(percentEncoded: false))
+        }
+    }
 
     /// Refuses to replace anything Agent Tooling cannot prove is empty, its own
     /// prior install, or an install recorded by a stored plan and receipt.
@@ -816,6 +859,7 @@ public actor OperationExecutor {
         withCopyOf source: URL,
         expectedFingerprint: String,
         destinationFingerprint: String?,
+        reviewedDestinationFingerprint: String?,
         projectRootPath: String?,
         planStepID: UUID
     ) throws {
@@ -839,6 +883,7 @@ public actor OperationExecutor {
             // Re-proved immediately before the swap so a destination that
             // gained unowned content while the copy was staged is still caught.
             try self.requireProvenOwnership(of: destination, expectedFingerprint: destinationFingerprint)
+            try self.requireReviewedDestination(destination, fingerprint: reviewedDestinationFingerprint)
         }
     }
 
@@ -925,6 +970,11 @@ public actor OperationExecutor {
     }
 
     private func preserveRollbackCopy(of destination: URL, planStepID: UUID) throws {
+        let rollback = try rollbackLocation(for: destination, planStepID: planStepID)
+        try fileManager.copyItem(at: destination, to: rollback)
+    }
+
+    private func rollbackLocation(for destination: URL, planStepID: UUID) throws -> URL {
         let rollback = store.receiptsURL
             .appending(path: "rollback", directoryHint: .isDirectory)
             .appending(path: planStepID.uuidString, directoryHint: .isDirectory)
@@ -936,8 +986,10 @@ public actor OperationExecutor {
             at: store.receiptsURL, withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700])
         try validateContainedPath(rollback.deletingLastPathComponent(), within: store.receiptsURL)
-        try fileManager.createDirectory(at: rollback.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try fileManager.copyItem(at: destination, to: rollback)
+        try fileManager.createDirectory(
+            at: rollback.deletingLastPathComponent(), withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        return rollback
     }
 
     private func removeStagingItemIfPresent(_ url: URL) {
@@ -1119,6 +1171,7 @@ enum OperationEngineError: LocalizedError, Sendable {
     case invalidArchive
     case unsafeWorkingDirectory(String)
     case sourceChangedAfterReview
+    case destinationChangedAfterReview(String)
     case unprovableDestination(String, String)
 
     var errorDescription: String? {
@@ -1141,6 +1194,8 @@ enum OperationEngineError: LocalizedError, Sendable {
             "Agent Tooling refused to run a command from an unreviewed or unavailable project folder: \(path)"
         case .sourceChangedAfterReview:
             "The source changed after it was reviewed. Refresh the plan and inspect the new contents before trying again."
+        case .destinationChangedAfterReview(let path):
+            "The installed files at \(path) changed after review. They were left alone. Refresh the plan before trying again."
         case .unprovableDestination(let path, let reason):
             "Agent Tooling stopped rather than overwrite \(path), which it cannot prove it installed. \(reason)"
         }

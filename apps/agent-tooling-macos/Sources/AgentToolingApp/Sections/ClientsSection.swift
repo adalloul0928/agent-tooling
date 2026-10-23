@@ -1,4 +1,5 @@
 import AgentToolingCore
+import Observation
 import SwiftUI
 
 /// Apps: what this Mac would change in each client, and the reviewed step that
@@ -15,78 +16,75 @@ struct ClientsSection: View {
     let workspace: WorkspaceLaunch.Workspace
 
     @Environment(AppNavigationState.self) private var navigation
-    @State private var reviewedRequest: PendingAgentRequest?
-    /// The assistant the reviewed request's own draft names, when it asks for
-    /// a skill to be written. The creator opens on that one.
-    @State private var draftingClient: ClientKind?
-    @State private var refusal: String?
-    @State private var isReviewingPlan = false
-    @State private var isPreparing = false
-    /// The request whose sheet is on screen, so closing it hands the queued
-    /// route back exactly once.
-    @State private var presentedRequestID: UUID?
+    @State private var presentation = ClientReviewPresentation()
 
     var body: some View {
+        @Bindable var presentation = presentation
         SyncCenterView(
             workspace: workspace,
             requests: workspace.requests,
             client: scopedClient,
             onShowAllClients: { navigation.showAllClients() },
-            onReviewChanges: { isPreparing = true },
+            onReviewChanges: { presentation.isPreparing = true },
             onReviewRequest: { present($0) }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Preparing reads; it writes nothing. The sheet opens on what it found,
         // and approving it is still a separate decision inside the sheet.
-        .task(id: isPreparing) {
-            guard isPreparing else { return }
+        .task(id: presentation.isPreparing) {
+            guard presentation.isPreparing else { return }
             await workspace.deployment.prepare()
-            isPreparing = false
             // The route that asked for this is answered now, plan or not. It
             // stayed asked until here so a task restarted mid-way (SwiftUI does
             // that at launch) found it waiting and joined the same preparation.
             navigation.consumeScreenRequest(.reviewChanges)
-            if workspace.deployment.plan != nil { isReviewingPlan = true }
+            presentation.prepared(hasPlan: workspace.deployment.plan != nil)
         }
         .onAppear(perform: applyRequestedRoute)
         .onChange(of: navigation.revision) { _, _ in applyRequestedRoute() }
+        .onChange(of: navigation.requestedPendingRequestID) { _, _ in applyRequestedRoute() }
+        .onChange(of: presentation.isPreparing) { _, preparing in
+            if !preparing { applyRequestedRoute() }
+        }
+        .onChange(of: workspace.requests.isBusy) { _, busy in
+            if !busy { applyRequestedRoute() }
+        }
         // An install changed what the apps hold, so the next thing every screen
         // says about "found" should come from a fresh check, not the last one.
         .onChange(of: workspace.deployment.results.count) { _, _ in
             Task { await workspace.device.refresh() }
         }
-        .sheet(item: $reviewedRequest, onDismiss: finishRequestPresentation) { request in
+        .sheet(item: $presentation.reviewedRequest, onDismiss: finishRequestPresentation) { request in
             PendingRequestReviewSheet(
                 request: request,
-                refusal: refusal,
+                refusal: presentation.refusal,
                 isBusy: workspace.requests.isBusy,
-                draftingClient: draftingClient,
-                onDefer: { reviewedRequest = nil },
+                draftingClient: presentation.draftingClient,
+                onDefer: { presentation.reviewedRequest = nil },
                 onReject: {
                     Task {
                         guard await workspace.requests.reject(request) else {
-                            refusal = workspace.requests.errorMessage
+                            presentation.refusal = workspace.requests.errorMessage
                             return
                         }
-                        reviewedRequest = nil
+                        presentation.reviewedRequest = nil
                     }
                 },
                 onContinue: {
                     Task {
                         switch await workspace.requests.accept(request) {
                         case .assignmentSaved:
-                            reviewedRequest = nil
                             // What was asked for is now recorded. Installing it
                             // is the next, separate decision, so the plan for it
                             // is prepared and shown rather than run.
-                            isPreparing = true
+                            presentation.acceptedRequest()
                         case .refused(let reason):
-                            refusal = reason
+                            presentation.refusal = reason
                         }
                     }
                 })
         }
-        .sheet(isPresented: $isReviewingPlan) {
+        .sheet(isPresented: $presentation.isReviewingPlan, onDismiss: finishPlanPresentation) {
             if let plan = workspace.deployment.plan {
                 PlanReviewSheet(workspace: workspace, plan: plan)
             } else {
@@ -99,7 +97,7 @@ struct ClientsSection: View {
                     message: workspace.deployment.errorMessage
                         ?? "This Mac's apps could not be checked. Nothing was changed.",
                     actionTitle: "Close",
-                    action: { isReviewingPlan = false }
+                    action: { presentation.isReviewingPlan = false }
                 )
                 .sheetSize(SheetSize.small)
                 .background(AgentTheme.contentBackground)
@@ -118,38 +116,107 @@ struct ClientsSection: View {
         // Arriving here from "Install now" elsewhere: prepare the plan and open
         // it, exactly as pressing Review Changes on this screen does.
         if navigation.requestedScreenRequest == .reviewChanges {
-            isPreparing = true
+            presentation.isPreparing = true
         }
-        guard reviewedRequest == nil, let id = navigation.requestedPendingRequestID else { return }
+        guard !workspace.requests.isBusy,
+            let id = navigation.requestedPendingRequestID,
+            presentation.beginRequestLoad(id)
+        else { return }
         Task {
-            guard let request = await workspace.requests.request(id: id) else {
-                navigation.consumePendingRequest(id)
+            let request = await workspace.requests.request(id: id)
+            let client: ClientKind? = if let request { await workspace.requests.draftingClient(for: request) } else { nil }
+            presentation.finishRequestLoad(id)
+            guard navigation.requestedPendingRequestID == id else {
+                applyRequestedRoute()
                 return
             }
-            present(request)
+            guard let request else {
+                navigation.consumePendingRequest(id)
+                applyRequestedRoute()
+                return
+            }
+            presentation.present(request, draftingClient: client)
         }
     }
 
     private func present(_ request: PendingAgentRequest) {
-        refusal = nil
-        presentedRequestID = request.id
-        guard request.kind == .createSkill else {
-            draftingClient = nil
-            reviewedRequest = request
-            return
-        }
-        // The creator opens on the assistant the request's own draft names,
-        // so the sheet reads that draft before it says who will write it.
+        guard presentation.beginRequestLoad(request.id) else { return }
         Task {
-            draftingClient = await workspace.requests.draftingClient(for: request)
-            reviewedRequest = request
+            let client = await workspace.requests.draftingClient(for: request)
+            presentation.finishRequestLoad(request.id)
+            presentation.present(request, draftingClient: client)
         }
     }
 
     private func finishRequestPresentation() {
-        if let id = presentedRequestID { navigation.consumePendingRequest(id) }
+        if let id = presentation.finishRequestPresentation() { navigation.consumePendingRequest(id) }
+        applyRequestedRoute()
+    }
+
+    private func finishPlanPresentation() {
+        presentation.finishPlanPresentation()
+        applyRequestedRoute()
+    }
+}
+
+/// A request, its closing animation, and its resulting plan occupy one review
+/// slot. A second queued request waits until all three have finished.
+@MainActor @Observable
+final class ClientReviewPresentation {
+    var reviewedRequest: PendingAgentRequest?
+    var refusal: String?
+    private(set) var draftingClient: ClientKind?
+    var isReviewingPlan = false
+    var isPreparing = false
+    private(set) var presentedRequestID: UUID?
+    private(set) var loadingRequestID: UUID?
+    private var planIsPresented = false
+
+    func beginRequestLoad(_ id: UUID) -> Bool {
+        guard canPresentRequest else { return false }
+        loadingRequestID = id
+        return true
+    }
+
+    func finishRequestLoad(_ id: UUID) {
+        if loadingRequestID == id { loadingRequestID = nil }
+    }
+
+    func present(_ request: PendingAgentRequest, draftingClient: ClientKind? = nil) {
+        guard canPresentRequest else { return }
+        refusal = nil
+        presentedRequestID = request.id
+        self.draftingClient = draftingClient
+        reviewedRequest = request
+    }
+
+    func acceptedRequest() {
+        isPreparing = true
+        reviewedRequest = nil
+    }
+
+    func prepared(hasPlan: Bool) {
+        planIsPresented = hasPlan
+        isReviewingPlan = hasPlan && presentedRequestID == nil
+        isPreparing = false
+    }
+
+    func finishRequestPresentation() -> UUID? {
+        let id = presentedRequestID
         presentedRequestID = nil
         draftingClient = nil
         refusal = nil
+        if planIsPresented { isReviewingPlan = true }
+        return id
+    }
+
+    func finishPlanPresentation() {
+        isReviewingPlan = false
+        planIsPresented = false
+    }
+
+    private var canPresentRequest: Bool {
+        reviewedRequest == nil && presentedRequestID == nil && loadingRequestID == nil
+            && !isPreparing && !isReviewingPlan && !planIsPresented
     }
 }

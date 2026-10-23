@@ -32,6 +32,8 @@ enum ScreenRequest: Equatable {
     case selectMCPServer(String)
     case selectPlugin(String)
     case selectReceipt(String)
+    case selectPreset(String)
+    case selectProject(String)
     /// Open Apps and prepare the install plan, so a person who just asked for
     /// something lands on the one step that actually puts it in an app.
     case reviewChanges
@@ -41,6 +43,8 @@ enum ScreenRequest: Equatable {
         case .addMCPServer, .pasteImport, .selectMCPServer: .mcpServers
         case .selectPlugin: .plugins
         case .selectReceipt: .activity
+        case .selectPreset: .presets
+        case .selectProject: .projects
         case .reviewChanges: .syncCenter
         }
     }
@@ -59,7 +63,7 @@ enum ScreenRequest: Equatable {
     /// The one row this request is about, when it is about a row at all.
     var itemID: String? {
         switch self {
-        case .selectMCPServer(let id), .selectPlugin(let id), .selectReceipt(let id): id
+        case .selectMCPServer(let id), .selectPlugin(let id), .selectReceipt(let id), .selectPreset(let id), .selectProject(let id): id
         case .addMCPServer, .pasteImport, .reviewChanges: nil
         }
     }
@@ -302,7 +306,7 @@ enum CommandPaletteCatalog {
                 symbol: AppSection.presets.symbol,
                 keywords: ["preset", "shelf", "collection"],
                 priority: 30,
-                outcome: .navigate(.presets))
+                outcome: .screenRequest(.selectPreset(preset.id.rawValue.uuidString.lowercased())))
         }
     }
 
@@ -317,7 +321,7 @@ enum CommandPaletteCatalog {
                 symbol: AppSection.projects.symbol,
                 keywords: ["project"] + project.repositoryHints,
                 priority: 30,
-                outcome: .navigate(.projects))
+                outcome: .screenRequest(.selectProject(project.id.rawValue.uuidString.lowercased())))
         }
     }
 

@@ -129,6 +129,74 @@ struct EncryptedFolderTransportTests {
                 == "Renamed on A")
     }
 
+    @Test func encryptedSyncCarriesUnpublishedParentsAndPreservesIndependentLocalWork() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let a = WorkspaceSyncCoordinator(store: fixture.storeA, transport: try fixture.transport(), writerID: WorkspaceObjectID())
+        let b = WorkspaceSyncCoordinator(store: fixture.storeB, transport: try fixture.transport(), writerID: WorkspaceObjectID())
+        _ = try await a.sync()
+        _ = try await b.sync()
+        try fixture.rename(store: fixture.storeA, to: "First offline edit")
+        let intermediate = try #require(try fixture.storeA.snapshot()).document.revision.id
+        try fixture.rename(store: fixture.storeA, to: "Final offline edit")
+        let localID = ArtifactID(UUID())
+        _ = try fixture.storeB.commitMetadata(
+            expectedRevisionID: try #require(try fixture.storeB.snapshot()).document.revision.id,
+            idempotencyKey: WorkspaceObjectID(), inputDigest: String(repeating: "b", count: 64), writerID: WorkspaceObjectID()
+        ) { document in
+            document.artifacts.append(
+                .init(identity: .init(id: localID, kind: .skill, displayName: "Local addition"), authority: .trackedOnly))
+            return [localID]
+        }
+        _ = try await a.sync()
+        guard case .merged = try await b.sync() else {
+            Issue.record("Encrypted transport must preserve the common ancestor across several offline edits")
+            return
+        }
+        #expect(try fixture.storeB.revision(intermediate) != nil)
+        let names = Set(try #require(try fixture.storeB.snapshot()).document.artifacts.map(\.identity.displayName))
+        #expect(names == ["Final offline edit", "Local addition"])
+        _ = try await a.sync()
+        #expect(try fixture.storeA.snapshot()?.document == fixture.storeB.snapshot()?.document)
+    }
+
+    @Test func legacyHeadWithoutParentsIsRefusedUntilItsOwningMacUpgradesTheArchive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.rename(store: fixture.storeA, to: "Legacy intermediate")
+        try fixture.rename(store: fixture.storeA, to: "Legacy latest")
+        let latest = try #require(try fixture.storeA.snapshot()).document
+        let box = try AES.GCM.seal(WorkspaceDocumentCoding.encode(latest), using: fixture.key)
+        let sealed = try #require(box.combined)
+        let legacy = try AgentToolingCoding.encoder().encode(LegacyEnvelope(formatVersion: 1, sealed: sealed))
+        let file = fixture.folder.appending(path: EncryptedFolderWorkspaceTransport.documentFileName)
+        try legacy.write(to: file, options: .atomic)
+        let a = WorkspaceSyncCoordinator(store: fixture.storeA, transport: try fixture.transport(), writerID: WorkspaceObjectID())
+        let b = WorkspaceSyncCoordinator(store: fixture.storeB, transport: try fixture.transport(), writerID: WorkspaceObjectID())
+        let before = try #require(try fixture.storeB.snapshot()).document
+
+        await #expect(throws: WorkspaceRevisionStoreError.missingAncestry) { _ = try await b.sync() }
+        #expect(try fixture.storeB.snapshot()?.document == before)
+        #expect(try Data(contentsOf: file) == legacy)
+        // A already has this exact head, but it must publish the missing
+        // ancestry instead of leaving the legacy archive permanently stuck.
+        guard case .published = try await a.sync() else {
+            Issue.record("The owning Mac must upgrade an ancestry-free legacy head")
+            return
+        }
+        #expect(try await fixture.transport().remoteState().ancestors.count == 2)
+        guard case .adopted = try await b.sync() else {
+            Issue.record("The lagging Mac must adopt after the legacy archive is upgraded")
+            return
+        }
+        #expect(try fixture.storeB.snapshot()?.document == latest)
+    }
+
+    private struct LegacyEnvelope: Encodable {
+        let formatVersion: Int
+        let sealed: Data
+    }
+
     private struct Fixture {
         static let alpha = ArtifactID(fixtureUUID("00000000-0000-0000-0000-0000000000a1"))
         static let workspaceID = WorkspaceObjectID(fixtureUUID("00000000-0000-0000-0000-0000000000e5"))

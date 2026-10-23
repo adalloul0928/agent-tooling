@@ -23,8 +23,8 @@ public enum EncryptedFolderTransportError: Error, Equatable, Sendable {
 /// each other; conflicts require a merge.
 public actor EncryptedFolderWorkspaceTransport {
     public static let documentFileName = "workspace.sealed"
-    public static let formatVersion = 1
-    private static let documentLimit = 32 << 20
+    public static let formatVersion = 2
+    private static let documentLimit = ((WorkspaceRevisionArchive.maximumBytes + 30) / 3) * 4 + 1024
 
     private let folder: URL
     private let key: SymmetricKey
@@ -63,7 +63,7 @@ public actor EncryptedFolderWorkspaceTransport {
         do { envelope = try AgentToolingCoding.decoder().decode(Envelope.self, from: bytes) } catch {
             throw EncryptedFolderTransportError.unsupportedFormat
         }
-        guard envelope.formatVersion == Self.formatVersion else {
+        guard envelope.formatVersion == 1 || envelope.formatVersion == Self.formatVersion else {
             throw EncryptedFolderTransportError.unsupportedFormat
         }
         let plain: Data
@@ -76,20 +76,26 @@ public actor EncryptedFolderWorkspaceTransport {
             // say what it found rather than replacing it.
             throw EncryptedFolderTransportError.cannotDecrypt
         }
-        return .init(head: head, document: try Self.decode(plain))
+        if envelope.formatVersion == 1 { return .init(head: head, document: try Self.decode(plain)) }
+        let archive = try WorkspaceRevisionArchive.decode(plain)
+        return .init(head: head, document: archive.document, ancestors: archive.ancestors)
     }
 
     /// Seals the document and writes it, but only if the folder still holds
     /// exactly what the caller last saw.
     public func publish(
         document: PortableWorkspaceDocument,
+        ancestors: [PortableWorkspaceDocument] = [],
         expectedRemoteHead: String?
     ) async throws -> GitWorkspacePublishReceipt {
-        let observed = try Self.currentHead(of: file)
+        let remote = try await remoteState()
+        let observed = remote.head
         guard observed == expectedRemoteHead else {
             throw EncryptedFolderTransportError.remoteAdvanced(remoteHead: observed ?? "")
         }
-        let plain = try Self.encode(document)
+        let plain = try WorkspaceRevisionArchive(
+            document: document, ancestors: ancestors + remote.ancestors + [remote.document].compactMap { $0 }
+        ).encoded()
         let sealed: Data
         do {
             guard let combined = try AES.GCM.seal(plain, using: key).combined else {
@@ -102,7 +108,7 @@ public actor EncryptedFolderWorkspaceTransport {
 
         // Written through a temporary file in the same folder and moved into
         // place, so a sync service never picks up a half-written box.
-        let temporary = folder.appending(path: Self.documentFileName + ".partial")
+        let temporary = folder.appending(path: Self.documentFileName + ".\(UUID().uuidString).partial")
         do {
             try bytes.write(to: temporary, options: .atomic)
             try? FileManager.default.setAttributes(
@@ -137,15 +143,6 @@ public actor EncryptedFolderWorkspaceTransport {
         SHA256.hash(data: bytes).lowercaseHex
     }
 
-    private static func encode(_ document: PortableWorkspaceDocument) throws -> Data {
-        try document.validateStructure()
-        let bytes = try WorkspaceDocumentCoding.encode(document)
-        guard bytes.count <= documentLimit else {
-            throw EncryptedFolderTransportError.documentTooLarge
-        }
-        return bytes
-    }
-
     private static func decode(_ bytes: Data) throws -> PortableWorkspaceDocument {
         let document: PortableWorkspaceDocument
         do { document = try WorkspaceDocumentCoding.decode(bytes) } catch { throw EncryptedFolderTransportError.invalidDocument }
@@ -160,18 +157,19 @@ public actor EncryptedFolderWorkspaceTransport {
 }
 
 extension EncryptedFolderWorkspaceTransport: WorkspaceRevisionTransport {
-    /// The sealed box holds the document only. Content and status do not
+    /// The sealed box holds the document and its ancestry. Content and status do not
     /// travel this way; the caller sees `carriesContent == false` and keeps
     /// them local.
     public nonisolated var carriesContent: Bool { false }
 
     public func publish(
         document: PortableWorkspaceDocument,
+        ancestors: [PortableWorkspaceDocument],
         content: [CapturedPackageTree],
         status: PublishedDeviceStatus?,
         expectedRemoteHead: String?
     ) async throws -> GitWorkspacePublishReceipt {
-        try await publish(document: document, expectedRemoteHead: expectedRemoteHead)
+        try await publish(document: document, ancestors: ancestors, expectedRemoteHead: expectedRemoteHead)
     }
 
     public func content(for digest: ContentDigest) async throws -> CapturedPackageTree? { nil }

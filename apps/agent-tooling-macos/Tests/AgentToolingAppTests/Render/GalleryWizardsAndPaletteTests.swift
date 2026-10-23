@@ -30,7 +30,7 @@ struct GalleryWizardsAndPaletteTests {
             try gallerySnapshot(
                 SkillCreationChooserSheet(managedClients: [.claude, .codex]) { _ in },
                 area: "Library · Skills", screen: "Skill creation chooser", state: "both-clients",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.small, appearance: appearance,
                 source: "Sources/AgentToolingApp/SkillCreationChooserSheet.swift")
 
             // Empty, before anything is asked.
@@ -39,7 +39,7 @@ struct GalleryWizardsAndPaletteTests {
                     workspace: fixture.workspace, drafting: StubSkillDrafting(),
                     installing: RecordingSkillCreatorInstalling(), client: .claude, onCreated: { _, _ in }),
                 area: "Library · Skills", screen: "Skill creator", state: "empty",
-                size: SheetGallerySize.wide, appearance: appearance,
+                size: SheetSize.creator, appearance: appearance,
                 source: "Sources/AgentToolingApp/SkillsView.swift:172")
 
             // Mid-conversation, waiting on an answer.
@@ -52,7 +52,7 @@ struct GalleryWizardsAndPaletteTests {
                 SkillCreatorSheet(
                     workspace: fixture.workspace, session: asking, client: .claude, onCreated: { _, _ in }),
                 area: "Library · Skills", screen: "Skill creator", state: "mid-conversation",
-                size: SheetGallerySize.wide, appearance: appearance,
+                size: SheetSize.creator, appearance: appearance,
                 source: "Sources/AgentToolingApp/SkillsView.swift:172")
 
             // Reviewing the generated package.
@@ -65,7 +65,7 @@ struct GalleryWizardsAndPaletteTests {
                 SkillCreatorSheet(
                     workspace: fixture.workspace, session: reviewing, client: .codex, onCreated: { _, _ in }),
                 area: "Library · Skills", screen: "Skill creator", state: "reviewing-draft",
-                size: SheetGallerySize.wide, appearance: appearance,
+                size: SheetSize.creator, appearance: appearance,
                 source: "Sources/AgentToolingApp/SkillsView.swift:172")
         }
     }

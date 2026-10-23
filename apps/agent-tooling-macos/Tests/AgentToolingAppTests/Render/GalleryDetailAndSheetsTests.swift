@@ -46,7 +46,9 @@ struct GalleryDetailAndSheetsTests {
             try gallerySnapshot(
                 PresetsView(
                     session: presets, library: fixture.workspace.library,
-                    export: fixture.workspace.export, initialSelection: ShellRenderFixture.presetID),
+                    export: fixture.workspace.export, initialSelection: ShellRenderFixture.presetID
+                )
+                .environment(AppNavigationState()),
                 area: "Library · Presets", screen: "Preset detail", state: "unfollowed",
                 appearance: appearance, source: "Sources/AgentToolingApp/PresetsView.swift")
         }
@@ -59,7 +61,8 @@ struct GalleryDetailAndSheetsTests {
             defer { fixture.remove() }
             try await fixture.assignSkillToFixtureProject()
             try gallerySnapshot(
-                ProjectsView(workspace: fixture.workspace, initialSelection: ShellRenderFixture.projectID),
+                ProjectsView(workspace: fixture.workspace, initialSelection: ShellRenderFixture.projectID)
+                    .environment(AppNavigationState()),
                 area: "Projects", screen: "Project detail", state: "assigned",
                 appearance: appearance, source: "Sources/AgentToolingApp/ProjectDetailView.swift")
         }
@@ -77,7 +80,7 @@ struct GalleryDetailAndSheetsTests {
                 WorkspaceAssignmentSheet(
                     session: fixture.workspace.library, artifactIDs: [ShellRenderFixture.skill]),
                 area: "Library · Skills", screen: "Assignment sheet", state: "choose",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.large, appearance: appearance,
                 source: "Sources/AgentToolingApp/SkillsView.swift:161")
         }
     }
@@ -93,7 +96,7 @@ struct GalleryDetailAndSheetsTests {
                     session: fixture.workspace.library, artifactIDs: [ShellRenderFixture.skill],
                     initialClients: [.claude, .gemini]),
                 area: "Library · Skills", screen: "Assignment sheet", state: "review",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.large, appearance: appearance,
                 source: "Sources/AgentToolingApp/SkillsView.swift:161")
         }
     }
@@ -110,7 +113,7 @@ struct GalleryDetailAndSheetsTests {
                 PlanReviewSheet(
                     workspace: fixture.workspace, plan: ShellRenderFixture.deploymentPlan()),
                 area: "Apps · Clients", screen: "Plan review sheet", state: "install-and-exclusion",
-                size: SheetGallerySize.large, appearance: appearance,
+                size: SheetSize.xlarge, appearance: appearance,
                 source: "Sources/AgentToolingApp/PlanReviewSheet.swift")
         }
     }
@@ -127,7 +130,7 @@ struct GalleryDetailAndSheetsTests {
                     refusal: "Standalone Skill is not in your library, and approving a request never adds one.",
                     onDefer: {}, onReject: {}, onContinue: {}),
                 area: "Apps · Clients", screen: "Request review sheet", state: "refused",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.xlarge, appearance: appearance,
                 source: "Sources/AgentToolingApp/Sections/ClientsSection.swift:55")
         }
     }
@@ -142,7 +145,7 @@ struct GalleryDetailAndSheetsTests {
             try gallerySnapshot(
                 FixAllSheet(plan: plan, onCancel: {}, onConfirm: {}),
                 area: "Apps · Checkup", screen: "Fix All sheet", state: "every-kind",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: CGSize(width: SheetSize.small.width, height: SheetSize.large.height), appearance: appearance,
                 source: "Sources/AgentToolingApp/CheckupView.swift:100")
         }
     }
@@ -175,12 +178,12 @@ struct GalleryDetailAndSheetsTests {
             try gallerySnapshot(
                 PasteImportSheet(workspace: fixture.workspace, mode: .paste),
                 area: "Library · Connections", screen: "Paste import sheet", state: "paste-mode",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.large, appearance: appearance,
                 source: "Sources/AgentToolingApp/MCPServersView.swift:79")
             try gallerySnapshot(
                 PasteImportSheet(workspace: fixture.workspace, mode: .newConnection),
                 area: "Library · Connections", screen: "Paste import sheet", state: "new-connection-mode",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.large, appearance: appearance,
                 source: "Sources/AgentToolingApp/MCPServersView.swift:81")
         }
         GalleryIndex.shared.addNote(
@@ -190,10 +193,9 @@ struct GalleryDetailAndSheetsTests {
     }
 }
 
-/// Sheet sizes for the gallery, named so a reviewer sees a sheet at its own
-/// footprint rather than a full window.
+/// Flexible detail canvases and popover height budgets. Fixed-size product
+/// sheets use their own `SheetSize` constants at each capture callsite.
 enum SheetGallerySize {
-    static let medium = CGSize(width: 680, height: 620)
     static let large = CGSize(width: 820, height: 720)
     /// A popover's content view, drawn at the compact footprint the system
     /// gives a popover rather than at a sheet's width.

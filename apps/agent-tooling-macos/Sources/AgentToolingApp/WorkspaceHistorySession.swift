@@ -15,6 +15,7 @@ final class WorkspaceHistorySession {
     private(set) var selectedID: WorkspaceObjectID?
     private(set) var preview: WorkspaceRestorePreview?
     private(set) var isBusy = false
+    private(set) var hasLoaded = false
     private(set) var errorMessage: String?
     private(set) var lastRestoredID: WorkspaceObjectID?
 
@@ -48,7 +49,10 @@ final class WorkspaceHistorySession {
     func refresh() async {
         guard !isBusy else { return }
         isBusy = true
-        defer { isBusy = false }
+        defer {
+            isBusy = false
+            hasLoaded = true
+        }
         do {
             points = try WorkspaceRestorePoints.available(in: store, limit: 40)
             errorMessage = nil
@@ -61,6 +65,7 @@ final class WorkspaceHistorySession {
             if let selectedID { loadPreview(selectedID) }
         } catch {
             points = []
+            selectedID = nil
             preview = nil
             errorMessage = "This workspace's earlier versions could not be read on this Mac."
         }
@@ -100,10 +105,16 @@ final class WorkspaceHistorySession {
             errorMessage = "That version could not be restored. Nothing was changed."
         }
         await library.refresh()
-        do { points = try WorkspaceRestorePoints.available(in: store, limit: 40) } catch { points = [] }
+        do {
+            points = try WorkspaceRestorePoints.available(in: store, limit: 40)
+        } catch {
+            points = []
+            errorMessage = "This workspace's earlier versions could not be read on this Mac."
+        }
     }
 
     private func loadPreview(_ id: WorkspaceObjectID) {
+        errorMessage = nil
         do {
             preview = try WorkspaceRestorePoints.preview(restoring: id, in: store)
             if preview == nil {

@@ -20,6 +20,7 @@ public protocol WorkspaceRevisionTransport: Actor {
     /// so through `carriesContent`.
     func publish(
         document: PortableWorkspaceDocument,
+        ancestors: [PortableWorkspaceDocument],
         content: [CapturedPackageTree],
         status: PublishedDeviceStatus?,
         expectedRemoteHead: String?
@@ -33,12 +34,31 @@ public protocol WorkspaceRevisionTransport: Actor {
 }
 
 public extension WorkspaceRevisionTransport {
+    /// Compatibility for callers publishing a root or a direct child of the
+    /// published history. Coordinators always supply their complete ancestry.
+    func publish(
+        document: PortableWorkspaceDocument,
+        content: [CapturedPackageTree],
+        status: PublishedDeviceStatus?,
+        expectedRemoteHead: String?
+    ) async throws -> GitWorkspacePublishReceipt {
+        try await publish(document: document, ancestors: [], content: content, status: status, expectedRemoteHead: expectedRemoteHead)
+    }
+
+    func publish(
+        document: PortableWorkspaceDocument,
+        ancestors: [PortableWorkspaceDocument],
+        expectedRemoteHead: String?
+    ) async throws -> GitWorkspacePublishReceipt {
+        try await publish(document: document, ancestors: ancestors, content: [], status: nil, expectedRemoteHead: expectedRemoteHead)
+    }
+
     /// Document only: the call every pre-content caller makes.
     func publish(
         document: PortableWorkspaceDocument,
         expectedRemoteHead: String?
     ) async throws -> GitWorkspacePublishReceipt {
-        try await publish(document: document, content: [], status: nil, expectedRemoteHead: expectedRemoteHead)
+        try await publish(document: document, ancestors: [], content: [], status: nil, expectedRemoteHead: expectedRemoteHead)
     }
 }
 

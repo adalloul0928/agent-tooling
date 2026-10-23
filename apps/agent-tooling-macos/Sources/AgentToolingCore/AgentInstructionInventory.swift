@@ -56,6 +56,7 @@ public enum AgentInstructionInventory {
     public static func scan(
         homeRoot: URL,
         projectRoot: URL? = nil,
+        surfaces: Set<TargetSurface> = [.claudeCode, .codexCLI],
         fileManager: FileManager = .default
     ) -> Result {
         var entries: [Entry] = []
@@ -74,58 +75,62 @@ public enum AgentInstructionInventory {
             }
         }
 
-        // Claude Code. Every one of these is loaded and concatenated; none of
-        // them replaces another.
-        add(
-            .claudeCode, .instructions, .managedPolicy,
-            URL(fileURLWithPath: "/Library/Application Support/ClaudeCode/CLAUDE.md"))
-        add(.claudeCode, .instructions, .user, homeRoot.appending(path: ".claude/CLAUDE.md"))
-        addDirectory(.claudeCode, .rule, .user, homeRoot.appending(path: ".claude/rules"))
-        addDirectory(.claudeCode, .agent, .user, homeRoot.appending(path: ".claude/agents"))
-        if let projectRoot {
-            add(.claudeCode, .instructions, .project, projectRoot.appending(path: "CLAUDE.md"))
-            add(.claudeCode, .instructions, .project, projectRoot.appending(path: ".claude/CLAUDE.md"))
-            add(.claudeCode, .instructions, .localProject, projectRoot.appending(path: "CLAUDE.local.md"))
-            addDirectory(.claudeCode, .rule, .project, projectRoot.appending(path: ".claude/rules"))
-            addDirectory(.claudeCode, .agent, .project, projectRoot.appending(path: ".claude/agents"))
+        if surfaces.contains(.claudeCode) {
+            // Claude Code. Every one of these is loaded and concatenated; none of
+            // them replaces another.
+            add(
+                .claudeCode, .instructions, .managedPolicy,
+                URL(fileURLWithPath: "/Library/Application Support/ClaudeCode/CLAUDE.md"))
+            add(.claudeCode, .instructions, .user, homeRoot.appending(path: ".claude/CLAUDE.md"))
+            addDirectory(.claudeCode, .rule, .user, homeRoot.appending(path: ".claude/rules"))
+            addDirectory(.claudeCode, .agent, .user, homeRoot.appending(path: ".claude/agents"))
+            if let projectRoot {
+                add(.claudeCode, .instructions, .project, projectRoot.appending(path: "CLAUDE.md"))
+                add(.claudeCode, .instructions, .project, projectRoot.appending(path: ".claude/CLAUDE.md"))
+                add(.claudeCode, .instructions, .localProject, projectRoot.appending(path: "CLAUDE.local.md"))
+                addDirectory(.claudeCode, .rule, .project, projectRoot.appending(path: ".claude/rules"))
+                addDirectory(.claudeCode, .agent, .project, projectRoot.appending(path: ".claude/agents"))
 
-            // Claude Code reads CLAUDE.md, not AGENTS.md. A project that has
-            // only the latter gives it nothing, and nothing else on this screen
-            // would show that.
-            let hasClaude = entries.contains {
-                $0.surface == .claudeCode && $0.kind == .instructions && $0.scope != .user
-                    && $0.scope != .managedPolicy
-            }
-            if !hasClaude, regularFileSize(projectRoot.appending(path: "AGENTS.md")) != nil {
-                notes.append(
-                    .init(
-                        surface: .claudeCode,
-                        detail:
-                            "This project has an AGENTS.md but no CLAUDE.md. Claude Code reads CLAUDE.md and will not read AGENTS.md, so none of it reaches Claude Code."
-                    ))
+                // Claude Code reads CLAUDE.md, not AGENTS.md. A project that has
+                // only the latter gives it nothing, and nothing else on this screen
+                // would show that.
+                let hasClaude = entries.contains {
+                    $0.surface == .claudeCode && $0.kind == .instructions && $0.scope != .user
+                        && $0.scope != .managedPolicy
+                }
+                if !hasClaude, regularFileSize(projectRoot.appending(path: "AGENTS.md")) != nil {
+                    notes.append(
+                        .init(
+                            surface: .claudeCode,
+                            detail:
+                                "This project has an AGENTS.md but no CLAUDE.md. Claude Code reads CLAUDE.md and will not read AGENTS.md, so none of it reaches Claude Code."
+                        ))
+                }
             }
         }
 
-        // Codex. In its own home it uses the first of these that is not empty;
-        // from the project root down, every directory contributes.
-        for name in ["AGENTS.override.md", "AGENTS.md"] {
-            let url = homeRoot.appending(path: ".codex").appending(path: name)
-            guard let size = regularFileSize(url), size > 0 else { continue }
-            entries.append(
-                .init(
-                    surface: .codexCLI, kind: .instructions, scope: .user,
-                    path: url.standardizedFileURL.path, byteCount: size))
-            break
-        }
-        if let projectRoot {
-            for name in ["AGENTS.override.md", "AGENTS.md", "TEAM_GUIDE.md", ".agents.md"] {
-                let url = projectRoot.appending(path: name)
+        if surfaces.contains(.codexCLI) {
+            // Codex. In its own home it uses the first of these that is not empty;
+            // from the project root down, every directory contributes.
+            for name in ["AGENTS.override.md", "AGENTS.md"] {
+                let url = homeRoot.appending(path: ".codex").appending(path: name)
                 guard let size = regularFileSize(url), size > 0 else { continue }
                 entries.append(
                     .init(
-                        surface: .codexCLI, kind: .instructions, scope: .project,
+                        surface: .codexCLI, kind: .instructions, scope: .user,
                         path: url.standardizedFileURL.path, byteCount: size))
                 break
+            }
+            if let projectRoot {
+                for name in ["AGENTS.override.md", "AGENTS.md", "TEAM_GUIDE.md", ".agents.md"] {
+                    let url = projectRoot.appending(path: name)
+                    guard let size = regularFileSize(url), size > 0 else { continue }
+                    entries.append(
+                        .init(
+                            surface: .codexCLI, kind: .instructions, scope: .project,
+                            path: url.standardizedFileURL.path, byteCount: size))
+                    break
+                }
             }
         }
 

@@ -1,4 +1,4 @@
-# Encrypted folder sync — contract v1
+# Encrypted folder sync — archive format 2
 
 Status: implemented and fixture-tested on one machine. No two-Mac run.
 
@@ -9,13 +9,32 @@ repository, revisions travel through a folder that a file-sync service already
 keeps in step between a person's Macs — iCloud Drive, Dropbox, a network share.
 
 What lands in that folder is a sealed box (AES-GCM) plus a tiny plaintext
-envelope carrying the format version. The portable document — every item name,
-every destination, every project name — is never written there in the clear.
+envelope carrying the format version. The portable document and its complete
+revision ancestry — every item name, destination and project name in that
+history — are never written there in the clear. Skill files and device status
+summaries still travel only through the Git transport.
+
+Format 2 seals the same validated archive used by Git: at most 4,096 reachable
+revisions and 32 MiB of encoded archive data. The outer envelope allows the
+additional AES-GCM and base64 overhead. Readers continue to accept format 1
+head-only documents. A Mac holding the complete history upgrades a matching
+legacy head on its next pass; missing history is never guessed. Format 1-only
+readers cannot read format 2, so update all participating Macs before the first
+format 2 publish. The key and enrollment file formats are unchanged.
+
+An oversized complete archive stops with a capacity error and leaves the
+existing library and sealed file in place. It cannot be repaired by
+republishing missing history. Keep the libraries and contact support before
+removing or rewriting their history.
+
+Joining a fresh Mac remains the Git setup flow. Folder connection changes the
+transport for Macs already using the same workspace identity; a different
+workspace is refused before its enrollment or key replaces the local one.
 
 ## Why a second transport rather than a second sync engine
 
-`WorkspaceRevisionTransport` has exactly two methods: observe what is there, and
-publish on top of exactly what was observed. Merging, conflict decisions,
+`WorkspaceRevisionTransport` observes the head and ancestry, publishes on top
+of exactly what was observed, and reports whether it can carry content. Merging, conflict decisions,
 ancestry and commit ordering all stay in `WorkspaceSyncCoordinator` and
 `WorkspaceMergeEngine`, which both transports share unchanged. A transport that
 could merge would be a second set of merge rules to get subtly wrong.
@@ -31,7 +50,7 @@ and once immediately before the file is moved into place. A Mac that finds
 something other than what it expected reports `remoteAdvanced` with what it
 found, and the coordinator merges rather than overwriting.
 
-The sealed box is written to a `.partial` file in the same folder and moved into
+The sealed box is written to a uniquely named `.partial` file in the same folder and moved into
 place, so a sync service never uploads a half-written box.
 
 ## The key

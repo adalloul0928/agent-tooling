@@ -17,6 +17,20 @@ import Testing
 @Suite("App launch state", .timeLimit(.minutes(5)))
 @MainActor
 struct AppLaunchStateTests {
+    @Test func aReadyWorkspaceStartsAutomaticChecksBeforeAnyWindowMounts() async throws {
+        let fixture = try await LaunchpadFixture()
+        defer { fixture.remove() }
+        let launch = try await Self.libraryLaunch(fixture, recorder: Recorder())
+        let sync = try #require(launch.readyWorkspace?.sync)
+        defer { sync.stopAutomaticSync() }
+
+        await waitUntil { sync.lastScheduleDecision == .notConnected }
+
+        #expect(!launch.isShellOpen)
+        #expect(!launch.isStageOpen)
+        #expect(sync.lastAttempt == nil)
+    }
+
     // MARK: - The launch table
 
     @Test func aMacWithNoLibraryOpensOnTheStageAlone() async throws {

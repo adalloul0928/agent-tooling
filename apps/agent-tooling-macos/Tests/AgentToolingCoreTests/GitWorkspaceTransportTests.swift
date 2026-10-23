@@ -35,6 +35,42 @@ struct GitWorkspaceTransportTests {
         #expect(state.document == document)
     }
 
+    @Test func ancestryLargerThanOneMegabyteRoundTripsWithoutOutputTruncation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let first = try await fixture.enroll("a")
+        var root = try Fixture.document(name: "Large library")
+        for index in 0..<64 {
+            root.artifacts.append(
+                .init(
+                    identity: .init(
+                        id: ArtifactID(), kind: .skill,
+                        displayName: "Skill \(index) " + String(repeating: "sample ", count: 16)),
+                    authority: .trackedOnly))
+        }
+        root = try WorkspaceDocumentCoding.seal(root)
+        var history = [root]
+        for index in 1...80 {
+            var next = try #require(history.last)
+            next.artifacts[0].identity.displayName = "Offline revision \(index)"
+            next.revision = .init(parentIDs: [next.revision.id], writerID: root.revision.writerID)
+            history.append(try WorkspaceDocumentCoding.seal(next))
+        }
+        let document = try #require(history.last)
+        let ancestors = Array(history.dropLast())
+        let archive = try WorkspaceRevisionArchive(document: document, ancestors: ancestors)
+        #expect(try archive.encoded().count > 1_048_576)
+        _ = try await first.publish(document: document, ancestors: ancestors, expectedRemoteHead: nil)
+        // Exercise both enrollment's default runner and a reopened transport's
+        // default runner, without increasing other command runners' limits.
+        #expect(try await first.remoteState().ancestors.count == ancestors.count)
+        _ = try await fixture.enroll("b")
+        let reopened = try GitWorkspaceTransport(checkout: fixture.checkout("b"))
+        let received = try await reopened.remoteState()
+        #expect(received.document == document)
+        #expect(received.ancestors == ancestors)
+    }
+
     @Test func aRejectedPushReportsTheRemoteHeadAndNeverForces() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -84,7 +120,7 @@ struct GitWorkspaceTransportTests {
             writerID: base.revision.writerID)
         #expect(merged.isResolved, "\(merged.conflicts)")
         let sealed = try WorkspaceDocumentCoding.seal(try #require(merged.document))
-        let mergeCommit = try await first.publish(document: sealed, expectedRemoteHead: remote.head)
+        let mergeCommit = try await first.publish(document: sealed, ancestors: [base, mine, theirs], expectedRemoteHead: remote.head)
 
         let converged = try await second.remoteState()
         #expect(converged.head == mergeCommit.commit)

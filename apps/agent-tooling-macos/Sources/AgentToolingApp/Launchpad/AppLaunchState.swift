@@ -170,17 +170,26 @@ final class AppLaunchState {
     /// What the stage reads, commits and joins through.
     let environment: LaunchpadEnvironment
 
-    private(set) var phase: Phase
+    private(set) var phase: Phase {
+        didSet { updateAutomaticSync() }
+    }
     /// The library, once it is open: from the launch, or from the stage's
     /// commit point, which hands it over while the phase stays `setup`.
-    private(set) var workspace: WorkspaceLaunch.Workspace?
+    private(set) var workspace: WorkspaceLaunch.Workspace? {
+        didSet {
+            if oldValue?.sync !== workspace?.sync { oldValue?.sync?.stopAutomaticSync() }
+            updateAutomaticSync()
+        }
+    }
     /// Persists across stage-window closure during setup; re-entry creates a new flow.
     private(set) var flow: LaunchpadFlow?
     /// A fresh presentation never inherits a retained window's previous fade.
     private(set) var stagePresentationID = UUID()
     /// The entry the flow was, or is next to be, made for.
     private(set) var pendingEntry: SetupEntry
-    private(set) var isStageOpen = false
+    private(set) var isStageOpen = false {
+        didSet { updateAutomaticSync() }
+    }
     private(set) var isStageKey = false
     /// Whether a shell is up in the main window.
     private(set) var isShellOpen = false
@@ -354,6 +363,18 @@ final class AppLaunchState {
         opening = task
         await task.value
         opening = nil
+    }
+
+    /// Setup owns its writes until hand-off. Once ready, the workspace keeps
+    /// syncing even when no Settings pane or main window is mounted.
+    private func updateAutomaticSync() {
+        guard phase == .ready, !isStageOpen, let workspace else {
+            workspace?.sync?.stopAutomaticSync()
+            return
+        }
+        workspace.installSyncStatusProvider()
+        let incoming = workspace.incoming
+        workspace.sync?.startAutomaticSync(onArrival: { [weak incoming] in await incoming?.review() })
     }
 
     /// The unreadable screen's and the failure screen's Try again: reads the

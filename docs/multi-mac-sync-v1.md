@@ -21,16 +21,42 @@ destinations, project folders, receipts, keys, or credentials.
 
 ```
 <branch>/
-  workspace.json                 the portable document (one file, one merge unit)
+  workspace.json                 the portable head document (one merge unit)
+  workspace-history.json         the head and its complete immutable ancestry
   content/<algorithm>/<digest>/  one immutable tree per content digest
       <the package files, verbatim>
   status/<deviceID>.json         one Mac's published summary (read-only to others)
 ```
 
 **`workspace.json`** is merged by `WorkspaceMergeEngine` per record (artifacts,
-assignments, projects, presets, devices, account choices…). Its revision history
-is kept in every Mac's store; Git's history is a second copy, not the one the
-engine reads.
+assignments, projects, presets, devices, account choices…). The coordinator
+imports the complete revision graph before selecting a common ancestor. Local
+edits made between publishes travel too; Git commits alone cannot supply them.
+
+**`workspace-history.json`** uses archive format 1: canonical document bytes in
+parent-before-child order, ending at the advertised head. Revisions must retain
+their identity and contents, belong to the same workspace, and have every
+parent present. Cycles and missing parents are refused before import changes
+anything. Archives are bounded to 4,096 reachable revisions and 32 MiB of
+encoded data; the transport does not truncate history to fit. The common base
+cannot be an ancestor of another shared revision. Incomparable best bases use
+revision-ID order so both Macs choose the same one.
+
+An archive above either limit stops with a capacity error, distinct from
+missing-history repair. The existing libraries are kept; retrying or
+republishing from another Mac does not shrink a complete graph. Keep both
+libraries and contact support before removing or rewriting history. Encoded
+document sizes are budgeted as the archive is assembled, before allocating
+the final JSON payload.
+
+Older Git repositories remain readable: published parents can be recovered
+from Git history and combined with locally held revisions. A matching head
+still imports missing parents or publishes a complete archive when this Mac
+has the history. If neither side has an unpublished parent, sync stops with
+repair guidance; update and sync the Mac that owns that history first. Older
+writers can leave a stale sidecar; its validated records are treated as
+additional ancestry, never as a replacement head. Update participating Macs
+before relying on complete-history transfer.
 
 **`content/`** is content-addressed and immutable. A tree is written once under
 its digest and never modified; two Macs writing the same digest write identical
@@ -102,13 +128,16 @@ with that **workspace ID** and a **fresh device ID**, scans this Mac for its
 device state, registers the device in the document, and publishes. Before the
 join commits nothing is written on this Mac but the dedicated checkout.
 
-The joined store's history starts at the remote head: the first revision this
-Mac holds is the one it adopted, so ancestry queries stop there. That is
-sufficient because merges need only the newest common ancestor, and both Macs
-hold every revision from the join onward.
+The joined store imports the validated head and all its ancestors before
+registering the new device. A repository with incomplete legacy history must
+be upgraded by a Mac holding the missing revisions before a fresh Mac joins.
+Existing local history is repaired when a later complete archive supplies its
+missing parents, including when both current heads already match.
 
 A Mac that already has a workspace cannot join another; it would have two
-sources of truth. The app says so and offers nothing destructive.
+sources of truth. The app says so and offers nothing destructive. Settings
+also refuses a repository or encrypted folder holding a different workspace
+before replacing this Mac's enrollment or encryption key.
 
 ### Before joining: the preflight
 
@@ -211,10 +240,15 @@ its own values through its own client. This line does not move.
 
 ## Scheduling
 
-The pure `WorkspaceSyncScheduler` decides when a pass may run; the shell asks it
-on open and after each local write, and a status line says "Synced 2m ago ·
-MacBook Pro last seen 3h ago". Passes never overlap, failures back off, and an
-unresolved conflict stops automatic passes until a person decides.
+The pure `WorkspaceSyncScheduler` decides when a pass may run. The opened
+workspace owns one periodic loop, started by `AppLaunchState` when the library
+is ready. Navigating away from Settings or closing the main window does not
+stop it. Setup pauses the loop until hand-off or the setup stage closes; a
+replaced workspace stops its old loop. Arrivals use the same incoming-review
+policy as the shell's open-time pass. The shell also asks after local writes.
+A status line says "Synced 2m ago · MacBook Pro last seen 3h ago". Passes never
+overlap, failures back off, and unresolved conflicts stop automatic passes
+until a person decides.
 
 ## Not covered by v1
 

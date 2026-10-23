@@ -298,4 +298,37 @@ struct MultiMacSyncTests {
                 registry: .init(adapters: []))
         }
     }
+
+    @Test func upgradingAMatchingLegacyHeadAlsoRecoversItsAuthoredSkillFiles() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let a = try await fixture.firstMac("Studio")
+        let skill = try await author(a, name: "release-check", body: "Published skill content")
+        _ = try await a.coordinator.sync()
+        let digest = try #require(try a.document.artifacts.first { $0.identity.id == skill }?.contentDigest)
+        // Simulate a head-only legacy repository with unpublished parents.
+        let checkout = fixture.root.appending(path: "Studio/checkout")
+        try GitTestFixture.git(["rm", GitWorkspaceTransport.historyFileName], in: checkout, checkingStatus: true)
+        try GitTestFixture.git(
+            [
+                "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgSign=false", "-c", "user.name=Fixture",
+                "-c", "user.email=fixture@example.com", "commit", "--quiet", "-m", "Legacy head",
+            ],
+            in: checkout, checkingStatus: true)
+        try GitTestFixture.git(["push", "origin", "main"], in: checkout, checkingStatus: true)
+        let emptyRoot = fixture.root.appending(path: "recovered-content")
+        try FileManager.default.createDirectory(at: emptyRoot, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let recovered = try CentralPackageContentStore(directory: emptyRoot)
+        let coordinator = WorkspaceSyncCoordinator(
+            store: a.store, transport: a.transport, writerID: WorkspaceObjectID(), contentStore: recovered)
+
+        guard case .published = try await coordinator.sync() else {
+            Issue.record("The matching legacy head should be republished with its complete history")
+            return
+        }
+
+        #expect(await coordinator.lastContentReport.imported == [digest])
+        #expect(try await recovered.read(digest) == a.contentStore.read(digest))
+        #expect(try await a.transport.remoteState().ancestors.count == a.store.revisionHistory(from: a.head).count - 1)
+    }
 }

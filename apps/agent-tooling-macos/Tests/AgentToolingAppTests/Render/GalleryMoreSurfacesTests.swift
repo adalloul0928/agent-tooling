@@ -29,7 +29,7 @@ struct GalleryMoreSurfacesTests {
             try gallerySnapshot(
                 AddCatalogSourceSheet(workspace: fixture.workspace, catalogs: fixture.workspace.marketplace),
                 area: "Discover", screen: "Add catalog source sheet", state: "empty",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/CatalogSourceEditing.swift:159")
         }
         GalleryIndex.shared.addNote(
@@ -65,7 +65,7 @@ struct GalleryMoreSurfacesTests {
                     session: fixture.workspace.settings,
                     edit: Self.pendingEdit(value: .boolean(true), name: "Tool search")),
                 area: "Apps · App settings", screen: "Effective setting edit sheet", state: "boolean",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/EffectiveSettingsView.swift:72")
             try gallerySnapshot(
                 EffectiveSettingEditSheet(
@@ -73,7 +73,7 @@ struct GalleryMoreSurfacesTests {
                     edit: Self.pendingEdit(value: .string("auto"), name: "Approval mode"),
                     choices: AccountSetting.approvalMode.acceptedValues.map { .string($0.rawValue) }),
                 area: "Apps · App settings", screen: "Effective setting edit sheet", state: "choice",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/EffectiveSettingsView.swift:72")
         }
     }
@@ -92,7 +92,7 @@ struct GalleryMoreSurfacesTests {
                     session: presets, library: fixture.workspace.library,
                     presetID: ShellRenderFixture.presetID, name: "Starter"),
                 area: "Library · Presets", screen: "Preset follow sheet", state: "choose",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/PresetsView.swift:57")
         }
     }
@@ -108,7 +108,7 @@ struct GalleryMoreSurfacesTests {
                 PresetEditorSheet(
                     session: presets, library: fixture.workspace.library, mode: .create, onCreated: { _ in }),
                 area: "Library · Presets", screen: "Preset editor sheet", state: "create",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/PresetsView.swift:62")
             try gallerySnapshot(
                 PresetEditorSheet(
@@ -116,7 +116,7 @@ struct GalleryMoreSurfacesTests {
                     mode: .rename(presetID: ShellRenderFixture.presetID, currentName: "Starter"),
                     onCreated: { _ in }),
                 area: "Library · Presets", screen: "Preset editor sheet", state: "rename",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/PresetsView.swift:67")
         }
     }
@@ -131,7 +131,7 @@ struct GalleryMoreSurfacesTests {
             try gallerySnapshot(
                 NewProjectSheet(workspace: fixture.workspace, onCreated: {}),
                 area: "Projects", screen: "New project sheet", state: "empty",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/ProjectsView.swift:85")
 
             await fixture.workspace.library.refresh()
@@ -139,7 +139,7 @@ struct GalleryMoreSurfacesTests {
                 try gallerySnapshot(
                     WorkspaceProjectAddSheet(session: fixture.workspace.library, project: project),
                     area: "Projects", screen: "Project add tools sheet", state: "choose",
-                    size: SheetGallerySize.large, appearance: appearance,
+                    size: SheetSize.large, appearance: appearance,
                     source: "Sources/AgentToolingApp/ProjectDetailView.swift:76")
             }
 
@@ -149,7 +149,7 @@ struct GalleryMoreSurfacesTests {
                     session: declaration,
                     projectRoot: URL(filePath: "/Users/example/src/project-a"), projectName: "Project A"),
                 area: "Projects", screen: "Project declaration sheet", state: "files",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/ProjectDetailView.swift:79")
         }
     }
@@ -165,7 +165,7 @@ struct GalleryMoreSurfacesTests {
                     session: fixture.workspace.library, artifactIDs: [ShellRenderFixture.skill],
                     initialProjectID: ShellRenderFixture.projectID),
                 area: "Projects", screen: "Project review sheet", state: "assign-to-project",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.large, appearance: appearance,
                 source: "Sources/AgentToolingApp/ProjectDetailView.swift:412")
         }
     }
@@ -180,7 +180,7 @@ struct GalleryMoreSurfacesTests {
                     existingNames: ["standalone-skill"], isBusy: false, canWrite: true,
                     errorMessage: nil, onCreate: { _, _ in }),
                 area: "Library · Skills", screen: "Skill editor sheet", state: "empty",
-                size: SheetGallerySize.large, appearance: appearance,
+                size: SheetSize.editor, appearance: appearance,
                 source: "Sources/AgentToolingApp/SkillsView.swift:158")
         }
     }
@@ -191,11 +191,19 @@ struct GalleryMoreSurfacesTests {
             let fixture = try await ShellRenderFixture()
             defer { fixture.remove() }
             let content = fixture.contentSession()
-            try gallerySnapshot(
-                SkillSourceEditorSheet(skill: Self.skillEntry(), session: content),
+            let skill = Self.skillEntry(contentDigest: try StubSkillContentService.tree().digest)
+            await content.load(skill)
+            #expect(content.storedSource(for: skill) == StubSkillContentService.definition)
+            try await galleryShellSnapshot(
+                SkillSourceEditorSheet(skill: skill, session: content),
                 area: "Library · Skills", screen: "Skill source editor sheet", state: "loaded",
-                size: SheetGallerySize.large, appearance: appearance,
-                source: "Sources/AgentToolingApp/SkillsView.swift:159")
+                size: SheetSize.editor, appearance: appearance,
+                source: "Sources/AgentToolingApp/SkillsView.swift:159",
+                note: "stored and editable source panes in a fixture window, read through the scripted content service"
+            ) { probe in
+                probe.contains("Stored") && probe.contains("Edited complete SKILL.md source")
+                    && !content.isLoading
+            }
         }
     }
 
@@ -261,7 +269,7 @@ struct GalleryMoreSurfacesTests {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .background(AgentTheme.contentBackground),
                 area: "Library · Connections", screen: "MCP runtimes sheet", state: "checked",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.large, appearance: appearance,
                 source: "Sources/AgentToolingApp/MCPServersView.swift:76")
         }
         GalleryIndex.shared.addNote(
@@ -280,14 +288,14 @@ struct GalleryMoreSurfacesTests {
                     workspace: fixture.workspace,
                     previewText: "claude mcp add --transport sse linear https://mcp.linear.app/sse"),
                 area: "Library · Connections", screen: "Paste import sheet", state: "parsed-definition",
-                size: SheetGallerySize.large, appearance: appearance,
+                size: SheetSize.large, appearance: appearance,
                 source: "Sources/AgentToolingApp/MCPServersView.swift:79")
             try gallerySnapshot(
                 PasteImportSheet(
                     workspace: fixture.workspace,
                     previewText: "this is not an mcp command, a json block, a url, or a SKILL.md"),
                 area: "Library · Connections", screen: "Paste import sheet", state: "parse-error",
-                size: SheetGallerySize.large, appearance: appearance,
+                size: SheetSize.large, appearance: appearance,
                 source: "Sources/AgentToolingApp/MCPServersView.swift:79")
         }
     }
@@ -303,7 +311,7 @@ struct GalleryMoreSurfacesTests {
             try gallerySnapshot(
                 AssignmentRemovalSheet(session: fixture.workspace.library, presentation: presentation),
                 area: "Library · Connections", screen: "Assignment removal sheet", state: "withdraw",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/MCPServersView.swift:89")
         }
     }
@@ -319,7 +327,7 @@ struct GalleryMoreSurfacesTests {
                     target: .stdio(executableURL: URL(filePath: "/opt/homebrew/bin/npx"), arguments: ["-y", "@scope/local"]),
                     onConfirm: {}),
                 area: "Library · Connections", screen: "MCP test consent sheet", state: "process-launch",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/MCPTestConsoleView.swift:233")
             try gallerySnapshot(
                 MCPTestConsentSheet(
@@ -327,7 +335,7 @@ struct GalleryMoreSurfacesTests {
                     target: .http(url: linearURL),
                     onConfirm: {}),
                 area: "Library · Connections", screen: "MCP test consent sheet", state: "remote-session",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/MCPTestConsoleView.swift:233")
         }
     }
@@ -407,7 +415,7 @@ struct GalleryMoreSurfacesTests {
                 AccountChangesReviewSheet(
                     session: fixture.workspace.accounts, plan: Self.accountPlan(), onClose: {}),
                 area: "Apps · Accounts", screen: "Account changes review sheet", state: "several-changes",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/AccountsView.swift:54")
         }
     }
@@ -425,7 +433,7 @@ struct GalleryMoreSurfacesTests {
                     ],
                     onConfirm: {}, onCancel: {}),
                 area: "Apps · Accounts", screen: "Share settings confirmation", state: "offer",
-                size: SheetGallerySize.popover, appearance: appearance,
+                size: CGSize(width: Size.fieldWide, height: SheetSize.small.height), appearance: appearance,
                 source: "Sources/AgentToolingApp/AccountsView.swift:99")
         }
     }
@@ -477,7 +485,7 @@ struct GalleryMoreSurfacesTests {
                 try gallerySnapshot(
                     PlanReviewSheet(workspace: fixture.workspace, plan: example.plan),
                     area: "Apps · Clients", screen: "Plan review sheet", state: example.state,
-                    size: SheetGallerySize.large, appearance: appearance,
+                    size: SheetSize.xlarge, appearance: appearance,
                     source: "Sources/AgentToolingApp/PlanReviewSheet.swift")
             }
         }
@@ -500,7 +508,7 @@ struct GalleryMoreSurfacesTests {
                 )
                 .environment(AppNavigationState()),
                 area: "Apps · Clients", screen: "Request review sheet", state: "approvable",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.xlarge, appearance: appearance,
                 source: "Sources/AgentToolingApp/Sections/ClientsSection.swift:55")
         }
     }
@@ -527,7 +535,7 @@ struct GalleryMoreSurfacesTests {
                     entries: session.reauthenticatableEntries,
                     commandText: { _ in "claude mcp reauth linear" }, onConfirm: {}, onCancel: {}),
                 area: "Apps · Health", screen: "Bulk re-authenticate confirmation", state: "offer",
-                size: SheetGallerySize.popover, appearance: appearance,
+                size: CGSize(width: Size.fieldWide, height: SheetSize.small.height), appearance: appearance,
                 source: "Sources/AgentToolingApp/HealthView.swift:67")
         }
     }
@@ -544,23 +552,23 @@ struct GalleryMoreSurfacesTests {
             try gallerySnapshot(
                 OtherMacSheet(workspace: fixture.workspace, device: device),
                 area: "Sync", screen: "Other Mac sheet", state: "detail",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.large, appearance: appearance,
                 source: "Sources/AgentToolingApp/DeviceSwitcher.swift:43")
             try gallerySnapshot(
                 AssignToDeviceSheet(workspace: fixture.workspace, device: device),
                 area: "Sync", screen: "Assign to device sheet", state: "choose",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/DeviceSwitcher.swift:179")
             try gallerySnapshot(
                 WorkspaceLinkDestinationSheet(
                     session: fixture.workspace.deployment, clients: [.claude, .codex]),
                 area: "Sync", screen: "Link destination sheet", state: "choose",
-                size: SheetGallerySize.medium, appearance: appearance,
+                size: SheetSize.medium, appearance: appearance,
                 source: "Sources/AgentToolingApp/SyncCenterView.swift:154")
             try gallerySnapshot(
                 ManagedClientsPopover(device: fixture.workspace.device),
                 area: "Apps · Clients", screen: "Managed clients popover", state: "list",
-                size: SheetGallerySize.popover, appearance: appearance,
+                size: CGSize(width: Size.managedClientsPopover, height: SheetGallerySize.popover.height), appearance: appearance,
                 source: "Sources/AgentToolingApp/SyncCenterView.swift:61")
         }
         GalleryIndex.shared.addNote(
@@ -629,12 +637,12 @@ struct GalleryMoreSurfacesTests {
             layer: .user, sourcePath: "/Users/example/.claude/settings.json", fingerprint: nil)
     }
 
-    private static func skillEntry() -> SkillEntry {
+    private static func skillEntry(contentDigest: ContentDigest) -> SkillEntry {
         SkillEntry(
             id: ShellRenderFixture.skill, displayName: "Standalone Skill",
             declaredName: "standalone-skill", summary: "A stored skill the gallery reads.",
             ownership: .centralPersonal, authority: .centralPersonal,
-            contentDigest: nil, parentID: nil, parentPluginLabel: nil, providerPluginID: nil,
+            contentDigest: contentDigest, parentID: nil, parentPluginLabel: nil, providerPluginID: nil,
             sourceLabel: nil, requestedAssignments: [], isAssignable: true, assignmentExplanation: nil)
     }
 

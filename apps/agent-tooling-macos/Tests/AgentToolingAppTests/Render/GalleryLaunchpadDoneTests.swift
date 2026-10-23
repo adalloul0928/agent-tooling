@@ -21,7 +21,7 @@ struct GalleryLaunchpadDoneTests {
     private static let cardSource = "Sources/AgentToolingApp/FinishSetupCard.swift"
     /// The card on Home at the default window size, with the page's margin.
     private static let cardCanvas = CGSize(width: 1_186, height: 440)
-    private static let popoverCanvas = CGSize(width: 452, height: 300)
+    private static let popoverCanvas = CGSize(width: Size.fieldWide, height: 300)
 
     @Test func doneAsTheFragmentDrawsIt() async throws {
         let fixture = try await LaunchpadFixture()

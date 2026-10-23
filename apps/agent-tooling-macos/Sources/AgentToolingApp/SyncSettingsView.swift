@@ -43,17 +43,7 @@ struct SyncSettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
-            session.load()
-            // The loop wakes often and syncs rarely: every wake-up asks the
-            // scheduler, which spaces real passes apart and stops them entirely
-            // while a conflict is undecided. It runs only while this screen is
-            // on screen, so leaving it ends the loop.
-            while !Task.isCancelled {
-                await session.runScheduledPass()
-                do { try await Task.sleep(for: WorkspaceSyncSession.checkInterval) } catch { return }
-            }
-        }
+
     }
 
     private var setupCard: some View {

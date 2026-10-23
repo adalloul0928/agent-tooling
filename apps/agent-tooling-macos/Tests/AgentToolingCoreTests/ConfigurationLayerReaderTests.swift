@@ -1,3 +1,4 @@
+import AgentToolingTestSupport
 import Foundation
 import Testing
 
@@ -7,6 +8,23 @@ import Testing
 /// reformatted or assumed empty.
 @Suite("Configuration layer reader")
 struct ConfigurationLayerReaderTests {
+    @Test func jsonNumbersAndBooleansRetainTheirTypesIncludingInsideLists() throws {
+        let home = try FixtureHome("configuration-json-types")
+        defer { home.remove() }
+        try home.plant(
+            ".claude/settings.json",
+            #"{"cleanupPeriodDays":0,"one":1,"ordinary":2,"enabled":true,"disabled":false,"mixed":[0,1,true,false,2,"1"]}"#)
+
+        let layer = try #require(try ConfigurationLayerReader().claudeCodeLayers(homeRoot: home.url).first)
+
+        #expect(layer.values["cleanupPeriodDays"] == .number(0))
+        #expect(layer.values["one"] == .number(1))
+        #expect(layer.values["ordinary"] == .number(2))
+        #expect(layer.values["enabled"] == .boolean(true))
+        #expect(layer.values["disabled"] == .boolean(false))
+        #expect(layer.values["mixed"] == .list([.number(0), .number(1), .boolean(true), .boolean(false), .number(2), .string("1")]))
+    }
+
     @Test func claudeLayersAreReadInPrecedenceOrderAndExplainOneValue() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

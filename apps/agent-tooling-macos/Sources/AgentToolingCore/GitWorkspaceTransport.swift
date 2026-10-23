@@ -51,6 +51,8 @@ public enum GitWorkspaceTransportError: Error, Equatable, Sendable, LocalizedErr
 public struct GitWorkspaceRemoteState: Hashable, Sendable {
     public let head: String?
     public let document: PortableWorkspaceDocument?
+    /// Immutable parents carried with the head, including unpublished local revisions.
+    public let ancestors: [PortableWorkspaceDocument]
     /// Content trees the remote holds, by digest. Empty for a transport that
     /// does not carry content.
     public let contentDigests: Set<ContentDigest>
@@ -58,11 +60,12 @@ public struct GitWorkspaceRemoteState: Hashable, Sendable {
     public let deviceStatuses: [PublishedDeviceStatus]
 
     public init(
-        head: String?, document: PortableWorkspaceDocument?,
+        head: String?, document: PortableWorkspaceDocument?, ancestors: [PortableWorkspaceDocument] = [],
         contentDigests: Set<ContentDigest> = [], deviceStatuses: [PublishedDeviceStatus] = []
     ) {
         self.head = head
         self.document = document
+        self.ancestors = ancestors
         self.contentDigests = contentDigests
         self.deviceStatuses = deviceStatuses
     }
@@ -76,8 +79,8 @@ public struct GitWorkspacePublishReceipt: Hashable, Sendable {
 
 /// Carries portable workspace revisions through a dedicated Git repository.
 ///
-/// It moves one file — the portable document — inside a repository the person
-/// connected for this purpose. It never synchronizes the live database, never
+/// It moves the portable document, its complete ancestry, authored content
+/// and device summaries inside a repository connected for this purpose. It never synchronizes the live database, never
 /// commits unrelated working-tree changes, and never force-pushes: a rejected
 /// push is reported as `remoteAdvanced` so the caller fetches, merges through
 /// `WorkspaceMergeEngine`, and publishes the merged revision instead.
@@ -86,13 +89,14 @@ public struct GitWorkspacePublishReceipt: Hashable, Sendable {
 /// readable by anyone with access to that repository.
 public actor GitWorkspaceTransport {
     public static let documentFileName = "workspace.json"
+    static let historyFileName = "workspace-history.json"
     public static let contentDirectoryName = "content"
     public static let statusDirectoryName = "status"
     /// The one Git this app runs: the Command Line Tools' shim, which runs
     /// the selected developer folder's Git.
     static let gitExecutable = "/usr/bin/git"
     public nonisolated var carriesContent: Bool { true }
-    private static let outputLimit = 1 << 20
+    private static let outputLimit = WorkspaceRevisionArchive.maximumBytes
     private static let documentLimit = 32 << 20
     private static let statusLimit = 256 << 10
     private static let maximumDeviceStatuses = 256
@@ -127,7 +131,7 @@ public actor GitWorkspaceTransport {
         }
         self.checkout = checkout
         self.branch = branch
-        self.runner = runner
+        self.runner = (runner as? ProcessCommandRunner)?.capturingOutput(upTo: Self.outputLimit + 1) ?? runner
     }
 
     /// Prepares a dedicated checkout for a workspace repository. The remote is
@@ -197,10 +201,53 @@ public actor GitWorkspaceTransport {
         guard let head else { return .init(head: nil, document: nil) }
         let blob = try await git(["show", "\(head):\(Self.documentFileName)"], allowing: [0, 128])
         guard blob.status == 0 else { return .init(head: head, document: nil) }
+        let document = try Self.decode(blob.standardOutput)
         return .init(
-            head: head, document: try Self.decode(blob.standardOutput),
+            head: head, document: document, ancestors: try await ancestors(of: document, at: head),
             contentDigests: try await contentDigests(at: head),
             deviceStatuses: try await deviceStatuses(at: head))
+    }
+
+    /// Older clients kept only published heads. Recover the parents Git still
+    /// holds; the store combines these with its own history before validating
+    /// closure. An unpublished parent absent on both sides remains an error.
+    private func ancestors(of document: PortableWorkspaceDocument, at head: String) async throws -> [PortableWorkspaceDocument] {
+        let history = try await git(["show", "\(head):\(Self.historyFileName)"], allowing: [0, 128])
+        if history.status == 0 {
+            let archive = try WorkspaceRevisionArchive.decode(Data(history.standardOutput.utf8))
+            // A legacy writer can update workspace.json while retaining an
+            // older sidecar. Its graph still supplies parents of the new head.
+            guard archive.document.workspaceID == document.workspaceID else { throw GitWorkspaceTransportError.invalidDocument }
+            if archive.document == document { return archive.ancestors }
+            return try Self.uniqueRevisions(
+                await legacyAncestors(at: head, workspaceID: document.workspaceID) + archive.documents)
+        }
+        return try await legacyAncestors(at: head, workspaceID: document.workspaceID)
+    }
+
+    private func legacyAncestors(at head: String, workspaceID: WorkspaceObjectID) async throws -> [PortableWorkspaceDocument] {
+        let log = try await git(["rev-list", "--max-count=4096", head, "--", Self.documentFileName])
+        var values: [PortableWorkspaceDocument] = []
+        var byteCount = 0
+        for commit in log.standardOutput.split(separator: "\n").dropFirst() {
+            let previous = try await git(["show", "\(commit):\(Self.documentFileName)"], allowing: [0, 128])
+            guard previous.status == 0 else { continue }
+            byteCount += previous.standardOutput.utf8.count
+            guard byteCount <= WorkspaceRevisionArchive.maximumBytes else { throw GitWorkspaceTransportError.documentTooLarge }
+            let value = try Self.decode(previous.standardOutput)
+            guard value.workspaceID == workspaceID else { break }
+            values.append(value)
+        }
+        return try Self.uniqueRevisions(values)
+    }
+
+    private static func uniqueRevisions(_ values: [PortableWorkspaceDocument]) throws -> [PortableWorkspaceDocument] {
+        var byID: [WorkspaceObjectID: PortableWorkspaceDocument] = [:]
+        for value in values {
+            if let known = byID[value.revision.id], known != value { throw WorkspaceRevisionStoreError.corruptState }
+            byID[value.revision.id] = value
+        }
+        return byID.values.sorted { $0.revision.id < $1.revision.id }
     }
 
     /// Which content trees the head commit holds: the digest directories under
@@ -279,25 +326,32 @@ public actor GitWorkspaceTransport {
         value.count == 64 && value.allSatisfy { ($0.isNumber || ("a"..."f").contains($0)) }
     }
 
-    /// Writes the document, commits only that file and pushes fast-forward.
+    /// Writes the head and its graph with owned content/status, then pushes fast-forward.
     /// A rejected push reports the remote head rather than overwriting it.
     public func publish(
         document: PortableWorkspaceDocument,
+        ancestors: [PortableWorkspaceDocument],
         content: [CapturedPackageTree],
         status: PublishedDeviceStatus?,
         expectedRemoteHead: String?
     ) async throws -> GitWorkspacePublishReceipt {
         let bytes = try Self.encode(document)
-        let observed = try await remoteState().head
+        let remote = try await remoteState()
+        let observed = remote.head
         guard observed == expectedRemoteHead else {
             throw GitWorkspaceTransportError.remoteAdvanced(remoteHead: observed ?? "")
         }
+        let archive = try WorkspaceRevisionArchive(
+            document: document, ancestors: ancestors + remote.ancestors + [remote.document].compactMap { $0 })
+        let history = try archive.encoded()
+        try await requireOnlyDocumentChanges()
         try await resetToRemote(head: observed)
         // Only our files may be committed. Anything else in the checkout is not
         // ours to publish, and its presence is a reason to stop.
         try await requireOnlyDocumentChanges()
         try bytes.write(to: checkout.appending(path: Self.documentFileName), options: .atomic)
-        var paths = [Self.documentFileName]
+        try history.write(to: checkout.appending(path: Self.historyFileName), options: .atomic)
+        var paths = [Self.documentFileName, Self.historyFileName]
         for tree in content {
             let relative = Self.contentPath(for: tree.digest)
             let destination = checkout.appending(path: relative, directoryHint: .isDirectory)
@@ -498,7 +552,7 @@ extension GitWorkspaceTransport {
     }
 
     nonisolated static func isOurs(_ path: String) -> Bool {
-        path == documentFileName
+        path == documentFileName || path == historyFileName
             || path.hasPrefix(contentDirectoryName + "/")
             || path.hasPrefix(statusDirectoryName + "/")
     }

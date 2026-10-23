@@ -14,7 +14,7 @@ import Observation
 /// shown and explained, never quietly made editable.
 @MainActor @Observable
 final class WorkspaceSettingsSession {
-    struct Surface: Identifiable {
+    struct Surface: Identifiable, Sendable {
         let id: TargetSurface
         let title: String
         let configuration: EffectiveConfiguration?
@@ -40,6 +40,9 @@ final class WorkspaceSettingsSession {
     private(set) var instructions: AgentInstructionInventory.Result?
     private(set) var surfaces: [Surface] = []
     private(set) var isBusy = false
+    private(set) var hasLoaded = false
+    private var readGeneration = 0
+    private let reader: any WorkspaceSettingsReading
     private(set) var selectedProjectID: ArtifactID?
     private(set) var pendingEdit: PendingEdit?
     private(set) var editMessage: String?
@@ -71,8 +74,10 @@ final class WorkspaceSettingsSession {
     init(
         homeRoot: URL,
         library: WorkspaceLibrarySession,
-        managedPolicyPath: URL?? = .none
+        managedPolicyPath: URL?? = .none,
+        reader: any WorkspaceSettingsReading = LiveWorkspaceSettingsReader()
     ) {
+        self.reader = reader
         self.homeRoot = homeRoot
         self.library = library
         self.managedPolicyPath =
@@ -158,98 +163,64 @@ final class WorkspaceSettingsSession {
     }
 
     func select(project id: ArtifactID?) {
+        guard selectedProjectID != id, pendingEdit == nil else { return }
         selectedProjectID = id
+        invalidateRead()
         Task { await refresh() }
     }
 
     func refresh() async {
+        // The active reader retries any scope that changed while it was away.
         guard !isBusy else { return }
         isBusy = true
         defer { isBusy = false }
         await reload()
     }
 
-    /// Reads only the apps this Mac manages. A client with no configuration
-    /// adapter (everything but Claude Code and Codex) is dropped inside
-    /// `reload`, so passing it here is harmless; passing an app this Mac does
-    /// not manage keeps its settings off the screen entirely.
     func refresh(managedClients: [ClientKind]) async {
-        self.managedClients = Set(managedClients)
+        let clients = Set(managedClients)
+        if self.managedClients != clients {
+            self.managedClients = clients
+            pendingEdit = nil
+            invalidateRead()
+        }
         await refresh()
     }
 
-    /// Whether every managed, adapter-backed surface has been read and none
-    /// remain — the screen then says nothing can be read rather than drawing an
-    /// empty page. Distinct from "still loading": a first render before any
-    /// refresh has `isBusy` true or no refresh yet, and does not claim this.
-    var hasNoReadableSurfaces: Bool { !isBusy && surfaces.isEmpty }
+    var hasNoReadableSurfaces: Bool { hasLoaded && !isBusy && surfaces.isEmpty }
 
-    /// Re-reads without taking the busy guard, so an action can finish by
-    /// showing what is true now rather than what was true before it ran.
+    private func invalidateRead() {
+        readGeneration += 1
+        surfaces = []
+        instructions = nil
+        hasLoaded = false
+        lastReceipt = nil
+        editMessage = nil
+    }
+
     private func reload() async {
-        let projectRoot = selectedProjectID.flatMap { id in
-            library.state?.snapshot.device.projectRoots?.first { $0.projectID == id }
-        }.map { URL(fileURLWithPath: $0.rootPath) }
-        let home = homeRoot
-        let policy = managedPolicyPath
-        // Version evidence comes from what this device actually observed; an
-        // unknown version claims no vendor-specific layout.
-        let versions = Dictionary(
-            (library.state?.snapshot.device.capabilityEvidence ?? []).compactMap { evidence in
-                evidence.installedClientVersion.map { (evidence.surface, $0) }
-            }, uniquingKeysWith: { first, _ in first })
-
-        let scannedHome = home
-        let scannedProject = projectRoot
-        instructions = await Task.detached {
-            AgentInstructionInventory.scan(homeRoot: scannedHome, projectRoot: scannedProject)
-        }.value
-        // Only the two clients with a configuration adapter can be read at all,
-        // and only when this Mac manages them. An unmanaged app's own files are
-        // its own business and stay off this screen.
-        let readsClaude = managedClients.contains(.claude)
-        let readsCodex = managedClients.contains(.codex)
-        surfaces = await Task.detached {
-            let reader = ConfigurationLayerReader()
-            var results: [Surface] = []
-            if readsClaude {
-                do {
-                    let layers = try reader.claudeCodeLayers(
-                        homeRoot: home, projectRoot: projectRoot,
-                        managedPolicyPath: policy)
-                    results.append(
-                        .init(
-                            id: .claudeCode, title: "Claude Code",
-                            configuration: EffectiveConfigurationResolver.resolve(
-                                adapter: ClaudeCodeConfigurationAdapter(),
-                                installedClientVersion: versions[.claudeCode], layers: layers),
-                            errorMessage: nil))
-                } catch {
-                    results.append(
-                        .init(
-                            id: .claudeCode, title: "Claude Code", configuration: nil,
-                            errorMessage: Self.describe(error)))
-                }
-            }
-            if readsCodex {
-                do {
-                    let adapter = CodexConfigurationAdapter(installedClientVersion: versions[.codexCLI])
-                    let layers = try reader.codexLayers(homeRoot: home, adapter: adapter)
-                    results.append(
-                        .init(
-                            id: .codexCLI, title: "Codex",
-                            configuration: EffectiveConfigurationResolver.resolve(
-                                adapter: adapter, installedClientVersion: versions[.codexCLI], layers: layers),
-                            errorMessage: nil))
-                } catch {
-                    results.append(
-                        .init(
-                            id: .codexCLI, title: "Codex", configuration: nil,
-                            errorMessage: Self.describe(error)))
-                }
-            }
-            return results
-        }.value
+        while true {
+            let generation = readGeneration
+            let projectID = selectedProjectID
+            let projectRoot = projectID.flatMap { id in
+                library.state?.snapshot.device.projectRoots?.first { $0.projectID == id }
+            }.map { URL(fileURLWithPath: $0.rootPath) }
+            let versions = Dictionary(
+                (library.state?.snapshot.device.capabilityEvidence ?? []).compactMap { evidence in
+                    evidence.installedClientVersion.map { (evidence.surface, $0) }
+                }, uniquingKeysWith: { first, _ in first })
+            let result = await reader.read(
+                .init(
+                    homeRoot: homeRoot, projectID: projectID, projectRoot: projectRoot,
+                    managedPolicyPath: managedPolicyPath, versions: versions, clients: managedClients))
+            // Editable rows and their instructions must describe the label that
+            // is still selected, never a project or app that was left behind.
+            guard generation == readGeneration else { continue }
+            instructions = result.instructions
+            surfaces = result.surfaces
+            hasLoaded = true
+            return
+        }
     }
 
     private nonisolated static func editMessage(for error: any Error) -> String {
@@ -276,7 +247,7 @@ final class WorkspaceSettingsSession {
         }
     }
 
-    private nonisolated static func describe(_ error: Error) -> String {
+    nonisolated static func describe(_ error: Error) -> String {
         switch error {
         case let tooLarge as ConfigurationFileTooLargeError:
             tooLarge.localizedDescription
@@ -285,5 +256,73 @@ final class WorkspaceSettingsSession {
         default:
             "This app's settings could not be read on this Mac."
         }
+    }
+}
+
+struct WorkspaceSettingsReadRequest: Sendable {
+    let homeRoot: URL
+    let projectID: ArtifactID?
+    let projectRoot: URL?
+    let managedPolicyPath: URL?
+    let versions: [TargetSurface: String]
+    let clients: Set<ClientKind>
+}
+
+struct WorkspaceSettingsReadResult: Sendable {
+    let instructions: AgentInstructionInventory.Result
+    let surfaces: [WorkspaceSettingsSession.Surface]
+}
+
+protocol WorkspaceSettingsReading: Sendable {
+    func read(_ request: WorkspaceSettingsReadRequest) async -> WorkspaceSettingsReadResult
+}
+
+struct LiveWorkspaceSettingsReader: WorkspaceSettingsReading {
+    func read(_ request: WorkspaceSettingsReadRequest) async -> WorkspaceSettingsReadResult {
+        await Task.detached {
+            let reader = ConfigurationLayerReader()
+            var results: [WorkspaceSettingsSession.Surface] = []
+            if request.clients.contains(.claude) {
+                do {
+                    let layers = try reader.claudeCodeLayers(
+                        homeRoot: request.homeRoot, projectRoot: request.projectRoot,
+                        managedPolicyPath: request.managedPolicyPath)
+                    results.append(
+                        .init(
+                            id: .claudeCode, title: "Claude Code",
+                            configuration: EffectiveConfigurationResolver.resolve(
+                                adapter: ClaudeCodeConfigurationAdapter(),
+                                installedClientVersion: request.versions[.claudeCode], layers: layers),
+                            errorMessage: nil))
+                } catch {
+                    results.append(
+                        .init(
+                            id: .claudeCode, title: "Claude Code", configuration: nil,
+                            errorMessage: WorkspaceSettingsSession.describe(error)))
+                }
+            }
+            if request.clients.contains(.codex) {
+                do {
+                    let adapter = CodexConfigurationAdapter(installedClientVersion: request.versions[.codexCLI])
+                    let layers = try reader.codexLayers(homeRoot: request.homeRoot, adapter: adapter)
+                    results.append(
+                        .init(
+                            id: .codexCLI, title: "Codex",
+                            configuration: EffectiveConfigurationResolver.resolve(
+                                adapter: adapter, installedClientVersion: request.versions[.codexCLI], layers: layers),
+                            errorMessage: nil))
+                } catch {
+                    results.append(
+                        .init(
+                            id: .codexCLI, title: "Codex", configuration: nil,
+                            errorMessage: WorkspaceSettingsSession.describe(error)))
+                }
+            }
+            let surfaces = Set(results.map(\.id))
+            return WorkspaceSettingsReadResult(
+                instructions: AgentInstructionInventory.scan(
+                    homeRoot: request.homeRoot, projectRoot: request.projectRoot, surfaces: surfaces),
+                surfaces: results)
+        }.value
     }
 }

@@ -1,6 +1,8 @@
 import AgentToolingTestSupport
 import Foundation
+import Observation
 import Testing
+import os
 
 @testable import AgentToolingApp
 @testable import AgentToolingCore
@@ -102,11 +104,53 @@ struct WorkspaceSyncScheduledPassTests {
         #expect(session.scheduleText?.contains("paused until you decide") == true)
     }
 
+    @Test(.timeLimit(.minutes(5)))
+    func automaticSyncOutlivesItsStartingTaskAndSettingsNavigation() async throws {
+        let fixture = try await Fixture()
+        defer { fixture.remove() }
+        try await fixture.connect()
+        let session = fixture.session()
+        defer { session.stopAutomaticSync() }
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let clock = OSAllocatedUnfairLock(initialState: start)
+        let arrivals = ArrivalCounter()
+        let navigation = AppNavigationState()
+        navigation.reveal(.settings)
+        // The caller ends immediately, just as the originating screen can.
+        await Task {
+            session.startAutomaticSync(
+                checkInterval: .milliseconds(10), now: { clock.withLock { $0 } },
+                onArrival: { arrivals.count += 1 })
+        }.value
+        await waitUntil { session.lastAttempt == start && !session.isBusy }
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+        _ = try await fixture.other.sync()
+        try fixture.rename(store: fixture.otherStore, to: "First remote edit")
+        try fixture.rename(store: fixture.otherStore, to: "Final remote edit")
+        _ = try await fixture.other.sync()
+        navigation.reveal(.overview)
+        // A second start must not replace the loop or its arrival callback.
+        session.startAutomaticSync(onArrival: { Issue.record("A second automatic loop was started") })
+        let next = start.addingTimeInterval(WorkspaceSyncScheduler.interval + 1)
+        clock.withLock { $0 = next }
+
+        await waitUntil { session.lastSynced == next && !session.isBusy }
+        await waitUntil { arrivals.count == 1 }
+
+        #expect(navigation.requestedSection == .overview)
+        #expect(try fixture.store.snapshot()?.document == fixture.otherStore.snapshot()?.document)
+        #expect(session.errorMessage == nil, "\(session.errorMessage ?? "")")
+    }
+
     @Test func theCheckWakesFarMoreOftenThanItSyncs() {
         // The loop's job is to ask, not to sync. A wake-up has to be much more
         // frequent than a real pass, or the timer would be setting the spacing
         // instead of the scheduler.
         #expect(WorkspaceSyncSession.checkInterval < .seconds(WorkspaceSyncScheduler.interval))
+    }
+
+    @Observable final class ArrivalCounter {
+        var count = 0
     }
 
     @MainActor private struct Fixture {

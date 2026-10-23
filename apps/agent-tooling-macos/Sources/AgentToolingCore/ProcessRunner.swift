@@ -33,16 +33,24 @@ public protocol StandardInputCommandRunning: Sendable {
 }
 
 public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning {
-    private static let maximumCapturedBytes = 1_048_576
     private static let maximumStandardInputBytes = 1_048_576
     private static let readChunkBytes = 65_536
     private static let pipeIOQueue = DispatchQueue(label: "AgentTooling.ProcessCommandRunner.pipeIO", qos: .userInitiated)
     private let timeout: Duration
     private let homeURL: URL
+    private var maximumOutputBytes = 1_048_576
 
     public init(timeout: Duration = .seconds(60), homeURL: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.timeout = timeout
         self.homeURL = homeURL
+    }
+
+    /// A transport may need a larger bounded blob while ordinary commands
+    /// retain the one-megabyte default and this runner's home and timeout.
+    func capturingOutput(upTo maximumBytes: Int) -> Self {
+        var copy = self
+        copy.maximumOutputBytes = max(1, maximumBytes)
+        return copy
     }
 
     public func run(executable: String, arguments: [String], currentDirectory: URL? = nil) async throws -> CommandOutput {
@@ -102,6 +110,7 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
                             standardInput: standardInput,
                             currentDirectory: currentDirectory,
                             homeURL: homeURL,
+                            maximumOutputBytes: maximumOutputBytes,
                             controller: controller
                         )
                     }
@@ -146,6 +155,7 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         standardInput: Data?,
         currentDirectory: URL?,
         homeURL: URL,
+        maximumOutputBytes: Int,
         controller: RunningProcessController
     ) async throws -> CommandOutput {
         let process = Process()
@@ -187,8 +197,8 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         defer { controller.finish(process) }
         // Start draining before writing input so a process that emits output
         // before consuming stdin cannot fill a pipe and deadlock the caller.
-        async let output = drain(standardOutput.fileHandleForReading)
-        async let error = drain(standardError.fileHandleForReading)
+        async let output = drain(standardOutput.fileHandleForReading, maximumBytes: maximumOutputBytes)
+        async let error = drain(standardError.fileHandleForReading, maximumBytes: maximumOutputBytes)
         if let standardInput, let inputPipe {
             do {
                 try await write(standardInput, to: inputPipe.fileHandleForWriting)
@@ -346,9 +356,9 @@ public struct ProcessCommandRunner: CommandRunning, StandardInputCommandRunning 
         return value
     }
 
-    private static func drain(_ handle: FileHandle) async throws -> CapturedStream {
+    private static func drain(_ handle: FileHandle, maximumBytes: Int) async throws -> CapturedStream {
         try await withCheckedThrowingContinuation { continuation in
-            let captured = ProcessStreamCapture(limit: maximumCapturedBytes)
+            let captured = ProcessStreamCapture(limit: maximumBytes)
             let channel = DispatchIO(type: .stream, fileDescriptor: handle.fileDescriptor, queue: pipeIOQueue) { _ in
                 try? handle.close()
             }
