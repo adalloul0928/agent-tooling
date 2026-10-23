@@ -92,13 +92,13 @@ struct GalleryLaunchpadReviewTests {
             let plan = try #require(sample.workspace.deployment.plan)
             try gallerySnapshot(
                 PlanReviewSheet(workspace: sample.workspace, plan: plan), area: "Apps · Clients", screen: "Plan review sheet",
-                state: "launchpad sample, one left alone", size: SheetGallerySize.large, appearance: appearance,
+                state: "launchpad sample, one left alone", size: SheetSize.xlarge, appearance: appearance,
                 source: "Sources/AgentToolingApp/PlanReviewSheet.swift")
             let review = ScopedPlanReview(workspace: sample.workspace, reviewing: plan)
             await review.prepare()
             try gallerySnapshot(
                 PlanReviewSheet(workspace: sample.workspace, review: review), area: "Apps · Clients",
-                screen: "Plan review sheet", state: "launchpad sample, read", size: SheetGallerySize.large,
+                screen: "Plan review sheet", state: "launchpad sample, read", size: SheetSize.xlarge,
                 appearance: appearance, source: "Sources/AgentToolingApp/PlanReviewSheet.swift")
         }
     }

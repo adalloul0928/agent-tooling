@@ -61,6 +61,8 @@ struct ReentryRoutesTests {
         let navigation = AppNavigationState()
         let review = UUID()
         navigation.open(.pendingRequest(review))
+        // The Apps route was already delivered; its review still waits while Settings is open.
+        navigation.consumeRequestedSection(.syncCenter)
         navigation.open(url: try Self.setupLink)
         let opened = AppLaunchStateTests.Recorded<SetupEntry>()
 
@@ -165,6 +167,8 @@ struct ReentryRoutesTests {
         let launch = try await Self.readyLaunch(fixture, on: "settings", recorder: recorder)
         let review = UUID()
         launch.navigation.open(.pendingRequest(review))
+        // The Apps route was already delivered; its review still waits while Settings is open.
+        launch.navigation.consumeRequestedSection(.syncCenter)
         let probe = Self.mainWindow(launch)
         defer { probe.close() }
 

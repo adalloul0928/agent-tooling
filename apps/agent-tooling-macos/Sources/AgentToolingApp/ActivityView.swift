@@ -15,6 +15,7 @@ import SwiftUI
 struct ActivityView: View {
     let session: WorkspaceActivitySession
     @Environment(AppNavigationState.self) private var navigation
+    @Environment(\.installDriftReader) private var driftReader
     @State private var query = ""
     @State private var filter: ActivityFilter = .all
     @State private var selectedID: UUID?
@@ -55,6 +56,7 @@ struct ActivityView: View {
             consumeRequest()
         }
         .onChange(of: displayedActivities.map(\.id)) { _, _ in clearHiddenReceipt() }
+        .onChange(of: mergedActivities) { _, _ in consumeRequest() }
         .onChange(of: navigation.revision) { _, _ in consumeRequest() }
         .onExitCommand { selectedID = nil }
     }
@@ -81,7 +83,14 @@ struct ActivityView: View {
             .padding(.horizontal, WorkspaceLayout.pageInset)
             .padding(.vertical, Space.lg)
 
-            if displayedActivities.isEmpty {
+            if !session.hasLoaded {
+                ProgressView("Reading activity…").frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let message = session.errorMessage {
+                EmptyStateView(
+                    symbol: "exclamationmark.triangle", title: "Activity could not be read",
+                    message: message, actionTitle: "Try again"
+                ) { Task { await session.refresh(driftReader: driftReader) } }
+            } else if displayedActivities.isEmpty {
                 EmptyStateView(
                     symbol: "clock.arrow.circlepath",
                     title: mergedActivities.isEmpty ? "No activity yet" : "No matching activity",
@@ -184,8 +193,7 @@ struct ActivityView: View {
     /// consuming the request is how this screen tells the shell it arrived.
     private func consumeRequest() {
         guard let id = navigation.requestedItemID,
-            let uuid = UUID(uuidString: id),
-            mergedActivities.contains(where: { $0.id == uuid })
+            let uuid = session.activityID(for: id)
         else { return }
         query = ""
         filter = .all
@@ -344,6 +352,10 @@ private struct ActivityReceiptDetail: View {
                     }
                 }
 
+                if let operationReceipt, operationReceipt.results.contains(where: { !$0.output.isEmpty }) {
+                    OperationReceiptOutputs(receipt: operationReceipt)
+                }
+
                 if let command = receipt.command {
                     CommandDisclosure(title: "Executed command", command: command)
                 }
@@ -401,8 +413,16 @@ private struct ItemOutcomeRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: Space.lg) {
-            StatusGlyph(state: state, size: Size.glyph)
-                .padding(.top, Space.nudge)
+            Group {
+                switch outcome.status {
+                case .skipped: Image(systemName: "minus.circle").foregroundStyle(.secondary)
+                case .pending: Image(systemName: "clock").foregroundStyle(.secondary)
+                default: StatusGlyph(state: state, size: Size.glyph)
+                }
+            }
+            .font(.system(size: Size.glyph))
+            .accessibilityLabel(outcome.status.displayName)
+            .padding(.top, Space.nudge)
             VStack(alignment: .leading, spacing: Space.xxs) {
                 HStack(spacing: Space.sm) {
                     Text(outcome.title).font(AgentFont.bodyMedium)
@@ -427,6 +447,36 @@ private struct ItemOutcomeRow: View {
         case .failed: .attention
         case .skipped, .pending: .unavailable
         case .manual: .pending
+        }
+    }
+}
+
+struct OperationReceiptOutputs: View {
+    let receipt: OperationReceipt
+    @State private var collapsed: Set<UUID> = []
+
+    var body: some View {
+        TitledCard("Step details") {
+            VStack(alignment: .leading, spacing: Space.lg) {
+                ForEach(Array(receipt.results.enumerated()), id: \.element.stepID) { index, result in
+                    DisclosureGroup(
+                        receipt.itemOutcomes.first(where: { $0.id == result.stepID })?.title ?? "Step \(index + 1)",
+                        isExpanded: Binding(
+                            get: { !collapsed.contains(result.stepID) },
+                            set: { expanded in
+                                if expanded { collapsed.remove(result.stepID) } else { collapsed.insert(result.stepID) }
+                            })
+                    ) {
+                        Text(result.output)
+                            .font(AgentFont.mono)
+                            .textSelection(.enabled)
+                            .wrapsLines()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, Space.sm)
+                            .accessibilityIdentifier("operation-step-output-\(result.stepID.uuidString)")
+                    }
+                }
+            }.padding(Space.xl)
         }
     }
 }

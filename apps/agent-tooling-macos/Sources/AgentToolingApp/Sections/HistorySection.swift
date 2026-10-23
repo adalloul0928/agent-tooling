@@ -18,8 +18,13 @@ struct HistorySection: View {
                     .disabled(session.isBusy)
             }
 
-            if session.points.isEmpty, session.isBusy {
+            if !session.hasLoaded || (session.points.isEmpty && session.isBusy) {
                 ProgressView("Reading earlier versions…").frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if session.points.isEmpty, let message = session.errorMessage {
+                EmptyStateView(
+                    symbol: "exclamationmark.triangle", title: "History could not be read",
+                    message: message, actionTitle: "Try again"
+                ) { Task { await session.refresh() } }
             } else if session.points.isEmpty {
                 EmptyStateView(
                     symbol: AppSection.history.symbol,
@@ -62,7 +67,7 @@ struct HistorySection: View {
                                 ? AnyShapeStyle(AgentTheme.onSelection)
                                 : point.isCurrent ? AnyShapeStyle(AgentTheme.selection) : AnyShapeStyle(.secondary))
                     VStack(alignment: .leading, spacing: Space.xxs) {
-                        Text(point.isCurrent ? "Now" : point.createdAt.formatted(.relative(presentation: .named)))
+                        Text(point.isCurrent ? "Now" : point.createdAt.formatted(date: .abbreviated, time: .standard))
                             .font(AgentFont.bodyMedium)
                             .foregroundStyle(selected ? AgentTheme.onSelection : Color.primary)
                         Text(summary(point))

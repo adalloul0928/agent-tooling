@@ -203,6 +203,7 @@ struct SkillsBrowser: View {
         .onChange(of: navigation.revision) { _, _ in applyExternalNavigation() }
         .onChange(of: inventory.skills) { _, _ in
             clearHiddenSelection()
+            applyExternalNavigation()
             // A check or a saved assignment can take a row off the list. The bar
             // must never offer a count the review would not honour.
             if isSelecting { selection.formIntersection(assignableIDs) }

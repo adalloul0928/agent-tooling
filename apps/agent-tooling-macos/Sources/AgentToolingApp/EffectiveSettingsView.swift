@@ -29,6 +29,7 @@ struct EffectiveSettingsView: View {
                         }
                     }
                     .labelsHidden().fixedSize()
+                    .disabled(session.pendingEdit != nil)
                 }
                 Button("Refresh", systemImage: "arrow.clockwise") { refreshID = UUID() }
                     .labelStyle(.iconOnly).buttonStyle(.glass).disabled(session.isBusy)
@@ -51,7 +52,10 @@ struct EffectiveSettingsView: View {
                     if let message = session.editMessage {
                         AttentionBanner(title: "That change was not made", message: message)
                     }
-                    if session.hasNoReadableSurfaces {
+                    if !session.hasLoaded {
+                        ProgressView("Reading app settings…")
+                            .frame(maxWidth: .infinity, minHeight: Size.emptyStateStackMinHeight)
+                    } else if session.hasNoReadableSurfaces {
                         EmptyStateView(
                             symbol: "gearshape",
                             title: "No app settings to show",

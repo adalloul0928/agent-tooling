@@ -411,15 +411,11 @@ extension SkillsBrowser {
             navigation.consumeSkillCreationRequest(requestID)
             openSkillCreator(requestID: requestID)
         }
-        let requested = navigation.requestedSkillID ?? navigation.requestedItemID
-        guard let requested,
-            let match = inventory.skills.first(where: { $0.id.rawValue.uuidString.lowercased() == requested })
-        else { return }
+        guard let id = navigation.resolveRequestedSkill(in: inventory.skills) else { return }
         scope = .all
         query = ""
         resetFilters()
-        selectedID = match.id
-        navigation.consumeRequestedItem(requested)
+        selectedID = id
     }
 
     /// Opens the creator: with a chosen assistant for a blank skill, or for a

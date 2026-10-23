@@ -15,6 +15,7 @@ struct PresetsView: View {
     let session: WorkspacePresetsSession
     let library: WorkspaceLibrarySession
     let export: WorkspacePackageExportSession
+    @Environment(AppNavigationState.self) private var navigation
     @State private var selection: ArtifactID?
     @State private var linking: ArtifactID?
     @State private var shareSelection: ArtifactID?
@@ -54,6 +55,13 @@ struct PresetsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await session.refresh() }
+        .onAppear(perform: consumeRequestedItem)
+        .onChange(of: navigation.revision) { _, _ in consumeRequestedItem() }
+        .onChange(of: presets.map(\.id)) { _, _ in consumeRequestedItem() }
+        .onChange(of: selection) { _, _ in
+            shareSelection = presets.first { $0.id == selection }?.memberArtifactIDs.first { resolve($0).present }
+            export.discard()
+        }
         .sheet(isPresented: Binding(get: { linking != nil }, set: { if !$0 { linking = nil } })) {
             if let presetID = linking, let preset = presets.first(where: { $0.id == presetID }) {
                 PresetFollowSheet(session: session, library: library, presetID: presetID, name: preset.name)
@@ -72,6 +80,11 @@ struct PresetsView: View {
                 ) { _ in }
             }
         }
+    }
+
+    private func consumeRequestedItem() {
+        guard let id = navigation.resolveRequestedItem(in: presets.map(\.id)) else { return }
+        selection = id
     }
 
     private var presets: [WorkspaceLibraryPresetReadModel] { library.state?.library.presets ?? [] }
@@ -315,10 +328,10 @@ struct PresetsView: View {
                     }
                     .labelsHidden()
                     .frame(maxWidth: Size.fieldStandard)
-                    .onAppear { if shareSelection == nil { shareSelection = candidates.first?.id } }
-                    .onChange(of: preset.id) { _, _ in shareSelection = candidates.first?.id }
+                    .onAppear { normalizeShareSelection(candidates.map(\.id)) }
+                    .onChange(of: candidates.map(\.id)) { _, ids in normalizeShareSelection(ids) }
 
-                    shareActions
+                    shareActions(candidates: candidates.map(\.id))
                 }
             }
             .padding(Space.xl)
@@ -326,13 +339,26 @@ struct PresetsView: View {
         .onChange(of: shareSelection) { _, _ in export.discard() }
     }
 
+    private func normalizeShareSelection(_ candidates: [ArtifactID]) {
+        guard Self.shareableSelection(shareSelection, candidates: candidates) == nil else { return }
+        shareSelection = candidates.first
+        export.discard()
+    }
+
+    static func shareableSelection(_ selection: ArtifactID?, candidates: [ArtifactID]) -> ArtifactID? {
+        selection.flatMap { candidates.contains($0) ? $0 : nil }
+    }
+
     @ViewBuilder
-    private var shareActions: some View {
-        if let preview = export.preview, preview.artifactID == shareSelection {
+    private func shareActions(candidates: [ArtifactID]) -> some View {
+        let selected = Self.shareableSelection(shareSelection, candidates: candidates)
+        if let preview = export.preview, preview.artifactID == selected {
             previewSummary(preview)
             HStack(spacing: Space.md) {
                 Button {
-                    guard let destination = PackageFileExport.chooseDestinationFolder() else { return }
+                    guard Self.shareableSelection(shareSelection, candidates: candidates) == preview.artifactID,
+                        let destination = PackageFileExport.chooseDestinationFolder()
+                    else { return }
                     Task { await export.write(to: destination) }
                 } label: {
                     Label("Export…", systemImage: "square.and.arrow.down")
@@ -342,7 +368,9 @@ struct PresetsView: View {
 
                 Button {
                     Task {
-                        guard let folder = try? PackageFileExport.stagingFolder() else { return }
+                        guard Self.shareableSelection(shareSelection, candidates: candidates) == preview.artifactID,
+                            let folder = try? PackageFileExport.stagingFolder()
+                        else { return }
                         await export.write(to: folder)
                         if let path = export.writtenPath {
                             shareAnchor.present([URL(fileURLWithPath: path)])
@@ -361,7 +389,7 @@ struct PresetsView: View {
             }
         } else {
             Button {
-                guard let id = shareSelection else { return }
+                guard let id = selected else { return }
                 Task { await export.prepare(id) }
             } label: {
                 // Reads the item and shows what an export would hold right
@@ -369,7 +397,7 @@ struct PresetsView: View {
                 Label("Prepare export", systemImage: "doc.text.magnifyingglass")
             }
             .secondaryActionStyle()
-            .disabled(export.isBusy || shareSelection == nil)
+            .disabled(export.isBusy || selected == nil)
         }
         if let message = export.errorMessage {
             Text(message).font(AgentFont.body).foregroundStyle(.secondary)

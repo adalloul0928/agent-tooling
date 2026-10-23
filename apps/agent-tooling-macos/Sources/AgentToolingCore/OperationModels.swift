@@ -63,6 +63,9 @@ public struct OperationStep: Identifiable, Codable, Hashable, Sendable {
     /// Existing source-linked installation, captured when the repository was
     /// linked. Updates require this exact tree both at review and before swap.
     public var destinationFingerprint: String?
+    /// Installed content shown in a deployment review. This binds the content
+    /// that may be replaced or removed without granting destination ownership.
+    public var reviewedDestinationDigest: ContentDigest?
     /// Optional working directory for a native command. The engine accepts it
     /// only when it exactly matches the separately reviewed project root.
     public var currentDirectoryPath: String?
@@ -90,6 +93,7 @@ public struct OperationStep: Identifiable, Codable, Hashable, Sendable {
         sourceFingerprint: String? = nil,
         destinationPath: String? = nil,
         destinationFingerprint: String? = nil,
+        reviewedDestinationDigest: ContentDigest? = nil,
         currentDirectoryPath: String? = nil,
         projectRootPath: String? = nil,
         contents: String? = nil,
@@ -108,6 +112,7 @@ public struct OperationStep: Identifiable, Codable, Hashable, Sendable {
         self.sourceFingerprint = sourceFingerprint
         self.destinationPath = destinationPath
         self.destinationFingerprint = destinationFingerprint
+        self.reviewedDestinationDigest = reviewedDestinationDigest
         self.currentDirectoryPath = currentDirectoryPath
         self.projectRootPath = projectRootPath
         self.contents = contents

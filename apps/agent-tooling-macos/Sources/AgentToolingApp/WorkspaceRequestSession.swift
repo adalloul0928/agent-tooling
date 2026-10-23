@@ -49,6 +49,7 @@ final class WorkspaceRequestSession {
     private(set) var requests: [PendingAgentRequest] = []
     private(set) var isBusy = false
     private(set) var errorMessage: String?
+    private var refreshTask: Task<Void, Never>?
 
     private let access: QueueAccess
     private let library: WorkspaceLibrarySession
@@ -68,20 +69,32 @@ final class WorkspaceRequestSession {
     /// Re-reads the queue. Opening the store and expiring old rows is work, so
     /// it happens off this actor and the screen that asked keeps drawing.
     func refresh() async {
+        // A route can arrive while the Apps screen is doing its first read.
+        // Join that read before looking up an exact request in the queue.
+        if let refreshTask {
+            await refreshTask.value
+            return
+        }
         guard !isBusy else { return }
         isBusy = true
-        defer { isBusy = false }
         errorMessage = nil
-        do {
-            requests = try await access.pending()
-        } catch {
-            // The last read is still the truest thing known about the queue, so
-            // it stays on screen rather than being replaced by nothing.
-            errorMessage =
-                requests.isEmpty
-                ? "The review queue could not be opened."
-                : "The review queue could not be read again. What is shown is the last read."
+        let task = Task {
+            defer {
+                isBusy = false
+                refreshTask = nil
+            }
+            do {
+                requests = try await access.pending()
+            } catch {
+                // Keep the last successful read visible when refreshing fails.
+                errorMessage =
+                    requests.isEmpty
+                    ? "The review queue could not be opened."
+                    : "The review queue could not be read again. What is shown is the last read."
+            }
         }
+        refreshTask = task
+        await task.value
     }
 
     /// One row, re-read, so a review always opens the current entry rather than

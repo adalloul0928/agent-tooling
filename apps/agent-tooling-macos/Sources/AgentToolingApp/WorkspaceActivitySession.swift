@@ -50,6 +50,7 @@ final class WorkspaceActivitySession {
     private(set) var activities: [ActivityReceipt] = []
     private(set) var drift: [InstalledPackageDrift] = []
     private(set) var isBusy = false
+    private(set) var hasLoaded = false
     private(set) var errorMessage: String?
 
     private let store: WorkspaceRevisionStore
@@ -62,7 +63,9 @@ final class WorkspaceActivitySession {
         guard !isBusy else { return }
         isBusy = true
         errorMessage = nil
-        defer { isBusy = false }
+        defer {
+            isBusy = false
+        }
         do {
             receipts = try store.operationReceipts(limit: WorkspaceRevisionStore.maximumReceipts)
             activities = try store.activityJournal(as: AgentActivityJournal.self, default: AgentActivityJournal()).entries
@@ -71,6 +74,7 @@ final class WorkspaceActivitySession {
             activities = []
             errorMessage = "This Mac's activity could not be read."
         }
+        hasLoaded = true
         // Drift reaches beyond the store's own rows, onto whatever this Mac
         // last installed into, so it goes through the injected reader even
         // though the read above did not need to.
@@ -97,6 +101,13 @@ final class WorkspaceActivitySession {
             if lhs.date == rhs.date { return lhs.id.uuidString < rhs.id.uuidString }
             return lhs.date > rhs.date
         }
+    }
+
+    /// Palette links name the durable operation receipt, while a journal row
+    /// may have its own identity. Both reveal that one merged activity row.
+    func activityID(for requestedID: String) -> UUID? {
+        guard let id = UUID(uuidString: requestedID) else { return nil }
+        return mergedActivities.first { $0.id == id || $0.operationReceiptID == id }?.id
     }
 
     /// One operation receipt as an Activity row.

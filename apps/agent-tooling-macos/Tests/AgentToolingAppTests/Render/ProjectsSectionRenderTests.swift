@@ -39,6 +39,7 @@ struct ProjectsSectionRenderTests {
 
         try expectDrawn(
             ProjectsView(workspace: fixture.workspace, initialSelection: ShellRenderFixture.projectID)
+                .environment(AppNavigationState())
                 .frame(width: shellWindowSize.width, height: shellWindowSize.height))
     }
 
@@ -52,6 +53,7 @@ struct ProjectsSectionRenderTests {
 
         try expectDrawn(
             ProjectsView(workspace: fixture.workspace, initialSelection: ShellRenderFixture.projectID)
+                .environment(AppNavigationState())
                 .frame(width: shellWindowSize.width, height: shellWindowSize.height))
     }
 }
@@ -75,9 +77,11 @@ extension ProjectsSectionRenderTests {
 
         try expectDrawn(
             ProjectsView(workspace: fixture.workspace)
+                .environment(AppNavigationState())
                 .frame(width: shellWindowSize.width, height: shellWindowSize.height))
         try expectDrawn(
             ProjectsView(workspace: fixture.workspace, initialSelection: ShellRenderFixture.projectID)
+                .environment(AppNavigationState())
                 .frame(width: shellWindowSize.width, height: shellWindowSize.height))
     }
 
@@ -97,6 +101,7 @@ extension ProjectsSectionRenderTests {
 
         try expectDrawn(
             ProjectsView(workspace: fixture.workspace, initialSelection: ShellRenderFixture.projectID)
+                .environment(AppNavigationState())
                 .frame(width: shellWindowSize.width, height: shellWindowSize.height))
     }
 }

@@ -1,3 +1,4 @@
+import CoreFoundation
 import Foundation
 
 public enum ConfigurationLayerReadError: Error, Equatable, Sendable {
@@ -192,10 +193,11 @@ extension ConfigurationLayerReader {
     static func value(_ raw: Any) -> ConfigurationValue {
         switch raw {
         case let value as String: .string(value)
-        case let value as Bool: .boolean(value)
         case let value as NSNumber:
-            // NSNumber bridges booleans too; the Bool case above catches those.
-            .number(value.doubleValue)
+            // JSON numbers 0 and 1 also bridge to Bool. Only CFBoolean is a
+            // Boolean; every other NSNumber must retain its numeric type.
+            CFGetTypeID(value) == CFBooleanGetTypeID()
+                ? .boolean(value.boolValue) : .number(value.doubleValue)
         case let value as [Any]: .list(value.map { self.value($0) })
         default: .opaque("Configured")
         }

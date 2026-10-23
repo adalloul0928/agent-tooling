@@ -29,6 +29,7 @@ struct InsightsView: View {
     /// Shown beside the report rather than as an alert, because nothing was
     /// changed and there is nothing to acknowledge.
     @State private var routeError: String?
+    @State private var failedRecommendation: ToolRecommendation?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -72,15 +73,26 @@ struct InsightsView: View {
 
             // With nothing to show yet the empty state takes the pane rather
             // than sitting at the top of a page that is otherwise blank.
-            if session.report == nil, !session.isScanning, session.errorMessage == nil {
+            if session.report == nil, !session.isScanning, session.errorMessage == nil, routeError == nil {
                 firstRunState
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: WorkspaceLayout.sectionSpacing) {
                         if session.isScanning {
                             scanningState
-                        } else if let message = routeError ?? session.errorMessage {
+                        } else if let message = session.errorMessage {
                             errorState(message)
+                        }
+                        if let message = routeError {
+                            InsightPanel("The skill creator could not open") {
+                                VStack(alignment: .leading, spacing: Space.sm) {
+                                    Text(message).font(AgentFont.body).textSelection(.enabled).wrapsLines()
+                                    Button("Try again") {
+                                        if let failedRecommendation { draftWithAssistant(failedRecommendation) }
+                                    }
+                                    .inlineActionStyle()
+                                }.padding(Space.xl)
+                            }
                         }
 
                         if let report = session.report {
@@ -690,6 +702,7 @@ struct InsightsView: View {
         let instruction = recommendation.draftInstruction ?? recommendation.summary
         guard !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         routeError = nil
+        failedRecommendation = recommendation
         let client = draftingClient
         let request = SkillDraftRequest(
             client: client,
@@ -701,6 +714,7 @@ struct InsightsView: View {
                 routeError = "This Mac could not record what to ask \(client.rawValue) for. Nothing was changed."
                 return
             }
+            failedRecommendation = nil
             navigation.openSkillCreationRequest(request.id)
         }
     }

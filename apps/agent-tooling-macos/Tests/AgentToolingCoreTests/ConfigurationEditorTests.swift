@@ -8,6 +8,24 @@ import Testing
 /// change confirmed by reading the file back.
 @Suite("Configuration editor")
 struct ConfigurationEditorTests {
+    @Test(arguments: [0.0, 1.0, 30.0])
+    func aNumericSettingIsWrittenAndVerifiedAsANumber(_ number: Double) throws {
+        let fixture = try Fixture(#"{"cleanupPeriodDays":7,"unknown":{"keep":true}}"#)
+        defer { fixture.remove() }
+        let before = try fixture.contents()
+        let editor = ConfigurationEditor()
+        let edit = ConfigurationEdit(
+            key: "cleanupPeriodDays", layer: .user, sourcePath: fixture.path,
+            newValue: .number(number), expectedFingerprint: try editor.fingerprint(of: fixture.path))
+
+        let receipt = try editor.apply(edit, adapter: ClaudeCodeConfigurationAdapter(), installedClientVersion: "2.0.0")
+
+        #expect(receipt.effectiveValue == .number(number))
+        #expect(try fixture.object()["cleanupPeriodDays"] as? Double == number)
+        #expect(try fixture.object()["unknown"] as? [String: Bool] == ["keep": true])
+        #expect(try Data(contentsOf: URL(fileURLWithPath: receipt.backupPath)) == before)
+    }
+
     @Test func oneSettingChangesWhileEveryOtherKeyAndUnknownFieldSurvives() throws {
         let fixture = try Fixture(
             #"""

@@ -110,10 +110,18 @@ struct GallerySectionsTests {
     /// does not let a test replace, so the shell Health screen can only show
     /// its "nothing checked yet" state; it is labelled honestly here, and the
     /// scripted listing is drawn from `HealthView` directly in
-    /// `GalleryMoreSurfacesTests`. Every other section draws its populated
-    /// screen.
+    /// `GalleryMoreSurfacesTests`. The generic fixture has no operation
+    /// receipts and leaves History's restore preview unselected. App Settings
+    /// starts a new asynchronous read on mount; its populated rows are captured
+    /// separately by `GalleryRegressionScreensTests` after bounded settling.
     static func state(for section: AppSection) -> String {
-        section == .health ? "unchecked" : "populated"
+        switch section {
+        case .health: "unchecked"
+        case .appSettings: "reading-settings"
+        case .activity: "no-receipts"
+        case .history: "list-unselected"
+        default: "populated"
+        }
     }
 
     /// The empty and first-run states a reviewer should see distinctly from the

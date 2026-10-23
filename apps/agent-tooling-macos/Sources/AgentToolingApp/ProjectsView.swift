@@ -10,16 +10,15 @@ import SwiftUI
 /// project's shared identity is its name and repository hints, never a path.
 struct ProjectsView: View {
     let workspace: WorkspaceLaunch.Workspace
+    @Environment(AppNavigationState.self) private var navigation
     @State private var query = ""
     @State private var filter: ProjectFilter = .all
     @State private var selectedProjectID: ArtifactID?
     @State private var refreshID = UUID()
     @State private var isCreatingProject = false
 
-    /// `initialSelection` opens straight to one project's detail pane. Nothing
-    /// in the shell deep-links here today — this section has no external
-    /// route of its own — so the only caller today is a render test proving
-    /// the detail pane draws; a future route can reuse the same seam.
+    /// A preview can start with one project selected; ordinary navigation
+    /// reveals its exact requested row after the library has loaded.
     init(workspace: WorkspaceLaunch.Workspace, initialSelection: ArtifactID? = nil) {
         self.workspace = workspace
         _selectedProjectID = State(initialValue: initialSelection)
@@ -76,6 +75,9 @@ struct ProjectsView: View {
             await workspace.library.refresh()
             await workspace.projectDiscovery.refresh()
         }
+        .onAppear(perform: consumeRequestedItem)
+        .onChange(of: navigation.revision) { _, _ in consumeRequestedItem() }
+        .onChange(of: allProjects.map(\.id)) { _, _ in consumeRequestedItem() }
         .onChange(of: listed.map(\.id)) { _, ids in
             if let selectedProjectID, !ids.contains(selectedProjectID) {
                 self.selectedProjectID = nil
@@ -85,6 +87,13 @@ struct ProjectsView: View {
         .sheet(isPresented: $isCreatingProject) {
             NewProjectSheet(workspace: workspace) { refreshID = UUID() }
         }
+    }
+
+    private func consumeRequestedItem() {
+        guard let id = navigation.resolveRequestedItem(in: workspace.library.state?.library.projects.map(\.id) ?? []) else { return }
+        query = ""
+        filter = .all
+        selectedProjectID = id
     }
 
     // MARK: Collection

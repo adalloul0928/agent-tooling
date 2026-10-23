@@ -33,6 +33,8 @@ public struct StagedDeployment: Hashable, Sendable {
     /// The staged tree for an install, or the installed tree for a removal.
     public let fingerprint: String
     public let destinationPath: String
+    /// The installed content the person reviewed, before staging began.
+    public let reviewedDestinationDigest: ContentDigest?
     public let client: ClientKind
     public let scope: ToolingScope
     public let change: Change
@@ -47,7 +49,8 @@ public struct StagedDeployment: Hashable, Sendable {
     public init(
         artifactID: ArtifactID, deploymentName: String, stagingPath: String, fingerprint: String,
         destinationPath: String, client: ClientKind, scope: ToolingScope, change: Change = .install,
-        projectRootPath: String? = nil, physicalDestinationID: WorkspaceObjectID? = nil
+        projectRootPath: String? = nil, physicalDestinationID: WorkspaceObjectID? = nil,
+        reviewedDestinationDigest: ContentDigest? = nil
     ) {
         self.projectRootPath = projectRootPath
         self.artifactID = artifactID
@@ -55,6 +58,7 @@ public struct StagedDeployment: Hashable, Sendable {
         self.stagingPath = stagingPath
         self.fingerprint = fingerprint
         self.destinationPath = destinationPath
+        self.reviewedDestinationDigest = reviewedDestinationDigest
         self.client = client
         self.scope = scope
         self.change = change
@@ -118,17 +122,21 @@ public enum WorkspaceDeploymentOperations {
         var staged: [StagedDeployment] = []
         for item in plan.items {
             let digest: ContentDigest
+            let reviewedDestinationDigest: ContentDigest?
             var removing = false
             let change: StagedDeployment.Change
             switch item.action {
             case .installContent(let value):
                 digest = value
+                reviewedDestinationDigest = nil
                 change = .install
-            case .updateContent(_, let value):
+            case .updateContent(let installed, let value):
                 digest = value
+                reviewedDestinationDigest = installed
                 change = .update
             case .removeContent(let value):
                 digest = value
+                reviewedDestinationDigest = value
                 removing = true
                 change = .remove
             // These are the command bridges' work, not a folder copy.
@@ -187,8 +195,8 @@ public enum WorkspaceDeploymentOperations {
             }
 
             if removing {
-                // The removal is bound to the exact installed tree that was
-                // measured, so an edited folder is refused at apply time.
+                // The earlier reviewed digest, not this new fingerprint,
+                // decides which content execution is allowed to remove.
                 let installed = (try? DirectoryFingerprint.sha256(of: destination)) ?? ""
                 staged.append(
                     .init(
@@ -196,7 +204,8 @@ public enum WorkspaceDeploymentOperations {
                         stagingPath: "", fingerprint: installed,
                         destinationPath: destination.path, client: client, scope: item.scope,
                         change: .remove, projectRootPath: projectRoot?.path,
-                        physicalDestinationID: item.physicalDestinationID))
+                        physicalDestinationID: item.physicalDestinationID,
+                        reviewedDestinationDigest: reviewedDestinationDigest))
                 continue
             }
             guard let tree else { throw WorkspaceDeploymentOperationError.missingContent }
@@ -223,7 +232,8 @@ public enum WorkspaceDeploymentOperations {
                     stagingPath: folder.path, fingerprint: fingerprint,
                     destinationPath: destination.path, client: client, scope: item.scope,
                     change: change, projectRootPath: projectRoot?.path,
-                    physicalDestinationID: item.physicalDestinationID))
+                    physicalDestinationID: item.physicalDestinationID,
+                    reviewedDestinationDigest: reviewedDestinationDigest))
         }
         return staged
     }
@@ -311,6 +321,7 @@ public enum WorkspaceDeploymentOperations {
                         id: identifiers(), kind: .command, title: disconnectionStepTitle(plan.nativeServerIdentifier),
                         detail: "Runs the app's own command to remove this connection.",
                         executable: plan.executableURL.path, arguments: plan.arguments,
+                        currentDirectoryPath: plan.workingDirectoryPath,
                         projectRootPath: plan.workingDirectoryPath)
                     installKeys[step.id] = .init(artifactID: plan.artifactID, physicalDestinationID: plan.physicalDestinationID)
                     return step
@@ -342,6 +353,7 @@ public enum WorkspaceDeploymentOperations {
                                 title: removalStepTitle(plan.nativeServerIdentifier),
                                 detail: "Runs the app's own command to remove the registration this one replaces.",
                                 executable: plan.executableURL.path, arguments: preArguments,
+                                currentDirectoryPath: plan.workingDirectoryPath,
                                 projectRootPath: plan.workingDirectoryPath, stopsOnFailure: true))
                     }
                     steps.append(
@@ -350,6 +362,7 @@ public enum WorkspaceDeploymentOperations {
                             title: connectionStepTitle(plan.nativeServerIdentifier),
                             detail: "Runs the app's own command to add this connection.",
                             executable: plan.executableURL.path, arguments: plan.arguments,
+                            currentDirectoryPath: plan.workingDirectoryPath,
                             projectRootPath: plan.workingDirectoryPath))
                     for step in steps { installKeys[step.id] = key }
                     return steps
@@ -464,9 +477,10 @@ public enum WorkspaceDeploymentOperations {
                 title: "Remove \(deployment.deploymentName)",
                 detail: "Remove the copy Agent Tooling installed in \(client.rawValue).",
                 destinationPath: deployment.destinationPath,
-                // Bound to the installed tree; an edited folder is
-                // left alone rather than deleted.
-                destinationFingerprint: deployment.fingerprint,
+                // Legacy callers supply a linked-install fingerprint. New
+                // deployment reviews bind content separately from ownership.
+                destinationFingerprint: deployment.reviewedDestinationDigest == nil ? deployment.fingerprint : nil,
+                reviewedDestinationDigest: deployment.reviewedDestinationDigest,
                 projectRootPath: deployment.projectRootPath)
             : OperationStep(
                 id: id,
@@ -478,6 +492,7 @@ public enum WorkspaceDeploymentOperations {
                 // staged folder that changed cannot slip past review.
                 sourceFingerprint: deployment.fingerprint,
                 destinationPath: deployment.destinationPath,
+                reviewedDestinationDigest: deployment.reviewedDestinationDigest,
                 // Names the project folder the copy lands under, so the
                 // executor admits that folder's client directory and
                 // nothing outside it.

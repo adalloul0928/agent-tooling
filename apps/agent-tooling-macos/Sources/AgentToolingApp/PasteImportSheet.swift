@@ -19,6 +19,7 @@ struct PasteImportSheet: View {
     @State private var importNotes: [String] = []
     @State private var selectedServer = 0
     @State private var serverDraft = MCPDraft()
+    @State private var hasEditedConnection = false
     @State private var skill: PastedSkillImport?
     @State private var skillDraft = SkillDraft()
     @State private var failure: String?
@@ -294,25 +295,25 @@ struct PasteImportSheet: View {
             }
 
             Section("Connection") {
-                TextField("Name", text: $serverDraft.name)
+                TextField("Name", text: editingConnection(\.name))
                     .accessibilityLabel("Connection name")
-                Picker("Transport", selection: $serverDraft.transport) {
+                Picker("Transport", selection: editingConnection(\.transport)) {
                     ForEach(MCPTransport.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
-                TextField("Endpoint or command", text: $serverDraft.endpoint)
+                TextField("Endpoint or command", text: editingConnection(\.endpoint))
                     .font(AgentFont.monoBody)
                     .accessibilityLabel("Endpoint or command")
-                Picker("Authentication", selection: $serverDraft.authentication) {
+                Picker("Authentication", selection: editingConnection(\.authentication)) {
                     ForEach(["OAuth", "API key", "Doppler", "None"], id: \.self) { Text($0).tag($0) }
                 }
-                Picker("Scope", selection: $serverDraft.scope) {
+                Picker("Scope", selection: editingConnection(\.scope)) {
                     ForEach([ToolingScope.user, .project, .localProject, .workspace]) { scope in
                         Text(scope.displayName).tag(scope)
                     }
                 }
                 if serverDraft.scope != .user {
                     HStack {
-                        TextField("Project folder", text: $serverDraft.projectRoot, prompt: Text("Choose an existing folder"))
+                        TextField("Project folder", text: editingConnection(\.projectRoot), prompt: Text("Choose an existing folder"))
                             .accessibilityLabel("Project folder")
                         Button("Choose…") { chooseProjectFolder() }
                     }
@@ -332,7 +333,7 @@ struct PasteImportSheet: View {
                 }
             }
 
-            if let message = serverError ?? failure {
+            if let message = failure ?? ((mode == .newConnection && !hasEditedConnection) ? nil : serverError) {
                 Section {
                     Label(message, systemImage: "exclamationmark.triangle")
                         .font(AgentFont.caption)
@@ -345,6 +346,15 @@ struct PasteImportSheet: View {
             guard servers.indices.contains(index) else { return }
             serverDraft = servers[index].draft
         }
+    }
+
+    private func editingConnection<Value>(_ keyPath: WritableKeyPath<MCPDraft, Value>) -> Binding<Value> {
+        Binding(
+            get: { serverDraft[keyPath: keyPath] },
+            set: {
+                hasEditedConnection = true
+                serverDraft[keyPath: keyPath] = $0
+            })
     }
 
     private var currentNotes: [String] {

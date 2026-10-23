@@ -61,6 +61,7 @@ final class WorkspaceSyncSession {
     /// quick changes queue on one actor rather than race on two.
     private let service: WorkspaceApplicationService
     private var transport: (any WorkspaceRevisionTransport)?
+    @ObservationIgnored private var automaticTask: Task<Void, Never>?
     /// Builds this Mac's published summary at publish time. Set by the shell,
     /// which knows the scan and the plan; nil publishes no status.
     var statusProvider: (@Sendable () async -> PublishedDeviceStatus?)?
@@ -156,6 +157,32 @@ final class WorkspaceSyncSession {
     /// wake-up asks the scheduler, which spaces real passes much further apart.
     static let checkInterval: Duration = .seconds(60)
 
+    /// Owned by the opened workspace, so closing Settings or the main window
+    /// does not cancel automatic sync. Repeated scene mounts share one loop.
+    func startAutomaticSync(
+        checkInterval: Duration = WorkspaceSyncSession.checkInterval,
+        now: @escaping @Sendable () -> Date = { .now },
+        onArrival: @escaping @MainActor () async -> Void = {}
+    ) {
+        guard automaticTask == nil else { return }
+        load()
+        automaticTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let before = self?.lastArrival
+                guard await self?.runScheduledPass(now: now()) != nil else { return }
+                if !Task.isCancelled, let arrival = self?.lastArrival, arrival != before { await onArrival() }
+                do { try await Task.sleep(for: checkInterval) } catch { return }
+            }
+        }
+    }
+
+    func stopAutomaticSync() {
+        automaticTask?.cancel()
+        automaticTask = nil
+    }
+
+    deinit { automaticTask?.cancel() }
+
     func load() {
         do {
             enrollment = try enrollmentStore.read()
@@ -176,10 +203,14 @@ final class WorkspaceSyncSession {
             let record = try WorkspaceSyncEnrollment(
                 workspaceID: workspaceID, remote: remote,
                 checkoutPath: checkout.standardizedFileURL.path, branch: branch)
-            transport = try await GitWorkspaceTransport.enroll(
+            let candidate = try await GitWorkspaceTransport.enroll(
                 remote: record.remote, checkout: checkout, branch: branch)
+            try Self.requireMatchingWorkspace(try await candidate.remoteState().document, workspaceID: workspaceID)
             try enrollmentStore.write(record)
+            transport = candidate
             enrollment = record
+        } catch GitWorkspaceTransportError.remote(.differentLibrary) {
+            errorMessage = Self.differentWorkspaceMessage
         } catch WorkspaceSyncEnrollmentError.invalidRemote {
             errorMessage = "Enter a repository address without a user name or password in it."
         } catch WorkspaceSyncEnrollmentError.invalidCheckout, GitWorkspaceTransportError.invalidCheckout {
@@ -342,7 +373,7 @@ final class WorkspaceSyncSession {
             // over someone else's sealed workspace.
             let candidate = try EncryptedFolderWorkspaceTransport(
                 folder: folder.standardizedFileURL, key: key)
-            _ = try await candidate.remoteState()
+            try Self.requireMatchingWorkspace(try await candidate.remoteState().document, workspaceID: workspaceID)
             let record = try WorkspaceSyncEnrollment(
                 workspaceID: workspaceID, remote: "",
                 checkoutPath: folder.standardizedFileURL.path, kind: .encryptedFolder)
@@ -351,6 +382,8 @@ final class WorkspaceSyncSession {
             transport = candidate
             enrollment = record
             if isNew { recoveryPhrase = WorkspaceFolderKeyStore.recoveryPhrase(for: key) }
+        } catch GitWorkspaceTransportError.remote(.differentLibrary) {
+            errorMessage = Self.differentWorkspaceMessage
         } catch WorkspaceFolderKeyError.invalidRecoveryPhrase {
             errorMessage = "That is not a phrase from another Mac. Copy all of it, exactly as it is shown there."
         } catch EncryptedFolderTransportError.cannotDecrypt {
@@ -362,6 +395,13 @@ final class WorkspaceSyncSession {
         } catch {
             errorMessage = "That folder could not be used. Nothing was changed."
         }
+    }
+
+    private static let differentWorkspaceMessage =
+        "That location holds another library. Use an empty location to share this library, or join the existing library through its Git repository during setup on a Mac without a library. This Mac's connection was kept."
+
+    private static func requireMatchingWorkspace(_ document: PortableWorkspaceDocument?, workspaceID: WorkspaceObjectID) throws {
+        if let document, document.workspaceID != workspaceID { throw GitWorkspaceTransportError.remote(.differentLibrary) }
     }
 
     /// Stops showing the phrase. It is not stored anywhere it could be shown

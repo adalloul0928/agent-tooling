@@ -113,7 +113,8 @@ public actor WorkspaceSyncCoordinator {
         let content = await contentToPublish(for: document, remote: remote)
         let status = await status?()
         let receipt = try await transport.publish(
-            document: document, content: content, status: status, expectedRemoteHead: remote.head)
+            document: document, ancestors: try store.revisionHistory(from: document.revision.id),
+            content: content, status: status, expectedRemoteHead: remote.head)
         lastContentReport.published.append(contentsOf: content.map(\.digest))
         return receipt
     }
@@ -128,7 +129,8 @@ public actor WorkspaceSyncCoordinator {
         guard !owed.isEmpty || status != nil else { return }
         do {
             _ = try await transport.publish(
-                document: document, content: owed, status: await status?(), expectedRemoteHead: remoteHead)
+                document: document, ancestors: try store.revisionHistory(from: document.revision.id),
+                content: owed, status: await status?(), expectedRemoteHead: remoteHead)
             lastContentReport.published.append(contentsOf: owed.map(\.digest))
         } catch {
             lastContentReport.unpublished.append(contentsOf: owed.map(\.digest))
@@ -157,8 +159,10 @@ public actor WorkspaceSyncCoordinator {
             return try await sync(idempotencyKey: idempotencyKey)
         }
         beginPass(remote)
-        if remoteDocument.revision.id == local.document.revision.id { return .upToDate(head: remoteHead) }
-        try store.importRemoteRevision(remoteDocument)
+        if remoteDocument.revision.id == local.document.revision.id {
+            return try await settleMatchingHead(remote, local: local.document, head: remoteHead)
+        }
+        try store.importRemoteRevisions(remoteDocument, ancestors: remote.ancestors)
         let ancestor = try store.commonAncestor(withRemote: remoteDocument)
         let conflicts = WorkspaceMergeEngine.merge(
             base: ancestor, local: local.document,
@@ -185,6 +189,8 @@ public actor WorkspaceSyncCoordinator {
             return .merged(receipt: receipt, published: published)
         } catch GitWorkspaceTransportError.remoteAdvanced {
             return .remoteMovedDuringSync
+        } catch EncryptedFolderTransportError.remoteAdvanced {
+            return .remoteMovedDuringSync
         }
     }
 
@@ -200,16 +206,12 @@ public actor WorkspaceSyncCoordinator {
             return .published(receipt)
         }
         if remoteDocument.revision.id == local.document.revision.id {
-            // Same revision both sides; content may still be owed either way,
-            // and this Mac's status is refreshed when something is.
-            await importContent(for: local.document, remote: remote)
-            await publishSide(document: local.document, remote: remote, remoteHead: remoteHead)
-            return .upToDate(head: remoteHead)
+            return try await settleMatchingHead(remote, local: local.document, head: remoteHead)
         }
 
         // Record the remote revision first so the merged revision's ancestry is
         // resolvable from this store alone afterwards.
-        try store.importRemoteRevision(remoteDocument)
+        try store.importRemoteRevisions(remoteDocument, ancestors: remote.ancestors)
         let ancestor = try store.commonAncestor(withRemote: remoteDocument)
 
         // A remote revision that already descends from ours is adopted whole,
@@ -225,6 +227,19 @@ public actor WorkspaceSyncCoordinator {
             // it alone holds still go up.
             await publishSide(document: remoteDocument, remote: remote, remoteHead: remoteHead)
             return .adopted(receipt)
+        }
+
+        // Publishing a local descendant keeps its identity; an extra merge
+        // would give both devices a new head to chase for no new intent.
+        if ancestor?.revision.id == remoteDocument.revision.id {
+            await importContent(for: local.document, remote: remote)
+            do {
+                return .published(try await publish(local.document, remote: remote))
+            } catch GitWorkspaceTransportError.remoteAdvanced {
+                return .remoteMovedDuringSync
+            } catch EncryptedFolderTransportError.remoteAdvanced {
+                return .remoteMovedDuringSync
+            }
         }
 
         let merge = WorkspaceMergeEngine.merge(
@@ -250,11 +265,38 @@ public actor WorkspaceSyncCoordinator {
             // The merged revision is committed here and will publish on the
             // next pass. Nothing was forced onto the remote.
             return .remoteMovedDuringSync
+        } catch EncryptedFolderTransportError.remoteAdvanced {
+            return .remoteMovedDuringSync
         }
     }
 }
 
 private extension WorkspaceSyncCoordinator {
+    /// Matching heads can still hide parents dropped by an older client.
+    /// Import supplied parents first, or upgrade the remote from complete
+    /// local history. Never call a damaged graph up to date.
+    func settleMatchingHead(
+        _ remote: GitWorkspaceRemoteState, local: PortableWorkspaceDocument, head: String
+    ) async throws -> WorkspaceSyncOutcome {
+        guard let document = remote.document, document == local else { throw WorkspaceRevisionStoreError.corruptState }
+        try store.importRemoteRevisions(document, ancestors: remote.ancestors)
+        do {
+            _ = try WorkspaceRevisionArchive(document: document, ancestors: remote.ancestors)
+        } catch WorkspaceRevisionStoreError.missingAncestry {
+            await importContent(for: local, remote: remote)
+            do {
+                return .published(try await publish(local, remote: remote))
+            } catch GitWorkspaceTransportError.remoteAdvanced {
+                return .remoteMovedDuringSync
+            } catch EncryptedFolderTransportError.remoteAdvanced {
+                return .remoteMovedDuringSync
+            }
+        }
+        await importContent(for: local, remote: remote)
+        await publishSide(document: local, remote: remote, remoteHead: head)
+        return .upToDate(head: head)
+    }
+
     /// Binds the receipt to the exact pair of revisions this pass combined, so
     /// a replay of the same pass returns its original result and a different
     /// pair cannot reuse the key.

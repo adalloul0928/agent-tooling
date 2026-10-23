@@ -53,6 +53,8 @@ final class AppNavigationState {
             clearRequests()
             requestedSkillID = id
         case .pendingRequest(let id):
+            requestedSection = .syncCenter
+            selectedClient = nil
             // A queued review is additive: it keeps the queues it is joining,
             // so only the one-shot scalar requests are cleared here.
             clearRequests(clearPendingQueue: false, clearSkillCreationQueue: false)
@@ -108,6 +110,30 @@ final class AppNavigationState {
     func consumeRequestedItem(_ id: String) {
         guard requestedItemID == id else { return }
         requestedItemID = nil
+    }
+
+    func resolveRequestedItem(in ids: [ArtifactID]) -> ArtifactID? {
+        guard let request = requestedItemID, let uuid = UUID(uuidString: request),
+            let match = ids.first(where: { $0.rawValue == uuid })
+        else { return nil }
+        consumeRequestedItem(request)
+        return match
+    }
+
+    func consumeRequestedSkill(_ id: String) {
+        guard requestedSkillID == id else { return }
+        requestedSkillID = nil
+    }
+
+    /// Keep a cold-load request until its target exists. Legacy names must be
+    /// unambiguous; a UUID always identifies one exact artifact.
+    func resolveRequestedSkill(in skills: [SkillEntry]) -> ArtifactID? {
+        guard let requested = requestedSkillID ?? requestedItemID,
+            let match = SkillRouteResolver.resolve(requested, in: skills)
+        else { return nil }
+        consumeRequestedSkill(requested)
+        consumeRequestedItem(requested)
+        return match
     }
 
     /// Opens the screen a request with no row of its own belongs to, and hands

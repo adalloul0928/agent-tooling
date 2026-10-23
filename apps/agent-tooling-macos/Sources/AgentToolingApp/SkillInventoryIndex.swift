@@ -294,3 +294,16 @@ struct SkillInventoryIndex: Equatable {
             isAssignable: parent.isAssignable, assignmentExplanation: parent.assignmentExplanation)
     }
 }
+
+enum SkillRouteResolver {
+    static func resolve(_ request: String, in skills: [SkillEntry]) -> ArtifactID? {
+        if let uuid = UUID(uuidString: request) {
+            return skills.first { $0.id.rawValue == uuid }?.id
+        }
+        let matches = skills.filter {
+            $0.declaredName?.caseInsensitiveCompare(request) == .orderedSame
+                || $0.displayName.caseInsensitiveCompare(request) == .orderedSame
+        }
+        return matches.count == 1 ? matches.first?.id : nil
+    }
+}
